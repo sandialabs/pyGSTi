@@ -8,14 +8,14 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import Section as _Section
+from pygsti.report.section import Section as _Section
 
 
 class HelpSection(_Section):
     _HTML_TEMPLATE = 'tabs/Help.html'
 
     @_Section.figure_factory()
-    def exampleTable(workspace, switchboard, **kwargs):
+    def example_table(workspace, switchboard, **kwargs):
         example_table = workspace.ExampleTable()
         example_table.set_render_options(click_to_display=True)
         return example_table

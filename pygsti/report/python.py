@@ -1,4 +1,6 @@
-""" Routines for converting python objects to python. """
+"""
+Routines for converting python objects to python.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -9,7 +11,8 @@
 #***************************************************************************************************
 
 import collections as _collections
-from ..objects.reportableqty import ReportableQty as _ReportableQty
+
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty
 
 '''
 table() and cell() functions are used by table.py in table creation
@@ -17,25 +20,29 @@ everything else is used in creating formatters in formatters.py
 '''
 
 
-def table(customHeadings, colHeadingsFormatted, rows, spec):
-    '''
+def table(custom_headings, col_headings_formatted, rows, spec):
+    """
     Create a "Python table" - really a pandas DataFrame
 
     Parameters
     ----------
-    customHeadings : None, dict
+    custom_headings : None, dict
         optional dictionary of custom table headings
-    colHeadingsFormatted : list
+
+    col_headings_formatted : list
         formatted column headings
+
     rows : list of lists of cell-strings
         Data in the table, pre-formatted
+
     spec : dict
         options for the formatter
+
     Returns
     -------
     dict : contains key 'python', which corresponds to a
-           pandas.DataFrame object representing the table
-    '''
+        pandas.DataFrame object representing the table
+    """
     try:
         import pandas as _pd
     except ImportError:
@@ -45,11 +52,11 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
     def getval(lbl):
         return lbl.value if isinstance(lbl, _ReportableQty) else lbl
 
-    if customHeadings is not None \
-            and "python" in customHeadings:
-        colLabels = customHeadings['python']
+    if custom_headings is not None \
+            and "python" in custom_headings:
+        colLabels = custom_headings['python']
     else:
-        colLabels = [getval(x) for x in colHeadingsFormatted]
+        colLabels = [getval(x) for x in col_headings_formatted]
     nCols = len(colLabels)
 
     if nCols == 0: return {'python': _pd.DataFrame()}
@@ -67,7 +74,7 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
         assert(len(formatted_rowData) == nCols)
         for i, formatted_cellData in enumerate(formatted_rowData):
             if isinstance(formatted_cellData, _ReportableQty) and \
-               formatted_cellData.has_eb():
+               formatted_cellData.has_errorbar:
                 cols_containing_ebs.add(i)
 
     n = 0  # number of cols inserted
@@ -91,7 +98,7 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
         for i, formatted_cellData in enumerate(formatted_rowData[1:], start=1):
             if i in cols_containing_ebs:
                 if isinstance(formatted_cellData, _ReportableQty):
-                    val, eb = formatted_cellData.get_value_and_err_bar()
+                    val, eb = formatted_cellData.value_and_errorbar
                 else:
                     val, eb = formatted_cellData, None
                 dict_of_columns[colLabels[i + n]].append(val)
@@ -111,28 +118,31 @@ def table(customHeadings, colHeadingsFormatted, rows, spec):
 
 
 def cell(data, label, spec):
-    '''
+    """
     Format the cell of a python table
 
     Parameters
     ----------
     data : string
         string representation of cell content
+
     label : string
         optional cell label, used for tooltips
+
     spec : dict
         options for the formatters
 
     Returns
     -------
     string
-    '''
+    """
     return data
 
 
 def list(l, specs):
     """
     Stub for conversion that isn't needed in python case.
+
     (Convert a python list to python.)
 
     Parameters
@@ -153,6 +163,7 @@ def list(l, specs):
 def vector(v, specs):
     """
     Stub for conversion that isn't needed in python case.
+
     (Convert a 1D numpy array to python.)
 
     Parameters
@@ -173,6 +184,7 @@ def vector(v, specs):
 def matrix(m, specs):
     """
     Stub for conversion that isn't needed in python case.
+
     Convert a 2D numpy array to python.
 
     Parameters
@@ -193,6 +205,7 @@ def matrix(m, specs):
 def value(el, specs):
     """
     Stub for conversion that isn't needed in python case.
+
     (this function would be for converting python to python).
 
     Parameters
@@ -213,6 +226,7 @@ def value(el, specs):
 def escaped(txt, specs):
     """
     Stub for conversion that isn't needed in python case.
+
     (Escape txt so it is python safe.)
 
     Parameters

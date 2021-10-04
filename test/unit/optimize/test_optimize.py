@@ -1,8 +1,7 @@
 import numpy as np
 
-from ..util import BaseCase, needs_deap
-
 from pygsti.optimize import optimize as opt
+from ..util import BaseCase, needs_deap
 
 
 class OptimizeTester(BaseCase):
@@ -12,9 +11,15 @@ class OptimizeTester(BaseCase):
         self.answer = np.array([0, 0], 'd')
 
     def test_minimize_methods(self):
-        for method in ("simplex", "supersimplex", "customcg", "basinhopping", "CG", "BFGS", "L-BFGS-B"):  # "homebrew"
+        for method in ("simplex", "customcg", "basinhopping", "CG", "BFGS", "L-BFGS-B"):  # "homebrew"
+            print("Method = ",method)
             result = opt.minimize(self.f, self.x0, method, maxiter=1000)
             self.assertArraysAlmostEqual(result.x, self.answer)
+
+    def test_supersimplex_methods(self):
+        result = opt.minimize(self.f, self.x0, "supersimplex", maxiter=10,
+                              tol=1e-2, inner_tol=1e-8, min_inner_maxiter=100, max_inner_maxiter=10000)
+        self.assertArraysAlmostEqual(result.x, self.answer)
 
     def test_minimize_swarm(self):
         result = opt.minimize(self.f, self.x0, "swarm", maxiter=30)
@@ -37,6 +42,6 @@ class OptimizeTester(BaseCase):
             return 2 * x[None, :]
 
         x0 = self.x0
-        opt.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, errType='rel')
-        opt.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, errType='abs')
+        opt.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, err_type='rel')
+        opt.check_jac(f_vec, x0, jac(x0), eps=1e-10, tol=1e-6, err_type='abs')
         # TODO assert correctness

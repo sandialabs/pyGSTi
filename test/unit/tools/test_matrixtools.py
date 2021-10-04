@@ -1,9 +1,9 @@
-from ..util import BaseCase
 import numpy as np
+import scipy.linalg as spl
 import scipy.sparse as sps
-import warnings
 
 import pygsti.tools.matrixtools as mt
+from ..util import BaseCase
 
 
 class MatrixToolsTester(BaseCase):
@@ -16,9 +16,6 @@ class MatrixToolsTester(BaseCase):
         self.assertTrue(mt.is_hermitian(herm_mx))
         self.assertFalse(mt.is_hermitian(non_herm_mx))
 
-        s = mt.mx_to_string(non_herm_mx)
-        # TODO assert correctness
-
     def test_is_pos_def(self):
         pos_mx = np.array([[ 4, 0.2],
                            [0.1, 3]], 'complex')
@@ -26,6 +23,21 @@ class MatrixToolsTester(BaseCase):
                                [1, 0]], 'complex')
         self.assertTrue(mt.is_pos_def(pos_mx))
         self.assertFalse(mt.is_pos_def(non_pos_mx))
+
+    def test_mx_to_string(self):
+        mx = np.array([[ 1, 1+2j],
+                       [1-2j, 3]], 'complex')
+
+        s = mt.mx_to_string(mx)
+
+        ls = s.split('\n')[:-1] # trim empty last line
+        mx2 = np.zeros_like(mx)
+        for i, row in enumerate(ls):
+            entries = row.split()
+            for j in range(len(entries) // 2):
+                mx2[i, j] = float(entries[2*j]) + 1j*float(entries[2*j+1][:-1]) # trim 'j'
+
+        self.assertArraysAlmostEqual(mx, mx2)
 
     def test_is_valid_density_mx(self):
         density_mx = np.array([[ 0.9,   0],
@@ -35,12 +47,9 @@ class MatrixToolsTester(BaseCase):
         self.assertTrue(mt.is_valid_density_mx(density_mx))
         self.assertFalse(mt.is_valid_density_mx(non_density_mx))
 
-        s = mt.mx_to_string(density_mx)
-        # TODO assert correctness
-
     def test_nullspace(self):
         a = np.array([[1, 1], [1, 1]])
-        print("Nullspace = ", mt.nullspace(a))
+        #print("Nullspace = ", mt.nullspace(a))
         expected = np.array(
             [[ 0.70710678],
              [-0.70710678]]
@@ -54,38 +63,38 @@ class MatrixToolsTester(BaseCase):
         diff2 = np.linalg.norm(mt.nullspace_qr(a) + expected)  # -1*expected is OK too (just an eigenvector)
         self.assertTrue(np.isclose(diff1, 0) or np.isclose(diff2, 0))
 
-        mt.print_mx(a)
-
-    def test_helpers(self):
-        a = np.array([1, 2, 3], 'd')
-        self.assertTrue(mt.array_eq(a, a))
+        #mt.print_mx(a)
 
     def test_matrix_log(self):
         M = np.array([[-1, 0], [0, -1]], 'complex')  # degenerate negative evals
-        mt.real_matrix_log(M, actionIfImaginary="raise", TOL=1e-6)
-        # TODO assert correctness
+        logM = mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
+        self.assertArraysAlmostEqual(spl.expm(logM), M)
 
         M = np.array([[-1, 1e-10], [1e-10, -1]], 'complex')  # degenerate negative evals, but will generate complex evecs
-        mt.real_matrix_log(M, actionIfImaginary="raise", TOL=1e-6)
-        # TODO assert correctness
+        logM = mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
+        self.assertArraysAlmostEqual(spl.expm(logM), M)
+
+        with self.assertRaises(ValueError):
+            M = np.array([[1, 0], [0, -1]], 'd')  # a negative *unparied* eigenvalue => log may be imaginary
+            mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
 
         M = np.array([[1, 0], [0, -1]], 'd')  # a negative *unparied* eigenvalue => log may be imaginary
-        mt.real_matrix_log(M, actionIfImaginary="ignore", TOL=1e-6)
-        # TODO assert correctness
+        logM = mt.real_matrix_log(M, action_if_imaginary="ignore", tol=1e-6)
+        self.assertArraysAlmostEqual(spl.expm(logM), M)
 
     def test_matrix_log_warns_on_imaginary(self):
         M = np.array([[1, 0], [0, -1]], 'd')
-        self.assertWarns(Warning, mt.real_matrix_log, M, actionIfImaginary="warn", TOL=1e-6)
+        self.assertWarns(Warning, mt.real_matrix_log, M, action_if_imaginary="warn", tol=1e-6)
 
     def test_matrix_log_raises_on_imaginary(self):
         M = np.array([[1, 0], [0, -1]], 'd')
         with self.assertRaises(ValueError):
-            mt.real_matrix_log(M, actionIfImaginary="raise", TOL=1e-6)
+            mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
 
     def test_matrix_log_raises_on_invalid_action(self):
         M = np.array([[1, 0], [0, -1]], 'd')
         with self.assertRaises(AssertionError):
-            mt.real_matrix_log(M, actionIfImaginary="foobar", TOL=1e-6)
+            mt.real_matrix_log(M, action_if_imaginary="foobar", tol=1e-6)
 
     def test_matrix_log_raise_on_no_real_log(self):
         a = np.array([[1, 1], [1, 1]])
@@ -157,34 +166,34 @@ class MatrixToolsTester(BaseCase):
         smx = sps.csr_matrix(mx)
         smx_lil = sps.lil_matrix(mx)  # currently unsupported
 
-        r = mt.safereal(mx, inplace=False)
+        r = mt.safe_real(mx, inplace=False)
         self.assertArraysAlmostEqual(r, np.real(mx))
-        i = mt.safeimag(mx, inplace=False)
+        i = mt.safe_imag(mx, inplace=False)
         self.assertArraysAlmostEqual(i, np.imag(mx))
 
-        r = mt.safereal(smx, inplace=False)
+        r = mt.safe_real(smx, inplace=False)
         self.assertArraysAlmostEqual(r.toarray(), np.real(mx))
-        i = mt.safeimag(smx, inplace=False)
+        i = mt.safe_imag(smx, inplace=False)
         self.assertArraysAlmostEqual(i.toarray(), np.imag(mx))
 
         with self.assertRaises(NotImplementedError):
-            mt.safereal(smx_lil, inplace=False)
+            mt.safe_real(smx_lil, inplace=False)
         with self.assertRaises(NotImplementedError):
-            mt.safeimag(smx_lil, inplace=False)
+            mt.safe_imag(smx_lil, inplace=False)
 
         with self.assertRaises(AssertionError):
-            mt.safereal(mx, check=True)
+            mt.safe_real(mx, check=True)
         with self.assertRaises(AssertionError):
-            mt.safeimag(mx, check=True)
+            mt.safe_imag(mx, check=True)
 
-        M = mx.copy(); M = mt.safereal(M, inplace=True)
+        M = mx.copy(); M = mt.safe_real(M, inplace=True)
         self.assertArraysAlmostEqual(M, np.real(mx))
-        M = mx.copy(); M = mt.safeimag(M, inplace=True)
+        M = mx.copy(); M = mt.safe_imag(M, inplace=True)
         self.assertArraysAlmostEqual(M, np.imag(mx))
 
-        M = smx.copy(); M = mt.safereal(M, inplace=True)
+        M = smx.copy(); M = mt.safe_real(M, inplace=True)
         self.assertArraysAlmostEqual(M.toarray(), np.real(mx))
-        M = smx.copy(); M = mt.safeimag(M, inplace=True)
+        M = smx.copy(); M = mt.safe_imag(M, inplace=True)
         self.assertArraysAlmostEqual(M.toarray(), np.imag(mx))
 
     def test_fast_expm(self):
@@ -196,7 +205,9 @@ class MatrixToolsTester(BaseCase):
 
         B = np.array([1, 1], 'd')
         expA = mt._custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta)
-        # TODO assert correctness
+
+        sp_expA = np.inner(spl.expm(mx), B)
+        self.assertArraysAlmostEqual(expA, sp_expA)
 
     def test_fast_expm_raises_on_non_square(self):
         nonSq = np.array([[1, 2, 4],

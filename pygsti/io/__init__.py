@@ -1,4 +1,6 @@
-""" pyGSTi Input/Output Python Package """
+"""
+pyGSTi Input/Output Python Package
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,16 +10,11 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-#Import the most important/useful routines of each module into
+# Import the most important/useful routines of each module into
 # the package namespace
-from .circuitparser import CircuitParser
-from .loaders import *
-from .writers import *
+#from .legacyio import enable_no_cython_unpickling
+#from .legacyio import enable_old_object_unpickling  # , disable_old_object_unpickling
+from .readers import *
 from .metadir import *
 from .stdinput import *
-from . import json
-from .legacyio import enable_old_object_unpickling  # , disable_old_object_unpickling
-
-#Users may not have msgpack, which is fine.
-try: from . import msgpack
-except ImportError: pass
+from .writers import *

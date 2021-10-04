@@ -1,13 +1,12 @@
-import unittest
-import pygsti
-import numpy as np
-import warnings
 import pickle
-import os
 
+import numpy as np
+
+import pygsti
+from pygsti.models import modelconstruction
 from pygsti.modelpacks.legacy import std1Q_XYI as std
+from ..testutils import BaseTestCase, temp_files
 
-from ..testutils import BaseTestCase, compare_files, temp_files
 
 # This class is for unifying some models that get used in this file and in testGateSets2.py
 class InstrumentTestCase(BaseTestCase):
@@ -19,11 +18,11 @@ class InstrumentTestCase(BaseTestCase):
         Erem = self.target_model.povms['Mdefault']['1']
         Gmz_plus = np.dot(E,E.T)
         Gmz_minus = np.dot(Erem,Erem.T)
-        self.target_model.instruments['Iz'] = pygsti.obj.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        self.target_model.instruments['Iz'] = pygsti.modelmembers.instruments.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
         self.povm_ident = self.target_model.povms['Mdefault']['0'] + self.target_model.povms['Mdefault']['1']
 
         self.mdl_target_wTP = self.target_model.copy()
-        self.mdl_target_wTP.instruments['IzTP'] = pygsti.obj.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        self.mdl_target_wTP.instruments['IzTP'] = pygsti.modelmembers.instruments.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
 
         super(InstrumentTestCase, self).setUp()
 
@@ -31,30 +30,35 @@ class InstrumentTestCase(BaseTestCase):
         #Test instrument construction with elements whose gpindices are already initialized.
         # Since this isn't allowed currently (a future functionality), we need to do some hacking
         E = self.target_model.povms['Mdefault']['0']
-        InstEl = pygsti.obj.FullDenseOp( np.dot(E,E.T) )
+        InstEl = pygsti.modelmembers.operations.FullArbitraryOp(np.dot(E, E.T))
         InstEl2 = InstEl.copy()
-        nParams = InstEl.num_params() # should be 16
+        nParams = InstEl.num_params # should be 16
 
-        I = pygsti.obj.Instrument({})
-        InstEl.set_gpindices(slice(0,16), I)
-        InstEl2.set_gpindices(slice(8,24), I) # some overlap - to test _build_paramvec
+        I = pygsti.modelmembers.instruments.Instrument({},
+                                                       evotype='default',
+                                                       state_space=pygsti.baseobjs.statespace.default_space_for_udim(2))
 
-        # TESTING ONLY - so we can add items!!!
-        I._readonly = False
-        I['A'] = InstEl
-        I['B'] = InstEl2
-        I._readonly = True
-
-        I._paramvec = I._build_paramvec()
-          # this whole test was to exercise this function's ability to
-          # form a parameter vector with weird overlapping gpindices.
-        self.assertEqual( len(I._paramvec) , 24 )
-
+        #TODO later: add tests to appending elements to an instrument
+        
+        #OLD REMOVE: No need to test this anymore - _build_paramvec has been removed
+        #InstEl.set_gpindices(slice(0,16), I)
+        #InstEl2.set_gpindices(slice(8,24), I) # some overlap - to test _build_paramvec
+        #
+        ## TESTING ONLY - so we can add items!!!
+        #I._readonly = False
+        #I['A'] = InstEl
+        #I['B'] = InstEl2
+        #I._readonly = True
+        #
+        #I._paramvec, I._paramlbls = I._build_paramvec()
+        #  # this whole test was to exercise this function's ability to
+        #  # form a parameter vector with weird overlapping gpindices.
+        #self.assertEqual( len(I._paramvec) , 24 )
 
     def testInstrumentMethods(self):
 
         v = self.mdl_target_wTP.to_vector()
-
+        
         mdl = self.mdl_target_wTP.copy()
         mdl.from_vector(v)
         mdl.basis = self.mdl_target_wTP.basis.copy()
@@ -72,62 +76,65 @@ class InstrumentTestCase(BaseTestCase):
         mdl.rotate(max_rotate=0.01, seed=1234)
 
     def testChangeDimension(self):
+        larger_ss = pygsti.baseobjs.ExplicitStateSpace([('L%d' % i,) for i in range(6)])
+        smaller_ss = pygsti.baseobjs.ExplicitStateSpace([('L%d' % i,) for i in range(3)])
+
         mdl = self.target_model.copy()
-        new_gs = mdl.increase_dimension(6)
-        new_gs = mdl.decrease_dimension(3)
+        new_gs = mdl.increase_dimension(larger_ss)
+        new_gs = mdl._decrease_dimension(smaller_ss)
 
         #TP
         mdl = self.target_model.copy()
-        mdl.set_all_parameterizations("TP")
-        new_gs = mdl.increase_dimension(6)
-        new_gs = mdl.decrease_dimension(3)
+        mdl.set_all_parameterizations("full TP")
+        new_gs = mdl.increase_dimension(larger_ss)
+        new_gs = mdl._decrease_dimension(smaller_ss)
 
 
     def testIntermediateMeas(self):
         # Mess with the target model to add some error to the povm and instrument
-        self.assertEqual(self.target_model.num_params(),92) # 4*3 + 16*5 = 92
+        self.assertEqual(self.target_model.num_params,92) # 4*3 + 16*5 = 92
         mdl = self.target_model.depolarize(op_noise=0.01, spam_noise=0.01)
         gs2 = self.target_model.depolarize(max_op_noise=0.01, max_spam_noise=0.01, seed=1234) #another way to depolarize
         mdl.povms['Mdefault'].depolarize(0.01)
 
         # Introducing a rotation error to the measurement
-        Uerr = pygsti.rotation_gate_mx([0,0.02,0]) # input angles are halved by the method
+        Uerr = pygsti.rotation_gate_mx([0, 0.02, 0]) # input angles are halved by the method
         E = np.dot(mdl.povms['Mdefault']['0'].T,Uerr).T # effect is stored as column vector
         Erem = self.povm_ident - E
-        mdl.povms['Mdefault'] = pygsti.obj.UnconstrainedPOVM({'0': E, '1': Erem})
+        mdl.povms['Mdefault'] = pygsti.modelmembers.povms.UnconstrainedPOVM({'0': E, '1': Erem}, evotype='default')
 
         # Now add the post-measurement gates from the vector E0 and remainder = id-E0
         Gmz_plus = np.dot(E,E.T) #since E0 is stored internally as column spamvec
         Gmz_minus = np.dot(Erem,Erem.T)
-        mdl.instruments['Iz'] = pygsti.obj.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
-        self.assertEqual(mdl.num_params(),92) # 4*3 + 16*5 = 92
+        mdl.instruments['Iz'] = pygsti.modelmembers.instruments.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        self.assertEqual(mdl.num_params,92) # 4*3 + 16*5 = 92
         #print(mdl)
 
         germs = std.germs
         fiducials = std.fiducials
         max_lengths = [1] #,2,4,8]
         glbls = list(mdl.operations.keys()) + list(mdl.instruments.keys())
-        lsgst_list = pygsti.construction.make_lsgst_experiment_list(
+        lsgst_struct = pygsti.circuits.create_lsgst_circuits(
             glbls,fiducials,fiducials,germs,max_lengths)
-        lsgst_list2 = pygsti.construction.make_lsgst_experiment_list(
+        lsgst_struct2 = pygsti.circuits.create_lsgst_circuits(
             mdl,fiducials,fiducials,germs,max_lengths) #use mdl as source
-        self.assertEqual(lsgst_list, lsgst_list2)
+        self.assertEqual(list(lsgst_struct), list(lsgst_struct2))
 
 
 
         mdl_datagen = mdl
-        ds = pygsti.construction.generate_fake_data(mdl,lsgst_list,1000,'none') #'multinomial')
-        pygsti.io.write_dataset(temp_files + "/intermediate_meas_dataset.txt",ds)
-        ds2 = pygsti.io.load_dataset(temp_files + "/intermediate_meas_dataset.txt")
+        ds = pygsti.data.simulate_data(mdl, lsgst_struct, 1000, 'none') #'multinomial')
+        pygsti.io.write_dataset(temp_files + "/intermediate_meas_dataset.txt", ds)
+        ds2 = pygsti.io.read_dataset(temp_files + "/intermediate_meas_dataset.txt")
         for opstr,dsRow in ds.items():
             for lbl,cnt in dsRow.counts.items():
                 self.assertAlmostEqual(cnt, ds2[opstr].counts[lbl],places=2)
         #print(ds)
 
         #LGST
-        mdl_lgst = pygsti.do_lgst(ds, fiducials,fiducials, self.target_model) #, guessModelForGauge=mdl_datagen)
+        mdl_lgst = pygsti.run_lgst(ds, fiducials, fiducials, self.target_model) #, guessModelForGauge=mdl_datagen)
         self.assertTrue("Iz" in mdl_lgst.instruments)
-        mdl_opt = pygsti.gaugeopt_to_target(mdl_lgst,mdl_datagen) #, method="BFGS")
+        mdl_opt = pygsti.gaugeopt_to_target(mdl_lgst, mdl_datagen) #, method="BFGS")
         print(mdl_datagen.strdiff(mdl_opt))
         print("Frobdiff = ",mdl_datagen.frobeniusdist( mdl_lgst))
         print("Frobdiff after GOpt = ",mdl_datagen.frobeniusdist(mdl_opt))
@@ -136,42 +143,42 @@ class InstrumentTestCase(BaseTestCase):
         #print(mdl_datagen)
 
         #DEBUG compiling w/dataset
-        #dbList = pygsti.construction.make_lsgst_experiment_list(self.target_model,fiducials,fiducials,germs,max_lengths)
+        #dbList = pygsti.circuits.create_lsgst_circuits(self.target_model,fiducials,fiducials,germs,max_lengths)
         ##self.target_model.simplify_circuits(dbList, ds)
-        #self.target_model.simplify_circuits([ pygsti.obj.Circuit(None,stringrep="Iz") ], ds )
+        #self.target_model.simplify_circuits([ pygsti.circuits.Circuit(None,stringrep="Iz") ], ds )
         #assert(False),"STOP"
 
         #LSGST
-        results = pygsti.do_long_sequence_gst(ds,self.target_model,fiducials,fiducials,germs,max_lengths)
-        #print(results.estimates['default'].models['go0'])
-        mdl_est = results.estimates['default'].models['go0']
-        mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est,mdl_datagen)
+        results = pygsti.run_long_sequence_gst(ds, self.target_model, fiducials, fiducials, germs, max_lengths)
+        #print(results.estimates[results.name].models['go0'])
+        mdl_est = results.estimates[results.name].models['go0']
+        mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est, mdl_datagen)
         print("Frobdiff = ", mdl_datagen.frobeniusdist(mdl_est))
         print("Frobdiff after GOpt = ", mdl_datagen.frobeniusdist(mdl_est_opt))
         self.assertAlmostEqual(mdl_datagen.frobeniusdist(mdl_est_opt), 0.0, places=4)
 
         #LGST w/TP gates
         mdl_targetTP = self.target_model.copy()
-        mdl_targetTP.set_all_parameterizations("TP")
-        self.assertEqual(mdl_targetTP.num_params(),71) # 3 + 4*2 + 12*5 = 71
+        mdl_targetTP.set_all_parameterizations("full TP")
+        self.assertEqual(mdl_targetTP.num_params,71) # 3 + 4*2 + 12*5 = 71
         #print(mdl_targetTP)
-        resultsTP = pygsti.do_long_sequence_gst(ds,mdl_targetTP,fiducials,fiducials,germs,max_lengths)
-        mdl_est = resultsTP.estimates['default'].models['go0']
-        mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est,mdl_datagen)
+        resultsTP = pygsti.run_long_sequence_gst(ds, mdl_targetTP, fiducials, fiducials, germs, max_lengths, verbosity=4)
+        mdl_est = resultsTP.estimates[resultsTP.name].models['go0']
+        mdl_est_opt = pygsti.gaugeopt_to_target(mdl_est, mdl_datagen)
         print("TP Frobdiff = ", mdl_datagen.frobeniusdist(mdl_est))
         print("TP Frobdiff after GOpt = ", mdl_datagen.frobeniusdist(mdl_est_opt))
         self.assertAlmostEqual(mdl_datagen.frobeniusdist(mdl_est_opt), 0.0, places=4)
 
     def testBasicGatesetOps(self):
         # This test was made from a debug script used to get the code working
-        model = pygsti.construction.build_explicit_model(
+        model = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0',)],['Gi','Gx','Gy'],
             [ "I(Q0)","X(pi/8,Q0)", "Y(pi/8,Q0)"])
-        #    prepLabels=["rho0"], prepExpressions=["0"],
-        #    effectLabels=["0","1"], effectExpressions=["0","complement"])
+        #    prep_labels=["rho0"], prep_expressions=["0"],
+        #    effect_labels=["0","1"], effect_expressions=["0","complement"])
 
-        v0 = pygsti.construction.basis_build_vector("0", pygsti.obj.Basis.cast("pp",4))
-        v1 = pygsti.construction.basis_build_vector("1", pygsti.obj.Basis.cast("pp",4))
+        v0 = modelconstruction.create_spam_vector("0", "Q0", "pp")
+        v1 = modelconstruction.create_spam_vector("1", "Q0", "pp")
         P0 = np.dot(v0,v0.T)
         P1 = np.dot(v1,v1.T)
         print("v0 = ",v0)
@@ -179,27 +186,27 @@ class InstrumentTestCase(BaseTestCase):
         print("P1 = ",P0)
         #print("P0+P1 = ",P0+P1)
 
-        model.instruments["Itest"] = pygsti.obj.Instrument( [('0',P0),('1',P1)] )
+        model.instruments["Itest"] = pygsti.modelmembers.instruments.Instrument([('0', P0), ('1', P1)])
 
-        for param in ("full","TP","CPTP"):
+        for param in ("full","full TP","CPTP"):
             print(param)
             model.set_all_parameterizations(param)
             model.to_vector() # builds & cleans paramvec for tests below
             for lbl,obj in model.preps.items():
-                print(lbl,':',obj.gpindices, pygsti.tools.length(obj.gpindices))
+                print(lbl,':', obj.gpindices, pygsti.tools.length(obj.gpindices))
             for lbl,obj in model.povms.items():
-                print(lbl,':',obj.gpindices, pygsti.tools.length(obj.gpindices))
+                print(lbl,':', obj.gpindices, pygsti.tools.length(obj.gpindices))
                 for sublbl,subobj in obj.items():
-                    print("  > ",sublbl,':',subobj.gpindices, pygsti.tools.length(subobj.gpindices))
+                    print("  > ", sublbl,':', subobj.gpindices, pygsti.tools.length(subobj.gpindices))
             for lbl,obj in model.operations.items():
-                print(lbl,':',obj.gpindices, pygsti.tools.length(obj.gpindices))
+                print(lbl,':', obj.gpindices, pygsti.tools.length(obj.gpindices))
             for lbl,obj in model.instruments.items():
-                print(lbl,':',obj.gpindices, pygsti.tools.length(obj.gpindices))
+                print(lbl,':', obj.gpindices, pygsti.tools.length(obj.gpindices))
                 for sublbl,subobj in obj.items():
-                    print("  > ",sublbl,':',subobj.gpindices, pygsti.tools.length(subobj.gpindices))
+                    print("  > ", sublbl,':', subobj.gpindices, pygsti.tools.length(subobj.gpindices))
 
 
-            print("NPARAMS = ",model.num_params())
+            print("NPARAMS = ",model.num_params)
             print("")
 
 
@@ -233,25 +240,25 @@ class InstrumentTestCase(BaseTestCase):
         gatestring1 = ('Gx','Gy')
         gatestring2 = ('Gx','Gy','Gy')
 
-        p1 = np.dot( model.operations['Gy'], model.operations['Gx'] )
-        p2 = model.product(gatestring1, bScale=False)
-        p3,scale = model.product(gatestring1, bScale=True)
+        p1 = np.dot( model.operations['Gy'].to_dense(), model.operations['Gx'].to_dense())
+        p2 = model.sim.product(gatestring1, scale=False)
+        p3,scale = model.sim.product(gatestring1, scale=True)
 
         print(p1)
         print(p2)
         print(p3*scale)
         self.assertAlmostEqual(np.linalg.norm(p1-scale*p3),0.0)
 
-        dp = model.dproduct(gatestring1)
-        dp_flat = model.dproduct(gatestring1,flat=True)
+        dp = model.sim.dproduct(gatestring1)
+        dp_flat = model.sim.dproduct(gatestring1,flat=True)
 
-        evt, lookup, outcome_lookup = model.bulk_evaltree( [gatestring1,gatestring2] )
+        layout = model.sim.create_layout( [gatestring1,gatestring2] )
 
-        p1 = np.dot( model.operations['Gy'], model.operations['Gx'] )
-        p2 = np.dot( model.operations['Gy'], np.dot( model.operations['Gy'], model.operations['Gx'] ))
+        p1 = np.dot( model.operations['Gy'].to_dense(), model.operations['Gx'].to_dense() )
+        p2 = np.dot( model.operations['Gy'].to_dense(), np.dot( model.operations['Gy'].to_dense(), model.operations['Gx'].to_dense() ))
 
-        bulk_prods = model.bulk_product(evt)
-        bulk_prods_scaled, scaleVals = model.bulk_product(evt, bScale=True)
+        bulk_prods = model.sim.bulk_product([gatestring1,gatestring2])
+        bulk_prods_scaled, scaleVals = model.sim.bulk_product([gatestring1,gatestring2], scale=True)
         bulk_prods2 = scaleVals[:,None,None] * bulk_prods_scaled
         self.assertArraysAlmostEqual(bulk_prods[0],p1)
         self.assertArraysAlmostEqual(bulk_prods[1],p2)
@@ -262,17 +269,17 @@ class InstrumentTestCase(BaseTestCase):
         gatestring1 = ('Gx','Gy') #,'Itest')
         gatestring2 = ('Gx','Gy','Gy')
 
-        evt, lookup, outcome_lookup = model.bulk_evaltree( [gatestring1,gatestring2] )
+        layout = model.sim.create_layout( [gatestring1,gatestring2] )
 
-        p1 = np.dot( np.transpose(model.povms['Mdefault']['0'].todense()),
-                     np.dot( model.operations['Gy'],
-                             np.dot(model.operations['Gx'],
-                                    model.preps['rho0'].todense())))
-        probs = model.probs(gatestring1)
+        p1 = np.dot( np.transpose(model.povms['Mdefault']['0'].to_dense()),
+                     np.dot( model.operations['Gy'].to_dense(),
+                             np.dot(model.operations['Gx'].to_dense(),
+                                    model.preps['rho0'].to_dense())))
+        probs = model.probabilities(gatestring1)
         print(probs)
         p20,p21 = probs[('0',)],probs[('1',)]
 
-        #probs = model.probs(gatestring1, bUseScaling=True)
+        #probs = model.probabilities(gatestring1, use_scaling=True)
         #print(probs)
         #p30,p31 = probs['0'],probs['1']
 
@@ -280,36 +287,36 @@ class InstrumentTestCase(BaseTestCase):
         #assertArraysAlmostEqual(p1,p30)
         #assertArraysAlmostEqual(p21,p31)
 
-        bulk_probs = model.bulk_probs([gatestring1,gatestring2],check=True)
+        bulk_probs = model.sim.bulk_probs([gatestring1,gatestring2])
 
-        evt_split = evt.copy()
-        new_lookup = evt_split.split(lookup, numSubTrees=2)
-        print("SPLIT TREE: new elIndices = ",new_lookup)
-        probs_to_fill = np.empty( evt_split.num_final_elements(), 'd')
-        model.bulk_fill_probs(probs_to_fill,evt_split,check=True)
+        #Need to add way to force split a layout to check this:
+        #evt_split = evt.copy()
+        #new_lookup = evt_split.split(lookup, num_sub_trees=2)
+        #print("SPLIT TREE: new el_indices = ",new_lookup)
+        #probs_to_fill = np.empty( evt_split.num_final_elements(), 'd')
+        #model.bulk_fill_probs(probs_to_fill,evt_split,check=True)
 
-        dProbs = model.dprobs(gatestring1)
-        bulk_dProbs = model.bulk_dprobs([gatestring1,gatestring2], returnPr=False, check=True)
+        #dProbs = model.sim.dprobs(gatestring1)  #Removed this functionality (unused)
+        bulk_dProbs = model.sim.bulk_dprobs([gatestring1,gatestring2])
 
-        hProbs = model.hprobs(gatestring1)
-        bulk_hProbs = model.bulk_hprobs([gatestring1,gatestring2], returnPr=False, check=True)
-
+        #hProbs = model.sim.hprobs(gatestring1)  #Removed this functionality (unused)
+        bulk_hProbs = model.sim.bulk_hprobs([gatestring1,gatestring2])
 
         print("DONE")
 
     def testAdvancedGateStrs(self):
         #specify prep and/or povm labels in operation sequence:
-        mdl_normal = pygsti.obj.Circuit( ('Gx',) )
-        mdl_wprep = pygsti.obj.Circuit( ('rho0','Gx') )
-        mdl_wpovm = pygsti.obj.Circuit( ('Gx','Mdefault') )
-        mdl_wboth = pygsti.obj.Circuit( ('rho0','Gx','Mdefault') )
+        circuit_normal = pygsti.circuits.Circuit(('Gx',))
+        circuit_wprep = pygsti.circuits.Circuit(('rho0', 'Gx'))
+        circuit_wpovm = pygsti.circuits.Circuit(('Gx', 'Mdefault'))
+        circuit_wboth = pygsti.circuits.Circuit(('rho0', 'Gx', 'Mdefault'))
 
         #Now compute probabilities for these:
         model = self.target_model.copy()
-        probs_normal = model.probs(mdl_normal)
-        probs_wprep = model.probs(mdl_wprep)
-        probs_wpovm = model.probs(mdl_wpovm)
-        probs_wboth = model.probs(mdl_wboth)
+        probs_normal = model.probabilities(circuit_normal)
+        probs_wprep = model.probabilities(circuit_wprep)
+        probs_wpovm = model.probabilities(circuit_wpovm)
+        probs_wboth = model.probabilities(circuit_wboth)
 
         print(probs_normal)
         print(probs_wprep)
@@ -321,19 +328,19 @@ class InstrumentTestCase(BaseTestCase):
         self.assertEqual( probs_normal, probs_wboth )
 
         #now try bulk op
-        bulk_probs = model.bulk_probs([mdl_normal, mdl_wprep, mdl_wpovm, mdl_wboth],check=True)
+        bulk_probs = model.sim.bulk_probs([circuit_normal, circuit_wprep, circuit_wpovm, circuit_wboth])
 
     def testWriteAndLoad(self):
         mdl = self.target_model.copy()
 
         s = str(mdl) #stringify with instruments
 
-        for param in ('full','TP','CPTP','static'):
+        for param in ('full','full TP','static'):  # skip 'CPTP' b/c cannot serialize that to text anymore
             print("Param: ",param)
             mdl.set_all_parameterizations(param)
             filename = temp_files + "/gateset_with_instruments_%s.txt" % param
             pygsti.io.write_model(mdl, filename)
-            gs2 = pygsti.io.read_model(filename)
+            gs2 = pygsti.io.parse_model(filename)
 
             self.assertAlmostEqual( mdl.frobeniusdist(gs2), 0.0 )
             for lbl in mdl.operations:

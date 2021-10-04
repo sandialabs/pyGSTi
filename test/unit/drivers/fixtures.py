@@ -1,10 +1,12 @@
 """Shared test fixtures for pygsti.drivers unit tests"""
-from ..util import Namespace
+import pygsti.circuits as pc
+import pygsti.data as pdata
 from pygsti.modelpacks.legacy import std1Q_XYI as std
-import pygsti.construction as pc
+from ..util import Namespace
 
 ns = Namespace()
 ns.model = std.target_model()
+ns.pspec = std.processor_spec()
 ns.opLabels = list(ns.model.operations.keys())
 ns.fiducials = std.fiducials
 ns.germs = std.germs
@@ -18,7 +20,7 @@ def datagen_gateset(self):
 
 @ns.memo
 def lsgstStrings(self):
-    return pc.make_lsgst_lists(
+    return pc.create_lsgst_circuit_lists(
         self.opLabels, self.fiducials, self.fiducials,
         self.germs, self.maxLengthList
     )
@@ -26,7 +28,7 @@ def lsgstStrings(self):
 
 @ns.memo
 def dataset(self):
-    return pc.generate_fake_data(
+    return pdata.simulate_data(
         self.datagen_gateset, self.lsgstStrings[-1],
-        nSamples=1000, sampleError='binomial', seed=100
+        num_samples=1000, sample_error='binomial', seed=100
     )

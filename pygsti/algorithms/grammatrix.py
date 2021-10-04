@@ -1,4 +1,6 @@
-""" Utility functions related to Gram matrix construction."""
+"""
+Utility functions related to Gram matrix construction.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,45 +10,45 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .. import construction as _construction
-from .core import gram_rank_and_evals as _gramRankAndEvals
-from ..objects import ComplementSPAMVec as _ComplementSPAMVec
+from pygsti.algorithms.core import gram_rank_and_eigenvalues as _gram_rank_and_evals
+from pygsti import circuits as _circuits
 
 
 ########################################################
 ## Gram matrix stuff
 ########################################################
 
-def get_max_gram_basis(opLabels, dataset, maxLength=0):
+def max_gram_basis(op_labels, dataset, max_length=0):
     """
-    Compute a maximal set of operation sequences that can be used as a basis for a Gram
-      matrix.  That is, a maximal set of strings {S_i} such that the gate
-      strings { S_i S_j } are all present in dataset.  If maxLength > 0, then
-      restrict len(S_i) <= maxLength.
+    Compute a maximal set of basis circuits for a Gram matrix.
+
+    That is, a maximal set of strings {S_i} such that the gate
+    strings { S_i S_j } are all present in dataset.  If max_length > 0, then
+    restrict len(S_i) <= max_length.
 
     Parameters
     ----------
-    opLabels : list or tuple
-      the operation labels to use in Gram matrix basis strings
+    op_labels : list or tuple
+        the operation labels to use in Gram matrix basis strings
 
     dataset : DataSet
-      the dataset to use when constructing the Gram matrix
+        the dataset to use when constructing the Gram matrix
 
-    maxLength : int, optional
-      the maximum string length considered for Gram matrix basis
-      elements.  Defaults to 0 (no limit).
+    max_length : int, optional
+        the maximum string length considered for Gram matrix basis
+        elements.  Defaults to 0 (no limit).
 
     Returns
     -------
     list of tuples
-      where each tuple contains operation labels and specifies a single operation sequence.
+        where each tuple contains operation labels and specifies a single circuit.
     """
 
     datasetStrings = list(dataset.keys())
     minLength = min([len(s) for s in datasetStrings])
-    if maxLength <= 0:
-        maxLength = max([len(s) for s in datasetStrings])
-    possibleStrings = _construction.gen_all_circuits(opLabels, (minLength + 1) // 2, maxLength // 2)
+    if max_length <= 0:
+        max_length = max([len(s) for s in datasetStrings])
+    possibleStrings = _circuits.iter_all_circuits(op_labels, (minLength + 1) // 2, max_length // 2)
 
     def _have_all_data(strings):
         for a in strings:
@@ -63,31 +65,31 @@ def get_max_gram_basis(opLabels, dataset, maxLength=0):
     return max_string_set
 
 
-def max_gram_rank_and_evals(dataset, targetModel, maxBasisStringLength=10,
-                            fixedLists=None):
+def max_gram_rank_and_eigenvalues(dataset, target_model, max_basis_string_length=10,
+                                  fixed_lists=None):
     """
-    Compute the rank and singular values of a maximal Gram matrix,that is, the
-    Gram matrix using a basis computed by:
-    get_max_gram_basis(dataset.get_gate_labels(), dataset, maxBasisStringLength).
+    Compute the rank and singular values of a maximal Gram matrix.
+
+    That is, compute the rank and singular values of the Gram matrix computed using the basis:
+    max_gram_basis(dataset.gate_labels(), dataset, max_basis_string_length).
 
     Parameters
     ----------
     dataset : DataSet
-      the dataset to use when constructing the Gram matrix
+        the dataset to use when constructing the Gram matrix
 
-    targetModel : Model
-      A model used to make sense of operation sequences and for the construction of
-      a theoretical gram matrix and spectrum.
+    target_model : Model
+        A model used to make sense of circuits and for the construction of
+        a theoretical gram matrix and spectrum.
 
-    maxBasisStringLength : int, optional
-      the maximum string length considered for Gram matrix basis
-      elements.  Defaults to 10.
+    max_basis_string_length : int, optional
+        the maximum string length considered for Gram matrix basis
+        elements.  Defaults to 10.
 
-    fixedLists : (prepStrs, effectStrs), optional
-      2-tuple of operation sequence lists, specifying the preparation and
-      measurement fiducials to use when constructing the Gram matrix,
-      and thereby bypassing the search for such lists.
-
+    fixed_lists : (prep_fiducials, effect_fiducials), optional
+        2-tuple of :class:`Circuit` lists, specifying the preparation and
+        measurement fiducials to use when constructing the Gram matrix,
+        and thereby bypassing the search for such lists.
 
     Returns
     -------
@@ -95,10 +97,10 @@ def max_gram_rank_and_evals(dataset, targetModel, maxBasisStringLength=10,
     singularvalues : numpy array
     targetsingularvalues : numpy array
     """
-    if fixedLists is not None:
-        maxRhoStrs, maxEStrs = fixedLists
+    if fixed_lists is not None:
+        maxRhoStrs, maxEStrs = fixed_lists
     else:
-        maxRhoStrs = maxEStrs = get_max_gram_basis(dataset.get_gate_labels(),
-                                                   dataset, maxBasisStringLength)
+        maxRhoStrs = maxEStrs = max_gram_basis(dataset.gate_labels(),
+                                               dataset, max_basis_string_length)
 
-    return _gramRankAndEvals(dataset, maxRhoStrs, maxEStrs, targetModel)
+    return _gram_rank_and_evals(dataset, maxRhoStrs, maxEStrs, target_model)

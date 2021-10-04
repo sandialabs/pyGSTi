@@ -1,9 +1,9 @@
-from notebookstestcase import _PYGSTI_ROOT, notebooks_in_path, run_notebook
-from nose.plugins.attrib import attr
+import logging
+import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
-import shutil
 
+from notebookstestcase import _PYGSTI_ROOT, notebooks_in_path, _make_test
 
 # All tutorials to be tested are under this directory
 _TUTORIALS_ROOT = _PYGSTI_ROOT / 'jupyter_notebooks' / 'Tutorials'
@@ -17,6 +17,7 @@ _TUTORIAL_FILES = [
 
 
 def test_tutorials():
+    logging.getLogger('traitlets').setLevel(logging.CRITICAL)
     with TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
 
@@ -32,8 +33,4 @@ def test_tutorials():
 
         # Emit a test for each notebook
         for nb_path in notebooks_in_path(_TUTORIALS_ROOT):
-            rel_path = nb_path.relative_to(_TUTORIALS_ROOT)
-            workdir = tmp_path / rel_path.parent
-            workdir.mkdir(parents=True, exist_ok=True)
-            description = "Running notebook {}".format(rel_path)
-            yield attr(description=description)(run_notebook), nb_path, workdir
+            yield _make_test(nb_path, tmp_path, _TUTORIALS_ROOT)

@@ -1,8 +1,10 @@
-from pygsti.objects.verbosityprinter import *
-#unneeded: from mpi4py                          import MPI
-from ..testutils import BaseTestCase, compare_files, temp_files
+import unittest
 
-import unittest, os
+from pygsti.baseobjs.verbosityprinter import *
+
+# unneeded: from mpi4py                          import MPI
+from ..testutils import BaseTestCase, temp_files
+
 
 class mock_comm():
     def __init__(self, rank):

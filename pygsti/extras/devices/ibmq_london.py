@@ -9,12 +9,12 @@
 #***************************************************************************************************
 
 # import numpy as _np
-# from ...objects import processorspec as _pspec
+# from ...baseobjs import processorspec as _pspec
 # from .ibmq_ourense import *
 
 qubits = ['Q' + str(x) for x in range(5)]
 
-twoQgate = 'Gcnot'
+two_qubit_gate = 'Gcnot'
 
 edgelist = [('Q1', 'Q0'),
             ('Q0', 'Q1'),

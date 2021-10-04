@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-from pygsti.construction import std1Q_XYI
-from pygsti.algorithms   import gaugeopt_to_target
-from pygsti.tools        import timed_block
-
 from mpi4py import MPI
+
+from pygsti.algorithms import gaugeopt_to_target
+from pygsti.construction import std1Q_XYI
+from pygsti.tools import timed_block
+
 comm = MPI.COMM_WORLD
 #comm = None
 
@@ -25,9 +26,9 @@ def main():
             gs_datagen, gs_target, tol=1e-7,
             method="auto",
             #method="L-BFGS-B",
-            itemWeights={'spam' : 1.0, 'gates':1.0},
-            spamMetric='frobenius',
-            gatesMetric='frobenius', checkJac=True,
+            item_weights={'spam' : 1.0, 'gates':1.0},
+            spam_metric='frobenius',
+            gates_metric='frobenius', check_jac=True,
             cptp_penalty_factor=1.0,
             spam_penalty_factor=1.0,
             comm=comm, verbosity=3)

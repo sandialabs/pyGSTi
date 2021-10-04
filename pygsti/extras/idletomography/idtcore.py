@@ -8,20 +8,25 @@
 #***************************************************************************************************
 """ Core Idle Tomography routines """
 
-import numpy as _np
+import collections as _collections
 import itertools as _itertools
 import time as _time
-import collections as _collections
 import warnings as _warnings
 
-from ... import construction as _cnst
-from ... import objects as _objs
-from ... import tools as _tools
-from ...objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+import numpy as _np
 
-from . import pauliobjs as _pobjs
 from . import idttools as _idttools
+from . import pauliobjs as _pobjs
 from .idtresults import IdleTomographyResults as _IdleTomographyResults
+from ... import baseobjs as _baseobjs
+from ... import models as _models
+from ... import tools as _tools
+from ...models import modelconstruction as _modelconstruction
+from ...modelmembers import states as _state
+from ...modelmembers import operations as _op
+from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ...circuits.circuit import Circuit as _Circuit
+
 
 # This module implements idle tomography, which deals only with
 # many-qubit idle gates (on some number of qubits) and single-
@@ -57,7 +62,7 @@ def hamiltonian_jac_element(prep, error, observable):
     """
     # dp/deps where p = eps * i * Tr(Obs (Err*rho - rho*Err)) = eps * i * ( Tr(Obs Err rho) - Tr(Obs rho Err))
     #                 = eps * i * Tr([Obs,Err] * rho)  so dp/deps just drops eps factor
-    com = error.icommutatorOver2(observable)
+    com = error.icommutator_over_2(observable)
     return 0 if (com is None) else com.statedot(prep)
 
 
@@ -181,12 +186,12 @@ def affine_jac_element(prep, error, meas, outcome):
     #   where ZI = diag(1,1,-1,-1), so this adds prob to 00 and 01 and removes from 10 and 11.
     # Instead it means the map AffZ x Id where AffZ : rho -> rho + eps Z and Id : rho -> rho.
 
-    def _affhelper(prepSign, prepBasis, errP, measSign, measBasis, outcome_bit):
+    def _affhelper(prep_sign, prep_basis, error_pauli, meas_sign, meas_basis, outcome_bit):
         """
         Answers this question:
-        If a qubit is prepped in state (prepSign,prepBasis) & measured
-        using POVM (measSign,measBasis), and experiences an affine error given
-        (at this qubit) by Pauli "errP", then at what rate does that change probability of outcome "bit"?
+        If a qubit is prepped in state (prep_sign,prep_basis) & measured
+        using POVM (meas_sign,meas_basis), and experiences an affine error given
+        (at this qubit) by Pauli "error_pauli", then at what rate does that change probability of outcome "bit"?
         This is going to get multiplied over all qubits.  A zero indicates that the affine error is orthogonal
         to the measurement basis, which means the probability of *all* outcomes including this bit are unaffected.
 
@@ -197,29 +202,29 @@ def affine_jac_element(prep, error, meas, outcome):
         # outputs ErrP if ErrP != 'I', otherwise it's just the identity map (see above).
         #
         # Thus, when ErrP != 'I', we have Tr( (I+/-P) ErrP ) which equals 0 whenever
-        # ErrP != P and +/-1 if ErrP == P.  The sign equals measSign when outcome_bit == "0",
+        # ErrP != P and +/-1 if ErrP == P.  The sign equals meas_sign when outcome_bit == "0",
         # and is reversed when it == "1".
         # When ErrP == 'I', we have Tr( (I+/-P) (I+/-P) ) = Tr( I + sign*I)
-        #  = 1 where sign = prepSign*measSign when outcome == "0" and -1 times
+        #  = 1 where sign = prep_sign*meas_sign when outcome == "0" and -1 times
         #      this when == "1".
         #  = 0 otherwise
 
-        assert(prepBasis in ("X", "Y", "Z"))  # 'I', for instance, is invalid
-        assert(measBasis in ("X", "Y", "Z"))  # 'I', for instance, is invalid
-        assert(prepBasis == measBasis)  # always true
+        assert(prep_basis in ("X", "Y", "Z"))  # 'I', for instance, is invalid
+        assert(meas_basis in ("X", "Y", "Z"))  # 'I', for instance, is invalid
+        assert(prep_basis == meas_basis)  # always true
         outsign = 1 if (outcome_bit == "0") else -1  # b/c we often just flip a sign when == "1"
-        # i.e. the sign used in I+/-P for measuring is measSign * outsign
+        # i.e. the sign used in I+/-P for measuring is meas_sign * outsign
 
-        if errP == 'I':  # special case: no affine action on this space
-            if prepBasis == measBasis:
-                return 1 if (prepSign * measSign * outsign == 1) else 0
+        if error_pauli == 'I':  # special case: no affine action on this space
+            if prep_basis == meas_basis:
+                return 1 if (prep_sign * meas_sign * outsign == 1) else 0
             else: return 1  # bases don't match
 
-        if measBasis != errP:  # then they don't commute (b/c neither can be 'I')
+        if meas_basis != error_pauli:  # then they don't commute (b/c neither can be 'I')
             return 0  # so there's no change along this axis (see docstring)
-        else:  # measBasis == errP != 'I'
-            if outcome_bit == "0": return measSign
-            else: return measSign * -1
+        else:  # meas_basis == error_pauli != 'I'
+            if outcome_bit == "0": return meas_sign
+            else: return meas_sign * -1
 
     return _np.prod([_affhelper(s1, P1, Err, s2, P2, o) for s1, P1, s2, P2, Err, o
                      in zip(prep.signs, prep.rep, meas.signs, meas.rep,
@@ -259,24 +264,24 @@ def affine_jac_obs_element(prep, error, observable):
     # Note: as in affine_jac_element, 'I's in error mean that this affine error
     # doesn't act (acts as the identity) on that qubit.
 
-    def _affhelper(prepSign, prepBasis, errP, obsP):
-        assert(prepBasis in ("X", "Y", "Z"))  # 'I', for instance, is invalid
+    def _affhelper(prep_sign, prep_basis, error_pauli, obs_pauli):
+        assert(prep_basis in ("X", "Y", "Z"))  # 'I', for instance, is invalid
 
-        # want Tr(obsP * AffErr[ I+/-P ] ).  There are several cases:
-        # 1) if obsP == 'I':
-        #   - if errP == 'I' (so AffErr = Id), Tr(I +/- P) == 1 always
-        #   - if errP != 'I', Tr(ErrP) == 0 since ErrP != 'I'
-        # 2) if obsP != 'I' (so Tr(obsP) == 0)
-        #   - if errP == 'I', Tr(obsP * (I +/- P)) = prepSign if (obsP == prepBasis) else 0
-        #   - if errP != 'I', Tr(obsP * errP) = 1 if (obsP == errP) else 0
+        # want Tr(obs_pauli * AffErr[ I+/-P ] ).  There are several cases:
+        # 1) if obs_pauli == 'I':
+        #   - if error_pauli == 'I' (so AffErr = Id), Tr(I +/- P) == 1 always
+        #   - if error_pauli != 'I', Tr(ErrP) == 0 since ErrP != 'I'
+        # 2) if obs_pauli != 'I' (so Tr(obs_pauli) == 0)
+        #   - if error_pauli == 'I', Tr(obs_pauli * (I +/- P)) = prep_sign if (obs_pauli == prep_basis) else 0
+        #   - if error_pauli != 'I', Tr(obs_pauli * error_pauli) = 1 if (obs_pauli == error_pauli) else 0
         #      (and actually this counts at 2 instead of 1 b/c obs isn't normalized (I think?))
 
-        if obsP == 'I':
-            return 1 if (errP == 'I') else 0
-        elif errP == 'I':
-            return prepSign if (prepBasis == obsP) else 0
+        if obs_pauli == 'I':
+            return 1 if (error_pauli == 'I') else 0
+        elif error_pauli == 'I':
+            return prep_sign if (prep_basis == obs_pauli) else 0
         else:
-            return 2 if (obsP == errP) else 0
+            return 2 if (obs_pauli == error_pauli) else 0
 
     return _np.prod([_affhelper(s1, P1, Err, o) for s1, P1, Err, o
                      in zip(prep.signs, prep.rep, error.rep, observable.rep)])
@@ -286,7 +291,7 @@ def affine_jac_obs_element(prep, error, observable):
 # Experiment generation:
 # -----------------------------------------------------------------------------
 
-def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
+def idle_tomography_fidpairs(nqubits, maxweight=2, include_hamiltonian=True,
                              include_stochastic=True, include_affine=True,
                              ham_tmpl="auto",
                              preferred_prep_basis_signs=("+", "+", "+"),
@@ -300,7 +305,7 @@ def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
 
     Parameters
     ----------
-    nQubits : int
+    nqubits : int
         The number of qubits.
 
     maxweight : int, optional
@@ -328,7 +333,7 @@ def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
     -------
     list
         a list of (prep,meas) 2-tuples of NQPauliState objects, each of
-        length `nQubits`, representing the fiducial pairs.
+        length `nqubits`, representing the fiducial pairs.
     """
     fidpairs = []  # list of 2-tuples of NQPauliState objects to return
 
@@ -366,12 +371,12 @@ def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
             for basisLets in _itertools.product(('X', 'Y', 'Z'), repeat=maxweight):
 
                 # flip base (preferred) basis signs as instructed by fliptup
-                prepSigns = [f * base_prep_signs[l] for f, l in zip(fliptup, basisLets)]
-                measSigns = [f * base_meas_signs[l] for f, l in zip(fliptup, basisLets)]
-                sto_tmpl_pairs.append((_pobjs.NQPauliState(''.join(basisLets), prepSigns),
-                                       _pobjs.NQPauliState(''.join(basisLets), measSigns)))
+                prep_signs = [f * base_prep_signs[l] for f, l in zip(fliptup, basisLets)]
+                meas_signs = [f * base_meas_signs[l] for f, l in zip(fliptup, basisLets)]
+                sto_tmpl_pairs.append((_pobjs.NQPauliState(''.join(basisLets), prep_signs),
+                                       _pobjs.NQPauliState(''.join(basisLets), meas_signs)))
 
-        fidpairs.extend(_idttools.tile_pauli_fidpairs(sto_tmpl_pairs, nQubits, maxweight))
+        fidpairs.extend(_idttools.tile_pauli_fidpairs(sto_tmpl_pairs, nqubits, maxweight))
 
     elif include_affine:
         raise ValueError("Cannot include affine sequences without also including stochastic ones!")
@@ -396,24 +401,24 @@ def idle_tomography_fidpairs(nQubits, maxweight=2, include_hamiltonian=True,
 
             # basis sign doesn't matter for hamiltonian terms,
             #  so just use preferred signs
-            prepSigns = [base_prep_signs[l] for l in prepLets]
-            measSigns = [base_meas_signs[l] for l in measLets]
-            ham_tmpl_pairs.append((_pobjs.NQPauliState(prepLets, prepSigns),
-                                   _pobjs.NQPauliState(measLets, measSigns)))
+            prep_signs = [base_prep_signs[l] for l in prepLets]
+            meas_signs = [base_meas_signs[l] for l in measLets]
+            ham_tmpl_pairs.append((_pobjs.NQPauliState(prepLets, prep_signs),
+                                   _pobjs.NQPauliState(measLets, meas_signs)))
 
-        fidpairs.extend(_idttools.tile_pauli_fidpairs(ham_tmpl_pairs, nQubits, maxweight))
+        fidpairs.extend(_idttools.tile_pauli_fidpairs(ham_tmpl_pairs, nqubits, maxweight))
 
     return fidpairs
 
 
-def preferred_signs_from_paulidict(pauliBasisDict):
+def preferred_signs_from_paulidict(pauli_basis_dict):
     """
     Infers what the preferred basis signs are based on the length of gate-name
-    strings in `pauliBasisDict` (shorter strings are preferred).
+    strings in `pauli_basis_dict` (shorter strings are preferred).
 
     Parameters
     ----------
-    pauliBasisDict : dict
+    pauli_basis_dict : dict
         A dictionary w/keys like `"+X"` or `"-Y"` and values that
         are tuples of gate *names* (not labels, which include qubit or
         other state-space designations), e.g. `("Gx","Gx")`.
@@ -427,15 +432,15 @@ def preferred_signs_from_paulidict(pauliBasisDict):
     """
     preferred_signs = ()
     for let in ('X', 'Y', 'Z'):
-        if "+" + let in pauliBasisDict: plusKey = "+" + let
-        elif let in pauliBasisDict: plusKey = let
+        if "+" + let in pauli_basis_dict: plusKey = "+" + let
+        elif let in pauli_basis_dict: plusKey = let
         else: plusKey = None
 
-        if "-" + let in pauliBasisDict: minusKey = '-' + let
+        if "-" + let in pauli_basis_dict: minusKey = '-' + let
         else: minusKey = None
 
         if minusKey and plusKey:
-            if len(pauliBasisDict[plusKey]) <= len(pauliBasisDict[minusKey]):
+            if len(pauli_basis_dict[plusKey]) <= len(pauli_basis_dict[minusKey]):
                 preferred_sign = '+'
             else:
                 preferred_sign = '-'
@@ -451,23 +456,23 @@ def preferred_signs_from_paulidict(pauliBasisDict):
     return preferred_signs
 
 
-def fidpairs_to_pauli_fidpairs(fidpairsList, pauliBasisDicts, nQubits):
+def fidpairs_to_pauli_fidpairs(fidpairs_list, pauli_basis_dicts, nqubits):
     """
     Translate :class:`GatesString`-type fiducial pairs to
-    :class:`NQPauliState`-type "Pauli fiducial pairs" using `pauliBasisDicts`.
+    :class:`NQPauliState`-type "Pauli fiducial pairs" using `pauli_basis_dicts`.
 
     Parameters
     ----------
-    fidpairsList : list
+    fidpairs_list : list
         A list whose elements are 2-tuples of :class:`Circuit` objects.
 
-    pauliBasisDicts : tuple
+    pauli_basis_dicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries
         specifying the way to prepare and measure in Pauli bases.  See
         :function:`preferred_signs_from_paulidict` for details on each
         dictionary's format.
 
-    nQubits : int
+    nqubits : int
         The number of qubits.  Needed because :class:`Circuit`
         objects don't contain this information.
 
@@ -482,7 +487,7 @@ def fidpairs_to_pauli_fidpairs(fidpairsList, pauliBasisDicts, nQubits):
     #         '-X': ('Gy',)*3, '-Y': ('Gx',), '-Z': ('Gx','Gx')}
     #measDict = { 'X': ('Gy',)*3, 'Y': ('Gx',), 'Z': (),
     #         '-X': ('Gy',), '-Y': ('Gx',)*3, '-Z': ('Gx','Gx')}
-    prepDict, measDict = pauliBasisDicts
+    prepDict, measDict = pauli_basis_dicts
 
     for k, v in prepDict.items():
         assert(k[-1] in ('X', 'Y', 'Z') and isinstance(v, tuple)), \
@@ -494,7 +499,7 @@ def fidpairs_to_pauli_fidpairs(fidpairsList, pauliBasisDicts, nQubits):
     rev_prepDict = {v: k for k, v in prepDict.items()}
     rev_measDict = {v: k for k, v in measDict.items()}
 
-    def convert(opstr, rev_pauliDict):
+    def convert(opstr, rev_pauli_dict):
         #Get gatenames_per_qubit (keys = sslbls, vals = lists of gatenames)
         #print("DB: Converting ",opstr)
         gatenames_per_qubit = _collections.defaultdict(list)
@@ -504,12 +509,12 @@ def fidpairs_to_pauli_fidpairs(fidpairsList, pauliBasisDicts, nQubits):
                 assert(isinstance(c.sslbls[0], int))
                 gatenames_per_qubit[c.sslbls[0]].append(c.name)
         #print("DB: gatenames_per_qubit =  ",gatenames_per_qubit)
-        #print("DB: rev keys = ",list(rev_pauliDict.keys()))
+        #print("DB: rev keys = ",list(rev_pauli_dict.keys()))
 
         #Check if list of gatenames equals a known basis prep/meas:
         letters = ""; signs = []
-        for i in range(nQubits):
-            basis = rev_pauliDict.get(tuple(gatenames_per_qubit[i]), None)
+        for i in range(nqubits):
+            basis = rev_pauli_dict.get(tuple(gatenames_per_qubit[i]), None)
             #print("DB:  Q%d: %s -> %s" % (i,str(gatenames_per_qubit[i]), str(basis)))
             assert(basis is not None)  # to indicate convert failed
             letters += basis[-1]  # last letter of basis should be 'X' 'Y' or 'Z'
@@ -519,7 +524,7 @@ def fidpairs_to_pauli_fidpairs(fidpairsList, pauliBasisDicts, nQubits):
         return _pobjs.NQPauliState(letters, signs)
 
     ret = []
-    for prepStr, measStr in fidpairsList:
+    for prepStr, measStr in fidpairs_list:
         try:
             prepPauli = convert(prepStr, rev_prepDict)
             measPauli = convert(measStr, rev_measDict)
@@ -548,7 +553,7 @@ def determine_paulidicts(model):
 
     Returns
     -------
-    pauliBasisDicts or None
+    pauli_basis_dicts or None
         If successful, a `(prepDict,measureDict)` 2-tuple of Pauli basis
         dictionaries.  If unsuccessful, None.
     """
@@ -565,40 +570,41 @@ def determine_paulidicts(model):
         prepLbls = list(model.prep_blks['layers'].keys())
         prep = model.prep_blks['layers'][prepLbls[0]]
 
-    if isinstance(prep, _objs.ComputationalSPAMVec):
+    if isinstance(prep, _state.ComputationalBasisState):
         if any([b != 0 for b in prep._zvals]): return None
-    elif isinstance(prep, _objs.LindbladSPAMVec):
-        if isinstance(prep.state_vec, _objs.ComputationalSPAMVec):
+    elif isinstance(prep, _state.ComposedState):
+        if isinstance(prep.state_vec, _state.ComputationalBasisState):
             if any([b != 0 for b in prep.state_vec._zvals]): return None
         if any([abs(v) > 1e-6 for v in prep.to_vector()]): return None
     else:
-        nQubits = int(round(_np.log2(model.dim) / 2))
-        cmp = _objs.ComputationalSPAMVec([0] * nQubits, model._evotype).todense()
-        if _np.linalg.norm(prep.todense() - cmp) > 1e-6: return None
+        nqubits = int(round(_np.log2(model.dim) / 2))
+        cmp = _state.ComputationalBasisState([0] * nqubits, 'pp', model._evotype).to_dense()
+        if _np.linalg.norm(prep.to_dense() - cmp) > 1e-6: return None
 
     def extract_action(g, cur_sslbls, ql):
         """ Note: assumes cur_sslbs is just a list of labels (of first "sector"
             of a real StateSpaceLabels struct) """
-        if isinstance(g, _objs.ComposedOp):
+        if isinstance(g, _op.ComposedOp):
             action = _np.identity(4, 'd')
             for fg in g.factorops:
                 action = _np.dot(extract_action(fg, cur_sslbls, ql), action)
             return action
 
-        if isinstance(g, _objs.EmbeddedOp):
+        if isinstance(g, _op.EmbeddedOp):
             #Note: an embedded gate need not use the *same* state space labels as the model
-            lbls = [cur_sslbls[g.state_space_labels.labels[0].index(locLbl)] for locLbl in g.targetLabels]
+            g_sslbls = g.state_space.tensor_product_block_labels(0)
+            lbls = [cur_sslbls[g_sslbls.index(locLbl)] for locLbl in g.target_labels]
             # TODO: add to StateSpaceLabels functionality to make sure two are compatible, and to translate between
             # them, & make sub-labels?
             return extract_action(g.embedded_op, lbls, ql)
 
-        # StaticDenseOp, LindbladDenseOp, other gates...
+        # StaticArbitraryOp, LindbladDenseOp, other gates...
         if len(cur_sslbls) == 1 and cur_sslbls[0] == ql:
-            mx = g.todense()
+            mx = g.to_dense()
             assert(mx.shape == (4, 4))
             return mx
         else:
-            mx = g.todense()
+            mx = g.to_dense()
             if _np.linalg.norm(mx - _np.identity(g.dim, 'd')) < 1e-6:
                 # acts as identity on some other space - this is ok
                 return _np.identity(4, 'd')
@@ -606,14 +612,16 @@ def determine_paulidicts(model):
                 raise ValueError("LinearOperator acts nontrivially on a space other than that in its label!")
 
     #Get several standard 1-qubit pi/2 rotations in Pauli basis:
-    pp = _objs.BuiltinBasis('pp', 4)
-    Gx = _cnst.basis_build_operation([('Q0',)], "X(pi/2,Q0)", basis=pp, parameterization="static").todense()
-    Gy = _cnst.basis_build_operation([('Q0',)], "Y(pi/2,Q0)", basis=pp, parameterization="static").todense()
+    pp = _baseobjs.BuiltinBasis('pp', 4)
+    Gx = _modelconstruction.create_operation("X(pi/2,Q0)", [('Q0',)], basis=pp,
+                                             parameterization="static").to_dense()
+    Gy = _modelconstruction.create_operation("Y(pi/2,Q0)", [('Q0',)], basis=pp,
+                                             parameterization="static").to_dense()
 
     #try to find 1-qubit pi/2 rotations
     found = {}
-    for gl in model.get_primitive_op_labels():
-        if isinstance(model, _objs.ExplicitOpModel):
+    for gl in model.primitive_op_labels:
+        if isinstance(model, _models.ExplicitOpModel):
             gate = model.operations[gl]
         else:
             gate = model.operation_blks['layers'][gl]
@@ -622,9 +630,9 @@ def determine_paulidicts(model):
             continue  # skip gates that don't have 1Q-like labels
         qubit_label = gl.sslbls[0]  # the qubit this gate is supposed to act on
         try:
-            assert(len(model.state_space_labels.labels) == 1), "Assumes a single state space sector"
+            assert(model.state_space.num_tensor_product_blocks == 1), "Assumes a single state space sector"
             action_on_qubit = extract_action(gate,
-                                             model.state_space_labels.labels[0],
+                                             model.state_space.tensor_product_block_labels(0),
                                              qubit_label)
         except ValueError:
             continue  # skip gates that we can't extract action from
@@ -648,7 +656,7 @@ def determine_paulidicts(model):
     return None
 
 
-def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
+def make_idle_tomography_list(nqubits, max_lenghts, pauli_basis_dicts, maxweight=2,
                               idle_string=((),), include_hamiltonian=True,
                               include_stochastic=True, include_affine=True,
                               ham_tmpl="auto", preferred_prep_basis_signs="auto",
@@ -658,17 +666,17 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
 
     Parameters
     ----------
-    nQubits : int
+    nqubits : int
         The number of qubits.
 
-    maxLengths : list
+    max_lenghts : list
         A list of maximum germ-power lengths. Each specifies a number many times
         to repeat the idle gate, and typically this is a list of the powers of
         2 preceded by zero, e.g. `[0,1,2,4,16]`.  The largest value in this
         list should be chosen to be the maximum number of idle gates you want to
         perform in a row (typically limited by performance or time constraints).
 
-    pauliBasisDicts : tuple
+    pauli_basis_dicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries
         specifying the way to prepare and measure in Pauli bases.  See
         :function:`preferred_signs_from_paulidict` for details on each
@@ -699,7 +707,7 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
         orientation if preferred because it's easier to achieve using the
         native model.  Additionally, the special (and default) value "auto"
         may be used, in which case :function:`preferred_signs_from_paulidict`
-        is used to choose preferred signs based on `pauliBasisDicts`.
+        is used to choose preferred signs based on `pauli_basis_dicts`.
 
     Returns
     -------
@@ -707,16 +715,16 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
         A list of :class:`Circuit` objects.
     """
 
-    prepDict, measDict = pauliBasisDicts
+    prepDict, measDict = pauli_basis_dicts
     if preferred_prep_basis_signs == "auto":
         preferred_prep_basis_signs = preferred_signs_from_paulidict(prepDict)
     if preferred_meas_basis_signs == "auto":
         preferred_meas_basis_signs = preferred_signs_from_paulidict(measDict)
 
-    GiStr = _objs.Circuit(idle_string, num_lines=nQubits)
+    GiStr = _Circuit(idle_string, num_lines=nqubits)
 
     pauli_fidpairs = idle_tomography_fidpairs(
-        nQubits, maxweight, include_hamiltonian, include_stochastic,
+        nqubits, maxweight, include_hamiltonian, include_stochastic,
         include_affine, ham_tmpl, preferred_prep_basis_signs,
         preferred_meas_basis_signs)
 
@@ -725,13 +733,13 @@ def make_idle_tomography_list(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
 
     listOfExperiments = []
     for prepFid, measFid in fidpairs:  # list of fidpairs / configs (a prep/meas that gets I^L placed btwn it)
-        for L in maxLengths:
+        for L in max_lenghts:
             listOfExperiments.append(prepFid + GiStr * L + measFid)
 
     return listOfExperiments
 
 
-def make_idle_tomography_lists(nQubits, maxLengths, pauliBasisDicts, maxweight=2,
+def make_idle_tomography_lists(nqubits, max_lenghts, pauli_basis_dicts, maxweight=2,
                                idle_string=((),), include_hamiltonian=True,
                                include_stochastic=True, include_affine=True,
                                ham_tmpl="auto", preferred_prep_basis_signs="auto",
@@ -743,17 +751,17 @@ def make_idle_tomography_lists(nQubits, maxLengths, pauliBasisDicts, maxweight=2
 
     Parameters
     ----------
-    nQubits : int
+    nqubits : int
         The number of qubits.
 
-    maxLengths : list
+    max_lenghts : list
         A list of maximum germ-power lengths. Each specifies a number many times
         to repeat the idle gate, and typically this is a list of the powers of
         2 preceded by zero, e.g. `[0,1,2,4,16]`.  The largest value in this
         list should be chosen to be the maximum number of idle gates you want to
         perform in a row (typically limited by performance or time constraints).
 
-    pauliBasisDicts : tuple
+    pauli_basis_dicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries
         specifying the way to prepare and measure in Pauli bases.  See
         :function:`preferred_signs_from_paulidict` for details on each
@@ -784,7 +792,7 @@ def make_idle_tomography_lists(nQubits, maxLengths, pauliBasisDicts, maxweight=2
         orientation if preferred because it's easier to achieve using the
         native model.  Additionally, the special (and default) value "auto"
         may be used, in which case :function:`preferred_signs_from_paulidict`
-        is used to choose preferred signs based on `pauliBasisDicts`.
+        is used to choose preferred signs based on `pauli_basis_dicts`.
 
     Returns
     -------
@@ -792,16 +800,16 @@ def make_idle_tomography_lists(nQubits, maxLengths, pauliBasisDicts, maxweight=2
         A list of lists of :class:`Circuit` objects, one list per max-L value.
     """
 
-    prepDict, measDict = pauliBasisDicts
+    prepDict, measDict = pauli_basis_dicts
     if preferred_prep_basis_signs == "auto":
         preferred_prep_basis_signs = preferred_signs_from_paulidict(prepDict)
     if preferred_meas_basis_signs == "auto":
         preferred_meas_basis_signs = preferred_signs_from_paulidict(measDict)
 
-    GiStr = _objs.Circuit(idle_string, num_lines=nQubits)
+    GiStr = _Circuit(idle_string, num_lines=nqubits)
 
     pauli_fidpairs = idle_tomography_fidpairs(
-        nQubits, maxweight, include_hamiltonian, include_stochastic,
+        nqubits, maxweight, include_hamiltonian, include_stochastic,
         include_affine, ham_tmpl, preferred_prep_basis_signs,
         preferred_meas_basis_signs)
 
@@ -809,7 +817,7 @@ def make_idle_tomography_lists(nQubits, maxLengths, pauliBasisDicts, maxweight=2
                 for x, y in pauli_fidpairs]  # e.g. convert ("XY","ZX") to tuple of Circuits
 
     listOfListsOfExperiments = []
-    for L in maxLengths:
+    for L in max_lenghts:
         expsForThisL = []
         for prepFid, measFid in fidpairs:  # list of fidpairs / configs (a prep/meas that gets I^L placed btwn it)
             expsForThisL.append(prepFid + GiStr * L + measFid)
@@ -822,8 +830,8 @@ def make_idle_tomography_lists(nQubits, maxLengths, pauliBasisDicts, maxweight=2
 # Running idle tomography
 # -----------------------------------------------------------------------------
 
-def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, idle_string,
-                               outcome, maxLengths, fitOrder=1):
+def compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, idle_string,
+                                        outcome, max_lenghts, fit_order=1):
     """
     Extract the observed error rate from a series of experiments which prepares
     and measures in the *same* Pauli basis and tracks a particular `outcome`.
@@ -837,7 +845,7 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, idle_str
         A `(prep,measure)` 2-tuple of :class:`NQPauliState` objects specifying
         the prepation state and measurement basis.
 
-    pauliBasisDicts : tuple
+    pauli_basis_dicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries
         specifying the way to prepare and measure in Pauli bases.  See
         :function:`preferred_signs_from_paulidict` for details on each
@@ -849,12 +857,12 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, idle_str
     outcome : NQOutcome
         The outcome being tracked.
 
-    maxLengths : list
+    max_lenghts : list
         A list of maximum germ-power lengths.  The seriese of sequences
         considered is `prepFiducial + idle_string^L + measFiducial`, where
-        `L` ranges over the values in `maxLengths`.
+        `L` ranges over the values in `max_lenghts`.
 
-    fitOrder : int, optional
+    fit_order : int, optional
         The polynomial order used to fit the observed data probabilities.
 
     Returns
@@ -866,7 +874,7 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, idle_str
     # fit number of given outcome counts to a line
     pauli_prep, pauli_meas = pauli_fidpair
 
-    prepDict, measDict = pauliBasisDicts
+    prepDict, measDict = pauli_basis_dicts
     prepFid = pauli_prep.to_circuit(prepDict)
     measFid = pauli_meas.to_circuit(measDict)
 
@@ -885,7 +893,7 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, idle_str
 
     #Get data to fit and weights to use in fitting
     data_to_fit = []; wts = []; errbars = []
-    for L in maxLengths:
+    for L in max_lenghts:
         opstr = prepFid + idle_string * L + measFid
         f, wt, err = freq_and_weight(opstr, outcome)
         data_to_fit.append(f)
@@ -893,25 +901,25 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, idle_str
         errbars.append(err)
 
     #curvefit -> slope
-    coeffs = _np.polyfit(maxLengths, data_to_fit, fitOrder, w=wts)  # when fitOrder = 1 = line
-    if fitOrder == 1:
+    coeffs = _np.polyfit(max_lenghts, data_to_fit, fit_order, w=wts)  # when fit_order = 1 = line
+    if fit_order == 1:
         slope = coeffs[0]
-    elif fitOrder == 2:
+    elif fit_order == 2:
         #OLD: slope =  coeffs[1] # c2*x2 + c1*x + c0 ->deriv@x=0-> c1
         det = coeffs[1]**2 - 4 * coeffs[2] * coeffs[0]
         slope = -_np.sign(coeffs[0]) * _np.sqrt(det) if det >= 0 else coeffs[1]
-    else: raise NotImplementedError("Only fitOrder <= 2 are supported!")
+    else: raise NotImplementedError("Only fit_order <= 2 are supported!")
 
     return {'rate': slope,
-            'fitOrder': fitOrder,
+            'fit_order': fit_order,
             'fitCoeffs': coeffs,
             'data': data_to_fit,
             'errbars': errbars,
             'weights': wts}
 
 
-def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
-                               idle_string, observable, maxLengths, fitOrder=1):
+def compute_observed_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts,
+                                        idle_string, observable, max_lenghts, fit_order=1):
     """
     Extract the observed error rate from a series of experiments which prepares
     and measures in *different* Pauli basis and tracks the expectation value of
@@ -926,7 +934,7 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
         A `(prep,measure)` 2-tuple of :class:`NQPauliState` objects specifying
         the prepation state and measurement basis.
 
-    pauliBasisDicts : tuple
+    pauli_basis_dicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries
         specifying the way to prepare and measure in Pauli bases.  See
         :function:`preferred_signs_from_paulidict` for details on each
@@ -938,12 +946,12 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
     observable : NQPauliOp
         The observable whose expectation value is being tracked.
 
-    maxLengths : list
+    max_lenghts : list
         A list of maximum germ-power lengths.  The seriese of sequences
         considered is `prepFiducial + idle_string^L + measFiducial`, where
-        `L` ranges over the values in `maxLengths`.
+        `L` ranges over the values in `max_lenghts`.
 
-    fitOrder : int, optional
+    fit_order : int, optional
         The polynomial order used to fit the observed data probabilities.
 
     Returns
@@ -955,7 +963,7 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
     # fit expectation value of `observable` (trace over all I elements of it) to a line
     pauli_prep, pauli_meas = pauli_fidpair
 
-    prepDict, measDict = pauliBasisDicts
+    prepDict, measDict = pauli_basis_dicts
     prepFid = pauli_prep.to_circuit(prepDict)
     measFid = pauli_meas.to_circuit(measDict)
 
@@ -1000,7 +1008,7 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
 
     #Get data to fit and weights to use in fitting
     data_to_fit = []; wts = []; errbars = []
-    for L in maxLengths:
+    for L in max_lenghts:
         opstr = prepFid + idle_string * L + measFid
         exptn, wt, err = unsigned_exptn_and_weight(opstr, obs_indices)
         data_to_fit.append(minus_sign * exptn)
@@ -1008,50 +1016,50 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts,
         errbars.append(err)
 
     #curvefit -> slope
-    coeffs = _np.polyfit(maxLengths, data_to_fit, fitOrder, w=wts)  # when fitOrder = 1 = line
-    if fitOrder == 1:
+    coeffs = _np.polyfit(max_lenghts, data_to_fit, fit_order, w=wts)  # when fit_order = 1 = line
+    if fit_order == 1:
         slope = coeffs[0]
-    elif fitOrder == 2:
+    elif fit_order == 2:
         #OLD: slope =  coeffs[1] # c2*x2 + c1*x + c0 ->deriv@x=0-> c1
         det = coeffs[1]**2 - 4 * coeffs[2] * coeffs[0]
         slope = -_np.sign(coeffs[0]) * _np.sqrt(det) if det >= 0 else coeffs[1]
         # c2*x2 + c1*x + c0 ->deriv@y=0-> 2*c2*x0 + c1;
         # x0=[-c1 +/- sqrt(c1^2 - 4c2*c0)] / 2*c2; take smaller root
         # but if determinant is < 0, fall back to x=0 slope
-    else: raise NotImplementedError("Only fitOrder <= 2 are supported!")
+    else: raise NotImplementedError("Only fit_order <= 2 are supported!")
 
     return {'rate': slope,
-            'fitOrder': fitOrder,
+            'fit_order': fit_order,
             'fitCoeffs': coeffs,
             'data': data_to_fit,
             'errbars': errbars,
             'weights': wts}
 
 
-def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=2,
+def do_idle_tomography(nqubits, dataset, max_lenghts, pauli_basis_dicts, maxweight=2,
                        idle_string=((),), include_hamiltonian="auto",
                        include_stochastic="auto", include_affine="auto",
-                       advancedOptions=None, verbosity=0, comm=None):
+                       advanced_options=None, verbosity=0, comm=None):
     """
     Analyze `dataset` using the idle tomography protocol to characterize
     `idle_string`.
 
     Parameters
     ----------
-    nQubits : int
+    nqubits : int
         The number of qubits.
 
     dataset : DataSet
         The set of data counts (observations) to use.
 
-    maxLengths : list
+    max_lenghts : list
         A list of maximum germ-power lengths. Each specifies a number many times
         to repeat the idle gate, and typically this is a list of the powers of
         2 preceded by zero, e.g. `[0,1,2,4,16]`.  The largest value in this
         list should be chosen to be the maximum number of idle gates you want to
         perform in a row (typically limited by performance or time constraints).
 
-    pauliBasisDicts : tuple
+    pauli_basis_dicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries
         specifying the way to prepare and measure in Pauli bases.  See
         :function:`preferred_signs_from_paulidict` for details on each
@@ -1071,7 +1079,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
         infer them (i.e. enough data to construct "full rank" Jacobian
         matrices).
 
-    advancedOptions : dict, optional
+    advanced_options : dict, optional
         A dictionary of optional advanced arguments which influence the
         way idle tomography is performed.  Allowed keys are:
 
@@ -1094,39 +1102,39 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
     IdleTomographyResults
     """
 
-    printer = _VerbosityPrinter.build_printer(verbosity, comm=comm)
+    printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
 
-    if advancedOptions is None:
-        advancedOptions = {}
+    if advanced_options is None:
+        advanced_options = {}
 
-    prepDict, measDict = pauliBasisDicts
-    if nQubits == 1:  # special case where line-labels may be ('*',)
+    prepDict, measDict = pauli_basis_dicts
+    if nqubits == 1:  # special case where line-labels may be ('*',)
         if len(dataset) > 0:
             first_circuit = list(dataset.keys())[0]
             line_labels = first_circuit.line_labels
         else:
             line_labels = (0,)
-        GiStr = _objs.Circuit(idle_string, line_labels=line_labels)
+        GiStr = _Circuit(idle_string, line_labels=line_labels)
     else:
-        GiStr = _objs.Circuit(idle_string, num_lines=nQubits)
+        GiStr = _Circuit(idle_string, num_lines=nqubits)
 
-    jacmode = advancedOptions.get("jacobian mode", "separate")
+    jacmode = advanced_options.get("jacobian mode", "separate")
     sto_aff_jac = None; sto_aff_obs_err_rates = None
     ham_aff_jac = None; ham_aff_obs_err_rates = None
 
     rankStr = "" if (comm is None) else "Rank%d: " % comm.Get_rank()
 
-    preferred_prep_basis_signs = advancedOptions.get('preferred_prep_basis_signs', 'auto')
-    preferred_meas_basis_signs = advancedOptions.get('preferred_meas_basis_signs', 'auto')
+    preferred_prep_basis_signs = advanced_options.get('preferred_prep_basis_signs', 'auto')
+    preferred_meas_basis_signs = advanced_options.get('preferred_meas_basis_signs', 'auto')
     if preferred_prep_basis_signs == "auto":
         preferred_prep_basis_signs = preferred_signs_from_paulidict(prepDict)
     if preferred_meas_basis_signs == "auto":
         preferred_meas_basis_signs = preferred_signs_from_paulidict(measDict)
 
-    if 'pauli_fidpairs' in advancedOptions:
+    if 'pauli_fidpairs' in advanced_options:
         same_basis_fidpairs = []  # *all* qubits prep/meas in same basis
         diff_basis_fidpairs = []  # at least one doesn't
-        for pauli_fidpair in advancedOptions['pauli_fidpairs']:
+        for pauli_fidpair in advanced_options['pauli_fidpairs']:
             #pauli_fidpair is a (prep,meas) tuple of NQPauliState objects
             if pauli_fidpair[0].rep == pauli_fidpair[1].rep:  # don't care about sign
                 same_basis_fidpairs.append(pauli_fidpair)
@@ -1137,20 +1145,20 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
         same_basis_fidpairs = None  # just for
         diff_basis_fidpairs = None  # safety
 
-    errors = _idttools.allerrors(nQubits, maxweight)
-    fitOrder = advancedOptions.get('fit order', 1)
+    errors = _idttools.allerrors(nqubits, maxweight)
+    fit_order = advanced_options.get('fit order', 1)
     intrinsic_rates = {}
     pauli_fidpair_dict = {}
     observed_rate_infos = {}
 
     if include_stochastic in (True, "auto"):
         tStart = _time.time()
-        if 'pauli_fidpairs' in advancedOptions:
+        if 'pauli_fidpairs' in advanced_options:
             pauli_fidpairs = same_basis_fidpairs
         else:
             pauli_fidpairs = idle_tomography_fidpairs(
-                nQubits, maxweight, False, include_stochastic, include_affine,
-                advancedOptions.get('ham_tmpl', "auto"),
+                nqubits, maxweight, False, include_stochastic, include_affine,
+                advanced_options.get('ham_tmpl', "auto"),
                 preferred_prep_basis_signs, preferred_meas_basis_signs)
         #print("DB: %d same-basis pairs" % len(pauli_fidpairs))
 
@@ -1176,8 +1184,8 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
                                  for err in errors])
                 my_J.append(Jrow)
 
-                info = get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, GiStr,
-                                                  out, maxLengths, fitOrder)
+                info = compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, GiStr,
+                                                           out, max_lenghts, fit_order)
                 info['jacobian row'] = _np.array(Jrow)
                 infos_for_this_fidpair[out] = info
 
@@ -1190,7 +1198,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
         J_list = [my_J] if (comm is None) else comm.gather(my_J, root=0)
 
         if comm is None or comm.Get_rank() == 0:
-            # pseudo-invert J to get "intrinsic" error rates (labeled by AllErrors(nQubits))
+            # pseudo-invert J to get "intrinsic" error rates (labeled by AllErrors(nqubits))
             # J*intr = obs
             J = _np.concatenate(J_list, axis=0)
             infos_by_fidpair = list(_itertools.chain(*info_list))  # flatten ~ concatenate
@@ -1254,12 +1262,12 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
 
     if include_hamiltonian in (True, "auto"):
         tStart = _time.time()
-        if 'pauli_fidpairs' in advancedOptions:
+        if 'pauli_fidpairs' in advanced_options:
             pauli_fidpairs = diff_basis_fidpairs
         else:
             pauli_fidpairs = idle_tomography_fidpairs(
-                nQubits, maxweight, include_hamiltonian, False, False,
-                advancedOptions.get('ham_tmpl', "auto"),
+                nqubits, maxweight, include_hamiltonian, False, False,
+                advanced_options.get('ham_tmpl', "auto"),
                 preferred_prep_basis_signs, preferred_meas_basis_signs)
         #print("DB: %d diff-basis pairs" % len(pauli_fidpairs))
 
@@ -1286,8 +1294,8 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
                                 for err in errors]
                     my_Jaff.append(Jaff_row)
 
-                info = get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauliBasisDicts, GiStr, obs,
-                                                  maxLengths, fitOrder)
+                info = compute_observed_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, GiStr, obs,
+                                                           max_lenghts, fit_order)
                 info['jacobian row'] = _np.array(Jrow)
                 if include_affine: info['affine jacobian row'] = _np.array(Jaff_row)
                 infos_for_this_fidpair[obs] = info
@@ -1303,7 +1311,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
             Jaff_list = [my_Jaff] if (comm is None) else comm.gather(my_Jaff, root=0)
 
         if comm is None or comm.Get_rank() == 0:
-            # pseudo-invert J to get "intrinsic" error rates (labeled by AllErrors(nQubits))
+            # pseudo-invert J to get "intrinsic" error rates (labeled by AllErrors(nqubits))
             # J*intr = obs
             J = _np.concatenate(J_list, axis=0)
             infos_by_fidpair = list(_itertools.chain(*info_list))  # flatten ~ concatenate
@@ -1410,7 +1418,7 @@ def do_idle_tomography(nQubits, dataset, maxLengths, pauliBasisDicts, maxweight=
             if include_affine:
                 intrinsic_rates['affine'] = all_intrinsic_rates[off:off + len(errors)]
 
-        return _IdleTomographyResults(dataset, maxLengths, maxweight, fitOrder, pauliBasisDicts, GiStr,
+        return _IdleTomographyResults(dataset, max_lenghts, maxweight, fit_order, pauli_basis_dicts, GiStr,
                                       errors, intrinsic_rates, pauli_fidpair_dict, observed_rate_infos)
     else:  # no results on other ranks...
         return None

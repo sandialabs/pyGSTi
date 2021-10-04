@@ -1,5 +1,5 @@
-from pathlib import Path
 import site
+from pathlib import Path
 
 myPackagePath = Path(__file__).parent.absolute()
 
@@ -17,7 +17,7 @@ print("Adding path:", myPackagePath)
 usp = Path(site.getusersitepackages())
 usp.mkdir(parents=True, exist_ok=True)
 uspfile = usp / 'GST.pth'
-with open(uspfile, 'w') as f:
+with open(str(uspfile), 'w') as f:
     f.write(pathspec)
     print('Wrote to {}'.format(uspfile))
 

@@ -8,9 +8,12 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import copy as _copy
-from . import analysis as _analysis
+
+import numpy as _np
+
+#from . import analysis as _analysis  # Doesn't exist!
+_analysis = None  # TODO - fix or remove this dependency
 
 
 def create_summary_datasets(ds, spec, datatype='adjusted', verbosity=1):
@@ -90,7 +93,7 @@ class RBSummaryDataset(object):
     the entire output of RB experiments).
     """
 
-    def __init__(self, number_of_qubits, success_counts=None, total_counts=None, hamming_distance_counts=None,
+    def __init__(self, num_qubits, success_counts=None, total_counts=None, hamming_distance_counts=None,
                  aux={}, finitecounts=True, descriptor=''):
         """
         # todo : update.
@@ -99,7 +102,7 @@ class RBSummaryDataset(object):
 
         Parameters
         ----------
-        number_of_qubits : int
+        num_qubits : int
             The number of qubits the dataset is for. This should be the number of qubits the RB experiments where
             "holistically" performed on. So, this dataset type is not suitable for, e.g., a *full* set of simultaneous
             RB data, which consists of parallel RB on different qubits. Data of that sort can be input into
@@ -153,7 +156,7 @@ class RBSummaryDataset(object):
             A string that describes what the data is for.
 
         """
-        self.number_of_qubits = number_of_qubits
+        self.num_qubits = num_qubits
         self.finitecounts = finitecounts
         self.aux = _copy.deepcopy(aux)
         self.descriptor = descriptor
@@ -197,7 +200,7 @@ class RBSummaryDataset(object):
         self.SPs = []
         self.ASPs = []
         for l in self.lengths:
-            SPs = [self.get_success_counts(l, i) / self.get_total_counts(l, i) for i in range(len(self.counts[l]))]
+            SPs = [self.success_counts(l, i) / self.total_counts(l, i) for i in range(len(self.counts[l]))]
             self.SPs.append(SPs)
             self.ASPs.append(_np.mean(SPs))
 
@@ -205,7 +208,7 @@ class RBSummaryDataset(object):
             self.adjusted_SPs = []
             self.adjusted_ASPs = []
             for l in self.lengths:
-                adjSPs = [self.get_adjusted_success_probability(l, i) for i in range(len(self.counts[l]))]
+                adjSPs = [self.adjusted_success_probability(l, i) for i in range(len(self.counts[l]))]
                 self.adjusted_SPs.append(adjSPs)
                 self.adjusted_ASPs.append(_np.mean(adjSPs))
 
@@ -217,13 +220,13 @@ class RBSummaryDataset(object):
 
         return
 
-    def get_adjusted_success_probability(self, length, index):
+    def adjusted_success_probability(self, length, index):
         """
         todo.
         """
-        return _analysis.adjusted_success_probability(self.get_hamming_distance_distribution(length, index))
+        return _analysis.adjusted_success_probability(self.hamming_distance_distribution(length, index))
 
-    def get_success_counts(self, length, index):
+    def success_counts(self, length, index):
         """
         todo
 
@@ -234,7 +237,7 @@ class RBSummaryDataset(object):
         else:
             return self.counts[length][index][0]
 
-    def get_total_counts(self, length, index):
+    def total_counts(self, length, index):
         """
         todo
 
@@ -248,7 +251,7 @@ class RBSummaryDataset(object):
         else:
             return self._total_counts[length][index]
 
-    def get_hamming_distance_distribution(self, length, index):
+    def hamming_distance_distribution(self, length, index):
         """
         todo
 
@@ -259,7 +262,7 @@ class RBSummaryDataset(object):
         else:
             raise ValueError("This is only possible for Hamming distance count data!")
 
-    def get_success_probabilities(self, successtype='raw'):
+    def success_probabilities(self, successtype='raw'):
         """
         todo.
 
@@ -272,13 +275,13 @@ class RBSummaryDataset(object):
 
     def add_bootstrapped_datasets(self, samples=1000):
         """
-        Adds bootstrapped datasets. The bootstrap is over both the finite counts of each
+        Adds bootstrapped data. The bootstrap is over both the finite counts of each
         circuit and over the circuits at each length.
 
         Parameters
         ----------
         samples : int, optional
-            The number of bootstrapped datasets to construct.
+            The number of bootstrapped data to construct.
 
         Returns
         -------
@@ -306,7 +309,7 @@ class RBSummaryDataset(object):
 
                         ind = _np.random.randint(numcircuits)
                         sampledSP = self.SPs[j][ind]
-                        totalcounts = self.get_total_counts(l, ind)
+                        totalcounts = self.total_counts(l, ind)
                         if self.finitecounts:
                             success_counts[l].append(_np.random.binomial(totalcounts, sampledSP))
                             total_counts[l].append(totalcounts)
@@ -327,15 +330,15 @@ class RBSummaryDataset(object):
                     for k in range(numcircuits):
 
                         ind = _np.random.randint(numcircuits)
-                        sampledHDProbs = self.get_hamming_distance_distribution(l, ind)
+                        sampledHDProbs = self.hamming_distance_distribution(l, ind)
 
                         if self.finitecounts:
-                            totalcounts = self.get_total_counts(l, ind)
+                            totalcounts = self.total_counts(l, ind)
                             hamming_distance_counts[l].append(list(_np.random.multinomial(totalcounts, sampledHDProbs)))
                         else:
                             hamming_distance_counts[l].append(sampledHDProbs)
 
-            bootstrapped_dataset = RBSummaryDataset(self.number_of_qubits, success_counts, total_counts,
+            bootstrapped_dataset = RBSummaryDataset(self.num_qubits, success_counts, total_counts,
                                                     hamming_distance_counts, finitecounts=self.finitecounts,
                                                     descriptor='data created from a non-parametric bootstrap')
 

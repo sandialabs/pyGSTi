@@ -1,4 +1,6 @@
-""" Utility functions for working with lists """
+"""
+Utility functions for working with lists
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,11 +10,12 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import itertools as _itertools
 
+import numpy as _np
 
-def remove_duplicates_in_place(l, indexToTest=None):
+
+def remove_duplicates_in_place(l, index_to_test=None):
     """
     Remove duplicates from the list passed as an argument.
 
@@ -21,24 +24,24 @@ def remove_duplicates_in_place(l, indexToTest=None):
     l : list
         The list to remove duplicates from.
 
-    indexToTest : int, optional
+    index_to_test : int, optional
         If not None, the index within the elements of l to test.  For
         example, if all the elements of l contain 2 tuples (x,y) then
-        set indexToTest == 1 to remove tuples with duplicate y-values.
+        set index_to_test == 1 to remove tuples with duplicate y-values.
 
     Returns
     -------
     None
     """
     s = set(); n = 0
-    if indexToTest is None:
+    if index_to_test is None:
         for x in l:
             if x not in s:
                 s.add(x)
                 l[n] = x; n += 1
     else:
         for x in l:
-            t = x[indexToTest]
+            t = x[index_to_test]
 
             if t not in s:
                 s.add(t)
@@ -47,19 +50,19 @@ def remove_duplicates_in_place(l, indexToTest=None):
     del l[n:]
 
 
-def remove_duplicates(l, indexToTest=None):
+def remove_duplicates(l, index_to_test=None):
     """
     Remove duplicates from the a list and return the result.
 
     Parameters
     ----------
-    l : list
-        The list to remove duplicates from.
+    l : iterable
+        The list/set to remove duplicates from.
 
-    indexToTest : int, optional
+    index_to_test : int, optional
         If not None, the index within the elements of l to test.  For
         example, if all the elements of l contain 2 tuples (x,y) then
-        set indexToTest == 1 to remove tuples with duplicate y-values.
+        set index_to_test == 1 to remove tuples with duplicate y-values.
 
     Returns
     -------
@@ -67,14 +70,14 @@ def remove_duplicates(l, indexToTest=None):
         the list after duplicates have been removed.
     """
     s = set(); ret = []
-    if indexToTest is None:
+    if index_to_test is None:
         for x in l:
             if x not in s:
                 s.add(x)
                 ret.append(x)
     else:
         for x in l:
-            t = x[indexToTest]
+            t = x[index_to_test]
             #TODO: create a special duplicate removal function for use with
             #  WeighedOpStrings ...
             if t not in s:
@@ -85,11 +88,10 @@ def remove_duplicates(l, indexToTest=None):
 
 def compute_occurrence_indices(lst):
     """
-    Returns a 0-based list of integers specifying which occurrence,
-    i.e. enumerated duplicate, each list item is.
+    A 0-based list of integers specifying which occurrence, i.e. enumerated duplicate, each list item is.
 
     For example, if `lst` = [ 'A','B','C','C','A'] then the
-    returned list will be   [  0 , 0 , 0 , 1 , 1 ].  This is useful
+    returned list will be   [  0 , 0 , 0 , 1 , 1 ].  This may be useful
     when working with `DataSet` objects that have `collisionAction`
     set to "keepseparate".
 
@@ -112,16 +114,16 @@ def compute_occurrence_indices(lst):
     return ret
 
 
-def find_replace_tuple(t, aliasDict):
+def find_replace_tuple(t, alias_dict):
     """
-    Replace elements of t according to rules in `aliasDict`.
+    Replace elements of t according to rules in `alias_dict`.
 
     Parameters
     ----------
     t : tuple or list
         The object to perform replacements upon.
 
-    aliasDict : dictionary
+    alias_dict : dictionary
         Dictionary whose keys are potential elements of `t` and whose values
         are tuples corresponding to a sub-sequence that the given element should
         be replaced with.  If None, no replacement is performed.
@@ -131,15 +133,15 @@ def find_replace_tuple(t, aliasDict):
     tuple
     """
     t = tuple(t)
-    if aliasDict is None: return t
-    for label, expandedStr in aliasDict.items():
+    if alias_dict is None: return t
+    for label, expandedStr in alias_dict.items():
         while label in tuple(t):
             i = t.index(label)
             t = t[:i] + tuple(expandedStr) + t[i + 1:]
     return t
 
 
-def find_replace_tuple_list(list_of_tuples, aliasDict):
+def find_replace_tuple_list(list_of_tuples, alias_dict):
     """
     Applies :func:`find_replace_tuple` on each element of `list_of_tuples`.
 
@@ -148,7 +150,7 @@ def find_replace_tuple_list(list_of_tuples, aliasDict):
     list_of_tuples : list
         A list of tuple objects to perform replacements upon.
 
-    aliasDict : dictionary
+    alias_dict : dictionary
         Dictionary whose keys are potential elements of `t` and whose values
         are tuples corresponding to a sub-sequence that the given element should
         be replaced with.  If None, no replacement is performed.
@@ -157,10 +159,10 @@ def find_replace_tuple_list(list_of_tuples, aliasDict):
     -------
     list
     """
-    return [find_replace_tuple(t, aliasDict) for t in list_of_tuples]
+    return [find_replace_tuple(t, alias_dict) for t in list_of_tuples]
 
 
-def apply_aliases_to_circuit_list(list_of_circuits, alias_dict):
+def apply_aliases_to_circuits(list_of_circuits, alias_dict):
     """
     Applies `alias_dict` to the circuits in `list_of_circuits`.
 
@@ -194,11 +196,6 @@ def sorted_partitions(n):
     ----------
     n : int
         The number to partition.
-
-    Returns
-    -------
-    iterator
-        Iterates over arrays of descending integers (sorted partitions).
     """
 
     if n == 0:  # special case
@@ -252,11 +249,6 @@ def partitions(n):
     ----------
     n : int
         The number to partition.
-
-    Returns
-    -------
-    iterator
-        Iterates over arrays of integers (partitions).
     """
     for p in sorted_partitions(n):
         previous = tuple()
@@ -286,11 +278,6 @@ def partition_into(n, nbins):
     nbins : int
         The fixed number of bins, equal to the length of all the
         partitions that are iterated over.
-
-    Returns
-    -------
-    iterator
-        Iterates over arrays of integers (partitions).
     """
     if n == 0:
         a = _np.zeros(nbins, _np.int64)
@@ -341,17 +328,12 @@ def _partition_into_slow(n, nbins):
 
 def incd_product(*args):
     """
-    Like `itertools.product` but returns the first modified index (which was
-    incremented) along with the product tuple itself.
+    Like `itertools.product` but returns the first modified (incremented) index along with the product tuple itself.
 
     Parameters
     ----------
     *args : iterables
         Any number of iterable things that we're taking the product of.
-
-    Returns
-    -------
-    iterator over tuples
     """
     lists = [list(a) for a in args]  # so we can get new iterators to each argument
     iters = [iter(l) for l in lists]

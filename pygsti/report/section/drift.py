@@ -8,49 +8,49 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from . import Section as _Section
+from pygsti.report.section import Section as _Section
 
 
 class DriftSection(_Section):
     _HTML_TEMPLATE = 'tabs/Drift.html'
 
     @_Section.figure_factory()
-    def driftSummaryTable(workspace, results=None, dskey=None, **kwargs):
+    def drift_summary_table(workspace, results=None, dskey=None, **kwargs):
         return workspace.DriftSummaryTable(results, dskey)
 
     @_Section.figure_factory()
-    def driftDetailsTable(workspace, results=None, **kwargs):
+    def drift_details_table(workspace, results=None, **kwargs):
         return workspace.DriftDetailsTable(results)
 
     @_Section.figure_factory()
-    def GlobalPowerSpectraPlot(workspace, results=None, dskey=None, **kwargs):
+    def global_power_spectra_plot(workspace, results=None, dskey=None, **kwargs):
         return workspace.PowerSpectraPlot(results, {'dataset': dskey})
 
     @_Section.figure_factory()
-    def GermFiducialPowerSpectraPlot(workspace, results=None, gss=None, switchboard=None, dskey=None, **kwargs):
+    def germ_fiducial_power_spectra_plot(workspace, results=None, switchboard=None,
+                                         dskey=None, **kwargs):
         return workspace.GermFiducialPowerSpectraPlot(
-            results, gss, switchboard.prepStrs, switchboard.germs,
-            switchboard.effectStrs, dskey, None, True
+            results, switchboard.prep_fiducials, switchboard.germs,
+            switchboard.meas_fiducials, dskey, None, True
         )
 
     @_Section.figure_factory()
-    def GermFiducialProbTrajectoriesPlot(workspace, results=None, gss=None, switchboard=None, dskey=None, **kwargs):
+    def germ_fiducial_prob_trajectories_plot(workspace, results=None, switchboard=None,
+                                             dskey=None, **kwargs):
         return workspace.GermFiducialProbTrajectoriesPlot(
-            results, gss, switchboard.prepStrs, switchboard.germs,
-            switchboard.effectStrs, switchboard.outcomes, 1, None,
+            results, switchboard.prep_fiducials, switchboard.germs,
+            switchboard.meas_fiducials, switchboard.outcomes, 1, None,
             dskey, None, None, True
         )
 
     @_Section.figure_factory()
-    def driftdetectorColorBoxPlot(workspace, results=None, gss=None, **kwargs):
+    def drift_detector_colorbox_plot(workspace, stabilityanalyzer=None, circuit_list=None, **kwargs):
         return workspace.ColorBoxPlot(
-            'driftdetector', gss, None, None, False, False, True,
-            False, 'compact', .05, 1e-4, None, None, results
+            'driftdetector', circuit_list, None, None, linlg_pcntle=.05, stabilityanalyzer=stabilityanalyzer
         )
 
     @_Section.figure_factory()
-    def driftsizeColorBoxPlot(workspace, results=None, gss=None, **kwargs):
+    def drift_size_colorbox_plot(workspace, stabilityanalyzer=None, circuit_list=None, **kwargs):
         return workspace.ColorBoxPlot(
-            'driftsize', gss, None, None, False, False, True, False,
-            'compact', .05, 1e-4, None, None, results
+            'driftsize', circuit_list, None, None, linlg_pcntle=.05, stabilityanalyzer=stabilityanalyzer
         )

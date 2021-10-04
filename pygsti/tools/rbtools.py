@@ -1,4 +1,6 @@
-""" Tools for analyzing RB data"""
+"""
+Tools for analyzing RB data
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -13,18 +15,19 @@ import numpy as _np
 
 def p_to_r(p, d, rtype='EI'):
     """
-    Converts an RB decay constant (p) to the RB error rate (r), where
-    p is (normally) obtained from fitting data to A + Bp^m. There are
-    two 'types' of RB error rate corresponding to different rescalings
-    of 1 - p. These are the entanglement infidelity (EI) type r and
-    the average gate infidelity (AGI) type r. The EI-type r is given by:
+    Converts an RB decay constant (`p`) to the RB error rate (`r`).
 
-    r =  (d^2 - 1)(1 - p)/d^2,
+    Here `p` is (normally) obtained from fitting data to `A + Bp^m`. There are two
+    'types' of RB error rate corresponding to different rescalings of `1 - p`.
+     These are the entanglement infidelity (EI) type r and the average gate
+    infidelity (AGI) type `r`. The EI-type `r` is given by:
 
-    where d is the dimension of the system (i.e., 2^n for n qubits).
-    The AGI-type r is given by
+    `r =  (d^2 - 1)(1 - p)/d^2`,
 
-    r =  (d - 1)(1 - p)/d.
+    where `d` is the dimension of the system (i.e., 2^n for n qubits).
+    The AGI-type `r` is given by
+
+    `r =  (d - 1)(1 - p)/d`.
 
     For RB on gates whereby every gate is followed by an n-qubit
     uniform depolarizing channel (the most idealized RB scenario)
@@ -90,8 +93,18 @@ def r_to_p(r, d, rtype='EI'):
 
 def adjusted_success_probability(hamming_distance_pdf):
     """
-    todo
+    The success probabilitys adjusted by hamming weights.
 
+    TODO: docstring - more explanation
+
+    Parameters
+    ----------
+    hamming_distance_pdf : <TODO typ>
+        <TODO description>
+
+    Returns
+    -------
+    numpy.ndarray
     """
     #adjSP = _np.sum([(-1 / 2)**n * hamming_distance_counts[n] for n in range(numqubits + 1)]) / total_counts
     adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
@@ -101,8 +114,26 @@ def adjusted_success_probability(hamming_distance_pdf):
 
 def marginalized_success_counts(dsrow, circ, target, qubits):
     """
-    todo
+    Marginalize the success counts over qubits.
 
+    Parameters
+    ----------
+    dsrow : _DataSetRow
+        The circuit outcome data to marginalize.
+
+    circ : Circuit
+        The circuit.
+
+    target : str
+        The ideal outcome, e.g. `"0010"`.
+
+    qubits : tuple
+        The qubit labels that are retained after the marginalization.
+
+    Returns
+    -------
+    int
+        The number of success counts.
     """
     if dsrow.total == 0:
         return 0
@@ -131,16 +162,44 @@ def marginalized_success_counts(dsrow, circ, target, qubits):
 
 def hamming_distance(bs1, bs2):
     """
-    todo
+    TODO: docstring
 
+    Parameters
+    ----------
+    bs1 : <TODO typ>
+        <TODO description>
+
+    bs2 : <TODO typ>
+        <TODO description>
+
+    Returns
+    -------
+    <TODO typ>
     """
     return _np.sum([b1 != b2 for b1, b2 in zip(bs1, bs2)])
 
 
 def marginalized_hamming_distance_counts(dsrow, circ, target, qubits):
     """
-    todo
+    TODO: docstring
 
+    Parameters
+    ----------
+    dsrow : _DataSetRow
+        The circuit outcome data to marginalize.
+
+    circ : Circuit
+        The circuit.
+
+    target : str
+        The ideal outcome, e.g. `"0010"`.
+
+    qubits : tuple
+        The qubit labels that are retained after the marginalization.
+
+    Returns
+    -------
+    list
     """
     if dsrow.total == 0:
         hamming_distance_counts = [0 for i in range(len(qubits) + 1)]
@@ -163,9 +222,9 @@ def marginalized_hamming_distance_counts(dsrow, circ, target, qubits):
 
 def rescaling_factor(lengths, quantity, offset=2):
     """
-    Finds a rescaling value alpha that can be used to map the Clifford RB decay constant
-    p to p_(rescaled) = p^(1/alpha) for finding e.g., a "CRB r per CNOT" or a "CRB r per
-    compiled Clifford depth".
+    Finds a rescaling value `alpha` that maps the Clifford RB decay constant `p` to `p_(rescaled) = p^(1/alpha)`.
+
+    This can be used for finding, e.g., a "CRB r per CNOT" or a "CRB r per compiled Clifford depth".
 
     Parameters
     ----------
@@ -180,7 +239,8 @@ def rescaling_factor(lengths, quantity, offset=2):
         A constant offset to add to lengths.
 
     Returns
-        mean over i of [mean(quantity[i])/(lengths[i]+offset)]
+    -------
+    float
     """
     assert(len(lengths) == len(quantity)), "Data format incorrect!"
     rescaling_factor = []

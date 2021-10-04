@@ -1,4 +1,6 @@
-""" Defines the Workspace class and supporting functionality."""
+"""
+Defines the Workspace class and supporting functionality.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,33 +10,37 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import itertools as _itertools
 import collections as _collections
-import os as _os
-import shutil as _shutil
-import numpy as _np
-#import uuid        as _uuid
-import random as _random
 import inspect as _inspect
+import itertools as _itertools
+import os as _os
 import pickle as _pickle
-
+# import uuid        as _uuid
+import random as _random
+import shutil as _shutil
 import subprocess as _subprocess
-
-from .. import objects as _objs
-from ..tools import compattools as _compat
-from ..objects.smartcache import CustomDigestError as _CustomDigestError
-
-from . import plotly_plot_ex as _plotly_ex
-from . import merge_helpers as _merge
-
 from pprint import pprint as _pprint
 
+import numpy as _np
+
+from pygsti.report import merge_helpers as _merge
+from pygsti.report import plotly_plot_ex as _plotly_ex
+from pygsti import baseobjs as _baseobjs
+from pygsti.baseobjs.smartcache import CustomDigestError as _CustomDigestError
+from pygsti.baseobjs import _compatibility as _compat
+
 _PYGSTI_WORKSPACE_INITIALIZED = False
-DEFAULT_PLOTLY_TEMPLATE = 'none'
+VALIDATE_PLOTLY = False  # False increases performance of report rendering; set to True to debug
 
 
 def in_ipython_notebook():
-    """Returns true if called from within an IPython/jupyter notebook"""
+    """
+    Returns true if called from within an IPython/jupyter notebook
+
+    Returns
+    -------
+    bool
+    """
     try:
         # 'ZMQInteractiveShell' in a notebook, 'TerminalInteractiveShell' in IPython REPL, and fails elsewhere.
         shell = get_ipython().__class__.__name__
@@ -44,17 +50,33 @@ def in_ipython_notebook():
 
 
 def display_ipynb(content):
-    """Render HTML content to an IPython notebook cell display"""
+    """
+    Render HTML content to an IPython notebook cell display
+
+    Parameters
+    ----------
+    content : str
+        HTML content to insert.
+
+    Returns
+    -------
+    None
+    """
     from IPython.core.display import display, HTML
     display(HTML(content))
 
 
 def enable_plotly_pickling():
     """
-    Hacks the plotly python library so that figures may be pickled and
-    un-pickled.  This hack should be used only temporarily - so all pickling
+    Hacks the plotly python library so that figures may be pickled and un-pickled.
+
+    This hack should be used only temporarily - so all pickling
     and un-pickling should be done between calls to
     :func:`enable_plotly_pickling` and :func:`disable_plotly_pickling`.
+
+    Returns
+    -------
+    None
     """
     import plotly
 
@@ -89,7 +111,13 @@ def enable_plotly_pickling():
 
 
 def disable_plotly_pickling():
-    """ Reverses the effect of :func:`enable_plotly_pickling` """
+    """
+    Reverses the effect of :func:`enable_plotly_pickling`
+
+    Returns
+    -------
+    None
+    """
     import plotly
 
     if int(plotly.__version__.split(".")[0]) >= 3:  # plotly version 3 or higher
@@ -112,7 +140,21 @@ def disable_plotly_pickling():
 
 
 def ws_custom_digest(md5, v):
-    """ A "digest" function for hashing several special types"""
+    """
+    A "digest" function for hashing several special types
+
+    Parameters
+    ----------
+    md5 : hashlib.HASH
+        The MD5 hash object.
+
+    v : object
+        the value to add to `md5` (using `md5.update(...)`).
+
+    Returns
+    -------
+    None
+    """
     if isinstance(v, NotApplicable):
         md5.update("NOTAPPLICABLE".encode('utf-8'))
     elif isinstance(v, SwitchValue):
@@ -121,16 +163,23 @@ def ws_custom_digest(md5, v):
         raise _CustomDigestError()
 
 
-def randomID():
-    """ Returns a random DOM ID """
+def random_id():
+    """
+    Returns a random document-objet-model (DOM) ID
+
+    Returns
+    -------
+    str
+    """
     return str(int(1000000 * _random.random()))
     #return str(_uuid.uuid4().hex) #alternative
 
 
 class Workspace(object):
     """
-    Central to data analysis, Workspace objects facilitate the building
-    of reports and dashboards.  In particular, they serve as a:
+    Central to data analysis, Workspace objects facilitate the building of reports and dashboards.
+
+    In particular, they serve as a:
 
     - factory for tables, plots, and other types of output
     - cache manager to optimize the construction of such output
@@ -139,6 +188,11 @@ class Workspace(object):
     Workspace objects are typically used either 1) within an ipython
     notebook to interactively build a report/dashboard, or 2) within
     a script to build a hardcoded ("fixed") report/dashboard.
+
+    Parameters
+    ----------
+    cachefile : str, optional
+        filename with cached workspace results
     """
 
     def __init__(self, cachefile=None):
@@ -151,12 +205,12 @@ class Workspace(object):
             filename with cached workspace results
         """
         self._register_components(False)
-        self.smartCache = _objs.SmartCache()
+        self.smartCache = _baseobjs.SmartCache()
         if cachefile is not None:
             self.load_cache(cachefile)
         self.smartCache.add_digest(ws_custom_digest)
 
-    def save_cache(self, cachefile, showUnpickled=False):
+    def save_cache(self, cachefile, show_unpickled=False):
         """
         Save this Workspace's cache to a file.
 
@@ -165,7 +219,7 @@ class Workspace(object):
         cachefile : str
             The filename to save the cache to.
 
-        showUnpickled : bool, optional
+        show_unpickled : bool, optional
             Whether to print quantities (keys) of cache that could not be
             saved because they were not pickle-able.
 
@@ -177,7 +231,7 @@ class Workspace(object):
             enable_plotly_pickling()
             _pickle.dump(self.smartCache, outfile)
             disable_plotly_pickling()
-        if showUnpickled:
+        if show_unpickled:
             print('Unpickled keys:')
             _pprint(self.smartCache.unpickleable)
 
@@ -288,9 +342,9 @@ class Workspace(object):
 
         # Specific to 1Q gates
         self.GateDecompTable = makefactory(_wt.GateDecompTable)
-        self.old_GateDecompTable = makefactory(_wt.old_GateDecompTable)
-        self.old_RotationAxisVsTargetTable = makefactory(_wt.old_RotationAxisVsTargetTable)
-        self.old_RotationAxisTable = makefactory(_wt.old_RotationAxisTable)
+        self.old_GateDecompTable = makefactory(_wt.OldGateDecompTable)
+        self.old_RotationAxisVsTargetTable = makefactory(_wt.OldRotationAxisVsTargetTable)
+        self.old_RotationAxisTable = makefactory(_wt.OldRotationAxisTable)
 
         # goodness of fit
         self.FitComparisonTable = makefactory(_wt.FitComparisonTable)
@@ -348,13 +402,13 @@ class Workspace(object):
 
         Parameters
         ----------
-        connected : bool (optional)
+        connected : bool , optional
             Whether to assume you are connected to the internet.  If you are,
             then setting this to `True` allows initialization to rely on web-
             hosted resources which will reduce the overall size of your
             notebook.
 
-        autodisplay : bool (optional)
+        autodisplay : bool , optional
             Whether to automatically display workspace objects after they are
             created.
 
@@ -382,12 +436,12 @@ class Workspace(object):
         script += _merge.insert_resource(connected, None, "pygsti_plotly_ex.js")
         script += "<script type='text/javascript'> window.plotman = new PlotManager(); </script>"
 
-        # Load style sheets for displaying tables
-        script += _merge.insert_resource(connected, None, "pygsti_dataviz.css")
-
         #jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css"
         jQueryUI_CSS = "https://code.jquery.com/ui/1.12.1/themes/smoothness/jquery-ui.css"
         script += _merge.insert_resource(connected, jQueryUI_CSS, "smoothness-jquery-ui.css")
+
+        # Load style sheets for displaying tables
+        script += _merge.insert_resource(connected, None, "pygsti_dataviz.css")
 
         #To fix the UI tooltips within Jupyter (b/c they use an old/custom JQueryUI css file)
         if connected:
@@ -531,10 +585,12 @@ class Workspace(object):
         self._register_components(autodisplay)
         return
 
-    def switchedCompute(self, fn, *args):
+    def switched_compute(self, fn, *args):
         """
-        Computes a function, given its name and arguments, when some or all of
-        those arguments are SwitchedValue objects.
+        Calls a compute function with special handling of :class:`SwitchedValue` arguments.
+
+        This is similar to calling `fn`, given its name and arguments, when
+        some or all of those arguments are :class:`SwitchedValue` objects.
 
         Caching is employed to avoid duplicating function evaluations which have
         the same arguments.  Note that the function itself doesn't need to deal
@@ -552,9 +608,6 @@ class Workspace(object):
         ----------
         fn : function
             The function to evaluate
-
-        args : list
-            The function's arguments
 
         Returns
         -------
@@ -671,18 +724,65 @@ class Workspace(object):
 
 class Switchboard(_collections.OrderedDict):
     """
-    Encapsulates a render-able set of user-interactive switches
-    for controlling visualized output.
+    Encapsulates a render-able set of user-interactive switches for controlling visualized output.
 
     Outwardly a Switchboard looks like a dictionary of SwitchValue
     objects, which in turn look like appropriately sized numpy arrays
     of values for some quantity.  Different switch positions select
     different values and thereby what data is visualized in various
     outputs (e.g. tables and plots).
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    switches : list
+        A list of switch names.  The length of this list is
+        the number of switches.
+
+    positions : list
+        Elements are lists of position labels, one per switch.
+        Length must be equal to `len(switches)`.
+
+    types : list of {'buttons','dropdown','slider','numslider'}
+        A list of switch-type strings specifying what type of switch
+        each switch is.
+
+        - 'buttons': a set of toggle buttons
+        - 'dropdown': a drop-down (or combo-box)
+        - 'slider': a horizontal slider (equally spaced items)
+        - 'numslider': a horizontal slider (spaced by numeric value)
+
+    initial_pos : list or None (optional)
+        A list of 0-based integer indices giving the initial
+        position of each of the `len(switches)` switches.  None
+        defaults to the first (0-th) position for each switch.
+
+    descriptions : list (optional)
+        A string description for each of the `len(switches)` switches.
+
+    show : list (optional)
+        A list of boolean (one for each of the `len(switches)` switches)
+        indicating whether or not that switch should be rendered.  The
+        special values "all" and "none" show all or none of the switches,
+        respectively.
+
+    id : str (optional)
+        A DOM identifier to use when rendering this Switchboard to HTML.
+        Usually leaving this value as `None` is best, in which case a
+        random identifier is created.
+
+    use_loadable_items : bool, optional
+        Whether "loadable" items are being used.  When using loadable items,
+        elements of a web page are explicitly told when to initialize themselves
+        by a "load_loadable_item" signal instead of loading as soon as the DOM
+        is ready (a traditional on-ready handler).  Using this option increases
+        the performance of large/complex web pages.
     """
 
     def __init__(self, ws, switches, positions, types, initial_pos=None,
-                 descriptions=None, show="all", ID=None, use_loadable_items=False):
+                 descriptions=None, show="all", id=None, use_loadable_items=False):
         """
         Create a new Switchboard.
 
@@ -719,15 +819,22 @@ class Switchboard(_collections.OrderedDict):
             special values "all" and "none" show all or none of the switches,
             respectively.
 
-        ID : str (optional)
+        id : str (optional)
             A DOM identifier to use when rendering this Switchboard to HTML.
             Usually leaving this value as `None` is best, in which case a
             random identifier is created.
+
+        use_loadable_items : bool, optional
+            Whether "loadable" items are being used.  When using loadable items,
+            elements of a web page are explicitly told when to initialize themselves
+            by a "load_loadable_item" signal instead of loading as soon as the DOM
+            is ready (a traditional on-ready handler).  Using this option increases
+            the performance of large/complex web pages.
         """
         # Note: intentionally leave off ws argument desc. in docstring
         assert(len(switches) == len(positions))
 
-        self.ID = randomID() if (ID is None) else ID
+        self.ID = random_id() if (id is None) else id
         self.ws = ws  # Workspace
         self.switchNames = switches
         self.switchTypes = types
@@ -1043,22 +1150,21 @@ class Switchboard(_collections.OrderedDict):
 
         return {'html': html, 'js': js}
 
-    def get_switch_change_handlerjs(self, switchIndex):
+    def create_switch_change_handlerjs(self, switch_index):
         """
-        Returns the Javascript needed to begin an on-change handler
-        for a particular switch.
+        Returns the Javascript needed to begin an on-change handler for a particular switch.
 
         Parameters
         ----------
-        switchIndex : int
+        switch_index : int
             The 0-based index of which switch to get handler JS for.
 
         Returns
         -------
         str
         """
-        ID = self.switchIDs[switchIndex]
-        typ = self.switchTypes[switchIndex]
+        ID = self.switchIDs[switch_index]
+        typ = self.switchTypes[switch_index]
         if typ == "buttons":
             return "$('#%s').on('change', function() {" % ID
         elif typ == "dropdown":
@@ -1071,21 +1177,21 @@ class Switchboard(_collections.OrderedDict):
         else:
             raise ValueError("Unknown switch type: %s" % typ)
 
-    def get_switch_valuejs(self, switchIndex):
+    def create_switch_valuejs(self, switch_index):
         """
         Returns the Javascript needed to get the value of a particular switch.
 
         Parameters
         ----------
-        switchIndex : int
+        switch_index : int
             The 0-based index of which switch to get value-extracting JS for.
 
         Returns
         -------
         str
         """
-        ID = self.switchIDs[switchIndex]
-        typ = self.switchTypes[switchIndex]
+        ID = self.switchIDs[switch_index]
+        typ = self.switchTypes[switch_index]
         if typ == "buttons":
             return "$(\"#%s > input[name='%s']:checked\").val()" % (ID, ID)
         elif typ == "dropdown":
@@ -1163,10 +1269,26 @@ class Switchboard(_collections.OrderedDict):
 
 class SwitchboardView(object):
     """
-    A duplicate or "view" of an existing switchboard which logically
-    represents the *same* set of switches.  Thus, when switches are
-    moved on the duplicate board, switches will move on the original
-    (and vice versa).
+    A duplicate or "view" of an existing switchboard.
+
+    This view is logically represents the *same* set of switches.
+    Thus, when switches are moved on the duplicate board, switches
+    will move on the original (and vice versa).
+
+    Parameters
+    ----------
+    switchboard : Switchboard
+        The base switch board.
+
+    idsuffix : str, optional
+        A suffix to append to the DOM ID of this switchboard
+        when rendering the view.  If "auto", a random suffix
+        is used.
+
+    show : list (optional)
+        A list of booleans indicating which switches should be rendered.
+        The special values "all" and "none" show all or none of the
+        switches, respectively.
     """
 
     def __init__(self, switchboard, idsuffix="auto", show="all"):
@@ -1189,7 +1311,7 @@ class SwitchboardView(object):
             switches, respectively.
         """
         if idsuffix == "auto":
-            self.idsuffix = "v" + randomID()
+            self.idsuffix = "v" + random_id()
         else:
             self.idsuffix = idsuffix
 
@@ -1249,9 +1371,10 @@ class SwitchboardView(object):
 
 class SwitchValue(object):
     """
-    Encapsulates a "switched value", which is essentially a value (i.e. some
-    quantity, usually one used as an argument to visualization functions) that
-    is controlled by the switches of a single Switchboard.
+    A value that is controlled by the switches of a single Switchboard.
+
+    "Value" here means an arbitrary quantity, and is usually an argument
+    to visualization functions.
 
     The paradigm is one of a Switchboard being a collection of switches along
     with a dictionary of SwitchValues, whereby each SwitchValue is a mapping
@@ -1262,6 +1385,20 @@ class SwitchValue(object):
 
     SwitchValue behaves much like a numpy array of values in terms of
     element access.
+
+    Parameters
+    ----------
+    parent_switchboard : Switchboard
+        The switch board this value is associated with.
+
+    name : str
+        The name of this value, which is also the key or member
+        name used to access this value from its parent `Switchboard`.
+
+    dependencies : iterable
+        The 0-based indices identifying which switches this value
+        depends upon, and correspondingly, which switch positions
+        the different axes of the new `SwitchValue` correspond to.
     """
 
     def __init__(self, parent_switchboard, name, dependencies):
@@ -1322,6 +1459,16 @@ class WorkspaceOutput(object):
     using a Workspace.  In particular, `render` is used to create embeddable
     output in various formats, and `display` is used to show the object within
     an iPython notebook.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The workspace containing the new object.
+
+    Attributes
+    ----------
+    default_render_options : dict
+        Class attribute giving default rendering options.
     """
     default_render_options = {
         #General
@@ -1360,7 +1507,7 @@ class WorkspaceOutput(object):
             The workspace containing the new object.
         """
         self.ws = ws
-        self.ID = randomID()  # maybe allow overriding this in the FUTURE
+        self.ID = random_id()  # maybe allow overriding this in the FUTURE
         self.options = WorkspaceOutput.default_render_options.copy()
 
     def set_render_options(self, **kwargs):
@@ -1389,8 +1536,6 @@ class WorkspaceOutput(object):
             everything else, respectively.  If an integer is given, it this
             same value is taken for all precision types.  If None, then
             `{'normal': 6, 'polar': 3, 'sci': 0}` is used.
-
-
 
         switched_item_mode : {'inline','separate files'}, optional
             Whether switched items should be rendered inline within the 'html'
@@ -1441,8 +1586,6 @@ class WorkspaceOutput(object):
             Whether the switched items should be vertically aligned by their
             tops or bottoms (when they're different heights).
 
-
-
         latex_cmd : str, optional
             The system command or executable used to compile LaTeX documents.
             Usually `"pdflatex"`.
@@ -1492,8 +1635,7 @@ class WorkspaceOutput(object):
 
     def render(self, typ="html"):
         """
-        Renders this object into the specifed format, specifically for
-        embedding it within a larger document.
+        Renders this object into the specified format, specifically for embedding it within a larger document.
 
         Parameters
         ----------
@@ -1514,6 +1656,10 @@ class WorkspaceOutput(object):
     def display(self):
         """
         Display this object within an iPython notebook.
+
+        Returns
+        -------
+        None
         """
         if not in_ipython_notebook():
             raise ValueError('Only run `display` from inside an IPython Notebook.')
@@ -1563,7 +1709,7 @@ class WorkspaceOutput(object):
         """ Cached-computation using self.ws's smart cache """
         return self.ws.smartCache.cached_compute(fn, args, kwargs)[1]
 
-    def _create_onready_handler(self, content, ID):
+    def _create_onready_handler(self, content, id):
         global_requirejs = self.options.get('global_requirejs', False)
         use_loadable_items = self.options.get('use_loadable_items', False)
         ret = ""
@@ -1573,7 +1719,7 @@ class WorkspaceOutput(object):
 
         ret += '  $(document).ready(function() {\n'
         if use_loadable_items:
-            ret += "  $('#%s').closest('.loadable').on('load_loadable_item', function(){\n" % ID
+            ret += "  $('#%s').closest('.loadable').on('load_loadable_item', function(){\n" % id
 
         ret += content
 
@@ -1587,19 +1733,19 @@ class WorkspaceOutput(object):
 
         return ret
 
-    def _render_html(self, ID, div_htmls, div_jss, div_ids, switchpos_map,
-                     switchboards, switchIndices, div_css_classes=None,
+    def _render_html(self, id, div_htmls, div_jss, div_ids, switchpos_map,
+                     switchboards, switch_indices, div_css_classes=None,
                      link_to=None, link_to_files_dir=None, embed_figures=True):
         """
         Helper rendering function, which takes care of the (complex)
         common logic which take a series of HTML div blocks corresponding
-        to the results of a Workspace.switchedCompute(...) call and
+        to the results of a Workspace.switched_compute(...) call and
         builds the HTML and JS necessary for toggling the visibility of
         these divs in response to changes in switch position(s).
 
         Parameters
         ----------
-        ID: str
+        id: str
             The identifier to use when constructing DOM ids.
 
         div_htmls : list
@@ -1616,13 +1762,13 @@ class WorkspaceOutput(object):
         switchpos_map : dict
             A dictionary mapping switch positions to div-index.  Keys are switch
             tuples of per-switchboard positions (i.e. a tuple of tuples), giving
-            the positions of each switch specified in `switchIndices`.  Values
+            the positions of each switch specified in `switch_indices`.  Values
             are integer indices into `html_divs`.
 
         switchboards : list
             A list of relevant SwitchBoard objects.
 
-        switchIndices : list
+        switch_indices : list
             A list of tuples, one per Switchboard object, giving the relevant
             switch indices (integers) within that Switchboard.
 
@@ -1664,7 +1810,7 @@ class WorkspaceOutput(object):
         #build HTML as container div containing one or more plot divs
         # Note: 'display: none' doesn't always work in firefox... (polar plots in ptic)
         #   style='display: none' or 'visibility: hidden'
-        html = "<div id='%s' class='pygsti-wsoutput-group'>\n" % ID
+        html = "<div id='%s' class='pygsti-wsoutput-group'>\n" % id
 
         div_contents = []
         if div_jss is None: div_jss = [""] * len(div_htmls)
@@ -1692,7 +1838,7 @@ class WorkspaceOutput(object):
         html += "\n</div>\n"  # ends pygsti-wsoutput-group div
 
         #build javascript to map switch positions to div_ids
-        js = "var switchmap_%s = new Array();\n" % ID
+        js = "var switchmap_%s = new Array();\n" % id
         for switchPositions, iDiv in switchpos_map.items():
             #switchPositions is a tuple of tuples of position indices, one tuple per switchboard
             div_id = div_ids[iDiv]
@@ -1700,20 +1846,20 @@ class WorkspaceOutput(object):
             for singleBoardSwitchPositions in switchPositions:
                 flatPositions.extend(singleBoardSwitchPositions)
             js += "switchmap_%s[ [%s] ] = '%s';\n" % \
-                (ID, ",".join(map(str, flatPositions)), div_id)
+                (id, ",".join(map(str, flatPositions)), div_id)
 
-        js += "window.switchmap_%s = switchmap_%s;\n" % (ID, ID)  # ensure a *global* variable
+        js += "window.switchmap_%s = switchmap_%s;\n" % (id, id)  # ensure a *global* variable
         js += "\n"
 
         cnd = " && ".join(["$('#switchbd%s_%d').hasClass('initializedSwitch')"
                            % (sb.ID, switchIndex)
-                           for sb, switchInds in zip(switchboards, switchIndices)
+                           for sb, switchInds in zip(switchboards, switch_indices)
                            for switchIndex in switchInds])
         if len(cnd) == 0: cnd = "true"
 
         #define fn to "connect" output object to switchboard, i.e.
         #  register event handlers for relevant switches so output object updates
-        js += "function connect_%s_to_switches(){\n" % ID
+        js += "function connect_%s_to_switches(){\n" % id
         js += "  if(%s) {\n" % cnd  # "if switches are ready"
         # loop below adds event bindings to the body of this if-block
 
@@ -1721,22 +1867,22 @@ class WorkspaceOutput(object):
         # build a (flattened) position array, and perform the lookup.  Note that
         # this function does the same thing regardless of *which* switch was
         # changed, and so is called by all relevant switch change handlers.
-        onchange_name = "%s_onchange" % ID
+        onchange_name = "%s_onchange" % id
         handler_js = "function %s() {\n" % onchange_name
-        handler_js += "  var tabdiv = $( '#%s' ).closest('.tabcontent');\n" % ID
+        handler_js += "  var tabdiv = $( '#%s' ).closest('.tabcontent');\n" % id
         handler_js += "  if( tabdiv.length > 0 && !tabdiv.hasClass('active') ) return;\n"  # short-circuit
         handler_js += "  var curSwitchPos = new Array();\n"
-        for sb, switchInds in zip(switchboards, switchIndices):
+        for sb, switchInds in zip(switchboards, switch_indices):
             for switchIndex in switchInds:
-                handler_js += "  curSwitchPos.push(%s);\n" % sb.get_switch_valuejs(switchIndex)
-        handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % ID
-        handler_js += "  $( '#%s' ).children().hide();\n" % ID
+                handler_js += "  curSwitchPos.push(%s);\n" % sb.create_switch_valuejs(switchIndex)
+        handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % id
+        handler_js += "  $( '#%s' ).children().hide();\n" % id
         handler_js += "  divToShow = $( '#' + idToShow );\n"
 
         #Javascript to switch to a new div
         if embed_figures:
             handler_js += "  divToShow.show();\n"
-            handler_js += "  divToShow.parentsUntil('#%s').show();\n" % ID
+            handler_js += "  divToShow.parentsUntil('#%s').show();\n" % id
             handler_js += "  caption = divToShow.closest('figure').children('figcaption:first');\n"
             handler_js += "  caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
         else:
@@ -1744,7 +1890,7 @@ class WorkspaceOutput(object):
             handler_js += "    $(`#${idToShow}`).load(`figures/${idToShow}.html`, function() {\n"
             handler_js += "        divToShow = $( '#' + idToShow );\n"
             handler_js += "        divToShow.show();\n"
-            handler_js += "        divToShow.parentsUntil('#%s').show();\n" % ID
+            handler_js += "        divToShow.parentsUntil('#%s').show();\n" % id
             if link_to and ('tex' in link_to):
                 handler_js += "    divToShow.append('<a class=\"dlLink\" href=\"figures/'"
                 handler_js += " + idToShow + '.tex\" target=\"_blank\">&#9660;TEX</a>');\n"
@@ -1760,39 +1906,39 @@ class WorkspaceOutput(object):
             handler_js += "  }\n"
             handler_js += "  else {\n"
             handler_js += "    divToShow.show();\n"
-            handler_js += "    divToShow.parentsUntil('#%s').show();\n" % ID
+            handler_js += "    divToShow.parentsUntil('#%s').show();\n" % id
             handler_js += "    caption = divToShow.closest('figure').children('figcaption:first');\n"
             handler_js += "    caption.css('width', Math.round(divToShow.width()*0.9) + 'px');\n"
             handler_js += "  }\n"
-        handler_js += "}\n"  # end <ID>_onchange function
+        handler_js += "}\n"  # end <id>_onchange function
 
         #build change event listener javascript
-        for sb, switchInds in zip(switchboards, switchIndices):
+        for sb, switchInds in zip(switchboards, switch_indices):
             # switchInds is a tuple containing the "used" switch indices of sb
             for switchIndex in switchInds:
                 # part of if-block ensuring switches are ready (i.e. created)
-                js += "    " + sb.get_switch_change_handlerjs(switchIndex) + \
+                js += "    " + sb.create_switch_change_handlerjs(switchIndex) + \
                     "%s(); });\n" % onchange_name
 
         #bind onchange call to custom 'tabchange' event that we trigger when tab changes
-        js += "    $( '#%s' ).closest('.tabcontent').on('tabchange', function(){\n" % ID
+        js += "    $( '#%s' ).closest('.tabcontent').on('tabchange', function(){\n" % id
         js += "%s(); });\n" % onchange_name
         js += "    %s();\n" % onchange_name  # call onchange function *once* at end to update visibility
 
         # end if-block
-        js += "    console.log('Switches initialized: %s handlers set');\n" % ID
-        js += "    $( '#%s' ).show()\n" % ID  # visibility updates are done: show parent container
+        js += "    console.log('Switches initialized: %s handlers set');\n" % id
+        js += "    $( '#%s' ).show()\n" % id  # visibility updates are done: show parent container
         js += "  }\n"  # ends if-block
         js += "  else {\n"  # switches aren't ready - so wait
-        js += "    setTimeout(connect_%s_to_switches, 500);\n" % ID
-        js += "    console.log('%s switches NOT initialized: Waiting...');\n" % ID
+        js += "    setTimeout(connect_%s_to_switches, 500);\n" % id
+        js += "    console.log('%s switches NOT initialized: Waiting...');\n" % id
         js += "  }\n"
         js += "};\n"  # end of connect function
 
         #on-ready handler starts trying to connect to switches
         # - note this is already in a 'load_loadable_item' handler, so no need for that here
         js += "$(document).ready(function() {\n"
-        js += "  connect_%s_to_switches();\n" % ID
+        js += "  connect_%s_to_switches();\n" % id
 
         if link_to:
             # Add download links for all divs at once since they're all ready
@@ -1818,8 +1964,12 @@ class WorkspaceOutput(object):
 
 class NotApplicable(WorkspaceOutput):
     """
-    Class signifying that an given set of arguments is not applicable
-    to a function being evaluated.
+    Class signifying that an given set of arguments is not applicable to a function being evaluated.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
     """
 
     def __init__(self, ws):
@@ -1828,10 +1978,9 @@ class NotApplicable(WorkspaceOutput):
         """
         super(NotApplicable, self).__init__(ws)
 
-    def render(self, typ="html", ID=None):
+    def render(self, typ="html", id=None):
         """
-        Renders this object into the specifed format, specifically for
-        embedding it within a larger document.
+        Renders this object into the specified format, specifically for embedding it within a larger document.
 
         Parameters
         ----------
@@ -1839,8 +1988,8 @@ class NotApplicable(WorkspaceOutput):
             The format to render as.  Allowed options are `"html"`,
             `"latex"`, and `"python"`.
 
-        ID : str, optional
-            An DOM ID used in place of the objects internal ID.
+        id : str, optional
+            An DOM id used in place of the objects internal id.
 
         Returns
         -------
@@ -1850,10 +1999,10 @@ class NotApplicable(WorkspaceOutput):
             `typ`.  For `"html"`, keys are `"html"` and `"js"` for HTML and
             and Javascript code, respectively.
         """
-        if ID is None: ID = self.ID
+        if id is None: id = self.ID
 
         if typ == "html":
-            return {'html': "<div id='%s' class='notapplicable'>[NO DATA or N/A]</div>" % ID, 'js': ""}
+            return {'html': "<div id='%s' class='notapplicable'>[NO DATA or N/A]</div>" % id, 'js': ""}
 
         elif typ == "latex":
             return {'latex': "Not applicable"}
@@ -1871,6 +2020,17 @@ class WorkspaceTable(WorkspaceOutput):
     A base class which provides the logic required to take a
     single table-generating function and make it into a legitimate
     `WorkspaceOutput` object for using within workspaces.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The workspace containing the new object.
+
+    fn : function
+        A table-creating function.
+
+    args : various
+        The arguments to `fn`.
     """
 
     def __init__(self, ws, fn, *args):
@@ -1892,12 +2052,11 @@ class WorkspaceTable(WorkspaceOutput):
         self.tablefn = fn
         self.initargs = args
         self.tables, self.switchboards, self.sbSwitchIndices, self.switchpos_map = \
-            self.ws.switchedCompute(self.tablefn, *self.initargs)
+            self.ws.switched_compute(self.tablefn, *self.initargs)
 
     def render(self, typ):
         """
-        Renders this table into the specifed format, specifically for
-        embedding it within a larger document.
+        Renders this table into the specified format, specifically for embedding it within a larger document.
 
         Parameters
         ----------
@@ -1946,7 +2105,7 @@ class WorkspaceTable(WorkspaceOutput):
                 if isinstance(table, NotApplicable):
                     table_dict = table.render("html", tableDivID)
                 else:
-                    table_dict = table.render("html", tableID=tableDivID + "_tbl",
+                    table_dict = table.render("html", table_id=tableDivID + "_tbl",
                                               tableclass="dataTable",
                                               precision=precDict['normal'],
                                               polarprecision=precDict['polar'],
@@ -1987,7 +2146,7 @@ class WorkspaceTable(WorkspaceOutput):
             render_includes = self.options.get('render_includes', True)
             leave_src = self.options.get('leave_includes_src', False)
             W, H = self.options.get('page_size', (6.5, 8.0))
-            printer = _objs.VerbosityPrinter(1)  # TEMP - add verbosity arg?
+            printer = _baseobjs.VerbosityPrinter(1)  # TEMP - add verbosity arg?
 
             #Note: in both cases output_dir needs to be the *relative* path
             # between the current directory and the output directory if
@@ -2168,7 +2327,7 @@ class WorkspaceTable(WorkspaceOutput):
 
             qtys = {'title': _os.path.splitext(_os.path.basename(str(filename)))[0],
                     'singleItem': self}
-            _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
+            _merge.merge_jinja_template(qtys, filename, template_name="standalone.html",
                                         verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap
@@ -2223,7 +2382,7 @@ class WorkspaceTable(WorkspaceOutput):
             #remove all other files
             _shutil.rmtree(tempDir)
 
-    def _form_table_js(self, tableID, table_html, table_plot_handlers,
+    def _form_table_js(self, table_id, table_html, table_plot_handlers,
                        switchboard_init_js):
 
         resizable = self.options.get('resizable', True)
@@ -2246,28 +2405,28 @@ class WorkspaceTable(WorkspaceOutput):
         init_table_js = ''
         if create_table_plots and resizable:  # make a resizable widget on *entire* plot
             # (will only act on first call, but wait until first plots are created)
-            init_table_js += '    make_wstable_resizable("{tableID}");\n'.format(tableID=tableID)
+            init_table_js += '    make_wstable_resizable("{table_id}");\n'.format(table_id=table_id)
         if add_autosize_handler and autosize == "continual":
-            init_table_js += '    make_wsobj_autosize("{tableID}");\n'.format(tableID=tableID)
+            init_table_js += '    make_wsobj_autosize("{table_id}");\n'.format(table_id=table_id)
         if create_table_plots:
-            init_table_js += '    trigger_wstable_plot_creation("{tableID}",{initautosize});\n'.format(
-                tableID=tableID, initautosize=str(autosize in ("initial", "continual")).lower())
+            init_table_js += '    trigger_wstable_plot_creation("{table_id}",{initautosize});\n'.format(
+                table_id=table_id, initautosize=str(autosize in ("initial", "continual")).lower())
 
         if queue_math_render:
             # then there is math text that needs rendering,
             # so queue this, *then* trigger plot creation
             content += ('  plotman.enqueue(function() {{ \n'
-                        '    renderMathInElement(document.getElementById("{tableID}"), {{ delimiters: [\n'
+                        '    renderMathInElement(document.getElementById("{table_id}"), {{ delimiters: [\n'
                         '             {{left: "$$", right: "$$", display: true}},\n'
                         '             {{left: "$", right: "$", display: false}},\n'
-                        '             ] }} );\n').format(tableID=tableID)
+                        '             ] }} );\n').format(table_id=table_id)
             content += init_table_js
-            content += '  }}, "Rendering math in {tableID}" );\n'.format(tableID=tableID)  # end enqueue
+            content += '  }}, "Rendering math in {table_id}" );\n'.format(table_id=table_id)  # end enqueue
         else:
             #Note: this MUST be below plot handler init, when it triggers plot creation
             content += init_table_js
 
-        return self._create_onready_handler(content, tableID)
+        return self._create_onready_handler(content, table_id)
 
 
 class WorkspacePlot(WorkspaceOutput):
@@ -2277,6 +2436,17 @@ class WorkspacePlot(WorkspaceOutput):
     A base class which provides the logic required to take a
     single plot.ly figure-generating function and make it into a
     legitimate `WorkspaceOutput` object for using within workspaces.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The workspace containing the new object.
+
+    fn : function
+        A table-creating function.
+
+    args : various
+        The arguments to `fn`.
     """
 
     def __init__(self, ws, fn, *args):
@@ -2300,16 +2470,15 @@ class WorkspacePlot(WorkspaceOutput):
         self.plotfn = fn
         self.initargs = args
         self.figs, self.switchboards, self.sbSwitchIndices, self.switchpos_map = \
-            self.ws.switchedCompute(self.plotfn, *self.initargs)
+            self.ws.switched_compute(self.plotfn, *self.initargs)
         '''
         self.initargs = args
         self.figs, self.switchboards, self.sbSwitchIndices, self.switchpos_map = \
-            self.ws.switchedCompute(fn, *self.initargs)
+            self.ws.switched_compute(fn, *self.initargs)
 
-    def render(self, typ="html", ID=None):
+    def render(self, typ="html", id=None):
         """
-        Renders this plot into the specifed format, specifically for
-        embedding it within a larger document.
+        Renders this plot into the specified format, specifically for embedding it within a larger document.
 
         Parameters
         ----------
@@ -2317,9 +2486,9 @@ class WorkspacePlot(WorkspaceOutput):
             The format to render as.  Currently `"html"`, `"latex"`
             and `"python"` are supported.
 
-        ID : str, optional
-            A base ID to use when rendering.  If None, the object's
-            persistent ID is used, which usually what you want.
+        id : str, optional
+            A base id to use when rendering.  If None, the object's
+            persistent id is used, which usually what you want.
 
         Returns
         -------
@@ -2342,8 +2511,8 @@ class WorkspacePlot(WorkspaceOutput):
         else:
             raise ValueError("Invalid 'valign' value: %s" % valign)
 
-        if ID is None: ID = self.ID
-        plotID = "plot_" + ID
+        if id is None: id = self.ID
+        plotID = "plot_" + id
 
         if typ == "html":
 
@@ -2379,10 +2548,10 @@ class WorkspacePlot(WorkspaceOutput):
                     fig_dict = fig.render(typ, plotDivID)
                 else:
                     #use auto-sizing (fluid layout)
-                    fig.plotlyfig.update_layout(template=DEFAULT_PLOTLY_TEMPLATE)
+                    #fig.plotlyfig.update_layout(template=DEFAULT_PLOTLY_TEMPLATE)  #slow: set default theme in plot_ex
                     fig_dict = _plotly_ex.plot_ex(
                         fig.plotlyfig, show_link=False, resizable=resizable,
-                        lock_aspect_ratio=True, master=True,  # bool(i==iMaster)
+                        lock_aspect_ratio=True, master=True, validate=VALIDATE_PLOTLY,  # bool(i==iMaster)
                         click_to_display=self.options['click_to_display'],
                         link_to=self.options['link_to'], link_to_id=plotDivID,
                         rel_figure_dir=_os.path.basename(
@@ -2542,7 +2711,7 @@ class WorkspacePlot(WorkspaceOutput):
 
             qtys = {'title': _os.path.splitext(_os.path.basename(str(filename)))[0],
                     'singleItem': self}
-            _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
+            _merge.merge_jinja_template(qtys, filename, template_name="standalone.html",
                                         verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap
@@ -2581,7 +2750,7 @@ class WorkspacePlot(WorkspaceOutput):
         else:
             raise ValueError("Unknown file type for %s" % filename)
 
-    def _form_plot_js(self, plotID, plot_handlers, switchboard_init_js):
+    def _form_plot_js(self, plot_id, plot_handlers, switchboard_init_js):
 
         resizable = self.options.get('resizable', True)
         autosize = self.options.get('autosize', 'none')
@@ -2597,15 +2766,15 @@ class WorkspacePlot(WorkspaceOutput):
         if switchboard_init_js: content += switchboard_init_js
 
         if resizable:  # make a resizable widget
-            content += 'make_wsplot_resizable("{plotID}");\n'.format(plotID=plotID)
+            content += 'make_wsplot_resizable("{plot_id}");\n'.format(plot_id=plot_id)
         if add_autosize_handler and autosize == "continual":  # add window resize handler
-            content += 'make_wsobj_autosize("{plotID}");\n'.format(plotID=plotID)
+            content += 'make_wsobj_autosize("{plot_id}");\n'.format(plot_id=plot_id)
         if create_plots:
             #trigger init & create of plots
-            content += 'trigger_wsplot_plot_creation("{plotID}",{initautosize});\n'.format(
-                plotID=plotID, initautosize=str(autosize in ("initial", "continual")).lower())
+            content += 'trigger_wsplot_plot_creation("{plot_id}",{initautosize});\n'.format(
+                plot_id=plot_id, initautosize=str(autosize in ("initial", "continual")).lower())
 
-        return self._create_onready_handler(content, plotID)
+        return self._create_onready_handler(content, plot_id)
 
 
 class WorkspaceText(WorkspaceOutput):
@@ -2615,6 +2784,17 @@ class WorkspaceText(WorkspaceOutput):
     A base class which provides the logic required to take a
     single text-generating function and make it into a legitimate
     `WorkspaceOutput` object for using within workspaces.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The workspace containing the new object.
+
+    fn : function
+        A text-creating function.
+
+    args : various
+        The arguments to `fn`.
     """
 
     def __init__(self, ws, fn, *args):
@@ -2636,12 +2816,11 @@ class WorkspaceText(WorkspaceOutput):
         self.textfn = fn
         self.initargs = args
         self.texts, self.switchboards, self.sbSwitchIndices, self.switchpos_map = \
-            self.ws.switchedCompute(self.textfn, *self.initargs)
+            self.ws.switched_compute(self.textfn, *self.initargs)
 
     def render(self, typ):
         """
-        Renders this text block into the specifed format, specifically for
-        embedding it within a larger document.
+        Renders this text block into the specified format, specifically for embedding it within a larger document.
 
         Parameters
         ----------
@@ -2709,7 +2888,7 @@ class WorkspaceText(WorkspaceOutput):
             leave_src = self.options.get('leave_includes_src', False)
             render_includes = self.options.get('render_includes', True)
             W, H = self.options.get('page_size', (6.5, 8.0))
-            printer = _objs.VerbosityPrinter(1)  # TEMP - add verbosity arg?
+            printer = _baseobjs.VerbosityPrinter(1)  # TEMP - add verbosity arg?
 
             #Note: in both cases output_dir needs to be the *relative* path
             # between the current directory and the output directory if
@@ -2856,7 +3035,7 @@ class WorkspaceText(WorkspaceOutput):
 
             qtys = {'title': _os.path.splitext(_os.path.basename(str(filename)))[0],
                     'singleItem': self}
-            _merge.merge_jinja_template(qtys, filename, templateName="standalone.html",
+            _merge.merge_jinja_template(qtys, filename, template_name="standalone.html",
                                         verbosity=verbosity)
 
             self.switchpos_map = saved_switchposmap
@@ -2911,7 +3090,7 @@ class WorkspaceText(WorkspaceOutput):
             #remove all other files
             _shutil.rmtree(tempDir)
 
-    def _form_text_js(self, textID, text_html, switchboard_init_js):
+    def _form_text_js(self, text_id, text_html, switchboard_init_js):
 
         content = ""
         if switchboard_init_js: content += switchboard_init_js
@@ -2931,7 +3110,7 @@ class WorkspaceText(WorkspaceOutput):
                 '}}\n'
                 'caption = el.closest("figure").children("figcaption:first");\n'
                 'caption.css("width", Math.round(el.width()*0.9) + "px");\n'
-            ).format(textid=textID)
+            ).format(textid=text_id)
         else:
             init_text_js = ""  # no per-div init needed
 
@@ -2939,13 +3118,13 @@ class WorkspaceText(WorkspaceOutput):
             # then there is math text that needs rendering,
             # so queue this, *then* trigger plot creation
             content += ('  plotman.enqueue(function() {{ \n'
-                        '    renderMathInElement(document.getElementById("{textID}"), {{ delimiters: [\n'
+                        '    renderMathInElement(document.getElementById("{text_id}"), {{ delimiters: [\n'
                         '             {{left: "$$", right: "$$", display: true}},\n'
                         '             {{left: "$", right: "$", display: false}},\n'
-                        '             ] }} );\n').format(textID=textID)
+                        '             ] }} );\n').format(text_id=text_id)
             content += init_text_js
-            content += '  }}, "Rendering math in {textID}" );\n'.format(textID=textID)  # end enqueue
+            content += '  }}, "Rendering math in {text_id}" );\n'.format(text_id=text_id)  # end enqueue
         else:
             content += init_text_js
 
-        return self._create_onready_handler(content, textID)
+        return self._create_onready_handler(content, text_id)

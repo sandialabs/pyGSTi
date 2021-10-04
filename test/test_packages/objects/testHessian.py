@@ -1,17 +1,16 @@
+import pickle
 import unittest
-import warnings
-import pygsti
-from pygsti.modelpacks.legacy import std1Q_XYI as stdxyi
-from pygsti.modelpacks.legacy import std1Q_XY as stdxy
-from pygsti.objects import modelfunction as gsf
-from pygsti.objects.mapforwardsim import MapForwardSimulator
-from pygsti.objects import Label as L
 
 import numpy as np
-import sys, os
-import pickle
+from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 
-from ..testutils import BaseTestCase, compare_files, temp_files
+import pygsti
+from pygsti import protocols as proto
+from pygsti.modelpacks.legacy import std1Q_XY as stdxy
+from pygsti.modelpacks.legacy import std1Q_XYI as stdxyi
+from pygsti.baseobjs import Label as L
+from pygsti.report import modelfunction as gsf
+from ..testutils import BaseTestCase, compare_files
 
 
 class TestHessianMethods(BaseTestCase):
@@ -20,83 +19,79 @@ class TestHessianMethods(BaseTestCase):
         super(TestHessianMethods, self).setUp()
 
         self.model = pygsti.io.load_model(compare_files + "/analysis.model")
-        self.ds = pygsti.objects.DataSet(fileToLoadFrom=compare_files + "/analysis.dataset")
+        self.ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
 
 
         fiducials = stdxyi.fiducials
         germs = stdxyi.germs
-        opLabels = list(self.model.operations.keys()) # also == std.gates
+        op_labels = list(self.model.operations.keys()) # also == std.gates
         self.maxLengthList = [1,2]
-        self.gss = pygsti.construction.make_lsgst_structs(opLabels, fiducials, fiducials, germs, self.maxLengthList)
+        self.gss = pygsti.circuits.make_lsgst_structs(op_labels, fiducials, fiducials, germs, self.maxLengthList)
 
 
     def test_parameter_counting(self):
         #XY Model: SPAM=True
-        n = stdxy.target_model().num_params()
+        n = stdxy.target_model().num_params
         self.assertEqual(n,44) # 2*16 + 3*4 = 44
 
-        n = stdxy.target_model().num_nongauge_params()
+        n = stdxy.target_model().num_nongauge_params
         self.assertEqual(n,28) # full 16 gauge params
 
         #XY Model: SPAM=False
         tst = stdxy.target_model()
         del tst.preps['rho0']
         del tst.povms['Mdefault']
-        n = tst.num_params()
+        n = tst.num_params
         self.assertEqual(n,32) # 2*16 = 32
 
-        n = tst.num_nongauge_params()
+        n = tst.num_nongauge_params
         self.assertEqual(n,18) # gates are all unital & TP => only 14 gauge params (2 casimirs)
 
 
         #XYI Model: SPAM=True
-        n = stdxyi.target_model().num_params()
+        n = stdxyi.target_model().num_params
         self.assertEqual(n,60) # 3*16 + 3*4 = 60
 
-        n = stdxyi.target_model().num_nongauge_params()
+        n = stdxyi.target_model().num_nongauge_params
         self.assertEqual(n,44) # full 16 gauge params: SPAM gate + 3 others
 
         #XYI Model: SPAM=False
         tst = stdxyi.target_model()
         del tst.preps['rho0']
         del tst.povms['Mdefault']
-        n = tst.num_params()
+        n = tst.num_params
         self.assertEqual(n,48) # 3*16 = 48
 
-        n = tst.num_nongauge_params()
+        n = tst.num_nongauge_params
         self.assertEqual(n,34) # gates are all unital & TP => only 14 gauge params (2 casimirs)
 
         #XYI Model: SP0=False
         tst = stdxyi.target_model()
-        tst.preps['rho0'] = pygsti.obj.TPSPAMVec(tst.preps['rho0'])
-        n = tst.num_params()
+        tst.preps['rho0'] = pygsti.modelmembers.states.TPState(tst.preps['rho0'])
+        n = tst.num_params
         self.assertEqual(n,59) # 3*16 + 2*4 + 3 = 59
 
-        n = tst.num_nongauge_params()
+        n = tst.num_nongauge_params
         self.assertEqual(n,44) # 15 gauge params (minus one b/c can't change rho?)
 
         #XYI Model: G0=SP0=False
-        tst.operations['Gi'] = pygsti.obj.TPDenseOp(tst.operations['Gi'])
-        tst.operations['Gx'] = pygsti.obj.TPDenseOp(tst.operations['Gx'])
-        tst.operations['Gy'] = pygsti.obj.TPDenseOp(tst.operations['Gy'])
-        n = tst.num_params()
+        tst.operations['Gi'] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gi'])
+        tst.operations['Gx'] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gx'])
+        tst.operations['Gy'] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gy'])
+        n = tst.num_params
         self.assertEqual(n,47) # 3*12 + 2*4 + 3 = 47
 
-        n = tst.num_nongauge_params()
+        n = tst.num_nongauge_params
         self.assertEqual(n,35) # full 12 gauge params of single 4x3 gate
 
-
     def test_hessian_projection(self):
+        chi2Hessian = pygsti.chi2_hessian(self.model, self.ds)
 
-        chi2, chi2Grad, chi2Hessian = pygsti.chi2(self.model, self.ds,
-                                                  returnGradient=True,
-                                                  returnHessian=True)
-
-        proj_non_gauge = self.model.get_nongauge_projector()
+        proj_non_gauge = self.model.compute_nongauge_projector()
         projectedHessian = np.dot(proj_non_gauge,
                                   np.dot(chi2Hessian, proj_non_gauge))
 
-        print(self.model.num_params())
+        print(self.model.num_params)
         print(proj_non_gauge.shape)
         self.assertEqual( projectedHessian.shape, (60,60) )
         #print("Evals = ")
@@ -127,34 +122,39 @@ class TestHessianMethods(BaseTestCase):
         TOL = 1e-7
         for val,chk in zip(eigvals,eigvals_chk):
             if abs(val) > TOL or abs(chk) > TOL:
-                self.assertAlmostEqual(abs(val-chk)/(abs(chk)+TOL), 0.0, places=3)
+                self.assertAlmostEqual(abs(val-chk)/(abs(chk)+TOL), 0.0, places=2)
             # (else both chk and val are <= TOL, so both == 0 for our purposes)
         #print "eigvals = ",eigvals
 
     def test_confidenceRegion(self):
 
-        res = pygsti.obj.Results()
-        res.init_dataset(self.ds)
-        res.init_circuits(self.gss)
+        edesign = proto.CircuitListsDesign([pygsti.circuits.CircuitList(circuit_struct)
+                                            for circuit_struct in self.gss])
+        data = proto.ProtocolData(edesign, self.ds)
+        res = proto.ModelEstimateResults(data, proto.StandardGST(modes="TP"))
 
         #Add estimate for hessian-based CI --------------------------------------------------
-        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
-                         [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
-                         estimate_key="default")
+        builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder()
+        res.add_estimate(
+            proto.estimate.Estimate.create_gst_estimate(
+                res, stdxyi.target_model(), stdxyi.target_model(),
+                [self.model] * len(self.maxLengthList), parameters={'final_objfn_builder': builder}),
+            estimate_key="default"
+        )
 
         est = res.estimates['default']
         est.add_confidence_region_factory('final iteration estimate', 'final')
         self.assertWarns(est.add_confidence_region_factory, 'final iteration estimate','final') #overwrites former
         self.assertTrue( est.has_confidence_region_factory('final iteration estimate', 'final'))
 
-        cfctry = est.get_confidence_region_factory('final iteration estimate', 'final')
+        cfctry = est.create_confidence_region_factory('final iteration estimate', 'final')
         self.assertFalse( cfctry.can_construct_views() ) # b/c no hessian or LR enabled yet...
         cfctry.compute_hessian(approximate=True)
         cfctry.compute_hessian()
-        self.assertTrue( cfctry.has_hessian() )
+        self.assertTrue( cfctry.has_hessian )
         self.assertFalse( cfctry.can_construct_views() ) # b/c hessian isn't projected yet...
 
-        mdl_dummy = cfctry.get_model() # test method
+        mdl_dummy = cfctry.model # test method
         s = pickle.dumps(cfctry) # test pickle
         pickle.loads(s)
 
@@ -179,38 +179,51 @@ class TestHessianMethods(BaseTestCase):
 
 
         #Add estimate for linresponse-based CI --------------------------------------------------
-        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
-                         [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
-                         estimate_key="linresponse")
+        res.add_estimate(
+            proto.estimate.Estimate.create_gst_estimate(
+                res, stdxyi.target_model(), stdxyi.target_model(),
+                [self.model]*len(self.maxLengthList), parameters={'final_objfn_builder': builder}),
+            estimate_key="linresponse"
+        )
 
         estLR = res.estimates['linresponse']
 
         #estLR.add_confidence_region_factory('final iteration estimate', 'final') #Could do this, but use alt. method for more coverage
         with self.assertRaises(KeyError):
-            estLR.get_confidence_region_factory('final iteration estimate', 'final') #won't create by default
-        cfctryLR = estLR.get_confidence_region_factory('final iteration estimate', 'final', createIfNeeded=True) #now it will
+            estLR.create_confidence_region_factory('final iteration estimate', 'final') #won't create by default
+        cfctryLR = estLR.create_confidence_region_factory('final iteration estimate', 'final', create_if_needed=True) #now it will
         self.assertTrue( estLR.has_confidence_region_factory('final iteration estimate', 'final'))
 
-        #cfctryLR = estLR.get_confidence_region_factory('final iteration estimate', 'final') #done by 'get' call above
+        #cfctryLR = estLR.create_confidence_region_factory('final iteration estimate', 'final') #done by 'get' call above
         self.assertFalse( cfctryLR.can_construct_views() ) # b/c no hessian or LR enabled yet...
         cfctryLR.enable_linear_response_errorbars() #parent results object is used to automatically populate params
 
         #self.assertTrue( cfctryLR.can_construct_views() )
         ci_linresponse = cfctryLR.view( 95.0, 'normal', None)
 
-        mdl_dummy = cfctryLR.get_model() # test method
+        mdl_dummy = cfctryLR.model # test method
         s = pickle.dumps(cfctryLR) # test pickle
         pickle.loads(s)
 
 
         #Add estimate for with bad objective ---------------------------------------------------------
-        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
-                         [self.model]*len(self.maxLengthList), parameters={'objective': 'foobar'},
-                         estimate_key="foo")
+        class FooBar:
+            def __init__(self):
+                self.cls_to_build = list  # an invalid objective class
+                self.regularization = {}
+                self.penalties = {}
+        
+        res.add_estimate(
+            proto.estimate.Estimate.create_gst_estimate(
+                res, stdxyi.target_model(), stdxyi.target_model(),
+                [self.model]*len(self.maxLengthList), parameters={'final_objfn_builder': FooBar()}),
+            estimate_key="foo"
+        )
+
         est = res.estimates['foo']
         est.add_confidence_region_factory('final iteration estimate', 'final')
         with self.assertRaises(ValueError): # bad objective
-            est.get_confidence_region_factory('final iteration estimate', 'final').compute_hessian()
+            est.create_confidence_region_factory('final iteration estimate', 'final').compute_hessian()
 
 
 
@@ -222,13 +235,13 @@ class TestHessianMethods(BaseTestCase):
 
             #linear response CI doesn't support profile likelihood intervals
             if ci_cur is not ci_linresponse: # (profile likelihoods not implemented in this case)
-                ar_of_intervals_Gx = ci_cur.get_profile_likelihood_confidence_intervals(L("Gx"))
-                ar_of_intervals_rho0 = ci_cur.get_profile_likelihood_confidence_intervals(L("rho0"))
-                ar_of_intervals_M0 = ci_cur.get_profile_likelihood_confidence_intervals(L("Mdefault"))
-                ar_of_intervals = ci_cur.get_profile_likelihood_confidence_intervals()
+                ar_of_intervals_Gx = ci_cur.retrieve_profile_likelihood_confidence_intervals(L("Gx"))
+                ar_of_intervals_rho0 = ci_cur.retrieve_profile_likelihood_confidence_intervals(L("rho0"))
+                ar_of_intervals_M0 = ci_cur.retrieve_profile_likelihood_confidence_intervals(L("Mdefault"))
+                ar_of_intervals = ci_cur.retrieve_profile_likelihood_confidence_intervals()
 
                 with self.assertRaises(ValueError):
-                    ci_cur.get_profile_likelihood_confidence_intervals("foobar") #invalid label
+                    ci_cur.retrieve_profile_likelihood_confidence_intervals("foobar") #invalid label
 
             def fnOfGate_float(mx,b):
                 return float(mx[0,0])
@@ -255,11 +268,11 @@ class TestHessianMethods(BaseTestCase):
                 FnObj = FnClass(self.model, 'Gx')
                 if fnOfOp is fnOfGate_3D:
                     with self.assertRaises(ValueError):
-                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                        df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
                 else:
-                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
-                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
-                                            FnObj, returnFnVal=True, verbosity=4)
+                    df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.compute_confidence_interval,
+                                            FnObj, return_fn_val=True, verbosity=4)
 
             ##SHORT-CIRCUIT linear reponse here to reduce run time
             if ci_cur is ci_linresponse: continue
@@ -280,22 +293,22 @@ class TestHessianMethods(BaseTestCase):
                 FnObj = FnClass(self.model, 'rho0', 'prep')
                 if fnOfVec is fnOfVec_3D:
                     with self.assertRaises(ValueError):
-                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                        df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
                 else:
-                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
-                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
-                                            FnObj, returnFnVal=True, verbosity=4)
+                    df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.compute_confidence_interval,
+                                            FnObj, return_fn_val=True, verbosity=4)
 
             for fnOfVec in (fnOfVec_float, fnOfVec_0D, fnOfVec_1D, fnOfVec_2D, fnOfVec_3D):
                 FnClass = gsf.vecfn_factory(fnOfVec)
                 FnObj = FnClass(self.model, 'Mdefault:0', 'effect')
                 if fnOfVec is fnOfVec_3D:
                     with self.assertRaises(ValueError):
-                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                        df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
                 else:
-                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
-                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
-                                            FnObj, returnFnVal=True, verbosity=4)
+                    df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.compute_confidence_interval,
+                                            FnObj, return_fn_val=True, verbosity=4)
 
 
             def fnOfSpam_float(rhoVecs, povms):
@@ -318,11 +331,11 @@ class TestHessianMethods(BaseTestCase):
                 FnObj = FnClass(self.model)
                 if fnOfSpam is fnOfSpam_3D:
                     with self.assertRaises(ValueError):
-                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                        df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
                 else:
-                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
-                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
-                                            FnObj, returnFnVal=True, verbosity=4)
+                    df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.compute_confidence_interval,
+                                            FnObj, return_fn_val=True, verbosity=4)
 
 
             def fnOfGateSet_float(mdl):
@@ -341,28 +354,34 @@ class TestHessianMethods(BaseTestCase):
                 FnObj = FnClass(self.model)
                 if fnOfGateSet is fnOfGateSet_3D:
                     with self.assertRaises(ValueError):
-                        df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
+                        df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
                 else:
-                    df = ci_cur.get_fn_confidence_interval(FnObj, verbosity=0)
-                    df, f0 = self.runSilent(ci_cur.get_fn_confidence_interval,
-                                            FnObj, returnFnVal=True, verbosity=4)
+                    df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
+                    df, f0 = self.runSilent(ci_cur.compute_confidence_interval,
+                                            FnObj, return_fn_val=True, verbosity=4)
 
         #TODO: assert values of df & f0 ??
 
-    def tets_pickle_ConfidenceRegion(self):
-        res = pygsti.obj.Results()
-        res.init_dataset(self.ds)
-        res.init_circuits(self.gss)
-        res.add_estimate(stdxyi.target_model(), stdxyi.target_model(),
-                         [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'},
-                         estimate_key="default")
+    def test_pickle_ConfidenceRegion(self):
+        edesign = proto.CircuitListsDesign([pygsti.circuits.CircuitList(circuit_struct)
+                                            for circuit_struct in self.gss])
+        data = proto.ProtocolData(edesign, self.ds)
+        res = proto.ModelEstimateResults(data, proto.StandardGST(modes="TP"))
 
-        res.add_confidence_region_factory('final iteration estimate', 'final')
-        self.assertTrue( res.has_confidence_region_factory('final iteration estimate', 'final'))
+        res.add_estimate(
+            proto.estimate.Estimate.create_gst_estimate(
+                res, stdxyi.target_model(), stdxyi.target_model(),
+                [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'}),
+            estimate_key="default"
+        )
 
-        cfctry = res.get_confidence_region_factory('final iteration estimate', 'final')
+        est = res.estimates['default']
+        est.add_confidence_region_factory('final iteration estimate', 'final')
+        self.assertTrue( est.has_confidence_region_factory('final iteration estimate', 'final'))
+
+        cfctry = est.create_confidence_region_factory('final iteration estimate', 'final')
         cfctry.compute_hessian()
-        self.assertTrue( cfctry.has_hessian() )
+        self.assertTrue( cfctry.has_hessian )
 
         cfctry.project_hessian('std')
         ci_std = cfctry.view( 95.0, 'normal', 'std')
@@ -377,13 +396,11 @@ class TestHessianMethods(BaseTestCase):
 
 
     def test_mapcalc_hessian(self):
-        chi2, chi2Hessian = pygsti.chi2(self.model, self.ds,
-                                        returnHessian=True)
+        chi2Hessian = pygsti.chi2_hessian(self.model, self.ds)
 
         mdl_mapcalc = self.model.copy()
         mdl_mapcalc._calcClass = MapForwardSimulator
-        chi2, chi2Hessian_mapcalc = pygsti.chi2(self.model, self.ds,
-                                        returnHessian=True)
+        chi2Hessian_mapcalc = pygsti.chi2_hessian(self.model, self.ds)
 
         self.assertArraysAlmostEqual(chi2Hessian, chi2Hessian_mapcalc)
 

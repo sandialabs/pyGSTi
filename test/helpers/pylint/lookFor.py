@@ -1,6 +1,8 @@
-from .helpers           import get_pylint_output, write_output
+import sys
+
+from .helpers import get_pylint_output
 from ..automation_tools import read_json
-import os, sys
+
 
 # https://docs.pylint.org/features.html#general-options
 

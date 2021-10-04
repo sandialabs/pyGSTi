@@ -1,4 +1,6 @@
-""" A custom conjugate gradient descent algorithm """
+"""
+A custom conjugate gradient descent algorithm
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -25,8 +27,8 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag=None, xopt=None):
 
     Parameters
     ----------
-    fn : function
-        The function to minimize.
+    f : function
+        The function to optimize
 
     x0 : numpy array
         The starting point (argument to fn).
@@ -103,7 +105,7 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag=None, xopt=None):
         # If the last step had crazy short length, reset stepsize
         if stepsize < MIN_STEPSIZE: stepsize = MIN_STEPSIZE
         def g(s): return f(x + s * change)  # f along a line given by changedir.  Argument to function is stepsize.
-        stepsize = _maximize1D(g, 0, abs(stepsize), last_fx)  # find optimal stepsize along change direction
+        stepsize = _maximize_1d(g, 0, abs(stepsize), last_fx)  # find optimal stepsize along change direction
 
         predicted_difference = stepsize * _np.dot(grad, change)
         if xopt is not None: xopt_dot = _np.dot(change, xopt - x) / \
@@ -138,7 +140,7 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag=None, xopt=None):
 
 
 # Minimize g(s), given (s1,g1=g(s1)) as a starting point and guess, s2 for minimum
-def _maximize1D(g, s1, s2, g1):
+def _maximize_1d(g, s1, s2, g1):
 
     PHI = (1.0 + _np.sqrt(5.0)) / 2  # golden ratio
     TOL = 1e-10; FRAC_TOL = 1e-6
@@ -153,8 +155,8 @@ def _maximize1D(g, s1, s2, g1):
 
     assert(g1 is not None or g3 is not None)
     if g1 is None or g3 is None:
-        if g1 is None: s1, g1 = _findBoundary(g, s3, s1); s1_on_bd = True
-        if g3 is None: s3, g3 = _findBoundary(g, s1, s3); s3_on_bd = True
+        if g1 is None: s1, g1 = _find_boundary(g, s3, s1); s1_on_bd = True
+        if g3 is None: s3, g3 = _find_boundary(g, s1, s3); s3_on_bd = True
         s2 = s1 + (s3 - s1) / PHI; g2 = g(s2)
 
     while((abs(s3 - s1) > TOL) and (abs(s3 - s1) > FRAC_TOL * (abs(s3) + abs(s1)))):
@@ -165,7 +167,7 @@ def _maximize1D(g, s1, s2, g1):
                 s2, g2 = s3, g3
                 s3 = s1 + (s3 - s1) * PHI; g3 = g(s3)
                 if g3 is None:
-                    s3, g3 = _findBoundary(g, s2, s3)
+                    s3, g3 = _find_boundary(g, s2, s3)
                     s3_on_bd = True
             else:  # contract to the left.
                 s3, g3 = s2, g2
@@ -176,7 +178,7 @@ def _maximize1D(g, s1, s2, g1):
                 s2, g2 = s1, g1
                 s1 = s3 - (s3 - s1) * PHI; g1 = g(s1)
                 if g1 is None:
-                    s1, g1 = _findBoundary(g, s2, s1)
+                    s1, g1 = _find_boundary(g, s2, s1)
                     s1_on_bd = True
 
             else:  # Got it bracketed: now just narrow down bracket
@@ -214,7 +216,7 @@ def _max_within_bracket(g, s1, g1, s2, g2, s3, g3):
 
 #find boundary of g (i.e. at the edge of where it is defined)
 # g(s1) must be defined (not None) and g(s2) must == None (function undefined)
-def _findBoundary(g, s1, s2):
+def _find_boundary(g, s1, s2):
     #print "DEBUG: finding bd fn"
     TOL = 1e-6
     while(abs(s1 - s2) > TOL):  # just do binary search
@@ -226,18 +228,18 @@ def _findBoundary(g, s1, s2):
 
 #provide finite difference derivatives with boundary for a given function f.  Boundaries are
 # determined by the function f returning a None value when it is not defined.
-def _finite_diff_dfdx_and_bdflag(f, x, DELTA):
+def _finite_diff_dfdx_and_bdflag(f, x, delta):
     x = x.copy()  # make sure x is unaltered
     N = len(x)
     dfdx = _np.zeros(N)  # complex?
     bd = _np.zeros(N)
     for k in range(N):
-        x[k] += DELTA; fPlus = f(x)
-        x[k] -= 2 * DELTA; fMinus = f(x)
-        x[k] += DELTA
+        x[k] += delta; fPlus = f(x)
+        x[k] -= 2 * delta; fMinus = f(x)
+        x[k] += delta
         if fPlus is None: bd[k] = +1.0
         elif fMinus is None: bd[k] = -1.0
-        else: dfdx[k] = (fPlus - fMinus) / (2 * DELTA)
+        else: dfdx[k] = (fPlus - fMinus) / (2 * delta)
         #assert(fPlus is not None or fMinus is not None) #make sure we don't evaluate f somewhere it's
         #completely undefined
 

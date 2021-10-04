@@ -1,14 +1,10 @@
-import unittest
-import pygsti
 import numpy as np
-import sys
-import warnings
-import os
 import plotly.graph_objs as go
 
-from ..testutils import BaseTestCase, temp_files, compare_files
+import pygsti
 from pygsti.report import colormaps as cmap
 from pygsti.report.figure import ReportFigure
+from ..testutils import BaseTestCase, temp_files
 
 
 class ColormapTests(BaseTestCase):
@@ -23,7 +19,7 @@ class ColormapTests(BaseTestCase):
 
         #Quick test of linlog inverse function (never used)
         llcmap = cmap.LinlogColormap(1.0, 10.0, 16, 0.95, 1, "red")
-        mpl = pygsti.report.mpl_colormaps.mpl_LinLogNorm(llcmap)
+        mpl = pygsti.report.mpl_colormaps.MplLinLogNorm(llcmap)
         x = mpl.inverse(1.0) # test out inverse() function
         xar = mpl.inverse(np.array([1.0,2.0],'d'))
 
@@ -66,14 +62,14 @@ class ColormapTests(BaseTestCase):
             )
         )
         plotly_fig = go.Figure(data=list(data), layout=layout)
-        pygsti_fig = ReportFigure(plotly_fig, colormap=None, pythonValue=None)
+        pygsti_fig = ReportFigure(plotly_fig, colormap=None, python_value=None)
 
         mpl_fig = plotly_to_matplotlib(pygsti_fig)
 
         plotly_to_matplotlib(pygsti_fig,temp_files + "/testMPL.pdf")
 
         with self.assertRaises(ValueError):
-            fig = ReportFigure(plotly_fig, colormap=None, pythonValue=None, special="foobar")
+            fig = ReportFigure(plotly_fig, colormap=None, python_value=None, special="foobar")
             plotly_to_matplotlib(fig)
 
         #Heatmap

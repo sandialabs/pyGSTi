@@ -1,4 +1,6 @@
-"""Defines the Formatter class"""
+"""
+Defines the Formatter class
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -11,11 +13,11 @@
 import re as _re
 from copy import deepcopy
 
-from ..objects.reportableqty import ReportableQty as _ReportableQty
+from pygsti.report.reportableqty import ReportableQty as _ReportableQty
 
 
 class Formatter(object):
-    '''
+    """
     Class defining the formatting rules for an object
 
     Once created, is used like a function with the signature: item, specs -> string
@@ -24,7 +26,38 @@ class Formatter(object):
     __call__ could be renamed to render() for compatibility with table.render(), row.render(), etc..
     However, using __call__ allows for the user to drop in custom functions in place of Formatter objects,
     which is useful (i.e. in creating figure formatters)
-    '''
+
+    Parameters
+    ----------
+    custom : function, optional
+        A custom-formatting function that has signature `custom(item, specs)` and returns
+        `item` formatted as a string.
+
+    stringreplacers : tuple, optional
+        A tuple of tuples of the form (pattern, replacement) where replacement is a normal
+        string.  Ex : [('rho', '&rho;')]
+
+    regexreplace  : tuple, optional
+        A tuple of the form (regex,   replacement) where replacement is formattable string,
+        and gets formatted with grouped result of regex matching on item) Ex : ('.*?([0-9]+)$', '_{%s}')
+
+    formatstring : str, optional
+        Outer formatting for after both replacements have been made
+
+    ebstring : str, optional
+        Format string used if the item being formatted has attached error bars.
+
+    nmebstring : str, optional
+        Alternate format string to use for non-Markovian error bars.
+
+    stringreturn : tuple
+        A `(string, string)` tuple that creates a formatting rules where the the second string
+        is used if a label is equal to the first.
+
+    defaults : dictionary (string, any)
+        overriden values to the dictionary passed in during formatted.
+        ie for rounded formatters, which override the precision key to be set to two
+    """
 
     def __init__(self,
                  custom=None,
@@ -94,7 +127,7 @@ class Formatter(object):
 
         if isinstance(item, _ReportableQty):
             # If values are replaced with dashes or empty, leave them be
-            s = str(item.get_value())
+            s = str(item.value)
             if s == '--' or s == '':
                 return s
             return item.render_with(self, specs, self.ebstring, self.nmebstring)
@@ -124,13 +157,18 @@ class Formatter(object):
         return formatstring % item
 
     def variant(self, **kwargs):
-        '''
-        Create a Formatter object from an existing formatter object, tweaking it slightly
+        """
+        Create a Formatter object from an existing formatter object, tweaking it slightly.
 
         Parameters
         ----------
-        Same as Formatter.__init__()
-        '''
+        kwargs : various
+            Arguments to Formatter.__init__().
+
+        Returns
+        -------
+        Formatter
+        """
         ret = deepcopy(self)
         for k, v in kwargs.items():
             if k not in ret.__dict__:

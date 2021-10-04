@@ -1,4 +1,6 @@
-""" Encapsulates a group in terms of matrices and relations """
+"""
+Encapsulates a group in terms of matrices and relations
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,21 +10,37 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .. import drivers as _drivers
-from ..modelpacks.legacy import std1Q_Cliffords
+from functools import reduce as _reduce
 
 import numpy as _np
-from functools import reduce as _reduce
 
 
 def is_integer(x):
+    """
+    Check if `x` is an integer type.
+
+    Parameters
+    ----------
+    x : object
+        Object to test.
+
+    Returns
+    -------
+    bool
+    """
+    #TODO: combine with compattools.isint(x) ??
     return bool(isinstance(x, int) or isinstance(x, _np.integer))
 
 
-def construct_1Q_Clifford_group():
+def construct_1q_clifford_group():
     """
     Returns the 1 qubit Clifford group as a MatrixGroup object
+
+    Returns
+    -------
+    MatrixGroup
     """
+    from pygsti.modelpacks.legacy import std1Q_Cliffords
     mdl = std1Q_Cliffords.target_model()
     return MatrixGroup(mdl.operations.values(), mdl.operations.keys())
 
@@ -30,24 +48,33 @@ def construct_1Q_Clifford_group():
 class MatrixGroup(object):
     """
     Encapsulates a group where each element is represented by a matrix.
+
+    Parameters
+    ----------
+    list_of_matrices : list
+        A list of the group elements (should be 2d numpy arrays), and
+        can be mdl.gate.values() for some Model `mdl` that forms a group.
+
+    labels : list, optional
+        A label corresponding to each group element.
     """
 
-    def __init__(self, listOfMatrices, labels=None):
+    def __init__(self, list_of_matrices, labels=None):
         """
         Constructs a new MatrixGroup object
 
         Parameters
         ----------
-        listOfMatrices : list
+        list_of_matrices : list
             A list of the group elements (should be 2d numpy arrays), and
             can be mdl.gate.values() for some Model `mdl` that forms a group.
 
         labels : list, optional
             A label corresponding to each group element.
         """
-        self.mxs = list(listOfMatrices)
+        self.mxs = list(list_of_matrices)
         self.labels = list(labels) if (labels is not None) else None
-        assert(labels is None or len(labels) == len(listOfMatrices))
+        assert(labels is None or len(labels) == len(list_of_matrices))
         if labels is not None:
             self.label_indices = {lbl: indx for indx, lbl in enumerate(labels)}
         else:
@@ -81,7 +108,7 @@ class MatrixGroup(object):
                     self.inverse_table[i] = j; break
         assert (-1 not in self.inverse_table), "Cannot construct inv table"
 
-    def get_matrix(self, i):
+    def matrix(self, i):
         """
         Returns the matrix corresponding to index or label `i`
 
@@ -97,7 +124,7 @@ class MatrixGroup(object):
         if not is_integer(i): i = self.label_indices[i]
         return self.mxs[i]
 
-    def get_matrix_inv(self, i):
+    def inverse_matrix(self, i):
         """
         Returns the inverse of the matrix corresponding to index or label `i`
 
@@ -113,7 +140,7 @@ class MatrixGroup(object):
         if not is_integer(i): i = self.label_indices[i]
         return self.mxs[self.inverse_table[i]]
 
-    def get_inv(self, i):
+    def inverse_index(self, i):
         """
         Returns the index/label corresponding to the inverse of index/label `i`
 
@@ -136,8 +163,7 @@ class MatrixGroup(object):
 
     def product(self, indices):
         """
-        Returns the index/label of corresponding to the product of a list
-        or tuple of indices/labels.
+        Returns the index/label of corresponding to the product of a list or tuple of indices/labels.
 
         Parameters
         ----------

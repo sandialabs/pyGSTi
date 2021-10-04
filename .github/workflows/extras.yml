@@ -1,0 +1,70 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Build and run test extras
+
+on:
+  push:
+    branches: [ "beta" ]
+  #pull_requests
+  #  branches: [ "master", "develop", "beta" ]
+  # Allow running manually from Actions tab
+  workflow_dispatch:
+
+env:
+  SKIP_DEAP: 1
+  NOSE_VERBOSE: 2
+  NOSE_WITH_TIMER: 1
+  NOSE_WITH_ID: 1
+  NOSE_REDNOSE: 1
+  NOSE_WITH_COVERAGE: 1
+  NOSE_COVER_PACKAGE: "pygsti"
+  NOSE_PROCESSES: -1
+  NOSE_NOPATH: ""
+  NOSE_PROCESS_TIMEOUT: 2400
+  NOSE_WHERE: "test/test_packages/"
+
+jobs:
+  test_extras: # On stable branches, run extended tests
+
+    runs-on: ubuntu-18.04
+    strategy:
+      fail-fast: false # Finish all tests even if one fails
+      matrix:
+        python-version: [3.6, 3.7, 3.8, 3.9]
+        nose-tests:
+        - "algorithms algorithmsb"
+        - "report reportb"
+        - "drivers objects tools iotest optimize construction extras"
+        # - "mpi" # Fails in GitHub Actions, passes locally but doesn't terminate threads properly
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up installation environment
+      run: |
+        ./.github/ci-scripts/before_install.sh
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Cache pip packages
+      uses: actions/cache@v2
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}-${{ hashFiles('**/*requirements.txt') }}
+    - name: Install package
+      run: |
+        python -m pip install --upgrade pip
+        # Installing with -e to keep installation local (for NOSE_NOPATH)
+        # but still compile Cython extensions
+        python -m pip install -e .[testing]
+    - name: Run test_packages ${{ matrix.nose-tests }}
+      env:
+        NOSETESTS: ${{ matrix.nose-tests }}
+      run: |
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        echo "nosetests: $NOSETESTS"
+        nosetests $NOSETESTS
+
+
+

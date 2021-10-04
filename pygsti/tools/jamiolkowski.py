@@ -1,4 +1,6 @@
-"""Utility functions related to the Choi representation of gates."""
+"""
+Utility functions related to the Choi representation of gates.
+"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -9,9 +11,10 @@
 #***************************************************************************************************
 
 import numpy as _np
-from ..objects.basis import Basis as _Basis
-from . import basistools as _bt
-from . import matrixtools as _mt
+
+from pygsti.tools import basistools as _bt
+from pygsti.tools import matrixtools as _mt
+from pygsti.baseobjs.basis import Basis as _Basis
 
 
 # Gate Mx G:      rho  --> G rho                    where G and rho are in the Pauli basis (by definition/convention)                                           # noqa
@@ -61,22 +64,21 @@ from . import matrixtools as _mt
 #  J(Phi) = sum_(0<i,j<n) Phi(Eij) otimes Eij                                                                                                                   # noqa
 #  where Eij is the matrix unit with a single element in the (i,j)-th position, i.e. Eij == |i><j|                                                              # noqa
 
-def jamiolkowski_iso(operationMx, opMxBasis='pp', choiMxBasis='pp'):
+def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp'):
     """
-    Given a operation matrix, return the corresponding Choi matrix that is normalized
-    to have trace == 1.
+    Given a operation matrix, return the corresponding Choi matrix that is normalized to have trace == 1.
 
     Parameters
     ----------
-    operationMx : numpy array
+    operation_mx : numpy array
         the operation matrix to compute Choi matrix of.
 
-    opMxBasis : Basis object
+    op_mx_basis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
 
-    choiMxBasis : Basis object
+    choi_mx_basis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
@@ -86,14 +88,14 @@ def jamiolkowski_iso(operationMx, opMxBasis='pp', choiMxBasis='pp'):
     numpy array
         the Choi matrix, normalized to have trace == 1, in the desired basis.
     """
-    operationMx = _np.asarray(operationMx)
-    opMxBasis = _bt.build_basis_for_matrix(operationMx, opMxBasis)
-    opMxInStdBasis = _bt.change_basis(operationMx, opMxBasis, opMxBasis.equivalent('std'))
+    operation_mx = _np.asarray(operation_mx)
+    op_mx_basis = _bt.create_basis_for_matrix(operation_mx, op_mx_basis)
+    opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, op_mx_basis.create_equivalent('std'))
 
     #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
     #  so that we can take dot products with the BVec matrices below
-    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', opMxBasis.equivalent(
-        'std'), opMxBasis.simple_equivalent('std'))
+    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', op_mx_basis.create_equivalent(
+        'std'), op_mx_basis.create_simple_equivalent('std'))
 
     N = opMxInStdBasis.shape[0]  # dimension of the full-basis (expanded) gate
     dmDim = int(round(_np.sqrt(N)))  # density matrix dimension
@@ -104,10 +106,10 @@ def jamiolkowski_iso(operationMx, opMxBasis='pp', choiMxBasis='pp'):
     # conjugating with this basis element and tracing, i.e. trace(B0^dag * Operation * B0), is not necessarily zero.
 
     #get full list of basis matrices (in std basis) -- i.e. we use dmDim
-    if not isinstance(choiMxBasis, _Basis):
-        choiMxBasis = _Basis.cast(choiMxBasis, N)  # we'd like a basis of dimension N
+    if not isinstance(choi_mx_basis, _Basis):
+        choi_mx_basis = _Basis.cast(choi_mx_basis, N)  # we'd like a basis of dimension N
 
-    BVec = choiMxBasis.simple_equivalent().elements
+    BVec = choi_mx_basis.create_simple_equivalent().elements
     M = len(BVec)  # can be < N if basis has multiple block dims
     assert(M == N), 'Expected {}, got {}'.format(M, N)
 
@@ -119,30 +121,31 @@ def jamiolkowski_iso(operationMx, opMxBasis='pp', choiMxBasis='pp'):
             choiMx[i, j] = _mt.trace(_np.dot(opMxInStdBasis, BiBj_dag)) \
                 / _mt.trace(_np.dot(BiBj, BiBj_dag))
 
-    # This construction results in a Jmx with trace == dim(H) = sqrt(operationMx.shape[0]) (dimension of density matrix)
-    #  but we'd like a Jmx with trace == 1, so normalize:
+    # This construction results in a Jmx with trace == dim(H) = sqrt(operation_mx.shape[0])
+    #  (dimension of density matrix) but we'd like a Jmx with trace == 1, so normalize:
     choiMx_normalized = choiMx / dmDim
     return choiMx_normalized
 
 # GStd = sum_ij Jij (BSi x BSj^*)
 
 
-def jamiolkowski_iso_inv(choiMx, choiMxBasis='pp', opMxBasis='pp'):
+def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp'):
     """
-    Given a choi matrix, return the corresponding operation matrix.  This function
-    performs the inverse of jamiolkowski_iso(...).
+    Given a choi matrix, return the corresponding operation matrix.
+
+    This function performs the inverse of :function:`jamiolkowski_iso`.
 
     Parameters
     ----------
-    choiMx : numpy array
+    choi_mx : numpy array
         the Choi matrix, normalized to have trace == 1, to compute operation matrix for.
 
-    choiMxBasis : Basis object
+    choi_mx_basis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
 
-    opMxBasis : Basis object
+    op_mx_basis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
@@ -152,19 +155,19 @@ def jamiolkowski_iso_inv(choiMx, choiMxBasis='pp', opMxBasis='pp'):
     numpy array
         operation matrix in the desired basis.
     """
-    choiMx = _np.asarray(choiMx)  # will have "expanded" dimension even if bases are for reduced...
-    N = choiMx.shape[0]  # dimension of full-basis (expanded) operation matrix
-    if not isinstance(choiMxBasis, _Basis):  # if we're not given a basis, build
-        choiMxBasis = _Basis.cast(choiMxBasis, N)  # one with the full dimension
+    choi_mx = _np.asarray(choi_mx)  # will have "expanded" dimension even if bases are for reduced...
+    N = choi_mx.shape[0]  # dimension of full-basis (expanded) operation matrix
+    if not isinstance(choi_mx_basis, _Basis):  # if we're not given a basis, build
+        choi_mx_basis = _Basis.cast(choi_mx_basis, N)  # one with the full dimension
 
     dmDim = int(round(_np.sqrt(N)))  # density matrix dimension
 
     #get full list of basis matrices (in std basis)
-    BVec = _bt.basis_matrices(choiMxBasis.simple_equivalent(), N)
+    BVec = _bt.basis_matrices(choi_mx_basis.create_simple_equivalent(), N)
     assert(len(BVec) == N)  # make sure the number of basis matrices matches the dim of the choi matrix given
 
     # Invert normalization
-    choiMx_unnorm = choiMx * dmDim
+    choiMx_unnorm = choi_mx * dmDim
 
     opMxInStdBasis = _np.zeros((N, N), 'complex')  # in matrix unit basis of entire density matrix
     for i in range(N):
@@ -172,21 +175,21 @@ def jamiolkowski_iso_inv(choiMx, choiMxBasis='pp', opMxBasis='pp'):
             BiBj = _np.kron(BVec[i], _np.conjugate(BVec[j]))
             opMxInStdBasis += choiMx_unnorm[i, j] * BiBj
 
-    if not isinstance(opMxBasis, _Basis):
-        opMxBasis = _Basis.cast(opMxBasis, N)  # make sure opMxBasis is a Basis; we'd like dimension to be N
+    if not isinstance(op_mx_basis, _Basis):
+        op_mx_basis = _Basis.cast(op_mx_basis, N)  # make sure op_mx_basis is a Basis; we'd like dimension to be N
 
     #project operation matrix so it acts only on the space given by the desired state space blocks
     opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'contract',
-                                       opMxBasis.simple_equivalent('std'), opMxBasis.equivalent('std'))
+                                       op_mx_basis.create_simple_equivalent('std'),
+                                       op_mx_basis.create_equivalent('std'))
 
     #transform operation matrix into appropriate basis
-    return _bt.change_basis(opMxInStdBasis, opMxBasis.equivalent('std'), opMxBasis)
+    return _bt.change_basis(opMxInStdBasis, op_mx_basis.create_equivalent('std'), op_mx_basis)
 
 
-def fast_jamiolkowski_iso_std(operationMx, opMxBasis):
+def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis):
     """
-    Given a operation matrix, return the corresponding Choi matrix in the standard
-    basis that is normalized to have trace == 1.
+    The corresponding Choi matrix in the standard basis that is normalized to have trace == 1.
 
     This routine *only* computes the case of the Choi matrix being in the
     standard (matrix unit) basis, but does so more quickly than
@@ -195,10 +198,10 @@ def fast_jamiolkowski_iso_std(operationMx, opMxBasis):
 
     Parameters
     ----------
-    operationMx : numpy array
+    operation_mx : numpy array
         the operation matrix to compute Choi matrix of.
 
-    opMxBasis : Basis object
+    op_mx_basis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
@@ -210,13 +213,13 @@ def fast_jamiolkowski_iso_std(operationMx, opMxBasis):
     """
 
     #first, get operation matrix into std basis
-    operationMx = _np.asarray(operationMx)
-    opMxBasis = _bt.build_basis_for_matrix(operationMx, opMxBasis)
-    opMxInStdBasis = _bt.change_basis(operationMx, opMxBasis, opMxBasis.equivalent('std'))
+    operation_mx = _np.asarray(operation_mx)
+    op_mx_basis = _bt.create_basis_for_matrix(operation_mx, op_mx_basis)
+    opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, op_mx_basis.create_equivalent('std'))
 
     #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
-    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', opMxBasis.equivalent('std'),
-                                       opMxBasis.simple_equivalent('std'))
+    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', op_mx_basis.create_equivalent('std'),
+                                       op_mx_basis.create_simple_equivalent('std'))
 
     #Shuffle indices to go from process matrix to Jamiolkowski matrix (they vectorize differently)
     N2 = opMxInStdBasis.shape[0]; N = int(_np.sqrt(N2))
@@ -231,18 +234,19 @@ def fast_jamiolkowski_iso_std(operationMx, opMxBasis):
     return Jmx_norm
 
 
-def fast_jamiolkowski_iso_std_inv(choiMx, opMxBasis):
+def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
     """
     Given a choi matrix in the standard basis, return the corresponding operation matrix.
-    This function performs the inverse of fast_jamiolkowski_iso_std(...).
+
+    This function performs the inverse of :function:`fast_jamiolkowski_iso_std`.
 
     Parameters
     ----------
-    choiMx : numpy array
+    choi_mx : numpy array
         the Choi matrix in the standard (matrix units) basis, normalized to
         have trace == 1, to compute operation matrix for.
 
-    opMxBasis : Basis object
+    op_mx_basis : Basis object
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
@@ -254,25 +258,28 @@ def fast_jamiolkowski_iso_std_inv(choiMx, opMxBasis):
     """
 
     #Shuffle indices to go from process matrix to Jamiolkowski matrix (they vectorize differently)
-    N2 = choiMx.shape[0]; N = int(_np.sqrt(N2))
+    N2 = choi_mx.shape[0]; N = int(_np.sqrt(N2))
     assert(N * N == N2)  # make sure N2 is a perfect square
-    opMxInStdBasis = choiMx.reshape((N, N, N, N)) * N
+    opMxInStdBasis = choi_mx.reshape((N, N, N, N)) * N
     opMxInStdBasis = _np.swapaxes(opMxInStdBasis, 1, 2).flatten()
     opMxInStdBasis = opMxInStdBasis.reshape((N2, N2))
-    opMxBasis = _bt.build_basis_for_matrix(opMxInStdBasis, opMxBasis)
+    op_mx_basis = _bt.create_basis_for_matrix(opMxInStdBasis, op_mx_basis)
 
     #project operation matrix so it acts only on the space given by the desired state space blocks
     opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'contract',
-                                       opMxBasis.simple_equivalent('std'), opMxBasis.equivalent('std'))
+                                       op_mx_basis.create_simple_equivalent('std'),
+                                       op_mx_basis.create_equivalent('std'))
 
     #transform operation matrix into appropriate basis
-    return _bt.change_basis(opMxInStdBasis, opMxBasis.equivalent('std'), opMxBasis)
+    return _bt.change_basis(opMxInStdBasis, op_mx_basis.create_equivalent('std'), op_mx_basis)
 
 
-def sum_of_negative_choi_evals(model, weights=None):
+def sum_of_negative_choi_eigenvalues(model, weights=None):
     """
-    Compute the amount of non-CP-ness of a model by summing the negative
-    eigenvalues of the Choi matrix for each gate in model.
+    Compute the amount of non-CP-ness of a model.
+
+    This is defined (somewhat arbitarily) by summing the negative
+    eigenvalues of the Choi matrix for each gate in `model`.
 
     Parameters
     ----------
@@ -291,17 +298,21 @@ def sum_of_negative_choi_evals(model, weights=None):
     """
     if weights is not None:
         default = weights.get('gates', 1.0)
-        sums = sums_of_negative_choi_evals(model)
+        sums = sums_of_negative_choi_eigenvalues(model)
         return sum([s * weights.get(gl, default)
                     for gl, s in zip(model.operations.keys(), sums)])
     else:
-        return sum(sums_of_negative_choi_evals(model))
+        return sum(sums_of_negative_choi_eigenvalues(model))
 
 
-def sums_of_negative_choi_evals(model):
+def sums_of_negative_choi_eigenvalues(model):
     """
-    Compute the amount of non-CP-ness of a model by summing the negative
+    Compute the amount of non-CP-ness of a model.
+
+    This is defined (somewhat arbitarily) by summing the negative
     eigenvalues of the Choi matrix for each gate in model separately.
+    This function is different from :function:`sum_of_negative_choi_eigenvalues`
+    in that it returns sums separately for each operation of `model`.
 
     Parameters
     ----------
@@ -325,10 +336,9 @@ def sums_of_negative_choi_evals(model):
     return ret
 
 
-def mags_of_negative_choi_evals(model):
+def magnitudes_of_negative_choi_eigenvalues(model):
     """
-    Compute the magnitudes of the negative eigenvalues of the Choi matricies
-    for each gate in model.
+    Compute the magnitudes of the negative eigenvalues of the Choi matricies for each gate in `model`.
 
     Parameters
     ----------
@@ -344,7 +354,7 @@ def mags_of_negative_choi_evals(model):
     """
     ret = []
     for (_, gate) in model.operations.items():
-        J = jamiolkowski_iso(gate, model.basis, choiMxBasis=model.basis.simple_equivalent('std'))
+        J = jamiolkowski_iso(gate, model.basis, choi_mx_basis=model.basis.create_simple_equivalent('std'))
         evals = _np.linalg.eigvals(J)  # could use eigvalsh, but wary of this since eigh can be wrong...
         for ev in evals:
             ret.append(-ev.real if ev.real < 0 else 0.0)

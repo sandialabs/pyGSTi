@@ -1,13 +1,15 @@
 import collections as _collections
 import itertools as _itertools
+
 import numpy as _np
 import scipy as _scipy
 import scipy.sparse as _sps
 
 import pygsti
+import pygsti.objects as _objs
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.modelpacks.legacy import std2Q_XYICNOT
-import pygsti.objects as _objs
+
 
 class QubitGraph(object):
     """ Graph data structure """
@@ -169,7 +171,7 @@ def nparams_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
                            independent1Qgates=True, ZZonly=False, verbosity=0):
     # noise can be either a seed or a random array that is long enough to use
 
-    printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
+    printer = pygsti.obj.VerbosityPrinter.create_printer(verbosity)
     printer.log("Computing parameters for a %d-qubit %s model" % (nQubits,geometry))
 
     qubitGraph = QubitGraph(nQubits, geometry)
@@ -245,7 +247,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
                           gateNoise=None, prepNoise=None, povmNoise=None, verbosity=0):
     # noise can be either a seed or a random array that is long enough to use
 
-    printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
+    printer = pygsti.obj.VerbosityPrinter.create_printer(verbosity)
     printer.log("Creating a %d-qubit %s model" % (nQubits,geometry))
 
     mdl = pygsti.obj.ExplicitOpModel() # no preps/POVMs
@@ -259,9 +261,9 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     #    eLbls.append( format(i,formatStr))
     #    eExprs.append( str(i) )    
     #Qlbls = tuple( ['Q%d' % i for i in range(nQubits)] )
-    #mdl = pygsti.construction.build_explicit_model(
+    #mdl = pygsti.construction.create_explicit_model(
     #    [2**nQubits], [Qlbls], [], [], 
-    #    effectLabels=eLbls, effectExpressions=eExprs)
+    #    effect_labels=eLbls, effect_expressions=eExprs)
     printer.log("Created initial model")
 
     qubitGraph = QubitGraph(nQubits, geometry)
@@ -314,9 +316,9 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
 
         
     #SPAM
-    basis1Q = pygsti.obj.Basis("pp",2)
-    prepFactors = [ pygsti.obj.TPSPAMVec(pygsti.construction.basis_build_vector("0", basis1Q))
-                    for i in range(nQubits)]
+    basis1Q = pygsti.obj.Basis("pp", 2)
+    prepFactors = [pygsti.obj.TPSPAMVec(pygsti.construction.create_spam_vector("0", "Q0", basis1Q))
+                   for i in range(nQubits)]
     if prepNoise is not None:
         if isinstance(prepNoise,tuple): # use as (seed, strength)
             seed,strength = prepNoise
@@ -325,12 +327,12 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         else:
             depolAmts = prepNoise[0:nQubits]
         for amt,vec in zip(depolAmts,prepFactors): vec.depolarize(amt) 
-    mdl.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep',prepFactors)
+    mdl.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep', prepFactors)
     
     factorPOVMs = []
     for i in range(nQubits):
-        effects = [ (l,pygsti.construction.basis_build_vector(l, basis1Q)) for l in ["0","1"] ]
-        factorPOVMs.append( pygsti.obj.TPPOVM(effects) )
+        effects = [(l, pygsti.construction.create_spam_vector(l, "Q0", basis1Q)) for l in ["0", "1"]]
+        factorPOVMs.append(pygsti.obj.TPPOVM(effects))
     if povmNoise is not None:
         if isinstance(povmNoise,tuple): # use as (seed, strength)
             seed,strength = povmNoise
@@ -339,7 +341,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         else:
             depolAmts = povmNoise[0:nQubits]
         for amt,povm in zip(depolAmts,factorPOVMs): povm.depolarize(amt) 
-    mdl.povms['Mdefault'] = pygsti.obj.TensorProdPOVM( factorPOVMs )
+    mdl.povms['Mdefault'] = pygsti.obj.TensorProdPOVM(factorPOVMs)
         
     printer.log("DONE! - returning Model with dim=%d and gates=%s" % (mdl.dim, list(mdl.operations.keys())))
     return mdl
@@ -358,12 +360,12 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
         Composed = _objs.ComposedDenseOp
         Embedded = _objs.EmbeddedDenseOp
     
-    printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
+    printer = pygsti.obj.VerbosityPrinter.create_printer(verbosity)
     printer.log("*** Creating global idle ***")
     
     termgates = [] # gates to compose
     ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nQubits)])]
-    basisAllQ = pygsti.objects.Basis('pp', 2**qubitGraph.nQubits, sparse=sparse)
+    basisAllQ = pygsti.objects.Basis('pp', 2 ** qubitGraph.nQubits, sparse=sparse)
     
     nQubits = qubitGraph.nQubits
     possible_err_qubit_inds = _np.arange(nQubits)
@@ -372,7 +374,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
         printer.log("Weight %d: %d possible qubits" % (wt,nPossible),2)
         basisEl_Id = basisProductMatrix(_np.zeros(wt,'i'),sparse)
         wtId = _sps.identity(4**wt,'d','csr') if sparse else  _np.identity(4**wt,'d')
-        wtBasis = pygsti.objects.Basis('pp', 2**wt, sparse=sparse)
+        wtBasis = pygsti.objects.Basis('pp', 2 ** wt, sparse=sparse)
         
         for err_qubit_inds in _itertools.combinations(possible_err_qubit_inds, wt):
             if len(err_qubit_inds) == 2 and not qubitGraph.is_connected(err_qubit_inds[0],err_qubit_inds[1]):
@@ -387,7 +389,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
             printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_inds,len(errbasis)), 3)
             errbasis = pygsti.obj.Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
             termErr = Lindblad(wtId, ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
-                               nonham_diagonal_only=True, truncate=True, mxBasis=wtBasis)
+                               nonham_diagonal_only=True, truncate=True, mx_basis=wtBasis)
         
             err_qubit_global_inds = err_qubit_inds
             fullTermErr = Embedded(ssAllQ, [('Q%d'%i) for i in err_qubit_global_inds],
@@ -402,7 +404,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
     
     
 
-#def create_noncomposed_gate(targetOp, target_qubit_inds, qubitGraph, maxWeight, maxHops,
+#def create_noncomposed_gate(target_op, target_qubit_inds, qubitGraph, max_weight, maxHops,
 #                            spectatorMaxWeight=1, mode="embed"):
 #
 #    assert(spectatorMaxWeight <= 1) #only 0 and 1 are currently supported
@@ -410,7 +412,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #    errinds = [] # list of basis indices for all error terms
 #    possible_err_qubit_inds = qubitGraph.radius(target_qubit_inds, maxHops)
 #    nPossible = len(possible_err_qubit_inds)
-#    for wt in range(maxWeight+1):
+#    for wt in range(max_weight+1):
 #        if mode == "no-embedding": # make an error term for the entire gate
 #            for err_qubit_inds in _itertools.combinations(possible_err_qubit_inds, wt):
 #                # err_qubit_inds are global qubit indices
@@ -439,11 +441,11 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #    
 #    if mode == "no-embedding":     
 #        fullTargetOp = EmbeddedDenseOp(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
-#                                    targetOp, basisAllQ) 
-#        fullTargetOp = StaticDenseOp( fullTargetOp ) #Make static
+#                                    target_op, basisAllQ) 
+#        fullTargetOp = StaticArbitraryOp( fullTargetOp ) #Make static
 #        fullLocalErr = LindbladDenseOp(fullTargetOp, fullTargetOp,
 #                         ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
-#                         nonham_diagonal_only=True, truncate=True, mxBasis=basisAllQ)
+#                         nonham_diagonal_only=True, truncate=True, mx_basis=basisAllQ)
 #          # gate on full qubit space that accounts for error on the "local qubits", that is,
 #          # those local to the qubits being operated on
 #    elif mode == "embed":
@@ -452,11 +454,11 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
 #        
 #        ssLocQ = ['Q%d'%i for i in range(nPossible)]
 #        basisLocQ = pygsti.objects.Basis('pp', 2**nPossible)
-#        locTargetOp = StaticDenseOp( EmbeddedDenseOp(ssLocQ, ['Q%d'%i for i in loc_target_inds],
-#                                    targetOp, basisLocQ) )
+#        locTargetOp = StaticArbitraryOp( EmbeddedDenseOp(ssLocQ, ['Q%d'%i for i in loc_target_inds],
+#                                    target_op, basisLocQ) )
 #        localErr = LindbladDenseOp(locTargetOp, locTargetOp,
 #                         ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
-#                         nonham_diagonal_only=True, truncate=True, mxBasis=basisLocQ)
+#                         nonham_diagonal_only=True, truncate=True, mx_basis=basisLocQ)
 #        fullLocalErr = EmbeddedDenseOp(ssAllQ, ['Q%d'%i for i in possible_err_qubit_inds],
 #                                   localErr, basisAllQ)
 #    else:
@@ -506,14 +508,14 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
         Embedded = _objs.EmbeddedDenseOp
         Static = _objs.StaticDenseOp
     
-    printer = pygsti.obj.VerbosityPrinter.build_printer(verbosity)
+    printer = pygsti.obj.VerbosityPrinter.create_printer(verbosity)
     printer.log("*** Creating composed gate ***")
     
     #Factor1: target operation
     printer.log("Creating %d-qubit target op factor on qubits %s" %
                 (len(target_qubit_inds),str(target_qubit_inds)),2)
     ssAllQ = [tuple(['Q%d'%i for i in range(qubitGraph.nQubits)])]
-    basisAllQ = pygsti.objects.Basis('pp', 2**qubitGraph.nQubits, sparse=sparse)
+    basisAllQ = pygsti.objects.Basis('pp', 2 ** qubitGraph.nQubits, sparse=sparse)
     fullTargetOp = Embedded(ssAllQ, ['Q%d'%i for i in target_qubit_inds],
                             Static(targetOp), basisAllQ.dim) 
 
@@ -582,12 +584,12 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
         
         #Construct one embedded Lindblad-gate using all `errbasis` terms
         ssLocQ = [tuple(['Q%d'%i for i in range(nLocal)])]
-        basisLocQ = pygsti.objects.Basis('pp', 2**nLocal, sparse=sparse)
+        basisLocQ = pygsti.objects.Basis('pp', 2 ** nLocal, sparse=sparse)
         locId = _sps.identity(4**nLocal,'d','csr') if sparse else _np.identity(4**nLocal,'d')
         localErr = Lindblad(locId, ham_basis=errbasis,
                             nonham_basis=errbasis, cptp=True,
                             nonham_diagonal_only=True, truncate=True,
-                            mxBasis=basisLocQ)
+                            mx_basis=basisLocQ)
         fullLocalErr = Embedded(ssAllQ, ['Q%d'%i for i in all_possible_err_qubit_inds],
                                 localErr, basisAllQ.dim)
         printer.log("Lindblad gate w/dim=%d and %d params (from error basis of len %d) -> embedded to gate w/dim=%d" %
@@ -608,7 +610,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
             basisEl_Id = basisProductMatrix(_np.zeros(wt,'i'),sparse) #identity basis el
 
             wtId = _sps.identity(4**wt,'d','csr') if sparse else _np.identity(4**wt,'d')
-            wtBasis = pygsti.objects.Basis('pp', 2**wt, sparse=sparse)
+            wtBasis = pygsti.objects.Basis('pp', 2 ** wt, sparse=sparse)
 
             printer.log("Weight %d, max-hops %d: %d possible qubits" % (wt,maxHops,nPossible),3)
             
@@ -628,7 +630,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
                 termErr = Lindblad(wtId, ham_basis=errbasis,
                                    nonham_basis=errbasis, cptp=True,
                                    nonham_diagonal_only=True, truncate=True,
-                                   mxBasis=wtBasis)
+                                   mx_basis=wtBasis)
         
                 fullTermErr = Embedded(ssAllQ, ['Q%d'%i for i in err_qubit_global_inds],
                                        termErr, basisAllQ.dim)

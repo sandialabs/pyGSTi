@@ -8,16 +8,17 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
 import copy as _copy
 import warnings as _warnings
 from itertools import cycle as _cycle
-from . import analysis as _analysis
-from . import dataset as _dataset
-from ...objects import oplessmodel as _oplessmodel
-from ...objects import dataset as _stdds
-from ...objects import multidataset as _multids
-from ...objects import datacomparator as _dcomp
+
+import numpy as _np
+
+from pygsti.data import dataset as _stdds, multidataset as _multids, datacomparator as _dcomp
+from pygsti.models import oplessmodel as _oplessmodel
+
+#from . import analysis as _analysis
+_analysis = None  # MOVED - and this module is deprecated & broken now, so just set to None
 
 
 class Benchmarker(object):
@@ -139,9 +140,9 @@ class Benchmarker(object):
                 best_boundary_index = 0
                 best_vb_at_best_boundary_index = None
                 for (ind, qs) in specsforw:
-                    vbdata = self.get_volumetric_benchmark_data(depths, widths=[w, ], datatype=datatype,
-                                                                statistic=statistic, specs={ind: [qs, ]},
-                                                                aggregate=aggregate, rescaler=rescaler)['data']
+                    vbdata = self.volumetric_benchmark_data(depths, widths=[w, ], datatype=datatype,
+                                                            statistic=statistic, specs={ind: [qs, ]},
+                                                            aggregate=aggregate, rescaler=rescaler)['data']
                     # Only looking at 1 width, so drop the width key, and keep only the depths with data
                     if not aggregate:
                         vbdata = {d: vbdata[d][w][passnum] for d in vbdata.keys() if w in vbdata[d].keys()}
@@ -196,8 +197,8 @@ class Benchmarker(object):
 
         return selected_regions
 
-    def get_volumetric_benchmark_data(self, depths, widths='all', datatype='success_probabilities',
-                                      statistic='mean', specs=None, aggregate=True, rescaler='auto'):
+    def volumetric_benchmark_data(self, depths, widths='all', datatype='success_probabilities',
+                                  statistic='mean', specs=None, aggregate=True, rescaler='auto'):
 
         # maxmax : max over all depths/widths larger or equal
         # minmin : min over all deoths/widths smaller or equal.
@@ -392,7 +393,7 @@ class Benchmarker(object):
 
         return out
 
-    def get_flattened_data(self, specs=None, aggregate=True):
+    def flattened_data(self, specs=None, aggregate=True):
 
         flattened_data = {}
 
@@ -478,7 +479,7 @@ class Benchmarker(object):
 
         if len(self.multids['success-fail']) > 1:
             self.dscomparator = _dcomp.DataComparator(self.multids['success-fail'], allow_bad_circuits=True)
-            self.dscomparator.implement(verbosity=verbosity)
+            self.dscomparator.run(verbosity=verbosity)
 
     def generate_success_or_fail_dataset(self, overwrite=False):
         """
@@ -491,8 +492,8 @@ class Benchmarker(object):
         sfmultids = _multids.MultiDataSet()
 
         for ds_ind, ds in self.multids['standard'].items():
-            sfds = _stdds.DataSet(outcomeLabels=['success', 'fail'], collisionAction=ds.collisionAction)
-            for circ, dsrow in ds.items(stripOccurrenceTags=True):
+            sfds = _stdds.DataSet(outcome_labels=['success', 'fail'], collision_action=ds.collisionAction)
+            for circ, dsrow in ds.items(strip_occurrence_tags=True):
                 try:
                     scounts = dsrow[dsrow.aux[self.success_key]]
                 except:
@@ -509,7 +510,7 @@ class Benchmarker(object):
 
     #     for circ
 
-    def get_summary_data(self, datatype, specindex, qubits=None):
+    def summary_data(self, datatype, specindex, qubits=None):
 
         spec = self._specs[specindex]
         structure = spec.get_structure()
@@ -560,7 +561,7 @@ class Benchmarker(object):
         #preddtypes = ('success_probabilities', )
         auxtypes = ['twoQgate_count', 'depth', 'target', 'width', 'circuit_index'] + auxtypes
 
-        def get_datatype(datatype, dsrow, circ, target, qubits):
+        def _get_datatype(datatype, dsrow, circ, target, qubits):
 
             if datatype == 'success_counts':
                 return _analysis.marginalized_success_counts(dsrow, circ, target, qubits)
@@ -591,12 +592,12 @@ class Benchmarker(object):
             percent = 0
 
             if preddskey is None or ds_ind > 0:
-                iterator = zip(self.multids[useds][ds_ind].items(stripOccurrenceTags=True),
+                iterator = zip(self.multids[useds][ds_ind].items(strip_occurrence_tags=True),
                                self.multids[useds].auxInfo.values(), _cycle(zip([None, ], [None, ])))
             else:
-                iterator = zip(self.multids[useds][ds_ind].items(stripOccurrenceTags=True),
+                iterator = zip(self.multids[useds][ds_ind].items(strip_occurrence_tags=True),
                                self.multids[useds].auxInfo.values(),
-                               predds.items(stripOccurrenceTags=True))
+                               predds.items(strip_occurrence_tags=True))
 
             for i, ((circ, dsrow), auxdict, (pcirc, pdsrow)) in enumerate(iterator):
 
@@ -679,20 +680,20 @@ class Benchmarker(object):
                     #print('---', i)
                     for qubits_ind, qubits in enumerate(structure):
                         for datatype in datatypes:
-                            x = get_datatype(datatype, dsrow, circ, target, qubits)
+                            x = _get_datatype(datatype, dsrow, circ, target, qubits)
                             summarydata[specind][qubits][datatype][depth][ds_ind].append(x)
                             # Only do predictions on the first pass dataset.
                             if preddskey is not None and ds_ind == 0:
-                                x = get_datatype(datatype, pdsrow, circ, target, qubits)
+                                x = _get_datatype(datatype, pdsrow, circ, target, qubits)
                                 predsummarydata[preddskey][specind][qubits][datatype][depth].append(x)
 
                         # Only do predictions and aux on the first pass dataset.
                         if ds_ind == 0:
                             for auxtype in auxtypes:
                                 if auxtype == 'twoQgate_count':
-                                    auxdata = circ.twoQgate_count()
+                                    auxdata = circ.two_q_gate_count()
                                 elif auxtype == 'depth':
-                                    auxdata = circ.depth()
+                                    auxdata = circ.depth
                                 elif auxtype == 'target':
                                     auxdata = target
                                 elif auxtype == 'circuit_index':
@@ -714,7 +715,7 @@ class Benchmarker(object):
                                     else:
                                         trimmedcirc = circ
 
-                                    predsp = predmodel.probs(trimmedcirc)[('success',)]
+                                    predsp = predmodel.probabilities(trimmedcirc)[('success',)]
                                     predsummarydata[pkey][specind][qubits]['success_probabilities'][depth].append(
                                         predsp)
 
@@ -767,7 +768,7 @@ class Benchmarker(object):
                         rbdata, bootstrap_samples=bootstraps, datatype='adjusted')
 
     def filter_experiments(self, numqubits=None, containqubits=None, onqubits=None, sampler=None,
-                           twoQgateprob=None, prefilter=None, benchmarktype=None):
+                           two_qubit_gate_prob=None, prefilter=None, benchmarktype=None):
         """
         todo
 
@@ -806,8 +807,8 @@ class Benchmarker(object):
                             keep = False
 
                 if keep:
-                    if twoQgateprob is not None:
-                        if not _np.allclose(twoQgateprob, spec.get_twoQgate_rate()):
+                    if two_qubit_gate_prob is not None:
+                        if not _np.allclose(two_qubit_gate_prob, spec.get_twoQgate_rate()):
                             keep = False
 
                 if keep:

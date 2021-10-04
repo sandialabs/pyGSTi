@@ -1,9 +1,8 @@
-from ..util import BaseCase
-from . import fixtures
-
-import pygsti.construction as pc
-from pygsti.objects import Circuit
 import pygsti.algorithms.fiducialpairreduction as fpr
+import pygsti.circuits as pc
+from pygsti.circuits import Circuit
+from . import fixtures
+from ..util import BaseCase
 
 _SEED = 1234
 
@@ -52,9 +51,9 @@ class FiducialPairReductionStdData(object):
 class FiducialPairReductionSmallData(FiducialPairReductionStdData):
     def setUp(self):
         super(FiducialPairReductionSmallData, self).setUp()
-        self.preps = pc.circuit_list([('Gx',)])
+        self.preps = pc.to_circuits([('Gx',)])
         self.effects = self.preps
-        self.germs = pc.circuit_list([('Gx',), ('Gy',)])
+        self.germs = pc.to_circuits([('Gx',), ('Gy',)])
         self.fiducial_pairs = [(0, 0)]
 
 # TODO optimize!!!!
@@ -64,14 +63,14 @@ class FindSufficientFiducialPairsBase(object):
     def test_find_sufficient_fiducial_pairs_sequential(self):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
             self.model, self.preps, self.effects, self.germs,
-            searchMode='sequential'
+            search_mode='sequential'
         )
         self.assertEqual(fiducial_pairs, self.fiducial_pairs)
 
     def test_find_sufficient_fiducial_pairs_random(self):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
             self.model, self.preps, self.effects, self.germs,
-            searchMode='random', nRandom=300, seed=_SEED
+            search_mode='random', n_random=300, seed=_SEED
         )
         # TODO assert correctness
 
@@ -80,7 +79,7 @@ class FindSufficientFiducialPairsPerGermBase(object):
     def test_find_sufficient_fiducial_pairs_per_germ_sequential(self):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs_per_germ(
             self.model, self.preps, self.effects, self.germs,
-            searchMode='sequential'
+            search_mode='sequential'
         )
         self.assertTrue(fiducial_pairs == self.fiducial_pairs_per_germ or
                         fiducial_pairs == self.fiducial_pairs_per_germ_alt)
@@ -88,7 +87,7 @@ class FindSufficientFiducialPairsPerGermBase(object):
     def test_find_sufficient_fiducial_pairs_per_germ_random(self):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs_per_germ(
             self.model, self.preps, self.effects, self.germs,
-            searchMode='random', nRandom=100, seed=_SEED
+            search_mode='random', n_random=100, seed=_SEED
         )
         # TODO assert correctness
 
@@ -101,7 +100,7 @@ class StdDataFindSufficientFiducialPairsTester(FindSufficientFiducialPairsBase,
         test_pair_list = [(0, 0), (0, 1), (1, 0)]
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs(
             self.model, self.preps, self.effects, self.germs,
-            testPairList=test_pair_list
+            test_pair_list=test_pair_list
         )
         # TODO assert correctness
 
@@ -114,7 +113,7 @@ class SmallDataFindSufficientFiducialPairsTester(FindSufficientFiducialPairsBase
 
 class FindSufficientFiducialPairsExceptionTester(FiducialPairReductionStdData, BaseCase):
     def test_find_sufficient_fiducial_pairs_per_germ_raises_on_insufficient_fiducials(self):
-        insuff_fids = pc.circuit_list([('Gx',)])
+        insuff_fids = pc.to_circuits([('Gx',)])
         with self.assertRaises(ValueError):
             fpr.find_sufficient_fiducial_pairs_per_germ(
                 self.model, insuff_fids, insuff_fids, self.germs

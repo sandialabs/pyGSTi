@@ -1,10 +1,10 @@
 import os
-import nbformat
-from nbconvert.preprocessors import ExecutePreprocessor
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from nose.plugins.attrib import attr
 
+import nbformat
+from nbconvert.preprocessors import ExecutePreprocessor
+from nose.plugins.attrib import attr
 
 _DEFAULT_IPYNB_VERSION = 4
 _DEFAULT_TIMEOUT = 60 * 20  # 20 minutes
@@ -43,12 +43,19 @@ def notebooks_in_path(root_path, ignore_checkpoints=True):
                 yield Path(path) / ipynb
 
 
+def _make_test(nb_path, tmp_path, root_path):
+    rel_path = nb_path.relative_to(root_path)
+    workdir = tmp_path / rel_path.parent
+    workdir.mkdir(parents=True, exist_ok=True)
+
+    @attr(description="Running notebook {}".format(rel_path))
+    def test_wrapper():
+        run_notebook(nb_path, workdir)
+    return test_wrapper
+
+
 def _test_notebooks_in_path(root_path):
     with TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         for nb_path in notebooks_in_path(root_path):
-            rel_path = nb_path.relative_to(root_path)
-            workdir = tmp_path / rel_path.parent
-            workdir.mkdir(parents=True, exist_ok=True)
-            description = "Running notebook {}".format(rel_path)
-            yield attr(description=description)(run_notebook), nb_path, workdir
+            yield _make_test(nb_path, tmp_path, root_path)

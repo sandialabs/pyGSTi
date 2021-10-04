@@ -1,7 +1,8 @@
+import os
+import pickle
+
 import pygsti
 from pygsti.modelpacks.legacy import std1Q_XYI
-import pickle
-import os
 
 pv = pygsti.__version__
 if len(pv.split('.')) > 3:
@@ -17,13 +18,13 @@ maxLengths = [1, 2, 4]  # roughly gives the length of the sequences used by GST
 
 # 3) generate "fake" data from a depolarized version of target_model
 mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
-listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
+listOfExperiments = pygsti.circuits.create_lsgst_circuits(
     target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
-ds = pygsti.construction.generate_fake_data(mdl_datagen, listOfExperiments, nSamples=1000,
-                                            sampleError="binomial", seed=1234)
+ds = pygsti.data.simulate_data(mdl_datagen, listOfExperiments, num_samples=1000,
+                                       sample_error="binomial", seed=1234)
 
-results = pygsti.do_stdpractice_gst(ds, target_model, prep_fiducials, meas_fiducials,
-                                    germs, maxLengths, verbosity=3)
+results = pygsti.run_stdpractice_gst(ds, target_model, prep_fiducials, meas_fiducials,
+                                     germs, maxLengths, verbosity=3)
 
 
 def outname(typ):

@@ -11,18 +11,19 @@ Variables for working with the a model containing Idle, X(pi/2), Y(pi/2), and Z(
 """
 
 import sys as _sys
-from ...construction import circuitconstruction as _strc
-from ...construction import modelconstruction as _setc
-from ...construction import stdtarget as _stdtarget
+
+from ...circuits import circuitconstruction as _strc
+from ...models import modelconstruction as _setc
+from .. import stdtarget as _stdtarget
 
 description = "Idle, X(pi/2), Y(pi/2), Z(pi/2) gates"
 
 gates = ['Gi', 'Gx', 'Gy', 'Gz']
-fiducials = _strc.circuit_list([(), ('Gx',), ('Gy',), ('Gx', 'Gx'),
+fiducials = _strc.to_circuits([(), ('Gx',), ('Gy',), ('Gx', 'Gx'),
                                 ('Gx', 'Gx', 'Gx'), ('Gy', 'Gy', 'Gy')], line_labels=('*',))  # for 1Q MUB
 prepStrs = effectStrs = fiducials
 
-germs = _strc.circuit_list(
+germs = _strc.to_circuits(
     [('Gi',), ('Gx',), ('Gy',), ('Gz',),
      ('Gx', 'Gz'), ('Gx', 'Gy'),
      ('Gx', 'Gx', 'Gy'), ('Gx', 'Gx', 'Gz'),
@@ -34,10 +35,14 @@ germs = _strc.circuit_list(
 germs_lite = germs[0:10]
 
 #Construct a target model: Identity, X(pi/2), Y(pi/2)
-_target_model = _setc.build_explicit_model([('Q0',)], ['Gi', 'Gx', 'Gy', 'Gz'],
-                                           ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)", "Z(pi/2,Q0)"])
+_target_model = _setc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy', 'Gz'],
+                                                             ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)", "Z(pi/2,Q0)"])
 
 _gscache = {("full", "auto"): _target_model}
+
+
+def processor_spec():
+    return target_model('static').create_processor_spec(None)
 
 
 def target_model(parameterization_type="full", sim_type="auto"):

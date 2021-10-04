@@ -1,11 +1,10 @@
 import numpy as np
 
+from pygsti.algorithms import grasp
 from ..util import BaseCase
 
-from pygsti.algorithms import grasp
 
-
-# Helper functions to parameterize grasp.do_grasp
+# Helper functions to parameterize grasp.run_grasp
 def someScoreFn(elements_subset):
     num_t = sum([el.count('t') for el in elements_subset])
     num_els = len(elements_subset)
@@ -59,12 +58,12 @@ independent of their order in the source code
         """).split()
 
     def test_do_grasp(self):
-        result = grasp.do_grasp(
-            self.elements, greedyScoreFn=someScoreFn,
-            rclFn=indices_of_candidates, localScoreFn=someScoreFn,
-            getNeighborsFn=getNeighbors, finalScoreFn=someScoreFn,
-            iterations=10, feasibleThreshold=None,
-            feasibleFn=feasibleFn, initialElements=None, seed=1234,
+        result = grasp.run_grasp(
+            self.elements, greedy_score_fn=someScoreFn,
+            rcl_fn=indices_of_candidates, local_score_fn=someScoreFn,
+            get_neighbors_fn=getNeighbors, final_score_fn=someScoreFn,
+            iterations=10, feasible_threshold=None,
+            feasible_fn=feasibleFn, initial_elements=None, seed=1234,
             verbosity=3
         )
         # TODO assert correctness
@@ -73,34 +72,34 @@ independent of their order in the source code
         initial_elements = np.zeros(len(self.elements))
         initial_elements[0] = initial_elements[2] = initial_elements[10] = 1.0 #some initial state
 
-        result = grasp.do_grasp(
-            self.elements, greedyScoreFn=someScoreFn,
-            rclFn=indices_of_candidates, localScoreFn=someScoreFn,
-            getNeighborsFn=getNeighbors, finalScoreFn=someScoreFn,
-            iterations=10, feasibleThreshold=None,
-            feasibleFn=feasibleFn, initialElements=initial_elements,
+        result = grasp.run_grasp(
+            self.elements, greedy_score_fn=someScoreFn,
+            rcl_fn=indices_of_candidates, local_score_fn=someScoreFn,
+            get_neighbors_fn=getNeighbors, final_score_fn=someScoreFn,
+            iterations=10, feasible_threshold=None,
+            feasible_fn=feasibleFn, initial_elements=initial_elements,
             seed=1234, verbosity=3
         )
         # TODO assert correctness
 
     def test_do_grasp_raises_on_initial_element_size_mismatch(self):
         with self.assertRaises(ValueError):
-            grasp.do_grasp(
-                self.elements, greedyScoreFn=someScoreFn,
-                rclFn=indices_of_candidates, localScoreFn=someScoreFn,
-                getNeighborsFn=getNeighbors, finalScoreFn=someScoreFn,
-                iterations=10, feasibleThreshold=None,
-                feasibleFn=feasibleFn, initialElements=[0], seed=1234,
+            grasp.run_grasp(
+                self.elements, greedy_score_fn=someScoreFn,
+                rcl_fn=indices_of_candidates, local_score_fn=someScoreFn,
+                get_neighbors_fn=getNeighbors, final_score_fn=someScoreFn,
+                iterations=10, feasible_threshold=None,
+                feasible_fn=feasibleFn, initial_elements=[0], seed=1234,
                 verbosity=3
             )
 
     def test_do_grasp_raises_on_missing_feasible_function_and_threshold(self):
         with self.assertRaises(ValueError):
-            grasp.do_grasp(
-                self.elements, greedyScoreFn=someScoreFn,
-                rclFn=indices_of_candidates, localScoreFn=someScoreFn,
-                getNeighborsFn=getNeighbors, finalScoreFn=someScoreFn,
-                iterations=10, feasibleThreshold=None,
-                feasibleFn=None, initialElements=[0], seed=1234,
+            grasp.run_grasp(
+                self.elements, greedy_score_fn=someScoreFn,
+                rcl_fn=indices_of_candidates, local_score_fn=someScoreFn,
+                get_neighbors_fn=getNeighbors, final_score_fn=someScoreFn,
+                iterations=10, feasible_threshold=None,
+                feasible_fn=None, initial_elements=[0], seed=1234,
                 verbosity=3
             )

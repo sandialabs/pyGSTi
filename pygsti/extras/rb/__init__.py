@@ -9,5 +9,5 @@
 #***************************************************************************************************
 
 from . import dataset
-from .benchmarker import Benchmarker
 from . import simulate
+from .benchmarker import Benchmarker

@@ -1,10 +1,9 @@
 """IO test reference generation"""
 import functools
-
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-import pygsti
-
 from pathlib import Path
+
+import pygsti
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from . import TEMP_FILE_PATH
 
 
@@ -34,7 +33,7 @@ class IOGen:
 
     @_memo
     def ds(self):
-        ds = pygsti.obj.DataSet(outcomeLabels=['0', '1'], comment="Hello")
+        ds = pygsti.data.DataSet(outcome_labels=['0', '1'], comment="Hello")
         ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
         ds.add_count_dict(('Gx', 'Gy'), {'0': 40, '1': 60})
         ds.done_adding_data()
@@ -46,7 +45,7 @@ class IOGen:
 
     @_memo
     def sparse_ds(self):
-        ds = pygsti.objects.DataSet()
+        ds = pygsti.data.DataSet()
         ds.add_count_dict(('Gx',), {'0': 10, '1': 90})
         ds[('Gy',)] = {'0': 20, '1': 80}
         ds[('Gx', 'Gy')] = {('0', '0'): 30, ('1', '1'): 70}
@@ -56,15 +55,15 @@ class IOGen:
     @_write('sparse_dataset1a.txt')
     def sparse_dataset_1a(self, path):
         pygsti.io.write_dataset(
-            path, self.sparse_ds, outcomeLabelOrder=None,
-            fixedColumnMode=True
+            path, self.sparse_ds, outcome_label_order=None,
+            fixed_column_mode=True
         )
 
     @_write('sparse_dataset2a.txt')
     def sparse_dataset_2a(self, path):
         pygsti.io.write_dataset(
-            path, self.sparse_ds, outcomeLabelOrder=None,
-            fixedColumnMode=False
+            path, self.sparse_ds, outcome_label_order=None,
+            fixed_column_mode=False
         )
 
     @_memo
@@ -74,15 +73,15 @@ class IOGen:
     @_write('sparse_dataset1b.txt')
     def sparse_dataset_1b(self, path):
         pygsti.io.write_dataset(
-            path, self.sparse_ds, outcomeLabelOrder=self.ordering,
-            fixedColumnMode=True
+            path, self.sparse_ds, outcome_label_order=self.ordering,
+            fixed_column_mode=True
         )
 
     @_write('sparse_dataset2b.txt')
     def sparse_dataset_2b(self, path):
         pygsti.io.write_dataset(
-            path, self.sparse_ds, outcomeLabelOrder=self.ordering,
-            fixedColumnMode=False
+            path, self.sparse_ds, outcome_label_order=self.ordering,
+            fixed_column_mode=False
         )
 
     @_write('TestMultiDataset.txt')
@@ -101,7 +100,7 @@ Gx^4 20 80 0.2 100
 
     @_memo
     def circuit_list(self):
-        return pygsti.construction.circuit_list([(), ('Gx',), ('Gx', 'Gy')])
+        return pygsti.circuits.to_circuits([(), ('Gx',), ('Gx', 'Gy')])
 
     @_memo
     def circuit_list_header(self):

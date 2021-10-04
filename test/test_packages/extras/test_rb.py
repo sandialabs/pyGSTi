@@ -1,10 +1,12 @@
-from ..testutils import BaseTestCase, compare_files, temp_files
 import unittest
+
 import numpy as np
 
 import pygsti
+from ..testutils import BaseTestCase, compare_files, temp_files
+
+
 #from pygsti.extras import rb
-from pygsti.objects import Label
 
 class RBTestCase(BaseTestCase):
     @unittest.skip("Need to update RB unit tests since major code update")
@@ -33,7 +35,7 @@ class RBTestCase(BaseTestCase):
         n = 3
         glist = ['Gxpi','Gypi','Gzpi','Gh','Gp','Gcphase'] # 'Gi',
         availability = {'Gcphase':[(0,1),(1,2)]}
-        pspec = pygsti.obj.ProcessorSpec(n,glist,availability=availability,verbosity=0)
+        pspec = pygsti.obj.QubitProcessorSpec(n, glist, availability=availability, construct_models=('target', 'clifford'), verbosity=0)
 
         errormodel = rb.simulate.create_iid_pauli_error_model(pspec, oneQgate_errorrate=0.01, twoQgate_errorrate=0.05,
                                                               idle_errorrate=0.005, measurement_errorrate=0.05,
@@ -59,23 +61,23 @@ class RBTestCase(BaseTestCase):
 
         from pygsti.modelpacks.legacy import std1Q_Cliffords
         target_model = std1Q_Cliffords.target_model()
-        clifford_group = rb.group.construct_1Q_Clifford_group()
+        clifford_group = rb.group.construct_1q_clifford_group()
 
         from pygsti.modelpacks.legacy import std1Q_XY
         target_model = std1Q_XY.target_model()
         clifford_compilation = std1Q_XY.clifford_compilation
-        compiled_cliffords = pygsti.construction.build_explicit_alias_model(target_model,clifford_compilation)
+        compiled_cliffords = pygsti.models.modelconstruction.create_explicit_alias_model(target_model, clifford_compilation)
 
         for key in list(compiled_cliffords.operations.keys()):
-            self.assertLess(np.sum(abs(compiled_cliffords.operations[key]-clifford_group.get_matrix(key))), 10**(-10))
+            self.assertLess(np.sum(abs(compiled_cliffords.operations[key]-clifford_group.matrix(key))), 10**(-10))
 
         from pygsti.modelpacks.legacy import std1Q_XYI
         target_model = std1Q_XYI.target_model()
         clifford_compilation = std1Q_XYI.clifford_compilation
-        compiled_cliffords = pygsti.construction.build_explicit_alias_model(target_model,clifford_compilation)
+        compiled_cliffords = pygsti.models.modelconstruction.create_explicit_alias_model(target_model, clifford_compilation)
 
         for key in list(compiled_cliffords.operations.keys()):
-            self.assertLess(np.sum(abs(compiled_cliffords.operations[key]-clifford_group.get_matrix(key))), 10**(-10))
+            self.assertLess(np.sum(abs(compiled_cliffords.operations[key]-clifford_group.matrix(key))), 10**(-10))
 
         # Future : add the remaining Clifford compilations here.
 

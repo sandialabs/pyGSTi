@@ -1,15 +1,13 @@
 import unittest
 import warnings
-import collections
-import pickle
-import pygsti
-import os
-from pygsti.modelpacks.legacy import std1Q_XYI as std
-from ..testutils import BaseTestCase, compare_files, temp_files
 
 import numpy as np
 
+import pygsti
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from pygsti.report import reportables as rptbl
+from ..testutils import BaseTestCase
+
 
 class TestReportables(BaseTestCase):
 
@@ -17,11 +15,11 @@ class TestReportables(BaseTestCase):
         super(TestReportables, self).setUp()
 
     def test_helpers(self):
-        self.assertTrue(rptbl._nullFn("Any arguments") is None)
+        self.assertTrue(rptbl._null_fn("Any arguments") is None)
 
-        self.assertAlmostEqual(rptbl._projectToValidProb(-0.1), 0.0)
-        self.assertAlmostEqual(rptbl._projectToValidProb(1.1), 1.0)
-        self.assertAlmostEqual(rptbl._projectToValidProb(0.5), 0.5)
+        self.assertAlmostEqual(rptbl._project_to_valid_prob(-0.1), 0.0)
+        self.assertAlmostEqual(rptbl._project_to_valid_prob(1.1), 1.0)
+        self.assertAlmostEqual(rptbl._project_to_valid_prob(0.5), 0.5)
 
         nan_qty = rptbl.evaluate(None) # none function -> nan qty
         self.assertTrue( np.isnan(nan_qty.value) )
@@ -35,15 +33,15 @@ class TestReportables(BaseTestCase):
         gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)
         gs2 = std.target_model()
         gl = "Gx" # operation label
-        opstr = pygsti.obj.Circuit( ('Gx','Gx') )
-        syntheticIdles = pygsti.construction.circuit_list( [
+        opstr = pygsti.circuits.Circuit(('Gx', 'Gx'))
+        syntheticIdles = pygsti.circuits.to_circuits( [
              ('Gx',)*4, ('Gy',)*4 ] )
 
         gatesetfn_factories = (  # model, oplabel
             rptbl.Choi_matrix,
             rptbl.Choi_evals,
             rptbl.Choi_trace,
-            rptbl.Gate_eigenvalues, #GAP
+            rptbl.GateEigenvalues, #GAP
             rptbl.Upper_bound_fidelity ,
             rptbl.Closest_ujmx,
             rptbl.Maximum_fidelity,
@@ -56,20 +54,20 @@ class TestReportables(BaseTestCase):
 
 
         gatesetfn_factories = ( # model, circuit
-            rptbl.Circuit_eigenvalues,
+            rptbl.CircuitEigenvalues,
         )
         for gsf_factory in gatesetfn_factories:
             gsf = gsf_factory(gs1,opstr)
             rptbl.evaluate(gsf)
 
 
-        gatesetfn_factories = ( # modelA, modelB, circuit
+        gatesetfn_factories = ( # model_a, model_b, circuit
             rptbl.Rel_circuit_eigenvalues,
             rptbl.Circuit_fro_diff ,
             rptbl.Circuit_entanglement_infidelity,
             rptbl.Circuit_avg_gate_infidelity,
             rptbl.Circuit_jt_diff,
-            rptbl.Circuit_half_diamond_norm,
+            rptbl.CircuitHalfDiamondNorm,
             rptbl.Circuit_nonunitary_entanglement_infidelity,
             rptbl.Circuit_nonunitary_avg_gate_infidelity,
             rptbl.Circuit_eigenvalue_entanglement_infidelity,
@@ -84,7 +82,7 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
 
 
-        gatesetfn_factories = ( # modelA, modelB, povmlbl
+        gatesetfn_factories = ( # model_a, model_b, povmlbl
             rptbl.POVM_entanglement_infidelity,
             rptbl.POVM_jt_diff,
             rptbl.POVM_half_diamond_norm,
@@ -103,13 +101,13 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
 
 
-        gatesetfn_factories = ( # modelA, modelB, gatelbl
+        gatesetfn_factories = ( # model_a, model_b, gatelbl
             rptbl.Entanglement_fidelity,
             rptbl.Entanglement_infidelity,
             rptbl.Closest_unitary_fidelity,
             rptbl.Fro_diff,
             rptbl.Jt_diff,
-            rptbl.Half_diamond_norm,
+            rptbl.HalfDiamondNorm,
             rptbl.Nonunitary_entanglement_infidelity,
             rptbl.Nonunitary_avg_gate_infidelity,
             rptbl.Eigenvalue_nonunitary_entanglement_infidelity,
@@ -134,7 +132,7 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
 
 
-        gatesetfn_factories = ( # modelA, modelB, syntheticIdleStrs
+        gatesetfn_factories = ( # model_a, model_b, synthetic_idle_strs
             rptbl.Robust_LogGTi_and_projections,
         )
         for gsf_factory in gatesetfn_factories:
@@ -142,7 +140,7 @@ class TestReportables(BaseTestCase):
             rptbl.evaluate(gsf)
 
 
-        gatesetfn_factories = ( # modelA, modelB
+        gatesetfn_factories = ( # model_a, model_b
             rptbl.General_decomposition,
             rptbl.Average_gateset_infidelity,
             rptbl.Predicted_rb_number,
@@ -177,21 +175,21 @@ class TestReportables(BaseTestCase):
     def test_nearby_gatesetfns(self):
         gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)
         gs2 = std.target_model()
-        opstr = pygsti.obj.Circuit( ('Gx','Gx') )
+        opstr = pygsti.circuits.Circuit(('Gx', 'Gx'))
 
-        fn = rptbl.Half_diamond_norm(gs1,gs2,'Gx')
+        fn = rptbl.HalfDiamondNorm(gs1,gs2,'Gx')
         if fn is not None:
             fn.evaluate(gs1)
             fn.evaluate_nearby(gs1)
         else:
-            warnings.warn("Can't test Half_diamond_norm! (probably b/c cvxpy isn't available)")
+            warnings.warn("Can't test HalfDiamondNorm! (probably b/c cvxpy isn't available)")
 
-        fn = rptbl.Circuit_half_diamond_norm(gs1,gs2,opstr)
+        fn = rptbl.CircuitHalfDiamondNorm(gs1,gs2,opstr)
         if fn is not None:
             fn.evaluate(gs1)
             fn.evaluate_nearby(gs1)
         else:
-            warnings.warn("Can't test Circuit_half_diamond_norm! (probably b/c cvxpy isn't available)")
+            warnings.warn("Can't test CircuitHalfDiamondNorm! (probably b/c cvxpy isn't available)")
 
     def test_closest_unitary(self):
         gs1 = std.target_model().depolarize(op_noise=0.1, spam_noise=0.05)

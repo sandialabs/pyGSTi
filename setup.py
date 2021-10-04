@@ -1,14 +1,17 @@
 """A python implementation of Gate Set Tomography"""
 
 from warnings import warn
+from collections import defaultdict
 
 try:
     from setuptools import setup
     from setuptools import Extension
+    from setuptools.command.build_ext import build_ext
 except ImportError:
     from distutils.core import setup
     from distutils.extension import Extension
-
+    from distutils.command.build_ext import build_ext
+    
 descriptionTxt = """\
 Gate set tomography (GST) is a quantum tomography protocol that provides full characterization of a quantum logic device
 (e.g. a qubit).  GST estimates a set of quantum logic gates and (simultaneously) the associated state preparation and
@@ -66,7 +69,9 @@ extras = {
         'psutil',
         'rednose',
         'zmq',
-        'jinja2'
+        'jinja2',
+        'seaborn',
+        'ply'
     ]
 }
 
@@ -82,13 +87,38 @@ extras['no_mpi'] = [e for e in extras['complete'] if e != 'mpi4py']
 def custom_version():
     from setuptools_scm.version import postrelease_version
 
-    return {'version_scheme': postrelease_version}
+    return {'version_scheme': postrelease_version,
+            'write_to': "pygsti/_version.py",
+            'local_scheme': "no-local-version"  # because pypi doesn't suppport it
+            }
+
+
+#Create a custom command class that allows us to specify different compiler flags
+# based on the compiler (~platform) being used (see
+# https://stackoverflow.com/questions/30985862/how-to-identify-compiler-before-defining-cython-extensions)
+BUILD_ARGS = defaultdict(lambda: ["-std=c++11"])  # ,"-stdlib=libc++", '-O3', '-g0'
+for compiler, args in [
+        ('msvc', []),
+        ('gcc', ["-std=c++11", "-Wno-deprecated"])]:
+    BUILD_ARGS[compiler] = args
+
+
+class build_ext_compiler_check(build_ext):
+    def build_extensions(self):
+        compiler = self.compiler.compiler_type
+        args = BUILD_ARGS[compiler]
+        print("\n\nCompiler: ",compiler,"\n")
+        for ext in self.extensions:
+            if ext.language == "c++":  # only do this for c++ files, so we can specify -std=c++11, etc.
+                ext.extra_compile_args = args
+        build_ext.build_extensions(self)
 
 
 def setup_with_extensions(extensions=None):
     setup(
         name='pyGSTi',
         use_scm_version=custom_version,
+        cmdclass={'build_ext': build_ext_compiler_check},
         description='A python implementation of Gate Set Tomography',
         long_description=descriptionTxt,
         author='Erik Nielsen, Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
@@ -96,8 +126,20 @@ def setup_with_extensions(extensions=None):
         packages=[
             'pygsti',
             'pygsti.algorithms',
-            'pygsti.construction',
+            'pygsti.baseobjs',
+            'pygsti.baseobjs.opcalc',
+            'pygsti.circuits',
+            'pygsti.circuits.circuitparser',
+            'pygsti.data',
             'pygsti.drivers',
+            'pygsti.evotypes',
+            'pygsti.evotypes.densitymx',
+            'pygsti.evotypes.densitymx_slow',
+            'pygsti.evotypes.statevec',
+            'pygsti.evotypes.statevec_slow',
+            'pygsti.evotypes.stabilizer',
+            'pygsti.evotypes.stabilizer_slow',
+            'pygsti.evotypes.chp',
             'pygsti.extras',
             'pygsti.extras.rb',
             'pygsti.extras.rpe',
@@ -105,29 +147,91 @@ def setup_with_extensions(extensions=None):
             'pygsti.extras.idletomography',
             'pygsti.extras.crosstalk',
             'pygsti.extras.devices',
+            'pygsti.forwardsims',
             'pygsti.io',
-            'pygsti.io.circuitparser',
+            'pygsti.layouts',
+            'pygsti.models',
+            'pygsti.modelmembers',
+            'pygsti.modelmembers.states',
+            'pygsti.modelmembers.operations',
+            'pygsti.modelmembers.instruments',
+            'pygsti.modelmembers.povms',
             'pygsti.modelpacks',
             'pygsti.modelpacks.legacy',
-            'pygsti.objects',
-            'pygsti.objects.replib',
-            'pygsti.objects.opcalc',
+            'pygsti.objectivefns',
             'pygsti.optimize',
+            'pygsti.processors',
             'pygsti.protocols',
             'pygsti.report',
             'pygsti.report.section',
-            'pygsti.tools'
+            'pygsti.serialization',
+            'pygsti.tools',
         ],
         package_dir={'': '.'},
         package_data={
             'pygsti.tools': ['fastcalc.pyx'],
-            'pygsti.objects.replib': [
-                'fastreplib.pyx',
-                'fastreps.cpp',
-                'fastreps.h'
+            'pygsti.evotypes': [
+                'basereps_cython.pxd',
+                'basereps_cython.pyx',
+                'basecreps.cpp',
+                'basecreps.h'],
+            'pygsti.evotypes.densitymx': [
+                'opreps.pxd',
+                'opreps.pyx',
+                'opcreps.cpp',
+                'opcreps.h',
+                'statereps.pxd',
+                'statereps.pyx',
+                'statecreps.cpp',
+                'statecreps.h',
+                'effectreps.pxd',
+                'effectreps.pyx',
+                'effectcreps.cpp',
+                'effectcreps.h'
             ],
-            'pygsti.objects.opcalc': ['fastopcalc.pyx'],
-            'pygsti.io.circuitparser': ['fastcircuitparser.pyx'],
+            'pygsti.evotypes.statevec': [
+                'opreps.pxd',
+                'opreps.pyx',
+                'opcreps.cpp',
+                'opcreps.h',
+                'statereps.pxd',
+                'statereps.pyx',
+                'statecreps.cpp',
+                'statecreps.h',
+                'effectreps.pxd',
+                'effectreps.pyx',
+                'effectcreps.cpp',
+                'effectcreps.h',
+                'termreps.pxd',
+                'termreps.pyx',
+                'termcreps.cpp',
+                'termcreps.h',
+            ],
+            'pygsti.evotypes.stabilizer': [
+                'opreps.pxd',
+                'opreps.pyx',
+                'opcreps.cpp',
+                'opcreps.h',
+                'statereps.pxd',
+                'statereps.pyx',
+                'statecreps.cpp',
+                'statecreps.h',
+                'effectreps.pxd',
+                'effectreps.pyx',
+                'effectcreps.cpp',
+                'effectcreps.h',
+                'termreps.pxd',
+                'termreps.pyx',
+                'termcreps.cpp',
+                'termcreps.h',
+            ],
+            'pygsti.forwardsims': [
+                'mapforwardsim_calc_densitymx.pyx',
+                'termforwardsim_calc_statevec.pyx',
+                'termforwardsim_calc_stabilizer.pyx'
+            ],
+            'pygsti.baseobjs.opcalc': ['fastopcalc.pyx'],
+            'pygsti.circuits.circuitparser': ['fastcircuitparser.pyx'],
             'pygsti.report': [
                 'templates/*.tex',
                 'templates/*.html',
@@ -152,7 +256,7 @@ def setup_with_extensions(extensions=None):
             'numpy>=1.15.0',
             'scipy',
             'plotly',
-            'ply'
+            'pandas'
         ],
         extras_require=extras,
         python_requires='>=3.5',
@@ -200,34 +304,188 @@ try:
             # libraries=['m'] #math lib?
         ),
         Extension(
-            "pygsti.objects.opcalc.fastopcalc",
-            sources=["pygsti/objects/opcalc/fastopcalc.pyx"],
+            "pygsti.baseobjs.opcalc.fastopcalc",
+            sources=["pygsti/baseobjs/opcalc/fastopcalc.pyx"],
             include_dirs=['.', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
-            "pygsti.objects.replib.fastreplib",
+            "pygsti.evotypes.basereps_cython",
             sources=[
-                "pygsti/objects/replib/fastreplib.pyx",
-                "pygsti/objects/replib/fastreps.cpp"
+                "pygsti/evotypes/basereps_cython.pyx",
+                "pygsti/evotypes/basecreps.cpp"
             ],
             include_dirs=['.', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         ),
         Extension(
-            "pygsti.io.circuitparser.fastcircuitparser",
-            sources=["pygsti/io/circuitparser/fastcircuitparser.pyx"],
+            "pygsti.evotypes.densitymx.statereps",
+            sources=[
+                "pygsti/evotypes/densitymx/statereps.pyx",
+                "pygsti/evotypes/densitymx/statecreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.densitymx.opreps",
+            sources=[
+                "pygsti/evotypes/densitymx/opreps.pyx",
+                "pygsti/evotypes/densitymx/opcreps.cpp",
+                "pygsti/evotypes/densitymx/statecreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.densitymx.effectreps",
+            sources=[
+                "pygsti/evotypes/densitymx/effectreps.pyx",
+                "pygsti/evotypes/densitymx/effectcreps.cpp",
+                "pygsti/evotypes/densitymx/statecreps.cpp",
+                "pygsti/evotypes/densitymx/opcreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.statevec.statereps",
+            sources=[
+                "pygsti/evotypes/statevec/statereps.pyx",
+                "pygsti/evotypes/statevec/statecreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.statevec.opreps",
+            sources=[
+                "pygsti/evotypes/statevec/opreps.pyx",
+                "pygsti/evotypes/statevec/opcreps.cpp",
+                "pygsti/evotypes/statevec/statecreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.statevec.effectreps",
+            sources=[
+                "pygsti/evotypes/statevec/effectreps.pyx",
+                "pygsti/evotypes/statevec/effectcreps.cpp",
+                "pygsti/evotypes/statevec/statecreps.cpp",
+                "pygsti/evotypes/statevec/opcreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.statevec.termreps",
+            sources=[
+                "pygsti/evotypes/statevec/termreps.pyx",
+                "pygsti/evotypes/statevec/termcreps.cpp",
+                "pygsti/evotypes/statevec/statecreps.cpp",
+                "pygsti/evotypes/statevec/opcreps.cpp",
+                "pygsti/evotypes/statevec/effectcreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.stabilizer.statereps",
+            sources=[
+                "pygsti/evotypes/stabilizer/statereps.pyx",
+                "pygsti/evotypes/stabilizer/statecreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.stabilizer.opreps",
+            sources=[
+                "pygsti/evotypes/stabilizer/opreps.pyx",
+                "pygsti/evotypes/stabilizer/opcreps.cpp",
+                "pygsti/evotypes/stabilizer/statecreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.stabilizer.effectreps",
+            sources=[
+                "pygsti/evotypes/stabilizer/effectreps.pyx",
+                "pygsti/evotypes/stabilizer/effectcreps.cpp",
+                "pygsti/evotypes/stabilizer/statecreps.cpp",
+                "pygsti/evotypes/stabilizer/opcreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.evotypes.stabilizer.termreps",
+            sources=[
+                "pygsti/evotypes/stabilizer/termreps.pyx",
+                "pygsti/evotypes/stabilizer/termcreps.cpp",
+                "pygsti/evotypes/stabilizer/statecreps.cpp",
+                "pygsti/evotypes/stabilizer/opcreps.cpp",
+                "pygsti/evotypes/stabilizer/effectcreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.forwardsims.mapforwardsim_calc_densitymx",
+            sources=[
+                "pygsti/forwardsims/mapforwardsim_calc_densitymx.pyx",
+                "pygsti/evotypes/densitymx/statecreps.cpp",
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.forwardsims.termforwardsim_calc_statevec",
+            sources=[
+                "pygsti/forwardsims/termforwardsim_calc_statevec.pyx",
+                "pygsti/evotypes/statevec/statecreps.cpp",
+                "pygsti/evotypes/basecreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.forwardsims.termforwardsim_calc_stabilizer",
+            sources=[
+                "pygsti/forwardsims/termforwardsim_calc_stabilizer.pyx",
+                "pygsti/evotypes/stabilizer/statecreps.cpp",
+                "pygsti/evotypes/basecreps.cpp"
+            ],
+            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            language="c++",
+            extra_link_args=["-std=c++11"]
+        ),
+        Extension(
+            "pygsti.circuits.circuitparser.fastcircuitparser",
+            sources=["pygsti/circuits/circuitparser/fastcircuitparser.pyx"],
             include_dirs=['.', np.get_include()],
             language="c++",
-            extra_compile_args=["-std=c++11"],  # ,"-stdlib=libc++"
             extra_link_args=["-std=c++11"]
         )
     ]
-    setup_with_extensions(cythonize(ext_modules, exclude_failures=True))
+    setup_with_extensions(cythonize(ext_modules, compiler_directives={'language_level': "3"}, exclude_failures=True))
 except ImportError:
     # Cython or numpy is not available
     warn("Extensions build tools are not available. Installing without Cython extensions...")

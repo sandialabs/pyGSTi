@@ -1,12 +1,10 @@
 import pickle
-import sys
-from io import StringIO
 from contextlib import contextmanager
+from io import StringIO
 from unittest import mock
 
+from pygsti.baseobjs import verbosityprinter as vbp
 from ..util import BaseCase
-
-from pygsti.objects import verbosityprinter as vbp
 
 warn_message = 'This might go badly'
 error_message = 'Something terrible happened'
@@ -55,7 +53,7 @@ class VerbosityPrinterMethodBase(object):
 class VerbosityPrinterStreamInstance(object):
     def setUp(self):
         super(VerbosityPrinterStreamInstance, self).setUp()
-        self.vbp = vbp.VerbosityPrinter.build_printer(self.verbosity)
+        self.vbp = vbp.VerbosityPrinter.create_printer(self.verbosity)
 
     @contextmanager
     def redirect_output(self):

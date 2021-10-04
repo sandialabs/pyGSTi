@@ -1,14 +1,10 @@
-import unittest
-import pygsti
-import numpy as np
 import pickle
 import time
+import unittest
 
-from pygsti.modelpacks.legacy import std1Q_XYI
-import pygsti.construction as pc
-from pygsti.objects import profiler
+from pygsti.baseobjs import profiler
+from ..testutils import BaseTestCase
 
-from ..testutils import BaseTestCase, compare_files, temp_files
 
 class ProfilerTestCase(BaseTestCase):
 
@@ -25,31 +21,31 @@ class ProfilerTestCase(BaseTestCase):
         p.add_time("My Name", start_time, prefix=1)
         p.add_count("My Count", inc=1, prefix=1)
         p.add_count("My Count", inc=2, prefix=1)
-        p.mem_check("My Memcheck", prefix=1)
-        p.mem_check("My Memcheck", prefix=1)
-        p.print_mem("My Memcheck just to print")
-        p.print_mem("My Memcheck just to print", show_minmax=True)
-        p.print_msg("My Message")
-        p.print_msg("My Message", all_ranks=True)
+        p.memory_check("My Memcheck", prefix=1)
+        p.memory_check("My Memcheck", prefix=1)
+        p.print_memory("My Memcheck just to print")
+        p.print_memory("My Memcheck just to print", show_minmax=True)
+        p.print_message("My Message")
+        p.print_message("My Message", all_ranks=True)
 
-        s = p.format_times(sortBy="name")
-        s = p.format_times(sortBy="time")
+        s = p._format_times(sort_by="name")
+        s = p._format_times(sort_by="time")
         with self.assertRaises(ValueError):
-            p.format_times(sortBy="foobar")
+            p._format_times(sort_by="foobar")
 
-        s = p.format_counts(sortBy="name")
-        s = p.format_counts(sortBy="count")
+        s = p._format_counts(sort_by="name")
+        s = p._format_counts(sort_by="count")
         with self.assertRaises(ValueError):
-            p.format_counts(sortBy="foobar")
+            p._format_counts(sort_by="foobar")
 
-        s = p.format_memory(sortBy="name")
-        s = p.format_memory(sortBy="usage")
+        s = p._format_memory(sort_by="name")
+        s = p._format_memory(sort_by="usage")
         with self.assertRaises(ValueError):
-            p.format_memory(sortBy="foobar")
+            p._format_memory(sort_by="foobar")
         with self.assertRaises(NotImplementedError):
-            p.format_memory(sortBy="timestamp")
+            p._format_memory(sort_by="timestamp")
         empty = profiler.Profiler(comm, default_print_memcheck=True)
-        self.assertEqual(empty.format_memory(sortBy="timestamp"),"No memory checkpoints")
+        self.assertEqual(empty._format_memory(sort_by="timestamp"),"No memory checkpoints")
 
     def test_profiler_pickling(self):
         comm=None
@@ -58,7 +54,7 @@ class ProfilerTestCase(BaseTestCase):
         p.add_time("My Name", start_time, prefix=1)
         p.add_count("My Count", inc=1, prefix=1)
         p.add_count("My Count", inc=2, prefix=1)
-        p.mem_check("My Memcheck", prefix=1)
+        p.memory_check("My Memcheck", prefix=1)
 
         s = pickle.dumps(p)
         p2 = pickle.loads(s)

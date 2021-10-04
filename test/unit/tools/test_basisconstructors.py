@@ -1,8 +1,7 @@
 import numpy as np
 
+import pygsti.baseobjs.basisconstructors as bc
 from ..util import BaseCase
-
-import pygsti.tools.basisconstructors as bc
 
 
 class BasisConstructorsTester(BaseCase):
@@ -77,13 +76,31 @@ class BasisConstructorsTester(BaseCase):
         self.assertArraysAlmostEqual(pp_trMx, np.identity(N, 'complex'))
 
     def test_basis_misc(self):
-        bc.pp_matrices(1)  # was [1] but this shouldn't be allowed
-        # TODO assert correctness
+        mx = bc.pp_matrices(1)  # was [1] but this shouldn't be allowed
+        self.assertArraysAlmostEqual(np.identity(1, 'complex'), mx)
 
     def test_pp_maxweight(self):
-        ppMax1 = bc.pp_matrices(2, maxWeight=1)  # using maxWeight
-        # TODO assert correctness
+        pp2Max1 = bc.pp_matrices(2, max_weight=1)  # using max_weight
+        pp2 = bc.pp_matrices(2) # For 2x2, should match max_weight=1
+        for mxMax, mx in zip(pp2Max1, pp2):
+            self.assertArraysAlmostEqual(mxMax, mx)
+
+        pp4Max1 = bc.pp_matrices(4, max_weight=1)
+        pp4 = bc.pp_matrices(4)
+        pp4Subset = [pp4[0], pp4[1], pp4[2], pp4[3], pp4[4], pp4[8], pp4[12]] # Pull out II,IX,IY,IZ,XI,YI,ZI
+        for mxMax, mxSub in zip(pp4Max1, pp4Subset):
+            self.assertArraysAlmostEqual(mxMax, mxSub)
 
     def test_qt_dim1(self):
         qutrit1 = bc.qt_matrices(1)  # special case when dim==1
-        # TODO assert correctness
+        self.assertArraysAlmostEqual(np.identity(1, 'd'), qutrit1)
+
+    def test_qt_orthonorm(self):
+        mxs = bc.qt_matrices(3)
+        for i in range(len(mxs)):
+            for j in range(len(mxs)):
+                dp = np.vdot(mxs[i], mxs[j])
+                if i == j:
+                    self.assertAlmostEqual(dp, 1.0)
+                else:
+                    self.assertAlmostEqual(dp, 0.0)

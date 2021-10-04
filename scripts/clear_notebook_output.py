@@ -4,8 +4,9 @@
 Modified from https://gist.github.com/damianavila/5305869
 """
 
-import sys
 import argparse
+import sys
+
 import nbformat
 
 _DEFAULT_VERSION = 4
@@ -15,6 +16,7 @@ def strip_output(nb):
     for cell in nb['cells']:
         if cell['cell_type'] == 'code':
             cell.outputs = []
+            cell.execution_count = None
 
 
 parser = argparse.ArgumentParser(description=__doc__)

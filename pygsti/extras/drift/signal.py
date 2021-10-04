@@ -9,19 +9,18 @@
 #***************************************************************************************************
 
 import numpy as _np
-from scipy.fftpack import dct as _dct
-from scipy.fftpack import idct as _idct
-from scipy.fftpack import fft as _fft
-from scipy.fftpack import ifft as _ifft
-from scipy import convolve as _convolve
-import warnings as _warnings
 import numpy.random as _rnd
+from scipy import convolve as _convolve
+from scipy.fftpack import dct as _dct
+from scipy.fftpack import fft as _fft
+from scipy.fftpack import idct as _idct
+from scipy.fftpack import ifft as _ifft
 
 try: from astropy.stats import LombScargle as _LombScargle
 except: _LombScargle = None
 
 from scipy.stats import chi2 as _chi2
-from ... import objects as _obj
+from pygsti import data as _data
 
 
 def spectrum(x, times=None, null_hypothesis=None, counts=1, frequencies='auto', transform='dct',
@@ -447,7 +446,7 @@ def power_significance_quasithreshold(significance, numstats, dof, procedure='Be
     return quasithreshold
 
 
-def get_auto_frequencies(ds, transform='dct'):
+def compute_auto_frequencies(ds, transform='dct'):
     """
     Returns a set of frequencies to create spectra for, for the input data. These frequencies are
     in units of 1 / unit where `unit` is the units of the time-stamps in the DataSet.
@@ -498,16 +497,16 @@ def get_auto_frequencies(ds, transform='dct'):
     assert(transform in ('dct', 'dft', 'lsp')), "The type of transform is invalid!"
     # todo : This is only reasonable with data that is equally spaced per circuit and with the same
     # time-step over circuits
-    if isinstance(ds, _obj.MultiDataSet):
+    if isinstance(ds, _data.MultiDataSet):
         dskey = list(ds.keys())[0]
-        timestep = ds[dskey].get_meantimestep()
+        timestep = ds[dskey].meantimestep
         rw = ds[dskey][list(ds[dskey].keys())[0]]
-    elif isinstance(ds, _obj.DataSet):
-        timestep = ds.get_meantimestep()
+    elif isinstance(ds, _data.DataSet):
+        timestep = ds.meantimestep
         rw = ds[list(ds.keys())[0]]
     else:
         raise ValueError("Input data must be a DataSet or MultiDataSet!")
-    numtimes = rw.get_number_of_times()
+    numtimes = rw.number_of_times
     freqs = frequencies_from_timestep(timestep, numtimes)
     freqslist = [freqs, ]
     # This pointers list should have keys based that are indices, as required by the stabilityanalyzer object.
@@ -565,7 +564,7 @@ def fourier_frequencies_from_times(times):
     return frequencies_from_timestep(timestep, numtimes)
 
 
-def amplitudes_at_frequencies(freqInds, timeseries, times=None, transform='dct'):
+def amplitudes_at_frequencies(freq_indices, timeseries, times=None, transform='dct'):
     """
     Finds the amplitudes in the data at the specified frequency indices.
     Todo: better docstring. Currently only works for the DCT.
@@ -574,8 +573,8 @@ def amplitudes_at_frequencies(freqInds, timeseries, times=None, transform='dct')
     for o in timeseries.keys():
 
         if transform == 'dct':
-            temp = _dct(timeseries[o], norm='ortho')[freqInds] / _np.sqrt(len(timeseries[o]) / 2)
-            if 0. in freqInds:
+            temp = _dct(timeseries[o], norm='ortho')[freq_indices] / _np.sqrt(len(timeseries[o]) / 2)
+            if 0. in freq_indices:
                 temp[0] = temp[0] / _np.sqrt(2)
             amplitudes[o] = list(temp)
 
