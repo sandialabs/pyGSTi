@@ -5,3 +5,5 @@ plotly
 pandas
 numpydoc
 sphinx>=2.1
+sphinx_rtd_theme
+sphinx-autoapi

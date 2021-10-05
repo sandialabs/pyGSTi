@@ -5,7 +5,7 @@ name: Build and run test extras
 
 on:
   push:
-    branches: [ "beta" ]
+    branches: [ "beta", "master" ]
   #pull_requests
   #  branches: [ "master", "develop", "beta" ]
   # Allow running manually from Actions tab
