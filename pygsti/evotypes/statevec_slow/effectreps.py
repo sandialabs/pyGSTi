@@ -19,6 +19,10 @@ class EffectRep(object):
     def __init__(self, state_space):
         self.state_space = _StateSpace.cast(state_space)
 
+    @property
+    def dim(self):
+        return self.state_space.udim
+
     def probability(self, state):
         return abs(self.amplitude(state))**2
 
