@@ -13,6 +13,7 @@ Defines objective-function objects
 import itertools as _itertools
 import sys as _sys
 import time as _time
+import pathlib as _pathlib
 
 import numpy as _np
 
@@ -21,6 +22,7 @@ from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableC
 from pygsti.tools import slicetools as _slct, mpitools as _mpit, sharedmemtools as _smt
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
@@ -112,7 +114,7 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
     #    return len(self.circuits)
 
 
-class ObjectiveFunctionBuilder(object):
+class ObjectiveFunctionBuilder(_NicelySerializable):
     """
     A factory class for building objective functions.
 
@@ -220,6 +222,23 @@ class ObjectiveFunctionBuilder(object):
         self.regularization = regularization
         self.penalties = penalties
         self.additional_args = kwargs
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'description': self.description,
+                      'class_to_build': self.cls_to_build.__module__ + '.' + self.cls_to_build.__name__,
+                      'regularization': self.regularization,
+                      'penalties': self.penalties,
+                      'additional_arguments': self.additional_args,
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        from pygsti.io.metadir import _class_for_name
+        return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
+                   state['regularization'], state['penalties'], *state['additional_arguments'])
 
     def compute_array_types(self, method_names, forwardsim):
         return self.cls_to_build.compute_array_types(method_names, forwardsim)
@@ -1560,7 +1579,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                     if self.raw_objfn.printer.verbosity > 3 or \
                        (self.raw_objfn.printer.verbosity == 3 and blk_rank == 0):
                         print("rank %d: %gs: block %d/%d, atom %d/%d, atom-size (#circuits) = %d"
-                              % (self.resource_alloc.comm_rank, _time.time() - tm, k + 1, kmax, iAtom,
+                              % (self.resource_alloc.comm_rank, _time.time() - tm, k + 1, kmax, iAtom + 1,
                                  len(layout.atoms), atom.num_elements))
                         _sys.stdout.flush(); k += 1
 
@@ -6077,7 +6096,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
 
 def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor, wrt_slice):
 
-    def get_local_deriv(op):
+    def _get_local_deriv(op):
         z = op.errorgen_coefficients_array()  # val**2 term is abs(z) = sqrt(z*z.conj)
         dz = op.errorgen_coefficients_array_deriv_wrt_params()
         dterms = 0.5 * (z.conjugate()[:, None] * dz + z[:, None] * dz.conjugate()) / _np.abs(z)[:, None]
@@ -6096,16 +6115,16 @@ def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor
 
     #for lbl in mdl.primitive_prep_labels:
     #    op = mdl.circuit_layer_operator(lbl, 'prep')
-    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
+    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += _get_local_deriv(op)
 
     for lbl in mdl.primitive_op_labels:
         op = mdl.circuit_layer_operator(lbl, 'op')
         gpinds_subset, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, op.gpindices)
-        errorgen_penalty_vec_grad_to_fill[0, within_wrtslice] += get_local_deriv(op)[within_gpinds]
+        errorgen_penalty_vec_grad_to_fill[0, within_wrtslice] += _get_local_deriv(op)[within_gpinds]
 
     #for lbl in mdl.primitive_povm_labels:
     #    op = mdl.circuit_layer_operator(lbl, 'povm')
-    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
+    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += _get_local_deriv(op)
 
     #Above fills derivative of val**2 = sum(terms), but we want deriv of val = sqrt(sum(terms)):
     errorgen_penalty_vec_grad_to_fill[0, :] *= 0.5 / val  # final == 1/sqrt(sum(terms)) * dsumterms
@@ -6261,7 +6280,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         raise NotImplementedError("No jacobian yet")
 
 
-class CachedObjectiveFunction(object):
+class CachedObjectiveFunction(_NicelySerializable):
     """
     Holds various values of an objective function at a particular point.
 
@@ -6273,6 +6292,33 @@ class CachedObjectiveFunction(object):
 
     The cache may only have values on the rank-0 proc (??)
     """
+
+    @classmethod
+    def from_dir(cls, dirname, quick_load=False):
+        """
+        Initialize a new CachedObjectiveFunction object from `dirname`.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
+        Parameters
+        ----------
+        dirname : str
+            The directory name.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
+        Returns
+        -------
+        CachedObjectiveFunction
+        """
+        import pygsti.io as _io
+        ret = cls.__new__(cls)
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
+        return ret
 
     def __init__(self, objective_function):
 
@@ -6303,3 +6349,52 @@ class CachedObjectiveFunction(object):
             self.total_counts = objfn_layout.allgather_local_array('e', objective_function.total_counts)
         else:
             self.probs = self.freqs = self.counts = self.total_counts = None
+
+        self.auxfile_types = {'layout': 'serialized-object',
+                              'model_paramvec': 'numpy-array',
+                              'fn': 'numpy-array',
+                              'chi2k_distributed_fn': 'numpy-array',
+                              'terms': 'numpy-array',
+                              'chi2k_distributed_terms': 'numpy-array',
+                              'percircuit': 'numpy-array',
+                              'chi2k_distributed_percircuit': 'numpy-array',
+                              'probs': 'numpy-array',
+                              'freqs': 'numpy-array',
+                              'counts': 'numpy-array',
+                              'total_counts': 'numpy-array'
+                              }
+
+    def write(self, dirname):
+        """
+        Write this CachedObjectiveFunction to a directory.
+
+        Parameters
+        ----------
+        dirname : str
+            The directory name to write.  This directory will be created
+            if needed, and the files in an existing directory will be
+            overwritten.
+
+        Returns
+        -------
+        None
+        """
+        import pygsti.io as _io
+        _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'description': self.description,
+                      'class_to_build': self.cls_to_build.__module__ + '.' + self.cls_to_build.__name__,
+                      'regularization': self.regularization,
+                      'penalties': self.penalties,
+                      'additional_arguments': self.additional_args,
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        from pygsti.io.metadir import _class_for_name
+        return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
+                   state['regularization'], state['penalties'], *state['additional_arguments'])

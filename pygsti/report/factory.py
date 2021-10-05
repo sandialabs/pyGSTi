@@ -24,7 +24,7 @@ from pygsti.report import merge_helpers as _merge
 from pygsti.report import reportables as _reportables
 from pygsti.report import section as _section
 from pygsti.report import workspace as _ws
-from pygsti import _version
+from pygsti._version import version as _pygsti_version
 from pygsti import tools as _tools
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
@@ -381,10 +381,11 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             for iL, L in enumerate(swLs):  # allow different results to have different Ls
                 if L in loc_Ls:
                     k = loc_Ls.index(L)
-                    switchBd.mdl_current[d, i, iL] = est.models['iteration estimates'][k]
-                    switchBd.mdl_current_modvi[d, i, iL] = est_modvi.models['iteration estimates'][k]
-            switchBd.mdl_all[d, i] = est.models['iteration estimates']
-            switchBd.mdl_all_modvi[d, i] = est_modvi.models['iteration estimates']
+                    switchBd.mdl_current[d, i, iL] = est.models['iteration %d estimate' % k]
+                    switchBd.mdl_current_modvi[d, i, iL] = est_modvi.models['iteration %d estimate' % k]
+            switchBd.mdl_all[d, i] = [est.models['iteration %d estimate' % k] for k in range(est.num_iterations)]
+            switchBd.mdl_all_modvi[d, i] = [est_modvi.models['iteration %d estimate' % k]
+                                            for k in range(est_modvi.num_iterations)]
 
             if confidence_level is not None:
                 misfit_sigma = est.misfit_sigma()
@@ -449,7 +450,6 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
         return {}
 
     idt_results_dict = {}
-    GiStr = _Circuit((idt_idle_op,))
 
     from ..extras import idletomography as _idt
     autodict = bool(idt_pauli_dicts == "auto")
@@ -464,6 +464,9 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
             idt_pauli_dicts = _idt.determine_paulidicts(idt_target)
             if idt_pauli_dicts is None:
                 continue  # automatic creation failed -> skip
+
+        qubit_labels = idt_target.state_space.tensor_product_block_labels(0)
+        GiStr = _Circuit((idt_idle_op,), line_labels=qubit_labels)
 
         circuits_final = results.circuit_lists['final']
         if not isinstance(circuits_final, _CircuitList): continue
@@ -484,12 +487,12 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
         maxLengths = circuit_struct.xs
         # just use "L0" (first maxLength) - all should have same fidpairs
         plaq = circuit_struct.plaquette(maxLengths[0], GiStr)
-        pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(plaq.fidpairs, idt_pauli_dicts, nQubits)
+        pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(list(plaq.fidpairs.values()), idt_pauli_dicts, nQubits)
         idt_advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
         printer.log(" * Running idle tomography on %s dataset *" % ky)
         idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idt_pauli_dicts,
                                              maxweight=2,  # HARDCODED for now (FUTURE)
-                                             idle_string=idStr, advancedOptions=idt_advanced)
+                                             idle_string=idStr, advanced_options=idt_advanced)
         idt_results_dict[ky] = idtresults
 
     return idt_results_dict
@@ -1196,7 +1199,7 @@ def construct_standard_report(results, title="auto",
                         " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+               ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
 
     results = results if isinstance(results, dict) else {"unique": results}
 
@@ -1421,7 +1424,7 @@ def construct_nqnoise_report(results, title="auto",
                         " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+               ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
 
     results = results if isinstance(results, dict) else {"unique": results}
 
@@ -1581,7 +1584,7 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
                         " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+               ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
     assert(len(results_dict) == 1), "Drift reports do not support multiple results objects yet."

@@ -511,9 +511,11 @@ class OpModelPerOpNoise(OpModelNoise):
                         [errmaps_to_embed_then_compose[sslbls], local_errormap])
 
         else:  # assume opnoise is an OpNoise object
-            local_errormap = opnoise.create_errormap(evotype, state_space)
             all_target_labels = None if (num_target_labels is None) else \
                 tuple(['@{}'.format(i) for i in range(num_target_labels)])
+            local_state_space = _StencilLabel.cast(all_target_labels).create_local_state_space(state_space) \
+                if (all_target_labels is not None) else state_space
+            local_errormap = opnoise.create_errormap(evotype, local_state_space)
             errmaps_to_embed_then_compose[all_target_labels] = local_errormap
         self._increment_touch_count(opkey)
         return errmaps_to_embed_then_compose
@@ -654,7 +656,8 @@ class ComposedOpModelNoise(OpModelNoise):
         noise_errgens = [modelnoise.apply_errorgen_stencil(s, evotype, state_space, target_labels, qubit_graph, copy)
                          for s, modelnoise in zip(stencil, self.opmodelnoises)]
         noise_errgens = list(filter(lambda x: x is not None, noise_errgens))
-        return _op.ComposedErrorgen(noise_errgens) if len(noise_errgens) > 0 else None
+        return _op.ComposedErrorgen(noise_errgens) if len(noise_errgens) > 1 \
+            else (noise_errgens[0] if len(noise_errgens) == 1 else None)
 
     def create_errormap_stencil(self, opkey, evotype, state_space, num_target_labels=None):
         """
@@ -671,7 +674,8 @@ class ComposedOpModelNoise(OpModelNoise):
         noise_ops = [modelnoise.apply_errormap_stencil(s, evotype, state_space, target_labels, qubit_graph, copy)
                      for s, modelnoise in zip(stencil, self.opmodelnoises)]
         noise_ops = list(filter(lambda x: x is not None, noise_ops))
-        return _op.ComposedOp(noise_ops) if len(noise_ops) > 0 else None
+        return _op.ComposedOp(noise_ops) if len(noise_ops) > 1 \
+            else (noise_ops[0] if len(noise_ops) == 1 else None)
 
     def compute_stencil_absolute_sslbls(self, stencil, state_space, target_labels=None, qubit_graph=None):
         """
@@ -1005,7 +1009,7 @@ class LindbladNoise(OpNoise):
         return cls(Ltermdict, parameterization)
 
     def __init__(self, error_coeffs, parameterization='auto'):
-        self.error_coeffs = error_coeffs
+        self.error_coeffs = error_coeffs  # keys are LocalElementaryErrorgenLabel objects
         self.parameterization = parameterization
 
     def create_errorgen(self, evotype, state_space):

@@ -87,7 +87,9 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
         qubit fiducials to use when trying to amplify gate parameters.  Note that
         no qubit "state-space" label is required here (i.e. *not* `(('Gx',1),)`);
         the tuples just contain single-qubit gate *names*.  If None, then
-        `[(), ('Gx',), ('Gy',)]` is used by default.
+        `[(), ('Gx',), ('Gy',)]` is used by default.  If a list of two such lists
+        is given, they specify preparation and measurement fiducials,
+        respectively, e.g.  `[ [(), ('Gx',), ('Gx','Gz')], [(), ('Gx',), ('Gz','Gx')] ]`.
 
     prep_lbl : Label, optional
         The state preparation label to use.  If None, then the first (and
@@ -201,7 +203,12 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
                        for l in model._effect_labels_for_povm(povmLbl)]
     if single_q_fiducials is None:
         # TODO: assert model has Gx and Gy gates?
-        single_q_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
+        single_q_prep_fiducials = single_q_meas_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
+    elif len(single_q_fiducials) == 2 and all([isinstance(fidlist, list) for fidlist in single_q_fiducials]):
+        single_q_prep_fiducials = single_q_fiducials[0]
+        single_q_meas_fiducials = single_q_fiducials[1]
+    else:  # assume a single list that works for both prep and measure
+        single_q_prep_fiducials = single_q_meas_fiducials = single_q_fiducials
 
     #dummy = 0.05*_np.ones(model.num_params,'d') # for evaluating derivs...
     #dummy = 0.05*_np.arange(1,model.num_params+1) # for evaluating derivs...
@@ -209,8 +216,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
     dummy = 5.0 * _np.random.random(model.num_params) + 0.5 * _np.ones(model.num_params, 'd')
     # expect terms to be either coeff*x or coeff*x^2 - (b/c of latter case don't eval at zero)
 
-    print("DB gpindices = ")
-    model._print_gpindices()
+    #print("DB gpindices = "); model._print_gpindices()  # DEBUG (can REMOVE)
 
     #amped_polys = []
     selected_gatename_fidpair_lists = []
@@ -241,12 +247,12 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
         # loop over all possible (remaining) fiducial pairs
         nQubits = len(qubit_filter)
         loc_Indices, _, _ = _mpit.distribute_indices(
-            list(range(len(single_q_fiducials)**nQubits)), comm, False)
+            list(range(len(single_q_prep_fiducials)**nQubits)), comm, False)
         loc_itr = 0; nLocIters = len(loc_Indices)
         #print("DB: Rank %d indices = " % comm.Get_rank(), loc_Indices)
 
         with printer.progress_logging(2):
-            for itr, prep in enumerate(_itertools.product(*([single_q_fiducials] * nQubits))):
+            for itr, prep in enumerate(_itertools.product(*([single_q_prep_fiducials] * nQubits))):
                 # There's probably a cleaner way to do this,
                 if loc_itr < len(loc_Indices) and itr == loc_Indices[loc_itr]:
                     loc_itr += 1  # but this limits us to this processor's local indices
@@ -259,7 +265,7 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
                 for i, el in enumerate(prep):
                     prepFid = prepFid + _onqubit(el, qubit_filter[i])
 
-                for meas in _itertools.product(*([single_q_fiducials] * nQubits)):
+                for meas in _itertools.product(*([single_q_meas_fiducials] * nQubits)):
 
                     if idt_pauli_dicts is not None:
                         # For idle tomography compatibility, only consider fiducial pairs with either
@@ -510,7 +516,9 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
         qubit fiducials to use when trying to amplify gate parameters.  Note that
         no qubit "state-space" label is required here (i.e. *not* `(('Gx',1),)`);
         the tuples just contain single-qubit gate *names*.  If None, then
-        `[(), ('Gx',), ('Gy',)]` is used by default.
+        `[(), ('Gx',), ('Gy',)]` is used by default.  If a list of two such lists
+        is given, they specify preparation and measurement fiducials,
+        respectively, e.g.  `[ [(), ('Gx',), ('Gx','Gz')], [(), ('Gx',), ('Gz','Gx')] ]`.
 
     prep_lbl : Label, optional
         The state preparation label to use.  If None, then the first (and
@@ -574,9 +582,16 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
     if effect_lbls is None:
         povmLbl = model._default_primitive_povm_layer_lbl()
         effect_lbls = [_Lbl("%s_%s" % (povmLbl, l)) for l in model._effect_labels_for_povm(povmLbl)]
-    if single_q_fiducials is None:
-        # TODO: assert model has Gx and Gy gates?
-        single_q_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
+
+    #OLD (see below)
+    #if single_q_fiducials is None:
+    #    # TODO: assert model has Gx and Gy gates?
+    #    single_q_prep_fiducials = single_q_meas_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
+    #elif len(single_q_fiducials) == 2 and all([isinstance(fidlist, list) for fidlist in single_q_fiducials]):
+    #    single_q_prep_fiducials = single_q_fiducials[0]
+    #    single_q_meas_fiducials = single_q_fiducials[1]
+    #else:  # assume a single list that works for both prep and measure
+    #    single_q_prep_fiducials = single_q_meas_fiducials = single_q_fiducials
 
     #dummy = 0.05*_np.ones(model.num_params,'d') # for evaluating derivs...
     #dummy = 0.05*_np.arange(1,model.num_params+1) # for evaluating derivs...
@@ -610,7 +625,7 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
 
     #Tile idle_fidpairs for max_weight onto nQubits
     # (similar to _tile_idle_fidpairs(...) but don't need to convert to circuits?)
-    tmpl = get_kcoverage_template(nQubits, max_weight)
+    tmpl = create_kcoverage_template(nQubits, max_weight)
     idle_gatename_fidpair_lists = true_idle_pairs[max_weight]
     #print("IDLE GFP LISTS = ",idle_gatename_fidpair_lists)
 
@@ -650,7 +665,7 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
 
         #OLD: back when we tried iterating over *all* core fiducial pairs
         # (now we think/know this is unnecessary - the "true idle" fidpairs suffice)
-        #for prep_core in _itertools.product(*([single_q_fiducials]*nCore) ):
+        #for prep_core in _itertools.product(*([single_q_prep_fiducials]*nCore) ):
         #
         #    #construct prep, a gatename-string, from prep_noncore and prep_core
         #    prep = list(prep_noncore)
@@ -664,7 +679,7 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
 
         #OLD: back when we tried iterating over *all* core fiducial pairs
         # (now we think/know this is unnecessary - the "true idle" fidpairs suffice)
-        #    for meas_core in [0]: # DEBUG _itertools.product(*([single_q_fiducials]*nCore) ):
+        #    for meas_core in [0]: # DEBUG _itertools.product(*([single_q_meas_fiducials]*nCore) ):
         #
         #        #construct meas, a gatename-string, from meas_noncore and meas_core
         #        meas = list(meas_noncore)
@@ -775,7 +790,9 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
         qubit fiducials to use when trying to amplify gate parameters.  Note that
         no qubit "state-space" label is required here (i.e. *not* `(('Gx',1),)`);
         the tuples just contain single-qubit gate *names*.  If None, then
-        `[(), ('Gx',), ('Gy',)]` is used by default.
+        `[(), ('Gx',), ('Gy',)]` is used by default.  If a list of two such lists
+        is given, they specify preparation and measurement fiducials,
+        respectively, e.g.  `[ [(), ('Gx',), ('Gx','Gz')], [(), ('Gx',), ('Gz','Gx')] ]`.
 
     prep_lbl : Label, optional
         The state preparation label to use.  If None, then the first (and
@@ -812,7 +829,12 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
         effect_lbls = model._effect_labels_for_povm(povmLbl)
     if single_q_fiducials is None:
         # TODO: assert model has Gx and Gy gates?
-        single_q_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
+        single_q_prep_fiducials = single_q_meas_fiducials = [(), ('Gx',), ('Gy',)]  # ('Gx','Gx')
+    elif len(single_q_fiducials) == 2 and all([isinstance(fidlist, list) for fidlist in single_q_fiducials]):
+        single_q_prep_fiducials = single_q_fiducials[0]
+        single_q_meas_fiducials = single_q_fiducials[1]
+    else:  # assume a single list that works for both prep and measure
+        single_q_prep_fiducials = single_q_meas_fiducials = single_q_fiducials
 
     #dummy = 0.05*_np.ones(model.num_params,'d') # for evaluating derivs...
     #dummy = 0.05*_np.arange(1,model.num_params+1) # for evaluating derivs...
@@ -845,10 +867,11 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
                    3**(2 * nQubits)))
 
     already_tried = set()
-    cores = [None] + list(_itertools.product(*([single_q_fiducials] * nCore)))
+    prep_cores = [None] + list(_itertools.product(*([single_q_prep_fiducials] * nCore)))
+    meas_cores = [None] + list(_itertools.product(*([single_q_meas_fiducials] * nCore)))
     # try *no* core insertion at first - leave as idle - before going through them...
 
-    for prep_core in cores:  # weird loop order b/c we don't expect to need this one
+    for prep_core in prep_cores:  # weird loop order b/c we don't expect to need this one
         if prep_core is not None:  # I don't think this *should* happen
             _warnings.warn(("Idle's prep fiducials only amplify %d of %d"
                             " directions!  Falling back to vary prep on core")
@@ -874,7 +897,7 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
 
             #for meas in _itertools.product(*([single_q_fiducials]*nQubits) ):
             #for meas_core in _itertools.product(*([single_q_fiducials]*nCore) ):
-            for meas_core in cores:
+            for meas_core in meas_cores:
 
                 if meas_core is None:
                     meas = meas_noncore
@@ -991,7 +1014,7 @@ def _tile_idle_fidpairs(qubit_labels, idle_gatename_fidpair_lists, max_idle_weig
     # XX element to a list of k (prep-gate-name-str, meas-gate-name-str) tuples one per *qubit*.
 
     nQubits = len(qubit_labels)
-    tmpl = get_kcoverage_template(nQubits, max_idle_weight)
+    tmpl = create_kcoverage_template(nQubits, max_idle_weight)
     final_fidpairs = []
 
     def merge_into_1q(g_str, gate_names, qubit_label):
@@ -1458,7 +1481,9 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         which form a set of 1-qubit fiducials for the given model (compatible
         with both the gates it posseses and their parameterizations - for
         instance, only `[(), ('Gx',), ('Gy',)]` is needed for just Hamiltonian
-        and Stochastic errors.
+        and Stochastic errors.  If a list of two such lists
+        is given, they specify preparation and measurement fiducials,
+        respectively, e.g.  `[ [(), ('Gx',), ('Gx','Gz')], [(), ('Gx',), ('Gz','Gx')] ]`.
 
     max_idle_weight : int, optional
         The maximum-weight for errors on the global idle gate.
@@ -1581,6 +1606,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         evotype=evotype,
         errcomp_type="gates")
     clouds = model.clouds
+
     #Note: maxSpamWeight=0 above b/c we don't care about amplifying SPAM errors (?)
     #print("DB: GATES = ",model.operation_blks['layers'].keys())
     #print("DB: CLOUDS = ",clouds)
@@ -2106,9 +2132,9 @@ def _get_kcoverage_template_k2(n):
     return half + other_half
 
 
-def get_kcoverage_template(n, k, verbosity=0):
+def create_kcoverage_template(n, k, verbosity=0):
     """
-    Get a template for how to create a "k-coverage" set of length-`n` sequences.
+    Construct a template for how to create a "k-coverage" set of length-`n` sequences.
 
     Consider a set of length-`n` words from a `k`-letter alphabet.  These words
     (sequences of letters) have the "k-coverage" property if, for any choice of
@@ -2318,7 +2344,7 @@ def _check_kcoverage_template(rows, n, k, verbosity=0):
     ----------
     rows : list
         A list of k-coverage words.  The same as whas is returned by
-        :function:`get_kcoverage_template`.
+        :function:`create_kcoverage_template`.
 
     n : int
         The sequences length.

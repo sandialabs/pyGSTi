@@ -16,7 +16,7 @@ class KCoverageTester(BaseCase):
         # TODO optimize
         n = 10  # nqubits
         k = 4  # number of "labels" needing distribution
-        rows = cc.get_kcoverage_template(n, k, verbosity=2)
+        rows = cc.create_kcoverage_template(n, k, verbosity=2)
         cc._check_kcoverage_template(rows, n, k, verbosity=1)
 
 
@@ -174,6 +174,7 @@ class NQNoiseConstructionTester(BaseCase):
             sigmaZ = np.array([[1, 0], [0, -1]], 'd')
             return scipy.linalg.expm(1j * float(a) * sigmaZ)
         fn.udim = 2
+        fn.shape = (2,2)
 
         pspec = _QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'), nonstd_gate_unitaries={'Ga': fn}, geometry='line')
         ccmdl = mc.create_cloud_crosstalk_model(pspec)

@@ -2,7 +2,6 @@
 mpi4py
 deap
 psutil
-pandas
 matplotlib
 ipython
 notebook

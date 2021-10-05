@@ -16,8 +16,11 @@ from .tpinstrumentop import TPInstrumentOp
 
 from pygsti.tools import optools as _ot
 
+# Avoid circular import
+import pygsti.modelmembers as _mm
 
-def get_instrument_type_from_op_type(op_type):
+
+def instrument_type_from_op_type(op_type):
     """Decode an op type into an appropriate instrument type.
 
     Parameters:
@@ -30,7 +33,7 @@ def get_instrument_type_from_op_type(op_type):
     instr_type_preferences: tuple of str
         POVM parameterization types
     """
-    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+    op_type_preferences = _mm.operations.verbose_type_from_op_type(op_type)
 
     # Limited set (only matching what is in convert)
     instr_conversion = {
@@ -39,7 +42,7 @@ def get_instrument_type_from_op_type(op_type):
         'static clifford': 'static clifford',
         'static': 'static',
         'full': 'full',
-        'full TP': 'TP',
+        'full TP': 'full TP',
     }
 
     instr_type_preferences = []
@@ -47,7 +50,7 @@ def get_instrument_type_from_op_type(op_type):
         instr_type = None
         if _ot.is_valid_lindblad_paramtype(typ):
             # Lindblad types are passed through as TP only (matching current convert logic)
-            instr_type = "TP"
+            instr_type = "full TP"
         else:
             instr_type = instr_conversion.get(typ, None)
 
@@ -58,7 +61,7 @@ def get_instrument_type_from_op_type(op_type):
             instr_type_preferences.append(instr_type)
 
     if len(instr_type_preferences) == 0:
-        raise RuntimeError(
+        raise ValueError(
             'Could not convert any op types from {}.\n'.format(op_type_preferences)
             + '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(instr_conversion.keys())))
             + '\tValid instrument_types: Lindblad types or {}'.format(sorted(list(set(instr_conversion.values()))))
@@ -100,7 +103,7 @@ def convert(instrument, to_type, basis, extra=None):
     to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
     for to_type in to_types:
         try:
-            if to_type == "TP":
+            if to_type == "full TP":
                 if isinstance(instrument, TPInstrument):
                     return instrument
                 else:

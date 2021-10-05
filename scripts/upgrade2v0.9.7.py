@@ -212,7 +212,7 @@ replacements = {
 "filter_gatestring" : "filter_circuit",
 "decomp_gate_index" : "decomp_op_index",
 "insert_gate_basis" : "insert_op_basis",
-"get_start_gateset" : "get_start_model",
+"get_start_gateset" : "retrieve_start_model",
 "gatesetfn_factory" : "modelfn_factory",
 "gateLabelOrString" : "opLabelOrString",
 "gate_error_labels" : "op_error_labels",

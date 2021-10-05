@@ -518,6 +518,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
                                 citerations=citerations, compilerargs=compilerargs,
                                 partitioned=partitioned,
                                 seed=lseed + i) for i in range(circuits_per_depth)]
+            #results = [_rc.create_direct_rb_circuit(*(args_list[0]), **(kwargs_list[0]))]  # num_processes == 1 case
             results = _tools.mptools.starmap_with_kwargs(_rc.create_direct_rb_circuit, circuits_per_depth,
                                                          num_processes, args_list, kwargs_list)
 
@@ -674,7 +675,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
             of `(circuit, ideal_outcome)` 2-tuples giving each RB circuit and its
             ideal (correct) outcome.
 
-        
+
         See init docstring for details on all other parameters.
 
         Returns
@@ -713,7 +714,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
 
             # future: port the starmap functionality to the non-clifford case and merge the two methods
-            # by just callling `create_mirror_rb_circuit` but with a different argument.   
+            # by just callling `create_mirror_rb_circuit` but with a different argument.
             if circuit_type == 'clifford':
                 args_list = [(pspec, clifford_compilations['absolute'], l)] * circuits_per_depth
                 kwargs_list = [dict(qubit_labels=qubit_labels, sampler=sampler,
@@ -732,11 +733,14 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                     # Default sampler arguments.
                     two_q_gate_args_lists = {'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}
 
-                circs = [_rc.sample_random_cz_zxzxz_circuit(pspec, l // 2, qubit_labels=qubit_labels, two_q_gate_density=two_q_gate_density,
-                                                            two_q_gate_args_lists=two_q_gate_args_lists) for _ in range(circuits_per_depth)]
+                circs = [_rc.sample_random_cz_zxzxz_circuit(pspec, l // 2, qubit_labels=qubit_labels,
+                                                            two_q_gate_density=two_q_gate_density,
+                                                            two_q_gate_args_lists=two_q_gate_args_lists)
+                         for _ in range(circuits_per_depth)]
 
                 mirroring_type = circuit_type.split('-')[0]
-                results = [(a, [b]) for a, b in [_mirroring.create_mirror_circuit(c, pspec, circ_type=mirroring_type) for c in circs]]
+                results = [(a, [b]) for a, b in [_mirroring.create_mirror_circuit(c, pspec, circ_type=mirroring_type)
+                                                 for c in circs]]
 
             else:
                 raise ValueError('Invalid option for `circuit_type`!')
@@ -929,7 +933,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             else:
                 raise ValueError("No 'std' asymptote for %s datatype!" % self.asymptote)
 
-        def get_rb_fits(circuitdata_per_depth):
+        def _get_rb_fits(circuitdata_per_depth):
             adj_sps = []
             for depth in depths:
                 percircuitdata = circuitdata_per_depth[depth]
@@ -950,7 +954,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             return full_fit_results, fixed_asym_fit_results
 
         #do RB fit on actual data
-        ff_results, faf_results = get_rb_fits(data_per_depth)
+        ff_results, faf_results = _get_rb_fits(data_per_depth)
 
         if self.bootstrap_samples > 0:
 
@@ -967,7 +971,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             bootstrap_caches = data.cache['bootstraps']  # if finitecounts else 'infbootstraps'
 
             for bootstrap_cache in bootstrap_caches:
-                bs_ff_results, bs_faf_results = get_rb_fits(bootstrap_cache[self.datatype])
+                bs_ff_results, bs_faf_results = _get_rb_fits(bootstrap_cache[self.datatype])
 
                 if bs_ff_results['success']:
                     for p in parameters:
@@ -1042,7 +1046,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         self.rtype = protocol_instance.rtype  # replicated for convenience?
         self.fits = fits
         self.defaultfit = defaultfit
-        self.auxfile_types['fits'] = 'pickle'  # b/c NamedDict don't json
+        self.auxfile_types['fits'] = 'dict:serialized-object'  # b/c NamedDict don't json
 
     def plot(self, fitkey=None, decay=True, success_probabilities=True, size=(8, 5), ylim=None, xlim=None,
              legend=True, title=None, figpath=None):

@@ -153,6 +153,18 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         _DistributableForwardSimulator.__init__(self, model, num_atoms, processor_grid, param_blk_sizes)
         self._max_cache_size = max_cache_size
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'max_cache_size': self._max_cache_size
+                      # (don't serialize parent model or processor distribution info)
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        #Note: resets processor-distribution information
+        return cls(None, state['max_cache_size'])
+
     def copy(self):
         """
         Return a shallow copy of this MapForwardSimulator
@@ -262,8 +274,12 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             #                                  (num_params, num_params), (num_params / np1, num_params / np2),
             #                                  approx_cachesize, self.model.dim)
 
+            GB = 1.0 / 1024.0**3
             if mem_estimate > mem_limit:
-                raise MemoryError("Not enough memory for desired layout!")
+                raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB" % (
+                    mem_limit * GB, mem_estimate * GB))
+            else:
+                printer.log("   Esimated memory required = %.1fGB" % (mem_estimate * GB))
 
         return layout
 

@@ -44,7 +44,6 @@ class TensorProductPOVMEffect(_POVMEffect):
         assert(len(factors) > 0), "Must have at least one factor!"
 
         self.factors = factors  # do *not* copy - needs to reference common objects
-        self.Np = sum([fct.num_params for fct in factors])
         self.effectLbls = _np.array(povm_effect_lbls)
 
         evotype = self.factors[0]._evotype
@@ -52,28 +51,66 @@ class TensorProductPOVMEffect(_POVMEffect):
 
         _POVMEffect.__init__(self, rep, evotype)
         self._rep.factor_effects_have_changed()  # initializes rep data
-        #sets gpindices, so do before stuff below
 
         #Set our parent and gpindices based on those of factor-POVMs, which
         # should all be owned by a TensorProdPOVM object.
         # (for now say we depend on *all* the POVMs parameters (even though
         #  we really only depend on one element of each POVM, which may allow
         #  using just a subset of each factor POVMs indices - but this is tricky).
-        self.set_gpindices(_slct.list_to_slice(
-            _np.concatenate([fct.gpindices_as_array()
-                             for fct in factors], axis=0), True, False),
-                           factors[0].parent)  # use parent of first factor
-        # (they should all be the same)
+        self.init_gpindices()
+
+    def submembers(self):
+        """
+        Get the ModelMember-derived objects contained in this one.
+
+        Returns
+        -------
+        list
+        """
+        return self.factors  # factor POVM object
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+        mm_dict['subpovm_effect_labels'] = self.effectLbls.tolist()
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        factors = [serial_memo[i] for i in mm_dict['submembers']]
+        return cls(factors, mm_dict['subpovm_effect_labels'], state_space)
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (self.state_space == other.state_space
+                and _np.array_equal(self.effectLbls, other.effectLbls))
 
     @property
     def parameter_labels(self):
         """
         An array of labels (usually strings) describing this model member's parameters.
         """
-        vl = _np.empty(self.Np, dtype=object); off = 0
-        for fct in self.factors:
-            N = fct.num_params
-            vl[off:off + N] = fct.parameter_labels; off += N
+        vl = _np.empty(self.num_params, dtype=object)
+        for povm, povm_local_inds in zip(self.factors, self._submember_rpindices):
+            vl[povm_local_inds] = povm.parameter_labels
         return vl
 
     def to_dense(self, on_space='minimal', scratch=None):
@@ -224,7 +261,7 @@ class TensorProductPOVMEffect(_POVMEffect):
         int
             the number of independent parameters.
         """
-        return self.Np
+        return len(self.gpindices_as_array())
 
     def to_vector(self):
         """
@@ -263,14 +300,14 @@ class TensorProductPOVMEffect(_POVMEffect):
         -------
         None
         """
-        if all([self.effectLbls[i] == list(povm.keys())[0]
+        if all([self.effectLbls[i] == iter(povm.keys()).__next__()
                 for i, povm in enumerate(self.factors)]):
             #then this is the *first* vector in the larger TensorProdPOVM
             # and we should initialize all of the factor_povms
-            for povm in self.factors:
-                local_inds = _modelmember._decompose_gpindices(
-                    self.gpindices, povm.gpindices)
-                povm.from_vector(v[local_inds], close, dirty_value)
+            for povm, povm_local_inds in zip(self.factors, self._submember_rpindices):
+                #local_inds = _modelmember._decompose_gpindices(
+                #    self.gpindices, povm.gpindices)
+                povm.from_vector(v[povm_local_inds], close, dirty_value)
 
         #Update representation, which may be a dense matrix or
         # just fast-kron arrays or a stabilizer state.
@@ -305,7 +342,8 @@ class TensorProductPOVMEffect(_POVMEffect):
         derivMx = _np.zeros((dim, self.num_params), typ)
 
         #Product rule to compute jacobian
-        for i, (fct, fct_dim) in enumerate(zip(self.factors, dims)):  # loop over the spamvec/povm we differentiate wrt
+        # loop over the spamvec/povm we differentiate wrt:
+        for i, (fct, fct_local_inds, fct_dim) in enumerate(zip(self.factors, self._submember_rpindices, dims)):
             vec = fct[self.effectLbls[i]]
 
             if vec.num_params == 0: continue  # no contribution
@@ -324,13 +362,9 @@ class TensorProductPOVMEffect(_POVMEffect):
                     post = _np.kron(post, fctA[self.effectLbls[j]].to_dense(on_space='minimal'))
                 deriv = _np.kron(deriv, post[:, None])  # add a dummy 1-dim to 'post' and do kron properly...
 
-            # POVM-factors hold global indices (b/c they're meant to be shareable)
-            local_inds = _modelmember._decompose_gpindices(
-                self.gpindices, fct.gpindices)
-
-            assert(local_inds is not None), \
+            assert(fct_local_inds is not None), \
                 "Error: gpindices has not been initialized for factor %d - cannot compute derivative!" % i
-            derivMx[:, local_inds] += deriv
+            derivMx[:, fct_local_inds] += deriv
 
         derivMx.shape = (dim, self.num_params)  # necessary?
         if wrt_filter is None:

@@ -185,7 +185,7 @@ class StdPracticeGSTTester(LongSequenceBase):
             # TODO assert correctness
 
     def test_stdpractice_gst_raises_on_bad_mode(self):
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(ValueError):
             result = ls.run_stdpractice_gst(
                 self.ds, self.pspec, self.fiducials, self.fiducials,
                 self.germs, self.maxLens, modes="Foobar"

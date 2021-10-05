@@ -96,26 +96,6 @@ class StochasticNoiseOp(_LinearOperator):
             keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
         return [{(i, i): 1.0} for i in range(self.basis.size - 1)]  # rates are just parameters squared
 
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        StochasticNoiseOp
-            A copy of this object.
-        """
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        copyOfMe = StochasticNoiseOp(self.state_space, self.basis, self._evotype,
-                                     self._params_to_rates(self.to_vector()))
-        return self._copy_gpindices(copyOfMe, parent, memo)
-
-    #to_dense / to_sparse?
     def to_dense(self, on_space='minimal'):
         """
         Return this operation as a dense matrix.
@@ -303,8 +283,49 @@ class StochasticNoiseOp(_LinearOperator):
 
     #Transform functions? (for gauge opt)
 
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        mm_dict['basis'] = self.basis.to_nice_serialization()
+        mm_dict['rates'] = self._params_to_rates(self.to_vector()).tolist()
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        basis = _Basis.from_nice_serialization(mm_dict['basis'])
+        return cls(state_space, basis, mm_dict['evotype'], mm_dict['rates'], seed_or_state=None)
+        # Note: we currently don't serialize random seed/state - that gets reset w/serialization
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (self.basis == other.basis and self.state_space == other.state_space)
+
     def __str__(self):
         s = "Stochastic noise operation map with state space = %s, num params = %d\n" % \
             (self.state_space, self.num_params)
         s += 'Rates: %s\n' % self._params_to_rates(self.to_vector())
         return s
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return 'rates: %s' % self._params_to_rates(self.to_vector())

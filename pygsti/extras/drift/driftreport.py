@@ -53,10 +53,10 @@ class DriftSummaryTable(_ws.WorkspaceTable):
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
         stabilityanalyzer = results.stabilityanalyzer
         table.add_row(['Global statistical significance level',
-                      stabilityanalyzer.get_statistical_significance(detectorkey=detectorkey)], [None, None])
+                       stabilityanalyzer.statistical_significance(detectorkey=detectorkey)], [None, None])
         table.add_row(['Instability detected', stabilityanalyzer.instability_detected(
             detectorkey=detectorkey)], [None, None])
-        table.add_row(['Instability size', stabilityanalyzer.get_maxmax_tvd_bound(
+        table.add_row(['Instability size', stabilityanalyzer.maxmax_tvd_bound(
             dskey=dskey, estimatekey=estimatekey)], [None, None])
         table.finish()
         return table
@@ -115,7 +115,7 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
         # If we're plotting spectra for more than one circuit.
         if isinstance(circuits, dict) or isinstance(circuits, list):
 
-            threshold, thresholdtype = stabilityanalyzer.get_power_threshold(
+            threshold, thresholdtype = stabilityanalyzer.power_threshold(
                 test=tuple(spectrumlabel.keys()), detectorkey=detectorkey)
             data = []
             ymax = threshold
@@ -131,7 +131,7 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
             for ind, (circlabel, circ) in enumerate(circuits.items()):
 
                 spectrumlabel['circuit'] = circ
-                freqs, powers = stabilityanalyzer.get_spectrum(spectrumlabel, returnfrequencies=True, checklevel=2)
+                freqs, powers = stabilityanalyzer.power_spectrum(spectrumlabel, returnfrequencies=True, checklevel=2)
 
                 xdata = _np.array(freqs)
                 ydata = _np.array(powers)
@@ -152,8 +152,8 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
         # If we're plotting a single spectrum.
         else:
 
-            freqs, powers = stabilityanalyzer.get_spectrum(spectrumlabel, returnfrequencies=True, checklevel=2)
-            threshold, thresholdtype = stabilityanalyzer.get_power_threshold(
+            freqs, powers = stabilityanalyzer.power_spectrum(spectrumlabel, returnfrequencies=True, checklevel=2)
+            threshold, thresholdtype = stabilityanalyzer.power_threshold(
                 test=tuple(spectrumlabel.keys()), detectorkey=detectorkey)
 
             xdata = _np.array(freqs)
@@ -181,7 +181,7 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
                              1 - 0.05 * (ylim[1] - ylim[0]) + ylim[0]],
                           # Todo.
                           text=['{}% Significance Threshold'.format(
-                              stabilityanalyzer.get_statistical_significance(detectorkey) * 100),
+                              stabilityanalyzer.statistical_significance(detectorkey) * 100),
                               'Expected Shot-Noise Level'],
                           mode='text',
                           showlegend=False
@@ -330,7 +330,7 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
             xdata = _np.asarray(times)
 
             for ind, (label, circuit) in enumerate(circuits.items()):
-                probsdict = stabilityanalyzer.get_probability_trajectory(circuit, times, dskey, estimatekey, estimator)
+                probsdict = stabilityanalyzer.probability_trajectory(circuit, times, dskey, estimatekey, estimator)
                 ydata = _np.asarray(probsdict[outcome])
 
                 # list of traces
@@ -370,7 +370,7 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
             dtimes, data = stabilityanalyzer.data[dskey][circuit].timeseries_for_outcomes
             if times is None:
                 times = _np.linspace(min(dtimes), max(dtimes), 5000)
-            p = stabilityanalyzer.get_probability_trajectory(
+            p = stabilityanalyzer.probability_trajectory(
                 circuit, times=times, dskey=dskey, estimatekey=estimatekey, estimator=estimator)[outcome]
             lowpass = _sig.moving_average(data[outcome], width=100)
 

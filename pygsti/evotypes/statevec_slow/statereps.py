@@ -65,7 +65,7 @@ class StateRep(_basereps.StateRep):
 
 
 class StateRepDensePure(StateRep):
-    def __init__(self, purevec, basis, state_space):
+    def __init__(self, purevec, state_space, basis):
         super(StateRepDensePure, self).__init__(purevec, state_space, basis)
 
     @property

@@ -111,7 +111,7 @@ class IBMQExperiment(dict):
         IBMQExperiment
             An object containing jobs to be submitted to IBM Q, which can then be submitted
             using the methods .submit() and whose results can be grabbed from IBM Q using
-            the method .get_results(). This object has dictionary-like access for all of
+            the method .retrieve_results(). This object has dictionary-like access for all of
             the objects it contains (e.g., ['qobj'] is a list of the objects to be submitted to
             IBM Q).
 
@@ -126,7 +126,7 @@ class IBMQExperiment(dict):
         # Populated when submitting to IBM Q with .submit()
         self['qjob'] = None
         self['job_ids'] = None
-        # Populated when grabbing results from IBM Q with .get_results()
+        # Populated when grabbing results from IBM Q with .retrieve_results()
         self['batch_result_object'] = None
         self['data'] = None
 
@@ -229,7 +229,7 @@ class IBMQExperiment(dict):
                     try:
                         print('  - Queue position is {}'.format(self['qjob'][-1].queue_position()))
                     except:
-                        print('  - Failed to get queue position {}'.format(batch_idx))
+                        print('  - Failed to get queue position {}'.format(batch_idx + 1))
                     submit_status = True
                 except Exception as ex:
                     template = "An exception of type {0} occurred. Arguments:\n{1!r}"
@@ -258,11 +258,11 @@ class IBMQExperiment(dict):
         """
         for counter, qjob in enumerate(self['qjob']):
             status = qjob.status()
-            print("Batch {}: {}".format(counter, status))
-            if status.name == 'QUEUED:':
+            print("Batch {}: {}".format(counter + 1, status))
+            if status.name == 'QUEUED':
                 print('  - Queue position is {}'.format(qjob.queue_position()))
 
-    def get_results(self):
+    def retrieve_results(self):
         """
         Gets the results of the completed jobs from IBM Q, and processes
         them into a pyGSTi DataProtocol object (stored as the key 'data'),

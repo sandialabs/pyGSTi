@@ -12,3 +12,4 @@ pyGSTi Processors Python Package
 
 from .processorspec import ProcessorSpec, QubitProcessorSpec
 from .compilationrules import CompilationRules, CliffordCompilationRules, CompilationError
+from .unitarygatefunction import UnitaryGateFunction

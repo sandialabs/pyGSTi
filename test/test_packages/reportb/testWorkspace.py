@@ -177,10 +177,13 @@ class TestWorkspace(ReportBaseCase):
 
         tbls.append( w.DataSetOverviewTable(self.ds,max_length_list=[1,2,4,8]) )
         tbls.append( w.FitComparisonTable(self.gss.xs, self.results.circuit_lists['iteration'],
-                                          self.results.estimates['default'].models['iteration estimates'], self.ds) )
+                                          [self.results.estimates['default'].models['iteration %d estimate' % k]
+                                           for k in range(self.results.estimates['default'].num_iterations)], self.ds) )
         with self.assertRaises(ValueError):
             w.FitComparisonTable(self.gss.xs, self.results.circuit_lists['iteration'],
-                                 self.results.estimates['default'].models['iteration estimates'], self.ds, objfn_builder="foobar")
+                                 [self.results.estimates['default'].models['iteration %d estimate' % k]
+                                           for k in range(self.results.estimates['default'].num_iterations)],
+                                 self.ds, objfn_builder="foobar")
 
         tbls.append( w.GaugeRobustErrgenTable(self.mdl, self.tgt) )
 
@@ -293,7 +296,7 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.mdl, dscomparator=dsc) ) # dscmp with 'None' dataset specified
         plts.append( w.ColorBoxPlot(("dscmp",), self.gss, None, self.mdl, dscomparator=dsc2) )
 
-        tds = pygsti.io.load_time_dependent_dataset(compare_files + "/timeseries_data_trunc.txt")
+        tds = pygsti.io.read_time_dependent_dataset(compare_files + "/timeseries_data_trunc.txt")
         #OLD: driftresults = drift.do_basic_drift_characterization(tds)
         results_gst = drift.StabilityAnalyzer(tds, ids=True)
         results_gst.compute_spectra()
@@ -345,7 +348,8 @@ class TestWorkspace(ReportBaseCase):
         plts.append( w.ChoiEigenvalueBarPlot(choievals, choieb) )
 
         plts.append( w.FitComparisonBarPlot(self.gss.xs, self.results.circuit_lists['iteration'],
-                                          self.results.estimates['default'].models['iteration estimates'], self.ds,) )
+                                            [self.results.estimates['default'].models['iteration %d estimate' % k]
+                                             for k in range(self.results.estimates['default'].num_iterations)], self.ds) )
         plts.append( w.GramMatrixBarPlot(self.ds,self.tgt) )
 
         plts.append( w.DatasetComparisonHistogramPlot(dsc, nbins=50, frequency=True,
@@ -422,9 +426,9 @@ class TestWorkspace(ReportBaseCase):
             switchbd5['key'] = 10 # can't add switched values like this.
         switchbd5.switchTypes[0] = "foobar" #mess with Switchboard internals to trigger errors below
         with self.assertRaises(ValueError):
-            switchbd5.get_switch_change_handlerjs(0)
+            switchbd5.create_switch_change_handlerjs(0)
         with self.assertRaises(ValueError):
-            switchbd5.get_switch_valuejs(0)
+            switchbd5.create_switch_valuejs(0)
         with self.assertRaises(ValueError):
             switchbd5.render("html")
 

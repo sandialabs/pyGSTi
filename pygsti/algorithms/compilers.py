@@ -578,7 +578,8 @@ def _compile_symplectic_using_rogge_algorithm(s, pspec=None, paulieq_compilation
         # Call the re-ordered global Gaussian elimination, which is wrap-around for the GE algorithms to deal
         # with qubit relabeling. Check is False avoids multiple checks of success, when only the last check matters.
         circuit = _compile_symplectic_using_ogge_algorithm(
-            s, eliminationorder, pspec=pspec, paulieq_compilation=paulieq_compilation, qubit_labels=qubit_labels, ctype=ctype, check=False)
+            s, eliminationorder, pspec=pspec, paulieq_compilation=paulieq_compilation, qubit_labels=qubit_labels,
+            ctype=ctype, check=False)
         # Find the cost of the circuit, and keep it if this circuit is the lowest-cost circuit so far.
         circuit_cost = costfunction(circuit, pspec)
         if circuit_cost < lowestcost:
@@ -2132,8 +2133,7 @@ def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilat
     failcount, i = 0, 0
 
     # Repeatedly find compilations for the symplectic, and pick the best one.
-    while i < iterations:
-
+    while i < iterations and failcount <= 5 * iterations:
         try:
             tc, tcc = compile_conditional_symplectic(
                 s, pspec, qubit_labels=qubit_labels, calg=algorithm, cargs=aargs, check=False, rand_state=rand_state)
@@ -2148,7 +2148,7 @@ def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilat
                 circuit = tc.copy()
                 check_circuit = tcc.copy(editable=True)
                 mincost = cost
-        except:
+        except AssertionError:
             failcount += 1
 
     assert(failcount <= 5 * iterations), \

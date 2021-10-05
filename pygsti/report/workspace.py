@@ -1150,7 +1150,7 @@ class Switchboard(_collections.OrderedDict):
 
         return {'html': html, 'js': js}
 
-    def get_switch_change_handlerjs(self, switch_index):
+    def create_switch_change_handlerjs(self, switch_index):
         """
         Returns the Javascript needed to begin an on-change handler for a particular switch.
 
@@ -1177,7 +1177,7 @@ class Switchboard(_collections.OrderedDict):
         else:
             raise ValueError("Unknown switch type: %s" % typ)
 
-    def get_switch_valuejs(self, switch_index):
+    def create_switch_valuejs(self, switch_index):
         """
         Returns the Javascript needed to get the value of a particular switch.
 
@@ -1874,7 +1874,7 @@ class WorkspaceOutput(object):
         handler_js += "  var curSwitchPos = new Array();\n"
         for sb, switchInds in zip(switchboards, switch_indices):
             for switchIndex in switchInds:
-                handler_js += "  curSwitchPos.push(%s);\n" % sb.get_switch_valuejs(switchIndex)
+                handler_js += "  curSwitchPos.push(%s);\n" % sb.create_switch_valuejs(switchIndex)
         handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % id
         handler_js += "  $( '#%s' ).children().hide();\n" % id
         handler_js += "  divToShow = $( '#' + idToShow );\n"
@@ -1917,7 +1917,7 @@ class WorkspaceOutput(object):
             # switchInds is a tuple containing the "used" switch indices of sb
             for switchIndex in switchInds:
                 # part of if-block ensuring switches are ready (i.e. created)
-                js += "    " + sb.get_switch_change_handlerjs(switchIndex) + \
+                js += "    " + sb.create_switch_change_handlerjs(switchIndex) + \
                     "%s(); });\n" % onchange_name
 
         #bind onchange call to custom 'tabchange' event that we trigger when tab changes

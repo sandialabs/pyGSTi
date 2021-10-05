@@ -165,8 +165,8 @@ class NQubitTestCase(BaseTestCase):
         lsgstLists = gss.truncate(xs_to_keep=maxLengths) # can just use gss as input to pygsti.run_long_sequence_gst_base
 
         mdl_to_optimize = build_XYCNOT_cloudnoise_model(nQubits, "line", cnot_edges, maxIdleWeight=2, maxhops=1,
-                                                         extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
-                                                         simulator="map", parameterization="H+S")
+                                                        extraWeight1Hops=0, extraGateWeight=1, verbosity=1,
+                                                        simulator="map", parameterization="H+S")
         results = pygsti.run_long_sequence_gst_base(ds, mdl_to_optimize,
                                                     lsgstLists, gauge_opt_params=False,
                                                     advanced_options={'tolerance': 1e-1}, verbosity=4)
@@ -290,7 +290,7 @@ class NQubitTestCase(BaseTestCase):
         basis1Q = pygsti.baseobjs.Basis.cast("pp", 4)
         basisNQ = pygsti.baseobjs.Basis.cast("pp", 4 ** nQubits)
         for i in range(nQubits):
-            effects = [(l, modelconstruction._basis_create_spam_vector(l, basis1Q)) for l in ["0", "1"]]
+            effects = [(l, modelconstruction.create_spam_vector(l, "Q0", basis1Q)) for l in ["0", "1"]]
             factorPOVMs.append(pygsti.modelmembers.povms.TPPOVM(effects, evotype='default'))
         povm = pygsti.modelmembers.povms.TensorProductPOVM(factorPOVMs)
         print(list(povm.keys()))
@@ -303,10 +303,10 @@ class NQubitTestCase(BaseTestCase):
         print("Post adding noise:"); print(povm)
 
         mdl = pygsti.models.ExplicitOpModel(['Q0', 'Q1', 'Q2'])
-        prepFactors = [pygsti.modelmembers.states.TPState(modelconstruction._basis_create_spam_vector("0", basis1Q))
+        prepFactors = [pygsti.modelmembers.states.TPState(modelconstruction.create_spam_vector("0", "Q0", basis1Q))
                        for i in range(nQubits)]
         mdl.preps['rho0'] = pygsti.modelmembers.states.TensorProductState(prepFactors, mdl.state_space)
-        # OR one big prep: mdl.preps['rho0'] = modelconstruction._basis_create_spam_vector("0", basisNQ)
+        # OR one big prep: mdl.preps['rho0'] = modelconstruction.create_spam_vector("0", basisNQ)
 
         print("Before adding to model:")
         print(" povm.gpindices = ",povm.gpindices, "parent is None?", bool(povm.parent is None))

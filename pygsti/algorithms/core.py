@@ -204,6 +204,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         lgstModel = _models.ExplicitOpModel([('L%d' % i,) for i in range(svd_truncate_to)], dumb_basis)
 
     for opLabel in op_labelsToEstimate:
+        #print("LGST ",opLabel)
         Xs = _construct_x_matrix(prep_fiducials, effect_fiducials, target_model, (opLabel,),
                                  dataset, op_label_aliases)  # shape (nVariants, nESpecs, nRhoSpecs)
 
@@ -430,6 +431,8 @@ def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple,
                 X[k, eoff:eoff + povmLen, j] = [dsRow_fractions.get(ol, 0) for ol in outcomes]
         eoff += povmLen
 
+    #print("DEBUG LGST on instrument, X = ")
+    #print(_np.round(X, 4))
     return X
 
 

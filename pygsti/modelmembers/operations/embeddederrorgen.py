@@ -131,27 +131,19 @@ class EmbeddedErrorgen(_EmbeddedOp):
             A Basis mapping the basis labels used in the
             keys of `Ltermdict` to basis matrices.
         """
-        embedded_coeffs = self.embedded_op.coefficients(return_basis, logscale_nonham)
-        embedded_Ltermdict = _collections.OrderedDict()
+        return self.embedded_op.coefficients(return_basis, logscale_nonham)
 
-        if return_basis:
-            # embed basis
-            Ltermdict, basis = embedded_coeffs
-            embedded_basis = _EmbeddedBasis(basis, self.state_space, self.targetLabels)
-            bel_map = {lbl: embedded_lbl for lbl, embedded_lbl in zip(basis.labels, embedded_basis.labels)}
+    def coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`coefficients_array`.
 
-            #go through and embed Ltermdict labels
-            for k, val in Ltermdict.items():
-                embedded_key = (k[0],) + tuple([bel_map[x] for x in k[1:]])
-                embedded_Ltermdict[embedded_key] = val
-            return embedded_Ltermdict, embedded_basis
-        else:
-            #go through and embed Ltermdict labels
-            Ltermdict = embedded_coeffs
-            for k, val in Ltermdict.items():
-                embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.targetLabels) for x in k[1:]])
-                embedded_Ltermdict[embedded_key] = val
-            return embedded_Ltermdict
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        return self.embedded_op.coefficient_labels()
 
     def coefficients_array(self):
         """
@@ -221,7 +213,7 @@ class EmbeddedErrorgen(_EmbeddedOp):
         """
         return self.coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """
         Sets the coefficients of terms in this error generator.
 
@@ -253,15 +245,17 @@ class EmbeddedErrorgen(_EmbeddedOp):
             the corresponding value given in `lindblad_term_dict`.  This is what is
             performed by the function :method:`set_error_rates`.
 
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given coefficients
+            cannot be parameterized as specified.
+
         Returns
         -------
         None
         """
-        unembedded_Ltermdict = _collections.OrderedDict()
-        for k, val in lindblad_term_dict.items():
-            unembedded_key = (k[0],) + tuple([_EmbeddedBasis.unembed_label(x, self.targetLabels) for x in k[1:]])
-            unembedded_Ltermdict[unembedded_key] = val
-        self.embedded_op.set_coefficients(unembedded_Ltermdict, action, logscale_nonham)
+        self.embedded_op.set_coefficients(lindblad_term_dict, action, logscale_nonham, truncate)
 
     def set_error_rates(self, lindblad_term_dict, action="update"):
         """

@@ -164,7 +164,7 @@ class SmartCache(object):
     def __getstate__(self):
         d = dict(self.__dict__)
 
-        def get_pickleable_dict(cache_dict):
+        def _get_pickleable_dict(cache_dict):
             pickleableCache = dict()
             for k, v in cache_dict.items():
                 try:
@@ -179,15 +179,15 @@ class SmartCache(object):
                     self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))
             return pickleableCache
 
-        d['cache'] = get_pickleable_dict(self.cache)
-        d['outargs'] = get_pickleable_dict(self.outargs)
+        d['cache'] = _get_pickleable_dict(self.cache)
+        d['outargs'] = _get_pickleable_dict(self.outargs)
         return d
 
     def __pygsti_getstate__(self):  # same but for json/msgpack
         d = dict(self.__dict__)
         from pygsti.serialization.jsoncodec import encode_obj
 
-        def get_jsonable_dict(cache_dict):
+        def _get_jsonable_dict(cache_dict):
 
             jsonableCache = dict()
             for k, v in cache_dict.items():
@@ -198,8 +198,8 @@ class SmartCache(object):
                     self.unpickleable.add(str(k[0]) + str(type(v)) + str(e))
             return jsonableCache
 
-        d['cache'] = get_jsonable_dict(self.cache)
-        d['outargs'] = get_jsonable_dict(self.outargs)
+        d['cache'] = _get_jsonable_dict(self.cache)
+        d['outargs'] = _get_jsonable_dict(self.outargs)
         return d
 
     def add_digest(self, custom):

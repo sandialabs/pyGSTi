@@ -48,6 +48,7 @@ class RepeatedOp(_LinearOperator):
         evotype = _Evotype.cast(evotype)
         rep = evotype.create_repeated_rep(self.repeated_op._rep, self.num_repetitions, state_space)
         _LinearOperator.__init__(self, rep, evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
 
     def submembers(self):
         """
@@ -75,27 +76,6 @@ class RepeatedOp(_LinearOperator):
         None
         """
         self.repeated_op.set_time(t)
-
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that factor operations have their
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.repeated_op.copy(parent, memo), self.num_repetitions, self._evotype)
-        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def to_sparse(self, on_space='minimal'):
         """
@@ -254,8 +234,39 @@ class RepeatedOp(_LinearOperator):
         deriv = deriv.reshape((self.dim**2, deriv.shape[2]))
         return deriv
 
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+        mm_dict['num_repetitions'] = self.num_repetitions
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        repeated_op = serial_memo[mm_dict['submembers'][0]]
+        return cls(repeated_op, mm_dict['num_repetitions'], mm_dict['evotype'])
+
     def __str__(self):
         """ Return string representation """
         s = "Repeated operation that repeates the below op %d times\n" % self.num_repetitions
         s += str(self.repeated_op)
         return s
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return "repeats %d times" % self.num_repetitions

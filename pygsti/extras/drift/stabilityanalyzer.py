@@ -595,13 +595,13 @@ class StabilityAnalyzer(object):
 
         return None
 
-    def get_dof_reduction(self, axislabel):
+    def dof_reduction(self, axislabel):
         """
         Find the null hypothesis chi2 degree of freedom (DOF) reduction when averaging power spectrum along
         `axislabel`.
 
             - Under null hypohesis, each base spectrum is distributed according to a chi2/k with a DOF k
-              for some k (obtainable via get_dof()).
+              for some k (obtainable via num_degrees_of_freedom()).
             - Under the composite null hypothesis the power spectrum, averaged along the `axislabel` axis
               is chi2/(numspectra*k - l) with a DOF of (numspectra*k - l) for some l, where numspectra is the
               number of spectrum along this axis.
@@ -621,7 +621,7 @@ class StabilityAnalyzer(object):
         else:
             return True
 
-    def get_dof(self, label, adjusted=False):
+    def num_degrees_of_freedom(self, label, adjusted=False):
         """
         Returns the number of degrees of freedom (DOF) for a power in the power spectrum specified by `label`.
         This is the DOF in the chi2 distribution that the powers are (approximately) distributed according to,
@@ -652,7 +652,7 @@ class StabilityAnalyzer(object):
 
         return dof
 
-    def get_number_of_spectra(self, label):
+    def num_spectra(self, label):
         """
         The number of power spectra in the "class" of spectra specified by `label`, where `label` is
         a tuple containing some subset of 'dataset', 'circuit' and 'outcome'. The strings it contains
@@ -806,7 +806,7 @@ class StabilityAnalyzer(object):
 
         return tuple(averageaxes), tuple(indices)
 
-    def get_spectrum(self, dictlabel=None, returnfrequencies=True, checklevel=2):
+    def power_spectrum(self, dictlabel=None, returnfrequencies=True, checklevel=2):
         """
         Returns a power spectrum.
 
@@ -860,7 +860,7 @@ class StabilityAnalyzer(object):
 
     def _get_averaged_spectrum(self, dictlabel={}, returnfrequencies=True, checklevel=2):
         """
-        A subroutine of the method `get_spectrum()`. See the docstring of that method for details.
+        A subroutine of the method `power_spectrum()`. See the docstring of that method for details.
 
         """
         # Check whether the requested averaging is allowed, with a check at the specified rigour level.
@@ -887,14 +887,14 @@ class StabilityAnalyzer(object):
 
             return freq, spectrum
 
-    def get_maxpower(self, dictlabel={}, freqsubset=None):
+    def maximum_power(self, dictlabel={}, freqsubset=None):
         """
         Returns the maximum power in a power spectrum.
 
         Parameters
         ----------
         dictlabel : dict, optional
-            The dictionary labelling the spectrum. The same format as in the get_spectrum() method.
+            The dictionary labelling the spectrum. The same format as in the power_spectrum() method.
             See the docstring of that method for more details.
 
         freqsubset : list, optional
@@ -905,7 +905,7 @@ class StabilityAnalyzer(object):
         float
             The maximal power in the spectrum.
         """
-        spectrum = self.get_spectrum(dictlabel)
+        spectrum = self.power_spectrum(dictlabel)
         if freqsubset is None:
             maxpower = _np.max(spectrum)
         else:
@@ -913,14 +913,14 @@ class StabilityAnalyzer(object):
 
         return maxpower
 
-    def get_pvalue(self, dictlabel={}, freqsubset=None, cutoff=0):
+    def maximum_power_pvalue(self, dictlabel={}, freqsubset=None, cutoff=0):
         """
         The p-value of the maximum power in a power spectrum.
 
         Parameters
         ----------
         dictlabel : dict, optional
-            The dictionary labelling the spectrum. The same format as in the get_spectrum() method.
+            The dictionary labelling the spectrum. The same format as in the power_spectrum() method.
             See the docstring of that method for more details.
 
         freqsubset : list, optional
@@ -935,9 +935,9 @@ class StabilityAnalyzer(object):
             The p-value of the maximal power in the specified spectrum.
 
         """
-        maxpower = self.get_maxpower(dictlabel=dictlabel, freqsubset=freqsubset)
+        maxpower = self.maximum_power(dictlabel=dictlabel, freqsubset=freqsubset)
         # future: update adjusted to True when the function allows it.
-        dof = self.get_dof(tuple(dictlabel.keys()), adjusted=False)
+        dof = self.num_degrees_of_freedom(tuple(dictlabel.keys()), adjusted=False)
         pvalue = _sig.power_to_pvalue(maxpower, dof)
         pvalue = max(cutoff, pvalue)
 
@@ -1103,9 +1103,9 @@ class StabilityAnalyzer(object):
         for test in condtests:
 
             sig = test_significance[test]
-            dof = self.get_dof(test, adjusted=False)
+            dof = self.num_degrees_of_freedom(test, adjusted=False)
             # The number of spectra held in `spectra`.
-            numspectra = self.get_number_of_spectra(test)
+            numspectra = self.num_spectra(test)
             # The total number of powers to be tested
             numtests = len(freqstest) * numspectra
             driftdetected_class[test] = False
@@ -1298,7 +1298,7 @@ class StabilityAnalyzer(object):
         if verbosity > 1: print("Instability detection complete!")
         return None
 
-    def get_statistical_significance(self, detectorkey=None):
+    def statistical_significance(self, detectorkey=None):
         """
         The statistical significance level of the instability detection
 
@@ -1336,8 +1336,8 @@ class StabilityAnalyzer(object):
         # Otherwise we return None, to signify that there was no equivalent test implemented.
         else: return None
 
-    def get_unstable_circuits(self, getmaxtvd=False, detectorkey=None, fromtests='auto', freqindices=False,
-                              estimatekey=None, dskey=None):
+    def unstable_circuits(self, getmaxtvd=False, detectorkey=None, fromtests='auto', freqindices=False,
+                          estimatekey=None, dskey=None):
         """
         Returns a dictionary, containing all the circuits that instability has been detected for as keys,
         with the values being the frequencies of the detected instability.
@@ -1345,7 +1345,7 @@ class StabilityAnalyzer(object):
         Parameters
         ----------
         getmaxtvd: bool, optional
-            Whether to also return the bound on the TVD deviation, as given by the get_max_tvd_bound() method.
+            Whether to also return the bound on the TVD deviation, as given by the maximum_tvd_bound() method.
             If True, then the values of the returned dictionary are a 2-element list: the first element is
             the frequencies detected for the unstable circuits, and the second element is this TVD bound.
 
@@ -1462,7 +1462,7 @@ class StabilityAnalyzer(object):
             if estimatekey is None:
                 estimatekey = self._def_probtrajectories
             for circuit in self.data[dskey].keys():
-                maxtvd = self.get_max_tvd_bound(circuit, dskey=dskey, estimatekey=estimatekey, estimator=None)
+                maxtvd = self.maximum_tvd_bound(circuit, dskey=dskey, estimatekey=estimatekey, estimator=None)
                 if circuit in circuits.keys():
                     circuits[circuit] = (circuits[circuit], maxtvd)
                 else:
@@ -1471,7 +1471,7 @@ class StabilityAnalyzer(object):
 
         return circuits
 
-    def get_instability_indices(self, dictlabel={}, detectorkey=None):
+    def instability_indices(self, dictlabel={}, detectorkey=None):
         """
         Returns the frequency indices that instability has been detected at in the specified
         power spectrum
@@ -1514,7 +1514,7 @@ class StabilityAnalyzer(object):
 
         return driftfreqinds
 
-    def get_instability_frequencies(self, dictlabel={}, detectorkey=None):
+    def instability_frequencies(self, dictlabel={}, detectorkey=None):
         """
         Returns the frequencies that instability has been detected at in the specified power spectrum.
         These frequencies are given in units of 1/t where 't' is the unit of the time stamps.
@@ -1538,7 +1538,7 @@ class StabilityAnalyzer(object):
         # If we're not given a detectorkey, we default to the standard detection results.
         if detectorkey is None: detectorkey = self._def_detection
         # Gets the drift indices, that we then jut need to convert to frequencies.
-        freqind = self.get_instability_indices(dictlabel=dictlabel, detectorkey=detectorkey)
+        freqind = self.instability_indices(dictlabel=dictlabel, detectorkey=detectorkey)
         # If this is for a particular circuit, find the circuit index for that circuit.
         if 'circuit' in dictlabel.keys():
             circuitindex = self._index('circuit', dictlabel['circuit'])
@@ -1552,7 +1552,7 @@ class StabilityAnalyzer(object):
 
         return driftfreqs
 
-    def get_power_threshold(self, test, detectorkey=None):
+    def power_threshold(self, test, detectorkey=None):
         """
         The statistical significance threshold for any power spectrum in the set specified by the tuple `test`.
 
@@ -1607,7 +1607,7 @@ class StabilityAnalyzer(object):
 
         return threshold, thresholdtype
 
-    def get_pvalue_threshold(self, test, detectorkey=None):
+    def pvalue_threshold(self, test, detectorkey=None):
         """
         The statistical significance threshold for any p-value of a power in the power spectra
         set specified by the tuple `test`.
@@ -1639,9 +1639,9 @@ class StabilityAnalyzer(object):
             above this threshold.
 
         """
-        powerthreshold, thresholdtype = self.get_power_threshold(test, detectorkey=detectorkey)
+        powerthreshold, thresholdtype = self.power_threshold(test, detectorkey=detectorkey)
         # future: update adjusted to True when the function allows it.
-        dof = self.get_dof(test, adjusted=False)
+        dof = self.num_degrees_of_freedom(test, adjusted=False)
         pvaluethreshold = _sig.power_to_pvalue(powerthreshold, dof)
 
         return pvaluethreshold, thresholdtype
@@ -1783,7 +1783,7 @@ class StabilityAnalyzer(object):
                     if 'dataset' in test: dictlabel['dataset'] = dskey
                     if 'circuit' in test: dictlabel['circuit'] = circuit
                     # Get the drift frequencies (doesn't include the zero frequency)
-                    freqs = self.get_instability_indices(dictlabel, detectorkey=detectorkey)
+                    freqs = self.instability_indices(dictlabel, detectorkey=detectorkey)
                     # Add in the zero frequency, as it's a hyperparameter of the model
                     freqs = list(freqs)
                     freqs.insert(0, 0)
@@ -1821,7 +1821,7 @@ class StabilityAnalyzer(object):
 
         return None
 
-    def get_probability_trajectory_model(self, circuit, dskey=None, estimatekey=None, estimator=None):
+    def probability_trajectory_model(self, circuit, dskey=None, estimatekey=None, estimator=None):
         """
         Returns the probability trajectory for a circuit, in the form of a ProbTrajectory object.
 
@@ -1878,9 +1878,9 @@ class StabilityAnalyzer(object):
 
         return ptraj
 
-    def get_probability_trajectory(self, circuit, times, dskey=None, estimatekey=None, estimator=None):
+    def probability_trajectory(self, circuit, times, dskey=None, estimatekey=None, estimator=None):
         """
-        Returns the probability trajectory for a circuit. See also get_probability_trajectory_model(),
+        Returns the probability trajectory for a circuit. See also probability_trajectory_model(),
         which provides are more complex, but more general-purpose, output.
 
         Parameters
@@ -1916,12 +1916,12 @@ class StabilityAnalyzer(object):
             and the value for an outcome is a list, which is the probability trajectory for that outcome.
 
         """
-        ptraj = self.get_probability_trajectory_model(circuit, dskey, estimatekey, estimator)
-        probabilities = ptraj.get_probabilities(times)
+        ptraj = self.probability_trajectory_model(circuit, dskey, estimatekey, estimator)
+        probabilities = ptraj.probabilities(times)
 
         return probabilities
 
-    def get_max_tvd_bound(self, circuit, dskey=None, estimatekey=None, estimator=None):
+    def maximum_tvd_bound(self, circuit, dskey=None, estimatekey=None, estimator=None):
         """
         Summarizes the size of the detected instability in the input circuit, as half the sum of the absolute values
         of the amplitudes in front of the non-constant basis functions in the estimate of the probability trajectories
@@ -1951,8 +1951,8 @@ class StabilityAnalyzer(object):
             The size of the instability in the circuit, as quantified by the amplitudes in the probability trajectory
             model.
         """
-        ptraj = self.get_probability_trajectory_model(circuit, dskey, estimatekey, estimator)
-        params = ptraj.get_parameters()
+        ptraj = self.probability_trajectory_model(circuit, dskey, estimatekey, estimator)
+        params = ptraj.parameters_copy()
         final_out_amplitudes = _np.zeros(len(ptraj.hyperparameters))
         summed_abs_amps = 0
 
@@ -1965,9 +1965,9 @@ class StabilityAnalyzer(object):
 
         return maxtvd
 
-    def get_maxmax_tvd_bound(self, dskey=None, estimatekey=None, estimator=None):
+    def maxmax_tvd_bound(self, dskey=None, estimatekey=None, estimator=None):
         """
-        The quantity returned by `get_max_tvd_bound` maximized over circuits. See the docstring of that method
+        The quantity returned by `maximum_tvd_bound` maximized over circuits. See the docstring of that method
         for more details.
 
         """
@@ -1978,7 +1978,7 @@ class StabilityAnalyzer(object):
 
         maxtvds = []
         for circuit in self.data[dskey].keys():
-            maxtvds.append(self.get_max_tvd_bound(circuit, dskey=dskey, estimatekey=estimatekey, estimator=estimator))
+            maxtvds.append(self.maximum_tvd_bound(circuit, dskey=dskey, estimatekey=estimatekey, estimator=estimator))
 
         maxmaxtvd = _np.max(maxtvds)
 

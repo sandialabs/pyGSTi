@@ -146,7 +146,7 @@ def run_model_test(model_filename_or_object,
     _update_objfn_builders([builder], advanced_options)
 
     #Create the protocol
-    proto = _proto.ModelTest(_load_model(model_filename_or_object), None, gopt_suite, None,
+    proto = _proto.ModelTest(_load_model(model_filename_or_object), None, gopt_suite,
                              builder, _get_badfit_options(advanced_options),
                              advanced_options.get('set trivial gauge group', True), printer,
                              name=advanced_options.get('estimate_label', None))
@@ -406,9 +406,9 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
     target_model = _load_model(target_model_filename_or_object)
-    pspec = target_model.create_processor_spec()
+    #pspec = target_model.create_processor_spec()
 
-    exp_design = _proto.StandardGSTDesign(pspec,
+    exp_design = _proto.StandardGSTDesign(target_model,
                                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                                           germs_list_or_filename, max_lengths,
                                           advanced_options.get('germ_length_limits', None),
@@ -423,9 +423,11 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
 
     if gauge_opt_params is None:
         gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
-    gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
+    gopt_suite = _proto.GSTGaugeOptSuite(
+        gaugeopt_argument_dicts=({'go0': gauge_opt_params} if gauge_opt_params else None),
+        gaugeopt_target=target_model)
     initial_model = _get_gst_initial_model(target_model, advanced_options)
-    proto = _proto.GateSetTomography(initial_model, gopt_suite, target_model,
+    proto = _proto.GateSetTomography(initial_model, gopt_suite,
                                      _get_gst_builders(advanced_options),
                                      _get_optimizer(advanced_options, target_model),
                                      _get_badfit_options(advanced_options), printer)
@@ -536,7 +538,7 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
     initial_model = _get_gst_initial_model(target_model, advanced_options)
 
-    proto = _proto.GateSetTomography(initial_model, gopt_suite, None,
+    proto = _proto.GateSetTomography(initial_model, gopt_suite,
                                      _get_gst_builders(advanced_options),
                                      _get_optimizer(advanced_options, target_model),
                                      _get_badfit_options(advanced_options), printer,
@@ -556,7 +558,7 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
 
 def run_stdpractice_gst(data_filename_or_set, processorspec_filename_or_object,
                         prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                        germs_list_or_filename, max_lengths, modes="TP,CPTP,Target",
+                        germs_list_or_filename, max_lengths, modes="full TP,CPTP,Target",
                         gaugeopt_suite='stdgaugeopt',
                         gaugeopt_target=None, models_to_test=None, comm=None, mem_limit=None,
                         advanced_options=None, output_pkl=None, verbosity=2):
@@ -688,14 +690,27 @@ def run_stdpractice_gst(data_filename_or_set, processorspec_filename_or_object,
                                           advanced_options.get('string_manipulation_rules', None),
                                           advanced_options.get('op_label_aliases', None),
                                           ds, 'drop', verbosity=printer)
+    if gaugeopt_target is not None:
+        if isinstance(gaugeopt_suite, _proto.GSTGaugeOptSuite):
+            raise ValueError("Cannot specify `gaugeopt_target` and have `gaugeopt_suite` be a GSTGaugeOptSuite object!")
+        gaugeopt_suite = _proto.GSTGaugeOptSuite.cast(gaugeopt_suite)
+        gaugeopt_suite.gaugeopt_target = gaugeopt_target
+
+    optimizer_target = processorspec_filename_or_object \
+        if isinstance(processorspec_filename_or_object, _Model) else exp_design.create_target_model()
+    # Note: could also try to get a target model from gaugeopt_suite...
 
     ds = _load_dataset(data_filename_or_set, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
-    proto = _proto.StandardGST(modes, gaugeopt_suite, gaugeopt_target, models_to_test,
+    proto = _proto.StandardGST(modes, gaugeopt_suite, models_to_test,
                                _get_gst_builders(advanced_options),
-                               _get_optimizer(advanced_options, exp_design.create_target_model()),
+                               _get_optimizer(advanced_options, optimizer_target),
                                _get_badfit_options(advanced_options), printer,
                                name=advanced_options.get('estimate_label', None))
+
+    # HACK to allow StandardGST to be run with explicit models that can't be described by a pspec (e.g. qutrits)
+    if isinstance(processorspec_filename_or_object, _Model):  # REMOVE this once a qutrit/qudit pspec exists.
+        proto._hack_target_model = processorspec_filename_or_object
 
     results = proto.run(data, mem_limit, comm)
     _output_to_pickle(results, output_pkl, comm)
@@ -720,7 +735,7 @@ def _load_dataset(data_filename_or_set, comm, verbosity):
                 with open(data_filename_or_set, 'rb') as pklfile:
                     ds = _pickle.load(pklfile)
             else:
-                ds = _io.load_dataset(data_filename_or_set, True, "aggregate", printer)
+                ds = _io.read_dataset(data_filename_or_set, True, "aggregate", printer)
             if comm is not None: comm.bcast(ds, root=0)
         else:
             ds = comm.bcast(None, root=0)
@@ -770,9 +785,15 @@ def _output_to_pickle(obj, output_pkl, comm):
 
 def _get_gst_initial_model(target_model, advanced_options):
     advanced_options = advanced_options or {}
+    user_model = None
     if advanced_options.get("starting_point", None) is None:
         advanced_options["starting_point"] = "LGST-if-possible"  # to keep backward compatibility
-    return _proto.GSTInitialModel(None, target_model, advanced_options.get("starting_point", None),
+    elif isinstance(advanced_options["starting_point"], _Model):
+        user_model = advanced_options["starting_point"]
+        advanced_options = advanced_options.copy()
+        advanced_options["starting_point"] = "User-supplied-Model"
+
+    return _proto.GSTInitialModel(user_model, target_model, advanced_options.get("starting_point", None),
                                   advanced_options.get('depolarize_start', 0),
                                   advanced_options.get('randomize_start', 0),
                                   advanced_options.get('lgst_gaugeopt_tol', 1e-6),

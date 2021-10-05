@@ -317,7 +317,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         
     #SPAM
     basis1Q = pygsti.obj.Basis("pp", 2)
-    prepFactors = [pygsti.obj.TPSPAMVec(pygsti.construction._basis_create_spam_vector("0", basis1Q))
+    prepFactors = [pygsti.obj.TPSPAMVec(pygsti.construction.create_spam_vector("0", "Q0", basis1Q))
                    for i in range(nQubits)]
     if prepNoise is not None:
         if isinstance(prepNoise,tuple): # use as (seed, strength)
@@ -331,7 +331,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
     
     factorPOVMs = []
     for i in range(nQubits):
-        effects = [(l, pygsti.construction._basis_create_spam_vector(l, basis1Q)) for l in ["0", "1"]]
+        effects = [(l, pygsti.construction.create_spam_vector(l, "Q0", basis1Q)) for l in ["0", "1"]]
         factorPOVMs.append(pygsti.obj.TPPOVM(effects))
     if povmNoise is not None:
         if isinstance(povmNoise,tuple): # use as (seed, strength)

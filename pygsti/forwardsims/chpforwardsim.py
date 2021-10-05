@@ -64,10 +64,12 @@ class CHPForwardSimulator(_WeakForwardSimulator):
         prep_label, op_labels, povm_label = self.model.split_circuit(circuit, erroron=('prep',))
         # Try to get unmarginalized POVM
         if povm_label is None:
-            default_povm_label = self.model._default_primitive_povm_layer_lbl(None)
-            povm_label = _Label(default_povm_label.name, state_space_labels=circuit.line_labels)
+            #OLD way (perhaps to avoid constructing a MarginalizedPOVM on many qubits?):
+            #default_povm_label = self.model._default_primitive_povm_layer_lbl(None)
+            #povm_label = _Label(default_povm_label.name, state_space_labels=circuit.line_labels)
+            povm_label = self.model._default_primitive_povm_layer_lbl(circuit.line_labels)
         assert (povm_label is not None), \
-            "Unable to get unmarginalized default POVM for %s" % str(circuit)
+            "Unable to get default POVM for %s" % str(circuit)
 
         # Use temporary file as per https://stackoverflow.com/a/8577225
         fd, path = _tf.mkstemp()
@@ -129,16 +131,17 @@ class CHPForwardSimulator(_WeakForwardSimulator):
             bitflip = _op.StaticStandardOp('Gxpi', 'pp', evotype='chp', state_space=None)
             for i, zval in enumerate(rho._zvals):
                 if zval:
-                    file_handle.write(bitflip.get_chp_str([target_offset + i]))
+                    file_handle.write(bitflip.chp_str)
+                    #OLD: file_handle.write(bitflip.get_chp_str([target_offset + i]))
 
         # Handle ComposedState of ComputationalBasisState + noise op with chp evotype
         def process_composed_state(rho, target_offset=0):
             if isinstance(rho, _state.ComposedState):
                 assert(rho._evotype == 'chp'), "ComposedState must have `chp` evotype for noise op"
                 process_computational_state(rho.state_vec, target_offset)
-                nqubits = rho.state_space.num_qubits
-                targets = _np.array(range(nqubits)) + target_offset
-                file_handle.write(rho.error_map.get_chp_str(targets))
+                #nqubits = rho.state_space.num_qubits
+                #targets = _np.array(range(nqubits)) + target_offset  # Stefan - this used to be an arg to chp_str (?)
+                file_handle.write(rho.error_map.chp_str)
             else:
                 process_computational_state(rho, target_offset)
 
@@ -174,7 +177,8 @@ class CHPForwardSimulator(_WeakForwardSimulator):
         # where most logic is based on simplify_effects and therefore expensive for many qubits)
         qubit_indices = None
         if povm_label.sslbls is not None:
-            flat_sslbls = [lbl for tbp in self.model.state_space_labels.labels for lbl in tbp]
+            flat_sslbls = [lbl for i in range(self.model.state_space.num_tensor_product_blocks)
+                           for lbl in self.model.state_space.tensor_product_block_labels(i)]
             qubit_indices = [flat_sslbls.index(q) for q in povm_label.sslbls]
 
         # Handle ComputationalBasisPOVM
@@ -193,9 +197,10 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 assert povm._evotype == 'chp', \
                     "ComposedPOVM must have `chp` evotype for noise op"
 
-                nqubits = povm.state_space.num_qubits
-                targets = _np.array(range(nqubits)) + target_offset
-                file_handle.write(povm.error_map.get_chp_str(targets))
+                #OLD REMOVE: nqubits = povm.state_space.num_qubits
+                #OLD REMOVE: targets = _np.array(range(nqubits)) + target_offset
+                #OLD REMOVE: file_handle.write(povm.error_map.get_chp_str(targets))
+                file_handle.write(povm.error_map.chp_str)
 
                 process_computational_povm(povm.base_povm, qubit_indices, target_offset)
             else:

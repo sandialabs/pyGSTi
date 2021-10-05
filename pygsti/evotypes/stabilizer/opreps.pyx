@@ -201,10 +201,10 @@ cdef class OpRepEmbedded(OpRep):
         self.state_space = state_space
 
     def __reduce__(self):
-        return (OpRepEmbedded, (self.embedded_rep, self.state_space, self.target_labels))
+        return (OpRepEmbedded, (self.state_space, self.target_labels, self.embedded_rep))
 
     def copy(self):
-        return OpRepEmbedded(self.embedded_rep.copy(), self.state_space, self.target_labels)
+        return OpRepEmbedded(self.state_space, self.target_labels, self.embedded_rep.copy())
 
 
 cdef class OpRepRepeated(OpRep):

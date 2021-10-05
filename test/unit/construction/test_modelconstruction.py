@@ -7,6 +7,7 @@ import pygsti.models.modelconstruction as mc
 import pygsti.modelmembers.operations as op
 import pygsti.tools.basistools as bt
 from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as GEEL
 from ..util import BaseCase
 
 
@@ -29,13 +30,14 @@ class ModelConstructionTester(BaseCase):
 
     def test_build_model(self):
         model1 = pygsti.models.ExplicitOpModel(['Q0'])
-        model1['rho0'] = mc._basis_create_spam_vector("0", model1.basis)
-        model1['Mdefault'] = pygsti.modelmembers.povms.UnconstrainedPOVM([('0', mc._basis_create_spam_vector("0", model1.basis)),
-                                                                          ('1', mc._basis_create_spam_vector("1", model1.basis))],
+        model1['rho0'] = mc.create_spam_vector("0", model1.state_space, model1.basis)
+        model1['Mdefault'] = pygsti.modelmembers.povms.UnconstrainedPOVM(
+            [('0', mc.create_spam_vector("0", model1.state_space, model1.basis)),
+             ('1', mc.create_spam_vector("1", model1.state_space, model1.basis))],
                                                                          evotype='default')
-        model1['Gi'] = mc._basis_create_operation(model1.state_space, "I(Q0)")
-        model1['Gx'] = mc._basis_create_operation(model1.state_space, "X(pi/2,Q0)")
-        model1['Gy'] = mc._basis_create_operation(model1.state_space, "Y(pi/2,Q0)")
+        model1['Gi'] = mc.create_operation("I(Q0)", model1.state_space, model1.basis)
+        model1['Gx'] = mc.create_operation("X(pi/2,Q0)", model1.state_space, model1.basis)
+        model1['Gy'] = mc.create_operation("Y(pi/2,Q0)", model1.state_space, model1.basis)
     
         model2 = mc.create_explicit_model_from_expressions(
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
@@ -87,12 +89,11 @@ class ModelConstructionTester(BaseCase):
         addlErr = pygsti.modelmembers.operations.FullTPOp(np.identity(4, 'd'))  # adds 12 params
         addlErr2 = pygsti.modelmembers.operations.FullTPOp(np.identity(4, 'd'))  # adds 12 params
 
+        mdl.operation_blks['gates']['Gi'].append(addlErr)
         mdl.operation_blks['gates']['Gx'].append(addlErr)
         mdl.operation_blks['gates']['Gy'].append(addlErr2)
-        mdl.operation_blks['gates']['Gi'].append(addlErr)
 
         # TODO: If you call mdl.num_params between the 3 calls above, this second one has an error...
-
         self.assertEqual(mdl.num_params, 24)
 
         # TODO: These are maybe not deterministic? Sometimes are swapped for me...
@@ -266,7 +267,7 @@ class ModelConstructionTester(BaseCase):
         )
         Gi_op = mdl_lb1.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
-        self.assertEqual(Gi_op.errorgen_coefficients(), {('H', 'X'): 0.1, ('S', 'Y'): 0.1})
+        self.assertEqual(Gi_op.errorgen_coefficients(), {GEEL('H', ['X'], [0]): 0.1, GEEL('S', ['Y'], [0]): 0.1})
         self.assertEqual(mdl_lb1.num_params, 2)
     
         # Test param passthrough
@@ -276,7 +277,7 @@ class ModelConstructionTester(BaseCase):
         )
         Gi_op = mdl_lb2.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
-        self.assertEqual(Gi_op.errorgen_coefficients(), {('H', 'X'): 0.1, ('S', 'Y'): 0.1})
+        self.assertEqual(Gi_op.errorgen_coefficients(), {GEEL('H', ['X'], [0]): 0.1, GEEL('S', ['Y'], [0]): 0.1})
         self.assertEqual(mdl_lb2.num_params, 2)
 
         mdl_prep1 = mc.create_crosstalk_free_model(
@@ -329,6 +330,7 @@ class ModelConstructionTester(BaseCase):
             sigmaZ = np.array([[1, 0], [0, -1]], 'd')
             return scipy.linalg.expm(1j * float(a) * sigmaZ)
         fn.udim = 2
+        fn.shape = (2,2)
 
         pspec = _ProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'), nonstd_gate_unitaries={'Ga': fn}, geometry='line')
         cfmdl = mc.create_crosstalk_free_model(pspec)
@@ -348,6 +350,7 @@ class ModelConstructionTester(BaseCase):
             sigmaX = np.array([[0, 1], [1, 0]], 'd')
             return scipy.linalg.expm(1j * float(theta) / 4 * sigmaX)
         fn.udim = 2
+        fn.shape = (2,2)
 
         class XRotationOpFactory(pygsti.modelmembers.operations.OpFactory):
             def __init__(self):
@@ -382,7 +385,7 @@ class ModelConstructionTester(BaseCase):
 
     def test_build_operation_raises_on_bad_parameterization(self):
         with self.assertRaises(ValueError):
-            mc._basis_create_operation([('Q0', 'Q1')], "X(pi,Q0)", "gm", parameterization="FooBar")
+            mc.create_operation("X(pi,Q0)", [('Q0', 'Q1')], "gm", parameterization="FooBar")
 
     def test_build_explicit_model_raises_on_bad_state(self):
         with self.assertRaises(ValueError):
@@ -429,18 +432,18 @@ class GateConstructionBase(object):
                             [0, 0, 0, -1]], 'd')
         cphaseMx = pygsti.tools.unitary_to_process_mx(Ucphase)
         self.CPHASE_chk = pygsti.tools.change_basis(cphaseMx, "std", self.basis)
-        self.ident = mc._basis_create_operation([('Q0',)], "I(Q0)", self.basis, param)
-        self.rotXa = mc._basis_create_operation([('Q0',)], "X(pi/2,Q0)", self.basis, param)
-        self.rotX2 = mc._basis_create_operation([('Q0',)], "X(pi,Q0)", self.basis, param)
-        self.rotYa = mc._basis_create_operation([('Q0',)], "Y(pi/2,Q0)", self.basis, param)
-        self.rotZa = mc._basis_create_operation([('Q0',)], "Z(pi/2,Q0)", self.basis, param)
-        self.rotNa = mc._basis_create_operation([('Q0',)], "N(pi/2,1.0,0.5,0,Q0)", self.basis, param)
-        self.iwL = mc._basis_create_operation([('Q0', 'L0')], "I(Q0)", self.basis, param)
-        self.CnotA = mc._basis_create_operation([('Q0', 'Q1')], "CX(pi,Q0,Q1)", self.basis, param)
-        self.CY = mc._basis_create_operation([('Q0', 'Q1')], "CY(pi,Q0,Q1)", self.basis, param)
-        self.CZ = mc._basis_create_operation([('Q0', 'Q1')], "CZ(pi,Q0,Q1)", self.basis, param)
-        self.CNOT = mc._basis_create_operation([('Q0', 'Q1')], "CNOT(Q0,Q1)", self.basis, param)
-        self.CPHASE = mc._basis_create_operation([('Q0', 'Q1')], "CPHASE(Q0,Q1)", self.basis, param)
+        self.ident = mc.create_operation("I(Q0)", [('Q0',)], self.basis, param)
+        self.rotXa = mc.create_operation("X(pi/2,Q0)", [('Q0',)], self.basis, param)
+        self.rotX2 = mc.create_operation("X(pi,Q0)", [('Q0',)], self.basis, param)
+        self.rotYa = mc.create_operation("Y(pi/2,Q0)", [('Q0',)], self.basis, param)
+        self.rotZa = mc.create_operation("Z(pi/2,Q0)", [('Q0',)], self.basis, param)
+        self.rotNa = mc.create_operation("N(pi/2,1.0,0.5,0,Q0)", [('Q0',)], self.basis, param)
+        self.iwL = mc.create_operation("I(Q0)", [('Q0', 'L0')], self.basis, param)
+        self.CnotA = mc.create_operation("CX(pi,Q0,Q1)", [('Q0', 'Q1')], self.basis, param)
+        self.CY = mc.create_operation("CY(pi,Q0,Q1)", [('Q0', 'Q1')], self.basis, param)
+        self.CZ = mc.create_operation("CZ(pi,Q0,Q1)", [('Q0', 'Q1')], self.basis, param)
+        self.CNOT = mc.create_operation("CNOT(Q0,Q1)", [('Q0', 'Q1')], self.basis, param)
+        self.CPHASE = mc.create_operation("CPHASE(Q0,Q1)", [('Q0', 'Q1')], self.basis, param)
 
     def test_construct_gates_static(self):
         self._construct_gates('static')
@@ -452,14 +455,11 @@ class GateConstructionBase(object):
     def test_construct_gates_full(self):
         self._construct_gates('full')
 
-        self.leakA = mc._basis_create_operation([('L0',), ('L1',), ('L2',)],
-                                        "LX(pi,0,1)", self.basis, 'full')
-        self.rotLeak = mc._basis_create_operation([('Q0',), ('L0',)],
-                                          "X(pi,Q0):LX(pi,0,2)", self.basis, 'full')
-        self.leakB = mc._basis_create_operation([('Q0',), ('L0',)], "LX(pi,0,2)", self.basis, 'full')
-        self.rotXb = mc._basis_create_operation([('Q0',), ('L0',), ('L1',)],
-                                        "X(pi,Q0)", self.basis, 'full')
-        self.CnotB = mc._basis_create_operation([('Q0', 'Q1'), ('L0',)], "CX(pi,Q0,Q1)", self.basis, 'full')
+        self.leakA = mc.create_operation("LX(pi,0,1)", [('L0',), ('L1',), ('L2',)], self.basis, 'full')
+        self.rotLeak = mc.create_operation("X(pi,Q0):LX(pi,0,2)", [('Q0',), ('L0',)], self.basis, 'full')
+        self.leakB = mc.create_operation("LX(pi,0,2)", [('Q0',), ('L0',)], self.basis, 'full')
+        self.rotXb = mc.create_operation("X(pi,Q0)", [('Q0',), ('L0',), ('L1',)], self.basis, 'full')
+        self.CnotB = mc.create_operation("CX(pi,Q0,Q1)", [('Q0', 'Q1'), ('L0',)], self.basis, 'full')
 
     def _test_leakA(self):
         leakA_ans = np.array([[0., 1., 0.],
@@ -547,27 +547,27 @@ class GateConstructionBase(object):
 
     def test_raises_on_bad_basis(self):
         with self.assertRaises(AssertionError):
-            mc._basis_create_operation([('Q0',)], "X(pi/2,Q0)", "FooBar")
+            mc.create_operation("X(pi/2,Q0)", [('Q0',)], "FooBar")
 
     def test_raises_on_bad_gate_name(self):
         with self.assertRaises(ValueError):
-            mc._basis_create_operation([('Q0',)], "FooBar(Q0)", self.basis)
+            mc.create_operation("FooBar(Q0)", [('Q0',)], self.basis)
 
     def test_raises_on_bad_state_spec(self):
         with self.assertRaises(ValueError):
-            mc._basis_create_operation([('A0',)], "I(Q0)", self.basis)
+            mc.create_operation("I(Q0)", [('A0',)], self.basis)
 
     def test_raises_on_bad_label(self):
         with self.assertRaises(KeyError):
-            mc._basis_create_operation([('Q0', 'L0')], "I(Q0,A0)", self.basis)
+            mc.create_operation("I(Q0,A0)", [('Q0', 'L0')], self.basis)
 
     def test_raises_on_qubit_state_space_mismatch(self):
         with self.assertRaises(ValueError):
-            mc._basis_create_operation([('Q0',), ('Q1',)], "CZ(pi,Q0,Q1)", self.basis)
+            mc.create_operation("CZ(pi,Q0,Q1)", [('Q0',), ('Q1',)], self.basis)
 
     def test_raises_on_LX_with_bad_basis_spec(self):
         with self.assertRaises(AssertionError):
-            mc._basis_create_operation([('Q0',), ('L0',)], "LX(pi,0,2)", "foobar")
+            mc.create_operation("LX(pi,0,2)", [('Q0',), ('L0',)], "foobar")
 
 
 class PauliGateConstructionTester(GateConstructionBase, BaseCase):

@@ -57,6 +57,7 @@ class CodecsTestCase(BaseTestCase):
         self.mdl_withInst = self.datagen_gateset.copy()
         self.mdl_withInst.instruments['Iz'] = pygsti.modelmembers.instruments.Instrument({'plus': Gmz_plus, 'minus': Gmz_minus})
         self.mdl_withInst.instruments['Iztp'] = pygsti.modelmembers.instruments.TPInstrument({'plus': Gmz_plus, 'minus': Gmz_minus})
+        self.mdl_withInst.num_params  # rebuilds parameter vector
 
         self.results = self.runSilent(pygsti.run_long_sequence_gst,
                                       self.ds, std.target_model(), self.fiducials, self.fiducials,

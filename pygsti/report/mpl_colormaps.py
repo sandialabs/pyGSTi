@@ -665,8 +665,13 @@ def special_keyplot(pygsti_fig, save_to, fontsize):
                 formatted_vals.append(val)
         return formatted_vals
 
+    # for suppression of "UserWarning: FixedFormatter should only be used together with FixedLocator" warning
+    import matplotlib.ticker as mticker
+
     axes.yaxis.tick_right()
     axes.xaxis.set_label_position("top")
+    axes.xaxis.set_major_locator(mticker.FixedLocator(axes.get_xticks().tolist()))  # avoids matplotlib warning (above)
+    axes.yaxis.set_major_locator(mticker.FixedLocator(axes.get_yticks().tolist()))  # when calling set_[x|y]ticklabels
     axes.set_xticklabels(_val_filter(prepStrs), rotation=90, ha='center', fontsize=fontsize)
     axes.set_yticklabels(list(reversed(_val_filter(effectStrs))), fontsize=fontsize)  # FLIP
     axes.set_xticks(_np.arange(len(prepStrs)) + .5)

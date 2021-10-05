@@ -15,7 +15,10 @@ from .verbosityprinter import VerbosityPrinter
 from .profiler import Profiler
 from .basis import Basis, BuiltinBasis, ExplicitBasis, TensorProdBasis, DirectSumBasis
 from .label import Label, CircuitLabel
+from .nicelyserializable import NicelySerializable
 from .outcomelabeldict import OutcomeLabelDict
 from .statespace import StateSpace, QubitSpace, ExplicitStateSpace
 from .resourceallocation import ResourceAllocation
 from .qubitgraph import QubitGraph
+from .errorgenbasis import ElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis, CompleteElementaryErrorgenBasis
+from .errorgenspace import ErrorgenSpace

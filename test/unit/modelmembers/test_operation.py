@@ -6,7 +6,7 @@ import scipy.sparse as sps
 import pygsti.modelmembers.operations as op
 import pygsti.tools.internalgates as itgs
 import pygsti.tools.optools as gt
-from pygsti.models.modelconstruction import _create_spam_vector, _create_operation
+from pygsti.models.modelconstruction import create_spam_vector, create_operation
 from pygsti.evotypes import Evotype
 from pygsti.modelmembers.instruments import TPInstrument
 from pygsti.modelmembers.states import FullState
@@ -313,7 +313,7 @@ class FullOpTester(MutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return _create_operation([(4,)], [('Q0',)], "X(pi/8,Q0)", "gm", parameterization="full")
+        return create_operation("X(pi/8,Q0)", [('Q0',)], "gm", parameterization="full")
 
     #REMOVED - we don't support .compose methods anymore
     #def test_composition(self):
@@ -370,7 +370,7 @@ class LinearlyParamOpTester(MutableDenseOpBase, BaseCase):
     @staticmethod
     def build_gate():
         # 'I' was 'D', 'full' was 'linear'
-        return _create_operation([(4,)], [('Q0',)], "I(Q0)", "gm", parameterization="full")
+        return create_operation("I(Q0)", [('Q0',)], "gm", parameterization="full")
 
     def test_constructor_raises_on_real_param_constraint_violation(self):
         baseMx = np.zeros((2, 2))
@@ -421,7 +421,7 @@ class TPOpTester(MutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return _create_operation([(4,)], [('Q0',)], "Y(pi/4,Q0)", "gm", parameterization="full TP")
+        return create_operation("Y(pi/4,Q0)", [('Q0',)], "gm", parameterization="full TP")
 
     #REMOVED - we don't support .compose methods anymore
     #def test_composition(self):
@@ -471,7 +471,7 @@ class StaticOpTester(ImmutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return _create_operation([(4,)], [('Q0',)], "Z(pi/3,Q0)", "gm", parameterization="static")
+        return create_operation("Z(pi/3,Q0)", [('Q0',)], "gm", parameterization="static")
 
     #REMOVED - we don't support .compose methods anymore
     #def test_compose(self):
@@ -802,8 +802,8 @@ class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):
         return inst['plus']
 
     def test_vector_conversion(self):
-        with self.assertRaises(ValueError):
-            self.gate.to_vector()
+        #with self.assertRaises(ValueError):
+        self.gate.to_vector()  # now to_vector is allowed
 
     def test_deriv_wrt_params(self):
         super(TPInstrumentOpTester, self).test_deriv_wrt_params()
@@ -824,7 +824,7 @@ class StochasticNoiseOpTester(BaseCase):
         expected_mx = np.identity(4); expected_mx[2, 2] = expected_mx[3, 3] = 0.98  # = 2*(0.1^2)
         self.assertArraysAlmostEqual(sop.to_dense(), expected_mx)
 
-        rho = _create_spam_vector([4], ['Q0'], "0", 'pp')
+        rho = create_spam_vector("0", "Q0", Basis.cast("pp", [4]))
         self.assertAlmostEqual(float(np.dot(rho.T, np.dot(sop.to_dense(), rho))),
                                0.99)  # b/c X dephasing w/rate is 0.1^2 = 0.01
 
@@ -840,6 +840,6 @@ class DepolarizeOpTester(BaseCase):
         expected_mx = np.identity(4); expected_mx[1, 1] = expected_mx[2, 2] = expected_mx[3, 3] = 0.96  # = 4*(0.1^2)
         self.assertArraysAlmostEqual(dop.to_dense(), expected_mx)
 
-        rho = _create_spam_vector([4], ['Q0'], "0", 'pp')
+        rho = create_spam_vector("0", "Q0", Basis.cast("pp", [4]))
         # b/c both X and Y dephasing rates => 0.01 reduction
         self.assertAlmostEqual(float(np.dot(rho.T, np.dot(dop.to_dense(), rho))), 0.98)

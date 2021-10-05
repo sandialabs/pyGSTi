@@ -516,6 +516,69 @@ MEASURE 2 ro[2]
         self.assertLess(abs(out['00'] - 0.5), 10**-10)
         self.assertLess(abs(out['11'] - 0.5), 10**-10)
 
+    def test_simulate_marginalization(self):
+        pspec = QubitProcessorSpec(4, ['Gx', 'Gy'], geometry='line')
+        mdl = mc.create_crosstalk_free_model(pspec)
+
+        #Same circuit with different line labels
+        c = circuit.Circuit("Gx:0Gy:0", line_labels=(0,1,2,3))
+        cp = circuit.Circuit("Gx:0Gy:0", line_labels=(1,2,0,3))
+        c01 = circuit.Circuit("Gx:0Gy:0", line_labels=(0,1))
+        c10 = circuit.Circuit("Gx:0Gy:0", line_labels=(1,0))
+        c0 = circuit.Circuit("Gx:0Gy:0", line_labels=(0,))
+
+        #Make sure mdl.probabilities and circuit.simulate give us the correct answers
+        pdict = mdl.probabilities(c)
+        self.assertEqual(len(pdict), 16)  # all of 0000 -> 1111
+        self.assertAlmostEqual(pdict['0000'], 0.5)
+        self.assertAlmostEqual(pdict['1000'], 0.5)
+
+        pdict = mdl.probabilities(cp)
+        self.assertEqual(len(pdict), 16)  # all of 0000 -> 1111
+        self.assertAlmostEqual(pdict['0000'], 0.5)
+        self.assertAlmostEqual(pdict['0010'], 0.5)
+
+        pdict = mdl.probabilities(c01)
+        self.assertEqual(len(pdict), 4)  # all of 00 -> 11
+        self.assertAlmostEqual(pdict['00'], 0.5)
+        self.assertAlmostEqual(pdict['10'], 0.5)
+
+        pdict = mdl.probabilities(c10)
+        self.assertEqual(len(pdict), 4)  # all of 00 -> 11
+        self.assertAlmostEqual(pdict['00'], 0.5)
+        self.assertAlmostEqual(pdict['01'], 0.5)
+
+        pdict = mdl.probabilities(c0)
+        self.assertEqual(len(pdict), 2)  # all of 0 -> 1
+        self.assertAlmostEqual(pdict['0'], 0.5)
+        self.assertAlmostEqual(pdict['1'], 0.5)
+
+        ## SAME results from circuit.simulate, except with smaller dicts (because 0s are dropped)
+        pdict = c.simulate(mdl)
+        self.assertEqual(len(pdict), 2)
+        self.assertAlmostEqual(pdict['0000'], 0.5)
+        self.assertAlmostEqual(pdict['1000'], 0.5)
+
+        pdict = cp.simulate(mdl)
+        self.assertEqual(len(pdict), 2)
+        self.assertAlmostEqual(pdict['0000'], 0.5)
+        self.assertAlmostEqual(pdict['0010'], 0.5)
+
+        pdict = c01.simulate(mdl)
+        self.assertEqual(len(pdict), 2)
+        self.assertAlmostEqual(pdict['00'], 0.5)
+        self.assertAlmostEqual(pdict['10'], 0.5)
+
+        pdict = c10.simulate(mdl)
+        self.assertEqual(len(pdict), 2)
+        self.assertAlmostEqual(pdict['00'], 0.5)
+        self.assertAlmostEqual(pdict['01'], 0.5)
+
+        pdict = c0.simulate(mdl)
+        self.assertEqual(len(pdict), 2)
+        self.assertAlmostEqual(pdict['0'], 0.5)
+        self.assertAlmostEqual(pdict['1'], 0.5)
+
 
 class CircuitOperationTester(BaseCase):
     # TODO merge with CircuitMethodTester
