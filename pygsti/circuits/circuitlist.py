@@ -66,7 +66,6 @@ class CircuitList(_NicelySerializable):
 
         Parameters
         ----------
-        circuit_rules
         circuits : list
             The list of circuits that constitutes the primary data held by this object.
 
@@ -77,6 +76,10 @@ class CircuitList(_NicelySerializable):
             empty dictionary (no aliases defined).  e.g. op_label_aliases['Gx^3'] =
             pygsti.obj.Circuit(['Gx','Gx','Gx'])
 
+        circuit_rules : list, optional
+            A list of `(find,replace)` 2-tuples which specify circuit-label replacement
+            rules.  Both `find` and `replace` are tuples of operation labels (or `Circuit` objects).
+
         circuit_weights : numpy.ndarray, optional
             If not None, an array of per-circuit weights (of length equal to the number of
             circuits) that are typically used to multiply the counts extracted for each circuit.
@@ -86,6 +89,7 @@ class CircuitList(_NicelySerializable):
         """
         self._circuits = tuple(map(_Circuit.cast, circuits))  # *static* container - can't add/append
         self.op_label_aliases = op_label_aliases
+        self.circuit_rules = circuit_rules
         self.circuit_weights = circuit_weights
         self.name = name  # an optional name for this circuit list
         self.uuid = _uuid.uuid4()  # like a persistent id(), useful for peristent (file) caches
