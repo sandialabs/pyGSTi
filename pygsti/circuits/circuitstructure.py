@@ -18,6 +18,7 @@ import numpy as _np
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.circuits.circuitconstruction import manipulate_circuit as _manipulate_circuit
 
 
 class CircuitPlaquette(_NicelySerializable):
@@ -41,14 +42,24 @@ class CircuitPlaquette(_NicelySerializable):
     op_label_aliases : dict, optional
         A dictionary of operation label aliases that is carried along
         for calls to :func:`expand_aliases`.
+
+    circuit_rules : list, optional
+        A list of `(find,replace)` 2-tuples which specify string replacement
+        rules.  Both `find` and `replace` are tuples of operation labels
+        (or `Circuit` objects).
     """
 
-    def __init__(self, elements, num_rows=None, num_cols=None, op_label_aliases=None):
+    def __init__(self, elements, num_rows=None, num_cols=None, op_label_aliases=None, circuit_rules=None):
         """
         Create a new CircuitPlaquette.
         """
-        self.elements = _collections.OrderedDict(elements)
+        self.circuit_rules = circuit_rules
         self.op_label_aliases = op_label_aliases
+        if self.circuit_rules is None:
+            self.elements = _collections.OrderedDict(elements)
+        else:
+            self.elements = _collections.OrderedDict([(k, _manipulate_circuit(c, self.circuit_rules))
+                                                      for k, c in elements.items()])
 
         if num_rows is None:
             num_rows = max([i for i, _ in elements]) + 1 if len(elements) > 0 else 0
@@ -61,6 +72,7 @@ class CircuitPlaquette(_NicelySerializable):
         state = super()._to_nice_serialization()
         state.update({'num_rows': self.num_rows,
                       'num_cols': self.num_cols,
+                      # NOTE: op_label_aliases and circuit_rules are taken care of by parent structure
                       })
         if self.__class__ == CircuitPlaquette:  # class comparison (use 'is'?)
             # then this call is acting as the top-level serialization, not a base-class call, so serialize elements:
@@ -70,16 +82,22 @@ class CircuitPlaquette(_NicelySerializable):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state, op_label_aliases=None, circuit_rules=None):
         # Note: it's ok that this method assumes the presence of 'elements', since it should only
         # be called to de-serialize a serialized actual CircuitPlaquette object and not a serialized
         # derived class object.
         from pygsti.io import stdinput as _stdinput
+        from pygsti.io.readers import convert_strings_to_circuits as _convert_strings_to_circuits
         std = _stdinput.StdInputParser()
         elements = {tuple(ij): std.parse_circuit(s, create_subcircuits=not _Circuit.default_expand_subcircuits)
                     for ij, s in state['elements']}
-        return cls(elements, state['num_rows'], state['num_cols'], op_label_aliases=None)
-        # Note: parent structure will set op_label_aliases, so we don't serialize it
+
+        #Note: circuit_rules have already been applied to serialized elements, so *don't* apply
+        # them again!  So pass `None` as circuit_rules to __init__ and set afterward (hack!):
+        ret = cls(elements, state['num_rows'], state['num_cols'], op_label_aliases, circuit_rules=None)
+        ret.circuit_rules = circuit_rules
+        return ret
+        # Note: parent structure pipes in op_label_aliases & circuit_rules here, so we don't serialize it
 
     @property
     def circuits(self):
@@ -263,9 +281,14 @@ class FiducialPairPlaquette(CircuitPlaquette):
     op_label_aliases : dict, optional
         A dictionary of operation label aliases that is carried along
         for calls to :func:`expand_aliases`.
+
+    circuit_rules : list, optional
+        A list of `(find,replace)` 2-tuples which specify string replacement
+        rules.  Both `find` and `replace` are tuples of operation labels
+        (or `Circuit` objects).
     """
 
-    def __init__(self, base, fidpairs, num_rows=None, num_cols=None, op_label_aliases=None):
+    def __init__(self, base, fidpairs, num_rows=None, num_cols=None, op_label_aliases=None, circuit_rules=None):
         """
         Create a new FiducialPairPlaquette.
         """
@@ -277,7 +300,7 @@ class FiducialPairPlaquette(CircuitPlaquette):
         self.fidpairs = fidpairs.copy()
         super().__init__(_collections.OrderedDict([((i, j), prep + base + meas)
                                                    for (i, j), (prep, meas) in fidpairs.items()]),
-                         num_rows, num_cols, op_label_aliases)
+                         num_rows, num_cols, op_label_aliases, circuit_rules)
 
     def _to_nice_serialization(self):  # memo holds already serialized objects
         state = super()._to_nice_serialization()
@@ -288,14 +311,14 @@ class FiducialPairPlaquette(CircuitPlaquette):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state, op_label_aliases=None, circuit_rules=None):
         from pygsti.io import stdinput as _stdinput
         std = _stdinput.StdInputParser()
         base = std.parse_circuit(state['base_circuit'], create_subcircuits=not _Circuit.default_expand_subcircuits)
         fidpairs = {tuple(ij): (std.parse_circuit(prepfid, create_subcircuits=not _Circuit.default_expand_subcircuits),
                                 std.parse_circuit(measfid, create_subcircuits=not _Circuit.default_expand_subcircuits))
                     for ij, prepfid, measfid in state['fiducial_pairs']}
-        return cls(base, fidpairs, state['num_rows'], state['num_cols'], op_label_aliases=None)
+        return cls(base, fidpairs, state['num_rows'], state['num_cols'], op_label_aliases, circuit_rules)
         # Note: parent structure will set op_label_aliases, so we don't serialize it
 
     def process_circuits(self, processor_fn, updated_aliases=None):
@@ -431,15 +454,20 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
     op_label_aliases : dict, optional
         A dictionary of operation label aliases that is carried along
         for calls to :func:`expand_aliases`.
+
+    circuit_rules : list, optional
+        A list of `(find,replace)` 2-tuples which specify string replacement
+        rules.  Both `find` and `replace` are tuples of operation labels
+        (or `Circuit` objects).
     """
 
-    def __init__(self, germ, power, fidpairs, num_rows=None, num_cols=None, op_label_aliases=None):
+    def __init__(self, germ, power, fidpairs, num_rows=None, num_cols=None, op_label_aliases=None, circuit_rules=None):
         """
         Create a new GermFiducialPairPlaquette.
         """
         self.germ = germ
         self.power = power
-        super().__init__(germ**power, fidpairs, num_rows, num_cols, op_label_aliases)
+        super().__init__(germ**power, fidpairs, num_rows, num_cols, op_label_aliases, circuit_rules)
 
     def _to_nice_serialization(self):  # memo holds already serialized objects
         state = super()._to_nice_serialization()
@@ -451,15 +479,16 @@ class GermFiducialPairPlaquette(FiducialPairPlaquette):
         return state
 
     @classmethod
-    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+    def _from_nice_serialization(cls, state, op_label_aliases=None, circuit_rules=None):
         from pygsti.io import stdinput as _stdinput
         std = _stdinput.StdInputParser()
         germ = std.parse_circuit(state['germ'], create_subcircuits=not _Circuit.default_expand_subcircuits)
         fidpairs = {tuple(ij): (std.parse_circuit(prepfid, create_subcircuits=not _Circuit.default_expand_subcircuits),
                                 std.parse_circuit(measfid, create_subcircuits=not _Circuit.default_expand_subcircuits))
                     for ij, prepfid, measfid in state['fiducial_pairs']}
-        return cls(germ, state['power'], fidpairs, state['num_rows'], state['num_cols'], op_label_aliases=None)
-        # Note: parent structure will set op_label_aliases, so we don't serialize it
+        return cls(germ, state['power'], fidpairs, state['num_rows'], state['num_cols'],
+                   op_label_aliases, circuit_rules)
+        # Note: parent structure pipes in op_label_aliases and circuit_rules, so we don't serialize them
 
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
@@ -604,9 +633,8 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         return cls({}, [], [], circuits_or_structure,
                    op_label_aliases, weights_dict, name)
 
-    def __init__(self, plaquettes, x_values, y_values, xlabel, ylabel,
-                 additional_circuits=None, op_label_aliases=None,
-                 circuit_weights_dict=None, additional_circuits_location='start', name=None):
+    def __init__(self, plaquettes, x_values, y_values, xlabel, ylabel, additional_circuits=None, op_label_aliases=None,
+                 circuit_rules=None, circuit_weights_dict=None, additional_circuits_location='start', name=None):
         # plaquettes is a dict of plaquettes whose keys are tuples of length 2
         self._plaquettes = _collections.OrderedDict(plaquettes)
         self.xs = x_values
@@ -640,10 +668,10 @@ class PlaquetteGridCircuitStructure(_CircuitList):
 
         circuit_weights = None if (circuit_weights_dict is None) else \
             _np.array([circuit_weights_dict.get(c, 0.0) for c in circuits], 'd')
-        super().__init__(circuits, op_label_aliases, circuit_weights, name)
+        super().__init__(circuits, op_label_aliases, circuit_rules, circuit_weights, name)
 
     def _to_nice_serialization(self):  # memo holds already serialized objects
-        assert(self.op_label_aliases is None), "We don't serialize members of op_label_aliases yet."
+        from pygsti.io.writers import convert_circuits_to_strings as _convert_circuits_to_strings
 
         def _gettype(vals):
             if all([isinstance(v, int) for v in vals]): return "int"
@@ -667,7 +695,8 @@ class PlaquetteGridCircuitStructure(_CircuitList):
                       'ytype': ytype,
                       'xlabel': self.xlabel,  # str
                       'ylabel': self.ylabel,  # str
-                      'op_label_aliases': self.op_label_aliases,  # dict
+                      'op_label_aliases': _convert_circuits_to_strings(self.op_label_aliases),
+                      'circuit_rules': _convert_circuits_to_strings(self.circuit_rules),
                       'additional_circuits_location': self._addl_location,
                       'plaquettes': [((_encodeval(xtype, x), _encodeval(ytype, y)), p.to_nice_serialization())
                                      for (x, y), p in self._plaquettes.items()],
@@ -690,6 +719,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
 
     @classmethod
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        from pygsti.io.readers import convert_strings_to_circuits as _convert_strings_to_circuits
         from pygsti.io import stdinput as _stdinput
         std = _stdinput.StdInputParser()
 
@@ -699,8 +729,11 @@ class PlaquetteGridCircuitStructure(_CircuitList):
                                                           create_subcircuits=not _Circuit.default_expand_subcircuits)
             raise ValueError("Unknown x/y type: %s" % str(typ))
 
+        op_label_aliases = _convert_strings_to_circuits(state['op_label_aliases'])
+        circuit_rules = _convert_strings_to_circuits(state['circuit_rules'])
+
         plaquettes = {(_decodeval(state['xtype'], x), _decodeval(state['ytype'], y)):
-                      CircuitPlaquette.from_nice_serialization(d)
+                      CircuitPlaquette.from_nice_serialization(d, op_label_aliases, circuit_rules)
                       for (x, y), d in state['plaquettes']}
         additional_circuits = [std.parse_circuit(s, create_subcircuits=not _Circuit.default_expand_subcircuits)
                                for s in state['additional_circuits']]
@@ -711,7 +744,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         yvalues = tuple([_decodeval(state['ytype'], y) for y in state['yvalues']])
 
         return cls(plaquettes, xvalues, yvalues, state['xlabel'], state['ylabel'],
-                   additional_circuits, state['op_label_aliases'], circuit_weights,
+                   additional_circuits, op_label_aliases, circuit_rules, circuit_weights,
                    state['additional_circuits_location'], name=state['name'])
 
     @property
@@ -813,8 +846,8 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         additional = list(filter(lambda c: c in circuits_to_keep, self._additional_circuits)) \
             if (circuits_to_keep is not None) else self._additional_circuits
         return PlaquetteGridCircuitStructure(plaquettes, xs, ys, self.xlabel, self.ylabel, additional,
-                                             self.op_label_aliases, circuit_weights_dict,
-                                             self._addl_location, self.name)
+                                             self.op_label_aliases, circuit_weights_dict=circuit_weights_dict,
+                                             additional_circuits_location=self._addl_location, name=self.name)
 
     def nested_truncations(self, axis='x', keep_rows_cols=False):
         """
@@ -893,8 +926,9 @@ class PlaquetteGridCircuitStructure(_CircuitList):
 
         circuit_weights_dict = {P(c): weight for c, weight in zip(self, self.circuit_weights)} \
             if (self.circuit_weights is not None) else None
-        return PlaquetteGridCircuitStructure(plaquettes, xs, ys, self.xlabel, self.ylabel, additional,
-                                             updated_aliases, circuit_weights_dict, self._addl_location, self.name)
+        return PlaquetteGridCircuitStructure(plaquettes, xs, ys, self.xlabel, self.ylabel, additional, updated_aliases,
+                                             circuit_weights_dict=circuit_weights_dict,
+                                             additional_circuits_location=self._addl_location, name=self.name)
 
     def copy(self):
         """
@@ -906,6 +940,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         """
         circuit_weights_dict = {c: weight for c, weight in zip(self, self.circuit_weights)} \
             if (self.circuit_weights is not None) else None
-        return PlaquetteGridCircuitStructure(self._plaquettes.copy(), self.xs[:], self.ys[:], self.xlabel,
-                                             self.ylabel, self._additional_circuits, self.op_label_aliases,
-                                             circuit_weights_dict, self._addl_location, self.name)
+        return PlaquetteGridCircuitStructure(self._plaquettes.copy(), self.xs[:], self.ys[:], self.xlabel, self.ylabel,
+                                             self._additional_circuits, self.op_label_aliases,
+                                             circuit_weights_dict=circuit_weights_dict,
+                                             additional_circuits_location=self._addl_location, name=self.name)

@@ -60,12 +60,13 @@ class CircuitList(_NicelySerializable):
             return circuits
         return cls(circuits)
 
-    def __init__(self, circuits, op_label_aliases=None, circuit_weights=None, name=None):
+    def __init__(self, circuits, op_label_aliases=None, circuit_rules=None, circuit_weights=None, name=None):
         """
         Create a CircuitList.
 
         Parameters
         ----------
+        circuit_rules
         circuits : list
             The list of circuits that constitutes the primary data held by this object.
 
@@ -90,10 +91,11 @@ class CircuitList(_NicelySerializable):
         self.uuid = _uuid.uuid4()  # like a persistent id(), useful for peristent (file) caches
 
     def _to_nice_serialization(self):  # memo holds already serialized objects
-        assert(self.op_label_aliases is None), "We don't serialize members of op_label_aliases yet."
+        from pygsti.io.writers import convert_circuits_to_strings as _convert_circuits_to_strings
         state = super()._to_nice_serialization()
         state.update({'name': self.name,
-                      'op_label_aliases': self.op_label_aliases,  # dict
+                      'op_label_aliases': _convert_circuits_to_strings(self.op_label_aliases),
+                      'circuit_rules': _convert_circuits_to_strings(self.circuit_rules),
                       'circuits': [c.str for c in self._circuits],
                       'circuit_weights': list(self.circuit_weights) if (self.circuit_weights is not None) else None,
                       'uuid': str(self.uuid)
@@ -102,12 +104,15 @@ class CircuitList(_NicelySerializable):
 
     @classmethod
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        from pygsti.io.readers import convert_strings_to_circuits as _convert_strings_to_circuits
         from pygsti.io import stdinput as _stdinput
         std = _stdinput.StdInputParser()
         circuits = [std.parse_circuit(s, create_subcircuits=_Circuit.default_expand_subcircuits)
                     for s in state['circuits']]
         circuit_weights = _np.array(state['circuit_weights'], 'd') if (state['circuit_weights'] is not None) else None
-        ret = cls(circuits, state['op_label_aliases'], circuit_weights, state['name'])
+        op_label_aliases = _convert_strings_to_circuits(state['op_label_aliases'])
+        circuit_rules = _convert_strings_to_circuits(state['circuit_rules'])
+        ret = cls(circuits, op_label_aliases, circuit_rules, circuit_weights, state['name'])
         ret.uuid = _uuid.UUID(state['uuid'])
         return ret
 

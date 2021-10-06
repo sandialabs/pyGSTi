@@ -21,6 +21,7 @@ from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitstructure import FiducialPairPlaquette as _FiducialPairPlaquette
 from pygsti.circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from pygsti.circuits.circuitconstruction import manipulate_circuits as _manipulate_circuits
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
@@ -443,10 +444,10 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
             pkey_dict[base_circuit] = (maxlen, germ)
             if power is None:  # no well-defined power, so just make a fiducial-pair plaquette
                 plaq = _FiducialPairPlaquette(base_circuit, fidpairs, len(meas_fiducials), len(prep_fiducials),
-                                              op_label_aliases)
+                                              op_label_aliases, circuit_rules)
             else:
                 plaq = _GermFiducialPairPlaquette(germ, power, fidpairs, len(meas_fiducials), len(prep_fiducials),
-                                                  op_label_aliases)
+                                                  op_label_aliases, circuit_rules)
             plaquette_dict[base_circuit] = plaq
         else:
             #Add to existing plaquette (assume we don't need to change number of rows/cols of plaquette)
@@ -458,11 +459,11 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                     new_fidpairs[(j, i)] = (prep, meas)
             if power is None:  # no well-defined power, so just make a fiducial-pair plaquette
                 plaquette_dict[base_circuit] = _FiducialPairPlaquette(base_circuit, new_fidpairs, len(meas_fiducials),
-                                                                      len(prep_fiducials), op_label_aliases)
+                                                                      len(prep_fiducials), op_label_aliases, circuit_rules)
             else:
                 plaquette_dict[base_circuit] = _GermFiducialPairPlaquette(germ, power, new_fidpairs,
                                                                           len(meas_fiducials), len(prep_fiducials),
-                                                                          op_label_aliases)
+                                                                          op_label_aliases, circuit_rules)
 
     printer = _VerbosityPrinter.create_printer(verbosity)
     if germ_length_limits is None: germ_length_limits = {}
@@ -485,6 +486,8 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
     else: opLabels = op_label_src
 
     lgst_list = _gsc.create_lgst_circuits(prep_fiducials, meas_fiducials, opLabels)
+    if circuit_rules is not None:
+        lgst_list = _manipulate_circuits(lgst_list, circuit_rules)
 
     allPossiblePairs = list(_itertools.product(range(len(prep_fiducials)),
                                                range(len(meas_fiducials))))
