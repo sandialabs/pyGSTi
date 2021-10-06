@@ -70,10 +70,6 @@ def _class_for_name(module_and_class_name):
 def _get_auxfile_ext(typ):
     #get expected extension
     if typ == 'text-circuit-list': ext = '.txt'
-    #elif typ == 'text-circuit-lists': ext = '.txt'
-    #elif typ == 'list-of-protocolobjs': ext = ''
-    #elif typ == 'dict-of-protocolobjs': ext = ''
-    #elif typ == 'dict-of-resultsobjs': ext = ''
     elif typ == 'dir-serialized-object': ext = ''  # a directory
     elif typ == 'partialdir-serialized-object': ext = ''  # a directory
     elif typ == 'serialized-object': ext = '.json'
@@ -83,7 +79,14 @@ def _get_auxfile_ext(typ):
     elif typ == 'pickle': ext = '.pkl'
     elif typ == 'none': ext = '.NA'
     elif typ == 'reset': ext = '.NA'
-    else: raise ValueError("Invalid aux-file type: %s" % typ)
+    else:
+        #DEPRECATED formats! REMOVE LATER
+        if typ == 'text-circuit-lists': ext = '.txt'
+        elif typ == 'list-of-protocolobjs': ext = ''
+        elif typ == 'dict-of-protocolobjs': ext = ''
+        elif typ == 'dict-of-resultsobjs': ext = ''
+        else:
+            raise ValueError("Invalid aux-file type: %s" % typ)
     return ext
 
 
@@ -216,6 +219,46 @@ def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
                     val[k] = v
                 else:
                     raise ValueError("Failed to load %d-th dictionary key: %s" % (i, str(k)))
+
+    elif cur_typ in ('text-circuit-lists', 'protocolobj', 'list-of-protocolobjs', 'dict-of-resultsobjs'):
+        # TODO LATER -- REMOVE this entire block - this is for backward compatibility only.
+        _warnings.warn(("Loading in an old and deprecated aux-file format - "
+                        "you should re-save this data to update the format!"))
+        ext = _get_auxfile_ext(cur_typ)
+        key = filenm
+
+        if cur_typ == 'text-circuit-lists':
+            i = 0; val = []
+            while True:
+                pth = root_dir / (key + str(i) + ext)
+                if not pth.exists(): break
+                if should_skip_loading(pth):
+                    val.append(None)
+                else:
+                    val.append(_load.load_circuit_list(pth))
+                i += 1
+
+        elif cur_typ == 'protocolobj':
+            protocol_dir = root_dir / (key + ext)
+            val = _cls_from_meta_json(protocol_dir).from_dir(protocol_dir, quick_load=quick_load)
+
+        elif cur_typ == 'list-of-protocolobjs':
+            i = 0; val = []
+            while True:
+                pth = root_dir / (key + str(i) + ext)
+                if not pth.exists(): break
+                val.append(_cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load)); i += 1
+
+        elif cur_typ == 'dict-of-protocolobjs':
+            keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
+            val = {k: _cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load) for k, pth in zip(keys, paths)}
+
+        elif cur_typ == 'dict-of-resultsobjs':
+            keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
+            val = {k: _cls_from_meta_json(pth)._from_dir_partial(pth, quick_load=quick_load)
+                   for k, pth in zip(keys, paths)}
+        else:
+            assert(False), "Should not get here!"
 
     else:
         #Simple types that just load the given file

@@ -382,8 +382,8 @@ class StockTermRep(TermRep):
             coeffrep = coeffrep.mult(t.coeff)
             pre_ops += t.pre_ops
             post_ops += t.post_ops
-        return TermRep(coeffrep, magnitude, logmag, first.pre_state, first.post_state,
-                       first.pre_effect, first.post_effect, pre_ops, post_ops)
+        return StockTermRep(coeffrep, magnitude, logmag, first.pre_state, first.post_state,
+                            first.pre_effect, first.post_effect, pre_ops, post_ops)
 
     def __init__(self, coeff, mag, logmag, pre_state, post_state,
                  pre_effect, post_effect, pre_ops, post_ops):
@@ -410,14 +410,14 @@ class StockTermRep(TermRep):
     def scalar_mult(self, x):
         coeff = self.coeff.copy()
         coeff.scale(x)
-        return TermRep(coeff, self.magnitude, self.logmagnitude,
-                       self.pre_state, self.post_state, self.pre_effect, self.post_effect,
-                       self.pre_ops, self.post_ops)
+        return StockTermRep(coeff, self.magnitude, self.logmagnitude,
+                            self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                            self.pre_ops, self.post_ops)
 
     def copy(self):
-        return TermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
-                       self.pre_state, self.post_state, self.pre_effect, self.post_effect,
-                       self.pre_ops, self.post_ops)
+        return StockTermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
+                            self.pre_state, self.post_state, self.pre_effect, self.post_effect,
+                            self.pre_ops, self.post_ops)
 
 
 StockTermDirectRep = StockTermRep

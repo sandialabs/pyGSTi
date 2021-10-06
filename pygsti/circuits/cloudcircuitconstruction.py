@@ -1595,7 +1595,12 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
     all_qubit_labels = processor_spec.qubit_labels  # generalize to 1st TPB labels (TODO)
     global_idle_lbl = processor_spec.global_idle_layer_label
 
-    evotype = 'statevec'  # could make this an arg, but only term-sim compatible evotypes allowed
+    try:
+        from pygsti.evotypes import statevec
+        evotype = 'statevec'  # could make this an arg, but only term-sim compatible evotypes allowed
+    except ImportError:
+        evotype = 'statevec_slow'
+
     model = _create_cloud_crosstalk_model_from_hops_and_weights(
         processor_spec, None,
         max_idle_weight, 0, maxhops, extra_weight_1_hops, extra_gate_weight,
@@ -1647,7 +1652,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         max_idle_weight, 0, maxhops, extra_weight_1_hops,
         extra_gate_weight, verbosity=printer - 5,
         simulator=_TermFSim(mode="taylor-order", max_order=1),
-        gate_type=parameterization, spam_type=parameterization, evotype="statevec",
+        gate_type=parameterization, spam_type=parameterization, evotype=evotype,
         errcomp_type="gates")
     idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
     # these are the params we want to amplify at first...
@@ -1731,7 +1736,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
                     max_idle_weight, 0, maxhops, extra_weight_1_hops,
                     extra_gate_weight, verbosity=printer - 5,
                     simulator=_TermFSim(mode="taylor-order", max_order=1),
-                    gate_type=parameterization, spam_type=parameterization, evotype="statevec", errcomp_type="gates")
+                    gate_type=parameterization, spam_type=parameterization, evotype=evotype, errcomp_type="gates")
                 sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
                 # these are the params we want to amplify...
                 idle_params = sidle_model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices
