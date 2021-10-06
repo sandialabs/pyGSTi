@@ -282,7 +282,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
         Parameters
         ----------
-        array_type : {"e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c"}
+        array_type : {"e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c", "cp", "cp2", "cpp"}
             The type of array to allocate, often corresponding to the array shape.  Let
             `nE` be the layout's number of elements, `nP1` and `nP2` be the number of
             parameters we differentiate with respect to (for first and second derivatives),
@@ -296,6 +296,9 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
             - `"jtj"`: (nP1, nP2)
             - `"jtf"`: (nP1,)
             - `"c"`: (nC,)
+            - `"cp"`: (nC, nP1)
+            - `"cp2"`: (nC, nP2)
+            - `"cpp"`: (nC, nP1, nP2)
             Note that, even though the `"p"` and `"jtf"` types are the same shape
             they are used for different purposes and are distributed differently
             when there are multiple processors.  The `"p"` type is for use with
@@ -324,6 +327,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         """
         # type can be "p", "dp" or "hp"
         nelements = self._size + extra_elements
+        ncircuits = self.num_circuits + extra_elements
         alloc_fn = _np.zeros if zero_out else _np.empty
         if array_type == 'e': shape = (nelements,)
         elif array_type == 'ep': shape = (nelements, self._param_dimensions[0])
@@ -333,7 +337,11 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         elif array_type == 'p': shape = (self._param_dimensions[0],)
         elif array_type == 'jtj': shape = (self._param_dimensions[0], self._param_dimensions[0])
         elif array_type == 'jtf': shape = (self._param_dimensions[0],)
-        elif array_type == 'c': shape = (self.num_circuits,)
+        elif array_type == 'c': shape = (ncircuits,)
+        elif array_type == 'cp': shape = (ncircuits, self._param_dimensions[0])
+        elif array_type == 'cp2': shape = (ncircuits, self._param_dimensions[1])
+        elif array_type == 'cpp':
+            shape = (ncircuits, self._param_dimensions[0], self._param_dimensions[1])
         else:
             raise ValueError("Invalid `array_type`: %s" % array_type)
 
@@ -376,7 +384,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
         Parameters
         ----------
-        array_type : ("e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c")
+        array_type : ("e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c", "cp", "cp2", "cpp")
             The type of array to allocate, often corresponding to the array shape.  See
             :method:`allocate_local_array` for a more detailed description.
 
