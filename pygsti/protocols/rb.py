@@ -739,6 +739,8 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                          for _ in range(circuits_per_depth)]
 
                 mirroring_type = circuit_type.split('-')[0]
+                if mirroring_type == 'cz+zxzxz':
+                    mirroring_type = 'clifford+zxzxz'
                 results = [(a, [b]) for a, b in [_mirroring.create_mirror_circuit(c, pspec, circ_type=mirroring_type)
                                                  for c in circs]]
 
