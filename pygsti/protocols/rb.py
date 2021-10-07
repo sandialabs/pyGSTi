@@ -733,8 +733,10 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                     # Default sampler arguments.
                     two_q_gate_args_lists = {'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}
 
+                one_q_gate_type = circuit_type.split('-')[-1]
+
                 circs = [_rc.sample_random_cz_zxzxz_circuit(pspec, l // 2, qubit_labels=qubit_labels,
-                                                            two_q_gate_density=two_q_gate_density,
+                                                            two_q_gate_density=two_q_gate_density, one_q_gate_type=one_q_gate_type,
                                                             two_q_gate_args_lists=two_q_gate_args_lists)
                          for _ in range(circuits_per_depth)]
 
