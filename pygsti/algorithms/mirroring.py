@@ -123,7 +123,7 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
     _, gate_inverse = pspec.compute_one_qubit_gate_relations()
     gate_inverse.update(pspec.compute_multiqubit_inversion_relations())  # add multiQ inverse
 
-    assert(circ_type in ('clifford+zxzxz', 'cz(theta)+zxzxz'))
+    assert(circ_type in ('clifford+zxzxz', 'cz(theta)+zxzxz')), '{} not a valid circ_type!'.format(circ_type)
 
     def compute_gate_inverse(gate_label):
 

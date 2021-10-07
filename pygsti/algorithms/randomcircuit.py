@@ -47,9 +47,9 @@ def sample_random_clifford_one_qubit_unitary_parameters():
     """
     TODO: docstring
     """
-    theta1 = _comp.mod_2pi(_np.random.randint(4) * _np.pi / 4)
-    theta2 = _comp.mod_2pi(_np.random.randint(4) * _np.pi / 4)
-    theta3 = _comp.mod_2pi(_np.random.randint(4) * _np.pi / 4)
+    theta1 = _comp.mod_2pi(_np.random.randint(4) * _np.pi / 2)
+    theta2 = _comp.mod_2pi(_np.random.randint(4) * _np.pi / 2)
+    theta3 = _comp.mod_2pi(_np.random.randint(4) * _np.pi / 2)
     return (theta1, theta2, theta3)
 
 
