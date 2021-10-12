@@ -368,8 +368,8 @@ def convert_strings_to_circuits(obj):
         if isinstance(x, (list, tuple)):
             if len(x) > 0 and x[0] == 'dict_items':  # then convert this list into a dictionary
                 return {_replace_strs_with_circuits(k): _replace_strs_with_circuits(v) for k, v in x[1:]}
-            else:  # normal list load
-                return [_replace_strs_with_circuits(el) for el in x]
+            else:  # normal list/tuple load -- we always load a tuple so it can work as a dict key
+                return tuple([_replace_strs_with_circuits(el) for el in x])
         if isinstance(x, dict):  # this case isn't written anymore - just to read old-format files (TODO REMOVE LATER)
             return {_replace_strs_with_circuits(k): _replace_strs_with_circuits(v) for k, v in x.items()}
         if isinstance(x, str):
