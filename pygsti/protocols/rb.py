@@ -724,7 +724,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                 results = _tools.mptools.starmap_with_kwargs(_rc.create_mirror_rb_circuit, circuits_per_depth,
                                                              num_processes, args_list, kwargs_list)
 
-            elif circuit_type in ('cz+zxzxz-clifford', 'clifford+zxzxz-haar', 'cz(theta)+zxzxz-haar'):
+            elif circuit_type in ('cz+zxzxz-clifford', 'clifford+zxzxz-haar', 'clifford+zxzxz-clifford', 'cz(theta)+zxzxz-haar'):
                 assert(sampler == 'edgegrab'), "Unless circuit_type = 'clifford' the only valid sampler is 'edgegrab'."
                 two_q_gate_density = samplerargs[0]
                 if len(samplerargs) >= 2:
