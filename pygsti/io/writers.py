@@ -636,19 +636,36 @@ def fill_in_empty_dataset_with_fake_data(dataset_filename, model, num_samples, s
     return ds
 
 
-def write_circuit_strings(filename, obj):
-    """ TODO: docstring - write various Circuit-containing standard objects with circuits
-        replaced by their string reps """
-    from pygsti.circuits import Circuit as _Circuit
+def convert_circuits_to_strings(obj):
+    """
+    Converts a list or dictionary potentially containing Circuit objects to a JSON-able one with circuit strings.
 
+    Parameters
+    ----------
+    obj : list or tuple or dict
+        The object to convert.
+
+    Returns
+    -------
+    object
+        A JSON-able object containing circuit string representations in place of Circuit objects.
+    """
+    from pygsti.circuits import Circuit as _Circuit
     def _replace_circuits_with_strs(x):
         if isinstance(x, (list, tuple)):
             return [_replace_circuits_with_strs(el) for el in x]
         if isinstance(x, dict):
-            return {_replace_circuits_with_strs(k): _replace_circuits_with_strs(v) for k, v in x.items()}
+            return ['dict_items'] + [(_replace_circuits_with_strs(k), _replace_circuits_with_strs(v))
+                                     for k, v in x.items()]
         return x.str if isinstance(x, _Circuit) else x
 
-    json_dict = _replace_circuits_with_strs(obj)
+    return _replace_circuits_with_strs(obj)
+
+
+def write_circuit_strings(filename, obj):
+    """ TODO: docstring - write various Circuit-containing standard objects with circuits
+        replaced by their string reps """
+    json_dict = convert_circuits_to_strings(obj)
     if str(filename).endswith('.json'):
         with open(filename, 'w') as f:
             _json.dump(json_dict, f, indent=4)

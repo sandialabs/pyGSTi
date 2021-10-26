@@ -76,10 +76,10 @@ class OpRepDenseUnitary(OpRep):
             raise ValueError("Invalid `on_space` argument: %s" % str(on_space))
 
     def acton(self, state):
-        return _StateRepDensePure(_np.dot(self.base, state.base), state.state_space, state.basis)
+        return _StateRepDensePure(_np.dot(self.base, state.data), state.state_space, state.basis)
 
     def adjoint_acton(self, state):
-        return _StateRepDensePure(_np.dot(_np.conjugate(self.base.T), state.base),
+        return _StateRepDensePure(_np.dot(_np.conjugate(self.base.T), state.data),
                                   state.state_space, state.basis)
 
     def __str__(self):
@@ -137,16 +137,16 @@ class OpRepSum(OpRep):
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        output_state = _StateRepDensePure(_np.zeros(state.base.shape, complex), state.state_space, state.basis)
+        output_state = _StateRepDensePure(_np.zeros(state.data.shape, complex), state.state_space, state.basis)
         for f in self.factor_reps:
-            output_state.base += f.acton(state).base
+            output_state.data += f.acton(state).data
         return output_state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        output_state = _StateRepDensePure(_np.zeros(state.base.shape, complex), state.state_space, state.basis)
+        output_state = _StateRepDensePure(_np.zeros(state.data.shape, complex), state.state_space, state.basis)
         for f in self.factor_reps:
-            output_state.base += f.adjoint_acton(state).base
+            output_state.data += f.adjoint_acton(state).data
         return output_state
 
 
@@ -182,6 +182,7 @@ class OpRepEmbedded(OpRep):
         blocksizes = _np.array([_np.product(state_space.tensor_product_block_udimensions(k))
                                 for k in range(nBlocks)], _np.int64)
 
+        self.target_labels = target_labels
         self.embedded_rep = embedded_rep
         self.num_basis_els = numBasisEls
         self.action_inds = actionInds
@@ -208,11 +209,11 @@ class OpRepEmbedded(OpRep):
         offset = 0
         for iBlk, blockSize in enumerate(self.blocksizes):
             if iBlk != self.active_block_index:
-                output_state.base[offset:offset + blockSize] = state.base[offset:offset + blockSize]  # identity op
+                output_state.data[offset:offset + blockSize] = state.data[offset:offset + blockSize]  # identity op
             offset += blockSize
 
     def acton(self, state):
-        output_state = _StateRepDensePure(_np.zeros(state.base.shape, complex), state.state_space, state.basis)
+        output_state = _StateRepDensePure(_np.zeros(state.data.shape, complex), state.state_space, state.basis)
         offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
@@ -224,9 +225,10 @@ class OpRepEmbedded(OpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = _StateRepDensePure(state.base[inds], state.state_space, basis=None)
-            embedded_outstate = self.embedded.acton(embedded_instate)
-            output_state.base[inds] += embedded_outstate.base
+            embedded_instate = _StateRepDensePure(state.data[inds],
+                                                  state.state_space.create_subspace(self.target_labels), basis=None)
+            embedded_outstate = self.embedded_rep.acton(embedded_instate)
+            output_state.data[inds] += embedded_outstate.data
 
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
@@ -235,7 +237,7 @@ class OpRepEmbedded(OpRep):
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
-        output_state = _StateRepDensePure(_np.zeros(state.base.shape, complex), state.state_space, state.basis)
+        output_state = _StateRepDensePure(_np.zeros(state.data.shape, complex), state.state_space, state.basis)
         offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
@@ -247,9 +249,10 @@ class OpRepEmbedded(OpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = _StateRepDensePure(state.base[inds], state.state_space, basis=None)
-            embedded_outstate = self.embedded.adjoint_acton(embedded_instate)
-            output_state.base[inds] += embedded_outstate.base
+            embedded_instate = _StateRepDensePure(state.data[inds],
+                                                  state.state_space.create_subspace(self.target_labels), basis=None)
+            embedded_outstate = self.embedded_rep.adjoint_acton(embedded_instate)
+            output_state.data[inds] += embedded_outstate.data
 
         #act on other blocks trivially:
         self._acton_other_blocks_trivially(output_state, state)
