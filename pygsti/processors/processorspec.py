@@ -22,6 +22,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.baseobjs import qubitgraph as _qgraph
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.modelmembers.operations import OpFactory
 
 
 class ProcessorSpec(_NicelySerializable):
@@ -741,7 +742,7 @@ class QubitProcessorSpec(ProcessorSpec):
         """The gate names that correspond to idle operations."""
         ret = []
         for gn, unitary in self.gate_unitaries.items():
-            if callable(unitary): continue  # factories can't be idle gates
+            if callable(unitary) or isinstance(unitary, OpFactory): continue  # factories can't be idle gates
             #TODO: add case for (unitary is None) if this is interpreted as a global idle
             if isinstance(unitary, (int, _np.int64)) or _np.allclose(unitary, _np.identity(unitary.shape[0], 'd')):
                 ret.append(gn)
