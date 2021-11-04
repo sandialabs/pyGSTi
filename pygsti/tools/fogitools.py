@@ -485,7 +485,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         # So dot(gauge_action.T, q) = dot(q.T, gauge_action) = 0.  Thus
 
                         #Mathematically:
-                        # let fogi_dir.T = int_vec.T * pinv(ga_A) - int_vec.T * pinv(ga_B).T so that:
+                        # let fogi_dir.T = int_vec.T * pinv(ga_A) - int_vec.T * pinv(ga_B) so that:
                         # dot(fogi_dir.T, gauge_action) = int_vec.T * (pinv(ga_A) - pinv(ga_B)) * gauge_action
                         #                               = (I - I) = 0
                         # (A,B are faithful reps of gauge on intersection space, so pinv(ga_A) * ga_A
