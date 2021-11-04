@@ -211,6 +211,16 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
             self._outcomes[i_unique] = tuple(outcomes)
             self._element_indices[i_unique] = _slct.list_to_slice(elindices, array_ok=True)
 
+#    def hotswap_circuits(self, circuits, unique_complete_circuits=None):
+#        self.circuits = circuits if isinstance(circuits, _CircuitList) else _CircuitList(circuits)
+#        unique_circuits_dict = {}
+#        for orig_i, unique_i in self._to_unique.items():
+#            unique_circuits_dict[unique_i] = self.circuits[orig_i]
+#        self._unique_circuits = [unique_circuits_dict[i] for i in range(len(unique_circuits_dict))]
+#        self._unique_circuit_index = _collections.OrderedDict(
+#            [(c, i) for i, c in enumerate(self._unique_circuits)])  # original circuits => unique circuit indices
+#        self._unique_complete_circuits = unique_complete_circuits  # Note: can be None
+
     def _to_nice_serialization(self):
         elindex_outcome_tuples = []
         for i_unique, outcomes in self._outcomes.items():
