@@ -233,7 +233,7 @@ class OpFactory(_gm.ModelMember):
 
     def __str__(self):
         s = "%s object with dimension %d and %d params" % (
-            self.__class__.__name__, self.dim, self.num_params)
+            self.__class__.__name__, self.state_space.dim, self.num_params)
         return s
 
     #Note: to_vector, from_vector, and num_params are inherited from
