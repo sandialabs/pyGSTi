@@ -387,6 +387,27 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         Direct access to the underlying process matrix data.
     """
 
+    @classmethod
+    def quick_init(cls, unitary_mx, superop_mx, basis, evotype, state_space):
+        # mx must be a numpy array for a unitary operator
+        # state_space as StateSpace
+        # evotyp an Evotype
+        # basis a Basis
+        self = cls.__new__(cls)
+        try:
+            rep = evotype.create_dense_unitary_rep(mx, basis, state_space)
+            self._reptype = 'unitary'
+            self._unitary = None
+        except Exception:
+            rep = evotype.create_dense_superop_rep(superop_mx, state_space)
+            self._reptype = 'superop'
+            self._unitary = unitary_mx
+
+        self._basis = basis
+        _LinearOperator.__init__(self, rep, evotype)
+        DenseOperatorInterface.__init__(self)
+        return self
+
     def __init__(self, mx, basis, evotype, state_space):
         """ Initialize a new LinearOperator """
         mx = _LinearOperator.convert_to_matrix(mx)

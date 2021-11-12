@@ -489,8 +489,8 @@ class _SimpleCompLayerRules(_LayerRules):
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
             ret = _op.ComposedOp(gblIdle + [self._layer_component_operation(model, l, caches['op-layers'])
                                             for l in components],
-                                 evotype=model.evotype, state_space=model.state_space)
-            model._init_virtual_obj(ret)  # so ret's gpindices get set
+                                 evotype=model.evotype, state_space=model.state_space, allocated_to_parent=model)
+            model._init_virtual_obj(ret)  # so ret's gpindices get set - I don't think this is needed...
 
         caches['complete-layers'][layerlbl] = ret  # cache the final label value
         return ret

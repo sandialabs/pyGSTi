@@ -326,8 +326,10 @@ def mapfill_dprobs_atom(fwdsim,
     probs = np.empty(nEls, 'd') #must be contiguous!
     probs2 = np.empty(nEls, 'd') #must be contiguous!
 
+    #print("MAPFILL DPROBS ATOM 1"); t=pytime.time(); t0=pytime.time()
     dm_mapfill_probs(probs, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
                      elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
+    #print("MAPFILL DPROBS ATOM 2 %.3fs" % (pytime.time() - t)); t=pytime.time()
 
     shared_mem_leader = resource_alloc.is_host_leader
 
@@ -338,6 +340,7 @@ def mapfill_dprobs_atom(fwdsim,
     for i in range(fwdsim.model.num_params):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
+            #print("MAPFILL DPROBS ATOM 3 (i=%d) %.3fs elapssed=%.1fs" % (i, pytime.time() - t, pytime.time() - t0)); t=pytime.time()
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
             fwdsim.model.from_vector(vec, close=True)
@@ -350,6 +353,7 @@ def mapfill_dprobs_atom(fwdsim,
                 #_fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)  # I don't think this is needed
                 array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
 
+    #print("MAPFILL DPROBS ATOM 4 elapsed=%.1fs" % (pytime.time() - t0))
     fwdsim.model.from_vector(orig_vec, close=True)
     free_rhocache(rho_cache)  #delete cache entries
 

@@ -452,6 +452,9 @@ class OpModel(Model):
     #Whether to perform extra parameter-vector integrity checks
     _pcheck = False
 
+    #Experimental: whether to call .from_vector on operation *cache* elements as part of model.from_vector call
+    _call_fromvector_on_cache = True
+
     def __init__(self, state_space, basis, evotype, layer_rules, simulator="auto"):
         """
         Creates a new OpModel.  Rarely used except from derived classes `__init__` functions.
@@ -671,9 +674,15 @@ class OpModel(Model):
                 obj.from_vector(ops_paramvec[obj.gpindices], dirty_value=False)
                 #object is known to be consistent with _paramvec
 
+            # Call from_vector on elements of the cache
+            if self._call_fromvector_on_cache:
+                for opcache in self._opcaches.values():
+                    for obj in opcache.values():
+                        obj.from_vector(ops_paramvec[obj.gpindices], dirty_value=False)
+
             self.dirty = False
             self._paramvec[:] = self._ops_paramvec_to_model_paramvec(ops_paramvec)
-            self._reinit_opcaches()  # changes to parameter vector structure invalidate cached ops
+            #self._reinit_opcaches()  # this shouldn't be necessary
 
         if OpModel._pcheck: self._check_paramvec()
 
@@ -1078,9 +1087,10 @@ class OpModel(Model):
             # dirty_value=False => obj.dirty = False b/c object is known to be consistent with _paramvec
 
         # Call from_vector on elements of the cache
-        for opcache in self._opcaches.values():
-            for obj in opcache.values():
-                obj.from_vector(w[obj.gpindices], close, dirty_value=False)
+        if self._call_fromvector_on_cache:
+            for opcache in self._opcaches.values():
+                for obj in opcache.values():
+                    obj.from_vector(w[obj.gpindices], close, dirty_value=False)
 
         if OpModel._pcheck: self._check_paramvec()
 

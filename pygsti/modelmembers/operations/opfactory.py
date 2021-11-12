@@ -21,7 +21,9 @@ from pygsti.modelmembers import povms as _povm
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs import basis as _basis
 from pygsti.evotypes import Evotype as _Evotype
+from pygsti.tools import optools as _ot
 
 
 def op_from_factories(factory_dict, lbl):
@@ -163,7 +165,7 @@ class OpFactory(_gm.ModelMember):
         # assign the created operation the same indices as we have.
         # (so we don't call model._init_virtual_obj as there's no need)
         obj.set_gpindices(self.gpindices, self.parent)
-        obj.from_vector(self.to_vector())
+        obj.from_vector(self.to_vector(), dirty_value=False)
         return obj
 
     def create_simplified_op(self, args=None, sslbls=None, item_lbl=None):
@@ -327,8 +329,12 @@ class EmbeddedOpFactory(OpFactory):
                                  "operations with given `sslbls` (these are already fixed!)")
 
         op = self.embedded_factory.create_op(args, sslbls)  # Note: will have its gpindices set already
-        embedded_op = _EmbeddedOp(self.state_space, self.target_labels, op)
-        embedded_op.set_gpindices(self.gpindices, self.parent)  # Overkill, since embedded op already has indices set?
+        embedded_op = _EmbeddedOp(self.state_space, self.target_labels, op, allocated_to_parent=self.parent)
+        #embedded_op.set_gpindices(self.gpindices, self.parent)  # Overkill, since embedded op already has indices set?
+        # Note - adding allocated_to_parent above and commenting out set_gpindices should be fine b/c
+        # 1) other factories always produce allocated ops_only_circuit, and
+        # 2) when this factory is allocated (maybe assert(self.parent is not None)?), it ensures submembers are
+
         return embedded_op
 
     def submembers(self):
@@ -640,8 +646,11 @@ class ComposedOpFactory(OpFactory):
             Instrument, or POVM, depending on the label requested.
         """
         ops_to_compose = [f.create_op(args, sslbls) if is_f else f for is_f, f in zip(self.is_factory, self.factors)]
-        op = _ComposedOp(ops_to_compose, self.evotype, self.state_space)
-        op.set_gpindices(self.gpindices, self.parent)  # Overkill, since composed ops already have indices set?
+        op = _ComposedOp(ops_to_compose, self.evotype, self.state_space, allocated_to_parent=self.parent)
+        #op.set_gpindices(self.gpindices, self.parent)  # Overkill, since composed ops already have indices set?
+        # Note - adding allocated_to_parent above and commenting out set_gpindices should be fine b/c
+        # 1) other factories always produce allocated ops_only_circuit, and
+        # 2) when this factory is allocated (maybe assert(self.parent is not None)?), it ensures submembers are
         return op
 
     def submembers(self):
@@ -749,9 +758,14 @@ class UnitaryOpFactory(OpFactory):
     """
 
     def __init__(self, fn, state_space, superop_basis="pp", evotype="densitymx"):
-        self.basis = superop_basis
-        self.fn = fn
         state_space = _statespace.StateSpace.cast(state_space)
+        self.basis = _basis.Basis.cast(superop_basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
+
+        # Compute transform matrices once and for all here, to speed up create_object calls
+        std_basis = _basis.BuiltinBasis('std', state_space.dim, sparse=self.basis.sparse)
+        self.transform_std_to_basis = std_basis.create_transform_matrix(self.basis)
+        self.transform_basis_to_std = self.basis.create_transform_matrix(std_basis)
+        self.fn = fn
         super(UnitaryOpFactory, self).__init__(state_space, evotype)
 
     def create_object(self, args=None, sslbls=None):
@@ -778,4 +792,7 @@ class UnitaryOpFactory(OpFactory):
         """
         assert(sslbls is None), "UnitaryOpFactory.create_object must be called with `sslbls=None`!"
         U = self.fn(args)
-        return _StaticUnitaryOp(U, self.basis, self.evotype, self.state_space)
+        # Expanded call to _bt.change_basis(_ot.unitary_to_process_mx(U), 'std', self.basis) for speed
+        std_superop = _ot.unitary_to_process_mx(U)
+        superop_mx = _np.dot(self.transform_std_to_basis, _np.dot(std_superop, self.transform_basis_to_std))
+        return _StaticUnitaryOp.quick_init(U, superop_mx, self.basis, self.evotype, self.state_space)
