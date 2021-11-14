@@ -12,6 +12,7 @@ Defines the Label class
 
 import itertools as _itertools
 import numbers as _numbers
+import sys as _sys
 
 _debug_record = {}
 
@@ -240,12 +241,12 @@ class LabelTup(Label, tuple):
         integerized_sslbls = []
         for ssl in state_space_labels:
             try: integerized_sslbls.append(int(ssl))
-            except: integerized_sslbls.append(ssl)
+            except: integerized_sslbls.append(_sys.intern(ssl))
 
         # Regardless of whether the input is a list, tuple, or int, the state space labels
         # (qubits) that the item/gate acts on are stored as a tuple (because tuples are immutable).
         sslbls = tuple(integerized_sslbls)
-        tup = (name,) + sslbls
+        tup = (_sys.intern(name),) + sslbls
         return tuple.__new__(cls, tup)
 
     __new__ = tuple.__new__
@@ -511,12 +512,12 @@ class LabelTupWithTime(Label, tuple):
         integerized_sslbls = []
         for ssl in state_space_labels:
             try: integerized_sslbls.append(int(ssl))
-            except: integerized_sslbls.append(ssl)
+            except: integerized_sslbls.append(_sys.intern(ssl))
 
         # Regardless of whether the input is a list, tuple, or int, the state space labels
         # (qubits) that the item/gate acts on are stored as a tuple (because tuples are immutable).
         sslbls = tuple(integerized_sslbls)
-        tup = (name,) + sslbls
+        tup = (_sys.intern(name),) + sslbls
         return cls.__new__(cls, tup, time)
 
     def __new__(cls, tup, time=0.0):
@@ -1790,13 +1791,13 @@ class LabelTupWithArgs(Label, tuple):
         integerized_sslbls = []
         for ssl in state_space_labels:
             try: integerized_sslbls.append(int(ssl))
-            except: integerized_sslbls.append(ssl)
+            except: integerized_sslbls.append(_sys.intern(ssl))
 
         # Regardless of whether the input is a list, tuple, or int, the state space labels
         # (qubits) that the item/gate acts on are stored as a tuple (because tuples are immutable).
         sslbls = tuple(integerized_sslbls)
         args = tuple(args)
-        tup = (name, 2 + len(args)) + args + sslbls  # stores: (name, K, args, sslbls)
+        tup = (_sys.intern(name), 2 + len(args)) + args + sslbls  # stores: (name, K, args, sslbls)
         # where K is the index of the start of the sslbls (or 1 more than the last arg index)
 
         return cls.__new__(cls, tup, time)
