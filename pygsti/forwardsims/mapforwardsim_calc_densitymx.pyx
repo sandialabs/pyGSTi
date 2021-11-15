@@ -28,6 +28,12 @@ from ..tools import slicetools as _slct
 #from ..tools import optools as _ot
 from ..tools.matrixtools import _fas
 
+#DEBUG REMOVE MEMORY PROFILING
+#import os, psutil
+#process = psutil.Process(os.getpid())
+#def print_mem_usage(prefix):
+#    print("%s: mem usage = %.3f GB" % (prefix, process.memory_info().rss / (1024.0**3)))
+
 #Use 64-bit integers
 ctypedef long long INT
 ctypedef unsigned long long UINT
@@ -176,6 +182,17 @@ def mapfill_probs_atom(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to_fil
     cdef vector[vector[INT]] final_indices_per_circuit = convert_and_wrap_dict_of_intlists(
         layout_atom.elindices_by_expcircuit, dest_indices)
 
+    #DEBUG REMOVE
+    #print_mem_usage("MAPFILL PROBS begin")
+    #for i in [1808, 419509, 691738, 497424]:
+    #    from ..evotypes.densitymx.opreps import OpRepComposed
+    #    op = operationreps[i]
+    #    if isinstance(op.embedded_rep, OpRepComposed):
+    #        extra = " factors = " + ', '.join([str(type(opp)) for opp in op.embedded_rep.factor_reps])
+    #    else:
+    #        extra = ""
+    #    print("ID ",i,str(type(op)),str(type(op.embedded_rep)), extra)
+
     if shared_mem_leader:
         #Note: dm_mapfill_probs could have taken a resource_alloc to employ multiple cpus to do computation.
         # Since array_fo_fill is assumed to be shared mem it would need to only update `array_to_fill` *if*
@@ -215,6 +232,7 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
     #Invariants required for proper memory management:
     # - upon loop entry, prop2 is allocated and prop1 is not (it doesn't "own" any memory)
     # - all rho_cache entries have been allocated via "new"
+    #REMOVE print("MAPFILL PROBS begin cfn")
     for k in range(<INT>c_layout_atom.size()):
         t0 = pytime.time() # DEBUG
         intarray = c_layout_atom[k]
@@ -222,7 +240,7 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
         istart = intarray[1]
         icache = intarray[2]
 
-        #print("mapfill_probs_block: BEGIN %d of %d: sz=%d" % (k, c_layout_atom.size(), intarray.size()))
+        #REMOVE print_mem_usage("mapfill_probs_block: BEGIN %d of %d: sz=%d" % (k, c_layout_atom.size(), intarray.size()))
 
         if istart == -1:
             init_state = c_rhoreps[intarray[3]]
@@ -244,7 +262,10 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
         for l in range(iFirstOp,<INT>intarray.size()): #during loop, both prop1 & prop2 are alloc'd
             #print "begin acton %d: %.2fs since last, %.2fs elapsed" % (l-2,pytime.time()-t1,pytime.time()-t0) # DEBUG
             #t1 = pytime.time() #DEBUG
+
             c_opreps[intarray[l]].acton(prop1,prop2)
+            #REMOVE print(" -> after ", intarray[l], " mem bytes = ",process.memory_info().rss)
+
             #print " post-act prop2:"; print [ prop2._dataptr[t] for t in range(4) ]
             #print("Acton %d (oprep index %d): %.3fs" % (l, intarray[l], pytime.time() - t1))
             tprop = prop1; prop1 = prop2; prop2 = tprop # swap prop1 <-> prop2
@@ -326,10 +347,12 @@ def mapfill_dprobs_atom(fwdsim,
     probs = np.empty(nEls, 'd') #must be contiguous!
     probs2 = np.empty(nEls, 'd') #must be contiguous!
 
-    #print("MAPFILL DPROBS ATOM 1"); t=pytime.time(); t0=pytime.time()
+    #if resource_alloc.comm_rank == 0:
+    #    print("MAPFILL DPROBS ATOM 1"); t=pytime.time(); t0=pytime.time()
     dm_mapfill_probs(probs, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
                      elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
-    #print("MAPFILL DPROBS ATOM 2 %.3fs" % (pytime.time() - t)); t=pytime.time()
+    #if resource_alloc.comm_rank == 0:
+    #    print("MAPFILL DPROBS ATOM 2 %.3fs" % (pytime.time() - t)); t=pytime.time()
 
     shared_mem_leader = resource_alloc.is_host_leader
 
@@ -340,7 +363,8 @@ def mapfill_dprobs_atom(fwdsim,
     for i in range(fwdsim.model.num_params):
         #print("dprobs cache %d of %d" % (i,self.Np))
         if i in iParamToFinal:
-            #print("MAPFILL DPROBS ATOM 3 (i=%d) %.3fs elapssed=%.1fs" % (i, pytime.time() - t, pytime.time() - t0)); t=pytime.time()
+            #if resource_alloc.comm_rank == 0:
+            #    print("MAPFILL DPROBS ATOM 3 (i=%d) %.3fs elapssed=%.1fs" % (i, pytime.time() - t, pytime.time() - t0)); t=pytime.time()
             iFinal = iParamToFinal[i]
             vec = orig_vec.copy(); vec[i] += eps
             fwdsim.model.from_vector(vec, close=True)
@@ -353,7 +377,8 @@ def mapfill_dprobs_atom(fwdsim,
                 #_fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)  # I don't think this is needed
                 array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
 
-    #print("MAPFILL DPROBS ATOM 4 elapsed=%.1fs" % (pytime.time() - t0))
+    #if resource_alloc.comm_rank == 0:
+    #    print("MAPFILL DPROBS ATOM 4 elapsed=%.1fs" % (pytime.time() - t0))
     fwdsim.model.from_vector(orig_vec, close=True)
     free_rhocache(rho_cache)  #delete cache entries
 
