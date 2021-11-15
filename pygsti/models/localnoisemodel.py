@@ -386,6 +386,7 @@ class _SimpleCompLayerRules(_LayerRules):
         self.global_idle_layer_label = global_idle_layer_label
         self.implicit_idle_mode = implicit_idle_mode  # how to handle implied idles ("blanks") in circuits
         self._add_global_idle_to_all_layers = False
+        self.use_op_caching = True  # expert functionality - can be turned off if needed
 
         if implicit_idle_mode is None or implicit_idle_mode == "none":  # no noise on idles
             pass  # just use defaults above
@@ -452,9 +453,11 @@ class _SimpleCompLayerRules(_LayerRules):
                 mpovm = _povm.MarginalizedPOVM(model.povm_blks['layers'][povmName],
                                                model.state_space, layerlbl.sslbls)  # cache in FUTURE
                 mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
-                caches['povm-layers'].update(mpovm.simplify_effects(mpovm_lbl))
-                assert(layerlbl in caches['povm-layers']), "Failed to create marginalized effect!"
-                return caches['povm-layers'][layerlbl]
+                simplified_effects = mpovm.simplify_effects(mpovm_lbl)
+                assert(layerlbl in simplified_effects), "Failed to create marginalized effect!"
+                if self.use_op_caching:
+                    caches['povm-layers'].update(simplified_effects)
+                return simplified_effects[layerlbl]
             else:
                 #raise KeyError(f"Could not build povm/effect for {layerlbl}!")
                 raise KeyError("Could not build povm/effect for %s!" % str(layerlbl))
@@ -478,7 +481,7 @@ class _SimpleCompLayerRules(_LayerRules):
 
         if isinstance(layerlbl, _CircuitLabel):
             op = self._create_op_for_circuitlabel(model, layerlbl)
-            caches['complete-layers'][layerlbl] = op
+            if self.use_op_caching: caches['complete-layers'][layerlbl] = op
             return op
 
         if len(components) == 1 and add_idle is False:
@@ -492,7 +495,8 @@ class _SimpleCompLayerRules(_LayerRules):
                                  evotype=model.evotype, state_space=model.state_space, allocated_to_parent=model)
             model._init_virtual_obj(ret)  # so ret's gpindices get set - I don't think this is needed...
 
-        caches['complete-layers'][layerlbl] = ret  # cache the final label value
+        if self.use_op_caching:
+            caches['complete-layers'][layerlbl] = ret  # cache the final label value
         return ret
 
     def _layer_component_operation(self, model, complbl, cache):
