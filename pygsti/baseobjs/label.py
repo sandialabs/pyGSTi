@@ -1952,10 +1952,16 @@ class LabelTupWithArgs(Label, tuple):
         #OLD return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
 
     def __lt__(self, x):
-        return tuple.__lt__(self, tuple(x))
+        try:
+            return tuple.__lt__(self, tuple(x))
+        except:
+            tuple.__lt__(tuple(map(str,self)), tuple(map(str,x)))
 
     def __gt__(self, x):
-        return tuple.__gt__(self, tuple(x))
+        try:
+            return tuple.__gt__(self, tuple(x))
+        except:
+            tuple.__gt__(tuple(map(str,self)), tuple(map(str,x)))
 
     def __pygsti_reduce__(self):
         return self.__reduce__()
