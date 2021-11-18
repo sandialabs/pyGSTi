@@ -277,8 +277,9 @@ def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, ter
     if term_cache is None:
         term_cache = {}
     needed_circuits = [c for c in circuits if c not in term_cache]
-    new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits)
-    term_cache.update(new_terms)
+    if len(needed_circuits):
+        new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits)
+        term_cache.update(new_terms)
 
     # We want to make sure we don't double count circuits, so keep track of what we've seen
     seen_circs = set()

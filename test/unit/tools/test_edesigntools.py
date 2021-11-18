@@ -136,4 +136,12 @@ class EdesignToolsTester(BaseCase):
         fim_by_L = et.calculate_fisher_information_matrices_by_L(target_model, edesign.all_circuits_needing_data)
         self.assertArraysAlmostEqual(fim1, fim_by_L[8])
 
+        # Try pre-cached by-L version
+        start = time.time()
+        fim_by_L2 = et.calculate_fisher_information_matrices_by_L(target_model, edesign.all_circuits_needing_data, term_cache=fim3_terms)
+        fim_by_L2_time = time.time() - start
+        for k,v in fim_by_L2.items():
+            self.assertArraysAlmostEqual(v, fim_by_L[k])
+        self.assertLess(10*fim_by_L2_time, fim1_time) # Cached version should be very fast compared to uncached
+
 
