@@ -10,7 +10,7 @@ Tools for working with ExperimentDesigns
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import math
+import numpy as _np
 
 def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_1Q=None,
                                         gate_time_2Q=None, measure_reset_time=0.0,
@@ -112,9 +112,200 @@ def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_
     if shots_per_circuit_per_batch is None:
             shots_per_circuit_per_batch = total_shots_per_circuit
         
-    num_rounds = math.ceil(total_shots_per_circuit / shots_per_circuit_per_batch)
-    num_batches = math.ceil(len(edesign.all_circuits_needing_data) / circuits_per_batch)
+    num_rounds = _np.ceil(total_shots_per_circuit / shots_per_circuit_per_batch)
+    num_batches = _np.ceil(len(edesign.all_circuits_needing_data) / circuits_per_batch)
     
     total_upload_time = interbatch_latency*num_batches*num_rounds
     
     return total_circ_time + total_upload_time
+
+def calculate_fisher_information_per_circuit(regularized_model, circuits):
+    """Helper function to calculate all Fisher information terms for each circuit.
+
+    This function can be used to pre-generate a cache for the
+    calculate_fisher_information_matrix() function, and this should be done for
+    computational efficiency when computing many Fisher information matrices.
+
+    Parameters
+    ----------
+    regularized_model: OpModel
+        The model used to calculate the terms of the Fisher information matrix.
+        This model must already be "regularized" such that there are no small probabilities,
+        usually by adding a small amount of SPAM error.
+    
+    circuits: list
+        List of circuits to compute Fisher information for.
+    
+    Returns
+    -------
+    fisher_info_terms: dict
+        Dictionary where keys are circuits and values are (num_params, num_params) Fisher information
+        matrices for a single circuit.
+    """
+    num_params = regularized_model.num_params
+    outcomes = regularized_model.sim.probs(()).keys()
+
+    ps = regularized_model.sim.bulk_probs(circuits)
+    js = regularized_model.sim.bulk_dprobs(circuits)
+    hs = regularized_model.sim.bulk_hprobs(circuits)
+    
+    fisher_info_terms = {}
+    for circuit in circuits:
+        if circuit not in fisher_info_terms:
+            fisher_info_terms[circuit] = _np.zeros([num_params, num_params])
+        
+        p = ps[circuit]
+        j = js[circuit]
+        h = hs[circuit]
+        for outcome in outcomes:
+            fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome])/p[outcome] - h[outcome]
+    
+    return fisher_info_terms
+
+
+def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache=None,
+                                        regularize_spam=True):
+    """Calculate the Fisher information matrix for a set of circuits and a model.
+
+    Note that the model should be regularized so that no probability should be very small
+    for numerical stability. This is done by default for models with a dense SPAM parameterization,
+    but must be done manually if this is not the case (e.g. CPTP parameterization).
+
+    Parameters
+    ----------
+    model: OpModel
+        The model used to calculate the terms of the Fisher information matrix.
+
+    circuits: list
+        List of circuits in the experiment design.
+
+    num_shots: int or dict
+        If int, specifies how many shots each circuit gets. If dict, keys must be circuits
+        and values are per-circuit counts.
+    
+    term_cache: dict or None
+        If provided, should have circuits as keys and per-circuit Fisher information matrices
+        as values, i.e. the output of calculate_fisher_information_per_circuit(). This cache
+        will be updated with any additional circuits that need to be calculated in the given
+        circuit list.
+    
+    regularize_spam: bool
+        If True, depolarizing SPAM noise is added to prevent 0 probabilities for numerical
+        stability. Note that this may fail if the model does not have a dense SPAM
+        paramerization. In that case, pass an already "regularized" model and set this to False.
+
+    Returns
+    -------
+    fisher_information: numpy.ndarray
+        Fisher information matrix of size (num_params, num_params)
+    """
+    # Regularize model
+    regularized_model = model.copy()
+    if regularize_spam:
+        regularized_model = regularized_model.depolarize(spam_noise=1e-3)
+    num_params = regularized_model.num_params
+
+    if isinstance(num_shots, dict):
+        assert _np.all([c in num_shots for c in circuits]), \
+            "If a dict, num_shots must have an entry for every circuit in the list"
+    else:
+        num_shots = {c: num_shots for c in circuits}
+    
+    # Calculate all needed terms
+    if term_cache is None:
+        term_cache = {}
+    needed_circuits = [c for c in circuits if c not in term_cache]
+    if len(needed_circuits):
+        new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits)
+        term_cache.update(new_terms)
+
+    # Collect all terms
+    fisher_information = _np.zeros((num_params, num_params))
+    for circ in circuits:
+        fisher_information += term_cache[circ] * num_shots[circ]
+    
+    return fisher_information
+
+
+def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, term_cache=None,
+                                               regularize_spam=True, cumulative=True):
+    """Calculate a set of Fisher information matrices for a set of circuits grouped by iteration.
+
+    Parameters
+    ----------
+    model: OpModel
+        The model used to calculate the terms of the Fisher information matrix.
+
+    circuits: list
+        List of circuits in the experiment design.
+
+    num_shots: int or dict
+        If int, specifies how many shots each circuit gets. If dict, keys must be circuits
+        and values are per-circuit counts.
+    
+    term_cache: dict or None
+        If provided, should have circuits as keys and per-circuit Fisher information matrices
+        as values, i.e. the output of calculate_fisher_information_per_circuit(). This cache
+        will be updated with any additional circuits that need to be calculated in the given
+        circuit list.
+    
+    regularize_spam: bool
+        If True, depolarizing SPAM noise is added to prevent 0 probabilities for numerical
+        stability. Note that this may fail if the model does not have a dense SPAM
+        paramerization. In that case, pass an already "regularized" model and set this to False.
+    
+    cumulative: bool
+        Whether to include Fisher information matrices for lower L (True) or not.
+
+    Returns
+    -------
+    fisher_information_by_L: dict
+        Dictionary with keys as circuit length L and value as Fisher information matrices
+    """
+    # Regularize model
+    regularized_model = model.copy()
+    if regularize_spam:
+        regularized_model = regularized_model.depolarize(spam_noise=1e-3)
+
+    if isinstance(num_shots, dict):
+        assert _np.all([c in num_shots for c in circuits]), \
+            "If a dict, num_shots must have an entry for every circuit in the list"
+    else:
+        num_shots = {c: num_shots for c in circuits}
+    
+    # Calculate all needed terms
+    if term_cache is None:
+        term_cache = {}
+    needed_circuits = [c for c in circuits if c not in term_cache]
+    new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits)
+    term_cache.update(new_terms)
+
+    # We want to make sure we don't double count circuits, so keep track of what we've seen
+    seen_circs = set()
+    
+    fisher_information_by_L = {}
+    prev_L = None
+    for (L, germ), plaq in circuits.iter_plaquettes():
+        # Build FIM for any new circuits included in this plaquette
+        plaq_circs = list(plaq.circuits)
+        unique_circs = list(set(plaq_circs) - seen_circs)
+        fim_term = calculate_fisher_information_matrix(regularized_model, unique_circs, num_shots,
+                                                       term_cache=term_cache, regularize_spam=False)
+        
+        # Update seen circuits
+        seen_circs = seen_circs.union(unique_circs)
+        
+        # Update Fisher information (multiple plaquettes can contribute to one L,
+        # and we also handle cumulative logic here)
+        if L not in fisher_information_by_L:
+            fisher_information_by_L[L] = fim_term
+
+            if cumulative and prev_L is not None:
+                fisher_information_by_L[L] += fisher_information_by_L[prev_L]
+        else:
+            fisher_information_by_L[L] += fim_term
+        
+        # Update L for next round
+        prev_L = L
+        
+    return fisher_information_by_L
