@@ -822,7 +822,7 @@ def gate_dependence_of_errormaps(model, target_model, norm='diamond', mx_basis=N
 #    error_gs.operations['GR'] = _np.mean(_np.array([ i for i in R_list]),axis=0)
 #    error_gs.operations['GQ'] = _np.mean(_np.array([ i for i in Q_list]),axis=0)
 #    error_gs.operations['GQ2'] = _np.dot(error_gs.operations['GQ'],error_gs.operations['Gavg'])
-#    error_gs.preps['rhoc_mixed'] = 1./d*_cnst._basis_create_identity_vec(error_gs.basis)#
+#    error_gs.preps['rhoc_mixed'] = 1./d*_cnst.create_identity_vec(error_gs.basis)#
 #
 #    #Assumes standard POVM labels
 #    povm = _objs.UnconstrainedPOVM( [('0_cm', target_model.povms['Mdefault']['0']),

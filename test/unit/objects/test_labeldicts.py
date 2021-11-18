@@ -23,11 +23,11 @@ class LabelDictTester(BaseCase):
         model = create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'], ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
         model2 = ExplicitOpModel(['Q0'])
         for label, gate in model.operations.items():
-            model2[label] = gate
+            model2[label] = gate.copy()
         for label, vec in model.preps.items():
-            model2[label] = vec
+            model2[label] = vec.copy()
         for label, povm in model.povms.items():
-            model2[label] = povm
+            model2[label] = povm.copy()
 
         self.assertAlmostEqual(model.frobeniusdist(model2), 0.0)
 

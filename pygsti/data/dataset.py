@@ -277,7 +277,7 @@ class _DataSetRow(object):
         """
         Row data in a time-series format.
 
-        This can be a much less succinct format than returned by `get_timeseries`.
+        This can be a much less succinct format than returned by `counts_as_timeseries`.
         E.g., it is highly inefficient for many-qubit data.
 
         Returns
@@ -336,7 +336,7 @@ class _DataSetRow(object):
 
         return times, {ol: seriesDict[oli] for ol, oli in self.dataset.olIndex.items()}
 
-    def get_timeseries(self):
+    def counts_as_timeseries(self):
         """
         Returns data in a time-series format.
 
@@ -1000,7 +1000,7 @@ class DataSet(object):
             assert(oli_data is None and time_data is None and rep_data is None
                    and circuits is None and circuit_indices is None
                    and outcome_labels is None and outcome_label_indices is None)
-            self.load(file_to_load_from)
+            self.read_binary(file_to_load_from)
             return
 
         # self.cirIndex  :  Ordered dictionary where keys = Circuit objects,
@@ -2864,9 +2864,13 @@ class DataSet(object):
         self.collisionAction = state_dict.get('collisionAction', 'aggregate')
         self.uuid = state_dict.get('uuid', None)
 
+    @_deprecated_fn('write_binary')
     def save(self, file_or_filename):
+        return self.write_binary(file_or_filename)
+
+    def write_binary(self, file_or_filename):
         """
-        Save this DataSet to a file.
+        Write this data set to a binary-format file.
 
         Parameters
         ----------
@@ -2918,9 +2922,15 @@ class DataSet(object):
                 for row in self.repData: _np.save(f, row)
         if bOpen: f.close()
 
+    @_deprecated_fn('read_binary')
     def load(self, file_or_filename):
+        return self.read_binary(file_or_filename)
+
+    def read_binary(self, file_or_filename):
         """
-        Load DataSet from a file, clearing any data is contained previously.
+        Read a DataSet from a binary file, clearing any data is contained previously.
+
+        The file should have been created with :method:`DataSet.write_binary`
 
         Parameters
         ----------

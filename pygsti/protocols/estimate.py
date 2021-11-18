@@ -13,10 +13,12 @@ Defines the Estimate class.
 import collections as _collections
 import copy as _copy
 import warnings as _warnings
+import pathlib as _pathlib
 
 import numpy as _np
 
 from pygsti import tools as _tools
+from pygsti import io as _io
 from pygsti.objectivefns.objectivefns import CachedObjectiveFunction as _CachedObjectiveFunction
 from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 from pygsti.protocols.confidenceregionfactory import ConfidenceRegionFactory as _ConfidenceRegionFactory
@@ -51,6 +53,32 @@ class Estimate(object):
         A dictionary of parameters associated with how these models
         were obtained.
     """
+
+    @classmethod
+    def from_dir(cls, dirname, quick_load=False):
+        """
+        Initialize a new Protocol object from `dirname`.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
+        Parameters
+        ----------
+        dirname : str
+            The directory name.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
+        Returns
+        -------
+        Protocol
+        """
+        ret = cls.__new__(cls)
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
+        return ret
 
     @classmethod
     def create_gst_estimate(cls, parent, target_model=None, seed_model=None,
@@ -88,11 +116,12 @@ class Estimate(object):
         if target_model: models['target'] = target_model
         if seed_model: models['seed'] = seed_model
         if models_by_iter:
-            models['iteration estimates'] = models_by_iter
+            for k, mdl in enumerate(models_by_iter):
+                models['iteration %d estimate' % k] = mdl
             models['final iteration estimate'] = models_by_iter[-1]
         return cls(parent, models, parameters)
 
-    def __init__(self, parent, models=None, parameters=None):
+    def __init__(self, parent, models=None, parameters=None, extra_parameters=None):
         """
         Initialize an empty Estimate object.
 
@@ -110,26 +139,87 @@ class Estimate(object):
             were obtained.
         """
         self.parent = parent
-        self.parameters = _collections.OrderedDict()
-        self.goparameters = _collections.OrderedDict()
+        #self.parameters = _collections.OrderedDict()
+        #self.goparameters = _collections.OrderedDict()
+
+        if parameters is None: parameters = {}
+        self.circuit_weights = parameters.get('weights', None)
+        self.protocol = parameters.get('protocol', None)
+        self.profiler = parameters.get('profiler', None)
+        self._final_mdc_store = parameters.get('final_mdc_store', None)
+        self._final_objfn_cache = parameters.get('final_objfn_cache', None)
+        self.final_objfn_builder = parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
+        self._final_objfn = parameters.get('final_objfn', None)
+
+        self.extra_parameters = extra_parameters if (extra_parameters is not None) else {}
+
+        from .gst import GSTGaugeOptSuite as _GSTGaugeOptSuite
+        self._gaugeopt_suite = _GSTGaugeOptSuite(gaugeopt_argument_dicts={})  # used for its serialization capabilities
+
         self.models = _collections.OrderedDict()
+        self.num_iterations = 0
         self.confidence_region_factories = _collections.OrderedDict()
 
         #Set models
         if models:
             self.models.update(models)
-
-        #Set parameters
-        if isinstance(parameters, _collections.OrderedDict):
-            self.parameters = parameters
-        elif parameters is not None:
-            for key in sorted(list(parameters.keys())):
-                self.parameters[key] = parameters[key]
+            while ('iteration %d estimate' % self.num_iterations) in models:
+                self.num_iterations += 1
 
         #Meta info
         self.meta = {}
 
-    def get_start_model(self, goparams):
+        self.auxfile_types = {'parent': 'reset',
+                              'models': 'dict:serialized-object',
+                              'confidence_region_factories': 'fancykeydict:serialized-object',
+                              'protocol': 'dir-serialized-object',
+                              'profiler': 'reset',
+                              '_final_mdc_store': 'reset',
+                              '_final_objfn_cache': 'dir-serialized-object',
+                              'final_objfn_builder': 'serialized-object',
+                              '_final_objfn': 'reset',
+                              '_gaugeopt_suite': 'serialized-object'
+                              }
+
+    @property
+    def parameters(self):
+        #HACK for now, until we can remove references that access these parameters
+        parameters = _collections.OrderedDict()
+        parameters['protocol'] = self.protocol  # Estimates can hold sub-Protocols <=> sub-results
+        parameters['profiler'] = self.profiler
+        parameters['final_mdc_store'] = self._final_mdc_store
+        parameters['final_objfn'] = self._final_objfn
+        parameters['final_objfn_cache'] = self._final_objfn_cache
+        parameters['final_objfn_builder'] = self.final_objfn_builder
+        parameters['weights'] = self.circuit_weights
+        parameters.update(self.extra_parameters)
+        #parameters['raw_objective_values']
+        #parameters['model_test_values']
+        return parameters
+
+    @property
+    def goparameters(self):
+        #HACK for now, until external references are removed
+        return self._gaugeopt_suite.gaugeopt_argument_dicts
+
+    def write(self, dirname):
+        """
+        Write this protocol to a directory.
+
+        Parameters
+        ----------
+        dirname : str
+            The directory name to write.  This directory will be created
+            if needed, and the files in an existing directory will be
+            overwritten.
+
+        Returns
+        -------
+        None
+        """
+        _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+    def retrieve_start_model(self, goparams):
         """
         Returns the starting model for the gauge optimization given by `goparams`.
 
@@ -200,7 +290,7 @@ class Estimate(object):
             i = 0
             while True:
                 label = "go%d" % i; i += 1
-                if (label not in self.goparameters) and \
+                if (label not in self._gaugeopt_suite.gaugeopt_argument_dicts) and \
                    (label not in self.models): break
 
         goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
@@ -227,6 +317,7 @@ class Estimate(object):
                 last_gs = model  # just use user-supplied result
             else:
                 from ..algorithms import gaugeopt_to_target as _gaugeopt_to_target
+                default_model = default_target_model = False
                 gop = gop.copy()  # so we don't change the caller's dict
                 if '_gaugeGroupEl' in gop: del gop['_gaugeGroupEl']
 
@@ -242,11 +333,13 @@ class Estimate(object):
                 elif "model" not in gop:
                     if 'final iteration estimate' in self.models:
                         gop["model"] = self.models['final iteration estimate']
+                        default_model = True
                     else: raise ValueError("Must supply 'model' in 'goparams' argument")
 
                 if "target_model" not in gop:
                     if 'target' in self.models:
                         gop["target_model"] = self.models['target']
+                        default_target_model = True
                     else: raise ValueError("Must supply 'target_model' in 'goparams' argument")
 
                 if "maxiter" not in gop:
@@ -262,14 +355,18 @@ class Estimate(object):
 
                 gop['_gaugeGroupEl'] = gauge_group_el  # an output stored here for convenience
 
+                #Don't store (and potentially serialize) model that we don't need to
+                if default_model: del gop['model']
+                if default_target_model: del gop['target_model']
+
             #sort the parameters by name for consistency
             ordered_goparams.append(_collections.OrderedDict(
                 [(k, gop[k]) for k in sorted(list(gop.keys()))]))
 
         assert(last_gs is not None)
         self.models[label] = last_gs
-        self.goparameters[label] = ordered_goparams if len(goparams_list) > 1 \
-            else ordered_goparams[0]
+        self._gaugeopt_suite.gaugeopt_argument_dicts[label] = ordered_goparams \
+            if len(goparams_list) > 1 else ordered_goparams[0]
 
     def add_confidence_region_factory(self,
                                       model_label='final iteration estimate',
@@ -409,9 +506,9 @@ class Estimate(object):
         printer = _VerbosityPrinter.create_printer(verbosity)
 
         ref_model = self.models[from_model_label]
-        goparams = self.goparameters[to_model_label]
+        goparams = self._gaugeopt_suite.gaugeopt_argument_dicts[to_model_label]
         goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
-        start_model = goparams_list[0]['model'].copy()
+        start_model = goparams_list[0]['model'].copy() if ('model' in goparams_list[0]) else ref_model.copy()
         final_model = self.models[to_model_label].copy()
 
         gauge_group_els = []
@@ -495,7 +592,7 @@ class Estimate(object):
         """
         p = self.parent
         gss = _PlaquetteGridCircuitStructure.cast(p.circuit_lists['final'])  # FUTURE: overrideable?
-        weights = self.parameters.get("weights", None)
+        weights = self.circuit_weights
 
         if weights is not None:
             scaled_dataset = p.dataset.copy_nonstatic()
@@ -565,14 +662,14 @@ class Estimate(object):
         ModelDatasetCircuitsStore
         """
         #Note: default array_types include 'ep' so, e.g. robust-stat re-optimization is possible.
-        if self.parameters.get('final_mdc_store', None) is None:
+        if self._final_mdc_store is None:
             assert(self.parent is not None), "Estimate must be linked with parent before objectivefn can be created"
             circuit_list = self.parent.circuit_lists['final']
             mdl = self.models['final iteration estimate']
             ds = self.parent.dataset
-            self.parameters['final_mdc_store'] = _ModelDatasetCircuitStore(mdl, ds, circuit_list, resource_alloc,
-                                                                           array_types)
-        return self.parameters['final_mdc_store']
+            self._final_mdc_store = _ModelDatasetCircuitStore(mdl, ds, circuit_list, resource_alloc,
+                                                              array_types)
+        return self._final_mdc_store
 
     def final_objective_fn(self, resource_alloc=None):
         """
@@ -594,13 +691,11 @@ class Estimate(object):
         -------
         MDCObjectiveFunction
         """
-        if self.parameters.get('final_objfn', None) is None:
+        if self._final_objfn is None:
             mdc_store = self.final_mdc_store(resource_alloc)
-            #objfn_builder = self.parameters['final_objfn_builder']
-            objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
-            objfn = objfn_builder.build_from_store(mdc_store)
-            self.parameters['final_objfn'] = objfn
-        return self.parameters['final_objfn']
+            objfn = self.final_objfn_builder.build_from_store(mdc_store)
+            self._final_objfn = objfn
+        return self._final_objfn
 
     def final_objective_fn_cache(self, resource_alloc=None):
         """
@@ -625,10 +720,10 @@ class Estimate(object):
         -------
         CachedObjectiveFunction
         """
-        if self.parameters.get('final_objfn_cache', None) is None:
+        if self._final_objfn_cache is None:
             objfn = self.final_objective_fn(resource_alloc)
-            self.parameters['final_objfn_cache'] = _CachedObjectiveFunction(objfn)
-        return self.parameters['final_objfn_cache']
+            self._final_objfn_cache = _CachedObjectiveFunction(objfn)
+        return self._final_objfn_cache
 
     def misfit_sigma(self, resource_alloc=None):
         """
@@ -652,8 +747,7 @@ class Estimate(object):
             objfn_cache = self.final_objective_fn_cache(resource_alloc)  # creates cache if needed
             fitqty = objfn_cache.chi2k_distributed_fn
         else:
-            objfn_builder = self.parameters.get('final_objfn_builder', _objfns.PoissonPicDeltaLogLFunction.builder())
-            objfn = objfn_builder.build(mdl, ds, circuit_list, resource_alloc, verbosity=0)
+            objfn = self.final_objfn_builder.build(mdl, ds, circuit_list, resource_alloc, verbosity=0)
             fitqty = objfn.chi2k_distributed_qty(objfn.fn())
 
         aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _CircuitList) else None
@@ -688,17 +782,27 @@ class Estimate(object):
         """
         if parent is None: parent = self.parent
         view = Estimate(parent)
-        view.parameters = self.parameters
+
+        view.circuit_weights = self.circuit_weights
+        view.protocol = self.protocol
+        view.profiler = self.profiler
+        view._final_mdc_store = self._final_mdc_store
+        view._final_objfn_cache = self._final_objfn_cache
+        view.final_objfn_builder = self.final_objfn_builder
+        view._final_objfn = self._final_objfn
+        view.extra_parameters = self.extra_parameters
+
         view.models = self.models
         view.confidence_region_factories = self.confidence_region_factories
 
+        goparameters = self._gaugeopt_suite.gaugeopt_argument_dicts
         if gaugeopt_keys is None:
-            gaugeopt_keys = list(self.goparameters.keys())
+            gaugeopt_keys = list(goparameters.keys())
         elif isinstance(gaugeopt_keys, str):
             gaugeopt_keys = [gaugeopt_keys]
         for go_key in gaugeopt_keys:
-            if go_key in self.goparameters:
-                view.goparameters[go_key] = self.goparameters[go_key]
+            if go_key in goparameters:
+                view._gaugopt_suite.gaugeopt_argument_dicts[go_key] = goparameters[go_key]
 
         return view
 
@@ -712,8 +816,18 @@ class Estimate(object):
         """
         #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
         cpy = Estimate(self.parent)
-        cpy.parameters = _copy.deepcopy(self.parameters)
-        cpy.goparameters = _copy.deepcopy(self.goparameters)
+
+        cpy.circuit_weights = _copy.deepcopy(self.circuit_weights)
+        cpy.protocol = _copy.deepcopy(self.protocol)
+        cpy.profiler = _copy.deepcopy(self.profiler)
+        cpy._final_mdc_store = _copy.deepcopy(self._final_mdc_store)
+        cpy._final_objfn_cache = _copy.deepcopy(self._final_objfn_cache)
+        cpy.final_objfn_builder = _copy.deepcopy(self.final_objfn_builder)
+        cpy._final_objfn = _copy.deepcopy(self._final_objfn)
+        cpy.extra_parameters = _copy.deepcopy(self.extra_parameters)
+        cpy.num_iterations = self.num_iterations
+
+        cpy._gaugeopt_suite = _copy.deepcopy(self._gaugeopt_suite)
         cpy.models = self.models.copy()
         cpy.confidence_region_factories = _copy.deepcopy(self.confidence_region_factories)
         cpy.meta = _copy.deepcopy(self.meta)
@@ -729,10 +843,10 @@ class Estimate(object):
         s += " ---------------------------------------------------------\n"
         s += "  " + "\n  ".join(list(self.models.keys())) + "\n"
         s += "\n"
-        s += " .parameters   -- a dictionary of simulation parameters:\n"
-        s += " ---------------------------------------------------------\n"
-        s += "  " + "\n  ".join(list(self.parameters.keys())) + "\n"
-        s += "\n"
+        #s += " .parameters   -- a dictionary of simulation parameters:\n"
+        #s += " ---------------------------------------------------------\n"
+        #s += "  " + "\n  ".join(list(self.parameters.keys())) + "\n"
+        #s += "\n"
         s += " .goparameters   -- a dictionary of gauge-optimization parameter dictionaries:\n"
         s += " ---------------------------------------------------------\n"
         s += "  " + "\n  ".join(list(self.goparameters.keys())) + "\n"
@@ -740,31 +854,12 @@ class Estimate(object):
         return s
 
     def __getstate__(self):
-        #Don't pickle comms in goparameters
         to_pickle = self.__dict__.copy()
-        to_pickle['goparameters'] = _collections.OrderedDict()
-        for lbl, goparams in self.goparameters.items():
-            if hasattr(goparams, "keys"):
-                if 'comm' in goparams:
-                    goparams = goparams.copy()
-                    goparams['comm'] = None
-                to_pickle['goparameters'][lbl] = goparams
-            else:  # goparams is a list
-                new_goparams = []  # new list
-                for goparams_dict in goparams:
-                    if 'comm' in goparams_dict:
-                        goparams_dict = goparams_dict.copy()
-                        goparams_dict['comm'] = None
-                    new_goparams.append(goparams_dict)
-                to_pickle['goparameters'][lbl] = new_goparams
 
         # don't pickle MDC objective function or store objects b/c they might contain
         #  comm objects (in their layouts)
-        to_pickle['parameters'] = self.parameters.copy()  # shallow copy
-        if 'final_mdc_store' in self.parameters:
-            del to_pickle['parameters']['final_mdc_store']
-        if 'final_objfn' in self.parameters:
-            del to_pickle['parameters']['final_objfn']
+        del to_pickle['_final_mdc_store']
+        del to_pickle['_final_objfn']
 
         # don't pickle parent (will create circular reference)
         del to_pickle['parent']
@@ -779,6 +874,10 @@ class Estimate(object):
         if 'gatesets' in state_dict:
             state_dict['models'] = state_dict['gatesets']
             del state_dict['gatesets']
+
+        # reset MDC objective function and store objects
+        state_dict['_final_mdc_store'] = None
+        state_dict['_final_objfn'] = None
 
         self.__dict__.update(state_dict)
         for crf in self.confidence_region_factories.values():

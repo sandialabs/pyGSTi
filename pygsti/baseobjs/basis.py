@@ -21,6 +21,8 @@ import scipy.sparse.linalg as _spsl
 from numpy.linalg import inv as _inv
 
 from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
 #Helper functions
@@ -48,7 +50,7 @@ def _sparse_equal(a, b, atol=1e-8):
     return _np.allclose(V1, V2, atol=atol)
 
 
-class Basis(object):
+class Basis(_NicelySerializable):
     """
     An ordered set of labeled matrices/vectors.
 
@@ -247,7 +249,11 @@ class Basis(object):
                             TensorProdBasis([BuiltinBasis(name, factorDim, sparse) for factorDim in tpbDim]))
                     else:
                         tpbBases.append(BuiltinBasis(name, tpbDim, sparse))
-                return DirectSumBasis(tpbBases)
+
+                if len(tpbBases) == 1:
+                    return tpbBases[0]
+                else:
+                    return DirectSumBasis(tpbBases)
             else:
                 return BuiltinBasis(name, dim, sparse)
         elif isinstance(name_or_basis_or_matrices, (list, tuple, _np.ndarray)):
@@ -892,7 +898,7 @@ class ExplicitBasis(Basis):
         if (len(labels) != len(elements)):
             raise ValueError("Expected a list of %d labels but got: %s" % (len(elements), str(labels)))
 
-        self.labels = labels
+        self.labels = tuple(labels)  # so hashable - see __hash__
         self.elements = []
         size = len(elements)
         if size == 0:
@@ -903,7 +909,7 @@ class ExplicitBasis(Basis):
             elshape = None
             for el in elements:
                 if sparse:
-                    if not _sps.issparse(el):
+                    if not _sps.issparse(el) or not _sps.isspmatrix_csr(el):  # needs to be CSR type for __hash__
                         el = _sps.csr_matrix(el)  # try to convert to a sparse matrix
                 else:
                     if not isinstance(el, _np.ndarray):
@@ -919,6 +925,23 @@ class ExplicitBasis(Basis):
         self._elshape = elshape
 
         super(ExplicitBasis, self).__init__(name, longname, real, sparse)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'longname': self.longname,
+                      'real': self.real,
+                      'sparse': self.sparse,
+                      'labels': self.labels,
+                      'elements': [self._encodemx(el) for el in self.elements]
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls([cls._decodemx(el) for el in state['elements']],
+                   state['labels'], state['name'], state['longname'], state['real'],
+                   state['sparse'])
 
     @property
     def dim(self):
@@ -953,7 +976,13 @@ class ExplicitBasis(Basis):
         return ExplicitBasis(self.elements, self.labels, self.name, self.longname, self.real, not self.sparse)
 
     def __hash__(self):
-        return hash((self.name, self.dim, self.elshape, self.sparse))  # better?
+        if self.sparse:
+            els_to_hash = tuple(((_np.round(el.data, 6).tostring(), el.indices.tostring(), el.indptr.tostring())
+                                 for el in self.elements))   # hash sparse matrices
+        else:
+            els_to_hash = tuple((_np.round(el, 6).tostring() for el in self.elements))
+        return hash((self.dim, self.elshape, self.sparse, self.labels, els_to_hash))
+        # OLD return hash((self.name, self.dim, self.elshape, self.sparse))  # better?
 
 
 class BuiltinBasis(LazyBasis):
@@ -997,6 +1026,19 @@ class BuiltinBasis(LazyBasis):
         real = _basis_constructor_dict[name].real
 
         super(BuiltinBasis, self).__init__(name, longname, real, sparse)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'sparse': self.sparse,
+                      'state_space': self.state_space.to_nice_serialization()
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        statespace = _StateSpace.from_nice_serialization(state['state_space'])
+        return cls(state['name'], statespace, state['sparse'])
 
     @property
     def dim(self):
@@ -1135,6 +1177,19 @@ class DirectSumBasis(LazyBasis):
 
         #Init everything but elements and labels & their number/size
         super(DirectSumBasis, self).__init__(name, longname, real, sparse)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'longname': self.longname,
+                      'component_bases': [b.to_nice_serialization() for b in self.component_bases]
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        component_bases = [Basis.from_nice_serialization(b) for b in state['component_bases']]
+        return cls(component_bases, state['name'], state['longname'])
 
     @property
     def dim(self):
@@ -1430,6 +1485,19 @@ class TensorProdBasis(LazyBasis):
 
         super(TensorProdBasis, self).__init__(name, longname, real, sparse)
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'longname': self.longname,
+                      'component_bases': [b.to_nice_serialization() for b in self.component_bases]
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        component_bases = [Basis.from_nice_serialization(b) for b in state['component_bases']]
+        return cls(component_bases, state['name'], state['longname'])
+
     @property
     def dim(self):
         """
@@ -1704,6 +1772,21 @@ class EmbeddedBasis(LazyBasis):
         sparse = basis_to_embed.sparse
 
         super(EmbeddedBasis, self).__init__(name, longname, real, sparse)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'longname': self.longname,
+                      'state_space': self.state_space.to_nice_serialization(),
+                      'embedded_basis': self.embedded_basis.to_nice_serialization()
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        basis_to_embed = Basis.from_nice_serialization(state['embedded_basis'])
+        state_space = _StateSpace.from_nice_serialization(state['state_space'])
+        return cls(basis_to_embed, state_space, state['target_labels'], state['name'], state['longname'])
 
     @property
     def dim(self):

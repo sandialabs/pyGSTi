@@ -14,6 +14,7 @@ import numpy as _np
 
 from pygsti.models.model import Model as _Model
 from pygsti.baseobjs.opcalc import float_product as prod
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.forwardsims.successfailfwdsim import SuccessFailForwardSimulator as _SuccessFailForwardSimulator
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
@@ -30,29 +31,12 @@ class OplessModel(_Model):
 
     Parameters
     ----------
-    state_space_labels : StateSpaceLabels or list or tuple
-        The decomposition (with labels) of (pure) state-space this model
-        acts upon.  Regardless of whether the model contains operators or
-        superoperators, this argument describes the Hilbert space dimension
-        and imposed structure.  If a list or tuple is given, it must be
-        of a from that can be passed to `StateSpaceLabels.__init__`.
+    state_space : StateSpace
+        The state space of this model.
     """
 
-    def __init__(self, state_space_labels):
-        """
-        Creates a new Model.  Rarely used except from derived classes
-        `__init__` functions.
-
-        Parameters
-        ----------
-        state_space_labels : StateSpaceLabels or list or tuple
-            The decomposition (with labels) of (pure) state-space this model
-            acts upon.  Regardless of whether the model contains operators or
-            superoperators, this argument describes the Hilbert space dimension
-            and imposed structure.  If a list or tuple is given, it must be
-            of a from that can be passed to `StateSpaceLabels.__init__`.
-        """
-        _Model.__init__(self, state_space_labels)
+    def __init__(self, state_space):
+        _Model.__init__(self, state_space)
 
         #Setting things the rest of pyGSTi expects but probably shouldn't...
         self.basis = None
@@ -162,20 +146,27 @@ class SuccessFailModel(OplessModel):
 
     Parameters
     ----------
-    state_space_labels : StateSpaceLabels or list or tuple
-        The decomposition (with labels) of (pure) state-space this model
-        acts upon.  Regardless of whether the model contains operators or
-        superoperators, this argument describes the Hilbert space dimension
-        and imposed structure.  If a list or tuple is given, it must be
-        of a from that can be passed to `StateSpaceLabels.__init__`.
+    state_space : StateSpace
+        The state space of this model.
 
     use_cache : bool, optional
         Whether a cache should be used to increase performance.
     """
-    def __init__(self, state_space_labels, use_cache=False):
-        OplessModel.__init__(self, state_space_labels)
+    def __init__(self, state_space, use_cache=False):
+        OplessModel.__init__(self, state_space)
         self.use_cache = use_cache
         self._sim = _SuccessFailForwardSimulator(self)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'use_cache': self.use_cache
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        state_space = _StateSpace.from_nice_serialization(state['state_space'])
+        return cls(state_space, state['use_cache'])
 
     @property
     def sim(self):

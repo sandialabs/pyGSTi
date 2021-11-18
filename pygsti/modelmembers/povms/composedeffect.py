@@ -372,13 +372,10 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
             "`static_effect` evotype must match `errormap` ('%s' != '%s')" % (static_effect._evotype, evotype)
         assert(static_effect.num_params == 0), "`static_effect` 'reference' must have *zero* parameters!"
 
-        #d2 = static_effect.dim
         self.effect_vec = static_effect
         self.error_map = errormap
-        self.terms = {} if evotype in ("svterm", "cterm") else None
-        self.local_term_poly_coeffs = {} if evotype in ("svterm", "cterm") else None
-        # TODO REMOVE self.direct_terms = {} if evotype in ("svterm","cterm") else None
-        # TODO REMOVE self.direct_term_poly_coeffs = {} if evotype in ("svterm","cterm") else None
+        self.terms = {}
+        self.local_term_poly_coeffs = {}
 
         #Create representation
         effectRep = self.effect_vec._rep
@@ -387,7 +384,16 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         # an effect that applies a *named* errormap before computing with effectRep
 
         _POVMEffect.__init__(self, rep, evotype)  # sets self.dim
+        self.init_gpindices()  # initialize gpindices and subm_rpindices from sub-members
         #_ErrorMapContainer.__init__(self, self.error_map)
+
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        error_map = serial_memo[mm_dict['submembers'][0]]
+        static_effect = serial_memo[mm_dict['submembers'][1]]
+        return cls(static_effect, error_map)
 
     @property
     def size(self):
@@ -401,28 +407,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         -------
         list
         """
-        return [self.error_map]
-
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that embedded gate has its
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.effect_vec, self.error_map.copy(parent))
-        return self._copy_gpindices(copyOfMe, parent, memo)
+        return [self.error_map, self.effect_vec]
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
@@ -445,9 +430,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         """
         self.terms = {}  # clear terms cache since param indices have changed now
         self.local_term_poly_coeffs = {}
-        # TODO REMOVE self.direct_terms = {}
-        # TODO REMOVE self.direct_term_poly_coeffs = {}
-        _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
+        super().set_gpindices(gpindices, parent, memo)
 
     def to_dense(self, on_space='minimal', scratch=None):
         """

@@ -62,12 +62,12 @@ cdef class OpRep(_basereps_cython.OpRep):
     def aslinearoperator(self):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRep(_np.ascontiguousarray(v,'d'))
-            return self.acton(in_state).to_dense_superop()
+            in_state = StateRepDense(_np.ascontiguousarray(v,'d'), self.state_space)
+            return self.acton(in_state).to_dense_superket()
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRep(_np.ascontiguousarray(v,'d'))
-            return self.adjoint_acton(in_state).to_dense_superop()
+            in_state = StateRepDense(_np.ascontiguousarray(v,'d'), self.state_space)
+            return self.adjoint_acton(in_state).to_dense_superket()
         dim = self.c_rep._dim
         return ScipyLinearOperator((dim,dim), matvec=mv, rmatvec=rmv, dtype='d') # transpose, adjoint, dot, matmat?
 
@@ -430,7 +430,7 @@ cdef class OpRepExpErrorgen(OpRep):
         (<OpCRep_ExpErrorgen*>self.c_rep)._m_star = m_star
         (<OpCRep_ExpErrorgen*>self.c_rep)._s = s
 
-    def get_exp_params(self):
+    def exp_params(self):
         return ( (<OpCRep_ExpErrorgen*>self.c_rep)._mu,
                  (<OpCRep_ExpErrorgen*>self.c_rep)._eta,
                  (<OpCRep_ExpErrorgen*>self.c_rep)._m_star,

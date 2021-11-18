@@ -118,9 +118,25 @@ class TestDirectRBDesign(BaseCase):
         #     print('  Serial circuit:   ' + str(sd_circ))
         #     print('  Parallel circuit: ' + str(md_circ))
         #     print()
-            
+
+        #Print more debugging info since this test can fail randomly but we can't reproduce this.
+        unequal_circuits = []
+        for i, (sd, md) in enumerate(zip(serial_design.all_circuits_needing_data,
+                                         mp_design.all_circuits_needing_data)):
+            if str(sd) != str(md):
+                unequal_circuits.append((i, sd, md))
+        if len(unequal_circuits) > 0:
+            print("%d unequal circuits!!" % len(unequal_circuits))
+            print("Seed = ",self.seed, " depths=", self.depths, " circuits_per_depth=", self.circuits_per_depth)
+            for i, sd, md in unequal_circuits:
+                print("Index: ", i)
+                print("Serial design: ", sd.str)
+                print("Parall design: ", md.str)
+                print()
+
         self.assertTrue(all([str(sd) == str(md) for sd, md in zip(serial_design.all_circuits_needing_data,
-                                                        mp_design.all_circuits_needing_data)]))
+                                                                  mp_design.all_circuits_needing_data)]))
+
 
 class TestMirrorRBDesign(BaseCase):
 

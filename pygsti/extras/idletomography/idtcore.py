@@ -578,7 +578,7 @@ def determine_paulidicts(model):
         if any([abs(v) > 1e-6 for v in prep.to_vector()]): return None
     else:
         nqubits = int(round(_np.log2(model.dim) / 2))
-        cmp = _state.ComputationalBasisState([0] * nqubits, model._evotype).to_dense()
+        cmp = _state.ComputationalBasisState([0] * nqubits, 'pp', model._evotype).to_dense()
         if _np.linalg.norm(prep.to_dense() - cmp) > 1e-6: return None
 
     def extract_action(g, cur_sslbls, ql):
@@ -613,12 +613,10 @@ def determine_paulidicts(model):
 
     #Get several standard 1-qubit pi/2 rotations in Pauli basis:
     pp = _baseobjs.BuiltinBasis('pp', 4)
-    Gx = _modelconstruction._basis_create_operation(
-        [('Q0',)], "X(pi/2,Q0)", basis=pp, parameterization="static"
-    ).to_dense()
-    Gy = _modelconstruction._basis_create_operation(
-        [('Q0',)], "Y(pi/2,Q0)", basis=pp, parameterization="static"
-    ).to_dense()
+    Gx = _modelconstruction.create_operation("X(pi/2,Q0)", [('Q0',)], basis=pp,
+                                             parameterization="static").to_dense()
+    Gy = _modelconstruction.create_operation("Y(pi/2,Q0)", [('Q0',)], basis=pp,
+                                             parameterization="static").to_dense()
 
     #try to find 1-qubit pi/2 rotations
     found = {}
@@ -832,8 +830,8 @@ def make_idle_tomography_lists(nqubits, max_lenghts, pauli_basis_dicts, maxweigh
 # Running idle tomography
 # -----------------------------------------------------------------------------
 
-def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, idle_string,
-                               outcome, max_lenghts, fit_order=1):
+def compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, idle_string,
+                                        outcome, max_lenghts, fit_order=1):
     """
     Extract the observed error rate from a series of experiments which prepares
     and measures in the *same* Pauli basis and tracks a particular `outcome`.
@@ -920,8 +918,8 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, idle_s
             'weights': wts}
 
 
-def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts,
-                               idle_string, observable, max_lenghts, fit_order=1):
+def compute_observed_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts,
+                                        idle_string, observable, max_lenghts, fit_order=1):
     """
     Extract the observed error rate from a series of experiments which prepares
     and measures in *different* Pauli basis and tracks the expectation value of
@@ -1186,8 +1184,8 @@ def do_idle_tomography(nqubits, dataset, max_lenghts, pauli_basis_dicts, maxweig
                                  for err in errors])
                 my_J.append(Jrow)
 
-                info = get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, GiStr,
-                                                  out, max_lenghts, fit_order)
+                info = compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, GiStr,
+                                                           out, max_lenghts, fit_order)
                 info['jacobian row'] = _np.array(Jrow)
                 infos_for_this_fidpair[out] = info
 
@@ -1296,8 +1294,8 @@ def do_idle_tomography(nqubits, dataset, max_lenghts, pauli_basis_dicts, maxweig
                                 for err in errors]
                     my_Jaff.append(Jaff_row)
 
-                info = get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, GiStr, obs,
-                                                  max_lenghts, fit_order)
+                info = compute_observed_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, GiStr, obs,
+                                                           max_lenghts, fit_order)
                 info['jacobian row'] = _np.array(Jrow)
                 if include_affine: info['affine jacobian row'] = _np.array(Jaff_row)
                 infos_for_this_fidpair[obs] = info

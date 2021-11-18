@@ -222,6 +222,255 @@ def nullspace_qr(m, tol=1e-7):
     return q[:, rank:]
 
 
+def nice_nullspace(m, tol=1e-7):
+    """
+    Computes the nullspace of a matrix, and tries to return a "nice" basis for it.
+
+    Columns of the returned value (a basis for the nullspace) each have a maximum
+    absolute value of 1.0 and are chosen so as to align with the the original
+    matrix's basis as much as possible (the basis is found by projecting each
+    original basis vector onto an arbitrariliy-found nullspace and keeping only
+    a set of linearly independent projections).
+
+    Parameters
+    ----------
+    m : numpy array
+        An matrix of shape (M,N) whose nullspace to compute.
+
+    tol : float , optional
+        Nullspace tolerance, used when comparing diagonal values of R with zero.
+
+    Returns
+    -------
+    An matrix of shape (M,K) whose columns contain nullspace basis vectors.
+    """
+    nullsp = nullspace(m, tol)
+    nullsp_projector = _np.dot(nullsp, nullsp.conj().T)
+    keepers = []; current_rank = 0
+    for i in range(nullsp_projector.shape[1]):  # same as mx.shape[1]
+        rank = _np.linalg.matrix_rank(nullsp_projector[:, 0:i + 1], tol=tol)
+        if rank > current_rank:
+            keepers.append(i)
+            current_rank = rank
+    ret = _np.take(nullsp_projector, keepers, axis=1)
+
+    for j in range(ret.shape[1]):  # normalize columns so largest element is +1.0
+        mx = abs(max(ret[:, j]))
+        if mx > 1e-6: ret[:, j] /= mx
+    return ret
+
+
+def normalize_columns(m, return_norms=False, ord=None):
+    """
+    Normalizes the columns of a matrix.
+
+    Parameters
+    ----------
+    m : numpy.ndarray or scipy sparse matrix
+        The matrix.
+
+    return_norms : bool, optional
+        If `True`, also return a 1D array containing the norms
+        of the columns (before they were normalized).
+
+    ord : int, optional
+        The order of the norm.  See :function:`numpy.linalg.norm`.
+
+    Returns
+    -------
+    normalized_m : numpy.ndarray
+        The matrix after columns are normalized
+
+    column_norms : numpy.ndarray
+        Only returned when `return_norms=True`, a 1-dimensional array
+        of the pre-normalization norm of each column.
+    """
+    norms = column_norms(m, ord)
+    norms[norms == 0.0] = 1.0  # avoid division of zero-column by zero
+    normalized_m = scale_columns(m, 1 / norms)
+    return (normalized_m, norms) if return_norms else normalized_m
+
+
+def column_norms(m, ord=None):
+    """
+    Compute the norms of the columns of a matrix.
+
+    Parameters
+    ----------
+    m : numpy.ndarray or scipy sparse matrix
+        The matrix.
+
+    ord : int, optional
+        The order of the norm.  See :function:`numpy.linalg.norm`.
+
+    Returns
+    -------
+    numpy.ndarray
+        A 1-dimensional array of the column norms (length is number of columns of `m`).
+    """
+    if _sps.issparse(m):
+        #this could be done more efficiently, e.g. by converting to csc and taking column norms directly
+        norms = _np.array([_np.linalg.norm(m[:, j].todense(), ord=ord) for j in range(m.shape[1])])
+    else:
+        norms = _np.array([_np.linalg.norm(m[:, j], ord=ord) for j in range(m.shape[1])])
+    return norms
+
+
+def scale_columns(m, scale_values):
+    """
+    Scale each column of a matrix by a given value.
+
+    Usually used for normalization purposes, when the
+    matrix columns represent vectors.
+
+    Parameters
+    ----------
+    m : numpy.ndarray or scipy sparse matrix
+        The matrix.
+
+    scale_values : numpy.ndarray
+        A 1-dimensional array of scale values, one per
+        column of `m`.
+
+    Returns
+    -------
+    numpy.ndarray or scipy sparse matrix
+        A copy of `m` with scaled columns, possibly with different sparsity structure.
+    """
+    if _sps.issparse(m):
+        assert(len(scale_values) == m.shape[1])
+
+        m_csc = _sps.csc_matrix(m)
+        for j, scale in enumerate(scale_values):
+            m_csc.data[m_csc.indptr[j]:m_csc.indptr[j + 1]] *= scale
+        return m_csc
+    else:
+        return m * scale_values[None, :]
+
+
+def columns_are_orthogonal(m, tol=1e-7):
+    """
+    Checks whether a matrix contains orthogonal columns.
+
+    The columns do not need to be normalized.  In the
+    complex case, two vectors v and w are considered orthogonal
+    if `dot(v.conj(), w) == 0`.
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+        The matrix to check.
+
+    tol : float, optional
+        Tolerance for checking whether dot products are zero.
+
+    Returns
+    -------
+    bool
+    """
+    if m.size == 0: return True  # boundary case
+    check = _np.dot(m.conj().T, m)
+    check[_np.diag_indices_from(check)] = 0.0
+
+    return bool(_np.linalg.norm(check) / check.size < tol)
+
+
+def columns_are_orthonormal(m, tol=1e-7):
+    """
+    Checks whether a matrix contains orthogonal columns.
+
+    The columns do not need to be normalized.  In the
+    complex case, two vectors v and w are considered orthogonal
+    if `dot(v.conj(), w) == 0`.
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+        The matrix to check.
+
+    tol : float, optional
+        Tolerance for checking whether dot products are zero.
+
+    Returns
+    -------
+    bool
+    """
+    if m.size == 0: return True  # boundary case
+    check = _np.dot(m.conj().T, m)
+    return bool(_np.allclose(check, _np.identity(check.shape[0], 'd'), atol=tol))
+
+
+def independent_columns(m, initial_independent_cols=None, tol=1e-7):
+    """
+    Computes the indices of the linearly-independent columns in a matrix.
+
+    Optionally starts with a "base" matrix of independent columns, so that
+    the returned indices indicate the columns of `m` that are independent
+    of all the base columns and the other independent columns of `m`.
+
+    Parameters
+    ----------
+    m : numpy.ndarray or scipy sparse matrix
+        The matrix.
+
+    initial_independent_cols : numpy.ndarray or scipy sparse matrix, optional
+        If not `None`, a matrix of known-to-be independent columns so to test the
+        columns of `m` with respect to (in addition to the already chosen independent
+        columns of `m`.
+
+    tol : float, optional
+        Tolerance threshold used to decide whether a singular value is nonzero
+        (it is if it's is greater than `tol`).
+
+    Returns
+    -------
+    list
+        A list of the independent-column indices of `m`.
+    """
+    indep_cols = []
+
+    if not _sps.issparse(m):
+        running_indep_cols = initial_independent_cols.copy() \
+            if (initial_independent_cols is not None) else _np.empty((m.shape[0], 0), m.dtype)
+        num_indep_cols = running_indep_cols.shape[0]
+
+        for j in range(m.shape[1]):
+            trial = _np.concatenate((running_indep_cols, m[:, j]), axis=1)
+            if _np.linalg.matrix_rank(trial, tol=tol) == num_indep_cols + 1:
+                running_indep_cols = trial
+                indep_cols.append(j)
+                num_indep_cols += 1
+
+    else:  # sparse case
+
+        from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence as _ArpackNoConvergence
+        running_indep_cols = initial_independent_cols.copy() \
+            if (initial_independent_cols is not None) else _sps.csc_matrix((m.shape[0], 0), dtype=m.dtype)
+        num_indep_cols = running_indep_cols.shape[0]
+
+        for j in range(m.shape[1]):
+            trial = _sps.hstack((running_indep_cols, m[:, j]))
+
+            try:
+                lowest_sval = _spsl.svds(trial, k=1, which="SM", return_singular_vectors=False)
+            except _ArpackNoConvergence:
+                lowest_sval = 0  # assume lack of convergence means smallest singular value was too small (?)
+
+            if lowest_sval > tol:  # trial fogi dirs still linearly independent (full rank)
+                running_indep_cols = trial
+                indep_cols.append(j)
+            # else trial column made fogi dirs linearly dependent and so don't tally indep column
+
+    return indep_cols
+
+
+def pinv_of_matrix_with_orthogonal_columns(m):
+    """ TODO: docstring """
+    col_scaling = _np.sum(_np.abs(m)**2, axis=0)
+    m_with_scaled_cols = m.conj() * col_scaling[None, :]
+    return m_with_scaled_cols.T
+
+
 def matrix_sign(m):
     """
     The "sign" matrix of `m`
@@ -327,6 +576,7 @@ def mx_to_string(m, width=9, prec=4, withbrackets=False):
     string
         matrix m as a pretty formated string.
     """
+    if m.size == 0: return ""
     s = ""; tol = 10**(-prec)
     if _np.max(abs(_np.imag(m))) > tol:
         return mx_to_string_complex(m, width, width, prec)
@@ -1803,6 +2053,7 @@ def sparse_onenorm(a):
     float
     """
     return max(abs(a).sum(axis=0).flat)
+    # also == return _spsl.norm(a, ord=1) (comparable speed)
 
 
 def ndarray_base(a, verbosity=0):
@@ -2042,6 +2293,77 @@ def project_onto_antikite(mx, kite):
         k0 += k
     assert(k0 == dim), "Invalid kite %d-dimensional matrix: %s" % (dim, str(kite))
     return mx
+
+
+def remove_dependent_cols(mx, tol=1e-7):
+    """
+    Removes the linearly dependent columns of a matrix.
+
+    Parameters
+    ----------
+    mx : numpy.ndarray
+        The input matrix
+
+    Returns
+    -------
+        A linearly independent subset of the columns of `mx`.
+    """
+    last_rank = 0; cols_to_remove = []
+    for j in range(mx.shape[1]):
+        rnk = _np.linalg.matrix_rank(mx[:, 0:j + 1], tol)
+        if rnk == last_rank:
+            cols_to_remove.append(j)
+        else:
+            last_rank = rnk
+    #print("Removing %d cols" % len(cols_to_remove))
+    return _np.delete(mx, cols_to_remove, axis=1)
+
+
+def intersection_space(space1, space2, tol=1e-7, use_nice_nullspace=False):
+    """
+    TODO: docstring
+    """
+    VW = _np.concatenate((space1, -space2), axis=1)
+    nullsp = nice_nullspace(VW, tol) if use_nice_nullspace else nullspace(VW, tol)
+    #nullsp = _spl.null_space(VW, rcond=1e-3)  # alternative
+    return _np.dot(space1, nullsp[0:space1.shape[1], :])
+
+
+def union_space(space1, space2, tol=1e-7):
+    """
+    TODO: docstring
+    """
+    VW = _np.concatenate((space1, space2), axis=1)
+    return remove_dependent_cols(VW, tol)
+
+
+#UNUSED
+#def spectral_radius(x):
+#    if hasattr(x, 'ndim') and x.ndim == 2:  # then interpret as a numpy array and take norm
+#        evals = _np.sort(_np.linalg.eigvals(x))
+#        return abs(evals[-1] - evals[0])
+#    else:
+#        return x
+
+
+def jamiolkowski_angle(hamiltonian_mx):
+    """
+    TODO: docstring
+    """
+    Hmx = hamiltonian_mx
+    d = Hmx.shape[0]
+    I = _np.identity(d)
+    errmap = _np.kron(I, _spl.expm(1j * Hmx))
+    psi = _np.zeros(d**2)  # will be a maximally entangled state
+    for i in range(d):
+        x = _np.zeros(d); x[i] = 1.0
+        xx = _np.kron(x, x)
+        psi += xx / _np.sqrt(d)
+    assert(_np.isclose(_np.dot(psi, psi), 1.0))
+    cos_theta = abs(_np.dot(psi.conj(), _np.dot(errmap, psi)))
+    return _np.real_if_close(_np.arccos(cos_theta))
+    #cos_squared_theta = entanglement_infidelity(expm(1j * Hmx), identity)
+    #return _np.arccos(_np.sqrt(cos_squared_theta))
 
 
 def zvals_to_dense(self, zvals, superket=True):

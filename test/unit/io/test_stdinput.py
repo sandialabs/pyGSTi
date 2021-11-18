@@ -16,7 +16,7 @@ class DataSetLoaderTester(BaseCase):
         with open(pth, 'w') as f:
             f.write(contents)
 
-        ds = io.load_dataset(pth, ignore_zero_count_lines=False)
+        ds = io.read_dataset(pth, ignore_zero_count_lines=False)
         self.assertEqual(ds[Circuit('Gc0')]['0'], 10)
         self.assertEqual(ds[Circuit('Gc1')]['0'], 1)
         self.assertEqual(ds[Circuit('Gc2')]['1'], 23)
@@ -34,7 +34,7 @@ class DataSetLoaderTester(BaseCase):
         with open(pth, 'w') as f:
             f.write(contents)
 
-        ds = io.load_dataset(pth, ignore_zero_count_lines=False)
+        ds = io.read_dataset(pth, ignore_zero_count_lines=False)
         self.assertEqual(ds[Circuit('Gc0')]['0'], 0)
         self.assertEqual(ds[Circuit('Gc1')]['0'], 1)
         self.assertEqual(ds[Circuit('Gc2')]['0'], 0)
@@ -52,7 +52,7 @@ class DataSetLoaderTester(BaseCase):
         with open(pth, 'w') as f:
             f.write(contents)
 
-        ds = io.load_dataset(pth, ignore_zero_count_lines=False)
+        ds = io.read_dataset(pth, ignore_zero_count_lines=False)
         self.assertEqual(ds[Circuit('Gc1')]['0'], 1)
         self.assertEqual(ds[Circuit('Gc2')]['0'], 0)
 
@@ -73,7 +73,7 @@ class DataSetLoaderTester(BaseCase):
         #print(ds)
 
         io.write_dataset(pth, ds, fixed_column_mode=False)
-        ds = io.load_dataset(pth, ignore_zero_count_lines=False)
+        ds = io.read_dataset(pth, ignore_zero_count_lines=False)
 
         self.assertEqual(ds[c1]['0'], 0)
         self.assertEqual(ds[c2]['0'], 1)
@@ -92,7 +92,7 @@ class DataSetLoaderTester(BaseCase):
         with open(pth, 'w') as f:
             f.write(contents)
 
-        ds = io.load_dataset(pth, ignore_zero_count_lines=False)
+        ds = io.read_dataset(pth, ignore_zero_count_lines=False)
         self.assertEqual(ds[Circuit('Gc0')]['0'], 0)
         self.assertEqual(ds[Circuit('Gc1')]['0'], 1)
         self.assertEqual(ds[Circuit('Gc2')]['0'], 0)
@@ -111,7 +111,7 @@ class DataSetLoaderTester(BaseCase):
         with open(pth, 'w') as f:
             f.write(contents)
 
-        ds = io.load_dataset(pth, ignore_zero_count_lines=False)
+        ds = io.read_dataset(pth, ignore_zero_count_lines=False)
         self.assertEqual(ds[Circuit('Gc1')]['0'], 1)
         self.assertEqual(ds[Circuit('Gc2')]['0'], 0)
         self.assertEqual(ds[Circuit('Gc3')]['0'], 1)

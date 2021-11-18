@@ -19,6 +19,7 @@ from pygsti.modelmembers import modelmember as _gm
 from pygsti.modelmembers import instruments as _instrument
 from pygsti.modelmembers import povms as _povm
 from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.evotypes import Evotype as _Evotype
 
@@ -232,7 +233,7 @@ class OpFactory(_gm.ModelMember):
 
     def __str__(self):
         s = "%s object with dimension %d and %d params" % (
-            self.__class__.__name__, self.dim, self.num_params)
+            self.__class__.__name__, self.state_space.dim, self.num_params)
         return s
 
     #Note: to_vector, from_vector, and num_params are inherited from
@@ -265,12 +266,40 @@ class EmbeddedOpFactory(OpFactory):
         self.embedded_factory = factory_to_embed
         self.target_labels = target_labels
         super(EmbeddedOpFactory, self).__init__(state_space, factory_to_embed._evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
 
         #FUTURE: somehow do all the difficult embedded op computation once at construction so we
         # don't need to keep reconstructing an Embedded op in each create_op call.
         #Embedded = _op.EmbeddedDenseOp if dense else _op.EmbeddedOp
         #dummyOp = _op.ComposedOp([], dim=factory_to_embed.dim, evotype=factor_to_embed._evotype)
         #self.embedded_op = Embedded(stateSpaceLabels, target_labels, dummyOp)
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
+        mm_dict['target_labels'] = self.target_labels
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        return cls(state_space, mm_dict['target_labels'], serial_memo[mm_dict['submembers'][0]])
 
     def create_op(self, args=None, sslbls=None):
         """
@@ -405,6 +434,37 @@ class EmbeddingOpFactory(OpFactory):
         self.num_target_labels = num_target_labels
         self.allowed_sslbls_fn = allowed_sslbls_fn
         super(EmbeddingOpFactory, self).__init__(state_space, factory_or_op_to_embed._evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
+        mm_dict['num_target_labels'] = self.num_target_labels
+        mm_dict['allowed_sslbls_fn'] = self.allowed_sslbls_fn.to_nice_serialization()
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        allowed_sslbls_fn = _NicelySerializable.from_nice_serialization(mm_dict['allowed_sslbls_fn'])
+        return cls(state_space, serial_memo[mm_dict['submembers'][0]],
+                   mm_dict['num_target_labels'], allowed_sslbls_fn)
 
     def create_op(self, args=None, sslbls=None):
         """
@@ -555,6 +615,7 @@ class ComposedOpFactory(OpFactory):
         self.dense = dense
         self.is_factory = [isinstance(f, OpFactory) for f in factories_or_ops_to_compose]
         super(ComposedOpFactory, self).__init__(state_space, evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
 
     def create_op(self, args=None, sslbls=None):
         """

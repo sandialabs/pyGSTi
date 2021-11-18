@@ -13,15 +13,27 @@ Functions for loading GST objects from text files.
 import os as _os
 import pathlib as _pathlib
 import warnings as _warnings
+import json as _json
 
 from pygsti.io import metadir as _metadir
 from pygsti.io import stdinput as _stdinput
 from pygsti import baseobjs as _baseobjs
 from pygsti import circuits as _circuits
 from pygsti import data as _data
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
+@_deprecated_fn('read_dataset')
 def load_dataset(filename, cache=False, collision_action="aggregate",
+                 record_zero_counts=True, ignore_zero_count_lines=True,
+                 with_times="auto", circuit_parse_cache=None, verbosity=1):
+    """Deprecated!"""
+    return read_dataset(filename, cache, collision_action,
+                        record_zero_counts, ignore_zero_count_lines,
+                        with_times, circuit_parse_cache, verbosity)
+
+
+def read_dataset(filename, cache=False, collision_action="aggregate",
                  record_zero_counts=True, ignore_zero_count_lines=True,
                  with_times="auto", circuit_parse_cache=None, verbosity=1):
     """
@@ -95,7 +107,7 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
             if _os.path.exists(cache_filename) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
-                    printer.log("Loading from cache file: %s" % cache_filename)
+                    printer.log("Reading from cache file: %s" % cache_filename)
                     ds = _data.DataSet(file_to_load_from=cache_filename)
                     return ds
                 except: print("WARNING: Failed to load from cache file")  # pragma: no cover
@@ -125,7 +137,15 @@ def load_dataset(filename, cache=False, collision_action="aggregate",
         return ds
 
 
+@_deprecated_fn('read_multidataset')
 def load_multidataset(filename, cache=False, collision_action="aggregate",
+                      record_zero_counts=True, verbosity=1):
+    """Deprecated!"""
+    return read_multidataset(filename, cache, collision_action,
+                             record_zero_counts, verbosity)
+
+
+def read_multidataset(filename, cache=False, collision_action="aggregate",
                       record_zero_counts=True, verbosity=1):
     """
     Load a MultiDataSet from a file.
@@ -183,7 +203,7 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
             if _os.path.exists(cache_filename) and \
                _os.path.getmtime(filename) < _os.path.getmtime(cache_filename):
                 try:
-                    printer.log("Loading from cache file: %s" % cache_filename)
+                    printer.log("Reading from cache file: %s" % cache_filename)
                     mds = _data.MultiDataSet(file_to_load_from=cache_filename)
                     return mds
                 except: print("WARNING: Failed to load from cache file")  # pragma: no cover
@@ -210,7 +230,13 @@ def load_multidataset(filename, cache=False, collision_action="aggregate",
     return mds
 
 
+@_deprecated_fn('read_time_dependent_dataset')
 def load_time_dependent_dataset(filename, cache=False, record_zero_counts=True):
+    """Deprecated!"""
+    return read_time_dependent_dataset(filename, cache, record_zero_counts)
+
+
+def read_time_dependent_dataset(filename, cache=False, record_zero_counts=True):
     """
     Load time-dependent (time-stamped) data as a DataSet.
 
@@ -220,7 +246,7 @@ def load_time_dependent_dataset(filename, cache=False, record_zero_counts=True):
         The name of the file
 
     cache : bool, optional
-        Reserved to perform caching similar to `load_dataset`.  Currently
+        Reserved to perform caching similar to `read_dataset`.  Currently
         this argument doesn't do anything.
 
     record_zero_counts : bool, optional
@@ -239,6 +265,7 @@ def load_time_dependent_dataset(filename, cache=False, record_zero_counts=True):
     return tdds
 
 
+@_deprecated_fn('pygsti.models.Model.read(...)')
 def load_model(filename):
     """
     Load a Model from a file, formatted using the standard text-format for models.
@@ -255,6 +282,7 @@ def load_model(filename):
     return _stdinput.parse_model(filename)
 
 
+@_deprecated_fn()
 def load_circuit_dict(filename):
     """
     Load a circuit dictionary from a file, formatted using the standard text-format.
@@ -272,7 +300,13 @@ def load_circuit_dict(filename):
     return std.parse_dictfile(filename)
 
 
+@_deprecated_fn('read_circuit_list')
 def load_circuit_list(filename, read_raw_strings=False, line_labels='auto', num_lines=None):
+    """Deprecated!"""
+    return read_circuit_list(filename, read_raw_strings, line_labels, num_lines)
+
+
+def read_circuit_list(filename, read_raw_strings=False, line_labels='auto', num_lines=None):
     """
     Load a circuit list from a file, formatted using the standard text-format.
 
@@ -314,7 +348,56 @@ def load_circuit_list(filename, read_raw_strings=False, line_labels='auto', num_
         return std.parse_stringfile(filename, line_labels, num_lines, create_subcircuits)
 
 
+def convert_strings_to_circuits(obj):
+    """
+    Converts an object resulting from :function:`convert_circuits_to_strings` back to its original.
+
+    Parameters
+    ----------
+    obj : list or tuple or dict
+        The object to convert.
+
+    Returns
+    -------
+    object
+    """
+    from pygsti.circuits import Circuit as _Circuit
+    std = _stdinput.StdInputParser()
+
+    def _replace_strs_with_circuits(x):
+        if isinstance(x, (list, tuple)):
+            if len(x) > 0 and x[0] == 'dict_items':  # then convert this list into a dictionary
+                return {_replace_strs_with_circuits(k): _replace_strs_with_circuits(v) for k, v in x[1:]}
+            else:  # normal list/tuple load -- we always load a tuple so it can work as a dict key
+                return tuple([_replace_strs_with_circuits(el) for el in x])
+        if isinstance(x, dict):  # this case isn't written anymore - just to read old-format files (TODO REMOVE LATER)
+            return {_replace_strs_with_circuits(k): _replace_strs_with_circuits(v) for k, v in x.items()}
+        if isinstance(x, str):
+            return std.parse_circuit(x, create_subcircuits=_Circuit.default_expand_subcircuits)
+        return x
+
+    return _replace_strs_with_circuits(obj)
+
+
+def read_circuit_strings(filename):
+    """ TODO: docstring - load various Circuit-containing standard objects from a file where
+        they have been replaced by their string representations """
+
+    if str(filename).endswith('.json'):
+        with open(filename, 'r') as f:
+            json_dict = _json.load(f)
+            return convert_strings_to_circuits(json_dict)
+    else:
+        raise ValueError("Cannot determine format from extension of filename: %s" % str(filename))
+
+
+@_deprecated_fn('read_protocol_from_dir')
 def load_protocol_from_dir(dirname, quick_load=False, comm=None):
+    """Deprecated!"""
+    return read_protocol_from_dir(dirname, quick_load, comm)
+
+
+def read_protocol_from_dir(dirname, quick_load=False, comm=None):
     """
     Load a :class:`Protocol` from a directory on disk.
 
@@ -339,7 +422,13 @@ def load_protocol_from_dir(dirname, quick_load=False, comm=None):
     return _metadir._cls_from_meta_json(dirname).from_dir(dirname, quick_load=quick_load)
 
 
+@_deprecated_fn('read_edesign_from_dir')
 def load_edesign_from_dir(dirname, quick_load=False, comm=None):
+    """Deprecated!"""
+    return read_edesign_from_dir(dirname, quick_load, comm)
+
+
+def read_edesign_from_dir(dirname, quick_load=False, comm=None):
     """
     Load a :class:`ExperimentDesign` from a directory on disk.
 
@@ -378,7 +467,7 @@ def create_edesign_from_dir(dirname):
         for child in sorted(edesign_dir.iterdir()):
             if child.is_file():
                 try:
-                    lst = load_circuit_list(child, read_raw_strings=False, line_labels='auto')
+                    lst = read_circuit_list(child, read_raw_strings=False, line_labels='auto')
                     circuit_lists.append(lst); circuit_list_names.append(child.name)
                 except Exception:
                     pass
@@ -405,7 +494,13 @@ def create_edesign_from_dir(dirname):
         raise ValueError("Could not create an experiment design from the files in this directory!")
 
 
+@_deprecated_fn('read_data_from_dir')
 def load_data_from_dir(dirname, quick_load=False, comm=None):
+    """Deprecated!"""
+    return read_data_from_dir(dirname, quick_load, comm)
+
+
+def read_data_from_dir(dirname, quick_load=False, comm=None):
     """
     Load a :class:`ProtocolData` from a directory on disk.
 
@@ -435,7 +530,13 @@ def load_data_from_dir(dirname, quick_load=False, comm=None):
     return protocol_data.from_dir(dirname, quick_load=quick_load)
 
 
+@_deprecated_fn('read_results_from_dir')
 def load_results_from_dir(dirname, name=None, preloaded_data=None, quick_load=False, comm=None):
+    """Deprecated!"""
+    return read_results_from_dir(dirname, name, preloaded_data, quick_load, comm)
+
+
+def read_results_from_dir(dirname, name=None, preloaded_data=None, quick_load=False, comm=None):
     """
     Load a :class:`ProtocolResults` or :class:`ProtocolsResultsDir` from a directory on disk.
 

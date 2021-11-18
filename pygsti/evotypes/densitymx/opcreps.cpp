@@ -538,7 +538,7 @@ namespace CReps_densitymx {
     for(r=0; r<N; r++) {
       outdata[r] = 0;
       for(k=_A_indptr[r]; k<_A_indptr[r+1]; k++)
-	outdata[r] += _A_data[k] * indata[ _A_indices[k]];
+	    outdata[r] += _A_data[k] * indata[ _A_indices[k]];
     }
     return out_state;
   }

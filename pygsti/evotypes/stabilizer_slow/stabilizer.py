@@ -455,7 +455,7 @@ class StabilizerFrame(object):
             #DEBUG print("DB PYTHON XGEN returns ",result,new_amp)
             return result, new_amp
 
-        def get_target_ampl(tgt):
+        def _get_target_ampl(tgt):
             #requires just a single pass through X-block
             zvals = anchor.copy(); amp = anchor_amp  # start with anchor state
             lead = -1
@@ -487,13 +487,13 @@ class StabilizerFrame(object):
 
         if target is not None:
             if debug: print("Getting Target Amplitude")
-            return get_target_ampl(target)
+            return _get_target_ampl(target)
         elif qs_to_sample is not None:
             target = anchor.copy()
             for k, tup in enumerate(_itertools.product(*([[0, 1]] * len(qs_to_sample)))):
                 if _np.isnan(amp_samples[k]):
                     target[list(qs_to_sample)] = tup
-                    amp_samples[k] = get_target_ampl(target)
+                    amp_samples[k] = _get_target_ampl(target)
             return (anchor, amp_samples)
 
         else:

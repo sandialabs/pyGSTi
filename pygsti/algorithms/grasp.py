@@ -19,7 +19,7 @@ from pygsti import baseobjs as _baseobjs
 from pygsti import circuits as _circuits
 
 
-def get_swap_neighbors(weights, forced_weights=None, shuffle=False):
+def neighboring_weight_vectors(weights, forced_weights=None, shuffle=False):
     """
     Return the list of weights in the neighborhood of a given weight vector.
 
@@ -234,8 +234,10 @@ def _grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
     while betterSolnFound:
         betterSolnFound = False
         weightsNeighbors = get_neighbors_fn(currentWeights)
+        elements_obj_array = _np.empty(len(elements), dtype=object)
+        elements_obj_array[:] = elements  # Note: just doing _np.array(elements) => ragged edged 2D array
         neighborSolns = [[element for element
-                          in _np.array(elements)[_np.nonzero(weightsNeighbor)]]
+                          in elements_obj_array[_np.nonzero(weightsNeighbor)]]
                          for weightsNeighbor in weightsNeighbors]
         if feasibleTest == 'function':
             feasibleNeighborSolns = [(idx, soln) for idx, soln

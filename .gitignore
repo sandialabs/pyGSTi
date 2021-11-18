@@ -10,6 +10,7 @@
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
 jupyter_notebooks/Tutorials/tutorial_files
+jupyter_notebooks/Tutorials/algorithms/test_mirror_benchmark/
 jupyter_notebooks/**/offline
 jupyter_notebooks/Examples/example_files
 test/test_packages/offline
@@ -21,6 +22,9 @@ hooks/etc/permissions.yml
 /.eggs/
 .ropeproject
 .vscode
+doc/_autosummary
+doc/build
+pygsti/_version.py
 
 # Test Metadata #
 #################
@@ -108,3 +112,4 @@ scripts/profiling/data
 # Other Local-only Files #
 ############################
 local
+venv/

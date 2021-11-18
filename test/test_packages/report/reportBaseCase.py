@@ -111,6 +111,7 @@ class ReportBaseCase(BaseTestCase):
                                                                         'on_bad_fit': ["robust","Robust","robust+","Robust+"],
                                                                         'bad_fit_threshold': -1.0,
                                                                         'germ_length_limits': {('Gx','Gi','Gi'): 2} })
+
         #OLD
         #lsgst_gatesets_TP = pygsti.do_iterative_mlgst(cls.ds, cls.mdl_clgst_tp, cls.lsgstStrings, verbosity=0,
         #                                           min_prob_clip=1e-4, prob_clip_interval=(-1e6,1e6),

@@ -43,9 +43,15 @@ from pygsti.processors import CliffordCompilationRules as _CliffordCompilationRu
 from pygsti.models import oplessmodel as _oplessmodel, modelconstruction as _mconst
 from pygsti.modelmembers.povms import povm as _povm
 from pygsti.tools import rbtools as _anl
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
+@_deprecated_fn('basic_device_information')
 def get_device_specs(devname):
+    return basic_device_information(devname)
+
+
+def basic_device_information(devname):
     return _get_dev_specs(devname)
 
 
@@ -84,7 +90,7 @@ def _get_dev_specs(devname):
     return dev
 
 
-def get_edgelist(device):
+def edgelist(device):
 
     specs = _get_dev_specs(device)
 
@@ -356,7 +362,7 @@ def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_
     with non-independent error rates model.
     """
 
-    def get_local_depolarization_channel(rate, num_qubits):
+    def _get_local_depolarization_channel(rate, num_qubits):
 
         if num_qubits == 1:
 
@@ -377,7 +383,7 @@ def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_
 
             return _np.kron(channel, channel)
 
-    def get_local_povm(rate):
+    def _get_local_povm(rate):
 
         # Increase the error rate of X,Y,Z, as rate correpsonds to bit-flip rate.
         deprate = 3 * rate / 2
@@ -393,7 +399,7 @@ def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_
 
     error_rates = tempdict['error_rates']
     alias_dict = tempdict['alias_dict']
-    devspecs = get_device_specs(device)
+    devspecs = basic_device_information(device)
 
     if qubits is None:
         qubits = devspecs.qubits
@@ -415,14 +421,14 @@ def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_
         gatestr = str(lbl)
 
         if len(lbl.qubits) == 1:
-            errormap = get_local_depolarization_channel(error_rates['gates'][alias_dict.get(gatestr, gatestr)], 1)
+            errormap = _get_local_depolarization_channel(error_rates['gates'][alias_dict.get(gatestr, gatestr)], 1)
             model.operation_blks['gates'][lbl] = _np.dot(errormap, model.operation_blks['gates'][lbl])
 
         if len(lbl.qubits) == 2:
-            errormap = get_local_depolarization_channel(error_rates['gates'][alias_dict.get(gatestr, gatestr)], 2)
+            errormap = _get_local_depolarization_channel(error_rates['gates'][alias_dict.get(gatestr, gatestr)], 2)
             model.operation_blks['gates'][lbl] = _np.dot(errormap, model.operation_blks['gates'][lbl])
 
-    povms = [get_local_povm(error_rates['readout'][q]) for q in model.qubit_labels]
+    povms = [_get_local_povm(error_rates['readout'][q]) for q in model.qubit_labels]
     model.povm_blks['layers']['Mdefault'] = _povm.TensorProdPOVM(povms)
 
     return model

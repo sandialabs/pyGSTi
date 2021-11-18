@@ -10,10 +10,12 @@ Defines the ModelChild and ModelMember classes, which represent Model members
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from collections import OrderedDict
 import copy as _copy
 
 import numpy as _np
 
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import listtools as _lt
 from pygsti.tools import slicetools as _slct
 
@@ -90,7 +92,7 @@ class ModelChild(object):
         return d
 
 
-class ModelMember(ModelChild):
+class ModelMember(ModelChild, _NicelySerializable):
     """
     Base class for Model member objects that possess a definite state space, parameters count, and evolution type.
 
@@ -206,7 +208,25 @@ class ModelMember(ModelChild):
     @property
     def parameter_bounds(self):
         """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
-        return self._param_bounds
+        if self._param_bounds is not None:
+            return self._param_bounds
+
+        if len(self.submembers()) > 0:
+            param_bounds = _np.empty((self.num_params, 2), 'd')
+            param_bounds[:, 0] = -_np.inf
+            param_bounds[:, 1] = +_np.inf
+            for subm, local_inds in zip(self.submembers(), self._submember_rpindices):
+                subm_bounds = subm.parameter_bounds
+                if subm_bounds is not None:
+                    param_bounds[local_inds] = subm_bounds
+
+            # reset bounds to None if all are trivial
+            if _np.all(param_bounds[:, 0] == -_np.inf) and _np.all(param_bounds[:, 1] == _np.inf):
+                param_bounds = None
+        else:
+            param_bounds = self._param_bounds  # may be None
+
+        return param_bounds
 
     @parameter_bounds.setter
     def parameter_bounds(self, val):
@@ -287,14 +307,21 @@ class ModelMember(ModelChild):
         assert(self._parent is None), "Cannot relink parent: parent is not None!"
         self._parent = parent  # assume no dependent objects
 
-    def unlink_parent(self):
+    def unlink_parent(self, force=False):
         """
         Remove the parent-link of this member.
 
         Called when at least one reference (via `key`) to this object is being
         disassociated with `parent`.   If *all* references are to this object
         are now gone, set parent to None, invalidating any gpindices.
-        `starting_index`.
+
+        Parameters
+        ----------
+        force : bool, optional
+            If `True`, then resets parent to `None`, effectively de-allocating
+            the model member's parameters from the parent model, even if the
+            parent still contains references to it.  If `False`, the parent
+            is only set to `None` when its parent contains no reference to it.
 
         Returns
         -------
@@ -303,24 +330,25 @@ class ModelMember(ModelChild):
         for subm in self.submembers():
             subm.unlink_parent()
 
-        if (self.parent is not None) and (self.parent._obj_refcount(self) == 0):
+        if (self.parent is not None) and (force or self.parent._obj_refcount(self) == 0):
             self._parent = None
 
-    def clear_gpindices(self):
-        """
-        Sets gpindices to None, along with any submembers' gpindices.
-
-        This essentially marks these members for parameter re-allocation
-        (e.g. if the number - not just the value - of parameters they have
-        changes).
-
-        Returns
-        -------
-        None
-        """
-        for subm in self.submembers():
-            subm.clear_gpindices()
-        self._gpindices = None
+    # UNUSED - as this doesn't mark parameter for reallocation like it used to
+    #def clear_gpindices(self):
+    #    """
+    #    Sets gpindices to None, along with any submembers' gpindices.
+    #
+    #    This essentially marks these members for parameter re-allocation
+    #    (e.g. if the number - not just the value - of parameters they have
+    #    changes).
+    #
+    #    Returns
+    #    -------
+    #    None
+    #    """
+    #    for subm in self.submembers():
+    #        subm.clear_gpindices()
+    #    self._gpindices = None
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
@@ -361,9 +389,173 @@ class ModelMember(ModelChild):
 
         self._set_only_my_gpindices(gpindices, parent)
 
+    def shift_gpindices(self, above, amount, parent_filter=None, memo=None):
+        """
+        Shifts this member's gpindices by the given amount.
+
+        Usually called by the parent model when it shifts parameter
+        indices around in its parameter vector.
+
+        Parameters
+        ----------
+        above : int
+            The "insertion point" within the range of indices.  All indices
+            greater than or equal to this index are shifted.
+
+        amount : int
+            The amount to shift indices greater than or equal to `above` by.
+
+        parent_filter : Model or None
+            If a :class:`Model` object, then only those members with indices
+            allocated to this model will be shifted.  It usually makes sense
+            to specify this argument, supplying the parent model whose parameter
+            vector is being shifted.
+
+        memo : set, optional
+            A set keeping track of the object ids that have had their indices
+            set in a root `set_gpindices` call.  Used to prevent duplicate
+            calls and self-referencing loops.  If `memo` contains an object's
+            id (`id(self)`) then this routine will exit immediately.
+
+        Returns
+        -------
+        None
+        """
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
+        for subm in self.submembers():
+            subm.shift_gpindices(above, amount, parent_filter, memo)
+
+        if amount != 0 and (parent_filter is None or self.parent is parent_filter) and self.gpindices is not None:
+            if isinstance(self.gpindices, slice):
+                if self.gpindices.start >= above:
+                    self._set_only_my_gpindices(_slct.shift(self.gpindices, amount), self.parent)
+            else:
+                shifted = _np.where(self.gpindices >= above, self.gpindices + amount, self.gpindices)
+                self._set_only_my_gpindices(shifted, self.parent)  # works for integer arrays
+
     def _set_only_my_gpindices(self, gpindices, parent):
         self._parent = parent
         self._gpindices = gpindices
+
+    def _collect_parents(self, set_to_fill=None, memo=None):
+        """ Traverse sub-member tree and record all distinct parent Models. Useful for finding
+            the "anticipated parent" model when initializing a member with sub-members """
+        if set_to_fill is None: set_to_fill = set()
+        if memo is None: memo = set()
+        elif id(self) in memo: return
+        memo.add(id(self))
+
+        if len(self.submembers()) > 0:
+            for subm in self.submembers():
+                subm._collect_parents(set_to_fill, memo)
+        if self.parent is not None:
+            set_to_fill.add(self.parent)
+        return set_to_fill
+
+    def gpindices_are_allocated(self, model, memo=None):
+        """
+        Whether or not this model member's parameter indices are allocated within a potential parent model.
+
+        This is used to infer when the model member needs to have its parameter indices
+        reallocated (by its parent model).
+
+        Parameters
+        ----------
+        model : Model
+            Test for parameter allocation with respect to this model.
+
+        memo : dict, optional
+            Used to prevent duplicate calls and self-referencing loops.  If
+            `memo` contains an object's id (`id(self)`) then this routine
+            will exit immediately with a cached value.
+
+        Returns
+        -------
+        bool
+            True if this member's `.gpindices` and those of its sub-members are not None
+            and refer to parameter indices of `model`.
+        """
+        # Note: maybe this routine should always return False if model is None (?)
+        if memo is None: memo = {}
+        elif id(self) in memo: return memo[id(self)]
+
+        allocated = bool(self.gpindices is not None and model is self.parent)  # whether 'self' is allocated
+        if allocated and len(self.submembers()) > 0:  # then also check that submembers are allocated too
+            allocated = all([subm.gpindices_are_allocated(model, memo) for subm in self.submembers()])
+
+        memo[id(self)] = allocated
+        return allocated
+
+    def preallocate_gpindices(self, parent, memo=None):
+        """
+        Computes two key pieces of information for a model preparing to allocate this member.
+
+        These pieces of information are:
+
+        1. the total number of new parameters that would need to be allocated to `parent`
+           in order to have all this model member's parameters allocated to `parent`.
+        2. the largest parameter index from all the parameters already allocated to
+           `parent`.  This is useful for providing an ideal insertion point for the
+           new parameters, once the model has made space for them.
+
+        Note that this function does not update this model member's `.gpindces` or
+        other attributes at all - it just serves as a pre-allocation probe so that
+        the allocating model knows how much space in its parameter vector is needed/
+        requested by this perhaps-not-fully-allocated member.
+
+        Parameters
+        ----------
+        parent : Model
+            The model that parameter allocation is being considered with respect to.
+
+        memo : set, optional
+            Used to prevent duplicate calls and self-referencing loops.  If
+            `memo` contains an object's id (`id(self)`) then this routine
+            will exit immediately..
+
+        Returns
+        -------
+        num_new_params : int
+            the number of parameters that aren't currently allocated to `parent`
+        max_index : int
+            the maximum index of the parameters currently allocated to `parent`
+        """
+        assert(parent is not None), \
+            "Parent model cannot be `None`. Just call allocate_gpindices if there is no parent."
+
+        if memo is None: memo = set()
+        elif id(self) in memo:
+            return (0, -1)  # if already processes then don't need to do so again, and
+            # returning this is saying "don't tally any more new-params or adjust the max index"
+
+        memo.add(id(self))  # don't call this again
+
+        if len(self.submembers()) > 0:
+            #Allocate sub-members
+            max_existing_index = -1; tot_new_params = 0
+            for subm in self.submembers():
+                num_new_params, maxindex = subm.preallocate_gpindices(parent, memo)
+                tot_new_params += num_new_params
+                max_existing_index = max(max_existing_index, maxindex)
+            return tot_new_params, max_existing_index
+
+        else:  # no sub-members
+
+            if self.gpindices is None or parent is not self.parent:
+                # Note: parent == None has the special meaning of "no parent model".  When
+                # a modelmember is called upon to allocate indices to this non-model it
+                # *always* allocates the parameters even if it's self.parent is currently None.
+
+                #default behavior: assume num_params() works even with
+                # gpindices == None and indicate all our parameters should be allocated as "new"
+                return (self.num_params, -1)  # all params new, max existing index = -1 (no existing inds)
+            else:  # assume gpindices is good & everything's allocated already
+                max_existing_index = (self.gpindices.stop - 1) if isinstance(self.gpindices, slice) \
+                    else max(self.gpidices)  # an array
+                return 0, max_existing_index
 
     def allocate_gpindices(self, starting_index, parent, memo=None):
         """
@@ -434,7 +626,11 @@ class ModelMember(ModelChild):
             # print(" >>> DB DEFAULT %d ALLOCATING: " % id(self),
             #       self.gpindices, " parents:",
             #       pp(self.parent), pp(parent))
-            if self.gpindices is None or parent is not self.parent:
+            if self.gpindices is None or parent is None or parent is not self.parent:
+                # Note: parent == None has the special meaning of "no parent model".  When
+                # a modelmember is called upon to allocate indices to this non-model it
+                # *always* allocates the parameters even if it's self.parent is currently None.
+
                 #default behavior: assume num_params() works even with
                 # gpindices == None and allocate all our parameters as "new"
                 Np = self.num_params
@@ -453,6 +649,44 @@ class ModelMember(ModelChild):
         for subm in self.submembers():
             cnt += subm._obj_refcount(obj)
         return cnt
+
+    def init_gpindices(self):
+        """
+        Initializes this model member's parameter indices by allocating them to an "anticipated" parent model.
+
+        Objects with submembers often rely on having valid `.gpindices` and `.subm_rpindices`
+        attributes, but these aren't set until the object is allocated to a parent model.  This
+        method initializes these attributes in the best way possible *before* receiving the
+        actual parent model.  Typically model members (containing sub-members) are build in two ways:
+
+        1. The sub-members are all un-allocated, i.e. their `.parent` model is `None`
+        2. The sub-members are all allocated to the *same* parent model.
+
+        This method computes an "anticipated parent" model as the common parent of all
+        the submembers (if one exists) or `None`, and calls :method:`allocate_gpindices`
+        using this parent model and a starting index of 0.  This has the desired behavior
+        in the two cases above.  In case 1, parameter indices are set (allocated) but the
+        parent is set to `None`, so that the to-be parent model will see this member as
+        being unallocated.  In case 2, the parent model, if it is the anticipated one,
+        will see that this member's indices are already allocated to it, and won't need
+        to re-allocate them.
+        """
+        all_parents = self._collect_parents()
+        if len(all_parents) == 1:  # all sub-members have a common (non-None) parent model
+            # Next, check that all the sub-members are also *allocated* (have non-None gpindices) to this common parent
+            common_parent = all_parents.__iter__().__next__()
+            if all([subm.gpindices_are_allocated(common_parent) for subm in self.submembers()]):
+                # If so, then we can allocate our gpindices using this common parent
+                num_new_params = self.allocate_gpindices(starting_index=0, parent=common_parent)
+                assert(num_new_params == 0), \
+                    "No new parameters should have needed to be added (all sub-members were already allocated)!"
+                return
+
+        # Otherwise, we'll re-allocate all the indices using parent=None so that gpindices
+        #  and subm_rpindices get set for now, but will trigger a re-allocation when added
+        #  to an actual parent model.  When this re-allocation occurs, the basic properties
+        #  of this member (num_params, etc) should be the same as they are now (with parent=None).
+        self.allocate_gpindices(starting_index=0, parent=None)
 
     def gpindices_as_array(self):
         """
@@ -540,6 +774,191 @@ class ModelMember(ModelChild):
             memo[id(self.parent)] = None  # so deepcopy uses None instead of copying parent
         return self._copy_gpindices(_copy.deepcopy(self, memo), parent, memo)
 
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return True  # default is to have no additional checks for similarity
+
+    def is_similar(self, other, rtol=1e-5, atol=1e-8):
+        """
+        Comparator returning whether two ModelMembers are the same type
+        and parameterization.
+
+        ModelMembers with internal parameterization information (e.g.
+        LindbladErrorgen) should overload this function to account for that.
+
+        Parameters
+        ---------
+        other: ModelMember
+            ModelMember to compare to
+        rtol: float
+            Relative tolerance for floating poing comparisons (passed to numpy.isclose)
+        atol: float
+            Absolute tolerance for floating point comparisons (passed to numpy.isclose)
+
+        Returns
+        -------
+        bool
+            True if structure (all but parameter *values*) matches
+        """
+        if type(self) != type(other): return False
+        #if str(self.evotype) != str(other.evotype): return False  # allow models of different evotypes to be similar
+        if not self._is_similar(other, rtol, atol): return False
+
+        # Recursive check on submembers
+        if len(self.submembers()) != len(other.submembers()): return False
+        for sm1, sm2 in zip(self.submembers(), other.submembers()):
+            if not sm1.is_similar(sm2): return False
+
+        return True
+
+    def is_equivalent(self, other, rtol=1e-5, atol=1e-8):
+        """
+        Comparator returning whether two ModelMembers are equivalent.
+
+        This uses is_similar for type checking and NumPy allclose for parameter
+        checking, so is unlikely to be needed to overload.
+
+        Note that this only checks for NUMERICAL equivalence, not whether the objects
+        are the same.
+
+        Parameters
+        ---------
+        other: ModelMember
+            ModelMember to compare to
+        rtol: float
+            Relative tolerance for floating point comparisons (passed to numpy.isclose)
+        atol: float
+            Absolute tolerance for floating point comparisons (passed to numpy.isclose)
+
+        Returns
+        -------
+        bool
+            True if structure AND parameter vectors match
+        """
+        if not self.is_similar(other): return False
+
+        if not _np.allclose(self.to_vector(), other.to_vector(), rtol=rtol, atol=atol):
+            return False
+
+        # Recursive check on submembers
+        if len(self.submembers()) != len(other.submembers()): return False
+        for sm1, sm2 in zip(self.submembers(), other.submembers()):
+            # Technically calling is_equivalent here is extra type check work,
+            # but this is safer in case is_equivalent is overloaded in derived classes
+            if not sm1.is_equivalent(sm2): return False
+
+        return True
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = OrderedDict()
+        mm_dict['module'] = self.__module__
+        mm_dict['class'] = self.__class__.__name__
+        mm_dict['submembers'] = []
+        mm_dict['state_space'] = self.state_space.to_nice_serialization()
+        mm_dict['evotype'] = str(self.evotype)
+        mm_dict['model_parameter_indices'] = self._encodemx(self.gpindices_as_array())
+        mm_dict['relative_submember_parameter_indices'] = [list(map(int, _slct.to_array(inds)))
+                                                           for inds in self._submember_rpindices]
+        assert(self._paramlbls is None or isinstance(self._paramlbls, _np.ndarray))
+        mm_dict['parameter_labels'] = self._paramlbls.tolist() if (self._paramlbls is not None) else None
+        mm_dict['parameter_bounds'] = self._encodemx(self._param_bounds)
+
+        # Dereference submembers
+        for sm in self.submembers():
+            try:
+                mm_node = mmg_memo[id(sm)]
+                mm_dict['submembers'].append(mm_node.serialize_id)
+            except KeyError:
+                print('Each submember must be in the memo.')
+                print('Submember Id: ', id(sm), ', Submember: \n', sm)
+                print('Memo:\n')
+                for k, v in mmg_memo.items():
+                    print('  Id: ', k, ', Serialize Id: ', v.serialize_id, end=', ')
+                    print('  ModelMember:\n', v.mm)
+
+        return mm_dict
+
+    @classmethod
+    def _check_memoized_dict(cls, mm_dict, serial_memo):
+        """Performs simple checks to ensure that `mm_dict` corresponds to the
+           actual class( `cls`) being created, and that all submembers are present in `serial_memo` """
+        needed_tags = ['module', 'class', 'submembers', 'state_space', 'evotype']
+        assert all([tag in mm_dict.keys() for tag in needed_tags]), 'Must provide all needed tags: %s' % needed_tags
+
+        assert mm_dict['module'] == cls.__module__, "Module must match"
+        assert mm_dict['class'] == cls.__name__, "Class must match"
+        assert all([(sub_id in serial_memo) for sub_id in mm_dict['submembers']]), "Not all sub-members exist!"
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        """
+        For subclasses to implement.  Submember-existence checks are performed,
+        and the gpindices of the return value is set, by the non-underscored
+        :method:`from_memoized_dict` implemented in this class.
+        """
+        #E.g.:
+        # assert len(mm_dict['submembers']) == 0, 'ModelMember base class has no submembers'
+        # return cls(mm_dict['state_space'], mm_dict['evotype'])
+        raise NotImplementedError("Derived classes should implement this!")
+
+    @classmethod
+    def from_memoized_dict(cls, mm_dict, serial_memo):
+        """Deserialize a ModelMember object and relink submembers from a memo.
+
+        Parameters
+        ----------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for deserialization
+            This must have at least the following fields:
+                module, class, submembers, state_space, evotype
+
+        serial_memo: dict
+            Keys are serialize_ids and values are ModelMembers. This is NOT the same as
+            other memos in ModelMember, (e.g. copy(), allocate_gpindices(), etc.).
+            This is similar but not the same as mmg_memo in to_memoized_dict(),
+            as we do not need to build a ModelMemberGraph for deserialization.
+
+        Returns
+        -------
+        ModelMember
+            An initialized object
+        """
+        cls._check_memoized_dict(mm_dict, serial_memo)
+
+        obj = cls._from_memoized_dict(mm_dict, serial_memo)
+
+        my_gpindices = _slct.list_to_slice(cls._decodemx(mm_dict['model_parameter_indices']), array_ok=True)
+        obj._set_only_my_gpindices(my_gpindices, parent=None)  # parent will get re-linked later (by Model)
+
+        obj._submember_rpindices = tuple([_slct.list_to_slice(inds)
+                                          for inds in mm_dict['relative_submember_parameter_indices']])
+        if mm_dict['parameter_labels'] is not None:
+            obj._paramlbls = _np.empty(len(mm_dict['parameter_labels']), dtype=object)
+            obj._paramlbls[:] = mm_dict['parameter_labels']  # 2-step init because otherwise we end up with a 2D array
+        else:
+            obj._paramlbls = None
+        obj._param_bounds = cls._decodemx(mm_dict['parameter_bounds'])
+
+        return obj
+
     def _copy_gpindices(self, op_obj, parent, memo):
         """ Helper function for implementing copy in derived classes """
         gpindices_copy = None
@@ -594,6 +1013,10 @@ class ModelMember(ModelChild):
             for i, sub in enumerate(self.submembers()):
                 #print(prefix, "  Sub%d: " % i, end='')
                 sub._print_gpindices(prefix + "  ", "Sub%d" % i, param_labels, max_depth - 1)
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return "(contents not available)"
 
 
 def _compose_gpindices(parent_gpindices, child_gpindices):

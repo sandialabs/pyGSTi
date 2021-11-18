@@ -10,6 +10,7 @@ The ConjugatedStatePOVMEffect class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
 import copy as _copy
 
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
@@ -66,7 +67,8 @@ class DenseEffectInterface(object):
 
     #Access to underlying array
     def __getitem__(self, key):
-        self.dirty = True
+        if not isinstance(key, (int, _np.int64)):  # don't set dirty flag if returning a single element
+            self.dirty = True
         return self.columnvec.__getitem__(key)
 
     def __getslice__(self, i, j):
@@ -142,6 +144,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
         evotype = state._evotype
         rep = evotype.create_conjugatedstate_effect_rep(state._rep)
         _POVMEffect.__init__(self, rep, evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
 
     @property
     def parameter_labels(self):
@@ -360,3 +363,16 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
             effect_terms.append(effect_term)
 
         return (effect_terms, ret[1]) if return_coeff_polys else effect_terms
+
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        # This method is meant to function for derived classes whose __init__
+        # methods just construct a specific type of state and pass this to
+        # ConjugatedStatePOVMEffect.__init__ (and don't add any other attributes).
+        # This includes FullPOVMEffect, FullPOVMPureEffect, etc.  As such, we need
+        # to construct the object is a more complex way:
+        ret = cls.__new__(cls)  # create a new object of the correct type
+        ConjugatedStatePOVMEffect.__init__(ret, serial_memo[mm_dict['submembers'][0]])  # init via this class's __init__
+        return ret

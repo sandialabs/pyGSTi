@@ -13,6 +13,7 @@ Defines objective-function objects
 import itertools as _itertools
 import sys as _sys
 import time as _time
+import pathlib as _pathlib
 
 import numpy as _np
 
@@ -21,6 +22,7 @@ from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableC
 from pygsti.tools import slicetools as _slct, mpitools as _mpit, sharedmemtools as _smt
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
@@ -112,7 +114,7 @@ def _objfn(objfn_cls, model, dataset, circuits=None,
     #    return len(self.circuits)
 
 
-class ObjectiveFunctionBuilder(object):
+class ObjectiveFunctionBuilder(_NicelySerializable):
     """
     A factory class for building objective functions.
 
@@ -220,6 +222,23 @@ class ObjectiveFunctionBuilder(object):
         self.regularization = regularization
         self.penalties = penalties
         self.additional_args = kwargs
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'description': self.description,
+                      'class_to_build': self.cls_to_build.__module__ + '.' + self.cls_to_build.__name__,
+                      'regularization': self.regularization,
+                      'penalties': self.penalties,
+                      'additional_arguments': self.additional_args,
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        from pygsti.io.metadir import _class_for_name
+        return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
+                   state['regularization'], state['penalties'], *state['additional_arguments'])
 
     def compute_array_types(self, method_names, forwardsim):
         return self.cls_to_build.compute_array_types(method_names, forwardsim)
@@ -1560,7 +1579,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                     if self.raw_objfn.printer.verbosity > 3 or \
                        (self.raw_objfn.printer.verbosity == 3 and blk_rank == 0):
                         print("rank %d: %gs: block %d/%d, atom %d/%d, atom-size (#circuits) = %d"
-                              % (self.resource_alloc.comm_rank, _time.time() - tm, k + 1, kmax, iAtom,
+                              % (self.resource_alloc.comm_rank, _time.time() - tm, k + 1, kmax, iAtom + 1,
                                  len(layout.atoms), atom.num_elements))
                         _sys.stdout.flush(); k += 1
 
@@ -2469,6 +2488,197 @@ class RawFreqWeightedChi2Function(RawChi2Function):
             A 1D array of the same length as `total_counts` and `probs`.
         """
         return 2 * total_counts / self.min_freq_clip_for_weighting
+
+
+class RawCustomWeightedChi2Function(RawChi2Function):
+
+    """
+    The function `custom_weight^2 (p-f)^2`, with custom weights that default to 1.
+
+    Parameters
+    ----------
+    regularization : dict, optional
+        Regularization values.
+
+    resource_alloc : ResourceAllocation, optional
+        Available resources and how they should be allocated for computations.
+
+    name : str, optional
+        A name for this objective function (can be anything).
+
+    description : str, optional
+        A description for this objective function (can be anything)
+
+    verbosity : int, optional
+        Level of detail to print to stdout.
+
+    custom_weights : numpy.ndarray, optional
+        One-dimensional array of the custom weights, which linearly multiply the
+        *least-squares* terms, i.e. `(p - f)`.  If `None`, then unit weights are
+        used and the objective function computes the sum of unweighted squares.
+    """
+    def __init__(self, regularization=None, resource_alloc=None, name="cwchi2",
+                 description="Sum of custom-weighted Chi^2", verbosity=0, custom_weights=None):
+        super().__init__(regularization, resource_alloc, name, description, verbosity)
+        self.custom_weights = custom_weights
+
+    def set_regularization(self):
+        """
+        Set regularization values.
+
+        Returns
+        -------
+        None
+        """
+        pass
+
+    def _weights(self, p, f, total_counts):
+        #Note: this could be computed once and cached?
+        """
+        Get the chi2 weighting factor.
+
+        Parameters
+        ----------
+        p : numpy.ndarray
+            The probabilities.
+
+        f : numpy.ndarray
+            The frequencies
+
+        total_counts : numpy.ndarray
+            The total counts.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        if self.custom_weights is not None:
+            return self.custom_weights
+        else:
+            return _np.ones(len(p), 'd')
+
+    def _dweights(self, p, f, wts):
+        """
+        Get the derivative of the chi2 weighting factor.
+
+        Parameters
+        ----------
+        p : numpy.ndarray
+            The probabilities.
+
+        f : numpy.ndarray
+            The frequencies
+
+        wts : numpy.ndarray
+            The weights, as computed by :method:`_weights`.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        return _np.zeros(len(p), 'd')
+
+    def _hweights(self, p, f, wts):
+        """
+        Get the 2nd derivative of the chi2 weighting factor.
+
+        Parameters
+        ----------
+        p : numpy.ndarray
+            The probabilities.
+
+        f : numpy.ndarray
+            The frequencies
+
+        wts : numpy.ndarray
+            The weights, as computed by :method:`_weights`.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        return _np.zeros(len(p), 'd')
+
+    def zero_freq_terms(self, total_counts, probs):
+        """
+        Evaluate objective function terms with zero frequency (where count and frequency are zero).
+
+        Such terms are treated specially because, for some objective functions,
+        having zero frequency is a special case and must be handled differently.
+
+        Parameters
+        ----------
+        total_counts : numpy.ndarray
+            The total counts.
+
+        probs : numpy.ndarray
+            The probabilities.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 1D array of the same length as `total_counts` and `probs`.
+        """
+        if self.custom_weights is not None:
+            return self.custom_weights**2 * probs**2  # elementwise cw^2 * p^2
+        else:
+            return probs**2  # p^2
+
+    def zero_freq_dterms(self, total_counts, probs):
+        """
+        Evaluate the derivative of zero-frequency objective function terms.
+
+        Zero frequency terms are treated specially because, for some objective functions,
+        these are a special case and must be handled differently.  Derivatives are
+        evaluated element-wise, i.e. the i-th element of the returned array is the
+        derivative of the i-th term with respect to the i-th probability (derivatives
+        with respect to all other probabilities are zero because of the function structure).
+
+        Parameters
+        ----------
+        total_counts : numpy.ndarray
+            The total counts.
+
+        probs : numpy.ndarray
+            The probabilities.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 1D array of the same length as `total_counts` and `probs`.
+        """
+        if self.custom_weights is not None:
+            return 2 * self.custom_weights**2 * probs
+        else:
+            return 2 * probs  # p^2
+
+    def zero_freq_hterms(self, total_counts, probs):
+        """
+        Evaluate the 2nd derivative of zero-frequency objective function terms.
+
+        Zero frequency terms are treated specially because, for some objective functions,
+        these are a special case and must be handled differently.  Derivatives are
+        evaluated element-wise, i.e. the i-th element of the returned array is the
+        2nd derivative of the i-th term with respect to the i-th probability (derivatives
+        with respect to all other probabilities are zero because of the function structure).
+
+        Parameters
+        ----------
+        total_counts : numpy.ndarray
+            The total counts.
+
+        probs : numpy.ndarray
+            The probabilities.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 1D array of the same length as `total_counts` and `probs`.
+        """
+        if self.custom_weights is not None:
+            return 2 * self.custom_weights**2
+        else:
+            return 2 * _np.ones(len(probs))
 
 
 # The log(Likelihood) within the Poisson picture is:                                                                                                    # noqa
@@ -5079,6 +5289,69 @@ class FreqWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
         super().__init__(raw_objfn, mdc_store, penalties, verbosity)
 
 
+class CustomWeightedChi2Function(TimeIndependentMDCObjectiveFunction):
+    """
+    Model-based custom-weighted chi-squared function: `cw^2 (p-f)^2`
+
+    Parameters
+    ----------
+    mdl : Model
+        The model - specifies how parameter values are turned into probabilities
+        for each circuit outcome.
+
+    dataset : DataSet
+        The data set - specifies how counts and total_counts are obtained for each
+        circuit outcome.
+
+    circuits : list or CircuitList
+        The circuit list - specifies what probabilities and counts this objective
+        function compares.  If `None`, then the keys of `dataset` are used.
+
+    regularization : dict, optional
+        Regularization values.
+
+    penalties : dict, optional
+        Penalty values.  Penalties usually add additional (penalty) terms to the sum
+        of per-circuit-outcome contributions that evaluate to the objective function.
+
+    resource_alloc : ResourceAllocation, optional
+        Available resources and how they should be allocated for computations.
+
+    name : str, optional
+        A name for this objective function (can be anything).
+
+    description : str, optional
+        A description for this objective function (can be anything)
+
+    verbosity : int, optional
+        Level of detail to print to stdout.
+
+    enable_hessian : bool, optional
+        Whether hessian calculations are allowed.  If `True` then more resources are
+        needed.  If `False`, calls to hessian-requiring function will result in an
+        error.
+
+    custom_weights : numpy.ndarray, optional
+        One-dimensional array of the custom weights, which linearly multiply the
+        *least-squares* terms, i.e. `(p - f)`.  If `None`, then unit weights are
+        used and the objective function computes the sum of unweighted squares.
+    """
+
+    @classmethod
+    def create_from(cls, model, dataset, circuits, regularization=None, penalties=None,
+                    resource_alloc=None, name=None, description=None, verbosity=0,
+                    method_names=('fn',), array_types=(), custom_weights=None):
+        mdc_store = cls._create_mdc_store(model, dataset, circuits, resource_alloc, method_names,
+                                          array_types, verbosity)
+        return cls(mdc_store, regularization, penalties, name, description, verbosity, custom_weights)
+
+    def __init__(self, mdc_store, regularization=None, penalties=None, name=None, description=None, verbosity=0,
+                 custom_weights=None):
+        raw_objfn = RawCustomWeightedChi2Function(regularization, mdc_store.resource_alloc, name, description,
+                                                  verbosity, custom_weights)
+        super().__init__(raw_objfn, mdc_store, penalties, verbosity)
+
+
 class PoissonPicDeltaLogLFunction(TimeIndependentMDCObjectiveFunction):
     """
     Model-based poisson-picture delta log-likelihood function: `N*f*log(f/p) - N*(f-p)`.
@@ -6077,7 +6350,7 @@ def _spam_penalty_jac_fill(spam_penalty_vec_grad_to_fill, mdl, prefactor, op_bas
 
 def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor, wrt_slice):
 
-    def get_local_deriv(op):
+    def _get_local_deriv(op):
         z = op.errorgen_coefficients_array()  # val**2 term is abs(z) = sqrt(z*z.conj)
         dz = op.errorgen_coefficients_array_deriv_wrt_params()
         dterms = 0.5 * (z.conjugate()[:, None] * dz + z[:, None] * dz.conjugate()) / _np.abs(z)[:, None]
@@ -6096,16 +6369,16 @@ def _errorgen_penalty_jac_fill(errorgen_penalty_vec_grad_to_fill, mdl, prefactor
 
     #for lbl in mdl.primitive_prep_labels:
     #    op = mdl.circuit_layer_operator(lbl, 'prep')
-    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
+    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += _get_local_deriv(op)
 
     for lbl in mdl.primitive_op_labels:
         op = mdl.circuit_layer_operator(lbl, 'op')
         gpinds_subset, within_wrtslice, within_gpinds = _slct.intersect_within(wrt_slice, op.gpindices)
-        errorgen_penalty_vec_grad_to_fill[0, within_wrtslice] += get_local_deriv(op)[within_gpinds]
+        errorgen_penalty_vec_grad_to_fill[0, within_wrtslice] += _get_local_deriv(op)[within_gpinds]
 
     #for lbl in mdl.primitive_povm_labels:
     #    op = mdl.circuit_layer_operator(lbl, 'povm')
-    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += get_local_deriv(op)
+    #    errorgen_penalty_vec_grad_to_fill[0, op.gpindices] += _get_local_deriv(op)
 
     #Above fills derivative of val**2 = sum(terms), but we want deriv of val = sqrt(sum(terms)):
     errorgen_penalty_vec_grad_to_fill[0, :] *= 0.5 / val  # final == 1/sqrt(sum(terms)) * dsumterms
@@ -6261,7 +6534,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         raise NotImplementedError("No jacobian yet")
 
 
-class CachedObjectiveFunction(object):
+class CachedObjectiveFunction(_NicelySerializable):
     """
     Holds various values of an objective function at a particular point.
 
@@ -6273,6 +6546,33 @@ class CachedObjectiveFunction(object):
 
     The cache may only have values on the rank-0 proc (??)
     """
+
+    @classmethod
+    def from_dir(cls, dirname, quick_load=False):
+        """
+        Initialize a new CachedObjectiveFunction object from `dirname`.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
+        Parameters
+        ----------
+        dirname : str
+            The directory name.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
+        Returns
+        -------
+        CachedObjectiveFunction
+        """
+        import pygsti.io as _io
+        ret = cls.__new__(cls)
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
+        return ret
 
     def __init__(self, objective_function):
 
@@ -6303,3 +6603,52 @@ class CachedObjectiveFunction(object):
             self.total_counts = objfn_layout.allgather_local_array('e', objective_function.total_counts)
         else:
             self.probs = self.freqs = self.counts = self.total_counts = None
+
+        self.auxfile_types = {'layout': 'serialized-object',
+                              'model_paramvec': 'numpy-array',
+                              'fn': 'numpy-array',
+                              'chi2k_distributed_fn': 'numpy-array',
+                              'terms': 'numpy-array',
+                              'chi2k_distributed_terms': 'numpy-array',
+                              'percircuit': 'numpy-array',
+                              'chi2k_distributed_percircuit': 'numpy-array',
+                              'probs': 'numpy-array',
+                              'freqs': 'numpy-array',
+                              'counts': 'numpy-array',
+                              'total_counts': 'numpy-array'
+                              }
+
+    def write(self, dirname):
+        """
+        Write this CachedObjectiveFunction to a directory.
+
+        Parameters
+        ----------
+        dirname : str
+            The directory name to write.  This directory will be created
+            if needed, and the files in an existing directory will be
+            overwritten.
+
+        Returns
+        -------
+        None
+        """
+        import pygsti.io as _io
+        _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'description': self.description,
+                      'class_to_build': self.cls_to_build.__module__ + '.' + self.cls_to_build.__name__,
+                      'regularization': self.regularization,
+                      'penalties': self.penalties,
+                      'additional_arguments': self.additional_args,
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        from pygsti.io.metadir import _class_for_name
+        return cls(_class_for_name(state['class_to_build']), state['name'], state['description'],
+                   state['regularization'], state['penalties'], *state['additional_arguments'])

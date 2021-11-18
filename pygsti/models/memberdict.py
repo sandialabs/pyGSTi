@@ -286,20 +286,25 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
 
         if isinstance(value, _mm.ModelMember):  # if we're given an object, just replace
             #When self has a valid parent (as it usually does, except when first initializing)
-            # we copy and reset the gpindices & parent of ModelMember values which either:
-            # 1) belong to a different parent (indices would be inapplicable if they exist)
-            # 2) have indices but no parent (indices are inapplicable to us)
-            # Note that we don't copy and reset the case when a value's parent and gpindices
-            #  are both None, as gpindices==None indicates that the value may not have had
-            #  its gpindices allocated yet and so *might* have "latent" gpindices that do
-            #  belong to our parent (self.parent) (and copying a value will reset all
+            # we copy and reset the gpindices & parent of ModelMember values *if* they
+            # belong to a different parent (indices would be inapplicable if they exist).
+            #
+            # If a ModelMember's parent is None then we leave the indices alone, as they may
+            # have been initialized to allow the object to fully function in the absence of a
+            # parent model.  Still, these indices are inapplicable to us and will prompt a call
+            # to value.allocate_gpindices(...) the next time the Model's parameter vector is rebuilt.
+            #
+            # Alternatively, gpindices==None indicates that the value may not have had
+            #  its gpindices allocated yet and so *might* have "latent" (i.e. from-submember) gpindices
+            #  that do belong to our parent (self.parent) (and copying a value will reset all
             #  the parents to None).
+            #
+            # Either way, we should only copy the value when its parent is non-None and not our parent.
             wrongParent = (value.parent is not None) and (value.parent is not self.parent)
-            inappInds = (value.parent is None) and (value.gpindices is not None)
 
-            if self.parent is not None and (wrongParent or inappInds):
+            if self.parent is not None and wrongParent:
                 value = value.copy()  # copy value (so we don't mess up other parent) and
-                value.set_gpindices(None, self.parent)  # erase gindices don't apply to us
+                value.set_gpindices(None, self.parent)  # erase gindices that don't apply to us
 
             if not hasattr(value, "_evotype"): value._evotype = "densitymx"  # for backward compatibility
             self._check_evotype(value._evotype)
@@ -308,8 +313,8 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
                 existing = super(OrderedMemberDict, self).__getitem__(key)
             else: existing = None
 
-            if self.parent is not None: value.set_gpindices(None, self.parent)  # set parent
             super(OrderedMemberDict, self).__setitem__(key, value)
+            new_item = value  # keep track of newly set item for later
 
             # let the now-replaced existing object know it's been
             # removed from the parent, allowing it to reset (to None)
@@ -321,6 +326,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
         elif key in self:  # if a object already exists...
             #try to set its value
             super(OrderedMemberDict, self).__getitem__(key).set_dense(value)
+            new_item = None  # keep track of newly set item for later
 
         else:
             #otherwise, we've been given a non-ModelMember-object that doesn't
@@ -333,12 +339,15 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
             self._check_evotype(obj._evotype)
             if self.parent is not None: obj.set_gpindices(None, self.parent)
             super(OrderedMemberDict, self).__setitem__(key, obj)
+            new_item = obj  # keep track of newly set item for later
 
-        #rebuild Model's parameter vector (params may need to be added)
-        if self.parent is not None:
+        #rebuild Model's parameter vector is a new modelmember has been added (*number* of params may need to change)
+        if new_item is not None and self.parent is not None:
             #print("DEBUG: marking paramvec for rebuild after inserting ", key, " : ", list(self.keys()))
-            self.parent._mark_for_rebuild(super(OrderedMemberDict, self).__getitem__(key))
-            # mark the parent's (Model's) paramvec for rebuilding
+            # mark the parent's (Model's) paramvec for rebuilding:
+            self.parent._mark_for_rebuild(new_item)
+            if new_item.parent is not self.parent:  # de-allocate any items allocated to other models
+                new_item.unlink_parent(force=True)
 
     def __delitem__(self, key):
         """Implements `del self[key]`"""

@@ -62,7 +62,7 @@ class WriteMultidatasetTester(IOBase):
         self.circuit_list = io_gen.circuit_list
         self.reference_path_ref = self.reference_path('TestMultiDataset.txt')
         # TODO generate dynamically
-        self.mds = io.load_multidataset(str(self.reference_path_ref))
+        self.mds = io.read_multidataset(str(self.reference_path_ref))
 
     @with_temp_path
     def test_write_empty_multidataset(self, tmp_path):

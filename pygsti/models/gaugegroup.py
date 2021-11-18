@@ -12,10 +12,15 @@ GaugeGroup and derived objects, used primarily in gauge optimization
 
 import numpy as _np
 
+from pygsti.baseobjs import StateSpace as _StateSpace
 from pygsti.modelmembers import operations as _op
+from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.evotypes.evotype import Evotype as _Evotype
 
 
-class GaugeGroup(object):
+class GaugeGroup(_NicelySerializable):
     """
     A parameterized set (ideally a group) of gauge transformations.
 
@@ -82,7 +87,7 @@ class GaugeGroup(object):
         return _np.array([], 'd')
 
 
-class GaugeGroupElement(object):
+class GaugeGroupElement(_NicelySerializable):
     """
     The element of a :class:`GaugeGroup`, which represents a single gauge transformation.
     """
@@ -375,6 +380,18 @@ class OpGaugeGroup(GaugeGroup):
         """
         return self._operation.to_vector()
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'state_space_dimension': int(self._operation.state_space.dim),
+                      'evotype': str(self._operation.evotype)
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        #Note: this method assumes the (different) __init__ signature used by derived classes
+        return cls(_statespace.default_space_for_dim(state['state_space_dimension']), state['evotype'])
+
 
 class OpGaugeGroupElement(GaugeGroupElement):
     """
@@ -483,6 +500,18 @@ class OpGaugeGroupElement(GaugeGroupElement):
         """
         return self._operation.num_params
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'class': self.__class__.__name__,
+                      'operation_matrix': self._encodemx(self._operation.to_dense())
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        operation_mx = cls._decodemx(state['operation_matrix'])
+        return cls(operation_mx)
+
 
 class FullGaugeGroup(OpGaugeGroup):
     """
@@ -503,6 +532,7 @@ class FullGaugeGroup(OpGaugeGroup):
     """
 
     def __init__(self, state_space, evotype='default'):
+        state_space = _StateSpace.cast(state_space)
         operation = _op.FullArbitraryOp(_np.identity(state_space.dim, 'd'), evotype, state_space)
         OpGaugeGroup.__init__(self, operation, FullGaugeGroupElement, "Full")
 
@@ -546,6 +576,7 @@ class TPGaugeGroup(OpGaugeGroup):
     """
 
     def __init__(self, state_space, evotype='default'):
+        state_space = _StateSpace.cast(state_space)
         operation = _op.FullTPOp(_np.identity(state_space.dim, 'd'), evotype, state_space)
         OpGaugeGroup.__init__(self, operation, TPGaugeGroupElement, "TP")
 
@@ -603,6 +634,7 @@ class DiagGaugeGroup(OpGaugeGroup):
     """
 
     def __init__(self, state_space, evotype='default'):
+        state_space = _StateSpace.cast(state_space)
         dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
@@ -660,6 +692,7 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
+        state_space = _StateSpace.cast(state_space)
         dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
@@ -716,10 +749,25 @@ class UnitaryGaugeGroup(OpGaugeGroup):
     """
 
     def __init__(self, state_space, basis, evotype='default'):
+        state_space = _StateSpace.cast(state_space)
+        evotype = _Evotype.cast(str(evotype), default_prefer_dense_reps=True)  # since we use deriv_wrt_params
         errgen = _op.LindbladErrorgen.from_operation_matrix(
             _np.identity(state_space.dim, 'd'), "H", basis, mx_basis=basis, evotype=evotype)
         operation = _op.ExpErrorgenOp(errgen)
         OpGaugeGroup.__init__(self, operation, UnitaryGaugeGroupElement, "Unitary")
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'state_space_dimension': int(self._operation.state_space.dim),
+                      'basis': self._operation.errorgen.ham_basis.to_nice_serialization(),
+                      'evotype': str(self._operation.evotype)
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        basis = _Basis.from_nice_serialization(state['basis'])
+        return cls(_statespace.default_space_for_dim(state['state_space_dimension']), basis, state['evotype'])
 
 
 class UnitaryGaugeGroupElement(OpGaugeGroupElement):
@@ -769,6 +817,7 @@ class SpamGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
+        state_space = _StateSpace.cast(state_space)
         dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
@@ -828,6 +877,7 @@ class TPSpamGaugeGroup(OpGaugeGroup):
         should be the same as `mdl.dim` where `mdl` is a :class:`Model` you
         might gauge-transform.
         """
+        state_space = _StateSpace.cast(state_space)
         dim = state_space.dim
         ltrans = _np.identity(dim, 'd')
         rtrans = _np.identity(dim, 'd')
@@ -879,6 +929,7 @@ class TrivialGaugeGroup(GaugeGroup):
     """
 
     def __init__(self, state_space):
+        state_space = _StateSpace.cast(state_space)
         self.state_space = state_space
         GaugeGroup.__init__(self, "Trivial")
 
@@ -920,6 +971,16 @@ class TrivialGaugeGroup(GaugeGroup):
             A 1D array of length :method:`num_params`.
         """
         return _np.empty(0, 'd')
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'state_space': self.state_space.to_nice_serialization()})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        state_space = _statespace.StateSpace.from_nice_serialization(state['state_space'])
+        return cls(state_space)
 
 
 class TrivialGaugeGroupElement(GaugeGroupElement):
@@ -1016,3 +1077,12 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         int
         """
         return 0
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'operation_dimension': self._matrix.shape[0]})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        return cls(state['operation_dimension'])

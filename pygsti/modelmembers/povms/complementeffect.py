@@ -56,6 +56,7 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         #    that they index into our local parameter vector.
 
         _ConjugatedStatePOVMEffect.__init__(self, self.identity.copy())
+        self.init_gpindices()  # initialize our gpindices based on sub-members
         self._construct_vector()  # reset's self.base
 
     def _construct_vector(self):
@@ -65,6 +66,51 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         base1d[:] = self.identity.to_dense() - sum([vec.state.to_dense() for vec in self.other_effects])
         base1d.flags.writeable = False
         self._ptr_has_changed()
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+        mm_dict['identity_vector'] = self._encodemx(self.identity.to_dense())
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        identity = cls._decodemx(mm_dict['identity_vector'])
+        other_effects = [serial_memo[i] for i in mm_dict['submembers']]
+        return cls(identity, other_effects)
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (self.identity.shape == other.identity.shape
+                and _np.allclose(self.identity.to_dense(), other.identity.to_dense(), rtol=rtol, atol=atol))
+
+    def submembers(self):
+        """
+        Get the ModelMember-derived objects contained in this one.
+
+        Returns
+        -------
+        list
+        """
+        # Note: don't include [self.state] because its params aren't ComplementPOVMEffect params
+        return self.other_effects
 
     @property
     def num_params(self):
@@ -118,7 +164,7 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         # we just construct our vector based on them.
         #Note: this is needed for finite-differencing in map-based calculator
         self._construct_vector()
-        self.dirty = dirty_value
+        self.dirty = False  # dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
         """

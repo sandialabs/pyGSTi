@@ -327,7 +327,7 @@ def aggregate_dataset_outcomes(dataset, label_merge_dict, record_zero_counts=Tru
 
     # New code that works for time-series data.
     for key in dataset.keys():
-        times, linecounts = dataset[key].get_timeseries()
+        times, linecounts = dataset[key].counts_as_timeseries()
         count_dict_list = []
         for i in range(len(times)):
             count_dict = {}
@@ -542,7 +542,7 @@ def trim_to_constant_numtimesteps(ds):
     minnumtimes = min(numtimes)
 
     for circuit in ds.keys():
-        times, series = ds[circuit].get_timeseries()
+        times, series = ds[circuit].counts_as_timeseries()
         trimmedtimes = times[0:minnumtimes]
         trimmedseries = series[0:minnumtimes]
         trimmedds.add_series_data(circuit, trimmedseries, trimmedtimes, aux=ds.auxInfo[circuit])

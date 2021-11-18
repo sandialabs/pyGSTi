@@ -2131,7 +2131,7 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
             for opstr in force:
                 initialWeights[germs_list.index(opstr)] = 1
 
-    def get_neighbors_fn(weights): return _grasp.get_swap_neighbors(
+    def _get_neighbors_fn(weights): return _grasp.neighboring_weight_vectors(
         weights, forced_weights=initialWeights, shuffle=shuffle)
 
     undercompleteModelNum = test_germs_list_completeness(model_list,
@@ -2199,7 +2199,7 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
                 iterSolns = _grasp.run_grasp_iteration(
                     elements=germs_list, greedy_score_fn=scoreFn, rcl_fn=rcl_fn,
                     local_score_fn=scoreFn,
-                    get_neighbors_fn=get_neighbors_fn,
+                    get_neighbors_fn=_get_neighbors_fn,
                     feasible_fn=_feasible_fn,
                     initial_elements=initialWeights, seed=seed,
                     verbosity=verbosity)

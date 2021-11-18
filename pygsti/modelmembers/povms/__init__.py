@@ -36,6 +36,9 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
 
+# Avoid circular import
+import pygsti.modelmembers as _mm
+
 
 def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='default', state_space=None,
                              on_construction_error='warn'):
@@ -56,7 +59,7 @@ def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='defau
                 effects = [(lbl, create_effect_from_pure_vector(vec, typ, basis, evotype, state_space))
                            for lbl, vec in pure_vectors.items()]
                 povm = UnconstrainedPOVM(effects, evotype, state_space)
-            elif typ == 'TP':
+            elif typ == 'full TP':
                 effects = [(lbl, create_effect_from_pure_vector(vec, "full", basis, evotype, state_space))
                            for lbl, vec in pure_vectors.items()]
                 povm = TPPOVM(effects, evotype, state_space)
@@ -97,7 +100,7 @@ def create_from_dmvecs(superket_vectors, povm_type, basis='pp', evotype='default
                 effects = [(lbl, create_effect_from_dmvec(dmvec, typ, basis, evotype, state_space))
                            for lbl, dmvec in superket_vectors.items()]
                 povm = UnconstrainedPOVM(effects, evotype, state_space)
-            elif typ == 'TP':
+            elif typ == 'full TP':
                 effects = [(lbl, create_effect_from_dmvec(dmvec, 'full', basis, evotype, state_space))
                            for lbl, dmvec in superket_vectors.items()]
                 povm = TPPOVM(effects, evotype, state_space)
@@ -199,7 +202,7 @@ def create_effect_from_dmvec(superket_vector, effect_type, basis='pp', evotype='
     raise ValueError("Could not create an effect of type(s) %s from the given superket vector!" % (str(effect_type)))
 
 
-def get_povm_type_from_op_type(op_type):
+def povm_type_from_op_type(op_type):
     """Decode an op type into an appropriate povm type.
 
     Parameters:
@@ -212,7 +215,7 @@ def get_povm_type_from_op_type(op_type):
     povm_type_preferences: tuple of str
         POVM parameterization types
     """
-    op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+    op_type_preferences = _mm.operations.verbose_type_from_op_type(op_type)
 
     # computational and TP are directly constructed as POVMS
     # All others pass through to the effects
@@ -224,7 +227,7 @@ def get_povm_type_from_op_type(op_type):
         'full unitary': 'full pure',
         'static': 'static',
         'full': 'full',
-        'full TP': 'TP',
+        'full TP': 'full TP',
         'linear': 'full',
     }
 
@@ -244,7 +247,7 @@ def get_povm_type_from_op_type(op_type):
             povm_type_preferences.append(povm_type)
 
     if len(povm_type_preferences) == 0:
-        raise RuntimeError(
+        raise ValueError(
             'Could not convert any op types from {}.\n'.format(op_type_preferences)
             + '\tKnown op_types: Lindblad types or {}\n'.format(sorted(list(povm_conversion.keys())))
             + '\tValid povm_types: Lindblad types or {}'.format(sorted(list(set(povm_conversion.values()))))
@@ -264,7 +267,7 @@ def convert(povm, to_type, basis, extra=None):
     povm : POVM
         POVM to convert
 
-    to_type : {"full","TP","static","static unitary","H+S terms",
+    to_type : {"full","full TP","static","static unitary","H+S terms",
         "H+S clifford terms","clifford"}
         The type of parameterizaton to convert to.  See
         :method:`Model.set_all_parameterizations` for more details.
@@ -292,7 +295,7 @@ def convert(povm, to_type, basis, extra=None):
                                      for lbl, vec in povm.items()]
                 return UnconstrainedPOVM(converted_effects, povm.evotype, povm.state_space)
 
-            elif to_type == "TP":
+            elif to_type == "full TP":
                 if isinstance(povm, TPPOVM):
                     return povm  # no conversion necessary
                 else:
@@ -307,7 +310,10 @@ def convert(povm, to_type, basis, extra=None):
                 if isinstance(povm, ComputationalBasisPOVM):  # special easy case
                     base_povm = ComputationalBasisPOVM(povm.state_space.num_qubits, povm.evotype)  # just copy it?
                 else:
-                    base_items = [(lbl, convert_effect(vec, 'static unitary', basis)) for lbl, vec in povm.items()]
+                    try:
+                        base_items = [(lbl, convert_effect(vec, 'static unitary', basis)) for lbl, vec in povm.items()]
+                    except Exception:  # try static mixed states next:
+                        base_items = [(lbl, convert_effect(vec, 'static', basis)) for lbl, vec in povm.items()]
                     base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
 
                 proj_basis = 'pp' if povm.state_space.is_entirely_qubits else basis
