@@ -55,8 +55,10 @@ extras = {
         'autopep8',
         'flake8'
     ],
+    'interpygate': ['csaps'],
     'testing': [
         'coverage',
+        'csaps',
         'cvxopt',
         'cvxpy',
         'cython',
