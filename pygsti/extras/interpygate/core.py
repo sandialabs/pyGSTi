@@ -539,6 +539,7 @@ class InterpolatedQuantityFactory(object):
             all_points = _np.array(list(_itertools.product(*axial_points)))
         else:
             assert(self._parameter_points is not None and self._num_params_to_evaluate_as_group == 0)
+            global use_csaps
             if use_csaps:
                 use_csaps = False
                 warnings.warn("Cubic spline interpolation requires rectangular grid. Defaulting to linear interpolator.")

@@ -54,13 +54,13 @@ class DriftSummaryTable(_ws.WorkspaceTable):
     todo
     """
 
-    def __init__(self, ws, stabilityanalyzer, dskey=None, detectorkey=None, estimatekey=None):
+    def __init__(self, ws, results, dskey=None, detectorkey=None, estimatekey=None):
         """
         todo
         """
-        super(DriftSummaryTable, self).__init__(ws, self._create, stabilityanalyzer, dskey, detectorkey, estimatekey)
+        super(DriftSummaryTable, self).__init__(ws, self._create, results, dskey, detectorkey, estimatekey)
 
-    def _create(self, stabilityanalyzer, dskey, detectorkey, estimatekey):
+    def _create(self, results, dskey, detectorkey, estimatekey):
         colHeadings = ['', '', ]
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
         stabilityanalyzer = results.stabilityanalyzer
@@ -79,13 +79,14 @@ class DriftDetailsTable(_ws.WorkspaceTable):
     todo
     """
 
-    def __init__(self, ws, stabilityanalyzer, detectorkey=None, estimatekey=None):
+    def __init__(self, ws, results, detectorkey=None, estimatekey=None):
         """
         todo
         """
-        super(DriftDetailsTable, self).__init__(ws, self._create, stabilityanalyzer, detectorkey, estimatekey)
+        super(DriftDetailsTable, self).__init__(ws, self._create, results, detectorkey, estimatekey)
 
-    def _create(self, stabilityanalyzer, detectorkey, estimatekey):
+    def _create(self, results, detectorkey, estimatekey):
+        stabilityanalyzer = results.stabilityanalyzer
         if detectorkey is None:
             detectorkey = stabilityanalyzer._def_detection
         if estimatekey is None:
@@ -110,16 +111,17 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
     Plot of time-series data power spectrum
     """
 
-    def __init__(self, ws, stabilityanalyzer, spectrumlabel={}, detectorkey=None,
+    def __init__(self, ws, results, spectrumlabel={}, detectorkey=None,
                  showlegend=False, scale=1.0):
         """
         todo
         """
-        super(PowerSpectraPlot, self).__init__(ws, self._create, stabilityanalyzer,
+        super(PowerSpectraPlot, self).__init__(ws, self._create, results,
                                                spectrumlabel, detectorkey, showlegend, scale)
 
-    def _create(self, stabilityanalyzer, spectrumlabel, detectorkey, showlegend, scale):
+    def _create(self, results, spectrumlabel, detectorkey, showlegend, scale):
 
+        stabilityanalyzer = results.stabilityanalyzer
         circuits = spectrumlabel.get('circuit', None)
 
         # If we're plotting spectra for more than one circuit.
@@ -255,15 +257,17 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
     Plot of time-series data power spectrum
     """
 
-    def __init__(self, ws, stabilityanalyzer, gss, prep, germ, meas, dskey=None, detectorkey=None,
+    def __init__(self, ws, results, gss, prep, germ, meas, dskey=None, detectorkey=None,
                  showlegend=False, scale=1.0):
         """
         todo
         """
-        super(GermFiducialPowerSpectraPlot, self).__init__(ws, self._create, stabilityanalyzer, gss, prep, germ, meas,
+        super(GermFiducialPowerSpectraPlot, self).__init__(ws, self._create, results, gss, prep, germ, meas,
                                                            dskey, detectorkey, showlegend, scale)
 
-    def _create(self, stabilityanalyzer, gss, prep, germ, meas, dskey, detectorkey, showlegend, scale):
+    def _create(self, results, gss, prep, germ, meas, dskey, detectorkey, showlegend, scale):
+
+        stabilityanalyzer = results.stabilityanalyzer
 
         if isinstance(germ, str):
             germ = _Circuit(None, stringrep=germ)
@@ -446,7 +450,7 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
     todo
     """
 
-    def __init__(self, ws, stabilityanalyzer, gss, prep, germ, meas, outcome, minL=1, times=None, dskey=None,
+    def __init__(self, ws, results, gss, prep, germ, meas, outcome, minL=1, times=None, dskey=None,
                  estimatekey=None, estimator=None, showlegend=False, scale=1.0):
         """
         todo
@@ -455,12 +459,14 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
             Specifies the set of operation sequences along with their structure, e.g. fiducials, germs,
             and maximum lengths.
         """
-        super(GermFiducialProbTrajectoriesPlot, self).__init__(ws, self._create, stabilityanalyzer, gss, prep, germ,
+        super(GermFiducialProbTrajectoriesPlot, self).__init__(ws, self._create, results, gss, prep, germ,
                                                                meas, outcome, minL, times, dskey, estimatekey,
                                                                estimator, showlegend, scale)
 
-    def _create(self, stabilityanalyzer, gss, prep, germ, meas, outcome, minL, times, dskey, estimatekey,
+    def _create(self, results, gss, prep, germ, meas, outcome, minL, times, dskey, estimatekey,
                 estimator, showlegend, scale):
+            
+        stabilityanalyzer = results.stabilityanalyzer
 
         if isinstance(germ, str):
             germ = _Circuit(None, stringrep=germ)
