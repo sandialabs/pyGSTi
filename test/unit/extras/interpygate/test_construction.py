@@ -21,7 +21,7 @@ sigP = (sigX + 1.j*sigY)/2.
 class SingleQubitTargetOp(pygsti.modelmembers.operations.OpFactory):
     def __init__(self):
         self.process = self.create_target_gate
-        pygsti.modelmembers.operations.OpFactory.__init__(self, 4, evotype="densitymx")
+        pygsti.modelmembers.operations.OpFactory.__init__(self, 1, evotype="densitymx")
         self.dim = 4
     
     def create_target_gate(self, v):
