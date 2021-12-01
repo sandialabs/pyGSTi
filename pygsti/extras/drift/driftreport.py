@@ -16,9 +16,9 @@ import warnings as _warnings
 import os as _os
 
 from ... import _version
-from ...objects.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ...objects import Circuit as _Circuit
-from ...objects import DataComparator as _DataComparator
+from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from ...circuits import Circuit as _Circuit
+from ...data import DataComparator as _DataComparator
 from ...report import workspace as _ws
 from ...report import workspaceplots as _wp
 from ...report import table as _reporttable
