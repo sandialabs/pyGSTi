@@ -191,10 +191,10 @@ def std_least_squares_fit(lengths, asps, n, seed=None, asymptote=None, ftype='fu
     if asymptote is not None: A = asymptote
     else: A = 1 / 2**n
     # First perform a fit with a fixed asymptotic value
-    FAF_results = custom_least_squares_fit(lengths, asps, n, a=A, seed=seed)
+    FAF_results = custom_least_squares_fit(lengths, asps, n, a=A, seed=seed, rtype=rtype)
     # Full fit is seeded by the fixed asymptote fit.
     seed_full = [FAF_results['estimates']['a'], FAF_results['estimates']['b'], FAF_results['estimates']['p']]
-    FF_results = custom_least_squares_fit(lengths, asps, n, seed=seed_full)
+    FF_results = custom_least_squares_fit(lengths, asps, n, seed=seed_full, rtype=rtype)
     # Returns the requested fit type.
     if ftype == 'full': return FF_results
     elif ftype == 'FA': return FAF_results
@@ -340,7 +340,7 @@ def custom_least_squares_fit(lengths, asps, n, a=None, b=None, seed=None, rtype=
         estimates['a'] = a
         estimates['b'] = b
         estimates['p'] = p
-        estimates['r'] = _rbt.p_to_r(p, 2**n)
+        estimates['r'] = _rbt.p_to_r(p, 2**n, rtype)
 
     results = {}
     results['estimates'] = estimates
