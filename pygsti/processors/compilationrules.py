@@ -70,8 +70,21 @@ class CompilationRules(object):
         self.local_templates = _collections.OrderedDict()  # gate_name => Circuit on gate's #qubits
         self.function_templates = _collections.OrderedDict()  # gate_name => fn(sslbls)
         self.specific_compilations = _collections.OrderedDict()  # gate_label => Circuit on absolute qubits
+
+        self._compiled_cache = _collections.OrderedDict() # compiled gate_label => Circuit on absolute qubits
+
         if compilation_rules_dict is not None:
-            raise NotImplementedError("Need to convert compilation_rules_dict into info")
+            for k,v in compilation_rules_dict.items():
+                if isinstance(k, str):
+                    if callable(v):
+                        self.function_templates[k] = v
+                    else:
+                        assert isinstance(v, _Circuit), "Values to gate name template must be functions of Circuits, not %s" % type(v)
+                        self.local_templates[k] = v
+                else:
+                    assert isinstance(k, _Label), "Keys to compilation_rules_dict must be str or Labels, not %s" % type(k)
+                    assert isinstance(v, _Circuit), "Values to specific compilations must be Circuits, not %s" % type(v)
+                    self.specific_compilations[k] = v
 
     def add_compilation_rule(self, gate_name, template_circuit_or_fn, unitary=None):
         """
@@ -152,6 +165,51 @@ class CompilationRules(object):
         dict
         """
         return {}
+    
+    def retrieve_compilation_of(self, oplabel, force=False):
+        """
+        Get a compilation of `oplabel`, computing one from local templates if necessary.
+
+        Parameters
+        ----------
+        oplabel : Label
+            The label of the gate to compile.
+
+        force : bool, optional
+            If True, then an attempt is made to recompute a compilation
+            even if `oplabel` already exists in this `CompilationLibrary`.
+            Otherwise compilations are only computed when they are *not* present.
+
+        Returns
+        -------
+        Circuit or None, if failed to retrieve compilation
+        """
+        print(f'looking up {oplabel}')
+        # First look up in cache
+        if not force and oplabel in self._compiled_cache:
+            return self._compiled_cache[oplabel]
+        
+        # Second, look up in specific compilations
+        if oplabel in self.specific_compilations:
+            self._compiled_cache[oplabel] = self.specific_compilations[oplabel]
+            return self._compiled_cache[oplabel]
+
+        # Third, construct from local template
+        if oplabel.name in self.local_templates:
+            template_to_use = self.local_templates[oplabel.name]
+            
+            # Template compilations always use integer qubit labels: 0 to N 
+            to_real_label = {i: oplabel.sslbls[i] for i in template_to_use.line_labels}
+
+            self._compiled_cache[oplabel] = template_to_use.map_state_space_labels(to_real_label)
+        elif oplabel.name in self.function_templates:
+            template_fn_to_use = self.function_templates[oplabel]
+            self._compiled_cache[oplabel] = _Circuit(template_fn_to_use(oplabel.sslbls))
+        else:
+            # Failed to compile
+            return None
+        
+        return self._compiled_cache[oplabel]
 
     def apply_to_processorspec(self, processor_spec, action="replace"):
         """

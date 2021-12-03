@@ -2579,7 +2579,7 @@ class Circuit(object):
                 "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
 
             def _get_compilation(gate):
-                return compilation.specific_compilations.get(gate, None)
+                return compilation.retrieve_compilation_of(gate)
 
         else:  # Otherwise, we assume it's a dict.
             assert(allowed_filter is None), \
