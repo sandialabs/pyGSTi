@@ -184,25 +184,20 @@ class CompilationRules(object):
         -------
         Circuit or None, if failed to retrieve compilation
         """
-        print(f'looking up {oplabel}')
         # First look up in cache
         if not force and oplabel in self._compiled_cache:
             return self._compiled_cache[oplabel]
         
-        # Second, look up in specific compilations
-        if oplabel in self.specific_compilations:
+        if oplabel in self.specific_compilations: # Second, look up in specific compilations
             self._compiled_cache[oplabel] = self.specific_compilations[oplabel]
-            return self._compiled_cache[oplabel]
-
-        # Third, construct from local template
-        if oplabel.name in self.local_templates:
+        elif oplabel.name in self.local_templates: # Third, construct from local template
             template_to_use = self.local_templates[oplabel.name]
             
             # Template compilations always use integer qubit labels: 0 to N 
             to_real_label = {i: oplabel.sslbls[i] for i in template_to_use.line_labels}
 
             self._compiled_cache[oplabel] = template_to_use.map_state_space_labels(to_real_label)
-        elif oplabel.name in self.function_templates:
+        elif oplabel.name in self.function_templates: # Fourth, construct from local function template
             template_fn_to_use = self.function_templates[oplabel]
             self._compiled_cache[oplabel] = _Circuit(template_fn_to_use(oplabel.sslbls))
         else:
