@@ -235,7 +235,7 @@ class OpFactory(_gm.ModelMember):
 
     def __str__(self):
         s = "%s object with dimension %d and %d params" % (
-            self.__class__.__name__, self.dim, self.num_params)
+            self.__class__.__name__, self.state_space.dim, self.num_params)
         return s
 
     #Note: to_vector, from_vector, and num_params are inherited from
@@ -600,7 +600,8 @@ class ComposedOpFactory(OpFactory):
         at least one factory or operator being composed.
 
     dense : bool, optional
-        Whether dense composed operations (ops which hold their entire
+        Whether dense composed operations (ops which hold their entire superoperator)
+        should be created.  (Currently UNUSED - leave as default).
     """
 
     def __init__(self, factories_or_ops_to_compose, state_space="auto", evotype="auto", dense=False):
@@ -723,6 +724,34 @@ class ComposedOpFactory(OpFactory):
             gate.from_vector(v[factor_local_inds], close, dirty_value)
         self.dirty = dirty_value
 
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
+        mm_dict['dense'] = self.dense
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        factories_or_ops_to_compose = [serial_memo[i] for i in mm_dict['submembers']]
+        return cls(factories_or_ops_to_compose, state_space, mm_dict['evotype'], mm_dict['dense'])
+
 
 #Note: to pickle these Factories we'll probably need to some work
 # because they include functions.
@@ -792,7 +821,42 @@ class UnitaryOpFactory(OpFactory):
         """
         assert(sslbls is None), "UnitaryOpFactory.create_object must be called with `sslbls=None`!"
         U = self.fn(args)
+
         # Expanded call to _bt.change_basis(_ot.unitary_to_process_mx(U), 'std', self.basis) for speed
         std_superop = _ot.unitary_to_process_mx(U)
         superop_mx = _np.dot(self.transform_std_to_basis, _np.dot(std_superop, self.transform_basis_to_std))
         return _StaticUnitaryOp.quick_init(U, superop_mx, self.basis, self.evotype, self.state_space)
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
+        mm_dict['unitary_function'] = self.fn.to_nice_serialization()
+        mm_dict['superop_basis'] = self.basis if isinstance(self.basis, str) \
+            else self.basis.to_nice_serialization()
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        superop_basis = mm_dict['superop_basis']
+        if isinstance(superop_basis, dict):
+            superop_basis = _basis.Basis.from_nice_serialization(superop_basis)
+        fn = _UnitaryGateFunction.from_nice_serialization(mm_dict['unitary_function'])
+        return cls(fn, state_space, superop_basis, mm_dict['evotype'])

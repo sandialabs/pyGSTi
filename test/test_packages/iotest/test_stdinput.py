@@ -229,7 +229,7 @@ G3            20  80
 
     @with_temp_file("""#Data File with bad syntax
 ## Columns = 0 count, 1 count
-{xx}            10  90
+{xx            10  90
 """)
     def test_parse_datafile_raises_on_syntax_error(self, tmp_path):
         with self.assertRaises(ValueError):

@@ -83,7 +83,7 @@ class ImplicitOpModel(_mdl.OpModel):
     def _primitive_op_label_dict(self):
         # don't include 'implied' ops as primitive ops -- FUTURE - maybe should include empty layer ([])?
         return _collections.OrderedDict([(k, None) for k in self.operation_blks['layers']
-                                         if not (k.name.startswith('(') and k.name.endswith(')'))])
+                                         if not (k.name.startswith('{') and k.name.endswith('}'))])
 
     @property
     def _primitive_instrument_label_dict(self):

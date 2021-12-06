@@ -742,10 +742,10 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     ret = _emdl.ExplicitOpModel(state_space, basis, default_gate_type=ideal_gate_type, evotype=evotype,
                                 simulator=simulator)
 
-    # Special rule: when initializng an explicit model, if the processor spec has an implied global idle
-    #  gate (e.g. "(idle)", then the created model instead has a empty-tuple Label as the key for this op.
+    # Special rule: when initializing an explicit model, if the processor spec has an implied global idle
+    #  gate (e.g. "{idle}", then the created model instead has a empty-tuple Label as the key for this op.
     global_idle_name = processor_spec.global_idle_gate_name
-    if (global_idle_name is not None) and global_idle_name.startswith('(') and global_idle_name.endswith(')'):
+    if (global_idle_name is not None) and global_idle_name.startswith('{') and global_idle_name.endswith('}'):
         gn_to_make_emptytup = global_idle_name
     else:
         gn_to_make_emptytup = None

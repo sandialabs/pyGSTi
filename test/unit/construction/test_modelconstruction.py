@@ -83,7 +83,7 @@ class ModelConstructionTester(BaseCase):
         )
         assert(set(mdl.operation_blks['gates'].keys()) == set(["Gi", "Gx", "Gy", "Gcnot"]))
         assert(set(mdl.operation_blks['layers'].keys()) == set(
-            [('Gi', 0), ('Gi', 1), ('Gx', 0), ('Gx', 1), ('Gy', 0), ('Gy', 1), ('Gcnot', 0, 1), ('Gcnot', 1, 0), '(auto_global_idle)']))
+            [('Gi', 0), ('Gi', 1), ('Gx', 0), ('Gx', 1), ('Gy', 0), ('Gy', 1), ('Gcnot', 0, 1), ('Gcnot', 1, 0), '{auto_global_idle}']))
         self.assertEqual(mdl.num_params, 0)
 
         addlErr = pygsti.modelmembers.operations.FullTPOp(np.identity(4, 'd'))  # adds 12 params
@@ -111,11 +111,11 @@ class ModelConstructionTester(BaseCase):
         self.assertEqual(mdl.operation_blks['gates']['Gi'].gpindices, slice1)
 
         # Case: ensure_composed_gates=False, independent_gates=True
-        pspec = _ProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'idle'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
+        pspec = _ProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Gidle'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
                                geometry='line')
         cfmdl = mc.create_crosstalk_free_model(
             pspec,
-            depolarization_strengths={'Gx': 0.1, 'idle': 0.01, 'prep': 0.01, 'povm': 0.01},
+            depolarization_strengths={'Gx': 0.1, 'Gidle': 0.01, 'prep': 0.01, 'povm': 0.01},
             stochastic_error_probs={'Gy': (0.02, 0.02, 0.02)},
             lindblad_error_coeffs={
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
@@ -128,7 +128,7 @@ class ModelConstructionTester(BaseCase):
         # Case: ensure_composed_gates=True, independent_gates=False
         cfmdl2 = mc.create_crosstalk_free_model(
             pspec,
-            depolarization_strengths={'Gx': 0.1, 'idle': 0.01, 'prep': 0.01, 'povm': 0.01},
+            depolarization_strengths={'Gx': 0.1, 'Gidle': 0.01, 'prep': 0.01, 'povm': 0.01},
             stochastic_error_probs={'Gy': (0.02, 0.02, 0.02)},
             lindblad_error_coeffs={
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
@@ -140,7 +140,7 @@ class ModelConstructionTester(BaseCase):
         # Same as above but add ('Gx','qb0') to test giving qubit-specific error rates
         cfmdl3 = mc.create_crosstalk_free_model(
             pspec,
-            depolarization_strengths={'Gx': 0.1, ('Gx', 'qb0'): 0.2, 'idle': 0.01, 'prep': 0.01, 'povm': 0.01},
+            depolarization_strengths={'Gx': 0.1, ('Gx', 'qb0'): 0.2, 'Gidle': 0.01, 'prep': 0.01, 'povm': 0.01},
             stochastic_error_probs={'Gy': (0.02, 0.02, 0.02)},
             lindblad_error_coeffs={
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},

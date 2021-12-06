@@ -15,6 +15,30 @@ import scipy.linalg as _spl
 
 from pygsti.tools import optools as _ot
 from pygsti.tools import symplectic as _symp
+from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
+
+
+class Gzr(_UnitaryGateFunction):
+    shape = (2, 2)
+
+    def __call__(self, theta):
+        return _np.array([[1., 0.], [0., _np.exp(-1j * float(theta[0]))]])
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return super(Gzr, cls)._from_nice_serialization(state)
+
+
+class Gczr(_UnitaryGateFunction):
+    shape = (4, 4)
+
+    def __call__(self, theta):
+        return _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.],
+                          [0., 0., 0., _np.exp(-1j * float(theta[0]))]], complex)
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return super(Gczr, cls)._from_nice_serialization(state)
 
 
 def internal_gate_unitaries():
@@ -256,23 +280,7 @@ def standard_gatename_unitaries():
     std_unitaries['Gswap'] = _np.array([[1., 0., 0., 0.], [0., 0., 1., 0.], [
                                        0., 1., 0., 0.], [0., 0., 0., 1.]], complex)
 
-    from pygsti.processors import UnitaryGateFunction as _UnitaryGateFunction
-
-    class Gzr(_UnitaryGateFunction):
-        shape = (2, 2)
-
-        def __call__(self, theta):
-            return _np.array([[1., 0.], [0., _np.exp(-1j * float(theta[0]))]])
-
     std_unitaries['Gzr'] = Gzr()
-
-    class Gczr(_UnitaryGateFunction):
-        shape = (4, 4)
-
-        def __call__(self, theta):
-            return _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.],
-                              [0., 0., 0., _np.exp(-1j * float(theta[0]))]], complex)
-
     std_unitaries['Gczr'] = Gczr()
 
     return std_unitaries
