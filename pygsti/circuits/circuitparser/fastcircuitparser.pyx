@@ -217,21 +217,29 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
             if i < end and s[i] == u'}':
                 i += 1
                 return [], i, segment
-            else:
-                raise ValueError("Invalid '{' at: %s..." % s[i-1:i+4])
         else:
             raise ValueError("Invalid prefix at: %s..." % s[i:i+5])
     else:
         raise ValueError("Invalid prefix at: %s..." % s[i:i+5])
 
     #z = re.match("([a-z0-9_]+)((?:;[a-zQ0-9_\./]+)*)((?::[a-zQ0-9_]+)*)(![0-9\.]+)?", s[i:end])
-    tup = []
-    while i < end:
-        c = s[i]
-        if u'a' <= c <= u'z' or u'0' <= c <= u'9' or c == u'_':
+    #tup = []
+    if s[start] == u'{':
+        while i < end and s[i] != u'}':
+            c = s[i]
+            if not (u'a' <= c <= u'z' or u'0' <= c <= u'9' or c == u'_' or c == u'(' or c == u')'):
+                raise ValueError("Invalid character '%s' in gate name: %s..." % (c, s[start-1:start+4]))
             i += 1
-        else:
-            break
+        if s[i] != u'}' or start + 1 >= i - 1:
+            raise ValueError("Invalid '{' at: %s..." % s[start - 1:start + 4])
+        i += 1
+    else:
+        while i < end:
+            c = s[i]
+            if u'a' <= c <= u'z' or u'0' <= c <= u'9' or c == u'_':
+                i += 1
+            else:
+                break
     name = s[start:i]; last = i
 
     args = []
