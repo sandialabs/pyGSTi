@@ -8,30 +8,18 @@
 #***************************************************************************************************
 """ Drift reporting and plotting functions """
 
-import time as _time
-import numpy as _np
-import itertools as _itertools
 import collections as _collections
-import warnings as _warnings
-import os as _os
 
-from ... import _version
-from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
-from ...circuits import Circuit as _Circuit
-from ...data import DataComparator as _DataComparator
-from ...report import workspace as _ws
-from ...report import workspaceplots as _wp
-from ...report import table as _reporttable
-from ...report import figure as _reportfigure
-from ...report import merge_helpers as _merge
-from ...report import autotitle as _autotitle
-from ...report import colormaps as _cmaps
-from ...tools import timed_block as _timed_block
+import numpy as _np
+import plotly.graph_objs as go
 
 from . import signal as _sig
-from . import stabilityanalyzer as _sa
+from ...circuits import Circuit as _Circuit
+from ...report import colormaps as _cmaps
+from ...report import figure as _reportfigure
+from ...report import table as _reporttable
+from ...report import workspace as _ws
 
-import plotly.graph_objs as go
 #import seaborn as _sns
 
 #We don't want to import seaborn just for a colorscale, so pulled this matplotlib source (derived from _cm.py):
@@ -93,15 +81,15 @@ class DriftDetailsTable(_ws.WorkspaceTable):
             estimatekey = stabilityanalyzer._def_probtrajectories
         colHeadings = ['', '', ]
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
-        table.addrow(['Transform', stabilityanalyzer.transform], [None, None])
-        table.addrow(['Single detector in the results', len(stabilityanalyzer._driftdetectors) == 1], [None, None])
-        table.addrow(['Name of detector', detectorkey], [None, None])
+        table.add_row(['Transform', stabilityanalyzer.transform], [None, None])
+        table.add_row(['Single detector in the results', len(stabilityanalyzer._driftdetectors) == 1], [None, None])
+        table.add_row(['Name of detector', detectorkey], [None, None])
         string_condtestsrun = ''
         for test in stabilityanalyzer._condtests[detectorkey]: string_condtestsrun += str(test) + ', '
         string_estimatekey = ''
         for detail in estimatekey: string_estimatekey += str(detail) + ', '
-        table.addrow(['Tests run for detector', string_condtestsrun], [None, None])
-        table.addrow(['Type of estimator', string_estimatekey], [None, None])
+        table.add_row(['Tests run for detector', string_condtestsrun], [None, None])
+        table.add_row(['Type of estimator', string_estimatekey], [None, None])
         table.finish()
         return table
 
@@ -257,15 +245,15 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
     Plot of time-series data power spectrum
     """
 
-    def __init__(self, ws, results, gss, prep, germ, meas, dskey=None, detectorkey=None,
+    def __init__(self, ws, results, prep, germ, meas, dskey=None, detectorkey=None,
                  showlegend=False, scale=1.0):
         """
         todo
         """
-        super(GermFiducialPowerSpectraPlot, self).__init__(ws, self._create, results, gss, prep, germ, meas,
-                                                           dskey, detectorkey, showlegend, scale)
+        super(GermFiducialPowerSpectraPlot, self).__init__(ws, self._create, results, prep, germ,
+                                                           meas, dskey, detectorkey, showlegend, scale)
 
-    def _create(self, results, gss, prep, germ, meas, dskey, detectorkey, showlegend, scale):
+    def _create(self, results, prep, germ, meas, dskey, detectorkey, showlegend, scale):
 
         stabilityanalyzer = results.stabilityanalyzer
 
@@ -288,17 +276,17 @@ class GermFiducialPowerSpectraPlot(_ws.WorkspacePlot):
         measind = edesign.meas_fiducials.index(meas)
         circuitdict = {}
 
-        #UNUSED: numL = len(gss.Ls)
+        #UNUSED: numL = len(circuit_struct.Ls)
         #UNUSED: colors = ['rgb' + str(tuple(i)) for i in _sns.color_palette("coolwarm", numL)]
-        for Lind, L in enumerate(gss.Ls):
-            for j, k, circuit in gss.get_plaquette(L, germ):
+        for Lind, L in enumerate(edesign.maxlengths):
+            for j, k, circuit in circuit_struct.plaquette(L, germ, empty_if_missing=True):
                 if j == prepind:
                     if k == measind:
                         circuitdict[L] = circuit
 
         spectrumlabel = {'dataset': dskey, 'circuit': circuitdict}
 
-        psp = PowerSpectraPlot(self.ws, stabilityanalyzer, spectrumlabel, detectorkey,
+        psp = PowerSpectraPlot(self.ws, results, spectrumlabel, detectorkey,
                                showlegend, scale)
         assert(len(psp.figs) == 1), "Only one figure should have been created!"
         return psp.figs[0]
@@ -379,7 +367,7 @@ class ProbTrajectoriesPlot(_ws.WorkspacePlot):
                 assert(len(stabilityanalyzer.data.keys()) == 1), \
                     "There is more than one DataSet, so must specify the `dskey`!"
                 dskey = list(stabilityanalyzer.data.keys())[0]
-            dtimes, data = stabilityanalyzer.data[dskey][circuit].get_timeseries_for_outcomes()
+            dtimes, data = stabilityanalyzer.data[dskey][circuit].timeseries_for_outcomes
             if times is None:
                 times = _np.linspace(min(dtimes), max(dtimes), 5000)
             p = stabilityanalyzer.probability_trajectory(
@@ -450,22 +438,22 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
     todo
     """
 
-    def __init__(self, ws, results, gss, prep, germ, meas, outcome, minL=1, times=None, dskey=None,
+    def __init__(self, ws, results, prep, germ, meas, outcome, min_length=1, times=None, dskey=None,
                  estimatekey=None, estimator=None, showlegend=False, scale=1.0):
         """
         todo
 
-        gss : CircuitStructure
+        circuits : BulkCircuitList
             Specifies the set of operation sequences along with their structure, e.g. fiducials, germs,
             and maximum lengths.
         """
-        super(GermFiducialProbTrajectoriesPlot, self).__init__(ws, self._create, results, gss, prep, germ,
-                                                               meas, outcome, minL, times, dskey, estimatekey,
-                                                               estimator, showlegend, scale)
+        super(GermFiducialProbTrajectoriesPlot, self).__init__(ws, self._create, results,
+                                                               prep, germ, meas, outcome, min_length, times,
+                                                               dskey, estimatekey, estimator, showlegend, scale)
 
-    def _create(self, results, gss, prep, germ, meas, outcome, minL, times, dskey, estimatekey,
+    def _create(self, results, prep, germ, meas, outcome, min_length, times, dskey, estimatekey,
                 estimator, showlegend, scale):
-            
+
         stabilityanalyzer = results.stabilityanalyzer
 
         if isinstance(germ, str):
@@ -483,15 +471,15 @@ class GermFiducialProbTrajectoriesPlot(_ws.WorkspacePlot):
         circuitsdict = {}
 
         truncatedL = []
-        for L in gss.Ls:
-            if L >= minL:
+        for L in edesign.maxlengths:
+            if L >= min_length:
                 truncatedL.append(L)
 
-        #numL = len(gss.Ls)
-        for Lind, L in enumerate(gss.Ls):
-            if L >= minL:
+        #numL = len(circuit_struct.Ls)
+        for Lind, L in enumerate(edesign.maxlengths):
+            if L >= min_length:
                 #trace_pt = None
-                for j, k, circuit in gss.get_plaquette(L, germ):
+                for j, k, circuit in circuit_struct.plaquette(L, germ, empty_if_missing=True):
                     if j == prepind:
                         if k == measind:
                             circuitsdict[L] = circuit
@@ -544,17 +532,21 @@ def _create_switchboard(ws, results_dict):
     return switchBd, dataset_labels
 
 
-def _create_drift_switchboard(ws, results, gss):
+def _create_drift_switchboard(ws, results):
     """
     todo
     """
-    if len(results.data.keys()) > 1:  # multidataset
+    edesign = results.data.edesign
+    stabilityanalyzer = results.stabilityanalyzer
+
+    if len(stabilityanalyzer.data.keys()) > 1:  # multidataset
         drift_switchBd = ws.Switchboard(
             ["Dataset              ", "Germ                 ", "Preparation Fiducial ", "Measurement Fiducial",
              "Outcome             "],
-            [list(results.data.keys()), [c.str for c in gss.germs], [c.str for c in gss.prepStrs],
-             [c.str for c in gss.effectStrs],
-             [i.str for i in results.data.get_outcome_labels()]],
+            [list(results.data.keys()), [c.str for c in edesign.germs],
+             [c.str for c in edesign.prep_fiducials],
+             [c.str for c in edesign.meas_fiducials],
+             [i.str for i in stabilityanalyzer.data.outcome_labels]],
             ["dropdown", "dropdown", "dropdown", "dropdown", "dropdown"], [0, 1, 0, 0, 0],
             show=[True, True, True, True, True])
         drift_switchBd.add("dataset", (0,))
@@ -566,57 +558,57 @@ def _create_drift_switchboard(ws, results, gss):
     else:
         drift_switchBd = ws.Switchboard(
             ["Germ", "Preperation Fiducial", "Measurement Fiducial", "Outcome"],
-            [[c.str for c in gss.germs], [c.str for c in gss.prepStrs],
-             [c.str for c in gss.effectStrs], [str(o) for o in results.data.get_outcome_labels()]],
+            [[c.str for c in edesign.germs], [c.str for c in edesign.prep_fiducials],
+             [c.str for c in edesign.meas_fiducials], [str(o) for o in stabilityanalyzer.data.outcome_labels]],
             ["dropdown", "dropdown", "dropdown", "dropdown"], [0, 0, 0, 0], show=[True, True, True, True])
         drift_switchBd.add("germs", (0,))
-        drift_switchBd.add("prepStrs", (1,))
-        drift_switchBd.add("effectStrs", (2,))
+        drift_switchBd.add("prep_fiducials", (1,))
+        drift_switchBd.add("meas_fiducials", (2,))
         drift_switchBd.add("outcomes", (3,))
 
-        drift_switchBd.germs[:] = gss.germs
-        drift_switchBd.prepStrs[:] = gss.prepStrs
-        drift_switchBd.effectStrs[:] = gss.effectStrs
-        drift_switchBd.outcomes[:] = results.data.get_outcome_labels()
+        drift_switchBd.germs[:] = edesign.germs
+        drift_switchBd.prep_fiducials[:] = edesign.prep_fiducials
+        drift_switchBd.meas_fiducials[:] = edesign.meas_fiducials
+        drift_switchBd.outcomes[:] = stabilityanalyzer.data.outcome_labels
 
     return drift_switchBd
 
 
-# TODO deprecate in favor of `report.factory.construct_drift_report`
-def create_drift_report(results, gss, filename, title="auto",
+# TODO deprecate in favor of `report.factory.create_drift_report`
+def create_drift_report(results, circuits, filename, title="auto",
                         ws=None, auto_open=False, link_to=None,
-                        brevity=0, advancedOptions=None, verbosity=1):
+                        brevity=0, advanced_options=None, verbosity=1):
     """
     Creates a Drift report.
     """
-    from pygsti.report.factory import construct_drift_report
+    from pygsti.report.factory import create_drift_report
     # Wrap a call to the new factory method
-    advancedOptions = advancedOptions or {}
-    ws = ws or _ws.Workspace(advancedOptions.get('cachefile', None))
+    advanced_options = advanced_options or {}
+    ws = ws or _ws.Workspace(advanced_options.get('cachefile', None))
 
-    report = construct_drift_report(
-        results, gss, title, ws, verbosity
+    report = create_drift_report(
+        results, circuits, title, ws, verbosity
     )
 
-    advancedOptions = advancedOptions or {}
-    precision = advancedOptions.get('precision', None)
+    advanced_options = advanced_options or {}
+    precision = advanced_options.get('precision', None)
 
     if filename is not None:
         if filename.endswith(".pdf"):
             report.write_pdf(
-                filename, build_options=advancedOptions,
+                filename, build_options=advanced_options,
                 brevity=brevity, precision=precision, auto_open=auto_open,
                 verbosity=verbosity
             )
         else:
-            resizable = advancedOptions.get('resizable', True)
-            autosize = advancedOptions.get('autosize', 'initial')
-            connected = advancedOptions.get('connected', False)
+            resizable = advanced_options.get('resizable', True)
+            autosize = advanced_options.get('autosize', 'initial')
+            connected = advanced_options.get('connected', False)
             single_file = filename.endswith(".html")
 
             report.write_html(
                 filename, auto_open=auto_open, link_to=link_to,
-                connected=connected, build_options=advancedOptions,
+                connected=connected, build_options=advanced_options,
                 brevity=brevity, precision=precision,
                 resizable=resizable, autosize=autosize,
                 single_file=single_file, verbosity=verbosity

@@ -414,7 +414,7 @@ class InterpolatedDenseOp(_DenseOperator):
         fullv[self._parameterized_indices] = self._paramvec
         fullv[self._frozen_indices] = self._frozen_values
         errorgen = self.base_interpolator(fullv)
-        self._ptr[:, :] = _ot.operation_from_error_generator(errorgen, self.target_op.to_dense(), 'logGTi')
+        self._ptr[:, :] = _ot.operation_from_error_generator(errorgen, self.target_op.to_dense(), 'pp', 'logGTi')
         self._ptr_has_changed()
         if self.aux_interpolator is not None:
             self.aux_info = self.aux_interpolator(fullv)
