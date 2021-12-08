@@ -743,7 +743,8 @@ class PlaquetteGridCircuitStructure(_CircuitList):
             raise ValueError("Unknown x/y type: %s" % str(typ))
 
         op_label_aliases = _convert_strings_to_circuits(state['op_label_aliases'])
-        circuit_rules = _convert_strings_to_circuits(state['circuit_rules'])
+        circuit_rules = _convert_strings_to_circuits(state['circuit_rules']) \
+            if ('circuit_rules' in state) else None  # for backward compatibility (REMOVE in FUTURE?)
 
         plaquettes = {(_decodeval(state['xtype'], x), _decodeval(state['ytype'], y)):
                       CircuitPlaquette.from_nice_serialization(d) for (x, y), d in state['plaquettes']}

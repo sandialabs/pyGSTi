@@ -268,6 +268,33 @@ class QubitProcessorSpec(ProcessorSpec):
         if isinstance(unitary, (int, _np.int64)): return unitary  # unitary=int => identity in n qubits
         return int(round(_np.log2(unitary.shape[0])))  # possibly factory *function* SHAPE (unitary may be callable)
 
+    def rename_gate_inplace(self, existing_gate_name, new_gate_name):
+        """
+        Renames a gate within this processor specification.
+
+        Parameters
+        ----------
+        existing_gate_name : str
+            The existing gate name you want to change.
+
+        new_gate_name : str
+            The new gate name.
+
+        Returns
+        -------
+        None
+        """
+        if existing_gate_name not in self.gate_names:
+            raise ValueError("'%s' is not an existing gate name!" % str(existing_gate_name))
+
+        def rename(nm):
+            return new_gate_name if (nm == existing_gate_name) else nm
+
+        self.gate_names = tuple([rename(nm) for nm in self.gate_names])
+        self.nonstd_gate_unitaries = {rename(k): v for k, v in self.nonstd_gate_unitaries}
+        self.gate_unitaries = _collections.OrderedDict([(rename(k), v) for k, v in self.gate_unitaries])
+        self.availability = _collections.OrderedDict([(rename(k), v) for k, v in self.availability])
+
     def resolved_availability(self, gate_name, tuple_or_function="auto"):
         """
         The availability of a given gate, resolved as either a tuple of sslbl-tuples or a function.
