@@ -245,7 +245,7 @@ class QubitProcessorSpec(ProcessorSpec):
         """ All the primitive operation labels derived from the gate names and availabilities """
         ret = []
         for gn in self.gate_names:
-            if gn.startswith('(') and gn.endswith(')'): continue  # skip implicit gate names
+            if gn.startswith('{') and gn.endswith('}'): continue  # skip implicit gate names
             avail = self.resolved_availability(gn, 'tuple')
             ret.extend([_Lbl(gn, sslbls) for sslbls in avail])
         return tuple(ret)

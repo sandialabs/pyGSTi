@@ -151,22 +151,30 @@ def _get_next_simple_lbl(s, start, end, integerize_sslbls, segment):
             i += 1; segment = 2  # marks end - no more labels allowed
         elif c == '{':
             i += 1
-            if i < end and s[i] == '}':
+            if i < end and s[i] == '}':  # empty-label special case
                 i += 1
                 return [], i, segment
-            else:
-                raise ValueError("Invalid '{' at: %s..." % s[i - 1:i + 4])
         else:
             raise ValueError("Invalid prefix at: %s..." % s[i:i + 5])
     else:
         raise ValueError("Invalid prefix at: %s..." % s[i:i + 5])
 
-    while i < end:
-        c = s[i]
-        if 'a' <= c <= 'z' or '0' <= c <= '9' or c == '_':
+    if s[start] == '{':
+        while i < end and s[i] != '}':
+            c = s[i]
+            if not ('a' <= c <= 'z' or '0' <= c <= '9' or c == '_' or c == '(' or c == ')'):
+                raise ValueError("Invalid character '%s' in gate name: %s..." % (c, s[start - 1:start + 4]))
             i += 1
-        else:
-            break
+        if s[i] != '}' or start + 1 >= i - 1:
+            raise ValueError("Invalid '{' at: %s..." % s[start - 1:start + 4])
+        i += 1
+    else:
+        while i < end:
+            c = s[i]
+            if 'a' <= c <= 'z' or '0' <= c <= '9' or c == '_':
+                i += 1
+            else:
+                break
     name = s[start:i]; last = i
 
     args = []
