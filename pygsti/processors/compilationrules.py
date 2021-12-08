@@ -51,9 +51,9 @@ class CompilationRules(object):
         can either be a unitary matrix, function returning a matrix, or None if the
         gate name is a standard PyGSTi unitary. The gate template is either a Circuit
         with local state space labels (i.e. 0..k-1 for k qubits) or a function that takes
-        target state space labels and returns the proper Circuit.
-        If the key is a gate label, the gate template (second entry of the value tuple)
-        MUST be a Circuit with absolute state space labels.
+        the target gate label and returns the proper Circuit. If the key is a gate label,
+        the gate template (second entry of the value tuple) MUST be a Circuit with
+        absolute state space labels.
     """
     @classmethod
     def cast(cls, obj):
@@ -75,7 +75,7 @@ class CompilationRules(object):
     def __init__(self, compilation_rules_dict=None):
         self.gate_unitaries = _collections.OrderedDict()  # gate_name => unitary mx, fn, or None
         self.local_templates = _collections.OrderedDict()  # gate_name => Circuit on gate's #qubits
-        self.function_templates = _collections.OrderedDict()  # gate_name => fn(sslbls)
+        self.function_templates = _collections.OrderedDict()  # gate_name => fn(gate_label) that returns Circuit on absolute qubits
         self.specific_compilations = _collections.OrderedDict()  # gate_label => Circuit on absolute qubits
 
         self._compiled_cache = _collections.OrderedDict() # compiled gate_label => Circuit on absolute qubits
@@ -208,8 +208,8 @@ class CompilationRules(object):
 
             self._compiled_cache[oplabel] = template_to_use.map_state_space_labels(to_real_label)
         elif oplabel.name in self.function_templates: # Fourth, construct from local function template
-            template_fn_to_use = self.function_templates[oplabel]
-            self._compiled_cache[oplabel] = _Circuit(template_fn_to_use(oplabel.sslbls))
+            template_fn_to_use = self.function_templates[oplabel.name]
+            self._compiled_cache[oplabel] = _Circuit(template_fn_to_use(oplabel))
         else:
             # Failed to compile
             return None
@@ -298,7 +298,8 @@ class CompilationRules(object):
                 # create boolean oracle function for availability
                 def _fn(sslbls):
                     try:
-                        self.function_templates[gn](sslbls)  # (returns a circuit)
+                        lbl = _Label(gn, sslbls)
+                        self.function_templates[gn](lbl)  # (returns a circuit)
                         return True
                     except CompilationError:
                         return False
