@@ -180,7 +180,7 @@ class InterpygateGSTTester(BaseCase):
         datagen_params[-2:] = [1.1,1.1]
         datagen_model.from_vector(datagen_params)
         probs = datagen_model.probabilities( (('Gxpi2',0),))
-        self.assertEqual(probs['0'],0.8247240241650917)
+        self.assertAlmostEqual(probs['0'],0.8247240241650917)
 
     def test_germ_selection(self):
         datagen_model = self.model.copy()
