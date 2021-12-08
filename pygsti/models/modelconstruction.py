@@ -12,6 +12,7 @@ Functions for the construction of new models.
 
 import collections as _collections
 import itertools as _itertools
+import warnings as _warnings
 from os import stat
 from pygsti.modelmembers.instruments.instrument import Instrument
 
@@ -747,6 +748,11 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     global_idle_name = processor_spec.global_idle_gate_name
     if (global_idle_name is not None) and global_idle_name.startswith('{') and global_idle_name.endswith('}'):
         gn_to_make_emptytup = global_idle_name
+    elif (global_idle_name is not None) and global_idle_name.startswith('(') and global_idle_name.endswith(')'):
+        # For backward compatibility
+        _warnings.warn(("Use of parenthesized gate names (e.g. '%s') is deprecated!  Processor spec gate names"
+                        " should be updated to use curly braces.") % str(global_idle_name))
+        gn_to_make_emptytup = global_idle_name
     else:
         gn_to_make_emptytup = None
 
@@ -829,6 +835,17 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
         ret.povms[k] = v
 
     modelnoise.warn_about_zero_counters()
+
+    if ideal_gate_type == "full" and ideal_prep_type == "full" and ideal_povm_type == "full":
+        ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, evotype)
+    elif (ideal_gate_type in ("full TP", "TP") and ideal_prep_type in ("full TP", "TP") \
+          and ideal_povm_type in ("full TP", "TP")):
+        ret.default_gauge_group = _gg.TPGaugeGroup(ret.state_space, evotype)
+    elif ideal_gate_type == "CPTP" and ideal_prep_type == "CPTP" and ideal_povm_type == "CPTP":
+        ret.default_gauge_group = _gg.UnitaryGaugeGroup(ret.state_space, basis, evotype)
+    else:
+        ret.default_gauge_group = _gg.TrivialGaugeGroup(ret.state_space)
+
     ret._clean_paramvec()
     return ret
 
