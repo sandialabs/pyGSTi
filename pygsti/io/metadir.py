@@ -216,7 +216,8 @@ def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
                 filenm_so_far = filenm + "_kvpair" + str(i)
                 bLoaded, el = _load_auxfile_member(root_dir, filenm_so_far, next_typ, meta, quick_load)
                 if bLoaded:
-                    val[k] = v
+                    if isinstance(k, list): k = tuple(k)  # convert list-type keys -> tuples
+                    val[k] = el
                 else:
                     raise ValueError("Failed to load %d-th dictionary key: %s" % (i, str(k)))
 
@@ -399,7 +400,7 @@ def _write_auxfile_member(root_dir, filenm, typ, val):
             for i, (k, v) in enumerate(val.items()):
                 filenm_so_far = filenm + "_kvpair" + str(i)
                 meta = _write_auxfile_member(root_dir, filenm_so_far, next_typ, v)
-                metadata.append(k, meta)
+                metadata.append((k, meta))
         else:
             metadata = None
 

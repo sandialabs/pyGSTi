@@ -160,15 +160,28 @@ class ConfidenceRegionFactory(_NicelySerializable):
         state.update({'model_label': self.model_lbl,
                       'circuit_list_label': self.circuit_list_lbl,
                       'nonmarkovian_radius_squared': self.nonMarkRadiusSq,
-                      'hessian_matrix': self._encodemx(self.hessian) if (self.hessian is not None) else None
+                      'hessian_matrix': self._encodemx(self.hessian) if (self.hessian is not None) else None,
+                      'hessian_projection_parameters': {k: v for k, v in self.hessian_projection_parameters},
+                      'inverse_hessian_projections': {k: self._encodemx(v) for k, v in self.inv_hessian_projections},
+                      'num_nongauge_params': self.nNonGaugeParams,  # can be None
+                      'num_gauge_params': self.nGaugeParams,  # can be None
+                      #Note: we don't currently serialize self.linresponse_gstfit_params (!)
                       })
         return state
 
     @classmethod
     def _from_nice_serialization(cls, state):
-        return cls(None, state['model_label'], state['circuit_list_label'],
-                   cls._decodemx(state['hessian_matrix']) if (state['hessian_matrix'] is not None) else None,
-                   state['nonmarkovian_radius_squared'])
+        ret = cls(None, state['model_label'], state['circuit_list_label'],
+                  cls._decodemx(state['hessian_matrix']) if (state['hessian_matrix'] is not None) else None,
+                  state['nonmarkovian_radius_squared'])
+        if 'hessian_projection_parameters' in state:  # for backward compatibility
+            for projection_lbl, params in state['hessian_projection_parameters']:
+                ret.hessian_projection_parameters[projection_lbl] = params  # (param dict is entirely JSON-able)
+                ret.inv_hessian_projections[projection_lbl] = cls._decodemx(
+                    state['inverse_hessian_projections'][projection_lbl])
+            ret.nNonGaugeParams = state['num_nongauge_params']
+            ret.nGaugeParams = state['num_gauge_params']
+        return ret
 
     def set_parent(self, parent):
         """
