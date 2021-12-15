@@ -891,23 +891,23 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                                                       qubit_graph=processor_spec.qubit_graph)
             if povmNoiseMap is not None: povm_ops.append(povmNoiseMap)
 
-    def _add_to_prep_layers(ideal_prep, prep_ops):
+    def _add_to_prep_layers(ideal_prep, prep_ops, prep_name):
         """ Adds noise elements to prep_layers """
         if len(prep_ops_to_compose) == 0:
-            prep_layers['rho0'] = ideal_prep
+            prep_layers[prep_name] = ideal_prep
         elif len(prep_ops_to_compose) == 1:
-            prep_layers['rho0'] = _state.ComposedState(ideal_prep, prep_ops[0])
+            prep_layers[prep_name] = _state.ComposedState(ideal_prep, prep_ops[0])
         else:
-            prep_layers['rho0'] = _state.ComposedState(ideal_prep, _op.ComposedOp(prep_ops))
+            prep_layers[prep_name] = _state.ComposedState(ideal_prep, _op.ComposedOp(prep_ops))
 
-    def _add_to_povm_layers(ideal_povm, povm_ops):
+    def _add_to_povm_layers(ideal_povm, povm_ops, povm_name):
         """ Adds noise elements to povm_layers """
         if len(povm_ops_to_compose) == 0:
-            povm_layers['Mdefault'] = ideal_povm
+            povm_layers[povm_name] = ideal_povm
         elif len(povm_ops_to_compose) == 1:
-            povm_layers['Mdefault'] = _povm.ComposedPOVM(povm_ops[0], ideal_povm, 'pp')
+            povm_layers[povm_name] = _povm.ComposedPOVM(povm_ops[0], ideal_povm, 'pp')
         else:
-            povm_layers['Mdefault'] = _povm.ComposedPOVM(_op.ComposedOp(povm_ops), ideal_povm, 'pp')
+            povm_layers[povm_name] = _povm.ComposedPOVM(_op.ComposedOp(povm_ops), ideal_povm, 'pp')
 
     def _create_nq_noise(lndtype):
         if local_noise:
@@ -928,116 +928,181 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
     # Here's where the actual logic starts.  The above functions avoid repeated blocks within the different
     # cases below.
 
-    # Prep logic
-    if isinstance(ideal_prep_type, (tuple, list)): ideal_prep_type = ideal_prep_type[0]  # HACK to support multiple vals
-    if ideal_prep_type == 'computational' or ideal_prep_type.startswith('lindblad '):
-        ideal_prep = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
+    for prep_name in processor_spec.prep_names:
+        prep_spec = processor_spec.prep_specifier(prep_name)
 
-        prep_ops_to_compose = []
-        if ideal_prep_type.startswith('lindblad '):  # then add a composed exp(errorgen) to computational SPAM
-            lndtype = ideal_prep_type[len('lindblad '):]
+        # Prep logic
+        if isinstance(ideal_prep_type, (tuple, list)): ideal_prep_type = ideal_prep_type[0]  # HACK to support multiple vals
+        if ideal_prep_type == 'computational' or ideal_prep_type.startswith('lindblad '):
 
-            err_gateNQ = _create_nq_noise(lndtype)
+            if isinstance(prep_spec, str):
+                if prep_spec == "rho0":
+                    ideal_prep = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
+                else:
+                    raise ValueError("Unrecognized state preparation spec '%s'" % prep_spec)
+            elif isinstance(prep_spec, _np.ndarray):
+                raise ValueError("Cannot construct arbitrary state preps (using numpy array) when ideal_prep_type=%s"
+                                 % ideal_prep_type)
+            else:
+                raise ValueError("Invalid state preparation spec: %s" % str(prep_spec))
 
-            prep_ops_to_compose.append(err_gateNQ)
+            prep_ops_to_compose = []
+            if ideal_prep_type.startswith('lindblad '):  # then add a composed exp(errorgen) to computational SPAM
+                lndtype = ideal_prep_type[len('lindblad '):]
 
-        # Add noise
-        _add_prep_noise(prep_ops_to_compose)
+                err_gateNQ = _create_nq_noise(lndtype)
 
-        #Add final ops to returned dictionaries  (Note: None -> ComputationPOVM within ComposedPOVM)
-        _add_to_prep_layers(ideal_prep, prep_ops_to_compose)
+                prep_ops_to_compose.append(err_gateNQ)
 
-    elif ideal_prep_type.startswith('tensor product '):
-        #Note: with "tensor product <X>" types, e.g. "tensor product static", we assume modelnoise specifies just
-        # a 1Q noise operation, even when `local_noise=False`
-        vectype = ideal_prep_type[len('tensor product '):]
+            # Add noise
+            _add_prep_noise(prep_ops_to_compose)
 
-        v0, v1 = _np.array([1, 0], 'd'), _np.array([0, 1], 'd')
-        ideal_prep1Q = _state.create_from_pure_vector(v0, vectype, 'pp', evotype, state_space=None)
-        prep_factors = [ideal_prep1Q.copy() for i in range(num_qubits)]
+            #Add final ops to returned dictionaries  (Note: None -> ComputationPOVM within ComposedPOVM)
+            _add_to_prep_layers(ideal_prep, prep_ops_to_compose, prep_name)
 
-        # Add noise
-        prep_noiseop1Q = modelnoise.create_errormap('prep', evotype, singleQ_state_space, target_labels=None)
-        if prep_noiseop1Q is not None:
-            prep_factors = [_state.ComposedState(
-                factor, (prep_noiseop1Q.copy() if independent_spam else prep_noiseop1Q)) for factor in prep_factors]
+        elif ideal_prep_type.startswith('tensor product '):
+            #Note: with "tensor product <X>" types, e.g. "tensor product static", we assume modelnoise specifies just
+            # a 1Q noise operation, even when `local_noise=False`
+            vectype = ideal_prep_type[len('tensor product '):]
 
-        prep_layers['rho0'] = _state.TensorProductState(prep_factors, state_space)
+            v0, v1 = _np.array([1, 0], 'd'), _np.array([0, 1], 'd')
+            ideal_preps1Q = (_state.create_from_pure_vector(v0, vectype, 'pp', evotype, state_space=None),
+                             _state.create_from_pure_vector(v1, vectype, 'pp', evotype, state_space=None)]
 
-    else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qubit state vectors & POVMs
+            if isinstance(prep_spec, str):
+                if prep_spec == "rho0":
+                    prep_factors = [ideal_preps1Q[0].copy() for i in range(num_qubits)]
+                else:
+                    raise ValueError("Unrecognized state preparation spec '%s'" % prep_spec)
+            elif isinstance(prep_spec, _np.ndarray):
+                raise ValueError("Cannot construct arbitrary state preps (using numpy array) when ideal_prep_type=%s"
+                                 % ideal_prep_type)
+            else:
+                raise ValueError("Invalid state preparation spec: %s" % str(prep_spec))
 
-        vectype = ideal_prep_type
-        vecs = []  # all the basis vectors for num_qubits
-        for i in range(2**num_qubits):
-            v = _np.zeros(2**num_qubits, 'd'); v[i] = 1.0
-            vecs.append(v)
+            # Add noise
+            prep_noiseop1Q = modelnoise.create_errormap('prep', evotype, singleQ_state_space, target_labels=None)
+            if prep_noiseop1Q is not None:
+                prep_factors = [_state.ComposedState(
+                    factor, (prep_noiseop1Q.copy() if independent_spam else prep_noiseop1Q)) for factor in prep_factors]
 
-        ideal_prep = _state.create_from_pure_vector(vecs[0], vectype, 'pp', evotype, state_space=state_space)
+            prep_layers[prep_name] = _state.TensorProductState(prep_factors, state_space)
 
-        # Add noise
-        prep_ops_to_compose = []
-        _add_prep_noise(prep_ops_to_compose)
+        else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qubit state vectors & POVMs
 
-        # Add final ops to returned dictionaries
-        _add_to_prep_layers(ideal_prep, prep_ops_to_compose)
+            vectype = ideal_prep_type
+            vecs = []  # all the basis vectors for num_qubits
+            for i in range(2**num_qubits):
+                v = _np.zeros(2**num_qubits, 'd'); v[i] = 1.0
+                vecs.append(v)
 
-    # Povm logic
-    if isinstance(ideal_povm_type, (tuple, list)): ideal_povm_type = ideal_povm_type[0]  # HACK to support multiple vals
-    if ideal_povm_type == 'computational' or ideal_povm_type.startswith('lindblad '):
-        ideal_povm = _povm.ComputationalBasisPOVM(num_qubits, evotype, state_space=state_space)
+            if isinstance(prep_spec, str):
+                if prep_spec == "rho0":
+                    ideal_prep = _state.create_from_pure_vector(vecs[0], vectype, 'pp', evotype, state_space=state_space)
+                else:
+                    raise ValueError("Unrecognized state preparation spec '%s'" % prep_spec)
+            elif isinstance(prep_spec, _np.ndarray):
+                raise ValueError("Cannot construct arbitrary state preps (using numpy array) when ideal_prep_type=%s"
+                                 % ideal_prep_type)
+            else:
+                raise ValueError("Invalid state preparation spec: %s" % str(prep_spec))
 
-        povm_ops_to_compose = []
-        if ideal_povm_type.startswith('lindblad '):  # then add a composed exp(errorgen) to computational SPAM
-            lndtype = ideal_povm_type[len('lindblad '):]
+            # Add noise
+            prep_ops_to_compose = []
+            _add_prep_noise(prep_ops_to_compose)
 
-            err_gateNQ = _create_nq_noise(lndtype)
+            # Add final ops to returned dictionaries
+            _add_to_prep_layers(ideal_prep, prep_ops_to_compose, prep_name)
 
-            povm_ops_to_compose.append(err_gateNQ.copy())  # .copy() => POVM errors independent
+    for povm_name in processor_spec.povm_names:
+        povm_spec = processor_spec.povm_specifier(povm_name)
 
-        # Add noise
-        _add_povm_noise(povm_ops_to_compose)
+        # Povm logic
+        if isinstance(ideal_povm_type, (tuple, list)): ideal_povm_type = ideal_povm_type[0]  # HACK to support multiple vals
+        if ideal_povm_type == 'computational' or ideal_povm_type.startswith('lindblad '):
 
-        #Add final ops to returned dictionaries  (Note: None -> ComputationPOVM within ComposedPOVM)
-        effective_ideal_povm = None if len(povm_ops_to_compose) > 0 else ideal_povm
-        _add_to_povm_layers(effective_ideal_povm, povm_ops_to_compose)
+            if isinstance(povm_spec, str):
+                if povm_spec in ("Mdefault", "Mz"):
+                    ideal_povm = _povm.ComputationalBasisPOVM(num_qubits, evotype, state_space=state_space)
+                else:
+                    raise ValueError("Unrecognized POVM spec '%s'" % povm_spec)
+            elif isinstance(povm_spec, dict):
+                raise ValueError("Cannot construct arbitrary POVM (using dict) when ideal_povm_type=%s"
+                                 % ideal_povm_type)
+            else:
+                raise ValueError("Invalid POVM spec: %s" % str(povm_spec))
 
-    elif ideal_povm_type.startswith('tensor product '):
-        #Note: with "tensor product <X>" types, e.g. "tensor product static", we assume modelnoise specifies just
-        # a 1Q noise operation, even when `local_noise=False`
-        vectype = ideal_povm_type[len('tensor product '):]
+            povm_ops_to_compose = []
+            if ideal_povm_type.startswith('lindblad '):  # then add a composed exp(errorgen) to computational SPAM
+                lndtype = ideal_povm_type[len('lindblad '):]
 
-        v0, v1 = _np.array([1, 0], 'd'), _np.array([0, 1], 'd')
-        ideal_povm1Q = _povm.create_from_pure_vectors([('0', v0), ('1', v1)], vectype, 'pp',
-                                                      evotype, state_space=None)
-        povm_factors = [ideal_povm1Q.copy() for i in range(num_qubits)]
+                err_gateNQ = _create_nq_noise(lndtype)
 
-        # Add noise
-        povm_noiseop1Q = modelnoise.create_errormap('povm', evotype, singleQ_state_space, target_labels=None)
-        if povm_noiseop1Q is not None:
-            povm_factors = [_povm.ComposedPOVM(
-                (povm_noiseop1Q.copy() if independent_spam else povm_noiseop1Q), factor, 'pp')
-                for factor in povm_factors]
+                povm_ops_to_compose.append(err_gateNQ.copy())  # .copy() => POVM errors independent
 
-        povm_layers['Mdefault'] = _povm.TensorProductPOVM(povm_factors, evotype, state_space)
+            # Add noise
+            _add_povm_noise(povm_ops_to_compose)
 
-    else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qubit state vectors & POVMs
+            #Add final ops to returned dictionaries  (Note: None -> ComputationPOVM within ComposedPOVM)
+            effective_ideal_povm = None if len(povm_ops_to_compose) > 0 else ideal_povm
+            _add_to_povm_layers(effective_ideal_povm, povm_ops_to_compose, povm_name)
 
-        vectype = ideal_povm_type
-        vecs = []  # all the basis vectors for num_qubits
-        for i in range(2**num_qubits):
-            v = _np.zeros(2**num_qubits, 'd'); v[i] = 1.0
-            vecs.append(v)
+        elif ideal_povm_type.startswith('tensor product '):
+            #Note: with "tensor product <X>" types, e.g. "tensor product static", we assume modelnoise specifies just
+            # a 1Q noise operation, even when `local_noise=False`
+            vectype = ideal_povm_type[len('tensor product '):]
 
-        ideal_povm = _povm.create_from_pure_vectors(
-            [(format(i, 'b').zfill(num_qubits), v) for i, v in enumerate(vecs)],
-            vectype, 'pp', evotype, state_space=state_space)
+            v0, v1 = _np.array([1, 0], 'd'), _np.array([0, 1], 'd')
+            ideal_povm1Q = _povm.create_from_pure_vectors([('0', v0), ('1', v1)], vectype, 'pp',
+                                                          evotype, state_space=None)
 
-        # Add noise
-        povm_ops_to_compose = []
-        _add_povm_noise(povm_ops_to_compose)
+            if isinstance(povm_spec, str):
+                if povm_spec in ("Mdefault", "Mz"):
+                    povm_factors = [ideal_povm1Q.copy() for i in range(num_qubits)]
+                else:
+                    raise ValueError("Unrecognized POVM spec '%s'" % povm_spec)
+            elif isinstance(povm_spec, dict):
+                raise ValueError("Cannot construct arbitrary POVM (using dict) when ideal_povm_type=%s"
+                                 % ideal_povm_type)
+            else:
+                raise ValueError("Invalid POVM spec: %s" % str(povm_spec))
 
-        # Add final ops to returned dictionaries
-        _add_to_povm_layers(ideal_povm, povm_ops_to_compose)
+            # Add noise
+            povm_noiseop1Q = modelnoise.create_errormap('povm', evotype, singleQ_state_space, target_labels=None)
+            if povm_noiseop1Q is not None:
+                povm_factors = [_povm.ComposedPOVM(
+                    (povm_noiseop1Q.copy() if independent_spam else povm_noiseop1Q), factor, 'pp')
+                    for factor in povm_factors]
+
+            povm_layers[povm_name] = _povm.TensorProductPOVM(povm_factors, evotype, state_space)
+
+        else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qubit state vectors & POVMs
+
+            vectype = ideal_povm_type
+            vecs = []  # all the basis vectors for num_qubits
+            for i in range(2**num_qubits):
+                v = _np.zeros(2**num_qubits, 'd'); v[i] = 1.0
+                vecs.append(v)
+
+            if isinstance(povm_spec, str):
+                if povm_spec in ("Mdefault", "Mz"):
+                    ideal_povm = _povm.create_from_pure_vectors(
+                        [(format(i, 'b').zfill(num_qubits), v) for i, v in enumerate(vecs)],
+                        vectype, 'pp', evotype, state_space=state_space)
+                else:
+                    raise ValueError("Unrecognized POVM spec '%s'" % povm_spec)
+            elif isinstance(povm_spec, dict):
+                raise ValueError("Cannot construct arbitrary POVM (using dict) when ideal_povm_type=%s"
+                                 % ideal_povm_type)
+            else:
+                raise ValueError("Invalid POVM spec: %s" % str(povm_spec))
+
+            # Add noise
+            povm_ops_to_compose = []
+            _add_povm_noise(povm_ops_to_compose)
+
+            # Add final ops to returned dictionaries
+            _add_to_povm_layers(ideal_povm, povm_ops_to_compose, povm_name)
 
     return prep_layers, povm_layers
 
