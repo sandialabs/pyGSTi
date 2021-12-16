@@ -142,7 +142,7 @@ cdef vector[EffectCRep*] convert_ereps(ereps):
 # -----------------------------------------
 
 def mapfill_probs_atom(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to_fill,
-                          dest_indices, layout_atom, resource_alloc):
+                       dest_indices, layout_atom, resource_alloc):
 
     # The required ending condition is that array_to_fill on each processor has been filled.  But if
     # memory is being shared and resource_alloc contains multiple processors on a single host, we only
@@ -282,9 +282,9 @@ def mapfill_dprobs_atom(fwdsim,
                         np.ndarray[double, ndim=2] array_to_fill,
                         dest_indices,
                         dest_param_indices,
-                        layout_atom, param_indices, resource_alloc):
+                        layout_atom, param_indices, resource_alloc, double eps):
 
-    cdef double eps = 1e-7 #hardcoded?
+    #cdef double eps = 1e-7
 
     if param_indices is None:
         param_indices = list(range(fwdsim.model.num_params))
