@@ -262,7 +262,6 @@ class QubitProcessorSpec(ProcessorSpec):
                 return tuple((_tuplize(el) for el in x))
             return x
 
-        #HERE - need to revamp serialization routines - but first we're working through model construction interface to make sure this pspec approach is good
         nonstd_gate_unitaries = {}
         for k, obj in state['nonstd_gate_unitaries'].items():
             if isinstance(obj, int):
@@ -272,32 +271,38 @@ class QubitProcessorSpec(ProcessorSpec):
             else:  # assume a matrix encoding of some sort (could be list or dict)
                 nonstd_gate_unitaries[k] = cls._decodemx(obj)
 
-        nonstd_preps = {}
-        for k, obj in state['nonstd_preps'].items():
-            if isinstance(obj, str):
-                nonstd_preps[k] = obj
+        def _unserialize_state(obj):
+            if isinstance(obj, str): return obj
             elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
-                nonstd_preps[k] = _NicelySerializable.from_nice_serialization(obj)
+                return _NicelySerializable.from_nice_serialization(obj)
             else:  # assume a matrix encoding of some sort (could be list or dict)
-                nonstd_preps[k] = cls._decodemx(obj)
+                return cls._decodemx(obj)
 
-        nonstd_povms = {}
-        for k, obj in state['nonstd_povms'].items():
-            if isinstance(obj, str):
-                nonstd_povms[k] = obj
+        def _unserialize_povm(obj):
+            if isinstance(obj, str): return obj
             elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
-                nonstd_povms[k] = _NicelySerializable.from_nice_serialization(obj)
-            else:  # assume a matrix encoding of some sort (could be list or dict)
-                nonstd_povms[k] = cls._decodemx(obj)
+                return _NicelySerializable.from_nice_serialization(obj)
+            elif isinstance(obj, dict): return {k: _unserialize_state(v) for k, v in obj.items()}
+            raise ValueError("Cannot unserialize POVM specifier of type %s!" % str(type(obj)))
 
-        nonstd_instruments = {}
-        for k, obj in state['nonstd_instruments'].items():
-            if isinstance(obj, str):
-                nonstd_instruments[k] = obj
+        def _unserialize_instrument_member(obj):
+            if isinstance(obj, str): return obj
             elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
-                nonstd_instruments[k] = _NicelySerializable.from_nice_serialization(obj)
-            else:  # assume a matrix encoding of some sort (could be list or dict)
-                nonstd_instruments[k] = cls._decodemx(obj)
+                return _NicelySerializable.from_nice_serialization(obj)
+            elif isinstance(obj, list):
+                return [(_unserialize_state(espec), _unserialize_state(rspec)) for espec, rspec in obj]
+            raise ValueError("Cannot unserialize Instrument member specifier of type %s!" % str(type(obj)))
+
+        def _unserialize_instrument(obj):
+            if isinstance(obj, str): return obj
+            elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
+                return _NicelySerializable.from_nice_serialization(obj)
+            elif isinstance(obj, dict): return {k: _unserialize_instrument_member(v) for k, v in obj.items()}
+            raise ValueError("Cannot unserialize Instrument specifier of type %s!" % str(type(obj)))
+
+        nonstd_preps = {k: _unserialize_state(obj) for k, obj in state['nonstd_preps'].items()}
+        nonstd_povms = {k: _unserialize_povm(obj) for k, obj in state['nonstd_povms'].items()}
+        nonstd_instruments = {k: _unserialize_instrument(obj) for k, obj in state['nonstd_instruments'].items()}
 
         symplectic_reps = {k: (cls._decodemx(s), cls._decodemx(p)) for k, (s, p) in state['symplectic_reps'].items()}
         availability = {k: _tuplize(v) for k, v in state['availability'].items()}
