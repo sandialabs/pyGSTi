@@ -824,6 +824,72 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     layer = _op.ComposedOp([ideal_gate, noiseop]) if (noiseop is not None) else ideal_gate
                     ret.operations[key] = layer
 
+    # Instruments:
+    for instrument_name in processor_spec.instrument_names:
+        instrument_spec = processor_spec.instrument_specifier(instrument_name)
+
+        #FUTURE: allow instruments to be embedded
+        #resolved_avail = processor_spec.resolved_availability(instrument_name)
+        resolved_avail = [None]  # all instrument (so far) act on all the qubits
+
+        # resolved_avail is a list/tuple of available sslbls for the current gate/factory
+        for inds in resolved_avail:  # inds are target qubit labels
+            key = _label.Label(gn, inds)
+
+            if isinstance(instrument_spec, str):
+                if instrument_spec == "Iz":
+                    #NOTE: this is very inefficient currently - there should be a better way of
+                    # creating an Iz instrument in the FUTURE
+                    inst_members = {}
+                    for ekey, effect_vec in _povm.ComputationalBasisPOVM(nqubits=len(qubit_labels), evotype=evotype,
+                                                                         state_space=state_space).items():
+                        E = effect_vec.to_dense('HilbertSchmidt').reshape((state_space.dim, 1))
+                        inst_members[ekey] = _np.dot(E, E.T)  # (effect vector is a column vector)
+                    ideal_instrument = _instrument.Instrument(inst_members)
+                else:
+                    raise ValueError("Unrecognized instrument spec '%s'" % instrument_spec)
+
+            elif isinstance(instrument_spec, dict):
+
+                def _spec_to_densevec(spec):
+                    if isinstance(spec, str):
+                        if spec == "rho0":
+                            state = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
+                            return state.to_dense()
+                    raise ValueError("Invalid effect or state prep spec: %s" % str(spec))
+
+                # elements are key, list-of-2-tuple pairs
+                for k, lst in instrument_spec.items():
+                    member = None
+                    for effect_spec, prep_spec in lst:
+                        effect_vec = _spec_to_densevec(effect_spec)
+                        prep_vec = _spec_to_densevec(prep_spec)
+                        if member is None:
+                            member = _np.outer(effect_vec, prep_vec)
+                        else:
+                            member += _np.outer(effect_vec, prep_vec)
+
+                    assert(member is not None), \
+                        "You must provide at least one rank-1 specifier for each instrument member!"
+                    inst_members[k] = member
+                ideal_instrument = _instrument.Instrument(inst_members)
+            else:
+                raise ValueError("Invalid instrument spec: %s" % str(instrument_spec))
+
+            if inds is None or inds == tuple(qubit_labels):  # then no need to embed
+                #ideal_gate = _op.create_from_unitary_mx(gate_unitary, ideal_gate_type, 'pp',
+                #                                        None, evotype, state_space)
+                pass  # ideal_instrument already created
+            else:
+                raise NotImplementedError("Embedded Instruments aren't supported yet")
+                # FUTURE: embed ideal_instrument onto qubits given by layer key (?)
+
+            #TODO: once we can compose instruments, compose with noise op here
+            #noiseop = modelnoise.create_errormap(key, evotype, state_space, target_labels=inds)
+            #layer = _op.ComposedOp([ideal_gate, noiseop]) if (noiseop is not None) else ideal_gate
+            layer = ideal_instrument
+            ret.instruments[key] = layer
+
     # SPAM:
     local_noise = False; independent_gates = True; independent_spam = True
     prep_layers, povm_layers = _create_spam_layers(processor_spec, modelnoise, local_noise,
@@ -967,7 +1033,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
 
             v0, v1 = _np.array([1, 0], 'd'), _np.array([0, 1], 'd')
             ideal_preps1Q = (_state.create_from_pure_vector(v0, vectype, 'pp', evotype, state_space=None),
-                             _state.create_from_pure_vector(v1, vectype, 'pp', evotype, state_space=None)]
+                             _state.create_from_pure_vector(v1, vectype, 'pp', evotype, state_space=None))
 
             if isinstance(prep_spec, str):
                 if prep_spec == "rho0":
