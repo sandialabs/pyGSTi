@@ -1,10 +1,14 @@
 import numpy as np
 import scipy
 import unittest
+from functools import reduce
 
 import pygsti
+from pygsti.modelpacks import smq1Q_XYI
+from pygsti.modelpacks import smq2Q_XYICNOT
 import pygsti.models.modelconstruction as mc
 import pygsti.modelmembers.operations as op
+import pygsti.modelmembers.states as st
 import pygsti.tools.basistools as bt
 from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as GEEL
@@ -16,6 +20,46 @@ class ModelConstructionTester(BaseCase):
         #OK for these tests, since we test user interface?
         #Set Model objects to "strict" mode for testing
         pygsti.models.ExplicitOpModel._strict = False
+
+    def test_model_states(self):
+        mdl1Q = smq1Q_XYI.target_model()
+        E0, E1 = mdl1Q.povms['Mdefault']['0'].to_dense(), mdl1Q.povms['Mdefault']['1'].to_dense()
+
+        mdl2Q = smq2Q_XYICNOT.target_model()
+        E01 = mdl2Q.povms['Mdefault']['01']
+
+        self.assertArraysAlmostEqual(np.kron(E0, E1), E01.to_dense())
+
+    def test_create_spam_vector(self):
+        def multikron(args):
+            return reduce(np.kron, args)
+
+        mdl1Q = smq1Q_XYI.target_model()
+        mdlE0, mdlE1 = mdl1Q.povms['Mdefault']['0'].to_dense(), mdl1Q.povms['Mdefault']['1'].to_dense()
+        ss1Q = pygsti.baseobjs.statespace.QubitSpace(1)
+        E0 = mc.create_spam_vector(0, ss1Q, 'pp').flatten()
+        E1 = mc.create_spam_vector(1, ss1Q, 'pp').flatten()
+
+        self.assertArraysAlmostEqual(mdlE0, E0)
+        self.assertArraysAlmostEqual(mdlE1, E1)
+
+        E0_chk = st.create_from_pure_vector(np.array([1, 0]), 'static', 'pp', 'default', state_space=ss1Q).to_dense()
+        E1_chk = st.create_from_pure_vector(np.array([0, 1]), 'static', 'pp', 'default', state_space=ss1Q).to_dense()
+        self.assertArraysAlmostEqual(E0_chk, E0)
+        self.assertArraysAlmostEqual(E1_chk, E1)
+
+        nQubits = 4
+        ssNQ = pygsti.baseobjs.statespace.QubitSpace(nQubits)
+        E = {'0': E0, '1': E1}
+        for i in range(2**nQubits):
+            bin_i = '{{0:0{}b}}'.format(nQubits).format(i)  # first .format creates format str, e.g. '{0:04b}'
+            print("Testing state %d (%s)" % (i, bin_i))
+            created = mc.create_spam_vector(i, ssNQ, 'pp').flatten()
+            krond = multikron([E[digit] for digit in bin_i])
+            v = np.zeros(2**nQubits, complex); v[i] = 1.0
+            alt_created = st.create_from_pure_vector(v, 'static', 'pp', 'default', state_space=ssNQ).to_dense()
+            self.assertArraysAlmostEqual(created, krond)
+            self.assertArraysAlmostEqual(created, alt_created)
 
     def test_build_basis_gateset(self):
         modelA = mc.create_explicit_model_from_expressions(

@@ -834,7 +834,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
 
         # resolved_avail is a list/tuple of available sslbls for the current gate/factory
         for inds in resolved_avail:  # inds are target qubit labels
-            key = _label.Label(gn, inds)
+            key = _label.Label(instrument_name, inds)
 
             if isinstance(instrument_spec, str):
                 if instrument_spec == "Iz":
@@ -1002,8 +1002,28 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
         if ideal_prep_type == 'computational' or ideal_prep_type.startswith('lindblad '):
 
             if isinstance(prep_spec, str):
-                if prep_spec == "rho0":
-                    ideal_prep = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
+                # Notes on conventions:  When there are multiple qubits, the leftmost in a string (or, intuitively,
+                # the first element in a list, e.g. [Q0_item, Q1_item, etc]) is "qubit 0".  For example, in the
+                # outcome string "01" qubit0 is 0 and qubit1 is 1.  To create the full state/projector, 1Q operations
+                # are tensored together in the same order, i.e., kron(Q0_item, Q1_item, ...).  When a state is specified
+                # as a single integer i (in Python), this means the i-th diagonal element of the density matrix (from
+                # its top-left corner) is 1.0.  This corresponds to the qubit state formed by the binary string of i
+                # where i is written normally, with the least significant bit on the right (but, perhaps
+                # counterintuitively, this bit corresponds to the highest-indexed qubit).  For example, "rho6" in a
+                # 3-qubit system corresponds to "rho_110", that is |1> otimes |1> otimes |0> or |110>.
+                if prep_spec.startswith('rho_') and all([l in ('0', '1') for l in prep_spec[len('rho_'):]]):
+                    binary_index = prep_spec[len('rho_'):]
+                    assert(len(binary_index) == num_qubits), \
+                        "Wrong number of qubits in '%s': expected %d" % (prep_spec, num_qubits)
+                    ideal_prep = _state.ComputationalBasisState([(0 if (l == '0') else 1) for l in binary_index],
+                                                                'pp', evotype, state_space)
+                elif prep_spec.startswith("rho") and prep_spec[len('rho'):].isdigit():
+                    index = int(prep_spec[len('rho'):])
+                    assert(0 <= index < 2**num_qubits), \
+                        "Index in '%s' out of bounds for state of %d qubits" % (prep_spec, num_qubits)
+                    binary_index = '{{0:0{}b}}'.format(num_qubits).format(index)
+                    ideal_prep = _state.ComputationalBasisState([(0 if (l == '0') else 1) for l in binary_index],
+                                                                'pp', evotype, state_space)
                 else:
                     raise ValueError("Unrecognized state preparation spec '%s'" % prep_spec)
             elif isinstance(prep_spec, _np.ndarray):
@@ -1034,10 +1054,20 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             v0, v1 = _np.array([1, 0], 'd'), _np.array([0, 1], 'd')
             ideal_preps1Q = (_state.create_from_pure_vector(v0, vectype, 'pp', evotype, state_space=None),
                              _state.create_from_pure_vector(v1, vectype, 'pp', evotype, state_space=None))
+            convbit = {'0': 0, '1': 1}  # convert binary digit (str) to index
 
             if isinstance(prep_spec, str):
-                if prep_spec == "rho0":
-                    prep_factors = [ideal_preps1Q[0].copy() for i in range(num_qubits)]
+                if prep_spec.startswith('rho_') and all([l in ('0', '1') for l in prep_spec[len('rho_'):]]):
+                    binary_index = prep_spec[len('rho_'):]
+                    assert(len(binary_index) == num_qubits), \
+                        "Wrong number of qubits in '%s': expected %d" % (prep_spec, num_qubits)
+                    prep_factors = [ideal_preps1Q[convbit[l]].copy() for l in binary_index]
+                elif prep_spec.startswith("rho") and prep_spec[len('rho'):].isdigit():
+                    index = int(prep_spec[len('rho'):])
+                    assert(0 <= index < 2**num_qubits), \
+                        "Index in '%s' out of bounds for state of %d qubits" % (prep_spec, num_qubits)
+                    binary_index = '{{0:0{}b}}'.format(num_qubits).format(index)
+                    prep_factors = [ideal_preps1Q[convbit[l]].copy() for l in binary_index]
                 else:
                     raise ValueError("Unrecognized state preparation spec '%s'" % prep_spec)
             elif isinstance(prep_spec, _np.ndarray):
@@ -1055,21 +1085,28 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             prep_layers[prep_name] = _state.TensorProductState(prep_factors, state_space)
 
         else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qubit state vectors & POVMs
-
             vectype = ideal_prep_type
-            vecs = []  # all the basis vectors for num_qubits
-            for i in range(2**num_qubits):
-                v = _np.zeros(2**num_qubits, 'd'); v[i] = 1.0
-                vecs.append(v)
 
             if isinstance(prep_spec, str):
-                if prep_spec == "rho0":
-                    ideal_prep = _state.create_from_pure_vector(vecs[0], vectype, 'pp', evotype, state_space=state_space)
+                if prep_spec.startswith('rho_') and all([l in ('0', '1') for l in prep_spec[len('rho_'):]]):
+                    binary_index = prep_spec[len('rho_'):]
+                    assert(len(binary_index) == num_qubits), \
+                        "Wrong number of qubits in '%s': expected %d" % (prep_spec, num_qubits)
+                    v = _np.zeros(2**num_qubits); v[int(binary_index, 2)] = 1.0
+                    ideal_prep = _state.create_from_pure_vector(v, vectype, 'pp', evotype, state_space=state_space)
+                elif prep_spec.startswith("rho") and prep_spec[len('rho'):].isdigit():
+                    index = int(prep_spec[len('rho'):])
+                    assert(0 <= index < 2**num_qubits), \
+                        "Index in '%s' out of bounds for state of %d qubits" % (prep_spec, num_qubits)
+                    v = _np.zeros(2**num_qubits); v[index] = 1.0
+                    ideal_prep = _state.create_from_pure_vector(v, vectype, 'pp', evotype, state_space=state_space)
                 else:
                     raise ValueError("Unrecognized state preparation spec '%s'" % prep_spec)
             elif isinstance(prep_spec, _np.ndarray):
-                raise ValueError("Cannot construct arbitrary state preps (using numpy array) when ideal_prep_type=%s"
-                                 % ideal_prep_type)
+                assert(len(prep_spec) == 2**num_qubits), \
+                    "Expected length-%d (not %d!) array as a %d-qubit prep specifier!" % (2**num_qubits,
+                                                                                          len(prep_spec), num_qubits)
+                ideal_prep = _state.create_from_pure_vector(prep_spec, vectype, 'pp', evotype, state_space=state_space)
             else:
                 raise ValueError("Invalid state preparation spec: %s" % str(prep_spec))
 
@@ -1145,12 +1182,13 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
         else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qubit state vectors & POVMs
 
             vectype = ideal_povm_type
-            vecs = []  # all the basis vectors for num_qubits
-            for i in range(2**num_qubits):
-                v = _np.zeros(2**num_qubits, 'd'); v[i] = 1.0
-                vecs.append(v)
 
             if isinstance(povm_spec, str):
+                vecs = []  # all the basis vectors for num_qubits
+                for i in range(2**num_qubits):
+                    v = _np.zeros(2**num_qubits, 'd'); v[i] = 1.0
+                    vecs.append(v)
+
                 if povm_spec in ("Mdefault", "Mz"):
                     ideal_povm = _povm.create_from_pure_vectors(
                         [(format(i, 'b').zfill(num_qubits), v) for i, v in enumerate(vecs)],
@@ -1158,8 +1196,33 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                 else:
                     raise ValueError("Unrecognized POVM spec '%s'" % povm_spec)
             elif isinstance(povm_spec, dict):
-                raise ValueError("Cannot construct arbitrary POVM (using dict) when ideal_povm_type=%s"
-                                 % ideal_povm_type)
+                effects = []
+                for k, effect_spec in povm_spec.items():
+
+                    if isinstance(effect_spec, str):
+                        if all([l in ('0', '1') for l in effect_spec]):
+                            binary_index = effect_spec
+                            assert(len(binary_index) == num_qubits), \
+                                "Wrong number of qubits in '%s': expected %d" % (effect_spec, num_qubits)
+                            v = _np.zeros(2**num_qubits); v[int(binary_index, 2)] = 1.0
+                            effects.append((k, v))
+                        elif effect_spec.startswith("E") and effect_spec[len('E'):].isdigit():
+                            index = int(effect_spec[len('E'):])
+                            assert(0 <= index < 2**num_qubits), \
+                                "Index in '%s' out of bounds for state of %d qubits" % (effect_spec, num_qubits)
+                            v = _np.zeros(2**num_qubits); v[index] = 1.0
+                            effects.append((k, v))
+                        else:
+                            raise ValueError("Unrecognized state preparation spec '%s'" % effect_spec)
+                    elif isinstance(effect_spec, _np.ndarray):
+                        assert(len(effect_spec) == 2**num_qubits), \
+                            "Expected length-%d (not %d!) array as a %d-qubit prep specifier!" % (
+                                2**num_qubits, len(effect_spec), num_qubits)
+                        effects.append((k, effect_spec))
+                    else:
+                        raise ValueError("Invalid state preparation spec: %s" % str(effect_spec))
+
+                ideal_povm = _povm.create_from_pure_vectors(effects, vectype, 'pp', evotype, state_space=state_space)
             else:
                 raise ValueError("Invalid POVM spec: %s" % str(povm_spec))
 
