@@ -215,9 +215,15 @@ class QubitProcessorSpec(ProcessorSpec):
             return (obj.to_nice_serialization() if isinstance(obj, _NicelySerializable)
                     else (obj if isinstance(obj, str) else self._encodemx(obj)))
 
+        def _serialize_povm_effect(obj):
+            if isinstance(obj, _NicelySerializable) or isinstance(obj, str): return obj
+            if isinstance(obj, (list, tuple)): return [_serialize_state(v) for v in obj]
+            if isinstance(obj, _np.ndarray): return [_serialize_state(obj)]  # turn into list!
+            raise ValueError("Cannot serialize POVM effect specifier of type %s!" % str(type(obj)))
+
         def _serialize_povm(obj):
             if isinstance(obj, _NicelySerializable) or isinstance(obj, str): return obj
-            if isinstance(obj, dict): return {k: _serialize_state(v) for k, v in obj.items()}
+            if isinstance(obj, dict): return {k: _serialize_povm_effect(v) for k, v in obj.items()}
             raise ValueError("Cannot serialize POVM specifier of type %s!" % str(type(obj)))
 
         def _serialize_instrument_member(obj):
@@ -244,9 +250,9 @@ class QubitProcessorSpec(ProcessorSpec):
                       'prep_names': list(self.prep_names),
                       'nonstd_preps': nonstd_preps,
                       'povm_names': list(self.povm_names),
-                      'nonstd_povm': nonstd_povms,
+                      'nonstd_povms': nonstd_povms,
                       'instrument_names': list(self.instrument_names),
-                      'nonstd_instrument': nonstd_instruments,
+                      'nonstd_instruments': nonstd_instruments,
                       'geometry': self.qubit_graph.to_nice_serialization(),
                       'symplectic_reps': {k: (self._encodemx(s), self._encodemx(p))
                                           for k, (s, p) in self._symplectic_reps.items()},
@@ -278,11 +284,19 @@ class QubitProcessorSpec(ProcessorSpec):
             else:  # assume a matrix encoding of some sort (could be list or dict)
                 return cls._decodemx(obj)
 
+        def _unserialize_povm_effect(obj):
+            if isinstance(obj, str): return obj
+            elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
+                return _NicelySerializable.from_nice_serialization(obj)
+            elif isinstance(obj, dict): return _unserialize_state(obj)  # assume a serialized array
+            elif isinstance(obj, list): return [_unserialize_state(v) for v in obj]
+            raise ValueError("Cannot unserialize POVM effect specifier of type %s!" % str(type(obj)))
+
         def _unserialize_povm(obj):
             if isinstance(obj, str): return obj
             elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
                 return _NicelySerializable.from_nice_serialization(obj)
-            elif isinstance(obj, dict): return {k: _unserialize_state(v) for k, v in obj.items()}
+            elif isinstance(obj, dict): return {k: _unserialize_povm_effect(v) for k, v in obj.items()}
             raise ValueError("Cannot unserialize POVM specifier of type %s!" % str(type(obj)))
 
         def _unserialize_instrument_member(obj):

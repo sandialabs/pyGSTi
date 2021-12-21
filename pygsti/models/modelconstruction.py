@@ -851,19 +851,43 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
 
             elif isinstance(instrument_spec, dict):
 
-                def _spec_to_densevec(spec):
+                def _spec_to_densevec(spec, is_prep):
+                    num_qubits = len(qubit_labels)
                     if isinstance(spec, str):
-                        if spec == "rho0":
-                            state = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
-                            return state.to_dense()
-                    raise ValueError("Invalid effect or state prep spec: %s" % str(spec))
+                        if all([l in ('0', '1') for l in spec]):
+                            binary_index = effect_spec
+                            assert(len(binary_index) == num_qubits), \
+                                "Wrong number of qubits in '%s': expected %d" % (spec, num_qubits)
+                            v = _np.zeros(2**num_qubits); v[int(binary_index, 2)] = 1.0
+                        elif (not is_prep) and spec.startswith("E") and spec[len('E'):].isdigit():
+                            index = int(spec[len('E'):])
+                            assert(0 <= index < 2**num_qubits), \
+                                "Index in '%s' out of bounds for state of %d qubits" % (spec, num_qubits)
+                            v = _np.zeros(2**num_qubits); v[index] = 1.0
+                        elif is_prep and spec.startswith("rho") and spec[len('rho'):].isdigit():
+                            index = int(effect_spec[len('rho'):])
+                            assert(0 <= index < 2**num_qubits), \
+                                "Index in '%s' out of bounds for state of %d qubits" % (spec, num_qubits)
+                            v = _np.zeros(2**num_qubits); v[index] = 1.0
+                        else:
+                            raise ValueError("Unrecognized instrument member spec '%s'" % spec)
+                    elif isinstance(spec, _np.ndarray):
+                        assert(len(spec) == 2**num_qubits), \
+                            "Expected length-%d (not %d!) array as a %d-qubit specifier!" % (
+                                2**num_qubits, len(spec), num_qubits)
+                        v = spec
+                    else:
+                        raise ValueError("Invalid effect or state prep spec: %s" % str(spec))
+
+                    return _bt.change_basis(_ot.state_to_dmvec(v), 'std', 'pp')
 
                 # elements are key, list-of-2-tuple pairs
+                inst_members = {}
                 for k, lst in instrument_spec.items():
                     member = None
                     for effect_spec, prep_spec in lst:
-                        effect_vec = _spec_to_densevec(effect_spec)
-                        prep_vec = _spec_to_densevec(prep_spec)
+                        effect_vec = _spec_to_densevec(effect_spec, is_prep=False)
+                        prep_vec = _spec_to_densevec(prep_spec, is_prep=True)
                         if member is None:
                             member = _np.outer(effect_vec, prep_vec)
                         else:
@@ -1196,33 +1220,55 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                 else:
                     raise ValueError("Unrecognized POVM spec '%s'" % povm_spec)
             elif isinstance(povm_spec, dict):
-                effects = []
+                effects_components = []; convert_to_dmvecs = False
                 for k, effect_spec in povm_spec.items():
+                    # effect_spec should generally be a list/tuple of component effect specs
+                    # that are added together to get the final effect.  For convenience, the user
+                    # can just specify the single element when this list is length 1.
+                    if isinstance(effect_spec, str) or isinstance(effect_spec, _np.ndarray):
+                        effect_spec = [effect_spec]
 
-                    if isinstance(effect_spec, str):
-                        if all([l in ('0', '1') for l in effect_spec]):
-                            binary_index = effect_spec
-                            assert(len(binary_index) == num_qubits), \
-                                "Wrong number of qubits in '%s': expected %d" % (effect_spec, num_qubits)
-                            v = _np.zeros(2**num_qubits); v[int(binary_index, 2)] = 1.0
-                            effects.append((k, v))
-                        elif effect_spec.startswith("E") and effect_spec[len('E'):].isdigit():
-                            index = int(effect_spec[len('E'):])
-                            assert(0 <= index < 2**num_qubits), \
-                                "Index in '%s' out of bounds for state of %d qubits" % (effect_spec, num_qubits)
-                            v = _np.zeros(2**num_qubits); v[index] = 1.0
-                            effects.append((k, v))
+                    assert(len(effect_spec) > 0), \
+                        "You must provide at least one component effect specifier for each POVM effect!"
+
+                    effect_components = []
+                    if len(effect_spec) > 1: convert_to_dmvecs = True
+                    for comp_espec in effect_spec:
+                        if isinstance(comp_espec, str):
+                            if all([l in ('0', '1') for l in comp_espec]):
+                                binary_index = comp_espec
+                                assert(len(binary_index) == num_qubits), \
+                                    "Wrong number of qubits in '%s': expected %d" % (comp_espec, num_qubits)
+                                v = _np.zeros(2**num_qubits); v[int(binary_index, 2)] = 1.0
+                                effect_components.append(v)
+                            elif comp_espec.startswith("E") and comp_espec[len('E'):].isdigit():
+                                index = int(comp_espec[len('E'):])
+                                assert(0 <= index < 2**num_qubits), \
+                                    "Index in '%s' out of bounds for state of %d qubits" % (comp_espec, num_qubits)
+                                v = _np.zeros(2**num_qubits); v[index] = 1.0
+                                effect_components.append(v)
+                            else:
+                                raise ValueError("Unrecognized POVM effect spec '%s'" % comp_espec)
+                        elif isinstance(comp_espec, _np.ndarray):
+                            assert(len(comp_espec) == 2**num_qubits), \
+                                "Expected length-%d (not %d!) array as a %d-qubit effect specifier!" % (
+                                    2**num_qubits, len(comp_espec), num_qubits)
+                            effect_components.append(comp_espec)
                         else:
-                            raise ValueError("Unrecognized state preparation spec '%s'" % effect_spec)
-                    elif isinstance(effect_spec, _np.ndarray):
-                        assert(len(effect_spec) == 2**num_qubits), \
-                            "Expected length-%d (not %d!) array as a %d-qubit prep specifier!" % (
-                                2**num_qubits, len(effect_spec), num_qubits)
-                        effects.append((k, effect_spec))
-                    else:
-                        raise ValueError("Invalid state preparation spec: %s" % str(effect_spec))
+                            raise ValueError("Invalid POVM effect spec: %s" % str(comp_espec))
+                        effects_components.append((k, effect_components))
 
-                ideal_povm = _povm.create_from_pure_vectors(effects, vectype, 'pp', evotype, state_space=state_space)
+                if convert_to_dmvecs:
+                    effects = []
+                    for k, effect_components in effects_components:
+                        dmvec = _bt.change_basis(_ot.state_to_dmvec(effect_components[0]), 'std', 'pp')
+                        for ec in effect_components[1:]:
+                            dmvec += _bt.change_basis(_ot.state_to_dmvec(ec), 'std', 'pp')
+                        effects.append((k, dmvec))
+                    ideal_povm = _povm.create_from_dmvecs(effects, vectype, 'pp', evotype, state_space=state_space)
+                else:
+                    effects = [(k, effect_components[0]) for k, effect_components in effects_components]
+                    ideal_povm = _povm.create_from_pure_vectors(effects, vectype, 'pp', evotype, state_space=state_space)
             else:
                 raise ValueError("Invalid POVM spec: %s" % str(povm_spec))
 
