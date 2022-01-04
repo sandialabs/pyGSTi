@@ -395,7 +395,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         # basis a Basis
         self = cls.__new__(cls)
         try:
-            rep = evotype.create_dense_unitary_rep(mx, basis, state_space)
+            rep = evotype.create_dense_unitary_rep(unitary_mx, basis, state_space)
             self._reptype = 'unitary'
             self._unitary = None
         except Exception:
