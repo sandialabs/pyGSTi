@@ -151,10 +151,10 @@ class InterpygateTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(_np.array([1.1, -0.01, -0.11, 0.055, 0.155, 1.59]), interp_op.to_vector())
 
         #print(interp_op.to_dense())
-        expected = _np.array([[ 1.00000000e+00, -5.18239627e-17,  1.73213179e-17, -2.77438386e-18],
-                              [ 0.00000000e+00,  7.09947188e-01,  9.63091290e-02, -2.25426593e-02],
-                              [-0.00000000e+00,  2.47704101e-03, -1.36114434e-01, -7.45867404e-01],
-                              [ 0.00000000e+00, -9.78352009e-02,  7.18575099e-01, -1.34763495e-01]])
+        expected = _np.array([[ 1.00000000e+00, -3.92320766e-17,  1.43373814e-18, -5.00802093e-18],
+                              [ 6.11491323e-19,  7.07674657e-01,  6.02660161e-02, -9.37426062e-02],
+                              [-1.58409463e-18, -7.75367332e-02, -1.56121712e-01, -7.31059113e-01],
+                              [ 7.43524968e-18, -7.91093355e-02,  7.32786974e-01, -1.10942333e-01]])
         #KEVIN - check this: below is the OLD expected result, and now we're getting the above.  Is this ok?
         #expected = _np.array([[ 1.00000000e+00, -5.14632352e-17,  1.58551100e-17, -8.59219991e-18],
         #                      [ 6.10412172e-19,  7.07796561e-01,  6.01596594e-02, -9.41693123e-02],
@@ -202,10 +202,10 @@ class InterpygateTestCase(BaseTestCase):
         #print("Actual:")
         #print(op.to_dense())
         #print(op.aux_info)
-        expected = _np.array([[ 1.00000000e+00, -3.70786112e-17, -6.17212039e-17,  1.04851313e-17],
-                              [ 0.00000000e+00,  8.41251521e-01, -9.06748383e-03,  1.41458405e-02],
-                              [-0.00000000e+00,  8.03846109e-03, -1.51268873e-01, -8.77110055e-01],
-                              [ 0.00000000e+00,  8.79311414e-03,  8.52900072e-01, -1.55007890e-01]])
+        expected = _np.array([[ 1.00000000e+00, -1.79603810e-17, -3.02087736e-17, -7.29450879e-19],
+                              [ 2.73166900e-19,  8.39404484e-01,  2.73637219e-03,  1.78744631e-02],
+                              [-1.70329720e-17,  1.75441114e-02, -1.74656910e-01, -8.63668429e-01],
+                              [ 7.78491911e-17,  5.98213820e-04,  8.63855305e-01, -1.31408966e-01]])
         #KEVIN - check this: below is the OLD expected result, and now we're getting the above.  Is this ok?
         #expected = _np.array([[ 1.00000000e+00, -3.67730279e-17, -4.28676069e-17,  6.20501240e-18],
         #                      [ 5.44719386e-19,  8.41211070e-01,  5.73783231e-03,  1.81516805e-02],
@@ -236,15 +236,16 @@ class InterpygateTestCase(BaseTestCase):
         interp_op = interp.InterpolatedDenseOp.create_by_interpolating_physical_process(
             target_op, example_process, param_ranges, comm=_comm,
             mpi_workers_per_process=mpi_workers_per_process)
-
+        
         self.assertEqual(interp_op.num_params, 6)
         interp_op.from_vector([1.1, -0.01, -0.11, 0.055, 0.155, 1.59])
         self.assertArraysAlmostEqual(_np.array([1.1, -0.01, -0.11, 0.055, 0.155, 1.59]), interp_op.to_vector())
+        #print(interp_op.to_dense())
 
-        expected = _np.array([[ 1.00000000e+00, -5.18239627e-17,  1.73213179e-17, -2.77438386e-18],
-                              [ 0.00000000e+00,  7.09947188e-01,  9.63091290e-02, -2.25426593e-02],
-                              [-0.00000000e+00,  2.47704101e-03, -1.36114434e-01, -7.45867404e-01],
-                              [ 0.00000000e+00, -9.78352009e-02,  7.18575099e-01, -1.34763495e-01]])
+        expected = _np.array([[ 1.00000000e+00, -3.92320766e-17,  1.43373814e-18, -5.00802093e-18],
+                              [ 6.11491323e-19,  7.07674657e-01,  6.02660161e-02, -9.37426062e-02],
+                              [-1.58409463e-18, -7.75367332e-02, -1.56121712e-01, -7.31059113e-01],
+                              [ 7.43524968e-18, -7.91093355e-02,  7.32786974e-01, -1.10942333e-01]])
         #KEVIN - check this: below is the OLD expected result, and now we're getting the above.  Is this ok?
         #expected = _np.array([[ 1.00000000e+00, -5.14632352e-17,  1.58551100e-17, -8.59219991e-18],
         #                      [ 6.10412172e-19,  7.07796561e-01,  6.01596594e-02, -9.41693123e-02],
@@ -291,10 +292,10 @@ class InterpygateTestCase(BaseTestCase):
         self.assertArraysAlmostEqual(v, op.to_vector())
         #print(op.to_dense())
         #print(op.aux_info)
-        expected = _np.array([[ 1.00000000e+00, -3.70786112e-17, -6.17212039e-17,  1.04851313e-17],
-                              [ 0.00000000e+00,  8.41251521e-01, -9.06748383e-03,  1.41458405e-02],
-                              [-0.00000000e+00,  8.03846109e-03, -1.51268873e-01, -8.77110055e-01],
-                              [ 0.00000000e+00,  8.79311414e-03,  8.52900072e-01, -1.55007890e-01]])
+        expected = _np.array([[ 1.00000000e+00, -1.79603810e-17, -3.02087736e-17, -7.29450879e-19],
+                              [ 2.73166900e-19,  8.39404484e-01,  2.73637219e-03,  1.78744631e-02],
+                              [-1.70329720e-17,  1.75441114e-02, -1.74656910e-01, -8.63668429e-01],
+                              [ 7.78491911e-17,  5.98213820e-04,  8.63855305e-01, -1.31408966e-01]])
         #KEVIN - check this: below is the OLD expected result, and now we're getting the above.  Is this ok?
         #expected = _np.array([[ 1.00000000e+00, -3.67730279e-17, -4.28676069e-17,  6.20501240e-18],
         #                      [ 5.44719386e-19,  8.41211070e-01,  5.73783231e-03,  1.81516805e-02],

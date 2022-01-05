@@ -422,7 +422,8 @@ def logl_hessian(model, dataset, circuits=None,
                          regularization, {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, mem_limit, ('hessian',), (), mdc_store, verbosity)
     hessian = obj.hessian()  # Note: hessian is only assembled on root processor
-    return -hessian if comm.rank == 0 else None # negative b/c objective is deltaLogL = max_logl - logL
+    return -hessian if (comm is None or comm.rank == 0) else None
+    # negative b/c objective is deltaLogL = max_logl - logL
 
 
 def logl_approximate_hessian(model, dataset, circuits=None,
@@ -510,7 +511,8 @@ def logl_approximate_hessian(model, dataset, circuits=None,
                          {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, mem_limit, ('approximate_hessian',), (), mdc_store, verbosity)
     hessian = obj.approximate_hessian()  # Note: hessian is only assembled on root processor
-    return -hessian if comm.rank == 0 else None  # negative b/c objective is deltaLogL = max_logl - logL
+    return -hessian if (comm is None or comm.rank == 0) else None
+    # negative b/c objective is deltaLogL = max_logl - logL
 
 
 def logl_max(model, dataset, circuits=None, poisson_picture=True,
