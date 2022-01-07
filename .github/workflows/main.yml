@@ -63,13 +63,13 @@ jobs:
         flake8 . --exit-zero --statistics
     - name: Run unit tests ubuntu
       if: ${{matrix.os == 'ubuntu-18.04'}}
-      run:
+      run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        echo "nosetests: $NOSETESTS"  
        nosetests $NOSETESTS
     - name: Run unit tests windows  
       if: ${{matrix.os == 'windows-2019'}}
-      run:
+      run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        echo "nosetests: $Env:NOSETESTS"  
        nosetests $Env:NOSETESTS
