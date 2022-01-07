@@ -61,11 +61,17 @@ jobs:
         flake8 . --count --show-source --statistics --config=.flake8-critical
         # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
         flake8 . --exit-zero --statistics
-    - name: Run unit tests      
-      run: |
-        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        echo "nosetests: $NOSETESTS"  
-        nosetests $NOSETESTS
+    - name: Run unit tests
+      if: matrix.os == 'ubuntu-18.04'
+        run:
+          python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+          echo "nosetests: $NOSETESTS"  
+          nosetests $NOSETESTS
+      if: matrix.os == 'windows-2019'
+        run:
+          python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+          echo "nosetests: $Env:NOSETESTS"  
+          nosetests $Env:NOSETESTS
   
   push: # Push to stable "beta" branch on successful build
 
