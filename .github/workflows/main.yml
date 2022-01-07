@@ -14,16 +14,16 @@ on:
   workflow_dispatch:
 
 env:
-  #SKIP_DEAP: 1
-  #NOSE_VERBOSE: 2
-  #NOSE_WITH_TIMER: 1
-  #NOSE_WITH_ID: 1
-  #NOSE_REDNOSE: 1
-  #NOSE_WITH_COVERAGE: 1
-  #NOSE_COVER_PACKAGE: "pygsti"
+  SKIP_DEAP: 1
+  NOSE_VERBOSE: 2
+  NOSE_WITH_TIMER: 1
+  NOSE_WITH_ID: 1
+  NOSE_REDNOSE: 1
+  NOSE_WITH_COVERAGE: 1
+  NOSE_COVER_PACKAGE: "pygsti"
   #NOSE_PROCESSES: -1
   NOSE_NOPATH: 1  use installed package, not source tree under CWD
-  #NOSE_PROCESS_TIMEOUT: 2400
+  NOSE_PROCESS_TIMEOUT: 2400
   NOSE_WHERE: "test/unit/"
 
 jobs:
@@ -67,14 +67,14 @@ jobs:
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        echo "nosetests: $NOSETESTS"  
-       nosetests $NOSETESTS
+       nosetests --processes=-1 $NOSETESTS
     - name: Run unit tests windows  
       if: ${{matrix.os == 'windows-2019'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        echo "nosetests: $Env:NOSETESTS"  
        #nosetests $Env:NOSETESTS
-       nosetests --traverse-namespace
+       nosetests --traverse-namespace --processes=0
   
   push: # Push to stable "beta" branch on successful build
 
