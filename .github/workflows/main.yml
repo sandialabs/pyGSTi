@@ -24,7 +24,7 @@ env:
   #NOSE_PROCESSES: -1
   NOSE_NOPATH: 1  use installed package, not source tree under CWD
   #NOSE_PROCESS_TIMEOUT: 2400
-  #NOSE_WHERE: "test/unit/"
+  NOSE_WHERE: "test/unit/"
 
 jobs:
   build: # Main build + unit test check
@@ -74,7 +74,7 @@ jobs:
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        echo "nosetests: $Env:NOSETESTS"  
        #nosetests $Env:NOSETESTS
-       nosetests -w test\unit\
+       nosetests
   
   push: # Push to stable "beta" branch on successful build
 
