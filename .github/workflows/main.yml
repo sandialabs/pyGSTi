@@ -74,7 +74,7 @@ jobs:
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        echo "nosetests: $Env:NOSETESTS"  
        #nosetests $Env:NOSETESTS
-       nosetests --traverse-namespace --processes=0
+       nosetests --traverse-namespace
   
   push: # Push to stable "beta" branch on successful build
 
