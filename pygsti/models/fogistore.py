@@ -92,7 +92,7 @@ class FirstOrderGaugeInvariantStore(object):
             sparse_gauge_action = gauge_action.dot(alpha)
             allop_gauge_action[self.op_errorgen_indices[op_label], :] = sparse_gauge_action[:, :]
             gauge_action_matrices_by_op[op_label] = sparse_gauge_action.toarray()  # make **DENSE** here
-            # Hopefully matrices aren't too larget after this reduction and dense matrices are ok,
+            # Hopefully matrices aren't too large after this reduction and dense matrices are ok,
             # otherwise we need to change downstream nullspace and pseduoinverse operations to be sparse compatible.
 
             #FUTURE: if update above creates zero-rows in gauge action matrix, maybe remove

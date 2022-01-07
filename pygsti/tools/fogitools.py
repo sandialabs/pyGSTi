@@ -326,9 +326,9 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
     dep_fogi_meta = []  # elements correspond to matrix columns
 
     def add_relational_fogi_dirs(dirs_to_add, gauge_vecs, gauge_dirs, initial_dirs, metadata,
-                                 existing_opset, new_op_label, new_opset):
+                                 existing_opset, new_op_label, new_opset, norm_orders):
         """ Note: gauge_vecs and gauge_dirs are the same up to a normalization - maybe combine? """
-        vecs_to_add, nrms = _mt.normalize_columns(dirs_to_add, ord=norm_order, return_norms=True)  # f_hat_vec = f / nrm
+        vecs_to_add, nrms = _mt.normalize_columns(dirs_to_add, ord=norm_orders, return_norms=True)  # f_hat_vec = f/nrm
         vector_L2_norm2s = _mt.column_norms(vecs_to_add)**2  # L2 norm squared
         vector_L2_norm2s[vector_L2_norm2s == 0.0] = 1.0  # avoid division of zero-column by zero
         dirs_to_add = _mt.scale_columns(vecs_to_add, 1 / vector_L2_norm2s)
@@ -353,6 +353,26 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
         return resulting_dirs
 
+    def resolve_norm_order(vecs_to_normalize, label_lists, given_norm_order):
+        """Turn user-supplied norm-order into an array of norm orders based, sometimes, on the vecs being normalized """
+        if isinstance(given_norm_order, int):
+            norm_order_array = _np.ones(local_fogi_dirs.shape[1], dtype=_np.int64) * given_norm_order
+        elif given_norm_order == "auto":  # automaticaly choose norm order based on fogi direction composition
+            lbl_lookup = {}; off = 0
+            for label_list in label_lists:
+                lbl_lookup.update({i + off: lbl for i, lbl in enumerate(label_list)})
+                off += len(label_list)
+            norm_order_array = []; TOL = 1e-8
+            for j in range(vecs_to_normalize.shape[1]):
+                lbl_types = set([lbl_lookup[i].errorgen_type for i, v in enumerate(vecs_to_normalize[:, j])
+                                 if abs(v) > TOL])  # a set of the errorgen types contributing to the jth vec
+                if lbl_types == set(['S']): norm_order_array.append(1)
+                else: norm_order_array.append(2)
+            norm_order_array = _np.array(norm_order_array, dtype=_np.int64)
+        else:
+            raise ValueError("Invalid norm_order: %s" % str(given_norm_order))
+        return norm_order_array
+
     for op_label in primitive_op_labels:
         #FOGI DEBUG print("##", op_label)
         ga = gauge_action_matrices[op_label]
@@ -371,18 +391,19 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
             continue
 
         #Get commutant and communtant-complement spaces
-        commutant = _mt.nice_nullspace(ga)  # columns = *gauge* elem gen directions
+        commutant = _mt.nice_nullspace(ga, orthogonalize=True)  # columns = *gauge* elem gen directions
         assert(_mt.columns_are_orthogonal(commutant))
 
         # Note: local/new_fogi_dirs are orthogonal but not necessarily normalized (so need to
         #  normalize to get inverse, but *don't* need pseudo-inverse).
-        local_fogi_dirs = _mt.nice_nullspace(ga.T)  # "conjugate space" to gauge action SPARSE?
+        local_fogi_dirs = _mt.nice_nullspace(ga.T, orthogonalize=True)  # "conjugate space" to gauge action SPARSE?
 
         #NORMALIZE FOGI DIRS to have norm 1 - based on mapping between unit-variance
         # gaussian distribution of target-gateset perturbations in the usual errorgen-set-space
         # to the FOGI space.  The basis of the fogi directions is understood to be the basis
         # of errorgen-superops arising from *un-normalized* (traditional) Pauli matrices.
-        local_fogi_vecs = _mt.normalize_columns(local_fogi_dirs, ord=norm_order)  # this gives us *vec*-norm we want
+        ord_to_use = resolve_norm_order(local_fogi_dirs, [errorgen_coefficient_labels[op_label]], norm_order)
+        local_fogi_vecs = _mt.normalize_columns(local_fogi_dirs, ord=ord_to_use)  # this gives us *vec*-norm we want
         vector_L2_norm2s = [_np.linalg.norm(local_fogi_vecs[:, j])**2 for j in range(local_fogi_vecs.shape[1])]
         local_fogi_dirs = local_fogi_vecs / _np.array(vector_L2_norm2s)[None, :]  # gives *dir*-norm we want # DUAL NORM
         #FOGI DEBUG print("  New intrinsic qtys = ", local_fogi_dirs.shape[1])
@@ -407,7 +428,8 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
             fogi_meta.append({'name': egname_with_op, 'abbrev': egname_abbrev, 'r': 0,
                               'gaugespace_dir': None, 'opset': (op_label,)})
 
-        complement = _mt.nice_nullspace(commutant.T)  # complement of commutant - where op is faithful rep
+        complement = _mt.nice_nullspace(commutant.T,
+                                        orthogonalize=True)  # complement of commutant - where op is faithful rep
         assert(_mt.columns_are_orthogonal(complement))
         ccomms[(op_label,)] = complement
         #gauge_action_for_op[op_label] = ga
@@ -512,7 +534,9 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         # start w/normalizd epsilon vecs (normalize according to norm_order, then divide by L2-norm^2
                         # so that the resulting intersection-space vector, after action by "M", projects the component
                         # of the norm_order-normalized gauge-space vector)
-                        int_vecs = _mt.normalize_columns(intersection_space, ord=norm_order)
+                        ord_to_use = resolve_norm_order(intersection_space, [gauge_space.elemgen_basis.labels],
+                                                        norm_order)
+                        int_vecs = _mt.normalize_columns(intersection_space, ord=ord_to_use)
                         vector_L2_norm2s = [_np.linalg.norm(int_vecs[:, j])**2 for j in range(int_vecs.shape[1])]
                         intersection_space = int_vecs / _np.array(vector_L2_norm2s)[None, :]  # DUAL NORM
 
@@ -525,7 +549,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         #NORMALIZATION:
                         # There are two normalizations relevant to relational fogi directions:
                         # 1) we normalize the would-be fogi vectors (those that would be prefixed by components in
-                        #    a linear expansion if the fogi directions were an ortogonal basis) to 1 using
+                        #    a linear expansion if the fogi directions were an orthogonal basis) to 1 using
                         #    the `norm_order` norm.  The fogi directions are then normalized so
                         #    numpy.dot(dir, vec) = 1.0, i.e. so their L2 norm = 1/L2-norm2-of-norm_order-normalized-vec.
                         #    => set dir = vec / L2(vec)**2 so, if L2(vec)=x, then L2(dir)=1/x and dot(dir,vec) = 1.0
@@ -541,6 +565,11 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         # theta = dot(gauge_normd_fogi_dir.T, e) = dot( dot(M, epsilon).T, e) = dot(fogi_dir.T / r, e)
                         #       = component / r
 
+                        norm_order_array = resolve_norm_order(
+                            local_fogi_dirs,
+                            [errorgen_coefficient_labels[ol] for ol in existing_set + (op_label,)],
+                            norm_order)
+
                         assert(_np.linalg.norm(_np.dot(gauge_action.T, local_fogi_dirs)) < 1e-8)
                         # transpose => dot(local_fogi_dirs.T, gauge_action) = 0
                         # = int_spc.T * [ pinv_gA  -pinv_gB ] * [[ga] [gB]]
@@ -549,7 +578,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
                         new_fogi_dirs = _sps.lil_matrix((num_elem_errgens, local_fogi_dirs.shape[1]),
                                                         dtype=local_fogi_dirs.dtype); off = 0
-                        for ol in existing_set + (op_label,):  # NOT new_set here b/c concat order below
+                        for ol in existing_set + (op_label,):  # NOT new_set here b/c concat order above
                             n = len(errorgen_coefficient_labels[ol])
                             new_fogi_dirs[op_errgen_indices[ol], :] = local_fogi_dirs[off:off + n, :]; off += n
                         new_fogi_dirs = new_fogi_dirs.tocsc()
@@ -574,14 +603,15 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         fogi_dirs = add_relational_fogi_dirs(new_fogi_dirs[:, indep_cols],
                                                              _np.take(int_vecs, indep_cols, axis=1),
                                                              _np.take(intersection_space, indep_cols, axis=1),
-                                                             fogi_dirs, fogi_meta, existing_set, op_label, new_set)
+                                                             fogi_dirs, fogi_meta, existing_set, op_label, new_set,
+                                                             norm_order_array[indep_cols])
 
                         # add new_fogi_dirs[:, dep_cols_to_add] to dep_fogi_dirs w/meta data
                         dep_fogi_dirs = add_relational_fogi_dirs(new_fogi_dirs[:, dep_cols_to_add],
                                                                  _np.take(int_vecs, dep_cols_to_add, axis=1),
                                                                  _np.take(intersection_space, dep_cols_to_add, axis=1),
                                                                  dep_fogi_dirs, dep_fogi_meta, existing_set,
-                                                                 op_label, new_set)
+                                                                 op_label, new_set, norm_order_array[dep_cols_to_add])
 
                         #if dependent_fogi_action == "drop":  # we could construct these, but would make fogi qtys messy
                         #    assert(_mt.columns_are_orthogonal(fogi_dirs))

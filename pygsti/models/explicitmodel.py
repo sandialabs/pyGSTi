@@ -1860,8 +1860,8 @@ class ExplicitOpModel(_mdl.OpModel):
             gauge_action_matrices[povm_label] = allowed_rowspace_mx
             gauge_action_gauge_spaces[povm_label] = op_gauge_space
 
-        norm_order = 2  # NOTE - this may should be 1 for normalizing 'S' quantities
-        #  -- FUTURE need to put this intelligence into FOGIStore!
+        norm_order = "auto"  # NOTE - should be 1 for normalizing 'S' quantities and 2 for 'H',
+        # so 'auto' utilizes intelligence within FOGIStore
         self.fogi_store = _FOGIStore(gauge_action_matrices, gauge_action_gauge_spaces,
                                      errorgen_coefficient_labels,  # gauge_errgen_space_labels,
                                      op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
