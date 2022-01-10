@@ -1597,7 +1597,7 @@ def csr_sum_indices(csr_matrices):
         The dimension of the destination matrix (and of each member of
         `csr_matrices`)
     """
-    if len(csr_matrices) == 0: return [], _np.empty(0, int), _np.empty(0, int), 0
+    if len(csr_matrices) == 0: return [], _np.empty(0, _np.int64), _np.empty(0, _np.int64), 0
 
     N = csr_matrices[0].shape[0]
     for mx in csr_matrices:
@@ -1902,8 +1902,10 @@ else:
         """
         #Note: copy v for now since it's modified by simple_core fn
         A, mu, m_star, s, eta = prep_a
-        indices = _np.array(A.indices, dtype=int)  # convert to 64-bit ints if needed
-        indptr = _np.array(A.indptr, dtype=int)
+
+        indices = _np.array(A.indices, dtype=_np.int64)  # convert to 64-bit ints if needed
+        indptr = _np.array(A.indptr, dtype=_np.int64)
+        
         return _fastcalc.custom_expm_multiply_simple_core(A.data, indptr, indices,
                                                           v.copy(), mu, m_star, s, tol, eta)
 
