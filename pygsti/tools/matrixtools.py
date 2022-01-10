@@ -1704,11 +1704,11 @@ def csr_sum_flat_indices(csr_matrices):
     """
     csr_sum_array, indptr, indices, N = csr_sum_indices(csr_matrices)
     if len(csr_sum_array) == 0:
-        return (_np.empty(0, int), _np.empty(0, 'd'), _np.zeros(1, int), indptr, indices, N)
+        return (_np.empty(0, _np.int64), _np.empty(0, 'd'), _np.zeros(1, _np.int64), indptr, indices, N)
 
-    flat_dest_index_array = _np.ascontiguousarray(_np.concatenate(csr_sum_array, axis=0), dtype=int)
+    flat_dest_index_array = _np.ascontiguousarray(_np.concatenate(csr_sum_array, axis=0), dtype=_np.int64)
     flat_csr_mx_data = _np.ascontiguousarray(_np.concatenate([mx.data for mx in csr_matrices], axis=0), dtype=complex)
-    mx_nnz_indptr = _np.cumsum([0] + [mx.nnz for mx in csr_matrices], dtype=int)
+    mx_nnz_indptr = _np.cumsum([0] + [mx.nnz for mx in csr_matrices], dtype=_np.int64)
 
     return flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr, indptr, indices, N
 
