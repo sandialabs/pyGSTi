@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false # Finish all tests even if one fails
       matrix:
-        os: [ubuntu-20.04, windows-2019]
+        os: [ubuntu-18.04, windows-2019]
         python-version: [3.6, 3.7, 3.8, 3.9]
         nose-tests:
         - "algorithms algorithmsb"
