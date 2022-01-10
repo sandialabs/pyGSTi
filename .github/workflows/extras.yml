@@ -19,7 +19,7 @@ env:
   NOSE_REDNOSE: 1
   NOSE_WITH_COVERAGE: 1
   NOSE_COVER_PACKAGE: "pygsti"
-  NOSE_PROCESSES: -1
+  #NOSE_PROCESSES: -1
   NOSE_NOPATH: ""
   NOSE_PROCESS_TIMEOUT: 2400
   NOSE_WHERE: "test/test_packages/"
@@ -27,10 +27,11 @@ env:
 jobs:
   test_extras: # On stable branches, run extended tests
 
-    runs-on: ubuntu-18.04
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false # Finish all tests even if one fails
       matrix:
+        os: [ubuntu-20.04, windows-2019]
         python-version: [3.6, 3.7, 3.8, 3.9]
         nose-tests:
         - "algorithms algorithmsb"

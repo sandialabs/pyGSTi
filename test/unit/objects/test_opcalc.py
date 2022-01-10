@@ -23,7 +23,7 @@ class OpCalcBase:
         d_v, d_c = self.opcalc.compact_deriv(
             v,
             np.ascontiguousarray(c, complex),
-            np.array((1, 2, 3), int)
+            np.array((1, 2, 3), np.int64)
         )
         self.assertArraysAlmostEqual(d_v, np.array([1, 1, 1, 1, 2, 2, 3, 1, 2, 2, 2]))
         self.assertArraysAlmostEqual(d_c, np.array([10, 12, 6], dtype='complex'))
