@@ -1738,7 +1738,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                   dependent_fogi_action='drop'):
+                   dependent_fogi_action='drop', include_spam=True):
 
         from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
         from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
@@ -1748,9 +1748,8 @@ class ExplicitOpModel(_mdl.OpModel):
         # ExplicitOpModel-specific - and assumes model's ops have specific structure (see extract_std_target*) !!
         primitive_op_labels = list(self.operations.keys())
 
-        #BEGIN NEW STUFF
-        primitive_prep_labels = list(self.preps.keys())
-        primitive_povm_labels = list(self.povms.keys())
+        primitive_prep_labels = list(self.preps.keys()) if include_spam else []
+        primitive_povm_labels = list(self.povms.keys()) if include_spam else []
 
         # "initial" gauge space is the space of error generators initially considered as
         # gauge transformations.  It can be reduced by the errors allowed on operations (by

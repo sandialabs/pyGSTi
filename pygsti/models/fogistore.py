@@ -55,6 +55,7 @@ class FirstOrderGaugeInvariantStore(object):
 
         # column space of self.fogi_directions
         #FOGI DEBUG print("DEBUG common gauge space of has dim", common_gauge_space.vectors.shape[1])
+        common_gauge_space.normalize()
         self.gauge_space = common_gauge_space
 
         # row space of self.fogi_directions - "errgen-set space" lookups
