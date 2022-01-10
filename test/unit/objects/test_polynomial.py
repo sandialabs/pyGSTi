@@ -20,7 +20,7 @@ class CompactPolynomialTester(BaseCase):
         self.assertArraysAlmostEqual(c2, np.array([4.0, 5.0, 6.0]))
         # 6x2^2 x3 + 5 x1^2 + 4
 
-        v = np.concatenate((v, v2), dtype=np.int64)
+        v = np.concatenate((v, v2)).astype(np.int64)
         c = np.concatenate((c, c2))
         c = np.ascontiguousarray(c, complex)
 
