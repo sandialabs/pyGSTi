@@ -677,14 +677,15 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
 
 def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients, gauge_action_matrices,
-                                      errorgen_coefficient_labels, gauge_elemgen_labels, model_dim):
+                                      errorgen_coefficient_bases_by_op, gauge_basis, model_dim):
     """ TODO: docstring """
 
-    gaugeSpaceDim = len(gauge_elemgen_labels)
+    gaugeSpaceDim = len(gauge_basis)
     errorgen_vec = {}
     for op_label in primitive_op_labels:
         errgen_dict = errorgen_coefficients[op_label]
-        errorgen_vec[op_label] = _np.array([errgen_dict.get(eglbl, 0) for eglbl in errorgen_coefficient_labels])
+        errorgen_vec[op_label] = _np.array([errgen_dict.get(eglbl, 0)
+                                            for eglbl in errorgen_coefficient_bases_by_op[op_label].labels])
 
     def fix_gauge_using_op(op_label, allowed_gauge_directions, available_op_labels, running_best_gauge_vec,
                            best_gauge_vecs, debug, op_label_to_compute_max_for):
@@ -739,7 +740,7 @@ def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients
     def _create_errgen_op(vec, list_of_mxs):
         return sum([c * mx for c, mx in zip(vec, list_of_mxs)])
 
-    from ..objects import Basis as _Basis
+    from ..baseobjs import Basis as _Basis
     ret = {}
     normalized_pauli_basis = _Basis.cast('pp', model_dim)
     scale = model_dim**(0.25)  # to change to standard pauli-product matrices
@@ -768,7 +769,7 @@ def compute_maximum_relational_errors(primitive_op_labels, errorgen_coefficients
             jamiol_angles.append(_mt.jamiolkowski_angle(_create_errgen_op(errgen_vec, gauge_basis_mxs)))
 
         max_relational_jangle = max(jamiol_angles)
-        print(max_relational_jangle)
+        #FOGI DEBUG print(max_relational_jangle)
         ret[op_label_to_compute_max_for] = max_relational_jangle
     return ret
 

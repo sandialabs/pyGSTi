@@ -129,7 +129,8 @@ class FirstOrderGaugeInvariantStore(object):
         # (pinv_allop_gauge_action takes errorgen-set -> gauge-gen space)
         self.allop_gauge_action = allop_gauge_action
         pinv_allop_gauge_action = _np.linalg.pinv(self.allop_gauge_action.toarray(), rcond=1e-7)
-        gauge_space_directions = _np.dot(pinv_allop_gauge_action, self.fogv_directions)  # in gauge-generator space
+        gauge_space_directions = _np.dot(pinv_allop_gauge_action,
+                                         self.fogv_directions.toarray())  # in gauge-generator space
         self.gauge_space_directions = gauge_space_directions
 
         #Notes on error-gen vs gauge-gen space:
@@ -320,8 +321,8 @@ class FirstOrderGaugeInvariantStore(object):
         elemgen_info = {}
         for k, (op_label, eglabel) in enumerate(self.errorgen_space_op_elem_labels):
             elemgen_info[k] = {
-                'type': eglabel[0],
-                'qubits': set([i for bel_lbl in eglabel[1:] for i, char in enumerate(bel_lbl) if char != 'I']),
+                'type': eglabel.errorgen_type,
+                'qubits': eglabel.sslbls,
                 'op_label': op_label,
                 'elemgen_label': eglabel,
             }
@@ -329,7 +330,8 @@ class FirstOrderGaugeInvariantStore(object):
         bins = {}
         dependent_indices = set(self.dependent_dir_indices)  # indices of one set of linearly dep. fogi dirs
         for i, meta in enumerate(self.fogi_metadata):
-            fogi_dir = self.fogi_directions[:, i].toarray()
+            fogi_dir = self.fogi_directions[:, i].toarray().ravel()
+
             label = meta['name']
             label_raw = meta['raw']
             label_abbrev = meta['abbrev']
