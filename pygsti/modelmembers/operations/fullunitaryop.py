@@ -12,7 +12,7 @@ The FullUnitaryOp class and supporting functionality.
 
 import numpy as _np
 
-from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseUnitaryOperator
+from pygsti.modelmembers.operations.denseop import DenseUnitaryOperator as _DenseUnitaryOperator
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 
 
@@ -42,7 +42,7 @@ class FullUnitaryOp(_DenseUnitaryOperator):
     """
 
     def __init__(self, m, basis='pp', evotype="default", state_space=None):
-        _DenseUnitaryOperator.__init__(m, basis, evotype, state_space)
+        _DenseUnitaryOperator.__init__(self, m, basis, evotype, state_space)
         self._paramlbls = _np.array(["MxElement Re(%d,%d)" % (i, j) for i in range(self.dim) for j in range(self.dim)]
                                     + ["MxElement Im(%d,%d)" % (i, j) for i in range(self.dim)
                                        for j in range(self.dim)], dtype=object)
