@@ -141,6 +141,11 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
     def __repr__(self):
         return str((self.errorgen_type, self.basis_element_labels, self.sslbls))
 
+    @property
+    def support(self):
+        """ Returns a sorted tuple of the elements of `self.sslbls` """
+        return tuple(sorted(self.sslbls))
+
     def padded_basis_element_labels(self, all_sslbls, identity_label='I'):
         """
         Idle-padded versions of this label's basis element labels based on its state space labels.
