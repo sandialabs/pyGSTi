@@ -43,9 +43,10 @@ class FullUnitaryOp(_DenseUnitaryOperator):
 
     def __init__(self, m, basis='pp', evotype="default", state_space=None):
         _DenseUnitaryOperator.__init__(self, m, basis, evotype, state_space)
-        self._paramlbls = _np.array(["MxElement Re(%d,%d)" % (i, j) for i in range(self.dim) for j in range(self.dim)]
-                                    + ["MxElement Im(%d,%d)" % (i, j) for i in range(self.dim)
-                                       for j in range(self.dim)], dtype=object)
+        udim = self.state_space.udim  # or self._ptr.shape[0]
+        self._paramlbls = _np.array(["MxElement Re(%d,%d)" % (i, j) for i in range(udim) for j in range(udim)]
+                                    + ["MxElement Im(%d,%d)" % (i, j) for i in range(udim)
+                                       for j in range(udim)], dtype=object)
 
     def set_dense(self, m):
         """
@@ -65,9 +66,10 @@ class FullUnitaryOp(_DenseUnitaryOperator):
         None
         """
         mx = _LinearOperator.convert_to_matrix(m)
-        if(mx.shape != (self.dim, self.dim)):
+        udim = self.state_space.udim  # maybe create a self.udim?
+        if(mx.shape != (udim, udim)):
             raise ValueError("Argument must be a (%d,%d) matrix!"
-                             % (self.dim, self.dim))
+                             % (udim, udim))
         self._ptr[:, :] = _np.array(mx)
         self._ptr_has_changed()
         self.dirty = True
@@ -82,7 +84,7 @@ class FullUnitaryOp(_DenseUnitaryOperator):
         int
             the number of independent parameters.
         """
-        return 2 * self.size
+        return 2 * self._ptr.size
 
     def to_vector(self):
         """
@@ -119,9 +121,10 @@ class FullUnitaryOp(_DenseUnitaryOperator):
         -------
         None
         """
-        assert(self._ptr.shape == (self.dim, self.dim))
-        self._ptr[:, :] = v[0:self.dim**2].reshape((self.dim, self.dim)) + \
-            1j * v[self.dim**2:].reshape((self.dim, self.dim))
+        udim = self.state_space.udim  # maybe create a self.udim?
+        assert(self._ptr.shape == (udim, udim))
+        self._ptr[:, :] = v[0:udim**2].reshape((udim, udim)) + \
+            1j * v[udim**2:].reshape((udim, udim))
         self._ptr_has_changed()
         self.dirty = dirty_value
 
@@ -145,8 +148,9 @@ class FullUnitaryOp(_DenseUnitaryOperator):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        derivMx = _np.concatenate((_np.identity(self.dim**2, 'complex'),
-                                   1j * _np.identity(self.dim**2, 'complex')),
+        udim = self.state_space.udim  # maybe create a self.udim?
+        derivMx = _np.concatenate((_np.identity(udim**2, 'complex'),
+                                   1j * _np.identity(udim**2, 'complex')),
                                   axis=1)
         if wrt_filter is None:
             return derivMx

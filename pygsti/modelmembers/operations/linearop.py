@@ -82,9 +82,9 @@ class LinearOperator(_modelmember.ModelMember):
         return self.state_space.dim
 
     @property
-    def size(self):
+    def hilbert_schmidt_size(self):
         """
-        Return the number of independent elements in this operation (when viewed as a dense array)
+        Return the number of independent elements in this operation as a dense Hilbert-Schmidt superoperator.
 
         Returns
         -------
