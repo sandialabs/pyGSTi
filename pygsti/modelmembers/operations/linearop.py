@@ -704,7 +704,7 @@ class LinearOperator(_modelmember.ModelMember):
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
         if not self.has_nonzero_hessian():
-            return _np.zeros((self.size, self.num_params, self.num_params), 'd')
+            return _np.zeros((self.hilbert_schmidt_size, self.num_params, self.num_params), 'd')
         else:
             return finite_difference_hessian_wrt_params(self, wrt_filter1, wrt_filter2)
 
