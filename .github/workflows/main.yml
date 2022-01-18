@@ -56,12 +56,13 @@ jobs:
         python -m pip install flake8
         python -m pip install .[testing]
         # python -m pip freeze  # this isn't relevant anymore since pip install builds a wheel separately
-#    - name: Lint with flake8
-#      run: |
+    - name: Lint with flake8
+      if: ${{matrix.os != 'windows-2019'}}
+      run: |
         # Critical errors, exit on failure
-#        flake8 . --count --show-source --statistics --config=.flake8-critical
+        flake8 . --count --show-source --statistics --config=.flake8-critical
         # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
-#        flake8 . --exit-zero --statistics
+        flake8 . --exit-zero --statistics
     - name: Run unit tests ubuntu
       if: ${{matrix.os == 'ubuntu-18.04'}}
       run: |
