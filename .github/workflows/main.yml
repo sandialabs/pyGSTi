@@ -21,17 +21,18 @@ env:
   NOSE_REDNOSE: 1
   NOSE_WITH_COVERAGE: 1
   NOSE_COVER_PACKAGE: "pygsti"
-  NOSE_PROCESSES: -1
-  NOSE_NOPATH: 1 # use installed package, not source tree under CWD
+  #NOSE_PROCESSES: -1
+  NOSE_NOPATH: 1  use installed package, not source tree under CWD
   NOSE_PROCESS_TIMEOUT: 2400
   NOSE_WHERE: "test/unit/"
 
 jobs:
   build: # Main build + unit test check
 
-    runs-on: ubuntu-18.04
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
+        os: [ubuntu-18.04, windows-2019]
         python-version: [3.6, 3.7, 3.8, 3.9]
 
     steps:
@@ -51,20 +52,30 @@ jobs:
     - name: Install package
       run: |
         python -m pip install --upgrade pip
+        python -m pip install wheel
         python -m pip install flake8
         python -m pip install .[testing]
         # python -m pip freeze  # this isn't relevant anymore since pip install builds a wheel separately
     - name: Lint with flake8
+      if: ${{matrix.os != 'windows-2019'}}
       run: |
         # Critical errors, exit on failure
         flake8 . --count --show-source --statistics --config=.flake8-critical
         # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
         flake8 . --exit-zero --statistics
-    - name: Run unit tests      
+    - name: Run unit tests ubuntu
+      if: ${{matrix.os == 'ubuntu-18.04'}}
       run: |
-        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        echo "nosetests: $NOSETESTS"  
-        nosetests $NOSETESTS
+       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+       echo "nosetests: $NOSETESTS"  
+       nosetests --processes=-1 $NOSETESTS
+    - name: Run unit tests windows  
+      if: ${{matrix.os == 'windows-2019'}}
+      run: |
+       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+       echo "nosetests: $Env:NOSETESTS"  
+       #nosetests $Env:NOSETESTS
+       nosetests --traverse-namespace
   
   push: # Push to stable "beta" branch on successful build
 
