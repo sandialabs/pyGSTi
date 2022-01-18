@@ -389,7 +389,8 @@ class _SimpleCompLayerRules(_LayerRules):
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        assert(all([len(k) == 1 for k in self.single_qubit_idle_layer_labels.keys()])), \
+        assert((self.single_qubit_idle_layer_labels is None)
+               or all([len(k) == 1 for k in self.single_qubit_idle_layer_labels.keys()])), \
             "All keys of single_qubit_idle_layer_labels should be 1-tuples of a *single* sslbl!"
         state.update({'global_idle_layer_label': (str(self.global_idle_layer_label)
                                                   if (self.global_idle_layer_label is not None) else None),
