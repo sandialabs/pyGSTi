@@ -51,7 +51,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         Initial values.  This should only be used internally in de-serialization.
     """
 
-    def __init__(self, member_ops, evotype=None, state_space=None, items=[]):
+    def __init__(self, member_ops, evotype=None, state_space=None, called_from_reduce=False, items=[]):
         self._readonly = False  # until init is done
         if len(items) > 0:
             assert(member_ops is None), "`items` was given when op_matrices != None"
@@ -98,7 +98,8 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
 
         _collections.OrderedDict.__init__(self, items)
         _mm.ModelMember.__init__(self, state_space, evotype)
-        self.init_gpindices()
+        if not called_from_reduce:  # if called from reduce, gpindices are already initialized
+            self.init_gpindices()  # initialize our gpindices based on sub-members
         self._readonly = True
 
     def submembers(self):
@@ -158,7 +159,8 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         dict_to_pickle['_parent'] = None
 
         #Note: must *copy* elements for pickling/copying
-        return (Instrument, (None, self.evotype, self.state_space, [(key, gate.copy()) for key, gate in self.items()]),
+        return (Instrument, (None, self.evotype, self.state_space, True,
+                             [(key, gate.copy()) for key, gate in self.items()]),
                 dict_to_pickle)
 
     def __pygsti_reduce__(self):
