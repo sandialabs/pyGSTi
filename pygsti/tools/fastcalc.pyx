@@ -1263,11 +1263,11 @@ def fast_compose_cliffords(np.ndarray[INT, ndim=2] s1, np.ndarray[INT, ndim=1] p
     cdef INT N = s1.shape[0] // 2 # Number of qubits
 
     # Temporary space of C^T U C terms
-    cdef np.ndarray[INT, ndim=2, mode="c"] inner = np.zeros([2*N, 2*N], dtype=np.int64)
+    cdef np.ndarray[INT, ndim=2, mode="c"] inner = np.zeros([2*N, 2*N], dtype=np.int)
 
     # Outputs
-    cdef np.ndarray[INT, ndim=2, mode="c"] s = np.zeros([2*N, 2*N], dtype=np.int64)
-    cdef np.ndarray[INT, ndim=1, mode="c"] p = np.zeros([2*N], dtype=np.int64)
+    cdef np.ndarray[INT, ndim=2, mode="c"] s = np.zeros([2*N, 2*N], dtype=np.int)
+    cdef np.ndarray[INT, ndim=1, mode="c"] p = np.zeros([2*N], dtype=np.int)
 
     # If C' = [[C^00, C^01], [C^10, C^11]] and U = [[0, 0], [I, 0]]
     # then C'^T U C' = [[C^10^T C00, C^10^T C^01], [C^11^T C^00, C^11^T C^01]]
