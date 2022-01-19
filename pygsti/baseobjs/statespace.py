@@ -725,6 +725,186 @@ class QubitSpace(StateSpace):
             return 'QubitSpace(' + str(len(self.qubit_labels)) + ")"
 
 
+class QuditSpace(StateSpace):
+    """
+    A state space consisting of N qudits.
+    """
+
+    def __init__(self, nqudits_or_labels, udim_or_udims):
+        if isinstance(nqudits_or_labels, int):
+            self.qudit_labels = tuple(range(nqudits_or_labels))
+        else:
+            self.qudit_labels = tuple(nqudits_or_labels)
+
+        if isinstance(udim_or_udims, int):
+            self.qudit_udims = tuple([udim_or_udims] * len(self.qudit_labels))
+        else:
+            self.qudit_udims = tuple(udim_or_udims)
+            assert(len(self.qudit_udims) == len(self.qudit_labels)), \
+                "`udim_or_udims` must either be an interger or have length equal to the number of qudits!"
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'qudit_labels': self.qudit_labels,
+                      'qudit_udims': self.qudit_udims})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(state['qudit_labels'], state['qudit_udims'])
+
+    @property
+    def udim(self):
+        """
+        Integer Hilbert (unitary operator) space dimension of this quantum state space.
+        """
+        return _np.product(self.qudit_udims)
+
+    @property
+    def dim(self):
+        """Integer Hilbert-Schmidt (super-operator) or classical dimension of this state space."""
+        return self.udim**2
+
+    #@property
+    #def num_qudits(self):  # may raise ValueError if the state space doesn't consist entirely of qudits
+    #    """
+    #    The number of qubits in this quantum state space.
+    #    """
+    #    return len(self.qubit_labels)
+
+    @property
+    def num_tensor_product_blocks(self):
+        """
+        Get the number of tensor-product blocks which are direct-summed to get the final state space.
+
+        Returns
+        -------
+        int
+        """
+        return 1
+
+    @property
+    def tensor_product_blocks_labels(self):
+        """
+        Get the labels for all the tensor-product blocks.
+
+        Returns
+        -------
+        tuple of tuples
+        """
+        return (self.qudit_labels,)
+
+    @property
+    def tensor_product_blocks_dimensions(self):
+        """
+        Get the superoperator dimensions for all the tensor-product blocks.
+
+        Returns
+        -------
+        tuple of tuples
+        """
+        return (tuple([udim**2 for udim in self.qudit_udims]),)
+
+    @property
+    def tensor_product_blocks_udimensions(self):
+        """
+        Get the unitary operator dimensions for all the tensor-product blocks.
+
+        Returns
+        -------
+        tuple of tuples
+        """
+        return (self.qudit_udims,)
+
+    @property
+    def tensor_product_blocks_types(self):
+        """
+        Get the type (quantum vs classical) of all the tensor-product blocks.
+
+        Returns
+        -------
+        tuple of tuples
+        """
+        return (('Q',) * len(self.qudit_labels))
+
+    def label_dimension(self, label):
+        """
+        The superoperator dimension of the given label (from any tensor product block)
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose dimension should be retrieved.
+
+        Returns
+        -------
+        int
+        """
+        if label in self.qudit_labels:
+            i = self.qudit_labels.index(label)
+            return self.qudit_udims[i]**2
+        else:
+            raise KeyError("Invalid qudit label: %s" % label)
+
+    def label_udimension(self, label):
+        """
+        The unitary operator dimension of the given label (from any tensor product block)
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose dimension should be retrieved.
+
+        Returns
+        -------
+        int
+        """
+        if label in self.qudit_labels:
+            i = self.qudit_labels.index(label)
+            return self.qudit_udims[i]
+        else:
+            raise KeyError("Invalid qudit label: %s" % label)
+
+    def label_tensor_product_block_index(self, label):
+        """
+        The index of the tensor product block containing the given label.
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose index should be retrieved.
+
+        Returns
+        -------
+        int
+        """
+        if label in self.qudit_labels:
+            return 0
+        else:
+            raise KeyError("Invalid qudit label: %s" % label)
+
+    def label_type(self, label):
+        """
+        The type (quantum or classical) of the given label (from any tensor product block).
+
+        Parameters
+        ----------
+        label : str or int
+            The label whose type should be retrieved.
+
+        Returns
+        -------
+        str
+        """
+        if label in self.qudit_labels:
+            return 'Q'
+        else:
+            raise KeyError("Invalid qudit label: %s" % label)
+
+    def __str__(self):
+        return 'QuditSpace(' + str(self.qudit_labels) + ")"
+
+
 class ExplicitStateSpace(StateSpace):
     """
     A customizable definition of a state space.
