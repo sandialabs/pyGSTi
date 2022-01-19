@@ -400,7 +400,7 @@ def _write_auxfile_member(root_dir, filenm, typ, val):
             for i, (k, v) in enumerate(val.items()):
                 filenm_so_far = filenm + "_kvpair" + str(i)
                 meta = _write_auxfile_member(root_dir, filenm_so_far, next_typ, v)
-                metadata.append(k, meta)
+                metadata.append((k, meta))
         else:
             metadata = None
 

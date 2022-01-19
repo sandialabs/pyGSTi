@@ -161,10 +161,12 @@ class ConfidenceRegionFactory(_NicelySerializable):
                       'circuit_list_label': self.circuit_list_lbl,
                       'nonmarkovian_radius_squared': self.nonMarkRadiusSq,
                       'hessian_matrix': self._encodemx(self.hessian) if (self.hessian is not None) else None,
-                      'hessian_projection_parameters': {k: v for k, v in self.hessian_projection_parameters},
-                      'inverse_hessian_projections': {k: self._encodemx(v) for k, v in self.inv_hessian_projections},
-                      'num_nongauge_params': self.nNonGaugeParams,  # can be None
-                      'num_gauge_params': self.nGaugeParams,  # can be None
+                      'hessian_projection_parameters': {k: v for k, v in self.hessian_projection_parameters.items()},
+                      'inverse_hessian_projections': {k: self._encodemx(v)
+                                                      for k, v in self.inv_hessian_projections.items()},
+                      'num_nongauge_params': int(self.nNonGaugeParams) if (self.nNonGaugeParams is not None) else None,
+                      'num_gauge_params': int(self.nGaugeParams) if (self.nGaugeParams is not None) else None,
+                      #Note: need int(.) casts above because int64 is *not* JSON serializable (?)
                       #Note: we don't currently serialize self.linresponse_gstfit_params (!)
                       })
         return state

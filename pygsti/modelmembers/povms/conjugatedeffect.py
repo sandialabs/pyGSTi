@@ -187,8 +187,8 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
         self.state._ptr_has_changed()
 
     @property
-    def size(self):
-        return self.state.size
+    def hilbert_schmidt_size(self):
+        return self.state.hilbert_schmidt_size
 
     def __str__(self):
         s = "%s with dimension %d\n" % (self.__class__.__name__, self.dim)
