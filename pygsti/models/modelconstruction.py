@@ -718,8 +718,9 @@ def create_explicit_model(processor_spec, custom_gates=None,
 def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotype="default", simulator="auto",
                            ideal_gate_type='auto', ideal_prep_type='auto', ideal_povm_type='auto',
                            embed_gates=False, basis='pp'):
-    qubit_labels = processor_spec.qubit_labels
-    state_space = _statespace.QubitSpace(qubit_labels)
+    qudit_labels = processor_spec.qudit_labels
+    state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
+        else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
     evotype = _Evotype.cast(evotype)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
@@ -765,15 +766,15 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
             assert (embed_gates), "Cannot create factories with `embed_gates=False` yet!"
             key = _label.Label(gn) if (gn != gn_to_make_emptytup) else _label.Label(())
             allowed_sslbls_fn = resolved_avail if callable(resolved_avail) else None
-            gate_nQubits = processor_spec.gate_num_qubits(gn)
+            gate_nQudits = processor_spec.gate_num_qudits(gn)
             ideal_factory = _opfactory.EmbeddingOpFactory(
-                state_space, local_gates[gn], num_target_labels=gate_nQubits, allowed_sslbls_fn=allowed_sslbls_fn)
+                state_space, local_gates[gn], num_target_labels=gate_nQudits, allowed_sslbls_fn=allowed_sslbls_fn)
             noiseop = modelnoise.create_errormap(key, evotype, state_space)  # No target indices... just local errs?
             factory = ideal_factory if (noiseop is None) else _op.ComposedOpFactory([ideal_factory, noiseop])
             ret.factories[key] = factory
 
         else:  # resolved_avail is a list/tuple of available sslbls for the current gate/factory
-            for inds in resolved_avail:  # inds are target qubit labels
+            for inds in resolved_avail:  # inds are target qudit labels
                 key = _label.Label(()) if (inds is None and gn == gn_to_make_emptytup) else _label.Label(gn, inds)
 
                 if key in custom_gates:  # allow custom_gates to specify gate elements directly
@@ -789,7 +790,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                 if gate_is_factory:
                     assert(embed_gates), "Cannot create factories with `embed_gates=False` yet!"
                     # TODO: check for modelnoise on *local* factory, i.e. create_errormap(gn, ...)??
-                    if inds is None or inds == tuple(qubit_labels):  # then no need to embed
+                    if inds is None or inds == tuple(qudit_labels):  # then no need to embed
                         ideal_factory = local_gates[gn]
                     else:
                         ideal_factory = _opfactory.EmbeddedOpFactory(state_space, inds, local_gates[gn])
@@ -797,11 +798,11 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     factory = ideal_factory if (noiseop is None) else _op.ComposedOpFactory([ideal_factory, noiseop])
                     ret.factories[key] = factory
                 else:
-                    if inds is None or inds == tuple(qubit_labels):  # then no need to embed
+                    if inds is None or inds == tuple(qudit_labels):  # then no need to embed
                         if isinstance(gate_unitary, (int, _np.int64)):  # interpret gate_unitary as identity
-                            assert(gate_unitary == len(qubit_labels)), \
-                                "Idle unitary as int should be on all qubits for %s" % (str(gn))
-                            ideal_gate = _op.ComposedOp([], evotype, state_space)  # (identity gate on *all* qubits)
+                            assert(gate_unitary == len(qudit_labels)), \
+                                "Idle unitary as int should be on all qudits for %s" % (str(gn))
+                            ideal_gate = _op.ComposedOp([], evotype, state_space)  # (identity gate on *all* qudits)
                         else:
                             ideal_gate = _op.create_from_unitary_mx(gate_unitary, ideal_gate_type, 'pp',
                                                                     None, evotype, state_space)
@@ -830,10 +831,10 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
 
         #FUTURE: allow instruments to be embedded
         #resolved_avail = processor_spec.resolved_availability(instrument_name)
-        resolved_avail = [None]  # all instrument (so far) act on all the qubits
+        resolved_avail = [None]  # all instrument (so far) act on all the qudits
 
         # resolved_avail is a list/tuple of available sslbls for the current gate/factory
-        for inds in resolved_avail:  # inds are target qubit labels
+        for inds in resolved_avail:  # inds are target qudit labels
             key = _label.Label(instrument_name, inds)
 
             if isinstance(instrument_spec, str):
@@ -841,7 +842,9 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     #NOTE: this is very inefficient currently - there should be a better way of
                     # creating an Iz instrument in the FUTURE
                     inst_members = {}
-                    for ekey, effect_vec in _povm.ComputationalBasisPOVM(nqubits=len(qubit_labels), evotype=evotype,
+                    if not all([udim == 2 for udim in processor_spec.qudit_udims]):
+                        raise NotImplementedError("'Iz' instrument can only be constructed on a space of *qubits*")
+                    for ekey, effect_vec in _povm.ComputationalBasisPOVM(nqubits=len(qudit_labels), evotype=evotype,
                                                                          state_space=state_space).items():
                         E = effect_vec.to_dense('HilbertSchmidt').reshape((state_space.dim, 1))
                         inst_members[ekey] = _np.dot(E, E.T)  # (effect vector is a column vector)
@@ -852,29 +855,32 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
             elif isinstance(instrument_spec, dict):
 
                 def _spec_to_densevec(spec, is_prep):
-                    num_qubits = len(qubit_labels)
+                    num_qudits = len(qudit_labels)
                     if isinstance(spec, str):
-                        if all([l in ('0', '1') for l in spec]):
-                            binary_index = effect_spec
-                            assert(len(binary_index) == num_qubits), \
-                                "Wrong number of qubits in '%s': expected %d" % (spec, num_qubits)
-                            v = _np.zeros(2**num_qubits); v[int(binary_index, 2)] = 1.0
+                        if spec.isdigit():  # all([l in ('0', '1') for l in spec]): for qubits
+                            bydigit_index = effect_spec
+                            assert(len(bydigit_index) == num_qudits), \
+                                "Wrong number of qudits in '%s': expected %d" % (spec, num_qudits)
+                            v = _np.zeros(state_space.udim)
+                            inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
+                            index = _np.dot(inc, list(map(int, bydigit_index)))
+                            v[index] = 1.0
                         elif (not is_prep) and spec.startswith("E") and spec[len('E'):].isdigit():
                             index = int(spec[len('E'):])
-                            assert(0 <= index < 2**num_qubits), \
-                                "Index in '%s' out of bounds for state of %d qubits" % (spec, num_qubits)
-                            v = _np.zeros(2**num_qubits); v[index] = 1.0
+                            assert(0 <= index < state_space.udim), \
+                                "Index in '%s' out of bounds for state space with udim %d" % (spec, state_space.udim)
+                            v = _np.zeros(state_space.udim); v[index] = 1.0
                         elif is_prep and spec.startswith("rho") and spec[len('rho'):].isdigit():
                             index = int(effect_spec[len('rho'):])
-                            assert(0 <= index < 2**num_qubits), \
-                                "Index in '%s' out of bounds for state of %d qubits" % (spec, num_qubits)
-                            v = _np.zeros(2**num_qubits); v[index] = 1.0
+                            assert(0 <= index < state_space.udim), \
+                                "Index in '%s' out of bounds for state space with udim %d" % (spec, state_space.udim)
+                            v = _np.zeros(state_space.udim); v[index] = 1.0
                         else:
                             raise ValueError("Unrecognized instrument member spec '%s'" % spec)
                     elif isinstance(spec, _np.ndarray):
-                        assert(len(spec) == 2**num_qubits), \
-                            "Expected length-%d (not %d!) array as a %d-qubit specifier!" % (
-                                2**num_qubits, len(spec), num_qubits)
+                        assert(len(spec) == state_space.udim), \
+                            "Expected length-%d (not %d!) array to specify a state of %s" % (
+                                state_space.udim, len(spec), str(state_space))
                         v = spec
                     else:
                         raise ValueError("Invalid effect or state prep spec: %s" % str(spec))
@@ -900,13 +906,13 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
             else:
                 raise ValueError("Invalid instrument spec: %s" % str(instrument_spec))
 
-            if inds is None or inds == tuple(qubit_labels):  # then no need to embed
+            if inds is None or inds == tuple(qudit_labels):  # then no need to embed
                 #ideal_gate = _op.create_from_unitary_mx(gate_unitary, ideal_gate_type, 'pp',
                 #                                        None, evotype, state_space)
                 pass  # ideal_instrument already created
             else:
                 raise NotImplementedError("Embedded Instruments aren't supported yet")
-                # FUTURE: embed ideal_instrument onto qubits given by layer key (?)
+                # FUTURE: embed ideal_instrument onto qudits given by layer key (?)
 
             #TODO: once we can compose instruments, compose with noise op here
             #noiseop = modelnoise.create_errormap(key, evotype, state_space, target_labels=inds)
@@ -943,10 +949,14 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
 def _create_spam_layers(processor_spec, modelnoise, local_noise,
                         ideal_prep_type, ideal_povm_type, evotype, state_space, independent_gates, independent_spam):
     """ local_noise=True creates lindblad ops that are embedded & composed 1Q ops, and assumes
-        that modelnoise specifies 1Q noise.  local_noise=False assumes modelnoise specifies n-qubit noise"""
-    qubit_labels = processor_spec.qubit_labels
-    num_qubits = processor_spec.num_qubits
-    singleQ_state_space = _statespace.default_space_for_udim(2)  # single qubit state space
+        that modelnoise specifies 1Q noise.  local_noise=False assumes modelnoise specifies n-qudit noise"""
+    qudit_labels = processor_spec.qudit_labels
+    num_qudits = len(qudit_labels)
+    qudit_udim = processor_spec.qudit_udims[0]
+    if not all([u == qudit_udim for u in processor_spec.qudit_udims]):
+        raise NotImplementedError("Mixtures of different dimension qudits is not implemented yet.")
+
+    singleQ_state_space = _statespace.default_space_for_udim(qudit_udim)  # single qudit state space
 
     #  Step 1 -- get the ideal prep and POVM, created as the types we want
     #  Step 2 -- add noise, by composing ideal with a noise operation (if desired)
@@ -958,13 +968,13 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
         if local_noise:  # then assume modelnoise specifies 1Q errors
             prep_noiseop1Q = modelnoise.create_errormap('prep', evotype, singleQ_state_space, target_labels=None)
             if prep_noiseop1Q is not None:
-                err_gates = [prep_noiseop1Q.copy() for i in range(num_qubits)] \
-                    if independent_gates else [prep_noiseop1Q] * num_qubits
-                prep_ops.extend([_op.EmbeddedOp(state_space, [qubit_labels[i]], err_gates[i])
-                                 for i in range(num_qubits)])
-        else:  # use modelnoise to construct n-qubit noise
+                err_gates = [prep_noiseop1Q.copy() for i in range(num_qudits)] \
+                    if independent_gates else [prep_noiseop1Q] * num_qudits
+                prep_ops.extend([_op.EmbeddedOp(state_space, [qudit_labels[i]], err_gates[i])
+                                 for i in range(num_qudits)])
+        else:  # use modelnoise to construct n-qudit noise
             prepNoiseMap = modelnoise.create_errormap('prep', evotype, state_space, target_labels=None,
-                                                      qubit_graph=processor_spec.qubit_graph)
+                                                      qudit_graph=processor_spec.qudit_graph)
             if prepNoiseMap is not None: prep_ops.append(prepNoiseMap)
 
     def _add_povm_noise(povm_ops):
@@ -972,13 +982,13 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
         if local_noise:  # then assume modelnoise specifies 1Q errors
             povm_noiseop1Q = modelnoise.create_errormap('povm', evotype, singleQ_state_space, target_labels=None)
             if povm_noiseop1Q is not None:
-                err_gates = [povm_noiseop1Q.copy() for i in range(num_qubits)] \
-                    if independent_gates else [povm_noiseop1Q] * num_qubits
-                povm_ops.extend([_op.EmbeddedOp(state_space, [qubit_labels[i]], err_gates[i])
-                                 for i in range(num_qubits)])
-        else:  # use modelnoise to construct n-qubit noise
+                err_gates = [povm_noiseop1Q.copy() for i in range(num_qudits)] \
+                    if independent_gates else [povm_noiseop1Q] * num_qudits
+                povm_ops.extend([_op.EmbeddedOp(state_space, [qudit_labels[i]], err_gates[i])
+                                 for i in range(num_qudits)])
+        else:  # use modelnoise to construct n-qudit noise
             povmNoiseMap = modelnoise.create_errormap('povm', evotype, state_space, target_labels=None,
-                                                      qubit_graph=processor_spec.qubit_graph)
+                                                      qudit_graph=processor_spec.qudit_graph)
             if povmNoiseMap is not None: povm_ops.append(povmNoiseMap)
 
     def _add_to_prep_layers(ideal_prep, prep_ops, prep_name):
@@ -1001,19 +1011,26 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
 
     def _create_nq_noise(lndtype):
         if local_noise:
-            # create a 1-qubit exp(errorgen) that is applied to each qubit independently
+            # create a 1-qudit exp(errorgen) that is applied to each qudit independently
             errgen_1Q = _op.LindbladErrorgen.from_error_generator(singleQ_state_space.dim, lndtype, 'pp', 'pp',
                                                                   truncate=True, evotype=evotype, state_space=None)
-            err_gateNQ = _op.ComposedOp([_op.EmbeddedOp(state_space, [qubit_labels[i]],
+            err_gateNQ = _op.ComposedOp([_op.EmbeddedOp(state_space, [qudit_labels[i]],
                                                         _op.ExpErrorgenOp(errgen_1Q.copy()))
-                                         for i in range(num_qubits)], evotype, state_space)
+                                         for i in range(num_qudits)], evotype, state_space)
         else:
-            # create an n-qubit exp(errorgen)
+            # create an n-qudit exp(errorgen)
             errgen_NQ = _op.LindbladErrorgen.from_error_generator(state_space.dim, lndtype, 'pp', 'pp',
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
             err_gateNQ = _op.ExpErrorgenOp(errgen_NQ)
         return err_gateNQ
+
+    def _decomp_index_to_digits(i, bases):
+        digits = []
+        for base in reversed(bases):
+            digits.insert(0, i % base)
+            i = i // base
+        return digits
 
     # Here's where the actual logic starts.  The above functions avoid repeated blocks within the different
     # cases below.
@@ -1035,17 +1052,22 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                 # where i is written normally, with the least significant bit on the right (but, perhaps
                 # counterintuitively, this bit corresponds to the highest-indexed qubit).  For example, "rho6" in a
                 # 3-qubit system corresponds to "rho_110", that is |1> otimes |1> otimes |0> or |110>.
-                if prep_spec.startswith('rho_') and all([l in ('0', '1') for l in prep_spec[len('rho_'):]]):
-                    binary_index = prep_spec[len('rho_'):]
-                    assert(len(binary_index) == num_qubits), \
-                        "Wrong number of qubits in '%s': expected %d" % (prep_spec, num_qubits)
-                    ideal_prep = _state.ComputationalBasisState([(0 if (l == '0') else 1) for l in binary_index],
+                if not all([udim == 2 for udim in processor_spec.qudit_udims]):
+                    raise NotImplementedError(("State preps can currently only be constructed on a space of *qubits*"
+                                               " when `ideal_prep_type == 'computational'` or is a Lindblad type"))
+                    # We can relax this once we update ComputationalBasisState to work with qudit state spaces
+
+                if prep_spec.startswith('rho_') and prep_spec[len('rho_'):].isdigit():  # all in ('0', '1') for qubits
+                    bydigit_index = prep_spec[len('rho_'):]
+                    assert(len(bydigit_index) == num_qudits), \
+                        "Wrong number of qudits in '%s': expected %d" % (prep_spec, num_qudits)
+                    ideal_prep = _state.ComputationalBasisState([(0 if (l == '0') else 1) for l in bydigit_index],
                                                                 'pp', evotype, state_space)
                 elif prep_spec.startswith("rho") and prep_spec[len('rho'):].isdigit():
                     index = int(prep_spec[len('rho'):])
-                    assert(0 <= index < 2**num_qubits), \
-                        "Index in '%s' out of bounds for state of %d qubits" % (prep_spec, num_qubits)
-                    binary_index = '{{0:0{}b}}'.format(num_qubits).format(index)
+                    assert(0 <= index < state_space.udim), \
+                        "Index in '%s' out of bounds for state space with udim %d" % (prep_spec, state_space.udim)
+                    binary_index = '{{0:0{}b}}'.format(num_qudits).format(index)  # must UPDATE to work with qudits
                     ideal_prep = _state.ComputationalBasisState([(0 if (l == '0') else 1) for l in binary_index],
                                                                 'pp', evotype, state_space)
                 else:
@@ -1075,23 +1097,25 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             # a 1Q noise operation, even when `local_noise=False`
             vectype = ideal_prep_type[len('tensor product '):]
 
-            v0, v1 = _np.array([1, 0], 'd'), _np.array([0, 1], 'd')
-            ideal_preps1Q = (_state.create_from_pure_vector(v0, vectype, 'pp', evotype, state_space=None),
-                             _state.create_from_pure_vector(v1, vectype, 'pp', evotype, state_space=None))
-            convbit = {'0': 0, '1': 1}  # convert binary digit (str) to index
+            def _create_ideal_1Q_prep(ud, i):
+                v = _np.zeros(ud, 'd'); v[i] = 1.0
+                return _state.create_from_pure_vector(v, vectype, 'pp', evotype, state_space=None)
 
             if isinstance(prep_spec, str):
                 if prep_spec.startswith('rho_') and all([l in ('0', '1') for l in prep_spec[len('rho_'):]]):
-                    binary_index = prep_spec[len('rho_'):]
-                    assert(len(binary_index) == num_qubits), \
-                        "Wrong number of qubits in '%s': expected %d" % (prep_spec, num_qubits)
-                    prep_factors = [ideal_preps1Q[convbit[l]].copy() for l in binary_index]
+                    bydigit_index = prep_spec[len('rho_'):]
+                    assert(len(bydigit_index) == num_qudits), \
+                        "Wrong number of qudits in '%s': expected %d" % (prep_spec, num_qudits)
+                    prep_factors = [_create_ideal_1Q_prep(udim, int(l))
+                                    for udim, l in zip(processor_spec.qudit_udims, bydigit_index)]
                 elif prep_spec.startswith("rho") and prep_spec[len('rho'):].isdigit():
                     index = int(prep_spec[len('rho'):])
-                    assert(0 <= index < 2**num_qubits), \
-                        "Index in '%s' out of bounds for state of %d qubits" % (prep_spec, num_qubits)
-                    binary_index = '{{0:0{}b}}'.format(num_qubits).format(index)
-                    prep_factors = [ideal_preps1Q[convbit[l]].copy() for l in binary_index]
+                    assert(0 <= index < state_space.udim), \
+                        "Index in '%s' out of bounds for state space with udim %d" % (prep_spec, state_space.udim)
+                    #binary_index = '{{0:0{}b}}'.format(num_qubits).format(index)  # OLD: for qubits
+                    bydigit_index = _decomp_index_to_digits(index, processor_spec.qudit_udims)
+                    prep_factors = [_create_ideal_1Q_prep(udim, l)
+                                    for udim, l in zip(processor_spec.qudit_udims, bydigit_index)]
                 else:
                     raise ValueError("Unrecognized state preparation spec '%s'" % prep_spec)
             elif isinstance(prep_spec, _np.ndarray):
@@ -1108,28 +1132,30 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
 
             prep_layers[prep_name] = _state.TensorProductState(prep_factors, state_space)
 
-        else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qubit state vectors & POVMs
+        else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qudit state vectors & POVMs
             vectype = ideal_prep_type
 
             if isinstance(prep_spec, str):
-                if prep_spec.startswith('rho_') and all([l in ('0', '1') for l in prep_spec[len('rho_'):]]):
-                    binary_index = prep_spec[len('rho_'):]
-                    assert(len(binary_index) == num_qubits), \
-                        "Wrong number of qubits in '%s': expected %d" % (prep_spec, num_qubits)
-                    v = _np.zeros(2**num_qubits); v[int(binary_index, 2)] = 1.0
+                if prep_spec.startswith('rho_') and prep_spec[len('rho_'):].isdigit():
+                    bydigit_index = prep_spec[len('rho_'):]
+                    assert(len(bydigit_index) == num_qudits), \
+                        "Wrong number of qudits in '%s': expected %d" % (prep_spec, num_qudits)
+                    v = _np.zeros(state_space.udim)
+                    inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
+                    v[_np.dot(inc, list(map(int, bydigit_index)))] = 1.0
                     ideal_prep = _state.create_from_pure_vector(v, vectype, 'pp', evotype, state_space=state_space)
                 elif prep_spec.startswith("rho") and prep_spec[len('rho'):].isdigit():
                     index = int(prep_spec[len('rho'):])
-                    assert(0 <= index < 2**num_qubits), \
-                        "Index in '%s' out of bounds for state of %d qubits" % (prep_spec, num_qubits)
-                    v = _np.zeros(2**num_qubits); v[index] = 1.0
+                    assert(0 <= index < state_space.udim), \
+                        "Index in '%s' out of bounds for state space with udim %d" % (prep_spec, state_space.udim)
+                    v = _np.zeros(state_space.udim); v[index] = 1.0
                     ideal_prep = _state.create_from_pure_vector(v, vectype, 'pp', evotype, state_space=state_space)
                 else:
                     raise ValueError("Unrecognized state preparation spec '%s'" % prep_spec)
             elif isinstance(prep_spec, _np.ndarray):
-                assert(len(prep_spec) == 2**num_qubits), \
-                    "Expected length-%d (not %d!) array as a %d-qubit prep specifier!" % (2**num_qubits,
-                                                                                          len(prep_spec), num_qubits)
+                assert(len(prep_spec) == state_space.udim), \
+                    "Expected length-%d (not %d!) array to specify a state of %s" % (
+                        state_space.udim, len(prep_spec), str(state_space))
                 ideal_prep = _state.create_from_pure_vector(prep_spec, vectype, 'pp', evotype, state_space=state_space)
             else:
                 raise ValueError("Invalid state preparation spec: %s" % str(prep_spec))
@@ -1148,9 +1174,14 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
         if isinstance(ideal_povm_type, (tuple, list)): ideal_povm_type = ideal_povm_type[0]  # HACK to support multiple vals
         if ideal_povm_type == 'computational' or ideal_povm_type.startswith('lindblad '):
 
+            if not all([udim == 2 for udim in processor_spec.qudit_udims]):
+                raise NotImplementedError(("POVMs can currently only be constructed on a space of *qubits* when using"
+                                           " `ideal_povm_type == 'computational'` or is a Lindblad type"))
+                # We can relax this once we update ComputationalBasisPOVM to work with qudit state spaces
+
             if isinstance(povm_spec, str):
                 if povm_spec in ("Mdefault", "Mz"):
-                    ideal_povm = _povm.ComputationalBasisPOVM(num_qubits, evotype, state_space=state_space)
+                    ideal_povm = _povm.ComputationalBasisPOVM(num_qudits, evotype, state_space=state_space)
                 else:
                     raise ValueError("Unrecognized POVM spec '%s'" % povm_spec)
             elif isinstance(povm_spec, dict):
@@ -1179,13 +1210,17 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             # a 1Q noise operation, even when `local_noise=False`
             vectype = ideal_povm_type[len('tensor product '):]
 
-            v0, v1 = _np.array([1, 0], 'd'), _np.array([0, 1], 'd')
-            ideal_povm1Q = _povm.create_from_pure_vectors([('0', v0), ('1', v1)], vectype, 'pp',
-                                                          evotype, state_space=None)
+            def _1vec(ud, i):  # constructs a vector of length `ud` with a single 1 at index `1`
+                v = _np.zeros(ud, 'd'); v[i] = 1.0; return v
+
+            def _create_ideal_1Q_povm(ud):
+                effect_vecs = [(str(i), _1vec(ud, i)) for i in range(ud)]
+                return _povm.create_from_pure_vectors(effect_vecs, vectype, 'pp',
+                                                      evotype, state_space=None)
 
             if isinstance(povm_spec, str):
                 if povm_spec in ("Mdefault", "Mz"):
-                    povm_factors = [ideal_povm1Q.copy() for i in range(num_qubits)]
+                    povm_factors = [_create_ideal_1Q_povm(udim) for udim in processor_spec.qudit_udims]
                 else:
                     raise ValueError("Unrecognized POVM spec '%s'" % povm_spec)
             elif isinstance(povm_spec, dict):
@@ -1203,19 +1238,20 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
 
             povm_layers[povm_name] = _povm.TensorProductPOVM(povm_factors, evotype, state_space)
 
-        else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qubit state vectors & POVMs
+        else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qudit state vectors & POVMs
 
             vectype = ideal_povm_type
 
             if isinstance(povm_spec, str):
-                vecs = []  # all the basis vectors for num_qubits
-                for i in range(2**num_qubits):
-                    v = _np.zeros(2**num_qubits, 'd'); v[i] = 1.0
+                vecs = []  # all the basis vectors for num_qudits
+                for i in range(state_space.udim):
+                    v = _np.zeros(state_space.udim, 'd'); v[i] = 1.0
                     vecs.append(v)
 
                 if povm_spec in ("Mdefault", "Mz"):
                     ideal_povm = _povm.create_from_pure_vectors(
-                        [(format(i, 'b').zfill(num_qubits), v) for i, v in enumerate(vecs)],
+                        [(''.join(map(str,_decomp_index_to_digits(i, processor_spec.qudit_udims))), v)
+                         for i, v in enumerate(vecs)],
                         vectype, 'pp', evotype, state_space=state_space)
                 else:
                     raise ValueError("Unrecognized POVM spec '%s'" % povm_spec)
@@ -1235,24 +1271,28 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                     if len(effect_spec) > 1: convert_to_dmvecs = True
                     for comp_espec in effect_spec:
                         if isinstance(comp_espec, str):
-                            if all([l in ('0', '1') for l in comp_espec]):
-                                binary_index = comp_espec
-                                assert(len(binary_index) == num_qubits), \
-                                    "Wrong number of qubits in '%s': expected %d" % (comp_espec, num_qubits)
-                                v = _np.zeros(2**num_qubits); v[int(binary_index, 2)] = 1.0
+                            if comp_espec.isdigit():  # all([l in ('0', '1') for l in comp_espec]) for qubits
+                                bydigit_index = comp_espec
+                                assert(len(bydigit_index) == num_qudits), \
+                                    "Wrong number of qudits in '%s': expected %d" % (comp_espec, num_qudits)
+                                v = _np.zeros(state_space.udim)
+                                inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
+                                index = _np.dot(inc, list(map(int, bydigit_index)))
+                                v[index] = 1.0
                                 effect_components.append(v)
                             elif comp_espec.startswith("E") and comp_espec[len('E'):].isdigit():
                                 index = int(comp_espec[len('E'):])
-                                assert(0 <= index < 2**num_qubits), \
-                                    "Index in '%s' out of bounds for state of %d qubits" % (comp_espec, num_qubits)
-                                v = _np.zeros(2**num_qubits); v[index] = 1.0
+                                assert(0 <= index < state_space.udim), \
+                                    "Index in '%s' out of bounds for state space with udim %d" % (
+                                        comp_espec, state_space.udim)
+                                v = _np.zeros(state_space.udim); v[index] = 1.0
                                 effect_components.append(v)
                             else:
                                 raise ValueError("Unrecognized POVM effect spec '%s'" % comp_espec)
                         elif isinstance(comp_espec, _np.ndarray):
-                            assert(len(comp_espec) == 2**num_qubits), \
-                                "Expected length-%d (not %d!) array as a %d-qubit effect specifier!" % (
-                                    2**num_qubits, len(comp_espec), num_qubits)
+                            assert(len(comp_espec) == state_space.udim), \
+                                "Expected length-%d (not %d!) array to specify a state of %s" % (
+                                    state_space.udim, len(comp_spec), str(state_space))
                             effect_components.append(comp_espec)
                         else:
                             raise ValueError("Invalid POVM effect spec: %s" % str(comp_espec))
@@ -1285,9 +1325,9 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
 def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=None,
                        ideal_gate_type=('static standard', 'static clifford', 'static unitary')):
     """
-    Construct a dictionary of potentially noisy gates that act only on their target qubits.
+    Construct a dictionary of potentially noisy gates that act only on their target qudits.
 
-    These gates are "local" because they act only on their intended target qubits.  The gates
+    These gates are "local" because they act only on their intended target qudits.  The gates
     consist of an ideal gate (obviously local, and crosstalk free) of the type given by
     `ideal_gate_type` composed with a noise operation given by `modelnoise`, if one exists.
     The returned dictionary contains keys for all the gate names in `processor_spec`.  Custom
@@ -1304,7 +1344,7 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
 
     modelnoise : ModelNoise, optional
         Noise that should be applied after the ideal gates.  This noise must
-        be *local* to each gate (i.e. acting on its target qubits).  See the
+        be *local* to each gate (i.e. acting on its target qudits).  See the
         :class:`ModelNoise` object documentation for details regarding how
         to specify different types of noise.  If `None`, then no noise is added .
 
@@ -1330,7 +1370,7 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
     if modelnoise is None: modelnoise = _OpModelPerOpNoise({})
 
     # All possible entries into the upcoming gate dictionary
-    # Not just gatenames as it is possible to override in qubit-specific operations
+    # Not just gatenames as it is possible to override in qudit-specific operations
     all_keys = _lt.remove_duplicates(list(processor_spec.gate_names)
                                      + list(custom_gates.keys())
                                      + list(modelnoise.keys()))
@@ -1350,7 +1390,7 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
         if key in ['prep', 'povm']:
             continue
 
-        # If key has qubits, get base name for lookup
+        # If key has qudits, get base name for lookup
         label = _label.Label(key)
         name = label.name
 
@@ -1369,7 +1409,7 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
             if noiseop is not None:
                 gatedict[key] = noiseop
             else:
-                gatedict[key] = _op.ComposedOp([], evotype, ideal_gate_state_space)  # (identity gate on N qubits)
+                gatedict[key] = _op.ComposedOp([], evotype, ideal_gate_state_space)  # (identity gate on N qudits)
 
         elif not callable(U):  # normal operation (not a factory)
             ideal_gate = ideal_gates.get(name, None)
@@ -1409,10 +1449,10 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
                                 independent_gates=False, independent_spam=True, ensure_composed_gates=False,
                                 ideal_gate_type='auto', ideal_spam_type='computational', implicit_idle_mode='none'):
     """
-    Create a n-qubit "crosstalk-free" model.
+    Create a n-qudit "crosstalk-free" model.
 
     By virtue of being crosstalk-free, this model's operations only
-    act nontrivially on their target qubits.  Gates consist of an ideal gate
+    act nontrivially on their target qudits.  Gates consist of an ideal gate
     operation possibly followed by an error operation.
 
     Errors can be specified using any combination of the 4 error rate/coeff arguments,
@@ -1437,7 +1477,7 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
         :class:`LinearOperator`, :class:`OpFactory`, or `numpy.ndarray`
         objects.  These objects override any other behavior for constructing
         their designated operations.  Keys of this dictionary may
-        be string-type gate *names* or labels that include target qubits.
+        be string-type gate *names* or labels that include target qudits.
 
     depolarization_strengths : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
@@ -1505,7 +1545,7 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
         (local) noise (e.g. an overrotation by 1 degree), and the
         `operation_bks['gates']` dictionary contains a single key per gate
         name.  If True, then gates with the same name acting on different
-        qubits may have different local noise, and so the
+        qudits may have different local noise, and so the
         `operation_bks['gates']` dictionary contains a key for each gate
          available gate placement.
 
@@ -1530,7 +1570,7 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
     implicit_idle_mode : {'none', 'add_global'}
         The way idel operations are added implicitly within the created model. `"none"`
         doesn't add any "extra" idle operations when there is a layer that contains some
-        gates but not gates on all the qubits.  `"add_global"` adds the global idle operation,
+        gates but not gates on all the qudits.  `"add_global"` adds the global idle operation,
         i.e., the operation for a global idle layer (zero gates - a completely empty layer),
         to every layer that is simulated, using the global idle as a background idle that always
         occurs regardless of the operation.
@@ -1539,9 +1579,9 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
     -------
     LocalNoiseModel
         A model with `"rho0"` prep, `"Mdefault"` POVM, and gates labeled by
-        the gate names and qubit labels (as specified by `processor_spec`).
+        the gate names and qudit labels (as specified by `processor_spec`).
         For instance, the operation label for the `"Gx"` gate on the second
-        qubit might be `Label("Gx",1)`.
+        qudit might be `Label("Gx",1)`.
     """
     modelnoise = _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs, lindblad_error_coeffs,
                                              depolarization_parameterization, stochastic_parameterization,
@@ -1558,7 +1598,7 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
                                  ensure_composed_gates=False, ideal_gate_type='auto', ideal_prep_type='auto',
                                  ideal_povm_type='auto', implicit_idle_mode='none'):
     """
-    Create a n-qubit "crosstalk-free" model.
+    Create a n-qudit "crosstalk-free" model.
 
     Similar to :method:`create_crosstalk_free_model` but the noise is input more generally,
     as a :class:`ModelNoise` object.  Arguments are the same as this function except that
@@ -1568,8 +1608,9 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     -------
     LocalNoiseModel
     """
-    qubit_labels = processor_spec.qubit_labels
-    state_space = _statespace.QubitSpace(qubit_labels)
+    qudit_labels = processor_spec.qudit_labels
+    state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
+        else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
     evotype = _Evotype.cast(evotype)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
@@ -1605,13 +1646,13 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
                                  independent_gates=False, independent_spam=True, errcomp_type="gates",
                                  implicit_idle_mode="none", verbosity=0):
     """
-    Create a n-qubit "cloud-crosstalk" model.
+    Create a n-qudit "cloud-crosstalk" model.
 
     In a cloud crosstalk model, gates consist of a (local) ideal gates followed
-    by an error operation that can act nontrivially on *any* of the processor's qubits
-    (not just a gate's target qubits).  Typically a gate's errors are specified
-    relative to the gate's target qubits, forming a "cloud" of errors around the
-    target qubits using some notion of locality (that may not be spatial, e.g.
+    by an error operation that can act nontrivially on *any* of the processor's qudits
+    (not just a gate's target qudits).  Typically a gate's errors are specified
+    relative to the gate's target qudits, forming a "cloud" of errors around the
+    target qudits using some notion of locality (that may not be spatial, e.g.
     local in frequency).  Currently, the "ideal" portion of each gate can only be
     created as a *static* (parameterless) object -- all gate parameters come from
     the error operation.
@@ -1638,7 +1679,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
         :class:`LinearOperator`, :class:`OpFactory`, or `numpy.ndarray`
         objects.  These objects override any other behavior for constructing
         their designated operations.  Keys of this dictionary may
-        be string-type gate *names* or labels that include target qubits.
+        be string-type gate *names* or labels that include target qudits.
 
     depolarization_strengths : dict, optional
         A dictionary whose keys are gate names (e.g. `"Gx"`) and whose values
@@ -1699,7 +1740,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
         noise (e.g. an overrotation by 1 degree), and the
         `operation_bks['cloudnoise']` dictionary will contains a single key per gate
         name.  If True, then gates with the same name acting on different
-        qubits may have different local noise, and so the
+        qudits may have different local noise, and so the
         `operation_bks['cloudnoise']` dictionary contains a key for each gate
          available gate placement.
 
@@ -1715,7 +1756,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
     implicit_idle_mode : {'none', 'add_global'}
         The way idel operations are added implicitly within the created model. `"none"`
         doesn't add any "extra" idle operations when there is a layer that contains some
-        gates but not gates on all the qubits.  `"add_global"` adds the global idle operation,
+        gates but not gates on all the qudits.  `"add_global"` adds the global idle operation,
         i.e., the operation for a global idle layer (zero gates - a completely empty layer),
         to every layer that is simulated, using the global idle as a background idle that always
         occurs regardless of the operation.
@@ -1742,7 +1783,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
                                   independent_spam=True, errcomp_type="errorgens",
                                   implicit_idle_mode="none", verbosity=0):
     """
-    Create a n-qubit "cloud-crosstalk" model.
+    Create a n-qudit "cloud-crosstalk" model.
 
     Similar to :method:`create_cloud_crosstalk_model` but the noise is input more generally,
     as a :class:`ModelNoise` object.  Arguments are the same as this function except that
@@ -1752,8 +1793,9 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
     -------
     CloudNoiseModel
     """
-    qubit_labels = processor_spec.qubit_labels
-    state_space = _statespace.QubitSpace(qubit_labels)  # FUTURE: allow other types of state spaces somehow?
+    qudit_labels = processor_spec.qudit_labels
+    state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
+        else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)  # FUTURE: allow more types of spaces
     evotype = _Evotype.cast(evotype)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
@@ -1782,8 +1824,8 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
         raise ValueError("Invalid `errcomp_type` value: %s" % str(errcomp_type))
 
     def build_cloudnoise_fn(lbl):
-        # lbl will be for a particular gate and target qubits.  If we have error rates for this specific gate
-        # and target qubits (i.e this primitive layer op) then we should build it directly (and independently,
+        # lbl will be for a particular gate and target qudits.  If we have error rates for this specific gate
+        # and target qudits (i.e this primitive layer op) then we should build it directly (and independently,
         # regardless of the value of `independent_gates`) using these rates.  Otherwise, if we have a stencil
         # for this gate, then we should use it to construct the output, using a copy when gates are independent
         # and a reference to the *same* stencil operations when `independent_gates==False`.
@@ -1800,7 +1842,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
             return None  # no cloudnoise error for this label
 
         return apply_stencil_fn(stencil, evotype, state_space, target_labels=lbl.sslbls,
-                                qubit_graph=processor_spec.qubit_graph,
+                                qudit_graph=processor_spec.qudit_graph,
                                 copy=independent_gates and (lbl not in modelnoise))  # no need to copy if first case
 
     def build_cloudkey_fn(lbl):
@@ -1814,13 +1856,13 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
             stencil = stencils[lbl.name]
         else:
             # simple cloud-key when there is no cloud noise
-            return tuple(lbl.sslbls) if (lbl.sslbls is not None) else qubit_labels
+            return tuple(lbl.sslbls) if (lbl.sslbls is not None) else qudit_labels
 
-        #Otherwise, process stencil to get a list of all the qubit labels `lbl`'s cloudnoise error
+        #Otherwise, process stencil to get a list of all the qudit labels `lbl`'s cloudnoise error
         # touches and form this into a key
         cloud_sslbls = modelnoise.compute_stencil_absolute_sslbls(stencil, state_space, lbl.sslbls,
-                                                                  processor_spec.qubit_graph)
-        hashable_sslbls = tuple(lbl.sslbls) if (lbl.sslbls is not None) else qubit_labels
+                                                                  processor_spec.qudit_graph)
+        hashable_sslbls = tuple(lbl.sslbls) if (lbl.sslbls is not None) else qudit_labels
         cloud_key = (hashable_sslbls, tuple(sorted(cloud_sslbls)))  # (sets are unhashable)
         return cloud_key
 
@@ -1843,13 +1885,13 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         connected_highweight_errors=True,
         verbosity=0):
     """
-    Create a "cloud crosstalk" model based on maximum error weights and hops along the processor's qubit graph.
+    Create a "cloud crosstalk" model based on maximum error weights and hops along the processor's qudit graph.
 
     This function provides a convenient way to construct cloud crosstalk models whose gate errors
     consist of Pauli elementary error generators (i.e. that correspond to Lindblad error coefficients)
-    that are limited in weight (number of non-identity Paulis) and support (which qubits have non-trivial
+    that are limited in weight (number of non-identity Paulis) and support (which qudits have non-trivial
     Paulis on them).  Errors are taken to be approximately local, meaning they are concentrated near the
-    target qubits of a gate, with the notion of locality taken from the processor specification's qubit graph.
+    target qudits of a gate, with the notion of locality taken from the processor specification's qudit graph.
     The caller provides maximum-weight, maximum-hop (a "hop" is the movement along a single graph edge), and
     gate type arguments to specify the set of possible errors on a gate.
 
@@ -1857,11 +1899,11 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
       a maximum weight, `max_idle_weight`.
     - State preparation and POVM errors are constructed similarly, with a global-idle-like error following
       or preceding the preparation or measurement, respectively.
-    - Gate errors are placed on all the qubits that can be reached with at most `maxhops` hops from (any of)
-      the gate's target qubits.  Elementary error generators up to weight `W`, where `W` equals the number
-      of target qubits (e.g., 2 for a CNOT gate) plus `extra_gate_weight` are allowed.  Weight-1 terms
+    - Gate errors are placed on all the qudits that can be reached with at most `maxhops` hops from (any of)
+      the gate's target qudits.  Elementary error generators up to weight `W`, where `W` equals the number
+      of target qudits (e.g., 2 for a CNOT gate) plus `extra_gate_weight` are allowed.  Weight-1 terms
       are a special case, and the `extra_weight_1_hops` argument adds to the usual `maxhops` in this case
-      to allow weight-1 errors on a possibly larger region of qubits around the target qubits.
+      to allow weight-1 errors on a possibly larger region of qudits around the target qudits.
 
     Parameters
     ----------
@@ -1894,27 +1936,27 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
     maxhops : int
         The locality constraint: for a gate, errors (of weight up to the
         maximum weight for the gate) are allowed to occur on the gate's
-        target qubits and those reachable by hopping at most `maxhops` times
-        from a target qubit along nearest-neighbor links (defined by the
+        target qudits and those reachable by hopping at most `maxhops` times
+        from a target qudit along nearest-neighbor links (defined by the
         `geometry`).
 
     extra_weight_1_hops : int, optional
         Additional hops (adds to `maxhops`) for weight-1 errors.  A value > 0
         can be useful for allowing just weight-1 errors (of which there are
-        relatively few) to be dispersed farther from a gate's target qubits.
+        relatively few) to be dispersed farther from a gate's target qudits.
         For example, a crosstalk-detecting model might use this.
 
     extra_gate_weight : int, optional
-        Addtional weight, beyond the number of target qubits (taken as a "base
+        Addtional weight, beyond the number of target qudits (taken as a "base
         weight" - i.e. weight 2 for a 2Q gate), allowed for gate errors.  If
-        this equals 1, for instance, then 1-qubit gates can have up to weight-2
-        errors and 2-qubit gates can have up to weight-3 errors.
+        this equals 1, for instance, then 1-qudit gates can have up to weight-2
+        errors and 2-qudit gates can have up to weight-3 errors.
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The circuit simulator used to compute any
         requested probabilities, e.g. from :method:`probs` or
         :method:`bulk_probs`.  Using `"auto"` selects `"matrix"` when there
-        are 2 qubits or less, and otherwise selects `"map"`.
+        are 2 qudits or less, and otherwise selects `"map"`.
 
     evotype : Evotype or str, optional
         The evolution type of this model, describing how states are
@@ -1937,9 +1979,9 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         state prepearation and POVM.
 
     implicit_idle_mode : {'none', 'add_global'}
-        The way idel operations are added implicitly within the created model. `"nonw"`
+        The way idel operations are added implicitly within the created model. `"none"`
         doesn't add any "extra" idle operations when there is a layer that contains some
-        gates but not gates on all the qubits.  `"add_global"` adds the global idle operation,
+        gates but not gates on all the qudits.  `"add_global"` adds the global idle operation,
         i.e., the operation for a global idle layer (zero gates - a completely empty layer),
         to every layer that is simulated, using the global idle as a background idle that always
         occurs regardless of the operation.
@@ -1961,25 +2003,25 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
 
     independent_gates : bool, optional
         Whether the noise added to a gate when it acts on one set of target
-        qubits is independent of its noise on a different set of target qubits.
+        qudits is independent of its noise on a different set of target qudits.
         If False, then all gates with the same name (e.g. "Gx") will be constrained
-        to having the *same* noise on the cloud around the target qubits (even though
-        the target qubits and cloud are different).  If True, then gate noise operations
-        for different sets of target qubits are independent.
+        to having the *same* noise on the cloud around the target qudits (even though
+        the target qudits and cloud are different).  If True, then gate noise operations
+        for different sets of target qudits are independent.
 
     independent_spam : bool, optional
         Similar to `independent_gates` but for state preparation and measurement operations.
         When `False`, the noise applied to each set (individual or pair or triple etc.) of
-        qubits must be the same, e.g., if the state preparation is a perfect preparation followed
-        by a single-qubit rotation then this rotation must be by the *same* angle on all of
-        the qubits.
+        qudits must be the same, e.g., if the state preparation is a perfect preparation followed
+        by a single-qudit rotation then this rotation must be by the *same* angle on all of
+        the qudits.
 
     connected_highweight_errors : bool, optional
         An additional constraint regarding high-weight errors.  When `True`, only high weight
         (weight 2+) elementary error generators whose non-trivial Paulis occupy a *connected*
-        portion of the qubit graph are allowed.  For example, if the qubit graph is a 1D chain
-        of 4 qubits, 1-2-3-4, and weight-2 errors are allowed on a single-qubit gate with
-        target = qubit-2, then weight-2 errors on 1-2 and 2-3 would be allowed, but errors on
+        portion of the qudit graph are allowed.  For example, if the qudit graph is a 1D chain
+        of 4 qudits, 1-2-3-4, and weight-2 errors are allowed on a single-qudit gate with
+        target = qudit-2, then weight-2 errors on 1-2 and 2-3 would be allowed, but errors on
         1-3 would be forbidden.  When `False`, no constraint is imposed.
 
     verbosity : int or VerbosityPrinter, optional
@@ -1992,9 +2034,14 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
 
     # construct noise specifications for the cloudnoise model
     modelnoise = {}
-    all_qubit_labels = processor_spec.qubit_labels
+    all_qudit_labels = processor_spec.qudit_labels
     conn = connected_highweight_errors  # shorthand: whether high-weight errors must be connected on the graph
     global_idle_name = processor_spec.global_idle_gate_name
+
+    if not all([udim == 2 for udim in processor_spec.qudit_udims]):
+        raise NotImplementedError("Can only create cloudnoise models from hops & weights for *qubit* spaces.")
+        # could relax this if we change the noise-building functions to take arguments specifying the state
+        # space and update them to remove assumptions of the Pauli basis, etc.
 
     # Global Idle
     if max_idle_weight > 0:
@@ -2002,14 +2049,14 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
             "`max_idle_weight` must equal 0 for processor specs without a global idle gate!"
         #printer.log("Creating Idle:")
         wt_maxhop_tuples = [(i, None) for i in range(1, max_idle_weight + 1)]
-        modelnoise[global_idle_name] = _build_weight_maxhops_modelnoise(all_qubit_labels, wt_maxhop_tuples,
+        modelnoise[global_idle_name] = _build_weight_maxhops_modelnoise(all_qudit_labels, wt_maxhop_tuples,
                                                                         gate_type, conn)
 
     # SPAM
     if max_spam_weight > 0:
         wt_maxhop_tuples = [(i, None) for i in range(1, max_spam_weight + 1)]
-        modelnoise['prep'] = _build_weight_maxhops_modelnoise(all_qubit_labels, wt_maxhop_tuples, spam_type, conn)
-        modelnoise['povm'] = _build_weight_maxhops_modelnoise(all_qubit_labels, wt_maxhop_tuples, spam_type, conn)
+        modelnoise['prep'] = _build_weight_maxhops_modelnoise(all_qudit_labels, wt_maxhop_tuples, spam_type, conn)
+        modelnoise['povm'] = _build_weight_maxhops_modelnoise(all_qudit_labels, wt_maxhop_tuples, spam_type, conn)
 
     # Gates
     weight_maxhops_tuples_1Q = [(1, maxhops + extra_weight_1_hops)] + \
@@ -2020,13 +2067,13 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
 
     for gatenm, gate_unitary in processor_spec.gate_unitaries.items():
         if gatenm == global_idle_name: continue  # processed above
-        gate_nQubits = int(gate_unitary) if isinstance(gate_unitary, (int, _np.int64)) \
-            else int(round(_np.log2(gate_unitary.shape[0])))  # NOTE: integer gate_unitary => idle on n qubits
-        if gate_nQubits not in (1, 2):
-            raise ValueError("Only 1- and 2-qubit gates are supported.  %s acts on %d qubits!"
-                             % (str(gatenm), gate_nQubits))
-        weight_maxhops_tuples = weight_maxhops_tuples_1Q if gate_nQubits == 1 else weight_maxhops_tuples_2Q
-        target_sslbls = ('@0',) if gate_nQubits == 1 else ('@0', '@1')
+        gate_nQudits = int(gate_unitary) if isinstance(gate_unitary, (int, _np.int64)) \
+            else int(round(_np.log2(gate_unitary.shape[0])))  # NOTE: integer gate_unitary => idle on n qudits
+        if gate_nQudits not in (1, 2):
+            raise ValueError("Only 1- and 2-qudit gates are supported.  %s acts on %d qudits!"
+                             % (str(gatenm), gate_nQudits))
+        weight_maxhops_tuples = weight_maxhops_tuples_1Q if gate_nQudits == 1 else weight_maxhops_tuples_2Q
+        target_sslbls = ('@0',) if gate_nQudits == 1 else ('@0', '@1')
         modelnoise[gatenm] = _build_weight_maxhops_modelnoise(target_sslbls, weight_maxhops_tuples,
                                                               gate_type, conn)
 
@@ -2073,25 +2120,25 @@ def _construct_restricted_weight_pauli_basis(wt, sparse=False):
         errbasis.append(basisEl)
         errbasis_lbls.append(''.join(["IXYZ"[i] for i in err_basis_inds]))
 
-    #printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_inds, len(errbasis)), 3)
+    #printer.log("Error on qudits %s -> error basis of length %d" % (err_qudit_inds, len(errbasis)), 3)
     return _ExplicitBasis(errbasis, errbasis_lbls, real=True, sparse=sparse)
 
 
 def _build_weight_maxhops_modelnoise(target_sslbls, weight_maxhops_tuples, lnd_parameterization, connected=True):
 
     # This function:
-    # loop over all size-`wt` *connected* combinations, `err_qubit_inds`, of the qubit indices in
-    #   `possible_err_qubit_inds`
-    #   - construct a local weight-`wt` Pauli basis & corresponding LindbladErrorgen on `wt` qubits
-    #       => replace with: opnoise.create_errorgen(evotype, state_space=None)  where opnoise is for a wt-qubit op
-    #   - embed this constructed local error onto `err_qubit_inds`
+    # loop over all size-`wt` *connected* combinations, `err_qudit_inds`, of the qudit indices in
+    #   `possible_err_qudit_inds`
+    #   - construct a local weight-`wt` Pauli basis & corresponding LindbladErrorgen on `wt` qudits
+    #       => replace with: opnoise.create_errorgen(evotype, state_space=None)  where opnoise is for a wt-qudit op
+    #   - embed this constructed local error onto `err_qudit_inds`
     #   - append embedded error onto running list
     #
     # Noise object structure:
     #  OpModelPerOpNoise( { op_key/'idle': { sslbls : opnoise } } )
     #     where sslbls can be absolute labels or stencil labels
     # -- could have a fn that spreads a single opnoise onto all the sslbls
-    #      given by size-`wt` connected combos of `possible_err_qubit_inds` - this would work for independent clouds
+    #      given by size-`wt` connected combos of `possible_err_qudit_inds` - this would work for independent clouds
     # -- have LindbladNoiseDict and another LindbladPauliAtWeight (?) noise objects,
     #     since we want to specify a lindblad noise by giving a weight and an initial basis (Pauli here)
 
@@ -2106,7 +2153,7 @@ def _build_weight_maxhops_modelnoise(target_sslbls, weight_maxhops_tuples, lnd_p
         else:
             stencil_lbl = _stencil.StencilLabelRadiusCombos(target_sslbls, max_hops, wt, connected)
 
-        local_state_space = _statespace.default_space_for_num_qubits(wt)
+        local_state_space = _statespace.default_space_for_num_qubits(wt)  # this function assumes qubits and Pauli basis
         modelnoise_dict[stencil_lbl] = _LindbladNoise.from_basis_coefficients(
             lnd_parameterization, _construct_restricted_weight_pauli_basis(wt),
             local_state_space)
@@ -2154,7 +2201,7 @@ def _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs
                     sslbls = None
                     local_nm = [err_typ]
                     for bel in basisEls:  # e.g. bel could be "X:Q0" or "XX:Q0,Q1"
-                        # OR "X:<n>" where n indexes a target qubit or "X:<dir>" where dir indicates
+                        # OR "X:<n>" where n indexes a target qudit or "X:<dir>" where dir indicates
                         # a graph *direction*, e.g. "up"
                         if ':' in bel:
                             bel_name, bel_sslbls = bel.split(':')  # should have form <name>:<comma-separated-sslbls>
@@ -2177,7 +2224,7 @@ def _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs
                                 "All basis elements of the same error term must operate on the *same* state!"
                         local_nm.append(bel_name)  # drop the state space labels, e.g. "XY:Q0,Q1" => "XY"
 
-                    # keep track of errors by the qubits they act on, as only each such
+                    # keep track of errors by the qudits they act on, as only each such
                     # set will have it's own LindbladErrorgen
                     local_nm = tuple(local_nm)  # so it's hashable
                     if sslbls is not None:

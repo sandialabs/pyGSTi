@@ -1433,46 +1433,50 @@ class ExplicitOpModel(_mdl.OpModel):
         self._opcaches['povm-layers'] = simplified_effects
         self._opcaches['op-layers'] = simplified_ops
 
-    def create_processor_spec(self, qubit_labels='auto'):
+    def create_processor_spec(self, qudit_labels='auto'):
         """
-        Create a processor specification from this model with the given qubit labels.
+        Create a processor specification from this model with the given qudit labels.
 
-        Currently this only works for models on qubits.
+        Currently this only works for models on qudits.
 
         Parameters
         ----------
-        qubit_labels : tuple or `"auto"`, optional
-            A tuple of qubit labels, e.g. ('Q0', 'Q1') or (0, 1).  `"auto"`
+        qudit_labels : tuple or `"auto"`, optional
+            A tuple of qudit labels, e.g. ('Q0', 'Q1') or (0, 1).  `"auto"`
             uses the labels in this model's state space labels.
 
         Returns
         -------
-        QubitProcessorSpec
+        QuditProcessorSpec or QubitProcessorSpec
         """
         from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+        from pygsti.processors import QuditProcessorSpec as _QuditProcessorSpec
         #go through ops, building up availability and unitaries, then create procesor spec...
 
-        nqubits = self.state_space.num_qubits
+        nqudits = self.state_space.num_qudits
         gate_unitaries = _collections.OrderedDict()
         all_sslbls = self.state_space.tensor_product_block_labels(0)
+        all_udims = [self.state_space.label_udimension(lbl) for lbl in all_sslbls]
         availability = {}
 
         def extract_unitary(Umx, U_sslbls, extracted_sslbls):
             if extracted_sslbls is None: return Umx  # no extraction to be done
             extracted_sslbls = list(extracted_sslbls)
             extracted_indices = [U_sslbls.index(lbl) for lbl in extracted_sslbls]
-            num_extracted = len(extracted_indices)
-            Nm1 = len(U_sslbls) - 1
+            extracted_udims = [self.state_space.label_udimension(lbl) for lbl in extracted_sslbls]
 
-            # can assume all lbls are qubits, so increment associated with qubit k is 2^(N-1-k)
+            # can assume all lbls are qudits, so increment associated with qudit k is (2^(N-1-k) for qubits):
+            all_inc = _np.flip(_np.cumprod(list(reversed(all_udims[1:] + [1]))))
+            extracted_inc = all_inc[extracted_indices]
+
             # assume this is a kronecker product (check this in FUTURE?), so just fill extracted
-            # unitary by fixing all non-extracted qubits (assumed identity-action on these) to 0
+            # unitary by fixing all non-extracted qudits (assumed identity-action on these) to 0
             # and looping over extracted ones:
-            U_extracted = _np.zeros((2**num_extracted, 2**num_extracted), complex)
-            for ii, itup in enumerate(_itertools.product(range(2), repeat=num_extracted)):
-                i = sum([bit * 2**(Nm1 - k) for k, bit in zip(extracted_indices, itup)])
-                for jj, jtup in enumerate(_itertools.product(range(2), repeat=num_extracted)):
-                    j = sum([bit * 2**(Nm1 - k) for k, bit in zip(extracted_indices, jtup)])
+            U_extracted = _np.zeros((_np.product(extracted_udims), _np.product(extracted_udims)), complex)
+            for ii, itup in enumerate(_itertools.product(*[range(ud) for ud in extracted_udims])):
+                i = _np.dot(extracted_inc, itup)
+                for jj, jtup in enumerate(_itertools.product(*[range(ud) for ud in extracted_udims])):
+                    j = _np.dot(extracted_inc, jtup)
                     U_extracted[ii, jj] = Umx[i, j]
             return U_extracted
 
@@ -1516,16 +1520,24 @@ class ExplicitOpModel(_mdl.OpModel):
         if len(unknown_unitaries) > 0:
             raise ValueError("Unitary not specfied for %s gate(s)!" % str(unknown_unitaries))
 
-        if qubit_labels == 'auto':
-            qubit_labels = self.state_space.tensor_product_block_labels(0)
-            #OR: qubit_labels = self.state_space.qubit_labels  # only works for a QubitSpace
+        if qudit_labels == 'auto':
+            qudit_labels = self.state_space.tensor_product_block_labels(0)
+            #OR: qudit_labels = self.state_space.qudit_labels  # only works for a QuditSpace
+            #OR: qudit_labels = self.state_space.qubit_labels  # only works for a QubitSpace
             #OR: qubit_labels = tuple(sorted(observed_sslbls))
 
-        if qubit_labels is None:  # special case of legacy explicit models where all gates have availability [None]
-            qubit_labels = tuple(range(nqubits))
+        if qudit_labels is None:  # special case of legacy explicit models where all gates have availability [None]
+            qudit_labels = tuple(range(nqudits))
 
-        return _QubitProcessorSpec(nqubits, list(gate_unitaries.keys()), gate_unitaries, availability,
-                                   qubit_labels=qubit_labels)
+        assert(len(qudit_labels) == nqudits), \
+            "Length of `qudit_labels` must equal %d (not %d)!" % (nqudits, len(qudit_labels))
+
+        if all([udim == 2 for udim in all_udims]):
+            return _QubitProcessorSpec(nqudits, list(gate_unitaries.keys()), gate_unitaries, availability,
+                                       qubit_labels=qudit_labels)
+        else:
+            return _QuditProcessorSpec(qudit_labels, all_udims, list(gate_unitaries.keys()), gate_unitaries,
+                                       availability)
 
     def create_modelmember_graph(self):
         return _MMGraph({

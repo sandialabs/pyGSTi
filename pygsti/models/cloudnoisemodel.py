@@ -38,71 +38,32 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
 from pygsti.baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
-from pygsti.processors.processorspec import ProcessorSpec as _ProcessorSpec
+from pygsti.processors.processorspec import ProcessorSpec as _ProcessorSpec, QubitProcessorSpec as _QubitProcessorSpec
 
 
 class CloudNoiseModel(_ImplicitOpModel):
     """
-    A n-qubit model using a low-weight and geometrically local error model with a common "global idle" operation.
+    A n-qudit model using a low-weight and geometrically local error model with a common "global idle" operation.
 
     Parameters
     ----------
-    num_qubits : int
-        The number of qubits
+    processor_spec : ProcessorSpec
+        The processor specification to create a model for.  This object specifies the
+        gate names and unitaries for the processor, and their availability on the
+        processor.
 
     gatedict : dict
         A dictionary (an `OrderedDict` if you care about insertion order) that
         associates with string-type gate names (e.g. `"Gx"`) :class:`LinearOperator`,
         `numpy.ndarray`, or :class:`OpFactory` objects. When the objects may act on
-        fewer than the total number of qubits (determined by their dimension/shape) then
-        they are repeatedly embedded into `num_qubits`-qubit gates as specified by their
-        `availability`.  These operations represent the ideal target operations, and
-        thus, any `LinearOperator` or `OpFactory` objects must be *static*, i.e., have
-        zero parameters.
-
-    availability : dict, optional
-        A dictionary whose keys are the same gate names as in
-        `gatedict` and whose values are lists of qubit-label-tuples.  Each
-        qubit-label-tuple must have length equal to the number of qubits
-        the corresponding gate acts upon, and causes that gate to be
-        embedded to act on the specified qubits.  For example,
-        `{ 'Gx': [(0,),(1,),(2,)], 'Gcnot': [(0,1),(1,2)] }` would cause
-        the `1-qubit `'Gx'`-gate to be embedded three times, acting on qubits
-        0, 1, and 2, and the 2-qubit `'Gcnot'`-gate to be embedded twice,
-        acting on qubits 0 & 1 and 1 & 2.  Instead of a list of tuples,
-        values of `availability` may take the special values:
-
-        - `"all-permutations"` and `"all-combinations"` equate to all possible
-        permutations and combinations of the appropriate number of qubit labels
-        (deterined by the gate's dimension).
-        - `"all-edges"` equates to all the vertices, for 1Q gates, and all the
-        edges, for 2Q gates of the geometry.
-        - `"arbitrary"` or `"*"` means that the corresponding gate can be placed
-        on any target qubits via an :class:`EmbeddingOpFactory` (uses less
-        memory but slower than `"all-permutations"`.
-
-        If a gate name (a key of `gatedict`) is not present in `availability`,
-        the default is `"all-edges"`.
-
-    qubit_labels : tuple, optional
-        The circuit-line labels for each of the qubits, which can be integers
-        and/or strings.  Must be of length `num_qubits`.  If None, then the
-        integers from 0 to `num_qubits-1` are used.
-
-    geometry : {"line","ring","grid","torus"} or QubitGraph
-        The type of connectivity among the qubits, specifying a
-        graph used to define neighbor relationships.  Alternatively,
-        a :class:`QubitGraph` object with node labels equal to
-        `qubit_labels` may be passed directly.
-
-    global_idle_layer : LinearOperator
-        A global idle operation which acts on all the qubits and
-        is, if `add_idle_noise_to_all_gates=True`, composed with the
-        actions of specific gates to form the layer operation of
-        any circuit layer.
+        fewer than the total number of qudits (determined by their dimension/shape) then
+        they are repeatedly embedded into operation on the entire state space as specified
+        by their availability within `processor_spec`.  These operations represent the ideal
+        target operations, and thus, any `LinearOperator` or `OpFactory` objects must be *static*,
+        i.e., have zero parameters.
 
     prep_layers, povm_layers : None or operator or dict or list, optional
-        The SPAM operations as n-qubit layer operations.  If `None`, then
+        The SPAM operations as n-qudit layer operations.  If `None`, then
         no preps (or POVMs) are created.  If a dict, then the keys are
         labels and the values are layer operators.  If a list, then the
         elements are layer operators and the labels will be assigned as
@@ -121,7 +82,7 @@ class CloudNoiseModel(_ImplicitOpModel):
     build_cloudkey_fn : function, optional
         An function which takes a single :class:`Label` as an argument and
         returns a "cloud key" for that primitive layer.  The "cloud" is the
-        set of qubits that the error (the operator returned from
+        set of qudits that the error (the operator returned from
         `build_cloudnoise_fn`) touches -- and the "key" returned from this
         function is meant to identify that cloud.  This is used to keep track
         of which primitive layer-labels correspond to the same cloud - e.g.
@@ -129,7 +90,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         be processed together when selecing sequences that amplify the parameters
         in the cloud-noise operations for these two labels.  The return value
         should be something hashable with the property that two noise
-        which act on the same qubits should have the same cloud key.
+        which act on the same qudits should have the same cloud key.
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The circuit simulator used to compute any
@@ -166,9 +127,13 @@ class CloudNoiseModel(_ImplicitOpModel):
         *generators*, i.e. a map that acts as the exponentiated sum of error
         generators (ordering is irrelevant in this case).
 
-    add_idle_noise_to_all_gates: bool, optional
-        Whether the global idle should be added as a factor following the
-        ideal action of each of the non-idle gates.
+    implicit_idle_mode : {'none', 'add_global'}
+        The way idel operations are added implicitly within the created model. `"none"`
+        doesn't add any "extra" idle operations when there is a layer that contains some
+        gates but not gates on all the qudits.  `"add_global"` adds the global idle operation,
+        i.e., the operation for a global idle layer (zero gates - a completely empty layer),
+        to every layer that is simulated, using the global idle as a background idle that always
+        occurs regardless of the operation.
 
     verbosity : int, optional
         An integer >= 0 dictating how must output to send to stdout.
@@ -180,10 +145,12 @@ class CloudNoiseModel(_ImplicitOpModel):
                  simulator="map", evotype="default", errcomp_type="gates",
                  implicit_idle_mode="none", verbosity=0):
 
-        qubit_labels = processor_spec.qubit_labels
-        state_space = _statespace.QubitSpace(qubit_labels)
+        qudit_labels = processor_spec.qudit_labels
+        state_space = _statespace.QubitSpace(qudit_labels) if isinstance(processor_spec, _QubitProcessorSpec) \
+            else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
 
-        simulator = _FSim.cast(simulator, state_space.num_qubits)
+        simulator = _FSim.cast(simulator,
+                               state_space.num_qubits if isinstance(state_space, _statespace.QubitSpace) else None)
         prefer_dense_reps = isinstance(simulator, _MatrixFSim)
         evotype = _Evotype.cast(evotype, default_prefer_dense_reps=prefer_dense_reps)
 
@@ -241,10 +208,10 @@ class CloudNoiseModel(_ImplicitOpModel):
         self.factories['layers'] = _OrderedMemberDict(self, None, None, flags)
 
         printer = _VerbosityPrinter.create_printer(verbosity)
-        printer.log("Creating a %d-qubit cloud-noise model" % self.processor_spec.num_qubits)
+        printer.log("Creating a %d-qudit cloud-noise model" % self.processor_spec.num_qudits)
 
         # a dictionary of "cloud" objects
-        # keys = cloud identifiers, e.g. (target_qubit_indices, cloud_qubit_indices) tuples
+        # keys = cloud identifiers, e.g. (target_qudit_indices, cloud_qudit_indices) tuples
         # values = list of gate-labels giving the gates (primitive layers?) associated with that cloud (necessary?)
         self._clouds = _collections.OrderedDict()
 
@@ -270,10 +237,10 @@ class CloudNoiseModel(_ImplicitOpModel):
                 # Target operation
                 if gate is not None:
                     allowed_sslbls_fn = resolved_avail if callable(resolved_avail) else None
-                    gate_nQubits = self.processor_spec.gate_num_qubits(gn)
-                    printer.log("Creating %dQ %s gate on arbitrary qubits!!" % (gate_nQubits, gn))
+                    gate_nQudits = self.processor_spec.gate_num_qudits(gn)
+                    printer.log("Creating %dQ %s gate on arbitrary qudits!!" % (gate_nQudits, gn))
                     self.factories['layers'][_Lbl(gn)] = _opfactory.EmbeddingOpFactory(
-                        state_space, gate, num_target_labels=gate_nQubits, allowed_sslbls_fn=allowed_sslbls_fn)
+                        state_space, gate, num_target_labels=gate_nQudits, allowed_sslbls_fn=allowed_sslbls_fn)
                     # add any primitive ops for this embedding factory?
 
                 # Cloudnoise operation
@@ -286,15 +253,15 @@ class CloudNoiseModel(_ImplicitOpModel):
                         self.factories['cloudnoise'][_Lbl(gn)] = cloudnoise
 
             else:  # resolved_avail is a list/tuple of available sslbls for the current gate/factory
-                for inds in resolved_avail:  # inds are target qubit labels
+                for inds in resolved_avail:  # inds are target qudit labels
 
                     #Target operation
                     if gate is not None:
-                        printer.log("Creating %dQ %s gate on qubits %s!!"
-                                    % ((len(qubit_labels) if inds is None else len(inds)), gn, inds))
+                        printer.log("Creating %dQ %s gate on qudits %s!!"
+                                    % ((len(qudit_labels) if inds is None else len(inds)), gn, inds))
                         assert(inds is None or _Lbl(gn, inds) not in gatedict), \
                             ("Cloudnoise models do not accept primitive-op labels, e.g. %s, in `gatedict` as this dict "
-                             "specfies the ideal target gates. Perhaps make the cloudnoise depend on the target qubits "
+                             "specfies the ideal target gates. Perhaps make the cloudnoise depend on the target qudits "
                              "of the %s gate?") % (str(_Lbl(gn, inds)), gn)
 
                         if gate_is_factory:
@@ -316,8 +283,8 @@ class CloudNoiseModel(_ImplicitOpModel):
 
                     if build_cloudkey_fn is not None:
                         # TODO: is there any way to get a default "key", e.g. the
-                        # qubits touched by the corresponding cloudnoise op?
-                        # need a way to identify a clound (e.g. Gx and Gy gates on some qubit will have *same* cloud)
+                        # qudits touched by the corresponding cloudnoise op?
+                        # need a way to identify a clound (e.g. Gx and Gy gates on some qudit will have *same* cloud)
                         cloud_key = build_cloudkey_fn(_Lbl(gn, inds))
                         if cloud_key not in self.clouds: self.clouds[cloud_key] = []
                         self.clouds[cloud_key].append(_Lbl(gn, inds))
@@ -327,7 +294,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         _init_spam_layers(self, prep_layers, povm_layers)  # SPAM
 
-        printer.log("DONE! - created Model with nqubits=%d and op-blks=" % self.state_space.num_qubits)
+        printer.log("DONE! - created Model with nqudits=%d and op-blks=" % self.state_space.num_qudits)
         for op_blk_lbl, op_blk in self.operation_blks.items():
             printer.log("  %s: %s" % (op_blk_lbl, ', '.join(map(str, op_blk.keys()))))
         self._clean_paramvec()
