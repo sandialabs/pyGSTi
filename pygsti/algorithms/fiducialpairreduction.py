@@ -22,8 +22,10 @@ from pygsti import circuits as _circuits
 
 from pygsti.circuits import circuitconstruction as _gsc
 from pygsti.modelmembers.operations import EigenvalueParamDenseOp as _EigenvalueParamDenseOp
+from pygsti.tools import apply_aliases_to_circuits as _apply_aliases_to_circuits
 from pygsti.tools import remove_duplicates as _remove_duplicates
 from pygsti.tools import slicetools as _slct
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
 def _nCr(n, r):                                                                           # noqa
@@ -42,6 +44,7 @@ def _random_combination(indices_tuple, r):
     return tuple(indices_tuple[i] for i in iis)
 
 
+@_deprecated_fn('find_sufficient_fiducial_pairs_per_germ_power')
 def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials, germs,
                                    test_lengths=(256, 2048), prep_povm_tuples="first", tol=0.75,
                                    search_mode="sequential", n_random=100, seed=None,
@@ -290,7 +293,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
                       for iEStr in range(nEStrs)]
     return listOfAllPairs
 
-
+@_deprecated_fn('find_sufficient_fiducial_pairs_per_germ_power')
 def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_fiducials,
                                             germs, pre_povm_tuples="first",
                                             search_mode="sequential", constrain_to_tp=True,
@@ -401,14 +404,15 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
 
             printer.show_progress(i, len(germs),
                                   suffix='-- %s germ (%d params)' %
-                                  (germ, gsGerm.num_params))
+                                  (repr(germ), gsGerm.num_params))
             #Debugging
             #print(gsGerm.operations["Ggerm"].evals)
             #print(gsGerm.operations["Ggerm"].params)
 
             #Determine which fiducial-pair indices to iterate over
             goodPairList = _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
-                                                  gsGerm, mem_limit, printer, search_mode, seed, n_random)
+                                                  gsGerm, 1, mem_limit,
+                                                  printer, search_mode, seed, n_random)
 
             assert(goodPairList is not None)
             pairListDict[germ] = goodPairList  # add to final list of per-germ pairs
@@ -420,6 +424,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
                                                   germs, max_lengths,
                                                   pre_povm_tuples="first",
                                                   search_mode="sequential", constrain_to_tp=True,
+                                                  trunc_scheme="whole germ powers",
                                                   n_random=100, seed=None, verbosity=0,
                                                   mem_limit=None):
     """
@@ -427,7 +432,14 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
 
     A "standard" set of GST circuits consists of all circuits of the form:
 
-    statePrep + prepFiducial + germPower + measureFiducial + measurement
+    Case: trunc_scheme == 'whole germ powers':
+      state_prep + prep_fiducial + pygsti.circuits.repeat_with_max_length(germ,L) + meas_fiducial + meas
+
+    Case: trunc_scheme == 'truncated germ powers':
+      state_prep + prep_fiducial + pygsti.circuits.repeat_and_truncate(germ,L) + meas_fiducial + meas
+
+    Case: trunc_scheme == 'length as exponent':
+      state_prep + prep_fiducial + germ^L + meas_fiducial + meas
 
     This set is typically over-complete, and it is possible to restrict the
     (prepFiducial, measureFiducial) pairs to a subset of all the possible
@@ -516,6 +528,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
 
     printer.log("------  Per Germ-Power Fiducial Pair Reduction --------")
+    printer.log("  Using %s germ power truncation scheme" % trunc_scheme)
     with printer.progress_logging(1):
         for i, germ_power in enumerate(_itertools.product(germs, max_lengths)):
             germ, L = germ_power
@@ -527,28 +540,39 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             # eigenvalues (and relevant off-diagonal elements)
             gsGerm = target_model.copy()
             gsGerm.set_all_parameterizations("static")
+            germMx = gsGerm.sim.product(germ)
+            gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
+                germMx, True, constrain_to_tp)
+            
             # SS: Difference from _per_germ version
-            expGerm = _gsc.repeat_with_max_length(germ, L)
-            if len(expGerm) == 0:
+            if trunc_scheme == "whole germ powers":
+                power = _gsc.repeat_count_with_max_length(germ, L)
+            # TODO: Truncation doesn't work nicely with a single "germ"
+            #elif trunc_scheme == "truncated germ powers":
+            #    germPowerCirc = _gsc.repeat_and_truncate(germ, L)
+            elif trunc_scheme == "length as exponent":
+                power = L
+            else:
+                raise ValueError("Truncation scheme %s not allowed" % trunc_scheme)
+
+            if power == 0:
                 # Skip empty circuits (i.e. germ^power > max_length)
                 printer.show_progress(i, len(germs) * len(max_lengths),
                                       suffix='-- %s germ skipped since longer than max length %d' %
                                       (repr(germ), L))
                 continue
-            germMx = gsGerm.sim.product(expGerm)
-            gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
-                germMx, True, constrain_to_tp)
 
             printer.show_progress(i, len(germs) * len(max_lengths),
-                                  suffix='-- %s germ^power (%d params)' %
-                                  (repr(expGerm), gsGerm.num_params))
+                                  suffix='-- %s germ, %d L (%d params)' %
+                                  (repr(germ), L, gsGerm.num_params))
             #Debugging
             #print(gsGerm.operations["Ggerm"].evals)
             #print(gsGerm.operations["Ggerm"].params)
 
             #Determine which fiducial-pair indices to iterate over
             goodPairList = _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
-                                                  gsGerm, mem_limit, printer, search_mode, seed, n_random)
+                                                  gsGerm, power, mem_limit,
+                                                  printer, search_mode, seed, n_random)
 
             assert(goodPairList is not None)
             pairListDict[germ_power] = goodPairList  # add to final list of per-germ-power pairs
@@ -681,14 +705,14 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
 
 # Helper function for per_germ and per_germ_power FPR
 def _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
-                           gsGerm, mem_limit, printer, search_mode, seed, n_random):
+                           gsGerm, power, mem_limit, printer, search_mode, seed, n_random):
     #Get dP-matrix for full set of fiducials, where
     # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
     #   j is similar, and derivs are wrt the "eigenvalues" of the germ
     #  (i.e. the parameters of the gsGerm model).
     lst = _gsc.create_circuits(
-        "pp[0]+f0+germ+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
-        germ=_circuits.Circuit(("Ggerm",)), pp=pre_povm_tuples,
+        "pp[0]+f0+germ*power+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
+        germ=_circuits.Circuit('Ggerm'), pp=pre_povm_tuples, power=power,
         order=('f0', 'f1', 'pp'))
 
     resource_alloc = _baseobjs.ResourceAllocation(comm=None, mem_limit=mem_limit)
@@ -716,6 +740,7 @@ def _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
     RANK_TOL = 1e-7
     rank = _np.linalg.matrix_rank(_np.dot(dPall, dPall.T), RANK_TOL)
     if rank < gsGerm.num_params:  # full fiducial set should work!
+        print(rank)
         raise ValueError("Incomplete fiducial-pair set!")
 
     #Below will take a *subset* of the rows in dPall
@@ -726,6 +751,7 @@ def _get_per_germ_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
     nEStrs = len(meas_fiducials)
     nPossiblePairs = len(prep_fiducials) * len(meas_fiducials)
     allPairIndices = list(range(nPossiblePairs))
+
 
     #Determine which fiducial-pair indices to iterate over
     goodPairList = None; maxRank = 0
