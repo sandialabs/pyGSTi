@@ -1114,7 +1114,7 @@ class ExplicitStateSpace(StateSpace):
         if self._nqudits is None:
             raise ValueError("This state space is not a tensor product of qubit factors spaces!")
         return self._nqudits
-    
+
     @property
     def num_tensor_product_blocks(self):
         """

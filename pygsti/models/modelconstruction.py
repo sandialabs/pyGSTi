@@ -934,7 +934,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
 
     if ideal_gate_type == "full" and ideal_prep_type == "full" and ideal_povm_type == "full":
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, evotype)
-    elif (ideal_gate_type in ("full TP", "TP") and ideal_prep_type in ("full TP", "TP") \
+    elif (ideal_gate_type in ("full TP", "TP") and ideal_prep_type in ("full TP", "TP")
           and ideal_povm_type in ("full TP", "TP")):
         ret.default_gauge_group = _gg.TPGaugeGroup(ret.state_space, evotype)
     elif ideal_gate_type == "CPTP" and ideal_prep_type == "CPTP" and ideal_povm_type == "CPTP":
@@ -1039,7 +1039,8 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
         prep_spec = processor_spec.prep_specifier(prep_name)
 
         # Prep logic
-        if isinstance(ideal_prep_type, (tuple, list)): ideal_prep_type = ideal_prep_type[0]  # HACK to support multiple vals
+        if isinstance(ideal_prep_type, (tuple, list)):  # HACK to support multiple vals
+            ideal_prep_type = ideal_prep_type[0]
         if ideal_prep_type == 'computational' or ideal_prep_type.startswith('lindblad '):
 
             if isinstance(prep_spec, str):
@@ -1171,7 +1172,8 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
         povm_spec = processor_spec.povm_specifier(povm_name)
 
         # Povm logic
-        if isinstance(ideal_povm_type, (tuple, list)): ideal_povm_type = ideal_povm_type[0]  # HACK to support multiple vals
+        if isinstance(ideal_povm_type, (tuple, list)):  # HACK to support multiple vals
+            ideal_povm_type = ideal_povm_type[0]
         if ideal_povm_type == 'computational' or ideal_povm_type.startswith('lindblad '):
 
             if not all([udim == 2 for udim in processor_spec.qudit_udims]):
@@ -1250,7 +1252,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
 
                 if povm_spec in ("Mdefault", "Mz"):
                     ideal_povm = _povm.create_from_pure_vectors(
-                        [(''.join(map(str,_decomp_index_to_digits(i, processor_spec.qudit_udims))), v)
+                        [(''.join(map(str, _decomp_index_to_digits(i, processor_spec.qudit_udims))), v)
                          for i, v in enumerate(vecs)],
                         vectype, 'pp', evotype, state_space=state_space)
                 else:
@@ -1292,7 +1294,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                         elif isinstance(comp_espec, _np.ndarray):
                             assert(len(comp_espec) == state_space.udim), \
                                 "Expected length-%d (not %d!) array to specify a state of %s" % (
-                                    state_space.udim, len(comp_spec), str(state_space))
+                                    state_space.udim, len(comp_espec), str(state_space))
                             effect_components.append(comp_espec)
                         else:
                             raise ValueError("Invalid POVM effect spec: %s" % str(comp_espec))
@@ -1308,7 +1310,8 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                     ideal_povm = _povm.create_from_dmvecs(effects, vectype, 'pp', evotype, state_space=state_space)
                 else:
                     effects = [(k, effect_components[0]) for k, effect_components in effects_components]
-                    ideal_povm = _povm.create_from_pure_vectors(effects, vectype, 'pp', evotype, state_space=state_space)
+                    ideal_povm = _povm.create_from_pure_vectors(effects, vectype, 'pp', evotype,
+                                                                state_space=state_space)
             else:
                 raise ValueError("Invalid POVM spec: %s" % str(povm_spec))
 

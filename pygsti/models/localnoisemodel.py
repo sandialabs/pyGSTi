@@ -58,7 +58,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         repeatedly embedded into operation on the entire state space as specified
         by their availability within `processor_spec`.  While the keys of this
         dictionary are usually string-type gate *names*, labels that include target
-        qudits, e.g. `("Gx",0)`, may be used to override the default behavior of 
+        qudits, e.g. `("Gx",0)`, may be used to override the default behavior of
         embedding a reference or a copy of the gate associated with the same label
         minus the target qudits (e.g. `"Gx"`).  Furthermore, :class:`OpFactory` objects
         may be used in place of `LinearOperator` objects to allow the evaluation of labels

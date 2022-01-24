@@ -312,7 +312,8 @@ def convert(povm, to_type, basis, extra=None):
                 else:
                     try:
                         if povm.evotype.minimal_space == 'Hilbert':
-                            base_items = [(lbl, convert_effect(vec, 'static unitary', basis)) for lbl, vec in povm.items()]
+                            base_items = [(lbl, convert_effect(vec, 'static unitary', basis))
+                                          for lbl, vec in povm.items()]
                         else:
                             raise RuntimeError('Evotype must be compatible with Hilbert ops to use pure effects')
                     except Exception:  # try static mixed states next:
