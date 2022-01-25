@@ -34,9 +34,13 @@ jobs:
         os: [ubuntu-18.04, windows-2019]
         python-version: [3.6, 3.7, 3.8, 3.9]
         nose-tests:
-        - "algorithms algorithmsb"
-        - "report reportb"
-        - "drivers objects tools iotest optimize construction extras"
+        - "algorithms"
+        - "algorithmsb"
+        - "report"
+        - "reportb"
+        - "report"
+        - "drivers objects tools iotest"
+        - "optimize construction extras"
         # - "mpi" # Fails in GitHub Actions, passes locally but doesn't terminate threads properly
 
     steps:
