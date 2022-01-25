@@ -59,13 +59,22 @@ jobs:
         # Installing with -e to keep installation local (for NOSE_NOPATH)
         # but still compile Cython extensions
         python -m pip install -e .[testing]
-    - name: Run test_packages ${{ matrix.nose-tests }}
+    - name: Run test_packages Ubuntu ${{ matrix.nose-tests }}
+      if: ${{matrix.os == 'ubuntu-18.04'}}
       env:
         NOSETESTS: ${{ matrix.nose-tests }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         echo "nosetests: $NOSETESTS"
         nosetests $NOSETESTS
+    - name: Run test_packages Windows ${{ matrix.nose-tests }}
+      if: ${{matrix.os == ''windows-2019''}}
+      env:
+        NOSETESTS: ${{ matrix.nose-tests }}
+      run: |
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        echo "nosetests: $Env:NOSETESTS"
+        nosetests $Env:NOSETESTS
 
 
 
