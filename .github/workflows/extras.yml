@@ -39,8 +39,13 @@ jobs:
         - "report"
         - "reportb"
         - "report"
-        - "drivers objects tools iotest"
-        - "optimize construction extras"
+        - "objects"
+        - "tools"
+        - "iotest"
+        - "drivers"
+        - "optimize"
+        - "construction"
+        - "extras"
         # - "mpi" # Fails in GitHub Actions, passes locally but doesn't terminate threads properly
 
     steps:
