@@ -34,7 +34,7 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
 
     availability = {}; nonstd_gate_unitaries = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
-    pspec = _ProcessorSpec(nQubits, ['(idle)', 'Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability, geometry)
+    pspec = _ProcessorSpec(nQubits, ['{idle}', 'Gx','Gy','Gcnot'], nonstd_gate_unitaries, availability, geometry)
     assert(spamtype == "lindblad")  # unused and should remove this arg, but should always be "lindblad"
     mdl = mc.create_cloud_crosstalk_model_from_hops_and_weights(
         pspec, None,

@@ -267,7 +267,7 @@ G3            0.1 100
         datafile_test = \
 """#Data File with bad syntax
 ## Columns = 0 count, 1 count
-{xx}            10  90
+{xx            10  90
 """
         f = open(temp_files + "/sip_test8.data","w")
         f.write(datafile_test)

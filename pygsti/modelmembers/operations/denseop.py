@@ -446,6 +446,8 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         -------
         numpy.ndarray
         """
+        if self._reptype == 'superop' and on_space == 'Hilbert':
+            return self._unitary
         return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
 
     def transform_inplace(self, s):
@@ -556,14 +558,14 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['dense_matrix'] = self.to_dense('Hilbert').tolist()
+        mm_dict['dense_matrix'] = self._encodemx(self.to_dense('Hilbert'))
         mm_dict['basis'] = self._basis.to_nice_serialization()
 
         return mm_dict
 
     @classmethod
     def _from_memoized_dict(cls, mm_dict, serial_memo):
-        m = _np.array(mm_dict['dense_matrix'])
+        m = cls._decodemx(mm_dict['dense_matrix'])
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         basis = _Basis.from_nice_serialization(mm_dict['basis'])
         return cls(m, basis, mm_dict['evotype'], state_space)

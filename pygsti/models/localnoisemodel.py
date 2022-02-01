@@ -241,8 +241,8 @@ class LocalNoiseModel(_ImplicitOpModel):
                         # then attempt to turn this 1Q idle into a global idle (for implied idle layers)
                         global_idle = _op.ComposedOp([_op.EmbeddedOp(state_space, (qlbl,), gate)
                                                       for qlbl in qubit_labels])
-                        self.operation_blks['layers'][_Lbl('(auto_global_idle)')] = global_idle
-                        global_idle_layer_label = layer_rules.global_idle_layer_label = _Lbl('(auto_global_idle)')
+                        self.operation_blks['layers'][_Lbl('{auto_global_idle}')] = global_idle
+                        global_idle_layer_label = layer_rules.global_idle_layer_label = _Lbl('{auto_global_idle}')
             else:
                 gate = None  # this is set to something useful in the "elif independent_gates" block below
 
@@ -331,8 +331,8 @@ class LocalNoiseModel(_ImplicitOpModel):
 
                 if len(gates_for_auto_global_idle) > 0:  # then create a global idle based on 1Q idle gates
                     global_idle = _op.ComposedOp(list(gates_for_auto_global_idle.values()))
-                    global_idle_layer_label = layer_rules.global_idle_layer_label = _Lbl('(auto_global_idle)')
-                    self.operation_blks['layers'][_Lbl('(auto_global_idle)')] = global_idle
+                    global_idle_layer_label = layer_rules.global_idle_layer_label = _Lbl('{auto_global_idle}')
+                    self.operation_blks['layers'][_Lbl('{auto_global_idle}')] = global_idle
 
         self._clean_paramvec()
 

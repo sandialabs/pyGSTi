@@ -1429,7 +1429,7 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
     #Gy = tgt1Q.operations[('Gypi2', 0)]
     #Gcnot = tgt2Q.operations[('Gcnot', 0, 1)]
     #Gii = tgt2Q.operations[()]
-    #gatedict = _collections.OrderedDict([('Gx', Gx), ('Gy', Gy), ('Gcnot', Gcnot), ('(idle)', Gii)])
+    #gatedict = _collections.OrderedDict([('Gx', Gx), ('Gy', Gy), ('Gcnot', Gcnot), ('{idle}', Gii)])
     availability = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
 
@@ -1439,7 +1439,7 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
     else:
         singleQfiducials = [(), ('Gx',), ('Gy',), ('Gx', 'Gx')]
 
-    processor_spec = _QubitProcessorSpec(num_qubits, ['Gx', 'Gy', 'Gcnot', '(idle)'],
+    processor_spec = _QubitProcessorSpec(num_qubits, ['Gx', 'Gy', 'Gcnot', '{idle}'],
                                          availability=availability, geometry=geometry)
     return create_cloudnoise_circuits(processor_spec, max_lengths, singleQfiducials,
                                       max_idle_weight, maxhops,

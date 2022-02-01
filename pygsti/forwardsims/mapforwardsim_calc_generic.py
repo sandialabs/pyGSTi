@@ -69,9 +69,9 @@ def mapfill_probs_atom(fwdsim, mx_to_fill, dest_indices, layout_atom, resource_a
 
 
 def mapfill_dprobs_atom(fwdsim, mx_to_fill, dest_indices, dest_param_indices, layout_atom, param_indices,
-                        resource_alloc):
+                        resource_alloc, eps):
 
-    eps = 1e-7  # hardcoded?
+    #eps = 1e-7
     #shared_mem_leader = resource_alloc.is_host_leader if (resource_alloc is not None) else True
 
     if param_indices is None:

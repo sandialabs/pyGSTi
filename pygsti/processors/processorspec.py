@@ -245,7 +245,7 @@ class QubitProcessorSpec(ProcessorSpec):
         """ All the primitive operation labels derived from the gate names and availabilities """
         ret = []
         for gn in self.gate_names:
-            if gn.startswith('(') and gn.endswith(')'): continue  # skip implicit gate names
+            if gn.startswith('{') and gn.endswith('}'): continue  # skip implicit gate names
             avail = self.resolved_availability(gn, 'tuple')
             ret.extend([_Lbl(gn, sslbls) for sslbls in avail])
         return tuple(ret)
@@ -267,6 +267,33 @@ class QubitProcessorSpec(ProcessorSpec):
         if unitary is None: return self.num_qubits  # unitary=None => identity on all qubits
         if isinstance(unitary, (int, _np.int64)): return unitary  # unitary=int => identity in n qubits
         return int(round(_np.log2(unitary.shape[0])))  # possibly factory *function* SHAPE (unitary may be callable)
+
+    def rename_gate_inplace(self, existing_gate_name, new_gate_name):
+        """
+        Renames a gate within this processor specification.
+
+        Parameters
+        ----------
+        existing_gate_name : str
+            The existing gate name you want to change.
+
+        new_gate_name : str
+            The new gate name.
+
+        Returns
+        -------
+        None
+        """
+        if existing_gate_name not in self.gate_names:
+            raise ValueError("'%s' is not an existing gate name!" % str(existing_gate_name))
+
+        def rename(nm):
+            return new_gate_name if (nm == existing_gate_name) else nm
+
+        self.gate_names = tuple([rename(nm) for nm in self.gate_names])
+        self.nonstd_gate_unitaries = {rename(k): v for k, v in self.nonstd_gate_unitaries}
+        self.gate_unitaries = _collections.OrderedDict([(rename(k), v) for k, v in self.gate_unitaries])
+        self.availability = _collections.OrderedDict([(rename(k), v) for k, v in self.availability])
 
     def resolved_availability(self, gate_name, tuple_or_function="auto"):
         """

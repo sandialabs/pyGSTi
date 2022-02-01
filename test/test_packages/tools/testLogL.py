@@ -56,13 +56,16 @@ class LogLTestCase(BaseTestCase):
         #self.assertArraysAlmostEqual(L, L3, places=6) # roundoff?
 
     def test_hessian_mpi(self):
-        from mpi4py import MPI
-        comm = MPI.COMM_WORLD
-        current_mem = pygsti.baseobjs.profiler._get_mem_usage
-        ds   = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
-        model = pygsti.io.load_model(compare_files + "/analysis.model")
-        L = pygsti.logl_hessian(model, ds,
-                                prob_clip_interval=(-1e6,1e6), mem_limit=500*1024**2+current_mem(),
-                                poisson_picture=True, comm=comm)
+        try:
+            from mpi4py import MPI
+            comm = MPI.COMM_WORLD
+            current_mem = pygsti.baseobjs.profiler._get_mem_usage
+            ds   = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
+            model = pygsti.io.load_model(compare_files + "/analysis.model")
+            L = pygsti.logl_hessian(model, ds,
+                                    prob_clip_interval=(-1e6,1e6), mem_limit=500*1024**2+current_mem(),
+                                    poisson_picture=True, comm=comm)
 
-        print(L)
+            print(L)
+        except ImportError:
+            self.skipTest('Skipping because failed to import MPI')

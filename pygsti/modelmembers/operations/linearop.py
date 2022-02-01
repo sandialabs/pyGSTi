@@ -82,9 +82,9 @@ class LinearOperator(_modelmember.ModelMember):
         return self.state_space.dim
 
     @property
-    def size(self):
+    def hilbert_schmidt_size(self):
         """
-        Return the number of independent elements in this operation (when viewed as a dense array)
+        Return the number of independent elements in this operation as a dense Hilbert-Schmidt superoperator.
 
         Returns
         -------
@@ -704,7 +704,7 @@ class LinearOperator(_modelmember.ModelMember):
             Hessian with shape (dimension^2, num_params1, num_params2)
         """
         if not self.has_nonzero_hessian():
-            return _np.zeros((self.size, self.num_params, self.num_params), 'd')
+            return _np.zeros((self.hilbert_schmidt_size, self.num_params, self.num_params), 'd')
         else:
             return finite_difference_hessian_wrt_params(self, wrt_filter1, wrt_filter2)
 
