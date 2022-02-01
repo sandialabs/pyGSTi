@@ -2672,10 +2672,14 @@ def lindblad_projections_to_paramvals(ham_projs, other_projs, param_mode="cptp",
                 #evals, U = _np.linalg.eigh(other_projs)  # works too (assert hermiticity above)
                 evals, U = _np.linalg.eig(other_projs)
                 Ui = _np.linalg.inv(U)
-
+                #try:
                 assert(all([ev >= ttol for ev in evals])), \
-                    ("Lindblad coefficients are not CPTP (truncate == %s)! (largest neg = %g)"
-                     % (str(truncate), min(evals.real)))
+                        ("Lindblad coefficients are not CPTP (truncate == %s)! (largest neg = %g)"
+                         % (str(truncate), min(evals.real)))
+                #except AssertionError:
+                #    print('Negative Eigenvalues Found: ', evals)
+                #    print('Hamiltonian Projections: ', ham_projs) 
+                #    print('Other Projections: ', other_projs)
 
                 pos_evals = evals.clip(1e-16, None)
                 other_projs = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
