@@ -21,8 +21,46 @@ from ...modelmembers.operations.opfactory import OpFactory as _OpFactory
 from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ...tools import optools as _ot
 
+try:
+    from csaps import NdGridCubicSmoothingSpline as _cubicSpline
+    use_csaps = True
+except ImportError:
+    use_csaps = False
+    import warnings
+    warnings.warn("Warning - Cannot import csaps module for spline interpolation. Interpolated gates will default to linear interpolation.")
 
-#TODO move elsewhere?
+if use_csaps:
+    class custom_interpolator():
+        # This class restructures the csaps.NdGridCubicSmoothingSpline API to be consistent 
+        # with that of scipy.interpolator.LinearNDInterpolator. 
+        def __init__(self, interpolator):
+            self.interpolator = interpolator
+        def __call__(self, *v):
+            output = self.interpolator(v)
+            return output[0]
+
+    def _cubicSplineMod(points, values, **kwargs):
+
+        grids = []
+        points = _np.array(points).T
+        values = _np.array(values)
+
+        n_variables = len(points)
+        
+        # Reformat everything to work with the CSAPS interpolator
+        meshgrids = points.reshape((n_variables,)+tuple(kwargs['shape']), order='C')
+        values = values.reshape(tuple(kwargs['shape']), order='C')
+        grid_points = []
+        for idm, mesh in enumerate(meshgrids):
+            # Progamatically construct slices like [0,0,:,0]
+            s = (0,)*(idm) + (slice(None),) + (0,)*(n_variables-idm-1)
+            grid_points += [mesh[s]]
+        
+        return custom_interpolator(_cubicSpline(grid_points, values, smooth=1))
+
+    # interpolator_and_args = (spline_interpolator, {'shape': (7,3,3)})
+
+
 def _split(n, a, cast_to_array=True):
     k, m = divmod(len(a), n)
     lst = list(a[i * k + min(i, m):(i + 1) * k + min(i + 1, m)] for i in range(n))
@@ -348,7 +386,7 @@ class InterpolatedDenseOp(_DenseOperator):
                     len(self._parameterized_indices), len(initial_point))
         self._paramvec = _np.array(initial_point, 'd')
 
-        super().__init__(_np.identity(dim, 'd'), evotype="densitymx")
+        super().__init__(_np.identity(dim, 'd'), evotype="densitymx", state_space=None)
 
         # initialize object
         self.from_vector(self._paramvec)
@@ -376,9 +414,8 @@ class InterpolatedDenseOp(_DenseOperator):
         fullv[self._parameterized_indices] = self._paramvec
         fullv[self._frozen_indices] = self._frozen_values
         errorgen = self.base_interpolator(fullv)
-        self._ptr[:, :] = _ot.operation_from_error_generator(errorgen, self.target_op.to_dense(), 'logGTi')
+        self._ptr[:, :] = _ot.operation_from_error_generator(errorgen, self.target_op.to_dense(), 'pp', 'logGTi')
         self._ptr_has_changed()
-
         if self.aux_interpolator is not None:
             self.aux_info = self.aux_interpolator(fullv)
         self.dirty = dirty_value
@@ -433,9 +470,12 @@ class InterpolatedQuantityFactory(object):
             The number of parameter ranges, counted back from the last one, that should be passed to
             `fn_to_interpolate` as an entire range of values, i.e. via the `grouped_axial_pts` argument.
 
-        interpolator_and_args : tuple, optional
+        interpolator_and_args : tuple or string, optional
             Optionally a 2-tuple of an interpolation class and argument dictionary.  If None, the
-            default of `(scipy.interpolate.LinearNDInterpolator, {'rescale': True})` is used.
+            default of `(csaps.NdGridCubicSmoothingSpline, {'shape', self.qty__shape})` is used. If
+            csaps is not available, then `(scipy.interpolate.LinearNDInterpolator, {'rescale': True})`
+            is used instead. A linear interpolator can be specified explicitly by `linear` and the 
+            default spline interpolator may be explicitly specified by `spline`. 
         """
         self.fn_to_interpolate = fn_to_interpolate
         assert(bool(parameter_ranges is not None) ^ bool(parameter_points is not None)), \
@@ -448,6 +488,7 @@ class InterpolatedQuantityFactory(object):
         self.points = None
         self.qty_shape = qty_shape
         self.interpolator_and_args = interpolator_and_args
+        self.grid_shape = None
 
     def compute_data(self, comm=None, mpi_workers_per_process=1, verbosity=0):
 
@@ -492,11 +533,16 @@ class InterpolatedQuantityFactory(object):
                     assert(isinstance(rng, _np.ndarray)), "Parameter ranges must be specified by tuples or arrays!"
                     axial_points.append(rng)
 
+            self.grid_shape = [len(points) for points in axial_points]
             points_to_distribute = _np.array(list(_itertools.product(*axial_points[0:iFirstGrouped])))
             grouped_axial_pts = axial_points[iFirstGrouped:]
             all_points = _np.array(list(_itertools.product(*axial_points)))
         else:
             assert(self._parameter_points is not None and self._num_params_to_evaluate_as_group == 0)
+            global use_csaps
+            if use_csaps:
+                use_csaps = False
+                warnings.warn("Cubic spline interpolation requires rectangular grid. Defaulting to linear interpolator.")
             points_to_distribute = self._parameter_points
             grouped_axial_pts = []
             all_points = points_to_distribute
@@ -575,7 +621,17 @@ class InterpolatedQuantityFactory(object):
         my_interpolators = _np.empty(len(my_index_tuples), dtype=object)
 
         if self.interpolator_and_args is None:
+            if use_csaps:
+                interp_cls, interp_kwargs = (_cubicSplineMod, {'shape': self.grid_shape})
+            else:
+                interp_cls, interp_kwargs = (_linND, {'rescale': True})
+        elif self.interpolator_and_args == 'linear':
             interp_cls, interp_kwargs = (_linND, {'rescale': True})
+        elif self.interpolator_and_args == 'spline':
+            if use_csaps:
+                interp_cls, interp_kwargs = (_cubicSplineMod, {'shape': self.grid_shape})
+            else:
+                raise ValueError("csaps package is not loaded, so 'spline' interpolator is not available.")
         else:
             interp_cls, interp_kwargs = self.interpolator_and_args
 

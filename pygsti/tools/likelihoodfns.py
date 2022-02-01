@@ -410,8 +410,9 @@ def logl_hessian(model, dataset, circuits=None,
 
     Returns
     -------
-    numpy array
-        array of shape (M,M), where M is the length of the vectorized model.
+    numpy array or None
+        On the root processor, the Hessian matrix of shape (nModelParams, nModelParams),
+        where nModelParams = `model.num_params`.  `None` on non-root processors.
     """
     from ..objectivefns import objectivefns as _objfns
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
@@ -420,8 +421,9 @@ def logl_hessian(model, dataset, circuits=None,
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, mem_limit, ('hessian',), (), mdc_store, verbosity)
-    local = -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
-    return obj.layout.allgather_local_array('epp', local)
+    hessian = obj.hessian()  # Note: hessian is only assembled on root processor
+    return -hessian if (comm is None or comm.rank == 0) else None
+    # negative b/c objective is deltaLogL = max_logl - logL
 
 
 def logl_approximate_hessian(model, dataset, circuits=None,
@@ -497,8 +499,9 @@ def logl_approximate_hessian(model, dataset, circuits=None,
 
     Returns
     -------
-    numpy array
-        array of shape (M,M), where M is the length of the vectorized model.
+    numpy array or None
+        On the root processor, the approximate Hessian matrix of shape (nModelParams, nModelParams),
+        where nModelParams = `model.num_params`.  `None` on non-root processors.
     """
     from ..objectivefns import objectivefns as _objfns
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
@@ -507,8 +510,9 @@ def logl_approximate_hessian(model, dataset, circuits=None,
                           'radius': radius},
                          {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, mem_limit, ('approximate_hessian',), (), mdc_store, verbosity)
-    local = -obj.approximate_hessian()  # negative b/c objective is deltaLogL = max_logl - logL
-    return obj.layout.allgather_local_array('epp', local)
+    hessian = obj.approximate_hessian()  # Note: hessian is only assembled on root processor
+    return -hessian if (comm is None or comm.rank == 0) else None
+    # negative b/c objective is deltaLogL = max_logl - logL
 
 
 def logl_max(model, dataset, circuits=None, poisson_picture=True,

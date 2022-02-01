@@ -1819,6 +1819,9 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
     base_estimate = results.estimates[base_estimate_label]
     parameters = base_estimate.parameters
 
+    if len(badfit_options.actions) == 0:
+        return  # nothing to do - and exit before we try to evaluate objective fn.
+
     #Resource alloc gets sent to these estimate methods for building
     # a distributed-layout outjective fn / MDC store if one doesn't exist.
     mdc_objfn = base_estimate.final_objective_fn(resource_alloc)

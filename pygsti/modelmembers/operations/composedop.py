@@ -61,7 +61,7 @@ class ComposedOp(_LinearOperator):
         else:
             state_space = _statespace.StateSpace.cast(state_space)
         assert(all([state_space.is_compatible_with(operation.state_space) for operation in ops_to_compose])), \
-            "All operations must have compatible state spaces (%d expected)!" % str(state_space)
+            "All operations must have compatible state spaces (%s expected)!" % str(state_space)
 
         if evotype == "auto":
             evotype = ops_to_compose[0]._evotype

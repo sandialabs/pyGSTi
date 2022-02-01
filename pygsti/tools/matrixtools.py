@@ -1902,8 +1902,10 @@ else:
         """
         #Note: copy v for now since it's modified by simple_core fn
         A, mu, m_star, s, eta = prep_a
+
         indices = _np.array(A.indices, dtype=_np.int64)  # convert to 64-bit ints if needed
         indptr = _np.array(A.indptr, dtype=_np.int64)
+        
         return _fastcalc.custom_expm_multiply_simple_core(A.data, indptr, indices,
                                                           v.copy(), mu, m_star, s, tol, eta)
 

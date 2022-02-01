@@ -22,3 +22,4 @@ from .resourceallocation import ResourceAllocation
 from .qubitgraph import QubitGraph
 from .errorgenbasis import ElementaryErrorgenBasis, ExplicitElementaryErrorgenBasis, CompleteElementaryErrorgenBasis
 from .errorgenspace import ErrorgenSpace
+from .unitarygatefunction import UnitaryGateFunction

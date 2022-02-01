@@ -1328,11 +1328,13 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         else:
             jT = j.T
             for i, param_slice in enumerate(self.param_slices):  # for each parameter slice <=> param "processor"
+                ncols = _slct.length(param_slice)
                 if i == self.my_owned_paramproc_index:
                     assert(param_slice == self.global_param_slice)
                     if atom_ralloc.comm is not None:
                         assert(self.param_slice_owners[i] == atom_ralloc.comm.rank)
-                        atom_ralloc.comm.Bcast(jT, root=atom_ralloc.comm.rank)  # *transpose* so receiving buf is cont.
+                        buf[0:ncols, :] = jT[:, :]  # broadcast *transpose* so buf slice is contiguous
+                        atom_ralloc.comm.Bcast(buf[0:ncols, :], root=atom_ralloc.comm.rank)
                         #Note: we only really need to broadcast this to other param_ralloc.comm.rank == 0
                         # procs as these are the only atom_jtj's that contribute in the allreduce_sum below.
                     else:
@@ -1340,7 +1342,6 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
                     atom_jtj[:, param_slice] = jT @ j  # _np.dot(jT, j)
                 else:
-                    ncols = _slct.length(param_slice)
                     atom_ralloc.comm.Bcast(buf[0:ncols, :], root=self.param_slice_owners[i])
                     other_j = buf[0:ncols, :].T
                     atom_jtj[:, param_slice] = jT @ other_j  # _np.dot(jT, other_j)

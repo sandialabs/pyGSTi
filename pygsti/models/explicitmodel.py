@@ -151,7 +151,7 @@ class ExplicitOpModel(_mdl.OpModel):
     def _primitive_op_label_dict(self):
         # don't include 'implied' ops as primitive ops -- FUTURE - maybe should include empty layer ([])?
         return _collections.OrderedDict([(k, None) for k in self.operations
-                                         if not (k.name.startswith('(') and k.name.endswith(')'))])
+                                         if not (k.name.startswith('{') and k.name.endswith('}'))])
 
     @property
     def _primitive_instrument_label_dict(self):
@@ -478,9 +478,9 @@ class ExplicitOpModel(_mdl.OpModel):
         int
             the number of model elements.
         """
-        rhoSize = [rho.size for rho in self.preps.values()]
+        rhoSize = [rho.hilbert_schmidt_size for rho in self.preps.values()]
         povmSize = [povm.num_elements for povm in self.povms.values()]
-        opSize = [gate.size for gate in self.operations.values()]
+        opSize = [gate.hilbert_schmidt_size for gate in self.operations.values()]
         instSize = [i.num_elements for i in self.instruments.values()]
         #Don't count self.factories?
         return sum(rhoSize) + sum(povmSize) + sum(opSize) + sum(instSize)
@@ -1478,8 +1478,8 @@ class ExplicitOpModel(_mdl.OpModel):
 
         def add_availability(opkey, op):
             if opkey == _Label(()) or opkey.is_simple():
-                if opkey == _Label(()):  # special case: turn empty tuple labels into "(idle)" gate in processor spec
-                    gn = "(idle)"
+                if opkey == _Label(()):  # special case: turn empty tuple labels into "{idle}" gate in processor spec
+                    gn = "{idle}"
                     sslbls = None
                 elif opkey.is_simple():
                     gn = opkey.name

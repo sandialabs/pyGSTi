@@ -430,15 +430,15 @@ class ExplicitOpModelCalc(object):
         numpy array
             2D array of derivatives.
         """
-        num_els = sum([obj.size for _, obj in self.all_objects()])
+        num_els = sum([obj.hilbert_schmidt_size for _, obj in self.all_objects()])
         num_op_params = self.Np if (self.interposer is None) else self.interposer.num_op_params
         deriv = _np.zeros((num_els, num_op_params), 'd')
 
         eo = 0  # element offset
         for lbl, obj in self.all_objects():
             #Note: no overlaps possible b/c of independent *elements*
-            deriv[eo:eo + obj.size, obj.gpindices] = obj.deriv_wrt_params()
-            eo += obj.size
+            deriv[eo:eo + obj.hilbert_schmidt_size, obj.gpindices] = obj.deriv_wrt_params()
+            eo += obj.hilbert_schmidt_size
 
         if self.interposer is not None:
             deriv = _np.dot(deriv, self.interposer.deriv_op_params_wrt_model_params())
@@ -492,10 +492,10 @@ class ExplicitOpModelCalc(object):
         dim = self.dim
         nParams = self.Np
 
-        nElements = sum([obj.size for _, obj in self.all_objects()])
-        #nElements = sum([o.size for o in self_operations.values()]) + \
-        #            sum([o.size for o in self_preps.values()]) + \
-        #            sum([o.size for o in self_effects.values()])
+        nElements = sum([obj.hilbert_schmidt_size for _, obj in self.all_objects()])
+        #nElements = sum([o.hilbert_schmidt_size for o in self_operations.values()]) + \
+        #            sum([o.hilbert_schmidt_size for o in self_preps.values()]) + \
+        #            sum([o.hilbert_schmidt_size for o in self_effects.values()])
 
         #This was considered as optional behavior, but better to just delete qtys from Model
         ##whether elements of the raw model matrices/SPAM vectors that are not
