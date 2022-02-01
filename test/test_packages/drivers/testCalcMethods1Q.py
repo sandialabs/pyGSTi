@@ -659,7 +659,6 @@ class CalcMethods1QTestCase(BaseTestCase):
                     self.assertTrue(False)
         print("Done checking %d sequences!" % len(listOfExperiments))
 
-    @unittest.skip("Temp skip for windows test debugging")
     def test_circuitsim_cterm(self):
         # Density-matrix simulation (of superoperator gates) using stabilizer-based term calcs
         c0 = pygsti.circuits.Circuit(layer_labels=(), num_lines=1) # 1-qubit circuit
