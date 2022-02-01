@@ -16,7 +16,7 @@ import numpy as _np
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.modelmembers.states.staticstate import StaticState as _StaticState
 from pygsti.modelmembers import term as _term
-from pygsti.evotypes import Evotype as _Evotype
+from pygsti.evotype import Evotype as _Evotype
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot

@@ -25,9 +25,6 @@ hooks/etc/permissions.yml
 doc/_autosummary
 doc/build
 .venv
-.venv_numba
-*.bat
-*.ipynb
 
 # Test Metadata #
 #################
