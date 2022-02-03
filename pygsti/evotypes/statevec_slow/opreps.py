@@ -297,8 +297,8 @@ class OpRepRepeated(OpRep):
 
 
 class OpRepLindbladErrorgen(OpRep):
-    def __init__(self, lindblad_term_dict, basis, state_space):
+    def __init__(self, lindblad_coefficient_blocks, state_space):
         super(OpRepLindbladErrorgen, self).__init__(state_space)
         self.Lterms = None
         self.Lterm_coeffs = None
-        self.LtermdictAndBasis = (lindblad_term_dict, basis)
+        self.lindblad_coefficient_blocks = lindblad_coefficient_blocks

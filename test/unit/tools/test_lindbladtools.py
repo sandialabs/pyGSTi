@@ -13,10 +13,11 @@ class LindbladToolsTester(BaseCase):
             [ 0,  0,  0,  0],
             [ 0,  0,  0,  0]
         ])
-        self.assertArraysAlmostEqual(lt.hamiltonian_to_lindbladian(np.zeros(shape=(2, 2))),
+        self.assertArraysAlmostEqual(lt.create_elementary_errorgen('H', np.zeros(shape=(2, 2))),
                                      expectedLindbladian)
         sparse = sps.csr_matrix(np.zeros(shape=(2, 2)))
-        spL = lt.hamiltonian_to_lindbladian(sparse, True)
+        #spL = lt.hamiltonian_to_lindbladian(sparse, True)
+        spL = lt.create_elementary_errorgen('H', sparse, True)
         self.assertArraysAlmostEqual(spL.toarray(),
                                      expectedLindbladian)
 
@@ -29,10 +30,10 @@ class LindbladToolsTester(BaseCase):
             [ 9, 12, 12, 16]
         ])
         self.assertArraysAlmostEqual(
-            lt.stochastic_lindbladian(a),
+            lt.create_elementary_errorgen('S', a),
             expected)
         sparse = sps.csr_matrix(a)
-        spL = lt.stochastic_lindbladian(sparse, True)
+        spL = lt.create_elementary_errorgen('S', sparse, True)
         self.assertArraysAlmostEqual(spL.toarray(),
                                      expected)
 
@@ -45,9 +46,9 @@ class LindbladToolsTester(BaseCase):
             [ -4,   6, -11,  1],
             [  9,   5,   5, -4]
         ])
-        self.assertArraysAlmostEqual(lt.nonham_lindbladian(a, b), expected)
+        self.assertArraysAlmostEqual(lt.create_lindbladian_term_errorgen('O', a, b), expected)
         sparsea = sps.csr_matrix(a)
         sparseb = sps.csr_matrix(b)
-        spL = lt.nonham_lindbladian(sparsea, sparseb, True)
+        spL = lt.create_lindbladian_term_errorgen('O', sparsea, sparseb, True)
         self.assertArraysAlmostEqual(spL.toarray(),
                                      expected)

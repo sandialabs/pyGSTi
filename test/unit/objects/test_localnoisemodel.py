@@ -86,13 +86,13 @@ class LocalNoiseModelInstanceTester(BaseCase):
         nQubits = 2
         noisy_idle = 0.9 * np.identity(4**nQubits, 'd')
         noisy_idle[0, 0] = 1.0
-        noisy_idle = ExpErrorgenOp(LindbladErrorgen.from_operation_matrix(noisy_idle, "H+S+A"))
+        noisy_idle = ExpErrorgenOp(LindbladErrorgen.from_operation_matrix(noisy_idle, "H+S"))
 
         pspec_2Q = QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Gidle'), geometry="line",
                                       qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
 
         mdl_local = create_crosstalk_free_model(pspec_2Q, {'Gidle': noisy_idle},
-                                                ideal_gate_type='H+S+A', ideal_spam_type="lindblad H+S+A",
+                                                ideal_gate_type='H+S', ideal_spam_type="lindblad H+S",
                                                 independent_gates=False, ensure_composed_gates=False,
                                                 implicit_idle_mode='add_global')
 
@@ -102,7 +102,7 @@ class LocalNoiseModelInstanceTester(BaseCase):
         test_circuit = (('Gx', 'qb0'), ('Gcnot', 'qb0', 'qb1'), [], [('Gx', 'qb1'), ('Gy', 'qb0')])
         self.assertAlmostEqual(sum(mdl_local.probabilities(test_circuit).values()), 1.0)
         self.assertAlmostEqual(mdl_local.probabilities(test_circuit)['00'], 0.414025)
-        self.assertEqual(mdl_local.num_params, 144)
+        self.assertEqual(mdl_local.num_params, 96)  # was 144 when used old H+S+A param mode (now removed)
 
         op = mdl_local.circuit_layer_operator(Label('Gx', 'qb1'))
         ref_op = ComposedOp([

@@ -795,8 +795,9 @@ class DepolarizationNoise(OpNoise):
         basis = _BuiltinBasis('pp', basis_size)
         rate_per_pauli = self.depolarization_rate / (basis_size - 1)
         errdict = {('S', bl): rate_per_pauli for bl in basis.labels[1:]}
-        return _op.LindbladErrorgen(errdict, "D", basis, mx_basis='pp',
-                                    truncate=False, evotype=evotype, state_space=state_space)
+        return _op.LindbladErrorgen.from_elementary_errorgens(
+            errdict, "D", basis, mx_basis='pp',
+            truncate=False, evotype=evotype, state_space=state_space)
 
     def create_errormap(self, evotype, state_space):
         """
@@ -885,8 +886,9 @@ class StochasticNoise(OpNoise):
         basis_size = state_space.dim  # e.g. 4 for a single qubit
         basis = _BuiltinBasis('pp', basis_size)
         errdict = {('S', bl): rate for bl, rate in zip(basis.labels[1:], sto_rates)}
-        return _op.LindbladErrorgen(errdict, "S", basis, mx_basis='pp',
-                                    truncate=False, evotype=evotype, state_space=state_space)
+        return _op.LindbladErrorgen.from_elementary_errorgens(
+            errdict, "S", basis, mx_basis='pp',
+            truncate=False, evotype=evotype, state_space=state_space)
 
     def create_errormap(self, evotype, state_space):
         """
@@ -1031,8 +1033,9 @@ class LindbladNoise(OpNoise):
         # Build LindbladErrorgen directly to have control over which parameters are set (leads to lower param counts)
         basis_size = state_space.dim  # e.g. 4 for a single qubit
         basis = _BuiltinBasis('pp', basis_size)
-        return _op.LindbladErrorgen(self.error_coeffs, self.parameterization, basis, mx_basis='pp',
-                                    truncate=False, evotype=evotype, state_space=state_space)
+        return _op.LindbladErrorgen.from_elementary_errorgens(
+            self.error_coeffs, self.parameterization, basis, mx_basis='pp',
+            truncate=False, evotype=evotype, state_space=state_space)
 
     def create_errormap(self, evotype, state_space):
         """

@@ -173,15 +173,15 @@ class ErrorGenTester(BaseCase):
         basisNames = ['std', 'gm', 'pp']  # , 'qt'] #dim must == 3 for qt
 
         for projectionType in projectionTypes:
-            ot.std_scale_factor(4, projectionType)
+            #REMOVE ot.std_scale_factor(4, projectionType)
             for basisName in basisNames:
-                ot.std_error_generators(4, projectionType, basisName)
+                #REMOVE ot.std_error_generators(4, projectionType, basisName)
+                ot.elementary_errorgens_dual(4, projectionType, basisName)
 
     def test_std_errgens_raise_on_bad_projection_type(self):
         with self.assertRaises(ValueError):
-            ot.std_scale_factor(4, "foobar")
-        with self.assertRaises(ValueError):
-            ot.std_error_generators(4, "foobar", 'gm')
+            #REMOVE ot.std_error_generators(4, "foobar", 'gm')
+            ot.elementary_errorgens_dual(4, "foobar", 'gm')
 
     def test_lind_errgens(self):
         basis = Basis.cast('gm', 4)

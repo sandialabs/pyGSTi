@@ -674,12 +674,16 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             errgen_cls = self.errorgen.__class__
             #Note: this only really works for LindbladErrorGen objects now... make more general in FUTURE?
             truncate = SPAM_TRANSFORM_TRUNCATE  # can't just be 'True' since we need to throw errors when appropriate
-            param = _LindbladParameterization(self.errorgen.parameterization.nonham_mode,
-                                              self.errorgen.parameterization.param_mode,
-                                              len(self.errorgen.ham_basis) > 0, len(self.errorgen.other_basis) > 0)
-            transformed_errgen = errgen_cls.from_operation_matrix(mx, param, self.errorgen.lindblad_basis,
-                                                                  self.errorgen.matrix_basis, truncate,
-                                                                  self.errorgen.evotype)
+            #REMOVE param = _LindbladParameterization(self.errorgen.parameterization.nonham_mode,
+            #REMOVE                                   self.errorgen.parameterization.param_mode,
+            #REMOVE                                   len(self.errorgen.ham_basis) > 0, len(self.errorgen.other_basis) > 0)
+            #REMOVE transformed_errgen = errgen_cls.from_operation_matrix(mx, param, self.errorgen.lindblad_basis,
+            #REMOVE                                                       self.errorgen.matrix_basis, truncate,
+            #REMOVE                                                       self.errorgen.evotype)
+            transformed_errgen = errgen_cls.from_operation_matrix_and_blocks(
+                mx, self.errorgen.coefficient_blocks, 'auto', self.errorgen.matrix_basis,
+                truncate, self.errorgen.evotype, self.errorgen.state_space)
+
             self.errorgen.from_vector(transformed_errgen.to_vector())
 
         self._update_rep()  # needed to rebuild exponentiated error gen
