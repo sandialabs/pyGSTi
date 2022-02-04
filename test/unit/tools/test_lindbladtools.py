@@ -2,6 +2,7 @@ import numpy as np
 import scipy.sparse as sps
 
 from pygsti.tools import lindbladtools as lt
+from pygsti.baseobjs import Basis
 from ..util import BaseCase
 
 
@@ -51,3 +52,39 @@ class LindbladToolsTester(BaseCase):
         spL = lt.create_lindbladian_term_errorgen('O', sparsea, sparseb, sparse=True)
         self.assertArraysAlmostEqual(spL.toarray(),
                                      expected)
+
+    def test_elementary_errorgen_bases(self):
+
+        bases = [Basis.cast('gm', 4),
+                 Basis.cast('pp', 4),
+                 Basis.cast('PP', 4)]
+
+        for basis in bases:
+            print(basis)
+
+            primals = []; duals = []; lbls = []
+            for lbl, bel in zip(basis.labels[1:], basis.elements[1:]):
+                lbls.append("H_%s" % lbl)
+                primals.append(lt.create_elementary_errorgen('H', bel)) 
+                duals.append(lt.create_elementary_errorgen_dual('H', bel)) 
+            for lbl, bel in zip(basis.labels[1:], basis.elements[1:]):
+                lbls.append("S_%s" % lbl)
+                primals.append(lt.create_elementary_errorgen('S', bel))
+                duals.append(lt.create_elementary_errorgen_dual('S', bel)) 
+            for i, (lbl, bel) in enumerate(zip(basis.labels[1:], basis.elements[1:])):
+                for lbl2, bel2 in zip(basis.labels[1+i+1:], basis.elements[1+i+1:]):
+                    lbls.append("C_%s_%s" % (lbl, lbl2))
+                    primals.append(lt.create_elementary_errorgen('C', bel, bel2))
+                    duals.append(lt.create_elementary_errorgen_dual('C', bel, bel2)) 
+            for i, (lbl, bel) in enumerate(zip(basis.labels[1:], basis.elements[1:])):
+                for lbl2, bel2 in zip(basis.labels[1+i+1:], basis.elements[1+i+1:]):
+                    lbls.append("A_%s_%s" % (lbl, lbl2))
+                    primals.append(lt.create_elementary_errorgen('A', bel, bel2))
+                    duals.append(lt.create_elementary_errorgen_dual('A', bel, bel2)) 
+
+            dot_mx = np.empty((len(duals), len(primals)), complex)
+            for i, dual in enumerate(duals):
+                for j, primal in enumerate(primals):
+                    dot_mx[i,j] = np.vdot(dual.flatten(), primal.flatten())
+
+            self.assertTrue(np.allclose(dot_mx, np.identity(len(lbls), 'd')))
