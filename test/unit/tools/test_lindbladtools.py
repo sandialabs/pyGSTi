@@ -17,38 +17,37 @@ class LindbladToolsTester(BaseCase):
                                      expectedLindbladian)
         sparse = sps.csr_matrix(np.zeros(shape=(2, 2)))
         #spL = lt.hamiltonian_to_lindbladian(sparse, True)
-        spL = lt.create_elementary_errorgen('H', sparse, True)
+        spL = lt.create_elementary_errorgen('H', sparse, sparse=True)
         self.assertArraysAlmostEqual(spL.toarray(),
                                      expectedLindbladian)
 
     def test_stochastic_lindbladian(self):
-        a = np.array([[1, 2], [3, 4]])
-        expected = 2.0 * np.array([
+        a = np.array([[1, 2], [3, 4]], 'd')
+        expected = np.array([
             [ 1,  2,  2,  4],
             [ 3,  4,  6,  8],
             [ 3,  6,  4,  8],
             [ 9, 12, 12, 16]
-        ])
+        ], 'd')
+        dual_eg, norm = lt.create_elementary_errorgen_dual('S', a, normalization_factor='auto_return')
         self.assertArraysAlmostEqual(
-            lt.create_elementary_errorgen('S', a),
-            expected)
+            dual_eg * norm, expected)
         sparse = sps.csr_matrix(a)
-        spL = lt.create_elementary_errorgen('S', sparse, True)
-        self.assertArraysAlmostEqual(spL.toarray(),
-                                     expected)
+        spL = lt.create_elementary_errorgen_dual('S', sparse, sparse=True)
+        self.assertArraysAlmostEqual(spL.toarray() * norm, expected)
 
     def test_nonham_lindbladian(self):
-        a = np.array([[1, 2], [3, 4]])
-        b = np.array([[1, 2], [3, 4]])
-        expected = 2.0 * np.array([
+        a = np.array([[1, 2], [3, 4]], 'd')
+        b = np.array([[1, 2], [3, 4]], 'd')
+        expected = np.array([
             [ -9,  -5,  -5,  4],
             [ -4, -11,   6,  1],
             [ -4,   6, -11,  1],
             [  9,   5,   5, -4]
-        ])
+        ], 'd')
         self.assertArraysAlmostEqual(lt.create_lindbladian_term_errorgen('O', a, b), expected)
         sparsea = sps.csr_matrix(a)
         sparseb = sps.csr_matrix(b)
-        spL = lt.create_lindbladian_term_errorgen('O', sparsea, sparseb, True)
+        spL = lt.create_lindbladian_term_errorgen('O', sparsea, sparseb, sparse=True)
         self.assertArraysAlmostEqual(spL.toarray(),
                                      expected)

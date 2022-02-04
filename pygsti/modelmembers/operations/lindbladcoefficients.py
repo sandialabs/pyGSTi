@@ -412,7 +412,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         else:  # flat == False and block type is 'other', so need to reshape:
             superops = [[cached_superops[i * nMxs + j] for j in range(nMxs)] for i in range(nMxs)] \
                 if sparse else cached_superops.copy().reshape((nMxs, nMxs, d2, d2))
-            return superops, cached_superops_1norms.copy().reshape((nMxs, nMxs)) \
+            return (superops, cached_superops_1norms.copy().reshape((nMxs, nMxs))) \
                 if include_1norms else superops
 
     def create_lindblad_term_objects(self, parameter_index_offset, max_polynomial_vars, evotype, state_space):
@@ -597,8 +597,12 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 for j, lbl2 in enumerate(self._bel_labels[i + 1:], start=i + 1):
                     ij = i * stride + j
                     ji = j * stride + i
-                    elem_errgen_indices[_LEEL('C', (lbl1, lbl2))] = [(1.0, ij), (1.0, ji)]  # C_PQ = NH_PQ + NH_QP
-                    elem_errgen_indices[_LEEL('A', (lbl1, lbl2))] = [(1.0j, ij), (-1.0j, ji)]  # A_PQ = i(NH_PQ - NH_QP)
+
+                    #Contributions from C_PQ and A_PQ coeffs NH_PQ and NH_QP coeffs:
+                    # NH_PQ = (C_PQ + i A_PQ)/2
+                    # NH_QP = (C_PQ - i A_PQ)/2
+                    elem_errgen_indices[_LEEL('C', (lbl1, lbl2))] = [(0.5, ij), (0.5, ji)]  # C_PQ contributions
+                    elem_errgen_indices[_LEEL('A', (lbl1, lbl2))] = [(0.5j, ij), (-0.5j, ji)]  # A_PQ contributions
         else:
             raise ValueError("Internal error: invalid block type!")
 
@@ -634,10 +638,14 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 for j, lbl2 in enumerate(self._bel_labels[i + 1:], start=i + 1):
                     ij = i * stride + j
                     ji = j * stride + i
+
+                    #Contributions from NH_PQ and NH_QP coeffs to C_PQ and A_PQ coeffs:
+                    # C_PQ = NH_PQ + NH_QP
+                    # A_PQ = i(NH_QP - NH_PQ)
                     block_data_indices[ij] = [(1.0, _LEEL('C', (lbl1, lbl2))), (-1.0j, _LEEL('A', (lbl1, lbl2)))]
-                    # NH_PQ = C_PQ - i A_PQ
+                    # NH_PQ = (C_PQ + i A_PQ)/2, but here we care that NH_PQ appears w/1.0 in C_PQ and -1j in A_QP
                     block_data_indices[ji] = [(1.0, _LEEL('C', (lbl1, lbl2))), (+1.0j, _LEEL('A', (lbl1, lbl2)))]
-                    # NH_QP = C_PQ + i A_PQ
+                    # NH_QP = (C_PQ - i A_PQ)/2, but here we care that NH_QP appears w/1.0 in C_PQ and +1j in A_QP
         else:
             raise ValueError("Internal error: invalid block type!")
 

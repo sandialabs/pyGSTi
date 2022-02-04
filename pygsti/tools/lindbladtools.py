@@ -50,8 +50,8 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
 
     Hamiltonian:  `L(rho) = -1j/(2d^2) * [ p, rho ]`
     Stochastic:   `L(rho) = 1/(d^2) p * rho * p
-    Correlation:  `L(rho) = 1/(2d^2) ( p * rho * q + q * rho * p - 0.5 {{p,q}, rho} )
-    Active:       `L(rho) = 1j/(2d^2) ( p * rho * q - q * rho * p + 0.5 {{p,q}, rho} )
+    Correlation:  `L(rho) = 1/(2d^2) ( p * rho * q + q * rho * p)
+    Active:       `L(rho) = 1j/(2d^2) ( p * rho * q - q * rho * p)
 
     where `d` is the dimension of the Hilbert space, e.g. 2 for a single qubit.  Square
     brackets denotes the commutator and curly brackets the anticommutator.
@@ -76,6 +76,8 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
     ndarray or Scipy CSR matrix
     """
     d = p.shape[0]; d2 = d**2
+    pdag = p.T.conjugate()
+    qdag = q.T.conjugate() if (q is not None) else None
 
     if sparse:
         elem_errgen = _sps.lil_matrix((d2, d2), dtype=p.dtype)
@@ -92,14 +94,15 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
         if typ == 'H':
             rho1 = -1j * (p @ rho0 - rho0 @ p)  # -1j / (2 * d2) *
         elif typ == 'S':
-            rho1 = (p @ rho0 @ p)  # 1 / d2 *
+            rho1 = (p @ rho0 @ pdag)  # 1 / d2 *
         elif typ == 'C':
-            rho1 = (p @ rho0 @ q + q @ rho0 @ p)  # 1 / (2 * d2) *
+            rho1 = (p @ rho0 @ qdag + q @ rho0 @ pdag)  # 1 / (2 * d2) *
         elif typ == 'A':
-            rho1 = 1j * (p @ rho0 @ q - q @ rho0 @ p)  # 1j / (2 * d2)
-        elem_errgen[:, i] = rho1.flatten()
+            rho1 = 1j * (p @ rho0 @ qdag - q @ rho0 @ pdag)  # 1j / (2 * d2)
+        elem_errgen[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
 
-    if normalization_factor == 'auto':
+    return_normalization = bool(normalization_factor == 'auto_return')
+    if normalization_factor in ('auto', 'auto_return'):
         primal = create_elementary_errorgen(typ, p, q, sparse)
         if sparse:
             normalization_factor = _np.vdot(elem_errgen.toarray().flatten(), primal.toarray().flatten())
@@ -108,7 +111,7 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
     elem_errgen *= _np.asscalar(_np.real_if_close(1 / normalization_factor))
 
     if sparse: elem_errgen = elem_errgen.tocsr()
-    return elem_errgen
+    return (elem_errgen, normalization_factor) if return_normalization else elem_errgen
 
 
 def create_elementary_errorgen(typ, p, q=None, sparse=False):
@@ -123,7 +126,7 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
     Hamiltonian:  `L(rho) = -1j * [ p, rho ]`
     Stochastic:   `L(rho) = p * rho * p - rho
     Correlation:  `L(rho) = p * rho * q + q * rho * p - 0.5 {{p,q}, rho}
-    Active:       `L(rho) = 1j( p * rho * q - q * rho * p + 0.5 {{p,q}, rho} )
+    Active:       `L(rho) = 1j( p * rho * q - q * rho * p + 0.5 {[p,q], rho} )
 
     Square brackets denotes the commutator and curly brackets the anticommutator.
     `L` is returned as a superoperator matrix that acts on vectorized density matrices.
@@ -156,8 +159,12 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
     assert((typ in 'HS' and q is None) or (typ in 'CA' and q is not None)), \
         "Wrong number of basis elements provided for %s-type elementary errorgen!" % typ    
 
+    pdag = p.T.conjugate()
+    qdag = q.T.conjugate() if (q is not None) else None
+
     if typ in 'CA':
-        pq_plus_qp = p @ q + q @ p
+        pq_plus_qp = pdag @ q + qdag @ p
+        pq_minus_qp = pdag @ q - qdag @ p
 
     # Loop through the standard basis as all possible input density matrices
     for i, rho0 in enumerate(basis_matrices('std', d2)):  # rho0 == input density mx
@@ -165,11 +172,12 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
         if typ == 'H':
             rho1 = -1j * (p @ rho0 - rho0 @ p)
         elif typ == 'S':
-            rho1 = p @ rho0 @ p - rho0  # Note: rho0 == I @ rho0 @ I
+            pdag_p = (pdag @ p)
+            rho1 = p @ rho0 @ pdag - 0.5 * (pdag_p @ rho0 + rho0 @ pdag_p)
         elif typ == 'C':
-            rho1 = p @ rho0 @ q + q @ rho0 @ p - 0.5 * (pq_plus_qp @ rho0 + rho0 @ pq_plus_qp)
+            rho1 = p @ rho0 @ qdag + q @ rho0 @ pdag - 0.5 * (pq_plus_qp @ rho0 + rho0 @ pq_plus_qp)
         elif typ == 'A':
-            rho1 = 1j * (p @ rho0 @ q - q @ rho0 @ p + 0.5 * (pq_plus_qp @ rho0 + rho0 @ pq_plus_qp))
+            rho1 = 1j * (p @ rho0 @ qdag - q @ rho0 @ pdag + 0.5 * (pq_minus_qp @ rho0 + rho0 @ pq_minus_qp))
 
         elem_errgen[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
 

@@ -894,7 +894,9 @@ class LindbladErrorgen(_LinearOperator):
         for blk in self.coefficient_blocks:
             self.paramvals[off:off + blk.num_params] = blk.to_vector()
             off += blk.num_params
+
         self._update_rep()
+        #assert(_np.allclose(errgen, self.to_dense()))  # DEBUG
 
     def _update_rep(self):
         """
@@ -1573,6 +1575,7 @@ class LindbladErrorgen(_LinearOperator):
             trunc = 1e-6 if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) else False
             self._set_params_from_matrix(err_gen_mx, truncate=trunc)
             self.dirty = True
+
             #Note: truncate=True above for unitary transformations because
             # while this trunctation should never be necessary (unitaries map CPTP -> CPTP)
             # sometimes a unitary transform can modify eigenvalues to be negative beyond

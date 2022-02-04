@@ -1475,19 +1475,20 @@ def elementary_errorgens_dual(dim, typ, basis):
     basis = _Basis.cast(basis, d2)
     basis_lbls = basis.labels[1:]  # skip identity
     basis_mxs = basis.elements[1:]  # skip identity
-    assert(_np.allclose(basis.elements[0], _np.identity(d))), "First element of basis must be the identity!"
+    assert(_np.allclose(basis.elements[0], _np.identity(d) * (_np.linalg.norm(basis.elements[0]) / _np.sqrt(d)))), \
+        "First element of basis must be the identity!"
     assert(len(basis_mxs) < d2)  # OK if there are fewer basis matrices (e.g. for bases w/multiple blocks)
 
     elem_errgens = {}
     if typ in 'HS':
         for lbl, mx in zip(basis_lbls, basis_mxs):
             key = _LocalElementaryErrorgenLabel(typ, (lbl,))
-            elem_errgens[key] = _lt.create_elementary_errogen_dual(typ, mx)
+            elem_errgens[key] = _lt.create_elementary_errorgen_dual(typ, mx)
     else:  # typ in 'CA'
         for i, (lblA, mxA) in enumerate(zip(basis_lbls, basis_mxs)):
             for lblB, mxB in zip(basis_lbls[i + 1:], basis_mxs[i + 1:]):
                 key = _LocalElementaryErrorgenLabel(typ, (lblA, lblB))
-                elem_errgens[key] = _lt.create_elementary_errogen_dual(typ, mxA, mxB)
+                elem_errgens[key] = _lt.create_elementary_errorgen_dual(typ, mxA, mxB)
 
     return elem_errgens
 
@@ -1688,7 +1689,7 @@ def create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, norma
         C = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[1]])
         ret = _lt.create_elementary_errorgen(typ, B, C, sparse=sparse)  # in std basis
     else:
-        raise ValueError("Invalid elementary error generator type: %s" % str(errorgen_type))
+        raise ValueError("Invalid elementary error generator type: %s" % str(typ))
 
     if normalize:
         normfn = _spsl.norm if sparse else _np.linalg.norm
@@ -3268,17 +3269,20 @@ def project_model(model, target_model,
         Useful for computing the expected log-likelihood or chi2.
     """
 
+    from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock
     opLabels = list(model.operations.keys())  # operation labels
     basis = model.basis
+    proj_basis = basis  # just use the same basis here (could make an arg later?)
 
-    #The projection basis needs to be a basis for density matrices
-    # (i.e. 2x2 mxs in 1Q case) rather than superoperators (4x4 mxs
-    # in 1Q case) - whcih is what model.basis is.  So, we just extract
-    # a builtin basis name for the projection basis.
-    if basis.name in ('pp', 'gm', 'std', 'qt'):
-        proj_basis_name = basis.name
-    else:
-        proj_basis_name = 'pp'  # model.basis is weird so just use paulis as projection basis
+    #OLD REMOVE
+    ##The projection basis needs to be a basis for density matrices
+    ## (i.e. 2x2 mxs in 1Q case) rather than superoperators (4x4 mxs
+    ## in 1Q case) - whcih is what model.basis is.  So, we just extract
+    ## a builtin basis name for the projection basis.
+    #if basis.name in ('pp', 'gm', 'std', 'qt'):
+    #    proj_basis_name = basis.name
+    #else:
+    #    proj_basis_name = 'pp'  # model.basis is weird so just use paulis as projection basis
 
     if basis.name != target_model.basis.name:
         raise ValueError("Basis mismatch between model (%s) and target (%s)!"
@@ -3299,67 +3303,68 @@ def project_model(model, target_model,
 
     for gl, errgen in zip(opLabels, errgens):
         if ('H' in projectiontypes) or ('H+S' in projectiontypes):
-            hamProj, hamGens = std_errorgen_projections(
-                errgen, "hamiltonian", proj_basis_name, basis, True)
-            #ham_error_gen = _np.einsum('i,ijk', hamProj, hamGens)
-            ham_error_gen = _np.tensordot(hamProj, hamGens, (0, 0))
-            ham_error_gen = _bt.change_basis(ham_error_gen, "std", basis)
+            hamBlk = LindbladCoefficientBlock('ham', proj_basis)
+            hamBlk.set_from_errorgen_projections(errgen, errorgen_basis=basis)
+            hamGens = hamBlk.create_lindblad_term_superoperators(mx_basis=basis)
+            ham_error_gen = _np.tensordot(hamBlk.block_data, hamGens, (0, 0))
 
         if ('S' in projectiontypes) or ('H+S' in projectiontypes):
-            stoProj, stoGens = std_errorgen_projections(
-                errgen, "stochastic", proj_basis_name, basis, True)
-            #sto_error_gen = _np.einsum('i,ijk', stoProj, stoGens)
-            sto_error_gen = _np.tensordot(stoProj, stoGens, (0, 0))
-            sto_error_gen = _bt.change_basis(sto_error_gen, "std", basis)
+            stoBlk = LindbladCoefficientBlock('other_diagonal', proj_basis)
+            stoBlk.set_from_errorgen_projections(errgen, errorgen_basis=basis)
+            stoGens = stoBlk.create_lindblad_term_superoperators(mx_basis=basis)
+            sto_error_gen = _np.tensordot(stoBlk.block_data, stoGens, (0, 0))
 
         if ('LND' in projectiontypes) or ('LNDF' in projectiontypes):
-            HProj, OProj, HGens, OGens = \
-                lindblad_errorgen_projections(
-                    errgen, proj_basis_name, proj_basis_name, basis, normalize=False,
-                    return_generators=True)
+            HBlk = LindbladCoefficientBlock('ham', proj_basis)
+            otherBlk = LindbladCoefficientBlock('other', proj_basis)
+            HBlk.set_from_errorgen_projections(errgen, errorgen_basis=basis)
+            otherBlk.set_from_errorgen_projections(errgen, errorgen_basis=basis)
+
+            HGens = HBlk.create_lindblad_term_superoperators(mx_basis=basis)
+            otherGens = otherBlk.create_lindblad_term_superoperators(mx_basis=basis)
+
             #Note: return values *can* be None if an empty/None basis is given
             #lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
             #                _np.einsum('ij,ijkl', OProj, OGens)
-            lnd_error_gen = _np.tensordot(HProj, HGens, (0, 0)) + \
-                _np.tensordot(OProj, OGens, ((0, 1), (0, 1)))
-            lnd_error_gen = _bt.change_basis(lnd_error_gen, "std", basis)
+            lnd_error_gen = _np.tensordot(HBlk.block_data, HGens, (0, 0)) + \
+                _np.tensordot(otherBlk.block_data, otherGens, ((0, 1), (0, 1)))
 
         targetOp = target_model.operations[gl]
 
         if 'H' in projectiontypes:
             gsDict['H'].operations[gl] = operation_from_error_generator(
                 ham_error_gen, targetOp, basis, gen_type)
-            NpDict['H'] += len(hamProj)
+            NpDict['H'] += len(hamBlk.block_data)
 
         if 'S' in projectiontypes:
             gsDict['S'].operations[gl] = operation_from_error_generator(
                 sto_error_gen, targetOp, basis, gen_type)
-            NpDict['S'] += len(stoProj)
+            NpDict['S'] += len(stoBlk.block_data)
 
         if 'H+S' in projectiontypes:
             gsDict['H+S'].operations[gl] = operation_from_error_generator(
                 ham_error_gen + sto_error_gen, targetOp, basis, gen_type)
-            NpDict['H+S'] += len(hamProj) + len(stoProj)
+            NpDict['H+S'] += len(hamBlk.block_data) + len(stoBlk.block_data)
 
         if 'LNDF' in projectiontypes:
             gsDict['LNDF'].operations[gl] = operation_from_error_generator(
                 lnd_error_gen, targetOp, basis, gen_type)
-            NpDict['LNDF'] += HProj.size + OProj.size
+            NpDict['LNDF'] += HBlk.block_data.size + otherBlk.block_data.size
 
         if 'LND' in projectiontypes:
-            evals, U = _np.linalg.eig(OProj)
+            evals, U = _np.linalg.eig(otherBlk.block_data)
             pos_evals = evals.clip(0, 1e100)  # clip negative eigenvalues to 0
             OProj_cp = _np.dot(U, _np.dot(_np.diag(pos_evals), _np.linalg.inv(U)))
             #OProj_cp is now a pos-def matrix
             #lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
             #                   _np.einsum('ij,ijkl', OProj_cp, OGens)
-            lnd_error_gen_cp = _np.tensordot(HProj, HGens, (0, 0)) + \
-                _np.tensordot(OProj_cp, OGens, ((0, 1), (0, 1)))
-            lnd_error_gen_cp = _bt.change_basis(lnd_error_gen_cp, "std", basis)
+            lnd_error_gen_cp = _np.tensordot(HBlk.block_data, HGens, (0, 0)) + \
+                _np.tensordot(OProj_cp, otherGens, ((0, 1), (0, 1)))
+            #lnd_error_gen_cp = _bt.change_basis(lnd_error_gen_cp, "std", basis)
 
             gsDict['LND'].operations[gl] = operation_from_error_generator(
                 lnd_error_gen_cp, targetOp, basis, gen_type)
-            NpDict['LND'] += HProj.size + OProj.size
+            NpDict['LND'] += HBlk.block_data.size + otherBlk.block_data.size
 
         #Removed attempt to contract H+S to CPTP by removing positive stochastic projections,
         # but this doesn't always return the gate to being CPTP (maybe b/c of normalization)...
