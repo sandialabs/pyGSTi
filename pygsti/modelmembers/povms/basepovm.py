@@ -27,7 +27,7 @@ from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 class _BasePOVM(_POVM):
     """ The base behavior for both UnconstrainedPOVM and TPPOVM """
 
-    def __init__(self, effects, evotype=None, state_space=None, preserve_sum=False):
+    def __init__(self, effects, evotype=None, state_space=None, preserve_sum=False, called_from_reduce=False):
         """
         Creates a new BasePOVM object.
 
@@ -107,7 +107,7 @@ class _BasePOVM(_POVM):
             items.append((self.complement_label, complement_effect))
 
         super(_BasePOVM, self).__init__(state_space, evotype, items)
-        self.init_gpindices()  # initialize our gpindices based on sub-members
+        if not called_from_reduce: self.init_gpindices()  # initialize our gpindices based on sub-members
         self._paramlbls = _np.array(paramlbls, dtype=object)
 
     def submembers(self):

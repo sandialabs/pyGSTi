@@ -1601,7 +1601,7 @@ def random_phase_vector(s, n, rand_state=None):
     allowed_values = _np.reshape(all_values[possible], (2 * n, 2))
 
     # Sample a uniformly random valid phase vector.
-    index = rand_state.randint(2, size=2 * n)
+    index = rand_state.randint(2, size=2 * n, dtype=_np.int64)
     for i in range(0, 2 * n):
         p[i] = allowed_values[i, index[i]]
 
@@ -2142,7 +2142,7 @@ def random_symplectic_index(n, rand_state=None):
         return zeros_str
 
     if cardinality <= max_integer:
-        index = rand_state.randint(cardinality)
+        index = rand_state.randint(cardinality, dtype=_np.int64)
 
     else:
         digits1 = len(str(cardinality))
