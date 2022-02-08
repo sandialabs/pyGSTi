@@ -358,16 +358,6 @@ class LindbladErrorgen(_LinearOperator):
                 blk.set_from_errorgen_projections(errgen, matrix_basis, truncate=truncate)
             blocks.append(blk)
 
-        #REMOVE (OLD)
-        #hamC, otherC = \
-        #    _ot.lindblad_errorgen_projections(
-        #        errgen, ham_basis, nonham_basis, matrix_basis, normalize=False,
-        #        return_generators=False, other_mode=parameterization.nonham_mode, sparse=sparse)
-        ## coeffs + bases => Ltermdict, basis
-        #Ltermdict, basis = _ot.projections_to_lindblad_terms(
-        #    hamC, otherC, ham_basis, nonham_basis, parameterization.nonham_mode)
-        #return cls(Ltermdict, parameterization, basis, matrix_basis, truncate, evotype, state_space)
-
         return cls(blocks, "auto", mx_basis, evotype, state_space)
 
     @classmethod
@@ -419,9 +409,6 @@ class LindbladErrorgen(_LinearOperator):
 
     def __init__(self, lindblad_coefficient_blocks, lindblad_basis='auto', mx_basis='pp',
                  evotype="default", state_space=None):
-    #OLD REMOVE def __init__(self, lindblad_term_dict, parameterization='auto', lindblad_basis='pp',
-    #OLD REMOVE              mx_basis="pp", truncate=True, evotype="default", state_space=None):
-
         state_space = _statespace.StateSpace.cast(state_space)
 
         #Decide on our rep-type ahead of time so we know whether to make bases sparse
@@ -486,19 +473,14 @@ class LindbladErrorgen(_LinearOperator):
         self._CSRSumIndices = self._CSRSumData = self._CSRSumPtr = None
 
         # Generator matrices & cache qtys: N/A for term-based evotypes
-        #REMOVE (always set below) self.hamGens = self.otherGens = None
-        #REMOVE (always set below) self.hamGens_1norms = self.otherGens_1norms = None
         #TODO - maybe move some/all of these to the coefficient block class:
         self._onenorm_upbound = None
-        #REMOVE self.Lmx = None
         self._coefficient_weights = None
 
         #All representations need to track 1norms:
         self.lindblad_term_superops_and_1norms = [
             blk.create_lindblad_term_superoperators(self.matrix_basis, sparse_bases, include_1norms=True, flat=True)
             for blk in lindblad_coefficient_blocks]
-
-        #REMOVE self.hamGens, self.otherGens, self.hamGens_1norms, self.otherGens_1norms = self._init_generators(dim)
 
         #Create a representation of the type chosen above:
         if self._rep_type == 'lindblad errorgen':
@@ -700,185 +682,6 @@ class LindbladErrorgen(_LinearOperator):
         #        assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
         return Lterms, coeffs_as_compact_polys
 
-
-        #OLD REMOVE
-        ## needed b/c operators produced by lindblad_error_generators have an extra 'd' scaling
-        #d = int(round(_np.sqrt(dim)))
-        #mpv = max_polynomial_vars
-        #
-        ## Lookup dictionaries for getting the *parameter* index associated
-        ## with a particlar basis label.  The -1 to compensates for the fact
-        ## that the identity element is the first element of each non-empty basis
-        ## and this does not have a correponding parameter/projection.
-        #hamBasisIndices = {lbl: i - 1 for i, lbl in enumerate(self.ham_basis.labels)}
-        #otherBasisIndices = {lbl: i - 1 for i, lbl in enumerate(self.other_basis.labels)}
-        #
-        ## as we expect `basis` will contain *dense* basis
-        ## matrices (maybe change in FUTURE?)
-        #numHamParams = max(len(hamBasisIndices) - 1, 0)  # compensate for first basis el,
-        #numOtherBasisEls = max(len(otherBasisIndices) - 1, 0)  # being the identity. (if there are any els at all)
-        #
-        ## Create Lindbladian terms - rank1 terms in the *exponent* with polynomial
-        ## coeffs (w/ *local* variable indices) that get converted to per-order
-        ## terms later.
-        #IDENT = None  # sentinel for the do-nothing identity op
-        #Lterms = []
-        #for termLbl in lindblad_term_dict:  # assumed to contain *local* elem errgen labels as keys
-        #    termType = termLbl.errorgen_type
-        #    bels = termLbl.basis_element_labels
-        #    if termType == "H":  # Hamiltonian
-        #        k = hamBasisIndices[bels[0]]  # index of parameter
-        #        # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
-        #        scale, U = _mt.to_unitary(basis[bels[0]])
-        #        scale *= _np.sqrt(d) / 2  # mimics rho1's _np.sqrt(d) / 2 scaling in `hamiltonian_to_lindbladian`
-        #        Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-        #            _Polynomial({(k,): -1j * scale}, mpv), U, IDENT, self._evotype, self.state_space))
-        #        Lterms.append(_term.RankOnePolynomialOpTerm.create_from(_Polynomial({(k,): +1j * scale}, mpv),
-        #                                                                IDENT, U.conjugate().T, self._evotype,
-        #                                                                self.state_space))
-        #
-        #    elif termType == "S":  # Stochastic
-        #        if self.parameterization.nonham_mode in ("diagonal", "diag_affine"):
-        #            if self.parameterization.param_mode in ("depol", "reldepol"):
-        #                # => same single param for all stochastic terms
-        #                k = numHamParams + 0  # index of parameter
-        #            else:
-        #                k = numHamParams + otherBasisIndices[bels[0]]  # index of parameter
-        #            scale, U = _mt.to_unitary(basis[bels[0]])  # ensure all Rank1Term operators are *unitary*
-        #            scale *= _np.sqrt(d)  # mimics "rho1 *= d" scaling in `nonham_lindbladian`
-        #            Lm = Ln = U
-        #            # power to raise parameter to in order to get coeff
-        #            pw = 2 if self.parameterization.param_mode in ("cptp", "depol") else 1
-        #
-        #            Lm_dag = Lm.conjugate().T
-        #            # assumes basis is dense (TODO: make sure works for sparse case too - and np.dots below!)
-        #            Ln_dag = Ln.conjugate().T
-        #            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-        #                _Polynomial({(k,) * pw: 1.0 * scale**2}, mpv), Ln, Lm_dag, self._evotype, self.state_space
-        #            ))
-        #            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-        #                _Polynomial({(k,) * pw: -0.5 * scale**2}, mpv), IDENT, _np.dot(Ln_dag, Lm),
-        #                self._evotype, self.state_space
-        #            ))
-        #            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-        #                _Polynomial({(k,) * pw: -0.5 * scale**2}, mpv), _np.dot(Lm_dag, Ln), IDENT,
-        #                self._evotype, self.state_space
-        #            ))
-        #
-        #        else:
-        #            i = otherBasisIndices[bels[0]]  # index of row in "other" coefficient matrix
-        #            j = otherBasisIndices[bels[1]]  # index of col in "other" coefficient matrix
-        #            scalem, Um = _mt.to_unitary(basis[bels[0]])  # ensure all Rank1Term operators are *unitary*
-        #            scalen, Un = _mt.to_unitary(basis[bels[1]])  # ensure all Rank1Term operators are *unitary*
-        #            Lm, Ln = Um, Un
-        #            scale = scalem * scalen
-        #            scale *= d  # mimics "rho1 *= d" scaling in `nonham_lindbladian`
-        #
-        #            # TODO: create these polys and place below...
-        #            polyTerms = {}
-        #            assert(self.parameterization.param_mode != "depol"), \
-        #                "`depol` mode not supported when nonham_mode=='all'"
-        #            assert(self.parameterization.param_mode != "reldepol"), \
-        #                "`reldepol` mode not supported when nonham_mode=='all'"
-        #            if self.parameterization.param_mode == "cptp":
-        #                # otherCoeffs = _np.dot(self.Lmx,self.Lmx.T.conjugate())
-        #                # coeff_ij = sum_k Lik * Ladj_kj = sum_k Lik * conjugate(L_jk)
-        #                #          = sum_k (Re(Lik) + 1j*Im(Lik)) * (Re(L_jk) - 1j*Im(Ljk))
-        #                def i_re(a, b): return numHamParams + (a * numOtherBasisEls + b)
-        #                def i_im(a, b): return numHamParams + (b * numOtherBasisEls + a)
-        #                for k in range(0, min(i, j) + 1):
-        #                    if k <= i and k <= j:
-        #                        polyTerms[(i_re(i, k), i_re(j, k))] = 1.0
-        #                    if k <= i and k < j:
-        #                        polyTerms[(i_re(i, k), i_im(j, k))] = -1.0j
-        #                    if k < i and k <= j:
-        #                        polyTerms[(i_im(i, k), i_re(j, k))] = 1.0j
-        #                    if k < i and k < j:
-        #                        polyTerms[(i_im(i, k), i_im(j, k))] = 1.0
-        #            else:  # param_mode == "unconstrained"
-        #                # coeff_ij = otherParam[i,j] + 1j*otherParam[j,i] (otherCoeffs is Hermitian)
-        #                ijIndx = numHamParams + (i * numOtherBasisEls + j)
-        #                jiIndx = numHamParams + (j * numOtherBasisEls + i)
-        #                polyTerms = {(ijIndx,): 1.0, (jiIndx,): 1.0j}
-        #
-        #            base_poly = _Polynomial(polyTerms, mpv)
-        #            Lm_dag = Lm.conjugate().T; Ln_dag = Ln.conjugate().T
-        #            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(1.0 * base_poly * scale, Ln, Lm,
-        #                                                                    self._evotype, self.state_space))
-        #            # adjoint(_np.dot(Lm_dag,Ln))
-        #            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-        #                -0.5 * base_poly * scale, IDENT, _np.dot(Ln_dag, Lm), self._evotype, self.state_space
-        #            ))
-        #            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-        #                -0.5 * base_poly * scale, _np.dot(Lm_dag, Ln), IDENT, self._evotype, self.state_space
-        #            ))
-        #
-        #    elif termType == "A":  # Affine
-        #        assert(self.parameterization.nonham_mode == "diag_affine")
-        #        if self.parameterization.param_mode in ("depol", "reldepol"):
-        #            # => same single param for all stochastic terms
-        #            k = numHamParams + 1 + otherBasisIndices[bels[0]]  # index of parameter
-        #        else:
-        #            k = numHamParams + numOtherBasisEls + otherBasisIndices[bels[0]]  # index of parameter
-        #
-        #        # rho -> basis[bels[0]] * I = basis[bels[0]] * sum{ P_i rho P_i } where Pi's
-        #        #  are the normalized paulis (including the identity), and rho has trace == 1
-        #        #  (all but "I/d" component of rho are annihilated by pauli sum; for the I/d component, all
-        #        #   d^2 of the terms in the sum is P/sqrt(d) * I/d * P/sqrt(d) == I/d^2, so the result is just "I")
-        #        scale, U = _mt.to_unitary(basis[bels[0]])  # ensure all Rank1Term operators are *unitary*
-        #        L = U
-        #        # Note: only works when `d` corresponds to integral # of qubits!
-        #        Bmxs = _bt.basis_matrices("pp", dim, sparse=False)
-        #        # scaling to make Bmxs unitary (reverse of `scale` above, where scale * U == basis[.])
-        #        Bscale = dim**0.25
-        #
-        #        for B in Bmxs:  # Note: *include* identity! (see pauli scratch notebook for details)
-        #            UB = Bscale * B  # UB is unitary
-        #            Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-        #                _Polynomial({(k,): 1.0 * scale / Bscale**2}, mpv),
-        #                _np.dot(L, UB), UB, self._evotype, self.state_space))  # /(dim-1.)
-        #
-        #        #TODO: check normalization of these terms vs those used in projections.
-        #
-        ##DEBUG
-        ##print("DB: params = ", list(enumerate(self.paramvals)))
-        ##print("DB: Lterms = ")
-        ##for i,lt in enumerate(Lterms):
-        ##    print("Term %d:" % i)
-        ##    print("  coeff: ", str(lt.coeff)) # list(lt.coeff.keys()) )
-        ##    print("  pre:\n", lt.pre_ops[0] if len(lt.pre_ops) else "IDENT")
-        ##    print("  post:\n",lt.post_ops[0] if len(lt.post_ops) else "IDENT")
-        #
-        ##Make compact polys that are ready to (repeatedly) evaluate (useful
-        ## for term-based calcs which call total_term_magnitude() a lot)
-        #poly_coeffs = [t.coeff for t in Lterms]
-        #tapes = [poly.compact(complex_coeff_tape=True) for poly in poly_coeffs]
-        #if len(tapes) > 0:
-        #    vtape = _np.concatenate([t[0] for t in tapes])
-        #    ctape = _np.concatenate([t[1] for t in tapes])
-        #else:
-        #    vtape = _np.empty(0, _np.int64)
-        #    ctape = _np.empty(0, complex)
-        #coeffs_as_compact_polys = (vtape, ctape)
-        #
-        ##DEBUG TODO REMOVE (and make into test) - check norm of rank-1 terms
-        ## (Note: doesn't work for Clifford terms, which have no .base):
-        ## rho =OP=> coeff * A rho B
-        ## want to bound | coeff * Tr(E Op rho) | = | coeff | * | <e|A|psi><psi|B|e> |
-        ## so A and B should be unitary so that | <e|A|psi><psi|B|e> | <= 1
-        ## but typically these are unitaries / (sqrt(2)*nqubits)
-        ##import bpdb; bpdb.set_trace()
-        ##scale = 1.0
-        ##for t in Lterms:
-        ##    for op in t._rep.pre_ops:
-        ##        test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
-        ##        assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
-        ##    for op in t._rep.post_ops:
-        ##        test = _np.dot(_np.conjugate(scale * op.base.T), scale * op.base)
-        ##        assert(_np.allclose(test, _np.identity(test.shape[0], 'd')))
-        #
-        #return Lterms, coeffs_as_compact_polys
-
     def _set_params_from_matrix(self, errgen, truncate):
         """ Sets self.paramvals based on `errgen` """
 
@@ -906,12 +709,6 @@ class LindbladErrorgen(_LinearOperator):
         should keep in sync with the parameters) and updates self._rep accordingly (by
         rewriting its data).
         """
-        #REMOVE
-        #hamCoeffs, otherCoeffs = _ot.paramvals_to_lindblad_projections(
-        #    self.paramvals, self.ham_basis_size, self.other_basis_size,
-        #    self.parameterization.param_mode, self.parameterization.nonham_mode, self.Lmx)
-        #onenorm = 0.0
-
         # Update 1-norm of composite errorgen
         onenorm = sum([_np.dot(_np.abs(blk.block_data.flat), one_norms) for blk, (_, one_norms)
                        in zip(self.coefficient_blocks, self.lindblad_term_superops_and_1norms)])
@@ -1291,26 +1088,6 @@ class LindbladErrorgen(_LinearOperator):
         for blk in self.coefficient_blocks:
             labels.extend(blk.coefficent_labels)
 
-        ##OLD REMOVE - when coefficients were == "elementary" error gens (not true anymore)
-        #LEEL = _LocalElementaryErrorgenLabel  # shorthand
-        #if self.ham_basis is not None:
-        #    labels.extend([LEEL('H', (basis_lbl,)) for basis_lbl in self.ham_basis.labels[1:]])
-        #if self.other_basis is not None:
-        #    if self.parameterization.nonham_mode == "diagonal":
-        #        labels.extend([LEEL('S', (basis_lbl,)) for basis_lbl in self.other_basis.labels[1:]])
-        #    elif self.parameterization.nonham_mode == "diag_affine":
-        #        labels.extend([LEEL('S', (basis_lbl,)) for basis_lbl in self.other_basis.labels[1:]])
-        #        labels.extend([LEEL('A', (basis_lbl,)) for basis_lbl in self.other_basis.labels[1:]])
-        #    else:  # 'all' mode
-        #        labels.extend([LEEL('S', (basis_lbl1, basis_lbl2))
-        #                       for basis_lbl1 in self.other_basis.labels[1:]
-        #                       for basis_lbl2 in self.other_basis.labels[1:]])
-        #
-        ##convert to *global* lindblad terms
-        #identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-        #sslbls = self.state_space.tensor_product_block_labels(0)  # just take first TPB labels as all labels
-        #labels = [_GlobalElementaryErrorgenLabel.cast(local_lbl, sslbls, identity_label_1Q) for local_lbl in labels]
-
         return tuple(labels)
 
     def coefficients_array(self):
@@ -1636,194 +1413,6 @@ class LindbladErrorgen(_LinearOperator):
     #        raise ValueError("Invalid transform for this LindbladDenseOp: type %s"
     #                         % str(type(s)))
 
-
-    #REMOVE - moved to functions in LindbladCoefficientBlock
-    #def _d_hdp(self):
-    #    return self.hamGens.transpose((1, 2, 0))  # PRETRANS
-    #    #return _np.einsum("ik,akl,lj->ija", self.leftTrans, self.hamGens, self.rightTrans)
-    #
-    #def _d_odp(self):
-    #    bsH = self.ham_basis_size
-    #    bsO = self.other_basis_size
-    #    nHam = bsH - 1 if (bsH > 0) else 0
-    #    dim = self.dim
-    #
-    #    assert(bsO > 0), "Cannot construct dOdp when other_basis_size == 0!"
-    #    if self.parameterization.nonham_mode == "diagonal":
-    #        otherParams = self.paramvals[nHam:]
-    #
-    #        # Derivative of exponent wrt other param; shape == [dim,dim,bs-1]
-    #        #  except "depol" & "reldepol" cases, when shape == [dim,dim,1]
-    #        if self.parameterization.param_mode == "depol":  # all coeffs same & == param^2
-    #            assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'depol' case!"
-    #            #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None] * 2*otherParams[0]
-    #            dOdp = _np.sum(_np.transpose(self.otherGens, (1, 2, 0)), axis=2)[:, :, None] * 2 * otherParams[0]
-    #        elif self.parameterization.param_mode == "reldepol":  # all coeffs same & == param
-    #            assert(len(otherParams) == 1), "Should only have 1 non-ham parameter in 'reldepol' case!"
-    #            #dOdp  = _np.einsum('alj->lj', self.otherGens)[:,:,None]
-    #            dOdp = _np.sum(_np.transpose(self.otherGens, (1, 2, 0)), axis=2)[:, :, None] * 2 * otherParams[0]
-    #        elif self.parameterization.param_mode == "cptp":  # (coeffs = params^2)
-    #            #dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
-    #            dOdp = _np.transpose(self.otherGens, (1, 2, 0)) * 2 * otherParams  # just a broadcast
-    #        else:  # "unconstrained" (coeff == params)
-    #            #dOdp  = _np.einsum('alj->lja', self.otherGens)
-    #            dOdp = _np.transpose(self.otherGens, (1, 2, 0))
-    #
-    #    elif self.parameterization.nonham_mode == "diag_affine":
-    #        otherParams = self.paramvals[nHam:]
-    #        # Note: otherGens has shape (2,bsO-1,dim,dim) with diag-term generators
-    #        # in first "row" and affine generators in second row.
-    #
-    #        # Derivative of exponent wrt other param; shape == [dim,dim,2,bs-1]
-    #        #  except "depol" & "reldepol" cases, when shape == [dim,dim,bs]
-    #        if self.parameterization.param_mode == "depol":  # all coeffs same & == param^2
-    #            diag_params = otherParams[0:1]
-    #            dOdp = _np.empty((dim, dim, bsO), 'complex')
-    #            #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2*diag_params[0] # single diagonal term
-    #            #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
-    #            dOdp[:, :, 0] = _np.sum(self.otherGens[0], axis=0) * 2 * diag_params[0]  # single diagonal term
-    #            dOdp[:, :, 1:] = _np.transpose(self.otherGens[1], (1, 2, 0))  # no need for affine_params
-    #        elif self.parameterization.param_mode == "reldepol":  # all coeffs same & == param^2
-    #            dOdp = _np.empty((dim, dim, bsO), 'complex')
-    #            #dOdp[:,:,0]  = _np.einsum('alj->lj', self.otherGens[0]) # single diagonal term
-    #            #dOdp[:,:,1:] = _np.einsum('alj->lja', self.otherGens[1]) # affine part: each gen has own param
-    #            dOdp[:, :, 0] = _np.sum(self.otherGens[0], axis=0)  # single diagonal term
-    #            dOdp[:, :, 1:] = _np.transpose(self.otherGens[1], (1, 2, 0))  # affine part: each gen has own param
-    #        elif self.parameterization.param_mode == "cptp":  # (coeffs = params^2)
-    #            diag_params = otherParams[0:bsO - 1]
-    #            dOdp = _np.empty((dim, dim, 2, bsO - 1), 'complex')
-    #            #dOdp[:,:,0,:] = _np.einsum('alj,a->lja', self.otherGens[0], 2*diag_params)
-    #            #dOdp[:,:,1,:] = _np.einsum('alj->lja', self.otherGens[1]) # no need for affine_params
-    #            dOdp[:, :, 0, :] = _np.transpose(self.otherGens[0], (1, 2, 0)) * 2 * diag_params  # broadcast works
-    #            dOdp[:, :, 1, :] = _np.transpose(self.otherGens[1], (1, 2, 0))  # no need for affine_params
-    #        else:  # "unconstrained" (coeff == params)
-    #            #dOdp  = _np.einsum('ablj->ljab', self.otherGens) # -> shape (dim,dim,2,bsO-1)
-    #            dOdp = _np.transpose(self.otherGens, (2, 3, 0, 1))  # -> shape (dim,dim,2,bsO-1)
-    #
-    #    else:  # nonham_mode == "all" ; all lindblad terms included
-    #        assert(self.parameterization.param_mode in ("cptp", "unconstrained"))
-    #
-    #        if self.parameterization.param_mode == "cptp":
-    #            L, Lbar = self.Lmx, self.Lmx.conjugate()
-    #            F1 = _np.tril(_np.ones((bsO - 1, bsO - 1), 'd'))
-    #            F2 = _np.triu(_np.ones((bsO - 1, bsO - 1), 'd'), 1) * 1j
-    #
-    #            # Derivative of exponent wrt other param; shape == [dim,dim,bs-1,bs-1]
-    #            # Note: replacing einsums here results in at least 3 numpy calls (probably slower?)
-    #            dOdp = _np.einsum('amlj,mb,ab->ljab', self.otherGens, Lbar, F1)  # only a >= b nonzero (F1)
-    #            dOdp += _np.einsum('malj,mb,ab->ljab', self.otherGens, L, F1)    # ditto
-    #            dOdp += _np.einsum('bmlj,ma,ab->ljab', self.otherGens, Lbar, F2)  # only b > a nonzero (F2)
-    #            dOdp += _np.einsum('mblj,ma,ab->ljab', self.otherGens, L, F2.conjugate())  # ditto
-    #        else:  # "unconstrained"
-    #            F0 = _np.identity(bsO - 1, 'd')
-    #            F1 = _np.tril(_np.ones((bsO - 1, bsO - 1), 'd'), -1)
-    #            F2 = _np.triu(_np.ones((bsO - 1, bsO - 1), 'd'), 1) * 1j
-    #
-    #            # Derivative of exponent wrt other param; shape == [dim,dim,bs-1,bs-1]
-    #            #dOdp  = _np.einsum('ablj,ab->ljab', self.otherGens, F0)  # a == b case
-    #            #dOdp += _np.einsum('ablj,ab->ljab', self.otherGens, F1) + \
-    #            #           _np.einsum('balj,ab->ljab', self.otherGens, F1) # a > b (F1)
-    #            #dOdp += _np.einsum('balj,ab->ljab', self.otherGens, F2) - \
-    #            #           _np.einsum('ablj,ab->ljab', self.otherGens, F2) # a < b (F2)
-    #            tmp_ablj = _np.transpose(self.otherGens, (2, 3, 0, 1))  # ablj -> ljab
-    #            tmp_balj = _np.transpose(self.otherGens, (2, 3, 1, 0))  # balj -> ljab
-    #            dOdp = tmp_ablj * F0  # a == b case
-    #            dOdp += tmp_ablj * F1 + tmp_balj * F1  # a > b (F1)
-    #            dOdp += tmp_balj * F2 - tmp_ablj * F2  # a < b (F2)
-    #
-    #    # apply basis transform
-    #    tr = len(dOdp.shape)  # tensor rank
-    #    assert((tr - 2) in (1, 2)), "Currently, dodp can only have 1 or 2 derivative dimensions"
-    #
-    #    assert(_np.linalg.norm(_np.imag(dOdp)) < IMAG_TOL)
-    #    return _np.real(dOdp)
-    #
-    #def _d2_odp2(self):
-    #    bsH = self.ham_basis_size
-    #    bsO = self.other_basis_size
-    #    nHam = bsH - 1 if (bsH > 0) else 0
-    #    dim = self.dim
-    #
-    #    assert(bsO > 0), "Cannot construct dOdp when other_basis_size == 0!"
-    #    if self.parameterization.nonham_mode == "diagonal":
-    #        otherParams = self.paramvals[nHam:]
-    #        nP = len(otherParams)
-    #
-    #        # Derivative of exponent wrt other param; shape == [dim,dim,nP,nP]
-    #        if self.parameterization.param_mode == "depol":
-    #            assert(nP == 1)
-    #            #d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
-    #            d2Odp2 = _np.sum(self.otherGens, axis=0)[:, :, None, None] * 2
-    #        elif self.parameterization.param_mode == "cptp":
-    #            assert(nP == bsO - 1)
-    #            #d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
-    #            d2Odp2 = _np.transpose(self.otherGens, (1, 2, 0))[:, :, :, None] * 2 * _np.identity(nP, 'd')
-    #        else:  # param_mode == "unconstrained" or "reldepol"
-    #            assert(nP == bsO - 1)
-    #            d2Odp2 = _np.zeros([dim, dim, nP, nP], 'd')
-    #
-    #    elif self.parameterization.nonham_mode == "diag_affine":
-    #        otherParams = self.paramvals[nHam:]
-    #        nP = len(otherParams)
-    #
-    #        # Derivative of exponent wrt other param; shape == [dim,dim,nP,nP]
-    #        if self.parameterization.param_mode == "depol":
-    #            assert(nP == bsO)  # 1 diag param + (bsO-1) affine params
-    #            d2Odp2 = _np.empty((dim, dim, nP, nP), 'complex')
-    #            #d2Odp2[:,:,0,0]  = _np.einsum('alj->lj', self.otherGens[0]) * 2 # single diagonal term
-    #            d2Odp2[:, :, 0, 0] = _np.sum(self.otherGens[0], axis=0) * 2  # single diagonal term
-    #            d2Odp2[:, :, 1:, 1:] = 0  # 2nd deriv wrt. all affine params == 0
-    #        elif self.parameterization.param_mode == "cptp":
-    #            assert(nP == 2 * (bsO - 1)); hnP = bsO - 1  # half nP
-    #            d2Odp2 = _np.empty((dim, dim, nP, nP), 'complex')
-    #            #d2Odp2[:,:,0:hnP,0:hnP] = _np.einsum('alj,aq->ljaq', self.otherGens[0], 2*_np.identity(nP,'d'))
-    #            d2Odp2[:, :, 0:hnP, 0:hnP] = _np.transpose(self.otherGens[0], (1, 2, 0))[
-    #                :, :, :, None] * 2 * _np.identity(nP, 'd')
-    #            d2Odp2[:, :, hnP:, hnP:] = 0  # 2nd deriv wrt. all affine params == 0
-    #        else:  # param_mode == "unconstrained" or "reldepol"
-    #            assert(nP == 2 * (bsO - 1))
-    #            d2Odp2 = _np.zeros([dim, dim, nP, nP], 'd')
-    #
-    #    else:  # nonham_mode == "all" : all lindblad terms included
-    #        nP = bsO - 1
-    #        if self.parameterization.param_mode == "cptp":
-    #            d2Odp2 = _np.zeros([dim, dim, nP, nP, nP, nP], 'complex')  # yikes! maybe make this SPARSE in future?
-    #
-    #            #Note: correspondence w/Erik's notes: a=alpha, b=beta, q=gamma, r=delta
-    #            # indices of d2Odp2 are [i,j,a,b,q,r]
-    #
-    #            def iter_base_ab_qr(ab_inc_eq, qr_inc_eq):
-    #                """ Generates (base,ab,qr) tuples such that `base` runs over
-    #                    all possible 'other' params and 'ab' and 'qr' run over
-    #                    parameter indices s.t. ab > base and qr > base.  If
-    #                    ab_inc_eq == True then the > becomes a >=, and likewise
-    #                    for qr_inc_eq.  Used for looping over nonzero hessian els. """
-    #                for _base in range(nP):
-    #                    start_ab = _base if ab_inc_eq else _base + 1
-    #                    start_qr = _base if qr_inc_eq else _base + 1
-    #                    for _ab in range(start_ab, nP):
-    #                        for _qr in range(start_qr, nP):
-    #                            yield (_base, _ab, _qr)
-    #
-    #            for base, a, q in iter_base_ab_qr(True, True):  # Case1: base=b=r, ab=a, qr=q
-    #                d2Odp2[:, :, a, base, q, base] = self.otherGens[a, q] + self.otherGens[q, a]
-    #            for base, a, r in iter_base_ab_qr(True, False):  # Case2: base=b=q, ab=a, qr=r
-    #                d2Odp2[:, :, a, base, base, r] = -1j * self.otherGens[a, r] + 1j * self.otherGens[r, a]
-    #            for base, b, q in iter_base_ab_qr(False, True):  # Case3: base=a=r, ab=b, qr=q
-    #                d2Odp2[:, :, base, b, q, base] = 1j * self.otherGens[b, q] - 1j * self.otherGens[q, b]
-    #            for base, b, r in iter_base_ab_qr(False, False):  # Case4: base=a=q, ab=b, qr=r
-    #                d2Odp2[:, :, base, b, base, r] = self.otherGens[b, r] + self.otherGens[r, b]
-    #
-    #        else:  # param_mode == "unconstrained"
-    #            d2Odp2 = _np.zeros([dim, dim, nP, nP, nP, nP], 'd')  # all params linear
-    #
-    #    # apply basis transform
-    #    tr = len(d2Odp2.shape)  # tensor rank
-    #    assert((tr - 2) in (2, 4)), "Currently, d2Odp2 can only have 2 or 4 derivative dimensions"
-    #
-    #    assert(_np.linalg.norm(_np.imag(d2Odp2)) < IMAG_TOL)
-    #    return _np.real(d2Odp2)
-
     def deriv_wrt_params(self, wrt_filter=None):
         """
         The element-wise derivative this operation.
@@ -1859,27 +1448,6 @@ class LindbladErrorgen(_LinearOperator):
             off += blk.num_params
 
         derivMx = _np.concatenate(blk_superop_derivs, axis=1)
-
-        #REMOVE (OLD)
-        #dim = self.dim
-        #bsH = self.ham_basis_size
-        #bsO = self.other_basis_size
-        #
-        ##Deriv wrt hamiltonian params
-        #if bsH > 0:
-        #    dH = self._d_hdp()
-        #    dH = dH.reshape((dim**2, bsH - 1))  # [iFlattenedOp,iHamParam]
-        #else:
-        #    dH = _np.empty((dim**2, 0), 'd')  # so concat works below
-        #
-        ##Deriv wrt other params
-        #if bsO > 0:
-        #    dO = self._d_odp()
-        #    dO = dO.reshape((dim**2, -1))  # [iFlattenedOp,iOtherParam]
-        #else:
-        #    dO = _np.empty((dim**2, 0), 'd')  # so concat works below
-        #
-        #derivMx = _np.concatenate((dH, dO), axis=1)
 
         assert(_np.linalg.norm(_np.imag(derivMx)) < IMAG_TOL)  # allowed to be complex?
         derivMx = _np.real(derivMx)
@@ -2008,10 +1576,6 @@ class LindbladErrorgen(_LinearOperator):
             the same local structure, i.e., not considering parameter values or submembers """
         return (all([myblk.is_similar(oblk) for myblk, oblk in zip(self.coefficient_blocks, other.coefficient_blocks)])
                 and (self.matrix_basis == other.matrix_basis))
-        #OLD return ((self.parameterization == other.parameterization)  REMOVE
-        #OLD         and (self.lindblad_basis == other.lindblad_basis)
-        #OLD         and (self.matrix_basis == other.matrix_basis)
-        #OLD         and (set(self.coefficients().keys()) == set(other.coefficients().keys())))
 
     def __str__(self):
         s = "Lindblad error generator with dim = %d, num params = %d\n" % \

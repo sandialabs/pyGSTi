@@ -1951,7 +1951,7 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
     opLabels = [gl for gl, gate in model_b.operations.items() if not _np.allclose(gate, Id)]
     nOperations = len(opLabels)
     lindbladMxBasis = _Basis.cast(mxBasis, model_a.dim)
-    nonI_lbls = lindbladMxBasis.labels[1:] # skip [0] == Identity
+    nonI_lbls = lindbladMxBasis.labels[1:]  # skip [0] == Identity
 
     error_superops = []; ptype_counts = {}  # ; ptype_scaleFctrs = {}
     error_labels = []

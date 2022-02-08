@@ -838,7 +838,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
 
     if ideal_gate_type == "full" and ideal_prep_type == "full" and ideal_povm_type == "full":
         ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, evotype)
-    elif (ideal_gate_type in ("full TP", "TP") and ideal_prep_type in ("full TP", "TP") \
+    elif (ideal_gate_type in ("full TP", "TP") and ideal_prep_type in ("full TP", "TP")
           and ideal_povm_type in ("full TP", "TP")):
         ret.default_gauge_group = _gg.TPGaugeGroup(ret.state_space, evotype)
     elif ideal_gate_type == "CPTP" and ideal_prep_type == "CPTP" and ideal_povm_type == "CPTP":

@@ -278,7 +278,7 @@ def set_idle_errors(nqubits, model, errdict, rand_default=None,
 
             if hamiltonian: hamiltonian_sub_v[k] = Hrate
             if stochastic: stochastic_sub_v[k] = _np.sqrt(Srate)  # b/c param gets squared
-            if affine: affine_sub_v[k] = Arate
+            #if affine: affine_sub_v[k] = Arate
 
     model.from_vector(v)
     return _np.array(rand_rates, 'd')  # the random rates that were chosen (to keep track of them for later)
@@ -352,9 +352,9 @@ def extract_idle_errors(nqubits, model, hamiltonian=True, stochastic=True, affin
             if stochastic and abs(stochastic_sub_v[k]) > 1e-6:
                 scale = 1. / (2**nTargetQubits) if scale_for_idt else 1.0
                 sto_rates[label] = stochastic_sub_v[k]**2 * scale
-            if affine and abs(affine_sub_v[k]) > 1e-6:
-                scale = 1. / (_np.sqrt(2)**nTargetQubits) if scale_for_idt else 1.0
-                aff_rates[label] = affine_sub_v[k] * scale
+            #if affine and abs(affine_sub_v[k]) > 1e-6:
+            #    scale = 1. / (_np.sqrt(2)**nTargetQubits) if scale_for_idt else 1.0
+            #    aff_rates[label] = affine_sub_v[k] * scale
 
     return ham_rates, sto_rates, aff_rates
 

@@ -16,204 +16,6 @@ from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySeri
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
 
-
-#class LindbladCoefficients(object):
-#    """
-#    The coefficient matrices of the Lindblad form of an error generator.
-#
-#    """
-#
-#    @classmethod
-#    def from_elementary_errorgens(cls, lindblad_term_dict, basis, other_mode="all"):
-#        """
-#        Convert a set of Lindblad terms into a dense matrix/grid of projections.
-#
-#        Essentially the inverse of :function:`projections_to_lindblad_terms`.
-#
-#        Parameters
-#        ----------
-#        lindblad_term_dict : dict
-#            A dictionary specifying which Linblad terms are present in the gate
-#            parameteriztion.  Keys are `(termType, basisLabel1, <basisLabel2>)`
-#            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic), or
-#            `"A"` (Affine).  Hamiltonian and Affine terms always have a single basis
-#            label (so key is a 2-tuple) whereas Stochastic tuples with 1 basis label
-#            indicate a *diagonal* term, and are the only types of terms allowed when
-#            `nonham_mode != "all"`.  Otherwise, Stochastic term tuples can include 2
-#            basis labels to specify "off-diagonal" non-Hamiltonian Lindblad terms.
-#            Basis labels can be strings or integers.  Values are complex
-#            coefficients (error rates).
-#    
-#        basis : Basis
-#            A basis mapping the labels used in the keys of `lindblad_term_dict` to
-#            basis matrices (e.g. numpy arrays or Scipy sparse matrices).  The
-#            first element of this basis should be an identity element, and
-#            will be propagated to the returned `ham_basis` and `other_basis`.
-#    
-#        other_mode : {"diagonal", "diag_affine", "all"}
-#            Which non-Hamiltonian terms are allowed in `lindblad_term_dict`.
-#            Allowed values are: `"diagonal"` (only the diagonal Stochastic),
-#            `"diag_affine"` (diagonal + affine generators), and `"all"`
-#            (all generators).
-#    
-#        Returns
-#        -------
-#        hamProjs : numpy.ndarray
-#            An array of length `basisdim-1`, giving the projections onto a
-#            full set of the Hamiltonian-type Lindblad terms (onto each element of
-#            `ham_basis`).
-#        otherProjs : numpy.ndarray
-#            An array of shape (d-1,d-1), (2,d-1), or (d-1,), where d=`basisdim`
-#            for `other_mode` equal to `"all"`, `"diag_affine"`, or `"diagonal"`,
-#            respectively.  Values give the projections onto the non-Hamiltonian
-#            -type Lindblad terms.
-#        ham_basis : Basis
-#            The basis used to construct `hamProjs`.
-#        other_basis : Basis
-#            The basis used to construct `otherProjs`.
-#        hamBasisIndices : OrderedDict
-#            A dictionary mapping the some or all of the basis labels of `basisdict`
-#            to the integers 0 to `len(ham_basis)`.  These are indices into
-#            `hamProjs`, giving the projection associated with each Hamiltonian
-#            basis element.
-#        otherBasisIndices : OrderedDict
-#            A dictionary mapping the some or all of the basis labels of `basisdict`
-#            to the integers 0 to `len(other_basis)`.  These are row and column
-#            indices into `otherProjs`, giving the projection associated with each
-#            pair of "other" basis elements (or single basis element if
-#            `other_mode!="all"`).
-#        """
-#        #Separately enumerate the (distinct) basis elements used for Hamiltonian
-#        # and non-Hamiltonian error terms
-#        #print("DB: lindblad term to proj: \n",lindblad_term_dict,"\n",basis)
-#        hamBasisLabels = []
-#        otherBasisLabels = []
-#        for termLbl, coeff in lindblad_term_dict.items():
-#            termLbl = _LocalElementaryErrorgenLabel.cast(termLbl)  # e.g. "HXX" => ('H','XX')
-#            termType = termLbl.errorgen_type
-#            bels = termLbl.basis_element_labels
-#            if termType == "H":  # Hamiltonian
-#                assert(len(bels) == 1), "Hamiltonian term labels should have form ('H',<basis element label>)"
-#                bel = basis.labels[bels[0]] if isinstance(bels[0], (int, _np.int64)) else bels[0]  # int -> actual lbl
-#                if bel not in hamBasisLabels:
-#                    hamBasisLabels.append(bel)
-#    
-#            elif termType == "S":  # Stochastic
-#                if other_mode in ("diagonal", "diag_affine"):
-#                    assert(len(bels) == 1), "Stochastic term labels should have form ('S',<basis element label>)"
-#                    bel = basis.labels[bels[0]] if isinstance(bels[0], (int, _np.int64)) else bels[0]
-#                    if bel not in otherBasisLabels:
-#                        otherBasisLabels.append(bel)
-#                else:
-#                    assert(len(bels) == 2), "Stochastic term labels should have form ('S',<bel1>, <bel2>)"
-#                    bel0 = basis.labels[bels[0]] if isinstance(bels[0], (int, _np.int64)) else bels[0]
-#                    bel1 = basis.labels[bels[1]] if isinstance(bels[1], (int, _np.int64)) else bels[1]
-#                    if bel0 not in otherBasisLabels:
-#                        otherBasisLabels.append(bel0)
-#                    if bel1 not in otherBasisLabels:
-#                        otherBasisLabels.append(bel1)
-#    
-#            elif termType == "A":  # Affine
-#                assert(other_mode == "diag_affine"), "Affine labels are only allowed in an affine mode"
-#                assert(len(bels) == 1), "Affine term labels should have form ('A',<basis element label>)"
-#                bel = basis.labels[bels[0]] if isinstance(bels[0], (int, _np.int64)) else bels[0]
-#                if bel not in otherBasisLabels:
-#                    otherBasisLabels.append(bel)
-#    
-#        #Construct bases
-#        # Note: the lists of basis matrices shouldn't contain the identity, since
-#        # the terms above shouldn't contain identity terms - but `basis` should
-#        # contain an identity element as it's first element, so add this identity el
-#        # to non-empty bases (empty bases stay empty!) to be consistent with the
-#        # rest of the framework (bases *have* Ids)
-#    
-#        sparse = basis.sparse
-#        if set(hamBasisLabels) == set(basis.labels):
-#            ham_basis = basis
-#        else:
-#            Id = basis[0]
-#            ham_basis_mxs = [basis[bl] for bl in hamBasisLabels]
-#            if len(ham_basis_mxs) > 0:
-#                ham_basis = _ExplicitBasis([Id] + ham_basis_mxs, ['I'] + hamBasisLabels,
-#                                           name=None, real=True, sparse=sparse)
-#            else:
-#                ham_basis = _ExplicitBasis(ham_basis_mxs, name=None, real=True, sparse=sparse)
-#    
-#        if set(otherBasisLabels) == set(basis.labels):
-#            other_basis = basis
-#        else:
-#            Id = basis[0]
-#            other_basis_mxs = [basis[bl] for bl in otherBasisLabels]
-#            if len(other_basis_mxs) > 0:
-#                other_basis = _ExplicitBasis([Id] + other_basis_mxs, ['I'] + otherBasisLabels,
-#                                             name=None, real=True, sparse=sparse)
-#            else:
-#                other_basis = _ExplicitBasis(other_basis_mxs, name=None, real=True, sparse=sparse)
-#    
-#        bsH, bsO = len(ham_basis), len(other_basis)
-#        #print("DB: constructed ham_basis = ",ham_basis)
-#        #print("DB: other basis = ",other_basis)
-#    
-#        #Create projection (term coefficient) arrays - or return None if
-#        # the corresponding basis is empty (as per our convention)
-#        hamProjs = _np.zeros(bsH - 1, 'complex') if bsH > 0 else None
-#        if bsO > 0:
-#            if other_mode == "diagonal":  # OK if this runs for 'auto' too since then len(otherBasisIndices) == 0
-#                otherProjs = _np.zeros(bsO - 1, 'complex')
-#            elif other_mode == "diag_affine":
-#                otherProjs = _np.zeros((2, bsO - 1), 'complex')
-#            else:
-#                otherProjs = _np.zeros((bsO - 1, bsO - 1), 'complex')
-#        else: otherProjs = None
-#    
-#        #Fill arrays
-#        hamBasisIndices = {lbl: i - 1 for i, lbl in enumerate(ham_basis.labels)}      # -1 to compensate for identity as
-#        otherBasisIndices = {lbl: i - 1 for i, lbl in enumerate(other_basis.labels)}  # first element (not in projections).
-#        for termLbl, coeff in lindblad_term_dict.items():
-#            termLbl = _LocalElementaryErrorgenLabel.cast(termLbl)  # e.g. "HXX" => ('H','XX')
-#            termType = termLbl.errorgen_type
-#            bels = [(basis.labels[bel] if isinstance(bel, (int, _np.int64)) else bel)  # convert int -> actual lbl since
-#                    for bel in termLbl.basis_element_labels]  # integer "basis el labels" are allowed in lindblad_term_dict
-#            if termType == "H":  # Hamiltonian
-#                k = hamBasisIndices[bels[0]]  # index of coefficient in array
-#                hamProjs[k] = coeff
-#            elif termType == "S":  # Stochastic
-#                if other_mode == "diagonal":
-#                    k = otherBasisIndices[bels[0]]  # index of coefficient in array
-#                    otherProjs[k] = coeff
-#                elif other_mode == "diag_affine":
-#                    k = otherBasisIndices[bels[0]]  # index of coefficient in array
-#                    otherProjs[0, k] = coeff
-#                else:  # other_mode == "all"
-#                    k = otherBasisIndices[bels[0]]  # index of row in "other" coefficient matrix
-#                    j = otherBasisIndices[bels[1]]  # index of col in "other" coefficient matrix
-#                    otherProjs[k, j] = coeff
-#            elif termType == "A":  # Affine
-#                assert(other_mode == "diag_affine")
-#                k = otherBasisIndices[bels[0]]  # index of coefficient in array
-#                otherProjs[1, k] = coeff
-#    
-#        return hamProjs, otherProjs, ham_basis, other_basis
-#
-#    @classmethod
-#    def from_single_block(ham_coefficients=None, other_coefficients=None, ham_basis=None, other_basis=None):
-#        pass  # TODO
-#
-#    
-#    def __init__(self, coefficient_blocks, ham_basis=None, other_basis=None):
-#        self.blocks = coefficient_blocks
-#        self.ham_basis = ham_basis
-#        self.other_basis = other_basis
-#
-#        if ham_nMxs > 0 and other_nMxs > 0:
-#            assert(other_mxs[0].shape[0] == ham_mxs[0].shape[0]), \
-#                "Bases must have the same dimension!"
-#    
-#        if ham_nMxs > 0:
-#            assert(_np.isclose(normfn(ham_mxs[0] - identityfn(d) / _np.sqrt(d)), 0)),\
-#                "The first matrix in 'dmbasis_ham' must be the identity"
-#
-
 class LindbladCoefficientBlock(_NicelySerializable):
     """ SCRATCH:
         This routine computes the Hamiltonian and Non-Hamiltonian ("other")
@@ -675,15 +477,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
             Specifies `block_data` as a linear combination of elementary error generators.
             Keys are :class:`LocalElementaryErrorgenLabel` objects and values are floats.
         """
-        #REMOVE
-        #, return_basis=True
-        #        return_basis : bool, optional
-        #    Whether to return a :class:`Basis` containing the elements
-        #    corresponding to labels within the returned dictionary.
-        #basis : Basis
-        #    A single basis containing all the basis labels used in `elementary_errorgens` (and
-        #    *only* those elements).  Only returned when `return_basis == True`.
-
         elementary_errorgens = _collections.OrderedDict()
         eeg_indices = self.elementary_errorgen_indices
         flat_data = self.block_data.ravel()
@@ -694,55 +487,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
             #set_basis_el(lbl, basis[lbl])  # REMOVE
 
         return elementary_errorgens
-
-        #REMOVE?
-        #TODO: move this to a function within parent?  Usefult for creating a basis out of a subset of labels,
-        # but probably not needed for a single block...
-        #basisdict = _collections.OrderedDict()
-        #
-        #if return_basis:
-        #    def set_basis_el(blbl, bel):
-        #        """ Sets an elment of basisdict, checking for consistency """
-        #        if blbl in basisdict:
-        #            assert(_mt.safe_norm(basisdict[blbl] - bel) < 1e-8), "Ambiguous basis el label %s" % blbl
-        #        else:
-        #            basisdict[blbl] = bel
-        #else:
-        #    def set_basis_el(blbl, bel):
-        #        pass
-        #
-        #
-        ##Turn basisdict into a Basis to return
-        #if return_basis:
-        #    if ham_basis == other_basis:
-        #        basis = ham_basis
-        #    elif ham_basis is None or set(ham_lbls).issubset(set(other_lbls)):
-        #        basis = other_basis
-        #    elif other_basis is None or set(other_lbls).issubset(set(ham_lbls)):
-        #        basis = ham_basis
-        #    else:
-        #        #Create an ExplictBasis using the matrices in basisdict plus the identity
-        #        sparse = True; real = True
-        #        if ham_basis is not None:
-        #            elshape = ham_basis.elshape
-        #            sparse = sparse and ham_basis.sparse
-        #            real = real and ham_basis.real
-        #        if other_basis is not None:
-        #            elshape = other_basis.elshape
-        #            sparse = sparse and other_basis.sparse
-        #            real = real and other_basis.real
-        #
-        #        d = elshape[0]
-        #        Id = _sps.identity(d, 'complex', 'csr') / _np.sqrt(d) if sparse \
-        #            else _np.identity(d, 'complex') / _np.sqrt(d)
-        #
-        #        lbls = ['I'] + list(basisdict.keys())
-        #        mxs = [Id] + list(basisdict.values())
-        #        basis = _ExplicitBasis(mxs, lbls, name=None,
-        #                               real=real, sparse=sparse)
-        #    return Ltermdict, basis
-        #else:
-        #    return Ltermdict
 
     def set_elementary_errorgens(self, elementary_errorgens, on_missing='ignore', truncate=False):
         # Note: could return a "stripped" version of elementary_errorgens
@@ -888,9 +632,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
             return _np.empty(0, 'd')
 
         if self._block_type == 'ham':
-            #REMOVE
-            #assert(_np.isclose(_np.linalg.norm(_np.imag(block_data)), 0)), \
-            #    "Hamiltoian coefficients are not all real!"
             if self._param_mode == "elements":
                 params = self.block_data.real
             else:
@@ -898,10 +639,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
                                  % (self._param_mode, self._block_type))
 
         elif self._block_type == 'other_diagonal':
-            #REMOVE
-            #assert(_np.isclose(_np.linalg.norm(_np.imag(block_data)), 0)), \
-            #    "Diagonal stochastic coefficients are not all real!"
-
             if self._param_mode in ("depol", "reldepol"):
                 # params is a *single-element* 1D vector of the sqrt of each diagonal el
                 assert(self._param_mode == "reldepol" or all([v >= ttol for v in self.block_data])), \
@@ -969,7 +706,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
                     #push any slightly negative evals of other_projs positive so that
                     # the Cholesky decomp will work.
                     Ui = _np.linalg.inv(U)
-                    pos_evals = evals.clip(1e-16, None)  # no need to clip anymore (REMOVE)
+                    pos_evals = evals.clip(1e-16, None)
                     nonzero_block_data = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
                     try:
                         nonzero_Lmx = _np.linalg.cholesky(nonzero_block_data)
@@ -1029,7 +766,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
         """
         return self._block_data_to_params(truncate=False)
 
-    #REMOVEdef paramvals_to_coefficients(self, parameter_values, cache_mx=None):
     def from_vector(self, v):
         """
         Construct Lindblad coefficients (for this block) from a set of parameter values.
@@ -1041,31 +777,10 @@ class LindbladCoefficientBlock(_NicelySerializable):
         ----------
         v : numpy.ndarray
             A 1D array of real parameter values.
-
-        REMOVE
-        ##cache_mx : numpy.ndarray, optional
-        ##    Scratch space that is used to store the lower-triangular
-        ##    Cholesky decomposition matrix that is used internally when
-        ##    computing the coefficients for an `'other'`-type block with
-        ##    `'cholesky'` parameterization type.
-        #
-        #Returns
-        #-------
-        #block_data : numpy.ndarray
-        #    A 1- or 2-dimensional array containing the lindblad coefficients for this block.
         """
         if self._param_mode == 'static':
             assert(len(v) == 0), "'static' paramterized blocks should have zero parameters!"
             return  # self.block_data remains the same - no update
-
-            #REMOVE
-            #num_bels = len(self._bel_labels)
-            #assert(len(parameter_values) == 0), "'static' paramterized blocks should have zero parameters!"
-            #if self._block_type in ('ham', 'other_diagonal'):
-            #    return _np.zeros(num_bels, 'd')
-            #elif self._block_type == 'other':
-            #    return _np.zeros((num_bels, num_bels), 'd')
-            #else: raise ValueError("Internal error: invalid block type!")
 
         if self._block_type == 'ham':
             if self._param_mode == 'elements':
