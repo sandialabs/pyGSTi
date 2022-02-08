@@ -208,6 +208,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.set_all_parameterizations("H+S")
         target_model.sim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1)
         target_model._print_gpindices()
+        target_model.from_vector(1e-10 * np.ones(target_model.num_params))  # to seed term calc (starting with perfect zeros causes trouble)
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prep_fiducials(), std.meas_fiducials(),
                                                std.germs(), self.maxLengths, verbosity=4)
 
@@ -245,6 +246,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model.sim = pygsti.forwardsims.TermForwardSimulator(mode='pruned', max_order=3, desired_perr=0.01,
                                                                allowed_perr=0.1, max_paths_per_outcome=1000,
                                                                perr_heuristic='meanscaled', max_term_stages=5)
+        target_model.from_vector(1e-10 * np.ones(target_model.num_params))  # to seed term calc (starting with perfect zeros causes trouble)
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prep_fiducials(), std.meas_fiducials(),
                                                std.germs(), self.maxLengths, verbosity=3)
 
@@ -572,15 +574,15 @@ class CalcMethods1QTestCase(BaseTestCase):
         # ### Density-matrix simulation (of superoperator gates) using map/matrix-based terms calcs
         # In this mode, "term calcs" use many state-vector propagation paths to simulate density
         # matrix propagation up to some desired order (in the assumed-to-be-small error rates).
-        mdl = std.target_model("static unitary", evotype='statevec')
-        mdl.set_all_parameterizations("H+S")
-        mdl.sim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1) # 1st-order in error rates
-
-        probs1 = mdl.probabilities(self.circuit1)
-        #self.circuit1.simulate(mdl) # calls probs - same as above line
-
-        print(probs1)
-        self.assert_outcomes(probs1, {('0',): 0.5,  ('1',): 0.5} )
+        #mdl = std.target_model("static unitary", evotype='statevec')
+        #mdl.set_all_parameterizations("H+S")
+        #mdl.sim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1) # 1st-order in error rates
+        #
+        #probs1 = mdl.probabilities(self.circuit1)
+        ##self.circuit1.simulate(mdl) # calls probs - same as above line
+        #
+        #print(probs1)
+        #self.assert_outcomes(probs1, {('0',): 0.5,  ('1',): 0.5} )
 
         #Using n-qubit models ("H+S terms" parameterization constructs embedded/composed gates containing LindbladTermGates, etc.)
         termsim = pygsti.forwardsims.TermForwardSimulator(mode='taylor-order', max_order=1) # 1st-order in error rates
@@ -588,6 +590,7 @@ class CalcMethods1QTestCase(BaseTestCase):
         mdl = pygsti.models.modelconstruction.create_crosstalk_free_model(
             pspec, simulator=termsim, ideal_gate_type="H+S", ideal_spam_type="H+S",
             evotype='statevec', ensure_composed_gates=False)
+
         probs1 = mdl.probabilities(self.circuit3)
         probs2 = self.circuit3.simulate(mdl) # calls probs - same as above line
         print(probs1)

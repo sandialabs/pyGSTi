@@ -954,7 +954,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
                     else:
                         perm[next_nonzero, i] = 1.0; next_nonzero += 1
 
-                perm_block_data = perm @ self.block_data @ perm
+                perm_block_data = perm @ self.block_data @ perm.T
                 nonzero_block_data = perm_block_data[0:num_nonzero, 0:num_nonzero]
                 assert(_np.isclose(_np.linalg.norm(self.block_data), _np.linalg.norm(nonzero_block_data)))
 
@@ -983,7 +983,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
                 perm_Lmx = _np.zeros(self.block_data.shape, 'complex')
                 perm_Lmx[0:num_nonzero, 0:num_nonzero] = nonzero_Lmx
-                Lmx = perm.T @ perm_Lmx @ perm.T
+                Lmx = perm.T @ perm_Lmx @ perm
 
                 for i in range(num_bels):
                     assert(_np.linalg.norm(_np.imag(Lmx[i, i])) < IMAG_TOL)

@@ -27,6 +27,9 @@ from pygsti import algorithms as _alg
 from pygsti import tools as _tools
 from pygsti.baseobjs.basis import Basis as _Basis, DirectSumBasis as _DirectSumBasis
 from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
+from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
+
 
 _CVXPY_AVAILABLE = pkgutil.find_loader('cvxpy') is not None
 
@@ -1773,32 +1776,61 @@ def errorgen_and_projections(errgen, mx_basis):
         'stochastic', and 'affine'.
     """
     ret = {}
-    egnorm = _np.linalg.norm(errgen.flatten())
+    #egnorm = _np.linalg.norm(errgen.flatten())
     ret['error generator'] = errgen
-    proj, scale = \
-        _tools.std_errorgen_projections(
-            errgen, "hamiltonian", mx_basis, mx_basis, return_scale_fctr=True)
-    ret['hamiltonian projections'] = proj
-    ret['hamiltonian projection power'] = float(_np.sum(proj**2) * scale**2) / egnorm**2 \
-        if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
-    #sum of squared projections of normalized error generator onto normalized projectors
 
-    proj, scale = \
-        _tools.std_errorgen_projections(
-            errgen, "stochastic", mx_basis, mx_basis, return_scale_fctr=True)
-    ret['stochastic projections'] = proj
-    ret['stochastic projection power'] = float(_np.sum(proj**2) * scale**2) / egnorm**2 \
-        if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
-    #sum of squared projections of normalized error generator onto normalized projectors
+    elem_errgen_basis = mx_basis  # aka the "projection basis"
 
-    proj, scale = \
-        _tools.std_errorgen_projections(
-            errgen, "affine", mx_basis, mx_basis, return_scale_fctr=True)
-    ret['affine projections'] = proj
-    ret['affine projection power'] = float(_np.sum(proj**2) * scale**2) / egnorm**2 \
-        if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
-    #sum of squared projections of normalized error generator onto normalized projectors
+    Hproj = _tools.project_errorgen(errgen, 'H', elem_errgen_basis, mx_basis)
+    Sproj = _tools.project_errorgen(errgen, 'S', elem_errgen_basis, mx_basis)
+    Cproj = _tools.project_errorgen(errgen, 'C', elem_errgen_basis, mx_basis)
+    Aproj = _tools.project_errorgen(errgen, 'A', elem_errgen_basis, mx_basis)
+
+    Hnorm2 = sum([abs(v)**2 for v in Hproj.values()])
+    Snorm2 = sum([abs(v)**2 for v in Sproj.values()])
+    Cnorm2 = sum([abs(v)**2 for v in Cproj.values()])
+    Anorm2 = sum([abs(v)**2 for v in Aproj.values()])
+
+    egnorm2 = Hnorm2 + Snorm2 + Cnorm2 + Anorm2
+    ret['H projection power'] = Hnorm2 / egnorm2
+    ret['S projection power'] = Snorm2 / egnorm2
+    ret['CA projection power'] = (Cnorm2 + Anorm2) / egnorm2
+
+    ret['H projections'] = _np.array([Hproj.get(_LEEL('H', (lbl,)), 0.0) for lbl in elem_errgen_basis.labels[1:]], 'd')
+    ret['S projections'] = _np.array([Sproj.get(_LEEL('S', (lbl,)), 0.0) for lbl in elem_errgen_basis.labels[1:]], 'd')
+    ca_mx = _np.zeros((len(elem_errgen_basis.labels) - 1, len(elem_errgen_basis.labels) - 1), 'd')
+    for i, lbl1 in enumerate(elem_errgen_basis.labels[1:]):
+        for j, lbl2 in enumerate(elem_errgen_basis.labels[1 + i + 1:], start=i + 1):
+            ca_mx[i, j] = Cproj.get(_LEEL('C', (lbl1, lbl2)), 0.0)  # upper triangle == C
+            ca_mx[j, i] = Aproj.get(_LEEL('A', (lbl1, lbl2)), 0.0)  # lower triangle == A
+    ret['CA projections'] = ca_mx
     return ret
+
+    #OLD REMOVE
+    #proj, scale = \
+    #    _tools.std_errorgen_projections(
+    #        errgen, "hamiltonian", mx_basis, mx_basis, return_scale_fctr=True)
+    #ret['hamiltonian projections'] = proj
+    #ret['hamiltonian projection power'] = float(_np.sum(proj**2) * scale**2) / egnorm**2 \
+    #    if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
+    ##sum of squared projections of normalized error generator onto normalized projectors
+    #
+    #proj, scale = \
+    #    _tools.std_errorgen_projections(
+    #        errgen, "stochastic", mx_basis, mx_basis, return_scale_fctr=True)
+    #ret['stochastic projections'] = proj
+    #ret['stochastic projection power'] = float(_np.sum(proj**2) * scale**2) / egnorm**2 \
+    #    if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
+    ##sum of squared projections of normalized error generator onto normalized projectors
+    #
+    #proj, scale = \
+    #    _tools.std_errorgen_projections(
+    #        errgen, "affine", mx_basis, mx_basis, return_scale_fctr=True)
+    #ret['affine projections'] = proj
+    #ret['affine projection power'] = float(_np.sum(proj**2) * scale**2) / egnorm**2 \
+    #    if (abs(scale) > 1e-8 and abs(egnorm) > 1e-8) else 0
+    ##sum of squared projections of normalized error generator onto normalized projectors
+    #return ret
 
 
 def log_tig_and_projections(a, b, mx_basis):
@@ -1918,20 +1950,25 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
     Id = _np.identity(model_a.dim, 'd')
     opLabels = [gl for gl, gate in model_b.operations.items() if not _np.allclose(gate, Id)]
     nOperations = len(opLabels)
+    lindbladMxBasis = _Basis.cast(mxBasis, model_a.dim)
+    nonI_lbls = lindbladMxBasis.labels[1:] # skip [0] == Identity
 
     error_superops = []; ptype_counts = {}  # ; ptype_scaleFctrs = {}
     error_labels = []
-    for ptype in ("hamiltonian", "stochastic", "affine"):
-        lindbladMxs = _tools.std_error_generators(model_a.dim, ptype,
-                                                  mxBasis)
-        lindbladMxBasis = _Basis.cast(mxBasis, model_a.dim)
 
-        lindbladMxs = lindbladMxs[1:]  # skip [0] == Identity
-        lbls = lindbladMxBasis.labels[1:]
+    for ptype in ("H", "S", "C", "A"):
+        dual_eegs = _tools.elementary_errorgens_dual(model_a.dim, ptype, mxBasis)
+        if ptype in ("H", "S"):
+            lindbladMxs = [dual_eegs[_LEEL(ptype, (bel,))] for bel in nonI_lbls]
+            error_labels.extend(["%s(%s)" % (ptype[0], bel) for bel in nonI_lbls])
+        else:
+            lindbladMxs = [dual_eegs[_LEEL(ptype, (bel1, bel2))]
+                           for i, bel1 in enumerate(nonI_lbls) for bel2 in nonI_lbls[i + 1:]]
+            error_labels.extend(["%s(%s,%s)" % (ptype[0], bel1, bel2)
+                                 for i, bel1 in enumerate(nonI_lbls) for bel2 in nonI_lbls[i + 1:]])
 
         ptype_counts[ptype] = len(lindbladMxs)
         error_superops.extend([_tools.change_basis(eg, "std", mxBasis) for eg in lindbladMxs])
-        error_labels.extend(["%s(%s)" % (ptype[0], lbl) for lbl in lbls])
     nSuperOps = len(error_superops)
     assert(len(error_labels) == nSuperOps)
 
@@ -1947,10 +1984,14 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
 
     def _get_projection_vec(errgen):
         proj = []
-        for ptype in ("hamiltonian", "stochastic", "affine"):
-            proj.append(_tools.std_errorgen_projections(
-                errgen, ptype, mxBasis, mxBasis)[1:])  # skip [0] == Identity
-        return _np.concatenate(proj)
+        for ptype in ("H", "S", "C", "A"):
+            projections = _tools.project_errorgen(errgen, ptype, mxBasis, mxBasis)
+            if ptype in ("H", "S"):
+                proj.extend([projections[_LEEL(ptype, (bel,))] for bel in nonI_lbls])
+            else:
+                proj.extend([projections[_LEEL(ptype, (bel1, bel2))]
+                             for i, bel1 in enumerate(nonI_lbls) for bel2 in nonI_lbls[i + 1:]])
+        return _np.array(proj)
 
     def first_order_noise(opstr, err_sup_op, gl_with_err):
         noise = _np.zeros((model_b.dim, model_b.dim), 'd')
@@ -2074,8 +2115,13 @@ def general_decomposition(model_a, model_b):
 
         decomp[gl + ' log inexactness'] = _np.linalg.norm(_spl.expm(logG) - gate)
 
-        hamProjs, hamGens = _tools.std_errorgen_projections(
-            logG, "hamiltonian", mxBasis, mxBasis, return_generators=True)
+        #hamProjs, hamGens = _tools.std_errorgen_projections(
+        #    logG, "hamiltonian", mxBasis, mxBasis, return_generators=True)
+        blk = _LindbladCoefficientBlock('ham', mxBasis)
+        blk.set_from_errorgen_projections(logG, mxBasis)
+        hamProjs = blk.block_data
+        #hamGens = blk.create_lindblad_term_superoperators(mxBasis)
+
         norm = _np.linalg.norm(hamProjs)
         decomp[gl + ' axis'] = hamProjs / norm if (norm > 1e-15) else hamProjs
 
@@ -2086,11 +2132,12 @@ def general_decomposition(model_a, model_b):
         # thus the factor of 2.0 above.
 
         basis_mxs = mxBasis.elements
-        scalings = [(_np.linalg.norm(hamGens[i]) / _np.linalg.norm(_tools.hamiltonian_to_lindbladian(mx))
-                     if _np.linalg.norm(hamGens[i]) > 1e-10 else 0.0)
-                    for i, mx in enumerate(basis_mxs)]
+        # REMOVE scalings = [(_np.linalg.norm(hamGens[i]) / _np.linalg.norm(_tools.hamiltonian_to_lindbladian(mx))
+        # REMOVE              if _np.linalg.norm(hamGens[i]) > 1e-10 else 0.0)
+        # REMOVE             for i, mx in enumerate(basis_mxs)]
+        # REMOVE hamMx = sum([s * c * bmx for s, c, bmx in zip(scalings, hamProjs, basis_mxs)])
         #really want hamProjs[i] * lindbladian_to_hamiltonian(hamGens[i]) but fn doesn't exists (yet)
-        hamMx = sum([s * c * bmx for s, c, bmx in zip(scalings, hamProjs, basis_mxs)])
+        hamMx = sum([c * bmx for c, bmx in zip(hamProjs, basis_mxs)])
         decomp[gl + ' hamiltonian eigenvalues'] = _np.array(_np.linalg.eigvals(hamMx))
 
     for gl in opLabels:
