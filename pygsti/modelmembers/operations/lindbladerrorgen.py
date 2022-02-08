@@ -133,7 +133,7 @@ class LindbladErrorgen(_LinearOperator):
         return cls(lindblad_coefficient_blocks, lindblad_basis, mx_basis, evotype, state_space)
 
     @classmethod
-    def from_operation_matrix(cls, op_matrix, parameterization='CPTP', lindblad_basis='pp',
+    def from_operation_matrix(cls, op_matrix, parameterization='CPTP', lindblad_basis='PP',
                               mx_basis='pp', truncate=True, evotype="default", state_space=None):
         """
         Creates a Lindblad-parameterized error generator from an operation.
@@ -223,7 +223,7 @@ class LindbladErrorgen(_LinearOperator):
                                         mx_basis, truncate, evotype, state_space=state_space)
 
     @classmethod
-    def from_error_generator(cls, errgen_or_dim, parameterization="CPTP", lindblad_basis='pp', mx_basis='pp',
+    def from_error_generator(cls, errgen_or_dim, parameterization="CPTP", lindblad_basis='PP', mx_basis='pp',
                              truncate=True, evotype="default", state_space=None):
         """
         TODO: docstring - take from now-private version below Note: errogen_or_dim can be an integer => zero errgen
@@ -238,7 +238,7 @@ class LindbladErrorgen(_LinearOperator):
                                          mx_basis, truncate, evotype, state_space)
 
     @classmethod
-    def _from_error_generator(cls, errgen, parameterization="CPTP", ham_basis="pp", nonham_basis="pp",
+    def _from_error_generator(cls, errgen, parameterization="CPTP", ham_basis="PP", nonham_basis="PP",
                               mx_basis="pp", truncate=True, evotype="default", state_space=None):
         """
         Create a Lindblad-form error generator from an error generator matrix and a basis.
@@ -371,7 +371,7 @@ class LindbladErrorgen(_LinearOperator):
         return cls(blocks, "auto", mx_basis, evotype, state_space)
 
     @classmethod
-    def from_elementary_errorgens(cls, elementary_errorgens, parameterization='auto', elementary_errorgen_basis='pp',
+    def from_elementary_errorgens(cls, elementary_errorgens, parameterization='auto', elementary_errorgen_basis='PP',
                                   mx_basis="pp", truncate=True, evotype="default", state_space=None):
 
         #convert elementary errorgen labels to *local* labels (ok to specify w/global labels)
@@ -913,7 +913,7 @@ class LindbladErrorgen(_LinearOperator):
         #onenorm = 0.0
 
         # Update 1-norm of composite errorgen
-        onenorm = sum([_np.dot(blk.block_data.flat, one_norms) for blk, (_, one_norms)
+        onenorm = sum([_np.dot(_np.abs(blk.block_data.flat), one_norms) for blk, (_, one_norms)
                        in zip(self.coefficient_blocks, self.lindblad_term_superops_and_1norms)])
         assert(_np.imag(onenorm) < 1e-6)
         onenorm = _np.real(onenorm)
@@ -1858,7 +1858,7 @@ class LindbladErrorgen(_LinearOperator):
             blk_superop_derivs.append(superop_deriv)
             off += blk.num_params
 
-        derivMx = _spl.block_diag(*blk_superop_derivs)
+        derivMx = _np.concatenate(blk_superop_derivs, axis=1)
 
         #REMOVE (OLD)
         #dim = self.dim

@@ -170,7 +170,7 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
     for i, rho0 in enumerate(basis_matrices('std', d2)):  # rho0 == input density mx
         # Only difference between H/S/C/A is how they transform input density matrices
         if typ == 'H':
-            rho1 = -1j * (p @ rho0 - rho0 @ p)
+            rho1 = -1j * (p @ rho0 - rho0 @ p)  # Add "/2" to have PP ham gens match previous versions of pyGSTi
         elif typ == 'S':
             pdag_p = (pdag @ p)
             rho1 = p @ rho0 @ pdag - 0.5 * (pdag_p @ rho0 + rho0 @ pdag_p)

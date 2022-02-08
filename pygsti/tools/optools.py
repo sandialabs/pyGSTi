@@ -1436,13 +1436,9 @@ def operation_from_error_generator(error_gen, target_op, mx_basis, typ="logG-log
 #    return scaleFctr
 
 
-def elementary_errorgens_dual(dim, typ, basis):
+def elementary_errorgens(dim, typ, basis):
     """
-    Compute the gate error generators for a standard set of errors.
-
-    Specifically, these errors can correspond to "Hamiltonian"-,
-    "Stochastic"-, or "Affine"-type errors in terms of the elements
-    of the specified basis.
+    Compute the elementary error generators of a certain type.
 
     Parameters
     ----------
@@ -1455,7 +1451,69 @@ def elementary_errorgens_dual(dim, typ, basis):
         The type of error generators to construct.
 
     basis : Basis or str
-        Which basis is used to construct the error generators.
+        Which basis is used to construct the error generators.  Note that this
+        is not the basis *of* the returned error generators (which is always
+        the `'std'` matrix-unit basis) but that used to define the different
+        elementary generator operations themselves.
+
+    Returns
+    -------
+    generators : numpy.ndarray
+        An array of shape (#basis-elements,dim,dim).  `generators[i]` is the
+        generator corresponding to the ith basis matrix in the
+        *std* (matrix unit) basis.  (Note that in most cases #basis-elements
+        == dim, so the size of `generators` is (dim,dim,dim) ).  Each
+        generator is normalized so that as a vector it has unit Frobenius norm.
+    """
+    d2 = dim
+    d = int(_np.sqrt(d2))
+    assert(_np.isclose(d * d, d2))  # d2 must be a perfect square
+    assert(typ in ('H', 'S', 'C', 'A')), "`typ` must be one of 'H', 'S', 'C', or 'A'"
+
+    #Get a list of the basis matrices
+    basis = _Basis.cast(basis, d2)
+    basis_lbls = basis.labels[1:]  # skip identity
+    basis_mxs = basis.elements[1:]  # skip identity
+    assert(_np.allclose(basis.elements[0], _np.identity(d) * (_np.linalg.norm(basis.elements[0]) / _np.sqrt(d)))), \
+        "First element of basis must be the identity!"
+    assert(len(basis_mxs) < d2)  # OK if there are fewer basis matrices (e.g. for bases w/multiple blocks)
+
+    elem_errgens = {}
+    if typ in 'HS':
+        for lbl, mx in zip(basis_lbls, basis_mxs):
+            key = _LocalElementaryErrorgenLabel(typ, (lbl,))
+            elem_errgens[key] = _lt.create_elementary_errorgen(typ, mx)
+    else:  # typ in 'CA'
+        for i, (lblA, mxA) in enumerate(zip(basis_lbls, basis_mxs)):
+            for lblB, mxB in zip(basis_lbls[i + 1:], basis_mxs[i + 1:]):
+                key = _LocalElementaryErrorgenLabel(typ, (lblA, lblB))
+                elem_errgens[key] = _lt.create_elementary_errorgen(typ, mxA, mxB)
+
+    return elem_errgens
+
+
+def elementary_errorgens_dual(dim, typ, basis):
+    """
+    Compute the set of dual-to-elementary error generators of a given type.
+
+    These error generators are dual to the elementary error generators
+    constructed by :function:`elementary_errorgens`.
+
+    Parameters
+    ----------
+    dim : int
+        The dimension of the error generators to be returned.  This is also the
+        associated gate dimension, and must be a perfect square, as `sqrt(dim)`
+        is the dimension of density matrices. For a single qubit, dim == 4.
+
+    typ : {'H', 'S', 'C', 'A'}
+        The type of error generators to construct.
+
+    basis : Basis or str
+        Which basis is used to construct the error generators.  Note that this
+        is not the basis *of* the returned error generators (which is always
+        the `'std'` matrix-unit basis) but that used to define the different
+        elementary generator operations themselves.
 
     Returns
     -------

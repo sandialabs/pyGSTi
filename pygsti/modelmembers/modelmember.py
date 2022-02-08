@@ -615,7 +615,9 @@ class ModelMember(ModelChild, _NicelySerializable):
                     starting_index += num_new_params
                     tot_new_params += num_new_params
 
-                submembers_with_params = [subm for subm in self.submembers() if subm.gpindices != slice(0, 0)]
+                submembers_with_params = [subm for subm in self.submembers() if
+                                          ((isinstance(subm.gpindices, slice) and subm.gpindices != slice(0, 0))
+                                           or (not isinstance(subm.gpindices, slice) and len(subm.gpindices) > 0))]
                 gpindices_slice_if_possible = _merge_indices(
                         [subm.gpindices for subm in submembers_with_params], submembers_with_params)
 

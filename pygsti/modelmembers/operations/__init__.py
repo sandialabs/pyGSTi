@@ -258,7 +258,7 @@ def convert(operation, to_type, basis, extra=None):
                 elif isinstance(operation, StaticUnitaryOp):
                     unitary_postfactor = operation.copy()
 
-                proj_basis = 'pp' if operation.state_space.is_entirely_qubits else basis
+                proj_basis = 'PP' if operation.state_space.is_entirely_qubits else basis
                 if unitary_postfactor is not None:
                     errorgen = LindbladErrorgen.from_error_generator(operation.state_space.dim, to_type, proj_basis,
                                                                      basis, truncate=True, evotype=operation.evotype,

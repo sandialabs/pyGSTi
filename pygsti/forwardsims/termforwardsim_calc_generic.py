@@ -17,6 +17,7 @@ import numpy as _np
 from pygsti.tools import listtools as _lt
 
 SMALL = 1e-5
+LOGSMALL = -5
 # a number which is used in place of zero within the
 # product of term magnitudes to keep a running path
 # magnitude from being zero (and losing memory of terms).
@@ -1050,9 +1051,10 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                 nzeros = current_nzeros
 
                 if denom == 0:
-                    denom = SMALL; nzeros -= 1
+                    # Note: adjust logmag because when term's mag == 0, it's logmag == 0 also (convention)
+                    denom = SMALL; nzeros -= 1; logmag -= LOGSMALL
                 if numerator == 0:
-                    numerator = SMALL; nzeros += 1
+                    numerator = SMALL; nzeros += 1; logmag += LOGSMALL
 
                 mag = current_mag * (numerator / denom)
                 actual_mag = mag if (nzeros == 0) else 0.0  # magnitude is actually zero if nzeros > 0

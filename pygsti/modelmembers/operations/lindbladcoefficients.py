@@ -428,6 +428,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             for k, bel_label in enumerate(self._bel_labels):  # k == index of local parameter that is coefficient
                 # ensure all Rank1Term operators are *unitary*, so we don't need to track their "magnitude"
                 scale, U = _mt.to_unitary(self._basis[bel_label])
+                #scale /= 2  # DEBUG REMOVE - this makes ham terms w/PP the same as earlier versions of pyGSTi
 
                 if self._param_mode == 'elements':
                     cpi = (pio + k,)  # coefficient's parameter indices (with offset)
@@ -436,13 +437,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
                     scale *= self.block_data[k]  # but scale factor gets multiplied by (static) coefficient
                 else: raise ValueError("Internal error: invalid param mode!!")
 
+                #Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                     _Polynomial({cpi: -1j * scale}, mpv), U, IDENT, evotype, state_space))
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                     _Polynomial({cpi: +1j * scale}, mpv), IDENT, U.conjugate().T, evotype, state_space))
-            else:
-                raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
-                                 % (self._param_mode, self._block_type))
 
         elif self._block_type == 'other_diagonal':
             for k, bel_label in enumerate(self._bel_labels):  # k == index of local parameter that is coefficient
@@ -459,13 +458,15 @@ class LindbladCoefficientBlock(_NicelySerializable):
                     scale *= self.block_data[k]  # but scale factor gets multiplied by (static) coefficient
                 else: raise ValueError("Internal error: invalid param mode!!")
 
-                pw = 2 if self._param_mode in ("cptp", "depol") else 1
+                pw = 2 if self._param_mode in ("cholesky", "depol") else 1
                 Lm = Ln = U
                 Lm_dag = Lm.conjugate().T  # assumes basis is dense (TODO: make sure works
                 Ln_dag = Ln.conjugate().T  # for sparse case too - and np.dots below!)
 
+                #Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
+                # e.g. in 2nd term, _np.dot(Ln_dag, Lm) == adjoint(_np.dot(Lm_dag,Ln))
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
-                    _Polynomial({cpi * pw: 1.0 * scale}, mpv), Ln, Lm_dag, evotype, state_space))
+                    _Polynomial({cpi * pw: 1.0 * scale}, mpv), Ln, Lm, evotype, state_space))
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                     _Polynomial({cpi * pw: -0.5 * scale}, mpv), IDENT, _np.dot(Ln_dag, Lm), evotype, state_space))
                 Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
@@ -508,6 +509,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
                         polyTerms = {(): self.block_data[i, j]}
                     else: raise ValueError("Internal error: invalid param mode!!")
 
+                    #Note: 2nd op to create_from must be the *adjoint* of the op you'd normally write down
                     base_poly = _Polynomial(polyTerms, mpv) * scale
                     Lterms.append(_term.RankOnePolynomialOpTerm.create_from(
                         1.0 * base_poly, Ln, Lm, evotype, state_space))
@@ -876,7 +878,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             in the case of `'other'` blocks.
         """
         if truncate is False:
-            ttol = -1e-12  # truncation tolerance
+            ttol = 0  # (was -1e-12) # truncation tolerance
         elif truncate is True:
             ttol = -_np.inf
         else:
@@ -904,10 +906,10 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 # params is a *single-element* 1D vector of the sqrt of each diagonal el
                 assert(self._param_mode == "reldepol" or all([v >= ttol for v in self.block_data])), \
                     "Lindblad stochastic coefficients are not positive (truncate == %s)!" % str(truncate)
-                assert(all([_np.isclose(v, self.block_data[0], atol=abs(ttol)) for v in self.block_data])), \
+                assert(all([_np.isclose(v, self.block_data[0], atol=1e-6) for v in self.block_data])), \
                     "Diagonal lindblad coefficients are not equal (truncate == %s)!" % str(truncate)
                 if self._param_mode == "depol":
-                    avg_coeff = _np.mean(self.block_data.clip(1e-16, 1e100))
+                    avg_coeff = _np.mean(self.block_data.clip(0, 1e100))  # was 1e-16
                     params = _np.array([_np.sqrt(_np.real(avg_coeff))], 'd')  # shape (1,)
                 else:  # "reldepol" -- no sqrt since not necessarily positive
                     avg_coeff = _np.mean(self.block_data)
@@ -916,7 +918,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             elif self._param_mode == "cholesky":  # params is a 1D vector of the sqrts of diagonal els
                 assert(all([v >= ttol for v in self.block_data])), \
                     "Lindblad stochastic coefficients are not positive (truncate == %s)!" % str(truncate)
-                coeffs = self.block_data.clip(1e-16, 1e100)
+                coeffs = self.block_data.clip(0, 1e100)  # was 1e-16
                 params = _np.sqrt(coeffs.real)  # shape (len(self._bel_labels),)
             elif self._param_mode == "elements":  # "unconstrained":
                 # params is a 1D vector of the real diagonal els of coefficient mx
@@ -933,27 +935,55 @@ class LindbladCoefficientBlock(_NicelySerializable):
             params = _np.empty((num_bels, num_bels), 'd')
 
             if self._param_mode == "cholesky":  # params mx stores Cholesky decomp
-                #push any slightly negative evals of other_projs positive so that
-                # the Cholesky decomp will work.
                 #assert(_np.allclose(block_data, block_data.T.conjugate()))
-                #evals, U = _np.linalg.eigh(block_data)  # works too (assert hermiticity above)
-                evals, U = _np.linalg.eig(self.block_data)
-                Ui = _np.linalg.inv(U)
 
-                assert(all([ev >= ttol for ev in evals])), \
+                #Identify any all-zero row&col indices, i.e. when the i-th row and i-th
+                # column are all zero.  When this happens, remove them from the cholesky decomp,
+                # algorithm and perofrm this decomp manually: the corresponding Lmx row & col
+                # are just 0:
+                zero_inds = set([i for i in range(self.block_data.shape[0])
+                                 if (_np.linalg.norm(self.block_data[i, :])
+                                     + _np.linalg.norm(self.block_data[:, i])) < 1e-12 * self.block_data.shape[0]])
+                num_nonzero = self.block_data.shape[0] - len(zero_inds)
+
+                next_nonzero = 0; next_zero = num_nonzero
+                perm = _np.zeros(self.block_data.shape, 'd')  # permute all zero rows/cols to end
+                for i in range(self.block_data.shape[0]):
+                    if i in zero_inds:
+                        perm[next_zero, i] = 1.0; next_zero += 1
+                    else:
+                        perm[next_nonzero, i] = 1.0; next_nonzero += 1
+
+                perm_block_data = perm @ self.block_data @ perm
+                nonzero_block_data = perm_block_data[0:num_nonzero, 0:num_nonzero]
+                assert(_np.isclose(_np.linalg.norm(self.block_data), _np.linalg.norm(nonzero_block_data)))
+
+                #evals, U = _np.linalg.eigh(nonzero_block_data)  # works too (assert hermiticity above)
+                evals, U = _np.linalg.eig(nonzero_block_data)
+
+                assert(all([ev > ttol for ev in evals])), \
                     ("Lindblad coefficients are not CPTP (truncate == %s)! (largest neg = %g)"
                      % (str(truncate), min(evals.real)))
 
-                pos_evals = evals.clip(1e-16, None)
-                block_data = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
-                try:
-                    Lmx = _np.linalg.cholesky(block_data)
+                if ttol < 0:  # if we're truncating and assert above allows *negative* eigenvalues
+                    #push any slightly negative evals of other_projs positive so that
+                    # the Cholesky decomp will work.
+                    Ui = _np.linalg.inv(U)
+                    pos_evals = evals.clip(1e-16, None)  # no need to clip anymore (REMOVE)
+                    nonzero_block_data = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
+                    try:
+                        nonzero_Lmx = _np.linalg.cholesky(nonzero_block_data)
+                        # if Lmx not postitive definite, try again with 1e-12 (same lines as above)
+                    except _np.linalg.LinAlgError:                         # pragma: no cover
+                        pos_evals = evals.clip(1e-12, 1e100)                # pragma: no cover
+                        nonzero_block_data = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))  # pragma: no cover
+                        nonzero_Lmx = _np.linalg.cholesky(nonzero_block_data)
+                else:  # truncate == False or == 0 case
+                    nonzero_Lmx = _np.linalg.cholesky(nonzero_block_data)
 
-                # if Lmx not postitive definite, try again with 1e-12 (same lines as above)
-                except _np.linalg.LinAlgError:                         # pragma: no cover
-                    pos_evals = evals.clip(1e-12, 1e100)                # pragma: no cover
-                    block_data = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))  # pragma: no cover
-                    Lmx = _np.linalg.cholesky(block_data)
+                perm_Lmx = _np.zeros(self.block_data.shape, 'complex')
+                perm_Lmx[0:num_nonzero, 0:num_nonzero] = nonzero_Lmx
+                Lmx = perm.T @ perm_Lmx @ perm.T
 
                 for i in range(num_bels):
                     assert(_np.linalg.norm(_np.imag(Lmx[i, i])) < IMAG_TOL)
