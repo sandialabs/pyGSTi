@@ -32,7 +32,7 @@ from pygsti import models as _models
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti import baseobjs as _baseobjs
-from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+from pygsti.processors import QuditProcessorSpec as _QuditProcessorSpec
 from pygsti.modelmembers import operations as _op
 from pygsti.models import Model as _Model
 from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup, GaugeGroupElement as _GaugeGroupElement
@@ -54,7 +54,7 @@ class HasProcessorSpec(object):
 
     Parameters
     ----------
-    processorspec_filename_or_obj : QubitProcessorSpec or str
+    processorspec_filename_or_obj : QuditProcessorSpec or str
         The processor API used by this experiment design.
     """
 
@@ -109,7 +109,7 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
 
     Parameters
     ----------
-    processorspec_filename_or_obj : QubitProcessorSpec or str
+    processorspec_filename_or_obj : QuditProcessorSpec or str
         The processor API used by this experiment design.
 
     circuit_lists : list
@@ -147,7 +147,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
     Parameters
     ----------
-    processorspec_filename_or_obj : QubitProcessorSpec or str
+    processorspec_filename_or_obj : QuditProcessorSpec or str
         The processor API used by this experiment design.
 
     prep_fiducial_list_or_filename : list or str
@@ -1606,7 +1606,7 @@ class StandardGST(_proto.Protocol):
 # ------------------ HELPER FUNCTIONS -----------------------------------
 
 def _load_pspec(processorspec_filename_or_obj):
-    if not isinstance(processorspec_filename_or_obj, _QubitProcessorSpec):
+    if not isinstance(processorspec_filename_or_obj, _QuditProcessorSpec):
         with open(processorspec_filename_or_obj, 'rb') as f:
             return _pickle.load(f)
     else:
