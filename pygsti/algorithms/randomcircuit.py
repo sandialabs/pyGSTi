@@ -934,7 +934,7 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
 #     p_rc_dict = {}
 #     circuit_dict = {}
 
-#     if isinstance(length, int):
+#     if isinstance(length, _np.int64):
 #         length_per_subset = [length for i in range(len(structure))]
 #     else:
 #         length_per_subset = length
@@ -1492,8 +1492,8 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
     # Find the expected outcome of the circuit.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit, pspec=pspec)
     if conditionaltwirl:  # s_out is not always the identity with a conditional twirl, only conditional on prep/measure.
-        assert(_np.array_equal(s_out[:n, n:], _np.zeros((n, n), int))), "Compiler has failed!"
-    else: assert(_np.array_equal(s_out, _np.identity(2 * n, int))), "Compiler has failed!"
+        assert(_np.array_equal(s_out[:n, n:], _np.zeros((n, n), _np.int64))), "Compiler has failed!"
+    else: assert(_np.array_equal(s_out, _np.identity(2 * n, _np.int64))), "Compiler has failed!"
 
     # Find the ideal output of the circuit.
     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
@@ -1778,8 +1778,8 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
 #     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit, pspec=pspec)
 #     if conditionaltwirl:  # s_out is not always the identity with a conditional twirl,
 #         # only conditional on prep/measure.
-#         assert(_np.array_equal(s_out[:n, n:], _np.zeros((n, n), int))), "Compiler has failed!"
-#     else: assert(_np.array_equal(s_out, _np.identity(2 * n, int))), "Compiler has failed!"
+#         assert(_np.array_equal(s_out[:n, n:], _np.zeros((n, n), _np.int64))), "Compiler has failed!"
+#     else: assert(_np.array_equal(s_out, _np.identity(2 * n, _np.int64))), "Compiler has failed!"
 
 #     # Find the ideal output of the circuit.
 #     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
@@ -2177,8 +2177,8 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
     rand_state = _np.random.RandomState(seed)  # OK if seed is None
 
     # Initialize the identity circuit rep.
-    s_composite = _np.identity(2 * n, int)
-    p_composite = _np.zeros((2 * n), int)
+    s_composite = _np.identity(2 * n, _np.int64)
+    p_composite = _np.zeros((2 * n), _np.int64)
     # Initialize an empty circuit
     full_circuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
 
@@ -2219,7 +2219,7 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
     # Find the expected outcome of the circuit.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit, pspec=pspec)
     # Check the output is the identity up to Paulis.
-    assert(_np.array_equal(s_out[:n, n:], _np.zeros((n, n), int)))
+    assert(_np.array_equal(s_out[:n, n:], _np.zeros((n, n), _np.int64)))
     # Find the ideal-out of the circuit, as a bit-string.
     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
     s_outstate, p_outstate = _symp.apply_clifford_to_stabilizer_state(s_out, p_out, s_inputstate, p_inputstate)
@@ -2525,7 +2525,7 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
 
     # The full circuit should be, up to a Pauli, the identity.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
-    assert(_np.array_equal(s_out, _np.identity(2 * n, int)))
+    assert(_np.array_equal(s_out, _np.identity(2 * n, _np.int64)))
 
     # Find the error-free output.
     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
@@ -2647,7 +2647,7 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
 #         rndm_indices = rndm.randint(0, len(group), m)
 #         if interleaved:
 #             interleaved_index = group.label_indices[interleaved]
-#             interleaved_indices = interleaved_index * _np.ones((m, 2), int)
+#             interleaved_indices = interleaved_index * _np.ones((m, 2), _np.int64)
 #             interleaved_indices[:, 0] = rndm_indices
 #             rndm_indices = interleaved_indices.flatten()
 
@@ -2677,7 +2677,7 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
 #         rndm_indices = rndm.randint(0, len(opLabels), m)
 #         if interleaved:
 #             interleaved_index = opLabels.index(interleaved)
-#             interleaved_indices = interleaved_index * _np.ones((m, 2), int)
+#             interleaved_indices = interleaved_index * _np.ones((m, 2), _np.int64)
 #             interleaved_indices[:, 0] = rndm_indices
 #             rndm_indices = interleaved_indices.flatten()
 
@@ -2716,7 +2716,7 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
 #             rndm_indices = rndm.randint(0, len(opLabels), m)
 #             if interleaved:
 #                 interleaved_index = opLabels.index(interleaved)
-#                 interleaved_indices = interleaved_index * _np.ones((m, 2), int)
+#                 interleaved_indices = interleaved_index * _np.ones((m, 2), _np.int64)
 #                 interleaved_indices[:, 0] = rndm_indices
 #                 rndm_indices = interleaved_indices.flatten()
 #             random_string = [opLabels[i] for i in rndm_indices]
@@ -2725,7 +2725,7 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
 #             rndm_indices = rndm.randint(0, len(group), m)
 #             if interleaved:
 #                 interleaved_index = group.label_indices[interleaved]
-#                 interleaved_indices = interleaved_index * _np.ones((m, 2), int)
+#                 interleaved_indices = interleaved_index * _np.ones((m, 2), _np.int64)
 #                 interleaved_indices[:, 0] = rndm_indices
 #                 rndm_indices = interleaved_indices.flatten()
 #             random_string = [group.labels[i] for i in rndm_indices]
@@ -3060,7 +3060,7 @@ def create_random_germpower_mirror_circuits(pspec, absolute_compilation, depths,
 
         # The full circuit should be, up to a Pauli, the identity.
         s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
-        assert(_np.array_equal(s_out, _np.identity(2 * n, int)))
+        assert(_np.array_equal(s_out, _np.identity(2 * n, _np.int64)))
 
         # Find the error-free output.
         s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
