@@ -244,7 +244,7 @@ def custom_least_squares_fit(lengths, asps, n, a=None, b=None, seed=None, rtype=
     variable['a'] = True
     variable['b'] = True
     variable['p'] = True
-    lengths = _np.array(lengths, int)
+    lengths = _np.array(lengths, _np.int64)
     asps = _np.array(asps, 'd')
 
     # The fit to do if a fixed value for a is given
