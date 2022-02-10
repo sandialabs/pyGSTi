@@ -1263,7 +1263,7 @@ def fast_compose_cliffords(np.ndarray[np.int64_t, ndim=2] s1, np.ndarray[np.int6
     cdef INT N = s1.shape[0] // 2 # Number of qubits
 
     # Temporary space of C^T U C terms
-    cdef np.ndarray[np.int64_t, ndim=2, mode="c"] inner = np.zeros([2*N, 2*N], dtype=np.int)
+    cdef np.ndarray[np.int64_t, ndim=2, mode="c"] inner = np.zeros([2*N, 2*N], dtype=np.int64)
 
     # Outputs
     cdef np.ndarray[np.int64_t, ndim=2, mode="c"] s = np.zeros([2*N, 2*N], dtype=np.int64)
