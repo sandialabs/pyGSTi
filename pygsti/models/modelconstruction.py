@@ -824,6 +824,96 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     layer = _op.ComposedOp([ideal_gate, noiseop]) if (noiseop is not None) else ideal_gate
                     ret.operations[key] = layer
 
+    # Instruments:
+    for instrument_name in processor_spec.instrument_names:
+        instrument_spec = processor_spec.instrument_specifier(instrument_name)
+
+        #FUTURE: allow instruments to be embedded
+        #resolved_avail = processor_spec.resolved_availability(instrument_name)
+        resolved_avail = [None]  # all instrument (so far) act on all the qubits
+
+        # resolved_avail is a list/tuple of available sslbls for the current gate/factory
+        for inds in resolved_avail:  # inds are target qubit labels
+            key = _label.Label(instrument_name, inds)
+
+            if isinstance(instrument_spec, str):
+                if instrument_spec == "Iz":
+                    #NOTE: this is very inefficient currently - there should be a better way of
+                    # creating an Iz instrument in the FUTURE
+                    inst_members = {}
+                    for ekey, effect_vec in _povm.ComputationalBasisPOVM(nqubits=len(qubit_labels), evotype=evotype,
+                                                                         state_space=state_space).items():
+                        E = effect_vec.to_dense('HilbertSchmidt').reshape((state_space.dim, 1))
+                        inst_members[ekey] = _np.dot(E, E.T)  # (effect vector is a column vector)
+                    ideal_instrument = _instrument.Instrument(inst_members)
+                else:
+                    raise ValueError("Unrecognized instrument spec '%s'" % instrument_spec)
+
+            elif isinstance(instrument_spec, dict):
+
+                def _spec_to_densevec(spec, is_prep):
+                    num_qubits = len(qubit_labels)
+                    if isinstance(spec, str):
+                        if all([l in ('0', '1') for l in spec]):
+                            binary_index = effect_spec
+                            assert(len(binary_index) == num_qubits), \
+                                "Wrong number of qubits in '%s': expected %d" % (spec, num_qubits)
+                            v = _np.zeros(2**num_qubits); v[int(binary_index, 2)] = 1.0
+                        elif (not is_prep) and spec.startswith("E") and spec[len('E'):].isdigit():
+                            index = int(spec[len('E'):])
+                            assert(0 <= index < 2**num_qubits), \
+                                "Index in '%s' out of bounds for state of %d qubits" % (spec, num_qubits)
+                            v = _np.zeros(2**num_qubits); v[index] = 1.0
+                        elif is_prep and spec.startswith("rho") and spec[len('rho'):].isdigit():
+                            index = int(effect_spec[len('rho'):])
+                            assert(0 <= index < 2**num_qubits), \
+                                "Index in '%s' out of bounds for state of %d qubits" % (spec, num_qubits)
+                            v = _np.zeros(2**num_qubits); v[index] = 1.0
+                        else:
+                            raise ValueError("Unrecognized instrument member spec '%s'" % spec)
+                    elif isinstance(spec, _np.ndarray):
+                        assert(len(spec) == 2**num_qubits), \
+                            "Expected length-%d (not %d!) array as a %d-qubit specifier!" % (
+                                2**num_qubits, len(spec), num_qubits)
+                        v = spec
+                    else:
+                        raise ValueError("Invalid effect or state prep spec: %s" % str(spec))
+
+                    return _bt.change_basis(_ot.state_to_dmvec(v), 'std', 'pp')
+
+                # elements are key, list-of-2-tuple pairs
+                inst_members = {}
+                for k, lst in instrument_spec.items():
+                    member = None
+                    for effect_spec, prep_spec in lst:
+                        effect_vec = _spec_to_densevec(effect_spec, is_prep=False)
+                        prep_vec = _spec_to_densevec(prep_spec, is_prep=True)
+                        if member is None:
+                            member = _np.outer(effect_vec, prep_vec)
+                        else:
+                            member += _np.outer(effect_vec, prep_vec)
+
+                    assert(member is not None), \
+                        "You must provide at least one rank-1 specifier for each instrument member!"
+                    inst_members[k] = member
+                ideal_instrument = _instrument.Instrument(inst_members)
+            else:
+                raise ValueError("Invalid instrument spec: %s" % str(instrument_spec))
+
+            if inds is None or inds == tuple(qubit_labels):  # then no need to embed
+                #ideal_gate = _op.create_from_unitary_mx(gate_unitary, ideal_gate_type, 'pp',
+                #                                        None, evotype, state_space)
+                pass  # ideal_instrument already created
+            else:
+                raise NotImplementedError("Embedded Instruments aren't supported yet")
+                # FUTURE: embed ideal_instrument onto qubits given by layer key (?)
+
+            #TODO: once we can compose instruments, compose with noise op here
+            #noiseop = modelnoise.create_errormap(key, evotype, state_space, target_labels=inds)
+            #layer = _op.ComposedOp([ideal_gate, noiseop]) if (noiseop is not None) else ideal_gate
+            layer = ideal_instrument
+            ret.instruments[key] = layer
+
     # SPAM:
     local_noise = False; independent_gates = True; independent_spam = True
     prep_layers, povm_layers = _create_spam_layers(processor_spec, modelnoise, local_noise,
@@ -891,23 +981,23 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                                                       qubit_graph=processor_spec.qubit_graph)
             if povmNoiseMap is not None: povm_ops.append(povmNoiseMap)
 
-    def _add_to_prep_layers(ideal_prep, prep_ops):
+    def _add_to_prep_layers(ideal_prep, prep_ops, prep_name):
         """ Adds noise elements to prep_layers """
         if len(prep_ops_to_compose) == 0:
-            prep_layers['rho0'] = ideal_prep
+            prep_layers[prep_name] = ideal_prep
         elif len(prep_ops_to_compose) == 1:
-            prep_layers['rho0'] = _state.ComposedState(ideal_prep, prep_ops[0])
+            prep_layers[prep_name] = _state.ComposedState(ideal_prep, prep_ops[0])
         else:
-            prep_layers['rho0'] = _state.ComposedState(ideal_prep, _op.ComposedOp(prep_ops))
+            prep_layers[prep_name] = _state.ComposedState(ideal_prep, _op.ComposedOp(prep_ops))
 
-    def _add_to_povm_layers(ideal_povm, povm_ops):
+    def _add_to_povm_layers(ideal_povm, povm_ops, povm_name):
         """ Adds noise elements to povm_layers """
         if len(povm_ops_to_compose) == 0:
-            povm_layers['Mdefault'] = ideal_povm
+            povm_layers[povm_name] = ideal_povm
         elif len(povm_ops_to_compose) == 1:
-            povm_layers['Mdefault'] = _povm.ComposedPOVM(povm_ops[0], ideal_povm, 'pp')
+            povm_layers[povm_name] = _povm.ComposedPOVM(povm_ops[0], ideal_povm, 'pp')
         else:
-            povm_layers['Mdefault'] = _povm.ComposedPOVM(_op.ComposedOp(povm_ops), ideal_povm, 'pp')
+            povm_layers[povm_name] = _povm.ComposedPOVM(_op.ComposedOp(povm_ops), ideal_povm, 'pp')
 
     def _create_nq_noise(lndtype):
         if local_noise:
@@ -928,116 +1018,266 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
     # Here's where the actual logic starts.  The above functions avoid repeated blocks within the different
     # cases below.
 
-    # Prep logic
-    if isinstance(ideal_prep_type, (tuple, list)): ideal_prep_type = ideal_prep_type[0]  # HACK to support multiple vals
-    if ideal_prep_type == 'computational' or ideal_prep_type.startswith('lindblad '):
-        ideal_prep = _state.ComputationalBasisState([0] * num_qubits, 'pp', evotype, state_space)
+    for prep_name in processor_spec.prep_names:
+        prep_spec = processor_spec.prep_specifier(prep_name)
 
-        prep_ops_to_compose = []
-        if ideal_prep_type.startswith('lindblad '):  # then add a composed exp(errorgen) to computational SPAM
-            lndtype = ideal_prep_type[len('lindblad '):]
+        # Prep logic
+        if isinstance(ideal_prep_type, (tuple, list)): ideal_prep_type = ideal_prep_type[0]  # HACK to support multiple vals
+        if ideal_prep_type == 'computational' or ideal_prep_type.startswith('lindblad '):
 
-            err_gateNQ = _create_nq_noise(lndtype)
+            if isinstance(prep_spec, str):
+                # Notes on conventions:  When there are multiple qubits, the leftmost in a string (or, intuitively,
+                # the first element in a list, e.g. [Q0_item, Q1_item, etc]) is "qubit 0".  For example, in the
+                # outcome string "01" qubit0 is 0 and qubit1 is 1.  To create the full state/projector, 1Q operations
+                # are tensored together in the same order, i.e., kron(Q0_item, Q1_item, ...).  When a state is specified
+                # as a single integer i (in Python), this means the i-th diagonal element of the density matrix (from
+                # its top-left corner) is 1.0.  This corresponds to the qubit state formed by the binary string of i
+                # where i is written normally, with the least significant bit on the right (but, perhaps
+                # counterintuitively, this bit corresponds to the highest-indexed qubit).  For example, "rho6" in a
+                # 3-qubit system corresponds to "rho_110", that is |1> otimes |1> otimes |0> or |110>.
+                if prep_spec.startswith('rho_') and all([l in ('0', '1') for l in prep_spec[len('rho_'):]]):
+                    binary_index = prep_spec[len('rho_'):]
+                    assert(len(binary_index) == num_qubits), \
+                        "Wrong number of qubits in '%s': expected %d" % (prep_spec, num_qubits)
+                    ideal_prep = _state.ComputationalBasisState([(0 if (l == '0') else 1) for l in binary_index],
+                                                                'pp', evotype, state_space)
+                elif prep_spec.startswith("rho") and prep_spec[len('rho'):].isdigit():
+                    index = int(prep_spec[len('rho'):])
+                    assert(0 <= index < 2**num_qubits), \
+                        "Index in '%s' out of bounds for state of %d qubits" % (prep_spec, num_qubits)
+                    binary_index = '{{0:0{}b}}'.format(num_qubits).format(index)
+                    ideal_prep = _state.ComputationalBasisState([(0 if (l == '0') else 1) for l in binary_index],
+                                                                'pp', evotype, state_space)
+                else:
+                    raise ValueError("Unrecognized state preparation spec '%s'" % prep_spec)
+            elif isinstance(prep_spec, _np.ndarray):
+                raise ValueError("Cannot construct arbitrary state preps (using numpy array) when ideal_prep_type=%s"
+                                 % ideal_prep_type)
+            else:
+                raise ValueError("Invalid state preparation spec: %s" % str(prep_spec))
 
-            prep_ops_to_compose.append(err_gateNQ)
+            prep_ops_to_compose = []
+            if ideal_prep_type.startswith('lindblad '):  # then add a composed exp(errorgen) to computational SPAM
+                lndtype = ideal_prep_type[len('lindblad '):]
 
-        # Add noise
-        _add_prep_noise(prep_ops_to_compose)
+                err_gateNQ = _create_nq_noise(lndtype)
 
-        #Add final ops to returned dictionaries  (Note: None -> ComputationPOVM within ComposedPOVM)
-        _add_to_prep_layers(ideal_prep, prep_ops_to_compose)
+                prep_ops_to_compose.append(err_gateNQ)
 
-    elif ideal_prep_type.startswith('tensor product '):
-        #Note: with "tensor product <X>" types, e.g. "tensor product static", we assume modelnoise specifies just
-        # a 1Q noise operation, even when `local_noise=False`
-        vectype = ideal_prep_type[len('tensor product '):]
+            # Add noise
+            _add_prep_noise(prep_ops_to_compose)
 
-        v0, v1 = _np.array([1, 0], 'd'), _np.array([0, 1], 'd')
-        ideal_prep1Q = _state.create_from_pure_vector(v0, vectype, 'pp', evotype, state_space=None)
-        prep_factors = [ideal_prep1Q.copy() for i in range(num_qubits)]
+            #Add final ops to returned dictionaries  (Note: None -> ComputationPOVM within ComposedPOVM)
+            _add_to_prep_layers(ideal_prep, prep_ops_to_compose, prep_name)
 
-        # Add noise
-        prep_noiseop1Q = modelnoise.create_errormap('prep', evotype, singleQ_state_space, target_labels=None)
-        if prep_noiseop1Q is not None:
-            prep_factors = [_state.ComposedState(
-                factor, (prep_noiseop1Q.copy() if independent_spam else prep_noiseop1Q)) for factor in prep_factors]
+        elif ideal_prep_type.startswith('tensor product '):
+            #Note: with "tensor product <X>" types, e.g. "tensor product static", we assume modelnoise specifies just
+            # a 1Q noise operation, even when `local_noise=False`
+            vectype = ideal_prep_type[len('tensor product '):]
 
-        prep_layers['rho0'] = _state.TensorProductState(prep_factors, state_space)
+            v0, v1 = _np.array([1, 0], 'd'), _np.array([0, 1], 'd')
+            ideal_preps1Q = (_state.create_from_pure_vector(v0, vectype, 'pp', evotype, state_space=None),
+                             _state.create_from_pure_vector(v1, vectype, 'pp', evotype, state_space=None))
+            convbit = {'0': 0, '1': 1}  # convert binary digit (str) to index
 
-    else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qubit state vectors & POVMs
+            if isinstance(prep_spec, str):
+                if prep_spec.startswith('rho_') and all([l in ('0', '1') for l in prep_spec[len('rho_'):]]):
+                    binary_index = prep_spec[len('rho_'):]
+                    assert(len(binary_index) == num_qubits), \
+                        "Wrong number of qubits in '%s': expected %d" % (prep_spec, num_qubits)
+                    prep_factors = [ideal_preps1Q[convbit[l]].copy() for l in binary_index]
+                elif prep_spec.startswith("rho") and prep_spec[len('rho'):].isdigit():
+                    index = int(prep_spec[len('rho'):])
+                    assert(0 <= index < 2**num_qubits), \
+                        "Index in '%s' out of bounds for state of %d qubits" % (prep_spec, num_qubits)
+                    binary_index = '{{0:0{}b}}'.format(num_qubits).format(index)
+                    prep_factors = [ideal_preps1Q[convbit[l]].copy() for l in binary_index]
+                else:
+                    raise ValueError("Unrecognized state preparation spec '%s'" % prep_spec)
+            elif isinstance(prep_spec, _np.ndarray):
+                raise ValueError("Cannot construct arbitrary state preps (using numpy array) when ideal_prep_type=%s"
+                                 % ideal_prep_type)
+            else:
+                raise ValueError("Invalid state preparation spec: %s" % str(prep_spec))
 
-        vectype = ideal_prep_type
-        vecs = []  # all the basis vectors for num_qubits
-        for i in range(2**num_qubits):
-            v = _np.zeros(2**num_qubits, 'd'); v[i] = 1.0
-            vecs.append(v)
+            # Add noise
+            prep_noiseop1Q = modelnoise.create_errormap('prep', evotype, singleQ_state_space, target_labels=None)
+            if prep_noiseop1Q is not None:
+                prep_factors = [_state.ComposedState(
+                    factor, (prep_noiseop1Q.copy() if independent_spam else prep_noiseop1Q)) for factor in prep_factors]
 
-        ideal_prep = _state.create_from_pure_vector(vecs[0], vectype, 'pp', evotype, state_space=state_space)
+            prep_layers[prep_name] = _state.TensorProductState(prep_factors, state_space)
 
-        # Add noise
-        prep_ops_to_compose = []
-        _add_prep_noise(prep_ops_to_compose)
+        else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qubit state vectors & POVMs
+            vectype = ideal_prep_type
 
-        # Add final ops to returned dictionaries
-        _add_to_prep_layers(ideal_prep, prep_ops_to_compose)
+            if isinstance(prep_spec, str):
+                if prep_spec.startswith('rho_') and all([l in ('0', '1') for l in prep_spec[len('rho_'):]]):
+                    binary_index = prep_spec[len('rho_'):]
+                    assert(len(binary_index) == num_qubits), \
+                        "Wrong number of qubits in '%s': expected %d" % (prep_spec, num_qubits)
+                    v = _np.zeros(2**num_qubits); v[int(binary_index, 2)] = 1.0
+                    ideal_prep = _state.create_from_pure_vector(v, vectype, 'pp', evotype, state_space=state_space)
+                elif prep_spec.startswith("rho") and prep_spec[len('rho'):].isdigit():
+                    index = int(prep_spec[len('rho'):])
+                    assert(0 <= index < 2**num_qubits), \
+                        "Index in '%s' out of bounds for state of %d qubits" % (prep_spec, num_qubits)
+                    v = _np.zeros(2**num_qubits); v[index] = 1.0
+                    ideal_prep = _state.create_from_pure_vector(v, vectype, 'pp', evotype, state_space=state_space)
+                else:
+                    raise ValueError("Unrecognized state preparation spec '%s'" % prep_spec)
+            elif isinstance(prep_spec, _np.ndarray):
+                assert(len(prep_spec) == 2**num_qubits), \
+                    "Expected length-%d (not %d!) array as a %d-qubit prep specifier!" % (2**num_qubits,
+                                                                                          len(prep_spec), num_qubits)
+                ideal_prep = _state.create_from_pure_vector(prep_spec, vectype, 'pp', evotype, state_space=state_space)
+            else:
+                raise ValueError("Invalid state preparation spec: %s" % str(prep_spec))
 
-    # Povm logic
-    if isinstance(ideal_povm_type, (tuple, list)): ideal_povm_type = ideal_povm_type[0]  # HACK to support multiple vals
-    if ideal_povm_type == 'computational' or ideal_povm_type.startswith('lindblad '):
-        ideal_povm = _povm.ComputationalBasisPOVM(num_qubits, evotype, state_space=state_space)
+            # Add noise
+            prep_ops_to_compose = []
+            _add_prep_noise(prep_ops_to_compose)
 
-        povm_ops_to_compose = []
-        if ideal_povm_type.startswith('lindblad '):  # then add a composed exp(errorgen) to computational SPAM
-            lndtype = ideal_povm_type[len('lindblad '):]
+            # Add final ops to returned dictionaries
+            _add_to_prep_layers(ideal_prep, prep_ops_to_compose, prep_name)
 
-            err_gateNQ = _create_nq_noise(lndtype)
+    for povm_name in processor_spec.povm_names:
+        povm_spec = processor_spec.povm_specifier(povm_name)
 
-            povm_ops_to_compose.append(err_gateNQ.copy())  # .copy() => POVM errors independent
+        # Povm logic
+        if isinstance(ideal_povm_type, (tuple, list)): ideal_povm_type = ideal_povm_type[0]  # HACK to support multiple vals
+        if ideal_povm_type == 'computational' or ideal_povm_type.startswith('lindblad '):
 
-        # Add noise
-        _add_povm_noise(povm_ops_to_compose)
+            if isinstance(povm_spec, str):
+                if povm_spec in ("Mdefault", "Mz"):
+                    ideal_povm = _povm.ComputationalBasisPOVM(num_qubits, evotype, state_space=state_space)
+                else:
+                    raise ValueError("Unrecognized POVM spec '%s'" % povm_spec)
+            elif isinstance(povm_spec, dict):
+                raise ValueError("Cannot construct arbitrary POVM (using dict) when ideal_povm_type=%s"
+                                 % ideal_povm_type)
+            else:
+                raise ValueError("Invalid POVM spec: %s" % str(povm_spec))
 
-        #Add final ops to returned dictionaries  (Note: None -> ComputationPOVM within ComposedPOVM)
-        effective_ideal_povm = None if len(povm_ops_to_compose) > 0 else ideal_povm
-        _add_to_povm_layers(effective_ideal_povm, povm_ops_to_compose)
+            povm_ops_to_compose = []
+            if ideal_povm_type.startswith('lindblad '):  # then add a composed exp(errorgen) to computational SPAM
+                lndtype = ideal_povm_type[len('lindblad '):]
 
-    elif ideal_povm_type.startswith('tensor product '):
-        #Note: with "tensor product <X>" types, e.g. "tensor product static", we assume modelnoise specifies just
-        # a 1Q noise operation, even when `local_noise=False`
-        vectype = ideal_povm_type[len('tensor product '):]
+                err_gateNQ = _create_nq_noise(lndtype)
 
-        v0, v1 = _np.array([1, 0], 'd'), _np.array([0, 1], 'd')
-        ideal_povm1Q = _povm.create_from_pure_vectors([('0', v0), ('1', v1)], vectype, 'pp',
-                                                      evotype, state_space=None)
-        povm_factors = [ideal_povm1Q.copy() for i in range(num_qubits)]
+                povm_ops_to_compose.append(err_gateNQ.copy())  # .copy() => POVM errors independent
 
-        # Add noise
-        povm_noiseop1Q = modelnoise.create_errormap('povm', evotype, singleQ_state_space, target_labels=None)
-        if povm_noiseop1Q is not None:
-            povm_factors = [_povm.ComposedPOVM(
-                (povm_noiseop1Q.copy() if independent_spam else povm_noiseop1Q), factor, 'pp')
-                for factor in povm_factors]
+            # Add noise
+            _add_povm_noise(povm_ops_to_compose)
 
-        povm_layers['Mdefault'] = _povm.TensorProductPOVM(povm_factors, evotype, state_space)
+            #Add final ops to returned dictionaries  (Note: None -> ComputationPOVM within ComposedPOVM)
+            effective_ideal_povm = None if len(povm_ops_to_compose) > 0 else ideal_povm
+            _add_to_povm_layers(effective_ideal_povm, povm_ops_to_compose, povm_name)
 
-    else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qubit state vectors & POVMs
+        elif ideal_povm_type.startswith('tensor product '):
+            #Note: with "tensor product <X>" types, e.g. "tensor product static", we assume modelnoise specifies just
+            # a 1Q noise operation, even when `local_noise=False`
+            vectype = ideal_povm_type[len('tensor product '):]
 
-        vectype = ideal_povm_type
-        vecs = []  # all the basis vectors for num_qubits
-        for i in range(2**num_qubits):
-            v = _np.zeros(2**num_qubits, 'd'); v[i] = 1.0
-            vecs.append(v)
+            v0, v1 = _np.array([1, 0], 'd'), _np.array([0, 1], 'd')
+            ideal_povm1Q = _povm.create_from_pure_vectors([('0', v0), ('1', v1)], vectype, 'pp',
+                                                          evotype, state_space=None)
 
-        ideal_povm = _povm.create_from_pure_vectors(
-            [(format(i, 'b').zfill(num_qubits), v) for i, v in enumerate(vecs)],
-            vectype, 'pp', evotype, state_space=state_space)
+            if isinstance(povm_spec, str):
+                if povm_spec in ("Mdefault", "Mz"):
+                    povm_factors = [ideal_povm1Q.copy() for i in range(num_qubits)]
+                else:
+                    raise ValueError("Unrecognized POVM spec '%s'" % povm_spec)
+            elif isinstance(povm_spec, dict):
+                raise ValueError("Cannot construct arbitrary POVM (using dict) when ideal_povm_type=%s"
+                                 % ideal_povm_type)
+            else:
+                raise ValueError("Invalid POVM spec: %s" % str(povm_spec))
 
-        # Add noise
-        povm_ops_to_compose = []
-        _add_povm_noise(povm_ops_to_compose)
+            # Add noise
+            povm_noiseop1Q = modelnoise.create_errormap('povm', evotype, singleQ_state_space, target_labels=None)
+            if povm_noiseop1Q is not None:
+                povm_factors = [_povm.ComposedPOVM(
+                    (povm_noiseop1Q.copy() if independent_spam else povm_noiseop1Q), factor, 'pp')
+                    for factor in povm_factors]
 
-        # Add final ops to returned dictionaries
-        _add_to_povm_layers(ideal_povm, povm_ops_to_compose)
+            povm_layers[povm_name] = _povm.TensorProductPOVM(povm_factors, evotype, state_space)
+
+        else:  # assume ideal_spam_type is a valid 'vectype' for creating n-qubit state vectors & POVMs
+
+            vectype = ideal_povm_type
+
+            if isinstance(povm_spec, str):
+                vecs = []  # all the basis vectors for num_qubits
+                for i in range(2**num_qubits):
+                    v = _np.zeros(2**num_qubits, 'd'); v[i] = 1.0
+                    vecs.append(v)
+
+                if povm_spec in ("Mdefault", "Mz"):
+                    ideal_povm = _povm.create_from_pure_vectors(
+                        [(format(i, 'b').zfill(num_qubits), v) for i, v in enumerate(vecs)],
+                        vectype, 'pp', evotype, state_space=state_space)
+                else:
+                    raise ValueError("Unrecognized POVM spec '%s'" % povm_spec)
+            elif isinstance(povm_spec, dict):
+                effects_components = []; convert_to_dmvecs = False
+                for k, effect_spec in povm_spec.items():
+                    # effect_spec should generally be a list/tuple of component effect specs
+                    # that are added together to get the final effect.  For convenience, the user
+                    # can just specify the single element when this list is length 1.
+                    if isinstance(effect_spec, str) or isinstance(effect_spec, _np.ndarray):
+                        effect_spec = [effect_spec]
+
+                    assert(len(effect_spec) > 0), \
+                        "You must provide at least one component effect specifier for each POVM effect!"
+
+                    effect_components = []
+                    if len(effect_spec) > 1: convert_to_dmvecs = True
+                    for comp_espec in effect_spec:
+                        if isinstance(comp_espec, str):
+                            if all([l in ('0', '1') for l in comp_espec]):
+                                binary_index = comp_espec
+                                assert(len(binary_index) == num_qubits), \
+                                    "Wrong number of qubits in '%s': expected %d" % (comp_espec, num_qubits)
+                                v = _np.zeros(2**num_qubits); v[int(binary_index, 2)] = 1.0
+                                effect_components.append(v)
+                            elif comp_espec.startswith("E") and comp_espec[len('E'):].isdigit():
+                                index = int(comp_espec[len('E'):])
+                                assert(0 <= index < 2**num_qubits), \
+                                    "Index in '%s' out of bounds for state of %d qubits" % (comp_espec, num_qubits)
+                                v = _np.zeros(2**num_qubits); v[index] = 1.0
+                                effect_components.append(v)
+                            else:
+                                raise ValueError("Unrecognized POVM effect spec '%s'" % comp_espec)
+                        elif isinstance(comp_espec, _np.ndarray):
+                            assert(len(comp_espec) == 2**num_qubits), \
+                                "Expected length-%d (not %d!) array as a %d-qubit effect specifier!" % (
+                                    2**num_qubits, len(comp_espec), num_qubits)
+                            effect_components.append(comp_espec)
+                        else:
+                            raise ValueError("Invalid POVM effect spec: %s" % str(comp_espec))
+                        effects_components.append((k, effect_components))
+
+                if convert_to_dmvecs:
+                    effects = []
+                    for k, effect_components in effects_components:
+                        dmvec = _bt.change_basis(_ot.state_to_dmvec(effect_components[0]), 'std', 'pp')
+                        for ec in effect_components[1:]:
+                            dmvec += _bt.change_basis(_ot.state_to_dmvec(ec), 'std', 'pp')
+                        effects.append((k, dmvec))
+                    ideal_povm = _povm.create_from_dmvecs(effects, vectype, 'pp', evotype, state_space=state_space)
+                else:
+                    effects = [(k, effect_components[0]) for k, effect_components in effects_components]
+                    ideal_povm = _povm.create_from_pure_vectors(effects, vectype, 'pp', evotype, state_space=state_space)
+            else:
+                raise ValueError("Invalid POVM spec: %s" % str(povm_spec))
+
+            # Add noise
+            povm_ops_to_compose = []
+            _add_povm_noise(povm_ops_to_compose)
+
+            # Add final ops to returned dictionaries
+            _add_to_povm_layers(ideal_povm, povm_ops_to_compose, povm_name)
 
     return prep_layers, povm_layers
 

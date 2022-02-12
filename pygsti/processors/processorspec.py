@@ -112,7 +112,9 @@ class QubitProcessorSpec(ProcessorSpec):
     """
 
     def __init__(self, num_qubits, gate_names, nonstd_gate_unitaries=None, availability=None,
-                 geometry=None, qubit_labels=None, nonstd_gate_symplecticreps=None, aux_info=None):
+                 geometry=None, qubit_labels=None, nonstd_gate_symplecticreps=None,
+                 prep_names=('rho0',), povm_names=('Mdefault',), instrument_names=(),
+                 nonstd_preps=None, nonstd_povms=None, nonstd_instruments=None, aux_info=None):
         assert(type(num_qubits) is int), "The number of qubits, n, should be an integer!"
         if nonstd_gate_unitaries is None: nonstd_gate_unitaries = {}
         assert(not (num_qubits > 1 and availability is None and geometry is None)), \
@@ -121,9 +123,14 @@ class QubitProcessorSpec(ProcessorSpec):
         #Store inputs for adding models later
         self.gate_names = tuple(gate_names[:])  # copy & cast to tuple
         self.nonstd_gate_unitaries = nonstd_gate_unitaries.copy() if (nonstd_gate_unitaries is not None) else {}
-        #self.gate_names += list(self.nonstd_gate_unitaries.keys())  # must specify all names in `gate_names`
+        self.prep_names = tuple(prep_names[:])
+        self.nonstd_preps = nonstd_preps.copy() if (nonstd_preps is not None) else {}
+        self.povm_names = tuple(povm_names[:])
+        self.nonstd_povms = nonstd_povms.copy() if (nonstd_povms is not None) else {}
+        self.instrument_names = tuple(instrument_names[:])
+        self.nonstd_instruments = nonstd_instruments.copy() if (nonstd_instruments is not None) else {}
 
-        # Stores the basic unitary matrices defining the gates, as it is convenient to have these easily accessable.
+        # Store the unitary matrices defining the gates, as it is convenient to have these easily accessable.
         self.gate_unitaries = _collections.OrderedDict()
         std_gate_unitaries = _itgs.standard_gatename_unitaries()
         for gname in gate_names:
@@ -157,6 +164,9 @@ class QubitProcessorSpec(ProcessorSpec):
             else:
                 raise ValueError(
                     str(gname) + " is not a valid 'standard' gate name, it must be given in `nonstd_gate_unitaries`")
+
+        # Note: do *not* store the complex vectors defining states, POVM effects, and instrument members
+        # as these can be large n-qubit vectors.
 
         # Set self.qubit_graph
         if geometry is None:
@@ -200,11 +210,50 @@ class QubitProcessorSpec(ProcessorSpec):
         nonstd_unitaries = {k: (obj.to_nice_serialization() if isinstance(obj, _NicelySerializable)
                                 else (int(obj) if isinstance(obj, (int, _np.int64)) else self._encodemx(obj)))
                             for k, obj in self.nonstd_gate_unitaries.items()}
+
+        def _serialize_state(obj):
+            return (obj.to_nice_serialization() if isinstance(obj, _NicelySerializable)
+                    else (obj if isinstance(obj, str) else self._encodemx(obj)))
+
+        def _serialize_povm_effect(obj):
+            if isinstance(obj, _NicelySerializable) or isinstance(obj, str): return obj
+            if isinstance(obj, (list, tuple)): return [_serialize_state(v) for v in obj]
+            if isinstance(obj, _np.ndarray): return [_serialize_state(obj)]  # turn into list!
+            raise ValueError("Cannot serialize POVM effect specifier of type %s!" % str(type(obj)))
+
+        def _serialize_povm(obj):
+            if isinstance(obj, _NicelySerializable) or isinstance(obj, str): return obj
+            if isinstance(obj, dict): return {k: _serialize_povm_effect(v) for k, v in obj.items()}
+            raise ValueError("Cannot serialize POVM specifier of type %s!" % str(type(obj)))
+
+        def _serialize_instrument_member(obj):
+            if isinstance(obj, _NicelySerializable) or isinstance(obj, str): return obj
+            if isinstance(obj, (list, tuple)):
+                assert(all([isinstance(rank1op_spec, (list, tuple)) and len(rank1op_spec) == 2
+                           for rank1op_spec in obj]))
+                return [(_serialize_state(espec), _serialize_state(rspec)) for espec, rspec in obj]
+            raise ValueError("Cannot serialize Instrument member specifier of type %s!" % str(type(obj)))
+
+        def _serialize_instrument(obj):
+            if isinstance(obj, _NicelySerializable) or isinstance(obj, str): return obj
+            if isinstance(obj, dict): return {k: _serialize_instrument_member(v) for k, v in obj.items()}
+            raise ValueError("Cannot serialize Instrument specifier of type %s!" % str(type(obj)))
+
+        nonstd_preps = {k: _serialize_state(obj) for k, obj in self.nonstd_preps.items()}
+        nonstd_povms = {k: _serialize_povm(obj) for k, obj in self.nonstd_povms.items()}
+        nonstd_instruments = {k: _serialize_instrument(obj) for k, obj in self.nonstd_instruments.items()}
+
         state.update({'qubit_labels': list(self.qubit_labels),
-                      'gate_names': list(self.gate_names),  # TODO: what if labels and not just strings?
-                      'availability': self.availability,  # should just have native types
-                      'geometry': self.qubit_graph.to_nice_serialization(),
+                      'gate_names': list(self.gate_names),  # Note: not labels, just strings, so OK
                       'nonstd_gate_unitaries': nonstd_unitaries,
+                      'availability': self.availability,  # should just have native types
+                      'prep_names': list(self.prep_names),
+                      'nonstd_preps': nonstd_preps,
+                      'povm_names': list(self.povm_names),
+                      'nonstd_povms': nonstd_povms,
+                      'instrument_names': list(self.instrument_names),
+                      'nonstd_instruments': nonstd_instruments,
+                      'geometry': self.qubit_graph.to_nice_serialization(),
                       'symplectic_reps': {k: (self._encodemx(s), self._encodemx(p))
                                           for k, (s, p) in self._symplectic_reps.items()},
                       'aux_info': self.aux_info
@@ -228,17 +277,132 @@ class QubitProcessorSpec(ProcessorSpec):
             else:  # assume a matrix encoding of some sort (could be list or dict)
                 nonstd_gate_unitaries[k] = cls._decodemx(obj)
 
+        def _unserialize_state(obj):
+            if isinstance(obj, str): return obj
+            elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
+                return _NicelySerializable.from_nice_serialization(obj)
+            else:  # assume a matrix encoding of some sort (could be list or dict)
+                return cls._decodemx(obj)
+
+        def _unserialize_povm_effect(obj):
+            if isinstance(obj, str): return obj
+            elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
+                return _NicelySerializable.from_nice_serialization(obj)
+            elif isinstance(obj, dict): return _unserialize_state(obj)  # assume a serialized array
+            elif isinstance(obj, list): return [_unserialize_state(v) for v in obj]
+            raise ValueError("Cannot unserialize POVM effect specifier of type %s!" % str(type(obj)))
+
+        def _unserialize_povm(obj):
+            if isinstance(obj, str): return obj
+            elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
+                return _NicelySerializable.from_nice_serialization(obj)
+            elif isinstance(obj, dict): return {k: _unserialize_povm_effect(v) for k, v in obj.items()}
+            raise ValueError("Cannot unserialize POVM specifier of type %s!" % str(type(obj)))
+
+        def _unserialize_instrument_member(obj):
+            if isinstance(obj, str): return obj
+            elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
+                return _NicelySerializable.from_nice_serialization(obj)
+            elif isinstance(obj, list):
+                return [(_unserialize_state(espec), _unserialize_state(rspec)) for espec, rspec in obj]
+            raise ValueError("Cannot unserialize Instrument member specifier of type %s!" % str(type(obj)))
+
+        def _unserialize_instrument(obj):
+            if isinstance(obj, str): return obj
+            elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
+                return _NicelySerializable.from_nice_serialization(obj)
+            elif isinstance(obj, dict): return {k: _unserialize_instrument_member(v) for k, v in obj.items()}
+            raise ValueError("Cannot unserialize Instrument specifier of type %s!" % str(type(obj)))
+
+        nonstd_preps = {k: _unserialize_state(obj) for k, obj in state['nonstd_preps'].items()}
+        nonstd_povms = {k: _unserialize_povm(obj) for k, obj in state['nonstd_povms'].items()}
+        nonstd_instruments = {k: _unserialize_instrument(obj) for k, obj in state['nonstd_instruments'].items()}
+
         symplectic_reps = {k: (cls._decodemx(s), cls._decodemx(p)) for k, (s, p) in state['symplectic_reps'].items()}
         availability = {k: _tuplize(v) for k, v in state['availability'].items()}
         geometry = _qgraph.QubitGraph.from_nice_serialization(state['geometry'])
 
         return cls(len(state['qubit_labels']), state['gate_names'], nonstd_gate_unitaries, availability,
-                   geometry, state['qubit_labels'], symplectic_reps, state['aux_info'])
+                   geometry, state['qubit_labels'], symplectic_reps, state['prep_names'], state['povm_names'],
+                   state['instrument_names'], nonstd_preps, nonstd_povms, nonstd_instruments, state['aux_info'])
 
     @property
     def num_qubits(self):
         """ The number of qubits. """
         return len(self.qubit_labels)
+
+    def prep_specifier(self, name):
+        """
+        The specifier for a given state preparation name.
+
+        The returned value specifies a state in one of several ways.  It can
+        either be a string identifying a standard state preparation (like `"rho0"`),
+        or a complex array describing a pure state.
+
+        Parameters
+        ----------
+        name : str
+            The name of the state preparation to access.
+
+        Returns
+        -------
+        str or numpy.ndarray
+        """
+        if name in self.nonstd_preps:
+            return self.nonstd_preps[name]
+        else:
+            # assert(is_standard_prep_name(name)) TODO
+            return name
+
+    def povm_specifier(self, name):
+        """
+        The specifier for a given POVM name.
+
+        The returned value specifies a POVM in one of several ways.  It can
+        either be a string identifying a standard POVM (like `"Mz"`),
+        or a dictionary with values describing the pure states that each element
+        of the POVM projects onto.  Each value can be either a string describing
+        a standard state or a complex array.
+
+        Parameters
+        ----------
+        name : str
+            The name of the POVM to access.
+
+        Returns
+        -------
+        str or numpy.ndarray
+        """
+        if name in self.nonstd_povms:
+            return self.nonstd_povms[name]
+        else:
+            # assert(is_standard_povm_name(name)) TODO
+            return name
+
+    def instrument_specifier(self, name):
+        """
+        The specifier for a given instrument name.
+
+        The returned value specifies an instrument in one of several ways.  It can
+        either be a string identifying a standard instrument (like `"Iz"`),
+        or a dictionary with values that are lists/tuples of 2-tuples describing each instrument
+        member as the sum of rank-1 process matrices.  Each 2-tuple element can be a
+        string describing a standard state or a complex array describing an arbitrary pure state.
+
+        Parameters
+        ----------
+        name : str
+            The name of the state preparation to access.
+
+        Returns
+        -------
+        str or dict
+        """
+        if name in self.nonstd_instruments:
+            return self.nonstd_instruments[name]
+        else:
+            # assert(is_standard_instrument_name(name)) TODO
+            return name
 
     @property
     def primitive_op_labels(self):

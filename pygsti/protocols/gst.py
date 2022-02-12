@@ -1221,7 +1221,6 @@ class GateSetTomography(_proto.Protocol):
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
         mdl_start = self.initial_model.retrieve_model(data.edesign, self.gaugeopt_suite.gaugeopt_target,
                                                       data.dataset, comm)
-        hack_mdl_start_copy = mdl_start.copy()  # HACK TODO REMOVE LATER - in case edesign can't make a target model
 
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
 
@@ -1253,12 +1252,7 @@ class GateSetTomography(_proto.Protocol):
             target_model = self.gaugeopt_suite.gaugeopt_target
         elif self.gaugeopt_suite.is_empty() is False:
             if isinstance(data.edesign, HasProcessorSpec):
-                try:
-                    target_model = data.edesign.create_target_model()
-                except:
-                    _warnings.warn(("Could not create target model for gauge opt. from edesign"
-                                    " - falling back to initial model!"))
-                    target_model = hack_mdl_start_copy
+                target_model = data.edesign.create_target_model()
             else:
                 target_model = None
         else:
