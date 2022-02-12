@@ -192,6 +192,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         for idle_name in idle_names:
             if self.processor_spec.gate_num_qubits(idle_name) == 1:
                 for idlelayer_sslbls in self.processor_spec.resolved_availability(idle_name, 'tuple'):
+                    if idlelayer_sslbls is None: continue  # case of 1Q model with "global" idle
                     assert(len(idlelayer_sslbls) == 1)  # should be a 1-qubit gate!
                     if idlelayer_sslbls not in singleq_idle_layer_labels:
                         singleq_idle_layer_labels[idlelayer_sslbls] = _Lbl(idle_name, idlelayer_sslbls)
@@ -526,6 +527,9 @@ class CloudNoiseLayerRules(_LayerRules):
                     raise ValueError("Invalid errcomp_type in CloudNoiseLayerRules: %s" % str(self.errcomp_type))
                 model._init_virtual_obj(ret)  # so ret's gpindices get set
                 return ret
+            else:
+                #Perfect no-noise idle
+                return Composed([], evotype=model.evotype, state_space=model.state_space)  # no need to init_virtual
 
         #Compose target operation from layer's component labels, which correspond
         # to the perfect (embedded) target ops in op_blks
@@ -536,6 +540,7 @@ class CloudNoiseLayerRules(_LayerRules):
                                 evotype=model.evotype, state_space=model.state_space)
         else:
             targetOp = self._layer_component_targetop(model, components[0], caches['op-layers'])
+
         ops_to_compose = [targetOp] if (targetOp is not None) else []
 
         if self.errcomp_type == "gates":
@@ -566,7 +571,8 @@ class CloudNoiseLayerRules(_LayerRules):
         else:
             raise ValueError("Invalid errcomp_type in CloudNoiseLayerRules: %s" % str(self.errcomp_type))
 
-        ret = Composed(ops_to_compose, evotype=model.evotype, state_space=model.state_space)
+        ret = Composed(ops_to_compose, evotype=model.evotype, state_space=model.state_space) \
+            if len(ops_to_compose) > 1 else ops_to_compose[0]
         model._init_virtual_obj(ret)  # so ret's gpindices get set
         caches['complete-layers'][layerlbl] = ret  # cache the final label value
         return ret

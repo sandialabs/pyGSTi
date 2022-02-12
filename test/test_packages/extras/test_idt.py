@@ -68,10 +68,10 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
     parameterization = '+'.join(base_param)
 
     gateset_idleInFids = build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
-                                                       simulator=simulator, parameterization=parameterization,
+                                                       simulator=simulator.copy(), parameterization=parameterization,
                                                        roughNoise=None, addIdleNoiseToAllGates=True, evotype=evotype)
     gateset_noIdleInFids = build_XYCNOT_cloudnoise_model(nQubits, "line", [], min(2,nQubits), 1,
-                                                         simulator=simulator, parameterization=parameterization,
+                                                         simulator=simulator.copy(), parameterization=parameterization,
                                                          roughNoise=None, addIdleNoiseToAllGates=False, evotype=evotype)
 
     listOfExperiments = idt.make_idle_tomography_list(nQubits, maxLengths, (prepDict,measDict), maxweight=min(2,nQubits),
@@ -91,8 +91,9 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
         err_vec = base_vec * errMag # for different errMags just scale the *same* random rates
         idt.set_idle_errors(nQubits, gateset_idleInFids, debug_errdict, rand_default=err_vec,
                           hamiltonian=hamiltonian, stochastic=stochastic, affine=affine)
-        idt.set_idle_errors(nQubits, gateset_noIdleInFids, debug_errdict, rand_default=err_vec,
-                          hamiltonian=hamiltonian, stochastic=stochastic, affine=affine) # same errors for w/ and w/out idle fiducial error
+        ##test = gateset_idleInFids.probabilities([()])
+        #idt.set_idle_errors(nQubits, gateset_noIdleInFids, debug_errdict, rand_default=err_vec,
+        #                  hamiltonian=hamiltonian, stochastic=stochastic, affine=affine) # same errors for w/ and w/out idle fiducial error
 
         for nSamples in nSamplesList:
             if nSamples == 'inf':
@@ -110,7 +111,7 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
 
             ds_noIdleInFids = pygsti.data.simulate_data(
                                 gateset_noIdleInFids, listOfExperiments, num_samples=Nsamp,
-                                sample_error=sampleError, seed=8675309)
+                                sample_error=sampleError, seed=8675309)            
 
             fileroot = get_fileroot(nQubits, maxLengths[-1], errMag, spamMag, nSamples, simulator, False)
             pickle.dump(gateset_noIdleInFids, open("%s_gs.pkl" % fileroot, "wb"))

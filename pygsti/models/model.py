@@ -482,6 +482,8 @@ class OpModel(Model):
     def sim(self):
         """ Forward simulator for this model """
         self._clean_paramvec()  # clear opcache and rebuild paramvec when needed
+        if hasattr(self._sim, 'model'):
+            assert(self._sim.model is self), "Simulator out of sync with model!!"
         return self._sim
 
     @sim.setter
