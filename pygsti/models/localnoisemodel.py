@@ -166,7 +166,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         idle_names = processor_spec.idle_gate_names
         global_idle_layer_label = processor_spec.global_idle_layer_label
 
-        layer_rules = _SimpleCompLayerRules(qubit_labels, implicit_idle_mode, None, global_idle_layer_label)
+        layer_rules = _SimpleCompLayerRules(qudit_labels, implicit_idle_mode, None, global_idle_layer_label)
 
         super(LocalNoiseModel, self).__init__(state_space, layer_rules, 'pp',
                                               simulator=simulator, evotype=evotype)

@@ -408,7 +408,8 @@ class ErrorRatesModel(SuccessFailModel):
             layers_with_idles = [circuit.layer_label_with_idles(i, idle_gate_name=self._idlename) for i in range(depth)]
             inds_to_mult_by_layer = [_np.array(indices_for_label(layer), _np.int64) for layer in layers_with_idles]
         else:
-            inds_to_mult_by_layer = [_np.array(indices_for_label(circuit.layer_label(i)), _np.int64) for i in range(depth)]
+            inds_to_mult_by_layer = [_np.array(indices_for_label(circuit.layer_label(i)), _np.int64)
+                                     for i in range(depth)]
 
         # Bit-flip readout error as a pre-measurement depolarizing channel.
         inds_to_mult = [r_inds[q] for q in circuit.line_labels]

@@ -201,7 +201,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         #assert(set(idle_names).issubset([global_idle_name])), \
         #    "Only global idle operations are allowed in a CloudNoiseModel!"
 
-        layer_rules = CloudNoiseLayerRules(errcomp_type, qubit_labels, implicit_idle_mode, singleq_idle_layer_labels,
+        layer_rules = CloudNoiseLayerRules(errcomp_type, qudit_labels, implicit_idle_mode, singleq_idle_layer_labels,
                                            noisy_global_idle_name)
         super(CloudNoiseModel, self).__init__(state_space, layer_rules, "pp", simulator=simulator, evotype=evotype)
 
@@ -546,7 +546,8 @@ class CloudNoiseLayerRules(_LayerRules):
         ops_to_compose = [targetOp] if (targetOp is not None) else []
 
         if self.errcomp_type == "gates":
-            if add_global_idle: ops_to_compose.append(model.operation_blks['cloudnoise'][self.implied_global_idle_label])
+            if add_global_idle:
+                ops_to_compose.append(model.operation_blks['cloudnoise'][self.implied_global_idle_label])
             # Note: add_padded_idle handled within _layer_component_cloudnoises
             component_cloudnoise_ops = self._layer_component_cloudnoises(model, components, caches['op-cloudnoise'])
             if len(component_cloudnoise_ops) > 0:
