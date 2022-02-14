@@ -459,7 +459,8 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                     new_fidpairs[(j, i)] = (prep, meas)
             if power is None:  # no well-defined power, so just make a fiducial-pair plaquette
                 plaquette_dict[base_circuit] = _FiducialPairPlaquette(base_circuit, new_fidpairs, len(meas_fiducials),
-                                                                      len(prep_fiducials), op_label_aliases, circuit_rules)
+                                                                      len(prep_fiducials), op_label_aliases,
+                                                                      circuit_rules)
             else:
                 plaquette_dict[base_circuit] = _GermFiducialPairPlaquette(germ, power, new_fidpairs,
                                                                           len(meas_fiducials), len(prep_fiducials),

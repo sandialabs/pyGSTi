@@ -33,39 +33,39 @@ from pygsti.circuits.circuitparser import parse_label as _parse_label
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
-from pygsti.processors.processorspec import ProcessorSpec as _ProcessorSpec
+from pygsti.processors.processorspec import ProcessorSpec as _ProcessorSpec, QubitProcessorSpec as _QubitProcessorSpec
 
 
 class LocalNoiseModel(_ImplicitOpModel):
     """
-    A n-qubit implicit model that allows for only local noise.
+    A n-qudit implicit model that allows for only local noise.
 
     This model holds as building blocks individual noisy gates
     which are trivially embedded into circuit layers as requested.
 
     Parameters
     ----------
-    processor_spec : QubitProcessorSpec
-        The processor to create a model for.  This object specifies the
-        number of qubits, gate names and unitaries, and other aspects of
-        a n-qubit processor.
+    processor_spec : ProcessorSpec
+        The processor specification to create a model for.  This object specifies the
+        gate names and unitaries for the processor, and their availability on the
+        processor.
 
     gatedict : dict
         A dictionary (an `OrderedDict` if you care about insertion order) that
         associates with gate names (e.g. `"Gx"`) :class:`LinearOperator`,
         `numpy.ndarray` objects. When the objects may act on fewer than the total
-        number of qubits (determined by their dimension/shape) then they are
-        repeatedly embedded into `num_qubits`-qubit gates as specified by `availability`.
-        While the keys of this dictionary are usually string-type gate *names*,
-        labels that include target qubits, e.g. `("Gx",0)`, may be used to
-        override the default behavior of embedding a reference or a copy of
-        the gate associated with the same label minus the target qubits
-        (e.g. `"Gx"`).  Furthermore, :class:`OpFactory` objects may be used
-        in place of `LinearOperator` objects to allow the evaluation of labels
+        number of qudits (determined by their dimension/shape) then they are
+        repeatedly embedded into operation on the entire state space as specified
+        by their availability within `processor_spec`.  While the keys of this
+        dictionary are usually string-type gate *names*, labels that include target
+        qudits, e.g. `("Gx",0)`, may be used to override the default behavior of
+        embedding a reference or a copy of the gate associated with the same label
+        minus the target qudits (e.g. `"Gx"`).  Furthermore, :class:`OpFactory` objects
+        may be used in place of `LinearOperator` objects to allow the evaluation of labels
         with arguments.
 
     prep_layers : None or operator or dict or list
-        The state preparateion operations as n-qubit layer operations.  If
+        The state preparateion operations as n-qudit layer operations.  If
         `None`, then no state preparations will be present in the created model.
         If a dict, then the keys are labels and the values are layer operators.
         If a list, then the elements are layer operators and the labels will be
@@ -74,7 +74,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         the sole prep and is assigned the label "rho0".
 
     povm_layers : None or operator or dict or list
-        The state preparateion operations as n-qubit layer operations.  If
+        The state preparateion operations as n-qudit layer operations.  If
         `None`, then no POVMS will be present in the created model.  If a dict,
         then the keys are labels and the values are layer operators.  If a list,
         then the elements are layer operators and the labels will be assigned as
@@ -116,7 +116,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         (local) noise (e.g. an overrotation by 1 degree), and the
         `operation_bks['gates']` dictionary contains a single key per gate
         name.  If True, then gates with the same name acting on different
-        qubits may have different local noise, and so the
+        qudits may have different local noise, and so the
         `operation_bks['gates']` dictionary contains a key for each gate
          available gate placement.
 
@@ -141,10 +141,12 @@ class LocalNoiseModel(_ImplicitOpModel):
                  simulator="auto", on_construction_error='raise',
                  independent_gates=False, ensure_composed_gates=False, implicit_idle_mode="none"):
 
-        qubit_labels = processor_spec.qubit_labels
-        state_space = _statespace.QubitSpace(qubit_labels)
+        qudit_labels = processor_spec.qudit_labels
+        state_space = _statespace.QubitSpace(qudit_labels) if isinstance(processor_spec, _QubitProcessorSpec) \
+            else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
 
-        simulator = _FSim.cast(simulator, state_space.num_qubits)
+        simulator = _FSim.cast(simulator,
+                               state_space.num_qubits if isinstance(state_space, _statespace.QubitSpace) else None)
         prefer_dense_reps = isinstance(simulator, _MatrixFSim)
         evotype = _Evotype.cast(evotype, default_prefer_dense_reps=prefer_dense_reps)
 
@@ -164,7 +166,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         idle_names = processor_spec.idle_gate_names
         global_idle_layer_label = processor_spec.global_idle_layer_label
 
-        layer_rules = _SimpleCompLayerRules(qubit_labels, implicit_idle_mode, None, global_idle_layer_label)
+        layer_rules = _SimpleCompLayerRules(qudit_labels, implicit_idle_mode, None, global_idle_layer_label)
 
         super(LocalNoiseModel, self).__init__(state_space, layer_rules, 'pp',
                                               simulator=simulator, evotype=evotype)
@@ -198,7 +200,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 if gate is not None:  # (a gate name may not be in gatedict if it's an identity without any noise)
                     if ensure_composed_gates and not isinstance(gate, _op.ComposedOp) and not gate_is_factory:
                         #Make a single ComposedOp *here*, which is used
-                        # in all the embeddings for different target qubits
+                        # in all the embeddings for different target qudits
                         gate = _op.ComposedOp([gate], state_space="auto", evotype="auto")  # to make adding factors easy
 
                     if gate_is_factory:
@@ -206,10 +208,10 @@ class LocalNoiseModel(_ImplicitOpModel):
                     else:
                         self.operation_blks['gates'][_Lbl(gateName)] = gate
 
-                    if gate_is_idle and gate.state_space.num_qubits == 1 and global_idle_layer_label is None:
+                    if gate_is_idle and gate.state_space.num_qudits == 1 and global_idle_layer_label is None:
                         # then attempt to turn this 1Q idle into a global idle (for implied idle layers)
                         global_idle = _op.ComposedOp([_op.EmbeddedOp(state_space, (qlbl,), gate)
-                                                      for qlbl in qubit_labels])
+                                                      for qlbl in qudit_labels])
                         self.operation_blks['layers'][_Lbl('{auto_global_idle}')] = global_idle
                         global_idle_layer_label = layer_rules.global_idle_layer_label = _Lbl('{auto_global_idle}')
             else:
@@ -223,11 +225,11 @@ class LocalNoiseModel(_ImplicitOpModel):
                 base_gate = mm_gatedict[gateName]
 
                 # Note: can't use automatic-embedding b/c we need to force embedding
-                # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qubits needs to embed)
+                # when just ordering doesn't align (e.g. Gcnot:1:0 on 2-qudits needs to embed)
                 allowed_sslbls_fn = resolved_avail if callable(resolved_avail) else None
-                gate_nQubits = self.processor_spec.gate_num_qubits(gateName)
+                gate_nQudits = self.processor_spec.gate_num_qudits(gateName)
                 embedded_op = _opfactory.EmbeddingOpFactory(state_space, base_gate,
-                                                            num_target_labels=gate_nQubits,
+                                                            num_target_labels=gate_nQudits,
                                                             allowed_sslbls_fn=allowed_sslbls_fn)
                 self.factories['layers'][_Lbl(gateName)] = embedded_op
 
@@ -275,20 +277,21 @@ class LocalNoiseModel(_ImplicitOpModel):
                     # into inds (except in the special case inds[0] == '*' where we make an EmbeddingOpFactory)
                     try:
                         if gate_is_factory:
-                            if inds is None or inds == tuple(qubit_labels):  # then no need to embed
+                            if inds is None or inds == tuple(qudit_labels):  # then no need to embed
                                 embedded_op = base_gate
                             else:
                                 embedded_op = _opfactory.EmbeddedOpFactory(state_space, inds, base_gate)
                             self.factories['layers'][_Lbl(gateName, inds)] = embedded_op
                         else:
-                            if inds is None or inds == tuple(qubit_labels):  # then no need to embed
+                            if inds is None or inds == tuple(qudit_labels):  # then no need to embed
                                 embedded_op = base_gate
                             else:
                                 embedded_op = _op.EmbeddedOp(state_space, inds, base_gate)
                             self.operation_blks['layers'][_Lbl(gateName, inds)] = embedded_op
 
                             # If a 1Q idle gate (factories not supported yet) then turn this into a global idle
-                            if gate_is_idle and base_gate.state_space.num_qubits == 1:
+                            if gate_is_idle and base_gate.state_space.num_qubits == 1 \
+                               and global_idle_layer_label is None:
                                 singleQ_idle_layer_labels[inds] = _Lbl(gateName, inds)  # allow custom setting of this?
 
                     except Exception as e:

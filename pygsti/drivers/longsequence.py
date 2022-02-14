@@ -19,7 +19,6 @@ from pygsti import baseobjs as _baseobjs
 from pygsti import protocols as _proto
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.baseobjs.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
-from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 from pygsti.models.model import Model as _Model
 from pygsti.models.modelconstruction import _create_explicit_model
 

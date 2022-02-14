@@ -68,7 +68,7 @@ cdef class EffectRepComputational(EffectRep):
     def __cinit__(self, _np.ndarray[_np.int64_t, ndim=1, mode='c'] zvals, basis, state_space):
 
         state_space = _StateSpace.cast(state_space)
-        assert(state_space.num_qubits == len(zvals))
+        assert(state_space.num_qudits == len(zvals))
         assert(basis.name == 'pp'), "Only Pauli-product computational effect vectors are currently supported"
 
         cdef INT nfactors = zvals.shape[0]
