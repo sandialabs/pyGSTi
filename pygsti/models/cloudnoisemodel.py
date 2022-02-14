@@ -127,13 +127,14 @@ class CloudNoiseModel(_ImplicitOpModel):
         *generators*, i.e. a map that acts as the exponentiated sum of error
         generators (ordering is irrelevant in this case).
 
-    implicit_idle_mode : {'none', 'add_global'}
-        The way idel operations are added implicitly within the created model. `"none"`
+    implicit_idle_mode : {'none', 'add_global', 'pad_1Q'}
+        The way idle operations are added implicitly within the created model. `"none"`
         doesn't add any "extra" idle operations when there is a layer that contains some
-        gates but not gates on all the qudits.  `"add_global"` adds the global idle operation,
+        gates but not gates on all the qubits.  `"add_global"` adds the global idle operation,
         i.e., the operation for a global idle layer (zero gates - a completely empty layer),
         to every layer that is simulated, using the global idle as a background idle that always
-        occurs regardless of the operation.
+        occurs regardless of the operation.  `"pad_1Q"` applies the 1-qubit idle gate (if one
+        exists) to all idling qubits within a circuit layer.
 
     verbosity : int, optional
         An integer >= 0 dictating how must output to send to stdout.
@@ -189,10 +190,19 @@ class CloudNoiseModel(_ImplicitOpModel):
         else:
             noisy_global_idle_name = None
 
-        assert(set(idle_names).issubset([global_idle_name])), \
-            "Only global idle operations are allowed in a CloudNoiseModel!"
+        singleq_idle_layer_labels = {}
+        for idle_name in idle_names:
+            if self.processor_spec.gate_num_qubits(idle_name) == 1:
+                for idlelayer_sslbls in self.processor_spec.resolved_availability(idle_name, 'tuple'):
+                    if idlelayer_sslbls is None: continue  # case of 1Q model with "global" idle
+                    assert(len(idlelayer_sslbls) == 1)  # should be a 1-qubit gate!
+                    if idlelayer_sslbls not in singleq_idle_layer_labels:
+                        singleq_idle_layer_labels[idlelayer_sslbls] = _Lbl(idle_name, idlelayer_sslbls)
+        #assert(set(idle_names).issubset([global_idle_name])), \
+        #    "Only global idle operations are allowed in a CloudNoiseModel!"
 
-        layer_rules = CloudNoiseLayerRules(errcomp_type, noisy_global_idle_name, implicit_idle_mode)
+        layer_rules = CloudNoiseLayerRules(errcomp_type, qubit_labels, implicit_idle_mode, singleq_idle_layer_labels,
+                                           noisy_global_idle_name)
         super(CloudNoiseModel, self).__init__(state_space, layer_rules, "pp", simulator=simulator, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_statespace': False,
@@ -364,34 +374,60 @@ class CloudNoiseModel(_ImplicitOpModel):
 
 class CloudNoiseLayerRules(_LayerRules):
 
-    def __init__(self, errcomp_type, implied_global_idle_label, implicit_idle_mode):
+    def __init__(self, errcomp_type, qubit_labels, implicit_idle_mode, singleq_idle_layer_labels,
+                 implied_global_idle_label):
+        self.qubit_labels = qubit_labels
         self.errcomp_type = errcomp_type
         self.implied_global_idle_label = implied_global_idle_label
+        self.single_qubit_idle_layer_labels = singleq_idle_layer_labels
         self.implicit_idle_mode = implicit_idle_mode  # how to handle implied idles ("blanks") in circuits
         self._add_global_idle_to_all_layers = False
+        self._add_padded_idle = False
 
         if implicit_idle_mode is None or implicit_idle_mode == "none":  # no noise on idles
             pass  # just use defaults above
-        elif implicit_idle_mode == "add_global":  # add global idle to all layers
-            self._add_global_idle_to_all_layers = True
+        elif implicit_idle_mode == "add_global" and self.implied_global_idle_label is not None:
+            self._add_global_idle_to_all_layers = True    # add global idle to all layers
+        elif implicit_idle_mode == "pad_1Q" and self.single_qubit_idle_layer_labels is not None:
+            self._add_padded_idle = True
         else:
             raise ValueError("Invalid `implicit_idle_mode`: '%s'" % str(implicit_idle_mode))
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
+        assert(all([len(k) == 1 for k in self.single_qubit_idle_layer_labels.keys()])), \
+            "All keys of single_qubit_idle_layer_labels should be 1-tuples of a *single* sslbl!"
         state.update({'error_composition_mode': self.errcomp_type,
                       'implied_global_idle_label': (str(self.implied_global_idle_label)
                                                     if (self.implied_global_idle_label is not None) else None),
+                      'single_qubit_idle_layer_labels': ({str(sslbls[0]): str(idle_lbl) for sslbls, idle_lbl
+                                                          in self.single_qubit_idle_layer_labels.items()}
+                                                         if self.single_qubit_idle_layer_labels is not None else None),
                       'implicit_idle_mode': self.implicit_idle_mode,
+                      'qubit_labels': list(self.qubit_labels),
                       })
         return state
 
     @classmethod
     def _from_nice_serialization(cls, state):
         from pygsti.circuits.circuitparser import parse_label as _parse_label
+
+        def _to_int(x):  # (same as in slowcircuitparser.py)
+            return int(x) if x.isdigit() else x
+
         gi_label = _parse_label(state['implied_global_idle_label']) \
             if (state['implied_global_idle_label'] is not None) else None
-        return cls(state['error_composition_mode'], gi_label, state['implicit_idle_mode'])
+
+        if state.get('single_qubit_idle_layer_labels', None) is not None:
+            singleQ_idle_lbls = {(_to_int(k),): _parse_label(v)
+                                 for k, v in state['single_qubit_idle_layer_labels'].items()}
+        else:
+            singleQ_idle_lbls = None
+
+        qubit_labels = tuple(state['qubit_labels']) if ('qubit_labels' in state) else None
+
+        return cls(state['error_composition_mode'], qubit_labels, state['implicit_idle_mode'],
+                   singleQ_idle_lbls, gi_label)
 
     def prep_layer_operator(self, model, layerlbl, caches):
         """
@@ -467,19 +503,35 @@ class CloudNoiseLayerRules(_LayerRules):
         Composed = _op.ComposedOp
         ExpErrorgen = _op.ExpErrorgenOp
         Sum = _op.ComposedErrorgen
-        add_idle = (self.implied_global_idle_label is not None) and self._add_global_idle_to_all_layers
+        add_global_idle = self._add_global_idle_to_all_layers
+        add_padded_idle = self._add_padded_idle
+
         #print("DB: CloudNoiseLayerLizard building gate %s for %s w/comp-type %s" %
         #      (('matrix' if dense else 'map'), str(oplabel), self.errcomp_type) )
 
         components = layerlbl.components
-        if (len(components) == 0 and self.implied_global_idle_label is not None) \
-           or components == (self.implied_global_idle_label,):
-            if self.errcomp_type == "gates":
-                return model.operation_blks['cloudnoise'][self.implied_global_idle_label]  # idle!
-            elif self.errcomp_type == "errorgens":
-                return ExpErrorgen(model.operation_blks['cloudnoise'][self.implied_global_idle_label])
+        if len(components) == 0:
+            if add_global_idle:
+                if self.errcomp_type == "gates":
+                    return model.operation_blks['cloudnoise'][self.implied_global_idle_label]  # idle!
+                elif self.errcomp_type == "errorgens":
+                    return ExpErrorgen(model.operation_blks['cloudnoise'][self.implied_global_idle_label])
+                else:
+                    raise ValueError("Invalid errcomp_type in CloudNoiseLayerRules: %s" % str(self.errcomp_type))
+            elif add_padded_idle:
+                idle_factors = [model.operation_blks['cloudnoise'][self.single_qubit_idle_layer_labels[(sslbl,)]]
+                                for sslbl in self.qubit_labels]
+                if self.errcomp_type == "gates":
+                    ret = Composed(idle_factors, evotype=model.evotype, state_space=model.state_space)
+                elif self.errcomp_type == "errorgens":
+                    ret = ExpErrorgen(Sum(idle_factors, state_space=model.state_space, evotype=model.evotype))
+                else:
+                    raise ValueError("Invalid errcomp_type in CloudNoiseLayerRules: %s" % str(self.errcomp_type))
+                model._init_virtual_obj(ret)  # so ret's gpindices get set
+                return ret
             else:
-                raise ValueError("Invalid errcomp_type in CloudNoiseLayerRules: %s" % str(self.errcomp_type))
+                #Perfect no-noise idle
+                return Composed([], evotype=model.evotype, state_space=model.state_space)  # no need to init_virtual
 
         #Compose target operation from layer's component labels, which correspond
         # to the perfect (embedded) target ops in op_blks
@@ -490,10 +542,12 @@ class CloudNoiseLayerRules(_LayerRules):
                                 evotype=model.evotype, state_space=model.state_space)
         else:
             targetOp = self._layer_component_targetop(model, components[0], caches['op-layers'])
+
         ops_to_compose = [targetOp] if (targetOp is not None) else []
 
         if self.errcomp_type == "gates":
-            if add_idle: ops_to_compose.append(model.operation_blks['cloudnoise'][self.implied_global_idle_label])
+            if add_global_idle: ops_to_compose.append(model.operation_blks['cloudnoise'][self.implied_global_idle_label])
+            # Note: add_padded_idle handled within _layer_component_cloudnoises
             component_cloudnoise_ops = self._layer_component_cloudnoises(model, components, caches['op-cloudnoise'])
             if len(component_cloudnoise_ops) > 0:
                 if len(component_cloudnoise_ops) > 1:
@@ -507,7 +561,8 @@ class CloudNoiseLayerRules(_LayerRules):
             #We compose the target operations to create a
             # final target op, and compose this with a *single* ExpErrorgen operation which has as
             # its error generator the composition (sum) of all the factors' error gens.
-            errorGens = [model.operation_blks['cloudnoise'][self.implied_global_idle_label]] if add_idle else []
+            # Note: add_padded_idle handled within _layer_component_cloudnoises
+            errorGens = [model.operation_blks['cloudnoise'][self.implied_global_idle_label]] if add_global_idle else []
             errorGens.extend(self._layer_component_cloudnoises(model, components, caches['op-cloudnoise']))
             if len(errorGens) > 0:
                 if len(errorGens) > 1:
@@ -518,7 +573,8 @@ class CloudNoiseLayerRules(_LayerRules):
         else:
             raise ValueError("Invalid errcomp_type in CloudNoiseLayerRules: %s" % str(self.errcomp_type))
 
-        ret = Composed(ops_to_compose, evotype=model.evotype, state_space=model.state_space)
+        ret = Composed(ops_to_compose, evotype=model.evotype, state_space=model.state_space) \
+            if len(ops_to_compose) > 1 else ops_to_compose[0]
         model._init_virtual_obj(ret)  # so ret's gpindices get set
         caches['complete-layers'][layerlbl] = ret  # cache the final label value
         return ret
@@ -572,13 +628,39 @@ class CloudNoiseLayerRules(_LayerRules):
         list
         """
         ret = []
-        for complbl in complbl_list:
-            if complbl in cache:
-                ret.append(cache[complbl])  # caches['cloudnoise-layers'] would hold "simplified" instrument members
-            elif complbl in model.operation_blks['cloudnoise']:
-                ret.append(model.operation_blks['cloudnoise'][complbl])
+        if self._add_padded_idle:
+            component_sslbls = [c.sslbls for c in complbl_list]
+            if None not in component_sslbls:  # sslbls == None => label covers *all* labels, no padding needed
+                present_sslbl_components = set(_itertools.chain(*[sslbls for sslbls in component_sslbls]))
+                absent_sslbls = [sslbl for sslbl in self.qubit_labels if (sslbl not in present_sslbl_components)]
+                factors = {sslbl: model.operation_blks['cloudnoise'][self.single_qubit_idle_layer_labels[(sslbl,)]]
+                           for sslbl in absent_sslbls}  # key = *lowest* (and only) sslbl
             else:
-                try:
-                    ret.append(_opfactory.op_from_factories(model.factories['cloudnoise'], complbl))
-                except KeyError: pass  # OK if cloudnoise doesn't exist (means no noise)
+                factors = {}
+
+            for complbl in complbl_list:
+                complbl_lowest_sslbl = sorted(complbl.sslbls)[0] if (complbl.sslbls is not None) else 0
+                if complbl in cache:
+                    factors[complbl_lowest_sslbl] = cache[complbl]
+                elif complbl in model.operation_blks['cloudnoise']:
+                    factors[complbl_lowest_sslbl] = model.operation_blks['cloudnoise'][complbl]
+                else:
+                    try:
+                        factors[complbl_lowest_sslbl] = _opfactory.op_from_factories(
+                            model.factories['cloudnoise'], complbl)
+                    except KeyError: pass  # OK if cloudnoise doesn't exist (means no noise)
+
+            ret = [factors[k] for k in sorted(factors.keys())]
+
+        else:
+            for complbl in complbl_list:
+                if complbl in cache:
+                    ret.append(cache[complbl])  # caches['cloudnoise-layers'] would hold "simplified" instrument members
+                elif complbl in model.operation_blks['cloudnoise']:
+                    ret.append(model.operation_blks['cloudnoise'][complbl])
+                else:
+                    try:
+                        ret.append(_opfactory.op_from_factories(model.factories['cloudnoise'], complbl))
+                    except KeyError: pass  # OK if cloudnoise doesn't exist (means no noise)
+
         return ret

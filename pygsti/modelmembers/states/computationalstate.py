@@ -141,7 +141,7 @@ class ComputationalBasisState(_State):
 
         evotype = _Evotype.cast(evotype)
         self._evotype = evotype  # set this before call to _State.__init__ so self.to_dense() can work...
-        rep = evotype.create_computational_state_rep(zvals, basis, state_space)
+        rep = evotype.create_computational_state_rep(self._zvals, basis, state_space)
         _State.__init__(self, rep, evotype)
 
     def to_dense(self, on_space='minimal', scratch=None):

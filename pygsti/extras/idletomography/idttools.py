@@ -14,9 +14,11 @@ import numpy as _np
 
 from . import pauliobjs as _pobjs
 from pygsti import tools as _tools
+from pygsti.models import CloudNoiseModel as _CloudNoiseModel
 from pygsti.modelmembers import operations as _op
 from pygsti.circuits import cloudcircuitconstruction as _nqn
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
+from pygsti.baseobjs.label import Label as _Label
 
 # maybe need to restructure in future - "tools" usually doesn't import "objects"
 
@@ -207,7 +209,10 @@ def set_idle_errors(nqubits, model, errdict, rand_default=None,
     v = model.to_vector()
     #assumes Implicit model w/'globalIdle' as a composed gate...
     # each factor applies to some set of the qubits (of size 1 to the max-error-weight)
-    global_idle_lbl = model.processor_spec.global_idle_layer_label
+    if isinstance(model, _CloudNoiseModel) and model._layer_rules.implicit_idle_mode == "add_global":
+        global_idle_lbl = _Label(())
+    else:
+        global_idle_lbl = model.processor_spec.global_idle_layer_label
     global_idle = model.circuit_layer_operator(global_idle_lbl, typ='op')
     factorops = global_idle.factorops if isinstance(global_idle, _op.ComposedOp) else (global_idle,)
     for i, factor in enumerate(factorops):

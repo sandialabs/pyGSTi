@@ -127,13 +127,14 @@ class LocalNoiseModel(_ImplicitOpModel):
         If False, then the appropriately parameterized gate objects (often
         dense gates) are used directly.
 
-    implicit_idle_mode : {'none', 'add_global'}
-        The way idel operations are added implicitly within the created model. `"none"`
+    implicit_idle_mode : {'none', 'add_global', 'pad_1Q'}
+        The way idle operations are added implicitly within the created model. `"none"`
         doesn't add any "extra" idle operations when there is a layer that contains some
-        gates but not gates on all the qudits.  `"add_global"` adds the global idle operation,
+        gates but not gates on all the qubits.  `"add_global"` adds the global idle operation,
         i.e., the operation for a global idle layer (zero gates - a completely empty layer),
         to every layer that is simulated, using the global idle as a background idle that always
-        occurs regardless of the operation.
+        occurs regardless of the operation.  `"pad_1Q"` applies the 1-qubit idle gate (if one
+        exists) to all idling qubits within a circuit layer.
     """
 
     def __init__(self, processor_spec, gatedict, prep_layers=None, povm_layers=None, evotype="default",
@@ -165,7 +166,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         idle_names = processor_spec.idle_gate_names
         global_idle_layer_label = processor_spec.global_idle_layer_label
 
-        layer_rules = _SimpleCompLayerRules(global_idle_layer_label, implicit_idle_mode)
+        layer_rules = _SimpleCompLayerRules(qubit_labels, implicit_idle_mode, None, global_idle_layer_label)
 
         super(LocalNoiseModel, self).__init__(state_space, layer_rules, 'pp',
                                               simulator=simulator, evotype=evotype)
@@ -233,7 +234,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                 self.factories['layers'][_Lbl(gateName)] = embedded_op
 
             else:  # resolved_avail is a list/tuple of available sslbls for the current gate/factory
-                gates_for_auto_global_idle = _collections.OrderedDict()
+                singleQ_idle_layer_labels = _collections.OrderedDict()
 
                 for inds in resolved_avail:
                     if _Lbl(gateName, inds) in mm_gatedict and inds is not None:
@@ -289,9 +290,9 @@ class LocalNoiseModel(_ImplicitOpModel):
                             self.operation_blks['layers'][_Lbl(gateName, inds)] = embedded_op
 
                             # If a 1Q idle gate (factories not supported yet) then turn this into a global idle
-                            if gate_is_idle and base_gate.state_space.num_qudits == 1 \
+                            if gate_is_idle and base_gate.state_space.num_qubits == 1 \
                                and global_idle_layer_label is None:
-                                gates_for_auto_global_idle[inds] = embedded_op
+                                singleQ_idle_layer_labels[inds] = _Lbl(gateName, inds)  # allow custom setting of this?
 
                     except Exception as e:
                         if on_construction_error == 'warn':
@@ -299,10 +300,15 @@ class LocalNoiseModel(_ImplicitOpModel):
                         if on_construction_error in ('warn', 'ignore'): continue
                         else: raise e
 
-                if len(gates_for_auto_global_idle) > 0:  # then create a global idle based on 1Q idle gates
-                    global_idle = _op.ComposedOp(list(gates_for_auto_global_idle.values()))
-                    global_idle_layer_label = layer_rules.global_idle_layer_label = _Lbl('{auto_global_idle}')
-                    self.operation_blks['layers'][_Lbl('{auto_global_idle}')] = global_idle
+                if len(singleQ_idle_layer_labels) > 0:
+                    if implicit_idle_mode == 'add_global' and global_idle_layer_label is None:
+                        # then create a global idle based on 1Q idle gates
+                        global_idle = _op.ComposedOp([self.operation_blks['layers'][lbl]
+                                                      for lbl in singleQ_idle_layer_labels.values()])
+                        global_idle_layer_label = layer_rules.global_idle_layer_label = _Lbl('{auto_global_idle}')
+                        self.operation_blks['layers'][_Lbl('{auto_global_idle}')] = global_idle
+                    elif implicit_idle_mode == 'pad_1Q':
+                        layer_rules.single_qubit_idle_layer_labels = singleQ_idle_layer_labels
 
         self._clean_paramvec()
 
@@ -352,31 +358,69 @@ class LocalNoiseModel(_ImplicitOpModel):
 
 class _SimpleCompLayerRules(_LayerRules):
 
-    def __init__(self, global_idle_layer_label, implicit_idle_mode):
-        self.global_idle_layer_label = global_idle_layer_label
+    def __init__(self, qubit_labels, implicit_idle_mode, singleq_idle_layer_labels, global_idle_layer_label):
         self.implicit_idle_mode = implicit_idle_mode  # how to handle implied idles ("blanks") in circuits
+        self.qubit_labels = qubit_labels
         self._add_global_idle_to_all_layers = False
+        self._add_padded_idle = False
 
-        if implicit_idle_mode is None or implicit_idle_mode == "none":  # no noise on idles
-            pass  # just use defaults above
-        elif implicit_idle_mode == "add_global":  # add global idle to all layers
-            self._add_global_idle_to_all_layers = True
-        else:
+        if implicit_idle_mode not in ('none', 'add_global', 'pad_1Q'):
             raise ValueError("Invalid `implicit_idle_mode`: '%s'" % str(implicit_idle_mode))
+
+        self.single_qubit_idle_layer_labels = singleq_idle_layer_labels
+        self.global_idle_layer_label = global_idle_layer_label
+
+    @property
+    def single_qubit_idle_layer_labels(self):
+        return self._singleq_idle_layer_labels
+
+    @single_qubit_idle_layer_labels.setter
+    def single_qubit_idle_layer_labels(self, val):
+        self._singleq_idle_layer_labels = val
+        if self.implicit_idle_mode == "pad_1Q":
+            self._add_padded_idle = bool(self._singleq_idle_layer_labels is not None)
+
+    @property
+    def global_idle_layer_label(self):
+        return self._global_idle_layer_label
+
+    @global_idle_layer_label.setter
+    def global_idle_layer_label(self, val):
+        self._global_idle_layer_label = val
+        if self.implicit_idle_mode == "add_global":
+            self._add_global_idle_to_all_layers = bool(self._global_idle_layer_label is not None)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
+        assert((self.single_qubit_idle_layer_labels is None)
+               or all([len(k) == 1 for k in self.single_qubit_idle_layer_labels.keys()])), \
+            "All keys of single_qubit_idle_layer_labels should be 1-tuples of a *single* sslbl!"
         state.update({'global_idle_layer_label': (str(self.global_idle_layer_label)
                                                   if (self.global_idle_layer_label is not None) else None),
+                      'single_qubit_idle_layer_labels': ({str(sslbls[0]): str(idle_lbl) for sslbls, idle_lbl
+                                                          in self.single_qubit_idle_layer_labels.items()}
+                                                         if self.single_qubit_idle_layer_labels is not None else None),
                       'implicit_idle_mode': self.implicit_idle_mode,
+                      'qubit_labels': list(self.qubit_labels),
                       })
         return state
 
     @classmethod
     def _from_nice_serialization(cls, state):
+        def _to_int(x):  # (same as in slowcircuitparser.py)
+            return int(x) if x.isdigit() else x
+
         global_idle_label = _parse_label(state['global_idle_layer_label']) \
             if (state['global_idle_layer_label'] is not None) else None
-        return cls(global_idle_label, state['implicit_idle_mode'])
+
+        if state.get('single_qubit_idle_layer_labels', None) is not None:
+            singleQ_idle_lbls = {(_to_int(k),): _parse_label(v)
+                                 for k, v in state['single_qubit_idle_layer_labels'].items()}
+        else:
+            singleQ_idle_lbls = None
+
+        qubit_labels = tuple(state['qubit_labels']) if ('qubit_labels' in state) else None
+        return cls(qubit_labels, state['implicit_idle_mode'], singleQ_idle_lbls, global_idle_label)
 
     def prep_layer_operator(self, model, layerlbl, caches):
         """
@@ -444,7 +488,9 @@ class _SimpleCompLayerRules(_LayerRules):
         """
         if layerlbl in caches['complete-layers']: return caches['complete-layers'][layerlbl]
         components = layerlbl.components
-        add_idle = (self.global_idle_layer_label is not None) and self._add_global_idle_to_all_layers
+        add_global_idle = self._add_global_idle_to_all_layers
+        add_padded_idle = self._add_padded_idle
+        add_idle = add_global_idle or add_padded_idle
 
         if isinstance(layerlbl, _CircuitLabel):
             op = self._create_op_for_circuitlabel(model, layerlbl)
@@ -453,7 +499,25 @@ class _SimpleCompLayerRules(_LayerRules):
 
         if len(components) == 1 and add_idle is False:
             ret = self._layer_component_operation(model, components[0], caches['op-layers'])
-        else:
+        elif add_padded_idle:
+            component_sslbls = [c.sslbls for c in components]
+            if None not in component_sslbls:  # sslbls == None => label covers *all* labels, no padding needed
+                present_sslbl_components = set(_itertools.chain(*[sslbls for sslbls in component_sslbls]))
+                absent_sslbls = [sslbl for sslbl in self.qubit_labels if (sslbl not in present_sslbl_components)]
+                factors = {sslbl: model.operation_blks['layers'][self.single_qubit_idle_layer_labels[(sslbl,)]]
+                           for sslbl in absent_sslbls}  # key = *lowest* (and only) sslbl
+            else:
+                factors = {}
+
+            factors.update({(sorted(l.sslbls)[0] if (l.sslbls is not None) else 0):
+                            self._layer_component_operation(model, l, caches['op-layers'])
+                            for l in components})  # key = *lowest* sslbl or 0 (special case) if sslbls is None
+
+            #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
+            ret = _op.ComposedOp([factors[k] for k in sorted(factors.keys())],
+                                 evotype=model.evotype, state_space=model.state_space)
+            model._init_virtual_obj(ret)  # so ret's gpindices get set
+        else:  # add_global_idle
             gblIdle = [model.operation_blks['layers'][self.global_idle_layer_label]] if add_idle else []
 
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors

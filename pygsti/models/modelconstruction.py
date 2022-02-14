@@ -1570,13 +1570,14 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
         Similar to `ideal_gate_type` but for SPAM elements (state preparations
         and POVMs).
 
-    implicit_idle_mode : {'none', 'add_global'}
-        The way idel operations are added implicitly within the created model. `"none"`
+    implicit_idle_mode : {'none', 'add_global', 'pad_1Q'}
+        The way idle operations are added implicitly within the created model. `"none"`
         doesn't add any "extra" idle operations when there is a layer that contains some
         gates but not gates on all the qudits.  `"add_global"` adds the global idle operation,
         i.e., the operation for a global idle layer (zero gates - a completely empty layer),
         to every layer that is simulated, using the global idle as a background idle that always
-        occurs regardless of the operation.
+        occurs regardless of the operation.  `"pad_1Q"` applies the 1-qubit idle gate (if one
+        exists) to all idling qubits within a circuit layer.
 
     Returns
     -------
@@ -1756,13 +1757,14 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
         `errorgens`).  The latter is only an option when the noise is given solely
         in terms of Lindblad error coefficients.
 
-    implicit_idle_mode : {'none', 'add_global'}
-        The way idel operations are added implicitly within the created model. `"none"`
+    implicit_idle_mode : {'none', 'add_global', 'pad_1Q'}
+        The way idle operations are added implicitly within the created model. `"none"`
         doesn't add any "extra" idle operations when there is a layer that contains some
         gates but not gates on all the qudits.  `"add_global"` adds the global idle operation,
         i.e., the operation for a global idle layer (zero gates - a completely empty layer),
         to every layer that is simulated, using the global idle as a background idle that always
-        occurs regardless of the operation.
+        occurs regardless of the operation.  `"pad_1Q"` applies the 1-qubit idle gate (if one
+        exists) to all idling qubits within a circuit layer.
 
     verbosity : int or VerbosityPrinter, optional
         Amount of detail to print to stdout.
@@ -1981,13 +1983,14 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         and POVMs).  This specifies the Lindblad-error parameterization for the
         state prepearation and POVM.
 
-    implicit_idle_mode : {'none', 'add_global'}
-        The way idel operations are added implicitly within the created model. `"none"`
+    implicit_idle_mode : {'none', 'add_global', 'pad_1Q'}
+        The way idle operations are added implicitly within the created model. `"none"`
         doesn't add any "extra" idle operations when there is a layer that contains some
         gates but not gates on all the qudits.  `"add_global"` adds the global idle operation,
         i.e., the operation for a global idle layer (zero gates - a completely empty layer),
         to every layer that is simulated, using the global idle as a background idle that always
-        occurs regardless of the operation.
+        occurs regardless of the operation.  `"pad_1Q"` applies the 1-qubit idle gate (if one
+        exists) to all idling qubits within a circuit layer.
 
     errcomp_type : {"gates","errorgens"}
         How errors are composed when creating layer operations in the created
