@@ -651,6 +651,7 @@ def convert_circuits_to_strings(obj):
         A JSON-able object containing circuit string representations in place of Circuit objects.
     """
     from pygsti.circuits import Circuit as _Circuit
+
     def _replace_circuits_with_strs(x):
         if isinstance(x, (list, tuple)):
             return [_replace_circuits_with_strs(el) for el in x]

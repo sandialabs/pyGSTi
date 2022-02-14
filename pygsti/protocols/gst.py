@@ -32,7 +32,7 @@ from pygsti import models as _models
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti import baseobjs as _baseobjs
-from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+from pygsti.processors import QuditProcessorSpec as _QuditProcessorSpec
 from pygsti.modelmembers import operations as _op
 from pygsti.models import Model as _Model
 from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup, GaugeGroupElement as _GaugeGroupElement
@@ -54,7 +54,7 @@ class HasProcessorSpec(object):
 
     Parameters
     ----------
-    processorspec_filename_or_obj : QubitProcessorSpec or str
+    processorspec_filename_or_obj : QuditProcessorSpec or str
         The processor API used by this experiment design.
     """
 
@@ -109,7 +109,7 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
 
     Parameters
     ----------
-    processorspec_filename_or_obj : QubitProcessorSpec or str
+    processorspec_filename_or_obj : QuditProcessorSpec or str
         The processor API used by this experiment design.
 
     circuit_lists : list
@@ -147,7 +147,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
     Parameters
     ----------
-    processorspec_filename_or_obj : QubitProcessorSpec or str
+    processorspec_filename_or_obj : QuditProcessorSpec or str
         The processor API used by this experiment design.
 
     prep_fiducial_list_or_filename : list or str
@@ -1221,7 +1221,6 @@ class GateSetTomography(_proto.Protocol):
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
         mdl_start = self.initial_model.retrieve_model(data.edesign, self.gaugeopt_suite.gaugeopt_target,
                                                       data.dataset, comm)
-        hack_mdl_start_copy = mdl_start.copy()  # HACK TODO REMOVE LATER - in case edesign can't make a target model
 
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
 
@@ -1253,12 +1252,7 @@ class GateSetTomography(_proto.Protocol):
             target_model = self.gaugeopt_suite.gaugeopt_target
         elif self.gaugeopt_suite.is_empty() is False:
             if isinstance(data.edesign, HasProcessorSpec):
-                try:
-                    target_model = data.edesign.create_target_model()
-                except:
-                    _warnings.warn(("Could not create target model for gauge opt. from edesign"
-                                    " - falling back to initial model!"))
-                    target_model = hack_mdl_start_copy
+                target_model = data.edesign.create_target_model()
             else:
                 target_model = None
         else:
@@ -1612,7 +1606,7 @@ class StandardGST(_proto.Protocol):
 # ------------------ HELPER FUNCTIONS -----------------------------------
 
 def _load_pspec(processorspec_filename_or_obj):
-    if not isinstance(processorspec_filename_or_obj, _QubitProcessorSpec):
+    if not isinstance(processorspec_filename_or_obj, _QuditProcessorSpec):
         with open(processorspec_filename_or_obj, 'rb') as f:
             return _pickle.load(f)
     else:

@@ -48,7 +48,7 @@ class EffectRepComputational(EffectRep):
     def __init__(self, zvals, basis, state_space):
         state_space = _StateSpace.cast(state_space)
         assert(basis.name == 'pp'), "Only Pauli-product computational effect vectors are currently supported"
-        assert(state_space.num_qubits == len(zvals))
+        assert(state_space.num_qudits == len(zvals))
         assert(len(zvals) <= 64), "Cannot create a Computational basis rep with >64 qubits!"
         # Current storage of computational basis states converts zvals -> 64-bit integer
 

@@ -13,6 +13,10 @@ Sub-package holding model state preparation objects.
 import numpy as _np
 import warnings as _warnings
 
+from numpy.lib.arraysetops import isin
+
+from pygsti.modelmembers.povms.computationalpovm import ComputationalBasisPOVM
+
 from .composedstate import ComposedState
 from .computationalstate import ComputationalBasisState
 from .cptpstate import CPTPState
@@ -237,7 +241,8 @@ def convert(state, to_type, basis, extra=None):
                     except ValueError:
                         purevec = None
 
-                if purevec is not None:
+                if purevec is not None and state.evotype.minimal_space == 'Hilbert':
+                    # only use pure state if evotype supports it
                     static_state = StaticPureState(purevec, basis, state.evotype, state.state_space)
                 elif state.num_params > 0:  # then we need to convert to a static state
                     static_state = StaticState(state.to_dense(), state.evotype, state.state_space)

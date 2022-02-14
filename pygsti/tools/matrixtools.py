@@ -222,7 +222,7 @@ def nullspace_qr(m, tol=1e-7):
     return q[:, rank:]
 
 
-def nice_nullspace(m, tol=1e-7):
+def nice_nullspace(m, tol=1e-7, orthogonalize=False):
     """
     Computes the nullspace of a matrix, and tries to return a "nice" basis for it.
 
@@ -240,6 +240,9 @@ def nice_nullspace(m, tol=1e-7):
     tol : float , optional
         Nullspace tolerance, used when comparing diagonal values of R with zero.
 
+    orthogonalize : bool, optional
+        If `True`, the nullspace vectors are additionally orthogonalized.
+
     Returns
     -------
     An matrix of shape (M,K) whose columns contain nullspace basis vectors.
@@ -254,9 +257,13 @@ def nice_nullspace(m, tol=1e-7):
             current_rank = rank
     ret = _np.take(nullsp_projector, keepers, axis=1)
 
+    if orthogonalize: # and not columns_are_orthogonal(ret):
+        ret, _ = _np.linalg.qr(ret)  # Gram-Schmidt orthogonalization
+
     for j in range(ret.shape[1]):  # normalize columns so largest element is +1.0
-        mx = abs(max(ret[:, j]))
-        if mx > 1e-6: ret[:, j] /= mx
+        imax = _np.argmax(_np.abs(ret[:, j]))
+        if abs(ret[imax, j]) > 1e-6: ret[:, j] /= ret[imax, j]
+
     return ret
 
 
@@ -273,8 +280,10 @@ def normalize_columns(m, return_norms=False, ord=None):
         If `True`, also return a 1D array containing the norms
         of the columns (before they were normalized).
 
-    ord : int, optional
-        The order of the norm.  See :function:`numpy.linalg.norm`.
+    ord : int or list of ints, optional
+        The order of the norm.  See :function:`numpy.linalg.norm`.  An
+        array of orders can be given to specify the norm on a per-column
+        basis.
 
     Returns
     -------
@@ -300,19 +309,24 @@ def column_norms(m, ord=None):
     m : numpy.ndarray or scipy sparse matrix
         The matrix.
 
-    ord : int, optional
-        The order of the norm.  See :function:`numpy.linalg.norm`.
+    ord : int or list of ints, optional
+        The order of the norm.  See :function:`numpy.linalg.norm`.  An
+        array of orders can be given to specify the norm on a per-column
+        basis.
 
     Returns
     -------
     numpy.ndarray
         A 1-dimensional array of the column norms (length is number of columns of `m`).
     """
+    ord_list = [ord] * m.shape[1] if (ord is None or isinstance(ord, int)) else ord
+    assert(len(ord_list) == m.shape[1])
+
     if _sps.issparse(m):
         #this could be done more efficiently, e.g. by converting to csc and taking column norms directly
-        norms = _np.array([_np.linalg.norm(m[:, j].todense(), ord=ord) for j in range(m.shape[1])])
+        norms = _np.array([_np.linalg.norm(m[:, j].todense(), ord=o) for j, o in enumerate(ord_list)])
     else:
-        norms = _np.array([_np.linalg.norm(m[:, j], ord=ord) for j in range(m.shape[1])])
+        norms = _np.array([_np.linalg.norm(m[:, j], ord=o) for j, o in enumerate(ord_list)])
     return norms
 
 
@@ -371,7 +385,6 @@ def columns_are_orthogonal(m, tol=1e-7):
     if m.size == 0: return True  # boundary case
     check = _np.dot(m.conj().T, m)
     check[_np.diag_indices_from(check)] = 0.0
-
     return bool(_np.linalg.norm(check) / check.size < tol)
 
 
@@ -1597,7 +1610,7 @@ def csr_sum_indices(csr_matrices):
         The dimension of the destination matrix (and of each member of
         `csr_matrices`)
     """
-    if len(csr_matrices) == 0: return [], _np.empty(0, int), _np.empty(0, int), 0
+    if len(csr_matrices) == 0: return [], _np.empty(0, _np.int64), _np.empty(0, _np.int64), 0
 
     N = csr_matrices[0].shape[0]
     for mx in csr_matrices:
@@ -1704,11 +1717,11 @@ def csr_sum_flat_indices(csr_matrices):
     """
     csr_sum_array, indptr, indices, N = csr_sum_indices(csr_matrices)
     if len(csr_sum_array) == 0:
-        return (_np.empty(0, int), _np.empty(0, 'd'), _np.zeros(1, int), indptr, indices, N)
+        return (_np.empty(0, _np.int64), _np.empty(0, 'd'), _np.zeros(1, _np.int64), indptr, indices, N)
 
-    flat_dest_index_array = _np.ascontiguousarray(_np.concatenate(csr_sum_array, axis=0), dtype=int)
+    flat_dest_index_array = _np.ascontiguousarray(_np.concatenate(csr_sum_array, axis=0), dtype=_np.int64)
     flat_csr_mx_data = _np.ascontiguousarray(_np.concatenate([mx.data for mx in csr_matrices], axis=0), dtype=complex)
-    mx_nnz_indptr = _np.cumsum([0] + [mx.nnz for mx in csr_matrices], dtype=int)
+    mx_nnz_indptr = _np.cumsum([0] + [mx.nnz for mx in csr_matrices], dtype=_np.int64)
 
     return flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr, indptr, indices, N
 
@@ -1902,8 +1915,9 @@ else:
         """
         #Note: copy v for now since it's modified by simple_core fn
         A, mu, m_star, s, eta = prep_a
-        indices = _np.array(A.indices, dtype=int)  # convert to 64-bit ints if needed
-        indptr = _np.array(A.indptr, dtype=int)
+
+        indices = _np.array(A.indices, dtype=_np.int64)  # convert to 64-bit ints if needed
+        indptr = _np.array(A.indptr, dtype=_np.int64)
         return _fastcalc.custom_expm_multiply_simple_core(A.data, indptr, indices,
                                                           v.copy(), mu, m_star, s, tol, eta)
 

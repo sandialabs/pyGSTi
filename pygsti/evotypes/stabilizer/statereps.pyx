@@ -80,8 +80,8 @@ cdef class StateRepComputational(StateRep):
     def __cinit__(self, zvals, basis, state_space):
 
         nqubits = len(zvals)
-        state_s = _np.fliplr(_np.identity(2 * nqubits, int))  # flip b/c stab cols are *first*
-        state_ps = _np.zeros(2 * nqubits, int)
+        state_s = _np.fliplr(_np.identity(2 * nqubits, _np.int64))  # flip b/c stab cols are *first*
+        state_ps = _np.zeros(2 * nqubits, _np.int64)
         for i, z in enumerate(zvals):
             state_ps[i] = state_ps[i + nqubits] = 2 if <bool>z else 0
             # TODO: check this is right -- (how/need to update the destabilizers?)
@@ -130,8 +130,8 @@ cdef class StateRepTensorProduct(StateRep):
         self.factor_reps = factor_state_reps
         n = sum([sf.nqubits for sf in self.factor_reps])  # total number of qubits
         np = int(_np.product([len(sf.pvectors) for sf in self.factor_reps]))
-        self._cinit_base(_np.zeros((2 * n, 2 * n), int),
-                         _np.zeros((np, 2 * n), int),
+        self._cinit_base(_np.zeros((2 * n, 2 * n), _np.int64),
+                         _np.zeros((np, 2 * n), _np.int64),
                          _np.ones(np, complex),
                          state_space)
         self.reps_have_changed()
@@ -142,7 +142,7 @@ cdef class StateRepTensorProduct(StateRep):
         n = sum([sf.nqubits for sf in sframe_factors])  # total number of qubits
 
         # (common) state matrix
-        sout = self.smatrix  #_np.zeros((2 * n, 2 * n), int)
+        sout = self.smatrix  #_np.zeros((2 * n, 2 * n), _np.int64)
         k = 0  # current qubit index
         for sf in sframe_factors:
             nq = sf.nqubits

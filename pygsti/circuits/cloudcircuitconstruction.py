@@ -1653,7 +1653,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         extra_gate_weight, verbosity=printer - 5,
         simulator=_TermFSim(mode="taylor-order", max_order=1),
         gate_type=parameterization, spam_type=parameterization, evotype=evotype,
-        errcomp_type="gates")
+        implicit_idle_mode="add_global", errcomp_type="gates")
     idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
     # these are the params we want to amplify at first...
     idle_params = idle_model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices
@@ -1736,7 +1736,8 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
                     max_idle_weight, 0, maxhops, extra_weight_1_hops,
                     extra_gate_weight, verbosity=printer - 5,
                     simulator=_TermFSim(mode="taylor-order", max_order=1),
-                    gate_type=parameterization, spam_type=parameterization, evotype=evotype, errcomp_type="gates")
+                    gate_type=parameterization, spam_type=parameterization, evotype=evotype,
+                    implicit_idle_mode="add_global", errcomp_type="gates")
                 sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
                 # these are the params we want to amplify...
                 idle_params = sidle_model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices

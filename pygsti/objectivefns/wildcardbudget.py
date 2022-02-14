@@ -872,11 +872,11 @@ def update_circuit_probs(probs, freqs, circuit_budget):
 
         # move j from A/B -> C
         if typ == 'A':
-            Alst = list(A); del Alst[Alst.index(j)]; A = _np.array(Alst, int)
-            Clst = list(C); Clst.append(j); C = _np.array(Clst, int)  # move A -> C
+            Alst = list(A); del Alst[Alst.index(j)]; A = _np.array(Alst, _np.int64)
+            Clst = list(C); Clst.append(j); C = _np.array(Clst, _np.int64)  # move A -> C
         else:  # typ == 'B'
-            Blst = list(B); del Blst[Blst.index(j)]; B = _np.array(Blst, int)
-            Clst = list(C); Clst.append(j); C = _np.array(Clst, int)  # move B -> C
+            Blst = list(B); del Blst[Blst.index(j)]; B = _np.array(Blst, _np.int64)
+            Clst = list(C); Clst.append(j); C = _np.array(Clst, _np.int64)  # move B -> C
 
         #update ratios
         del ratios[j]

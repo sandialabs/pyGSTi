@@ -88,7 +88,7 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
 
     comm = resource_alloc.comm
     host_comm = resource_alloc.host_comm
-    ok_buf = _np.empty(1, int)
+    ok_buf = _np.empty(1, _np.int64)
 
     if comm is None or isinstance(ari, _UndistributedArraysInterface):
         x[:] = _scipy.linalg.solve(a, b, assume_a='pos')
@@ -129,19 +129,19 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
         shared_floats, shared_floats_shm = _smt.create_shared_ndarray(
             resource_alloc, (host_comm.size,), 'd')
         shared_ints, shared_ints_shm = _smt.create_shared_ndarray(
-            resource_alloc, (max(host_comm.size, 3),), int)
+            resource_alloc, (max(host_comm.size, 3),), _np.int64)
         shared_rowb, shared_rowb_shm = _smt.create_shared_ndarray(
             resource_alloc, (a.shape[1] + 1,), 'd')
 
         # Scratch buffers
-        host_index_buf = _np.empty((resource_alloc.interhost_comm.size, 2), int) \
+        host_index_buf = _np.empty((resource_alloc.interhost_comm.size, 2), _np.int64) \
             if resource_alloc.interhost_comm.rank == 0 else None
         host_val_buf = _np.empty((resource_alloc.interhost_comm.size, 1), 'd') \
             if resource_alloc.interhost_comm.rank == 0 else None
     else:
         shared_floats = shared_ints = shared_rowb = None
 
-        host_index_buf = _np.empty((comm.size, 1), int) if comm.rank == 0 else None
+        host_index_buf = _np.empty((comm.size, 1), _np.int64) if comm.rank == 0 else None
         host_val_buf = _np.empty((comm.size, 1), 'd') if comm.rank == 0 else None
 
     # Idea: bring a|b into RREF then back-substitute to get x.
@@ -154,8 +154,8 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
     #Scratch space
     local_pivot_rowb = _np.empty(a.shape[1] + 1, 'd')
     smbuf1 = _np.empty(1, 'd')
-    smbuf2 = _np.empty(2, int)
-    smbuf3 = _np.empty(3, int)
+    smbuf2 = _np.empty(2, _np.int64)
+    smbuf3 = _np.empty(3, _np.int64)
 
     for icol in range(a.shape[1]):
 
@@ -346,7 +346,7 @@ def _back_substitution(a, b, x, pivot_row_indices, my_row_slice, ari, resource_a
 
     # x_indices_host = XXX  # x values to send to other procs -- TODO: slice of SHARED host array
     # x_values_host
-    # x_indices = _np.empty(_slct.length(my_row_slice), int)
+    # x_indices = _np.empty(_slct.length(my_row_slice), _np.int64)
     # x_valuess = _np.empty(_slct.length(my_row_slice), 'd')
     xval_buf = _np.empty(1, 'd')  # for MPI Send/Recv to work
 

@@ -127,7 +127,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         used to print log messages.
 
     num_nongauge_params : int, optional
-        Force the number of nongauge parameters rather than rely on automated gauge optimization. 
+        Force the number of nongauge parameters rather than rely on automated gauge optimization.
 
     Returns
     -------
@@ -305,7 +305,7 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
 
     l1_penalty : float, optional
         Coefficient for a penalty linear in the number of germs.
-    
+
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
 
@@ -1417,7 +1417,7 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
         Level of detail printed to stdout.
 
     num_nongauge_params : int, optional
-        Force the number of nongauge parameters rather than rely on automated gauge optimization. 
+        Force the number of nongauge parameters rather than rely on automated gauge optimization.
 
     Returns
     -------
@@ -1441,14 +1441,12 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
     #assert(all([(mdl.num_params == Np) for mdl in model_list])), \
     #    "All models must have the same number of parameters!"
 
-    
-    
     (_, numGaugeParams,
-         numNonGaugeParams, _) = _get_model_params(model_list)
+     numNonGaugeParams, _) = _get_model_params(model_list)
     if num_nongauge_params is not None:
         numGaugeParams = numGaugeParams + numNonGaugeParams - num_nongauge_params
         numNonGaugeParams = num_nongauge_params
-        
+
     germLengths = _np.array([len(germ) for germ in germs_list], _np.int64)
 
     numGerms = len(germs_list)
@@ -2099,7 +2097,7 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
 
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
-    
+
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
 
