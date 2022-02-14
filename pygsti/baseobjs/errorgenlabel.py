@@ -140,3 +140,46 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
 
     def __repr__(self):
         return str((self.errorgen_type, self.basis_element_labels, self.sslbls))
+
+    @property
+    def support(self):
+        """ Returns a sorted tuple of the elements of `self.sslbls` """
+        return tuple(sorted(self.sslbls))
+
+    def padded_basis_element_labels(self, all_sslbls, identity_label='I'):
+        """
+        Idle-padded versions of this label's basis element labels based on its state space labels.
+
+        A tuple of strings which positions the non-trivial single-qubit labels within the
+        elements of `self.basis_element_labels` into a background of `identity_label` characters.
+        For example, if the ordering of `all_sslbls` is `(0, 1, 2)`, `self.sslbls` is `(1,)`, and
+        `self.basis_element_labels` is `('X',)` then this method returns `('IXI',)`.
+
+        For this method to work correctly, basis element labels should be composed of single
+        characters corresponding to non-trivial single-qubit basis elements, and the total basis
+        element should be a product of these along with the identity on the state space labels
+        absent from `self.sslbls`.
+
+        Parameters
+        ----------
+        all_sslbls : tuple
+            An ordered list of the entirety of the state space labels to create padded basis
+            element labels for.  For example, `(0, 1, 2)` or `('Q0', 'Q1', 'Q2')`.
+
+        identity_label : str, optional
+            The single-character label used to indicate the single-qubit identity operation.
+
+        Returns
+        -------
+        tuple
+            A tuple of strings.
+        """
+        ret = []
+        all_sslbls = {lbl: i for i, lbl in enumerate(all_sslbls)}
+        sslbl_indices = [all_sslbls[lbl] for lbl in self.sslbls]
+        for bel in self.basis_element_labels:
+            lbl = [identity_label] * len(all_sslbls)
+            for i, char in zip(sslbl_indices, bel):
+                lbl[i] = char
+            ret.append(''.join(lbl))
+        return tuple(ret)

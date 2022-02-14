@@ -19,6 +19,7 @@ import collections as _collections
 from pygsti.baseobjs import Basis as _Basis
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti.tools import slicetools as _slct
 from pygsti.tools import fogitools as _fogit
 
 
@@ -55,6 +56,7 @@ class FirstOrderGaugeInvariantStore(object):
 
         # column space of self.fogi_directions
         #FOGI DEBUG print("DEBUG common gauge space of has dim", common_gauge_space.vectors.shape[1])
+        common_gauge_space.normalize()
         self.gauge_space = common_gauge_space
 
         # row space of self.fogi_directions - "errgen-set space" lookups
@@ -92,7 +94,7 @@ class FirstOrderGaugeInvariantStore(object):
             sparse_gauge_action = gauge_action.dot(alpha)
             allop_gauge_action[self.op_errorgen_indices[op_label], :] = sparse_gauge_action[:, :]
             gauge_action_matrices_by_op[op_label] = sparse_gauge_action.toarray()  # make **DENSE** here
-            # Hopefully matrices aren't too larget after this reduction and dense matrices are ok,
+            # Hopefully matrices aren't too large after this reduction and dense matrices are ok,
             # otherwise we need to change downstream nullspace and pseduoinverse operations to be sparse compatible.
 
             #FUTURE: if update above creates zero-rows in gauge action matrix, maybe remove
@@ -128,7 +130,8 @@ class FirstOrderGaugeInvariantStore(object):
         # (pinv_allop_gauge_action takes errorgen-set -> gauge-gen space)
         self.allop_gauge_action = allop_gauge_action
         pinv_allop_gauge_action = _np.linalg.pinv(self.allop_gauge_action.toarray(), rcond=1e-7)
-        gauge_space_directions = _np.dot(pinv_allop_gauge_action, self.fogv_directions)  # in gauge-generator space
+        gauge_space_directions = _np.dot(pinv_allop_gauge_action,
+                                         self.fogv_directions.toarray())  # in gauge-generator space
         self.gauge_space_directions = gauge_space_directions
 
         #Notes on error-gen vs gauge-gen space:
@@ -319,8 +322,8 @@ class FirstOrderGaugeInvariantStore(object):
         elemgen_info = {}
         for k, (op_label, eglabel) in enumerate(self.errorgen_space_op_elem_labels):
             elemgen_info[k] = {
-                'type': eglabel[0],
-                'qubits': set([i for bel_lbl in eglabel[1:] for i, char in enumerate(bel_lbl) if char != 'I']),
+                'type': eglabel.errorgen_type,
+                'qubits': eglabel.sslbls,
                 'op_label': op_label,
                 'elemgen_label': eglabel,
             }
@@ -328,7 +331,8 @@ class FirstOrderGaugeInvariantStore(object):
         bins = {}
         dependent_indices = set(self.dependent_dir_indices)  # indices of one set of linearly dep. fogi dirs
         for i, meta in enumerate(self.fogi_metadata):
-            fogi_dir = self.fogi_directions[:, i].toarray()
+            fogi_dir = self.fogi_directions[:, i].toarray().ravel()
+
             label = meta['name']
             label_raw = meta['raw']
             label_abbrev = meta['abbrev']
@@ -367,6 +371,183 @@ class FirstOrderGaugeInvariantStore(object):
             bins[ops_involved][types][qubits_acted_upon].append(info)
 
         return bins
+
+    def create_elementary_errorgen_space(self, op_elem_errgen_labels):
+        """
+        Construct a matrix whose column space spans the given list of elementary error generators.
+
+        Parameters
+        ----------
+        op_elem_errgen_labels : iterable
+            A list of `(operation_label, elementary_error_generator_label)` tuples, where
+            `operation_label` is one of the primitive operation labels in `self.primitive_op_labels`
+            and `elementary_error_generator_label` is a :class:`GlobalElementaryErrorgenLabel`
+            object.
+
+        Returns
+        -------
+        numpy.ndarray
+            A two-dimensional array of shape `(self.errorgen_space_dim, len(op_elem_errgen_labels))`.
+            Columns correspond to elements of `op_elem_errgen_labels` and the rowspace is the
+            full elementary error generator space of this FOGI analysis.
+        """
+        lbl_to_index = {}
+        for op_label in self.primitive_op_labels:
+            elem_errgen_lbls = self.elem_errorgen_labels_by_op[op_label]
+            elem_errgen_indices = _slct.indices(self.op_errorgen_indices[op_label])
+            assert(len(elem_errgen_indices) == len(elem_errgen_lbls))
+            lbl_to_index.update({(op_label, lbl): index for lbl, index in zip(elem_errgen_lbls, elem_errgen_indices)})
+
+        ret = _np.zeros((self.fogi_directions.shape[0], len(op_elem_errgen_labels)))
+        for i, lbl in enumerate(op_elem_errgen_labels):
+            ret[lbl_to_index[lbl], i] = 1.0
+        return ret
+
+    #UNUSED in our final analyses so far - deprecate in favor of create_fogi_aggregate_single_op_space?
+    #TODO: maybe can combine with function below, expanding it to take an op_set?
+    def create_fogi_aggregate_space(self, op_set='all', errorgen_types='all', target='all'):
+        """
+        Construct a matrix with columns equal to the FOGI directions within the specified categories.
+
+        Projecting a model's error-generator vector onto such a space can be used
+        to obtain the contribution of a desired subset of the model's errors.
+
+        Parameters
+        ----------
+        op_set : tuple or "all"
+            Restrict to (intrinsic) FOGI quantities of a single operation, given as a 1-tuple,
+            e.g. `(('Gxpi2',0),)` or relational error between multiple operations, e.g.,
+            `(('Gxpi2',0), ('Gypi2',0))`.  The special `"all"` value includes quantities on
+            all operations (no restriction).
+
+        errorgen_types : tuple of {"H", "S"} or "all"
+            Restrict to FOGI quantities containing elementary error generators of the given
+            type(s).  Note that a tuple with multiple types only selects FOGI quantities
+            containing *all* the give types (e.g., `('H','S')` will not match quantities
+            composed of solely Hamiltonian-type generators).  The special `"all"` value includes
+            quantities of all types (no restriction).
+
+        target : tuple or "all"
+            A tuple of state space (qubit) labels to restrict to, e.g., `('Q0','Q1')`.
+            Note that includeing multiple labels selects only those quantities that
+            target *all* the labels. The special `"all"` value includes quantities
+            on all targets (no restriction).
+
+        Returns
+        -------
+        numpy.ndarray
+            A two-dimensional array with `self.errorgen_space_dim` rows and a number of
+            columns dependent on the number of FOGI quantities matching the argument
+            criteria.
+        """
+        binned_infos = self.create_binned_fogi_infos()
+
+        selected_infos = []
+        for ops, infos_by_type in binned_infos.items():
+            if op_set == 'all' or ops == op_set:
+                for type_tup, infos_by_target in infos_by_type.items():
+                    if errorgen_types == 'all' or type_tup == errorgen_types:
+                        for tgt, info_lst in infos_by_target.items():
+                            if target == 'all' or tgt == target:
+                                selected_infos.extend(info_lst)
+
+        fogi_indices = [info['fogi_index'] for info in selected_infos]
+        space = _np.take(self.fogi_directions, fogi_indices, axis=1)
+        return space
+
+    def create_fogi_aggregate_single_op_space(self, op_label, errorgen_type='H',
+                                              intrinsic_or_relational='intrinsic', target='all'):
+        """
+        Construct a matrix with columns spanning a particular FOGI subspace for a single operation.
+
+        This is a subspace of the full error-generator space of this FOGI analysis,
+        and projecting a model's error-generator vector onto this space can be used
+        to obtain the contribution of a desired subset of the `op_label`'s errors.
+
+        Parameters
+        ----------
+        op_label : Label or str
+            The operation to construct a subspace for.  This should be an element of
+            `self.primitive_op_labels`.
+
+        errorgen_type : {"H", "S", "all"}
+            Potentially restrict to the subspace containing just Hamiltonian (H) or Pauli
+            stochastic (S) errors.  `"all"` imposes no restriction.
+
+        intrinsic_or_relational : {"intrinsic", "relational", "all"}
+            Restrict to intrinsic or relational errors (or not, using `"all"`).
+
+        target : tuple or "all"
+            A tuple of state space (qubit) labels to restrict to, e.g., `('Q0','Q1')`.
+            Note that including multiple labels selects only those quantities that
+            target *all* the labels. The special `"all"` value includes quantities
+            on all targets (no restriction).
+
+        Returns
+        -------
+        numpy.ndarray
+            A two-dimensional array with `self.errorgen_space_dim` rows and a number of
+            columns dependent on the dimension of the selected subspace.
+        """
+        binned_infos = self.create_binned_fogi_infos()
+
+        elem_errgen_lbls = self.elem_errorgen_labels_by_op[op_label]
+        elem_errgen_indices = _slct.indices(self.op_errorgen_indices[op_label])
+        assert(len(elem_errgen_indices) == len(elem_errgen_lbls))
+
+        op_elem_space = _np.zeros((self.fogi_directions.shape[0], len(elem_errgen_indices)))
+        for i, index in enumerate(elem_errgen_indices):
+            op_elem_space[index, i] = 1.0
+
+        if target == 'all' and errorgen_type == 'all':
+            on_target_elem_errgen_indices = elem_errgen_indices
+        else:
+            on_target_elem_errgen_indices = []
+            for index, lbl in zip(elem_errgen_indices, elem_errgen_lbls):
+                if errorgen_type == 'all' or errorgen_type == lbl.errorgen_type:
+                    support = lbl.support
+                    if (target == 'all') or (target == support):
+                        on_target_elem_errgen_indices.append(index)
+
+        support_elem_space = _np.zeros((self.fogi_directions.shape[0], len(on_target_elem_errgen_indices)))
+        for i, index in enumerate(on_target_elem_errgen_indices):
+            support_elem_space[index, i] = 1.0
+        #P_support_elem_space = support_elem_space @ np.linalg.pinv(support_elem_space)
+
+        if intrinsic_or_relational in ('intrinsic', 'relational'):
+            # easy case - can just use FOGIs to identify intrinsic errors
+            selected_infos = []
+            for ops, infos_by_type in binned_infos.items():
+                if ops == (op_label,):
+                    for types, infos_by_target in infos_by_type.items():  # use all types
+                        #if types == (egtype,):
+                        for _, info_lst in infos_by_target.items():  # use all targets here
+                            selected_infos.extend(info_lst)
+            fogi_indices = [info['fogi_index'] for info in selected_infos]
+            full_int_space = _np.take(self.fogi_directions.toarray(), fogi_indices, axis=1)
+
+            #space = P_op_elem_space @ full_int_space
+
+            if intrinsic_or_relational == 'intrinsic':
+                # full intrinsic space is a subspace of op_elem_space but perhaps not of support_elem_space
+                #target_int_space = P_op_elem_space @ full_int_space
+                support_int_space = _mt.intersection_space(support_elem_space, full_int_space, use_nice_nullspace=True)
+                space = support_int_space
+            elif intrinsic_or_relational == 'relational':
+                local_support_space = op_elem_space.T @ support_elem_space
+                local_int_space = op_elem_space.T @ full_int_space
+                local_rel_space = _mt.nice_nullspace(local_int_space.T)
+                support_rel_space = _mt.intersection_space(local_support_space, local_rel_space,
+                                                           use_nice_nullspace=True)
+                space = op_elem_space @ support_rel_space
+
+        elif intrinsic_or_relational == 'all':
+            space = support_elem_space
+        else:
+            raise ValueError("Invalid intrinsic_or_relational value: `%s`" % str(intrinsic_or_relational))
+
+        space = _mt.remove_dependent_cols(space)
+        return space
 
     @classmethod
     def merge_binned_fogi_infos(cls, binned_fogi_infos, index_offsets):
