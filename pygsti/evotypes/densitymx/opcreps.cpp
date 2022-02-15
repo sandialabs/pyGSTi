@@ -500,6 +500,7 @@ namespace CReps_densitymx {
     
     //cleanup what we allocated
     delete [] scratch;
+    delete [] B;
     delete init_state;
     
     DEBUG(out_state->print("OUTPUT"));

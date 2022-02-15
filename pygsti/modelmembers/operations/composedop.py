@@ -52,7 +52,7 @@ class ComposedOp(_LinearOperator):
         error generator being composed.
     """
 
-    def __init__(self, ops_to_compose, evotype="auto", state_space="auto"):
+    def __init__(self, ops_to_compose, evotype="auto", state_space="auto", allocated_to_parent=None):
         assert(len(ops_to_compose) > 0 or state_space != "auto"), \
             "Must compose at least one operation when state_space='auto'!"
         self.factorops = list(ops_to_compose)
@@ -97,7 +97,7 @@ class ComposedOp(_LinearOperator):
         self.local_term_poly_coeffs = {}
 
         _LinearOperator.__init__(self, rep, evotype)
-        self.init_gpindices()  # initialize our gpindices based on sub-members
+        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
         if self._rep_type == 'dense': self._update_denserep()  # update dense rep if needed
 
     def _update_denserep(self):

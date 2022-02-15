@@ -187,7 +187,11 @@ def _get_next_simple_lbl(s, start, end, integerize_sslbls, segment):
                 i += 1
             else:
                 break
-        args.append(s[last:i]); last = i
+        try:
+            arg = float(s[last:i])
+        except:
+            arg = s[last:i]
+        args.append(arg); last = i
 
     sslbls = []
     while i < end and s[i] == ':':

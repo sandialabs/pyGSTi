@@ -363,6 +363,7 @@ class _SimpleCompLayerRules(_LayerRules):
         self.qubit_labels = qubit_labels
         self._add_global_idle_to_all_layers = False
         self._add_padded_idle = False
+        self.use_op_caching = True  # expert functionality - can be turned off if needed
 
         if implicit_idle_mode not in ('none', 'add_global', 'pad_1Q'):
             raise ValueError("Invalid `implicit_idle_mode`: '%s'" % str(implicit_idle_mode))
@@ -466,9 +467,11 @@ class _SimpleCompLayerRules(_LayerRules):
                 mpovm = _povm.MarginalizedPOVM(model.povm_blks['layers'][povmName],
                                                model.state_space, layerlbl.sslbls)  # cache in FUTURE
                 mpovm_lbl = _Lbl(povmName, layerlbl.sslbls)
-                caches['povm-layers'].update(mpovm.simplify_effects(mpovm_lbl))
-                assert(layerlbl in caches['povm-layers']), "Failed to create marginalized effect!"
-                return caches['povm-layers'][layerlbl]
+                simplified_effects = mpovm.simplify_effects(mpovm_lbl)
+                assert(layerlbl in simplified_effects), "Failed to create marginalized effect!"
+                if self.use_op_caching:
+                    caches['povm-layers'].update(simplified_effects)
+                return simplified_effects[layerlbl]
             else:
                 #raise KeyError(f"Could not build povm/effect for {layerlbl}!")
                 raise KeyError("Could not build povm/effect for %s!" % str(layerlbl))
@@ -494,7 +497,7 @@ class _SimpleCompLayerRules(_LayerRules):
 
         if isinstance(layerlbl, _CircuitLabel):
             op = self._create_op_for_circuitlabel(model, layerlbl)
-            caches['complete-layers'][layerlbl] = op
+            if self.use_op_caching: caches['complete-layers'][layerlbl] = op
             return op
 
         if len(components) == 1 and add_idle is False:
@@ -523,10 +526,11 @@ class _SimpleCompLayerRules(_LayerRules):
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
             ret = _op.ComposedOp(gblIdle + [self._layer_component_operation(model, l, caches['op-layers'])
                                             for l in components],
-                                 evotype=model.evotype, state_space=model.state_space)
-            model._init_virtual_obj(ret)  # so ret's gpindices get set
+                                 evotype=model.evotype, state_space=model.state_space, allocated_to_parent=model)
+            model._init_virtual_obj(ret)  # so ret's gpindices get set - I don't think this is needed...
 
-        caches['complete-layers'][layerlbl] = ret  # cache the final label value
+        if self.use_op_caching:
+            caches['complete-layers'][layerlbl] = ret  # cache the final label value
         return ret
 
     def _layer_component_operation(self, model, complbl, cache):

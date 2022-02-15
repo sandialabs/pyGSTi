@@ -270,6 +270,115 @@ cdef class OpRepSum(OpRep):
         return OpRepSum([f.copy() for f in self.factor_reps], self.c_rep._dim)
 
 
+_embedding_quantities_cache = {}
+cdef class EmbeddingArraysCacheEl:
+    cdef public _np.ndarray noop_incrementers
+    cdef public _np.ndarray num_basis_els_noop_blankaction
+    cdef public _np.ndarray baseinds
+    cdef public _np.ndarray blocksizes
+    cdef public _np.ndarray num_basis_els
+    cdef public _np.ndarray action_inds
+    cdef public INT ncomponents_in_active_block
+    cdef public INT active_block_index
+    cdef public INT nblocks
+
+    def __cinit__(self, noop_incrementers,
+                  num_basis_els_noop_blankaction,
+                  baseinds, blocksizes, num_basis_els, action_inds,
+                  ncomponents_in_active_block, active_block_index, nblocks):
+        self.noop_incrementers = noop_incrementers
+        self.num_basis_els_noop_blankaction = num_basis_els_noop_blankaction
+        self.baseinds = baseinds
+        self.blocksizes = blocksizes
+        self.num_basis_els = num_basis_els
+        self.action_inds = action_inds
+        self.ncomponents_in_active_block = ncomponents_in_active_block
+        self.active_block_index = active_block_index
+        self.nblocks = nblocks
+
+
+def _compute_embedding_quantities_cachekey(state_space, target_labels, embedded_rep_dim):
+    iTensorProdBlks = [state_space.label_tensor_product_block_index(label) for label in target_labels]
+
+    # index of tensor product block (of state space) a bit label is part of
+    if len(set(iTensorProdBlks)) != 1:
+        raise ValueError("All qubit labels of a multi-qubit operation must correspond to the"
+                         " same tensor-product-block of the state space -- checked previously")  # pragma: no cover # noqa
+
+    iTensorProdBlk = iTensorProdBlks[0]  # because they're all the same (tested above) - this is "active" block
+    tensorProdBlkLabels = state_space.tensor_product_block_labels(iTensorProdBlk)
+    # count possible *density-matrix-space* indices of each component of the tensor product block
+    cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] num_basis_els = \
+        _np.array([state_space.label_dimension(l) for l in tensorProdBlkLabels], _np.int64)
+
+    # Separate the components of the tensor product that are not operated on, i.e. that our
+    # final map just acts as identity w.r.t.
+    labelIndices = [tensorProdBlkLabels.index(label) for label in target_labels]
+    cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] action_inds = _np.array(labelIndices, _np.int64)
+    assert(_np.product([num_basis_els[i] for i in action_inds]) == embedded_rep_dim), \
+        "Embedded operation has dimension (%d) inconsistent with the given target labels (%s)" % (
+            embedded_rep_dim, str(target_labels))
+
+    cdef INT dim = state_space.dim
+    cdef INT nblocks = state_space.num_tensor_product_blocks
+    cdef INT active_block_index = iTensorProdBlk
+    cdef INT ncomponents_in_active_block = len(state_space.tensor_product_block_labels(active_block_index))
+    cdef INT embedded_dim = embedded_rep_dim
+    cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] blocksizes = \
+        _np.array([_np.product(state_space.tensor_product_block_dimensions(k))
+                   for k in range(nblocks)], _np.int64)
+    cdef INT i, j
+
+    # num_basis_els_noop_blankaction is just num_basis_els with action_inds == 1
+    cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] num_basis_els_noop_blankaction = num_basis_els.copy()
+    for i in action_inds:
+        num_basis_els_noop_blankaction[i] = 1 # for indexing the identity space
+
+    # multipliers to go from per-label indices to tensor-product-block index
+    # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
+    cdef _np.ndarray tmp = _np.empty(ncomponents_in_active_block,_np.int64)
+    tmp[0] = 1
+    for i in range(1,ncomponents_in_active_block):
+        tmp[i] = num_basis_els[ncomponents_in_active_block-i]
+    multipliers = _np.array( _np.flipud( _np.cumprod(tmp) ), _np.int64)
+
+    # noop_incrementers[i] specifies how much the overall vector index
+    #  is incremented when the i-th "component" digit is advanced
+    cdef INT dec = 0
+    cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] noop_incrementers = _np.empty(ncomponents_in_active_block,_np.int64)
+    for i in range(ncomponents_in_active_block-1,-1,-1):
+        noop_incrementers[i] = multipliers[i] - dec
+        dec += (num_basis_els_noop_blankaction[i]-1)*multipliers[i]
+
+    cdef INT vec_index
+    cdef INT offset = 0 #number of basis elements preceding our block's elements
+    for i in range(active_block_index):
+        offset += blocksizes[i]
+
+    # self.baseinds specifies the contribution from the "active
+    #  component" digits to the overall vector index.
+    cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] baseinds = _np.empty(embedded_dim,_np.int64)
+    basisInds_action = [ list(range(num_basis_els[i])) for i in action_inds ]
+    for ii,op_b in enumerate(_itertools.product(*basisInds_action)):
+        vec_index = offset
+        for j,bInd in zip(action_inds,op_b):
+            vec_index += multipliers[j]*bInd
+        baseinds[ii] = vec_index
+
+    return EmbeddingArraysCacheEl(noop_incrementers,
+                                  num_basis_els_noop_blankaction,
+                                  baseinds, blocksizes, num_basis_els, action_inds,
+                                  ncomponents_in_active_block, active_block_index, nblocks)
+
+
+def _compute_embedding_quantities(state_space, target_labels, embedded_rep_dim):
+    cache_key = (state_space, target_labels)
+    if cache_key not in _embedding_quantities_cache:
+        _embedding_quantities_cache[cache_key] = _compute_embedding_quantities_cachekey(state_space, target_labels,
+                                                                                        embedded_rep_dim)
+    return _embedding_quantities_cache[cache_key]
+
+
 cdef class OpRepEmbedded(OpRep):
     cdef _np.ndarray noop_incrementers
     cdef _np.ndarray num_basis_els_noop_blankaction
@@ -282,87 +391,24 @@ cdef class OpRepEmbedded(OpRep):
     def __init__(self, state_space, target_labels, OpRep embedded_rep):
 
         state_space = _StateSpace.cast(state_space)
-        iTensorProdBlks = [state_space.label_tensor_product_block_index(label) for label in target_labels]
-        # index of tensor product block (of state space) a bit label is part of
-        if len(set(iTensorProdBlks)) != 1:
-            raise ValueError("All qubit labels of a multi-qubit operation must correspond to the"
-                             " same tensor-product-block of the state space -- checked previously")  # pragma: no cover # noqa
-
-        iTensorProdBlk = iTensorProdBlks[0]  # because they're all the same (tested above) - this is "active" block
-        tensorProdBlkLabels = state_space.tensor_product_block_labels(iTensorProdBlk)
-        # count possible *density-matrix-space* indices of each component of the tensor product block
-        cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] num_basis_els = \
-            _np.array([state_space.label_dimension(l) for l in tensorProdBlkLabels], _np.int64)
-
-        # Separate the components of the tensor product that are not operated on, i.e. that our
-        # final map just acts as identity w.r.t.
-        labelIndices = [tensorProdBlkLabels.index(label) for label in target_labels]
-        cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] action_inds = _np.array(labelIndices, _np.int64)
-        assert(_np.product([num_basis_els[i] for i in action_inds]) == embedded_rep.dim), \
-            "Embedded operation has dimension (%d) inconsistent with the given target labels (%s)" % (
-                embedded_rep.dim, str(target_labels))
-
-        cdef INT dim = state_space.dim
-        cdef INT nblocks = state_space.num_tensor_product_blocks
-        cdef INT active_block_index = iTensorProdBlk
-        cdef INT ncomponents_in_active_block = len(state_space.tensor_product_block_labels(active_block_index))
-        cdef INT embedded_dim = embedded_rep.dim
-        cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] blocksizes = \
-            _np.array([_np.product(state_space.tensor_product_block_dimensions(k))
-                       for k in range(nblocks)], _np.int64)
-        cdef INT i, j
-
-        # num_basis_els_noop_blankaction is just num_basis_els with action_inds == 1
-        cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] num_basis_els_noop_blankaction = num_basis_els.copy()
-        for i in action_inds:
-            num_basis_els_noop_blankaction[i] = 1 # for indexing the identity space
-
-        # multipliers to go from per-label indices to tensor-product-block index
-        # e.g. if map(len,basisInds) == [1,4,4] then multipliers == [ 16 4 1 ]
-        cdef _np.ndarray tmp = _np.empty(ncomponents_in_active_block,_np.int64)
-        tmp[0] = 1
-        for i in range(1,ncomponents_in_active_block):
-            tmp[i] = num_basis_els[ncomponents_in_active_block-i]
-        multipliers = _np.array( _np.flipud( _np.cumprod(tmp) ), _np.int64)
-
-        # noop_incrementers[i] specifies how much the overall vector index
-        #  is incremented when the i-th "component" digit is advanced
-        cdef INT dec = 0
-        cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] noop_incrementers = _np.empty(ncomponents_in_active_block,_np.int64)
-        for i in range(ncomponents_in_active_block-1,-1,-1):
-            noop_incrementers[i] = multipliers[i] - dec
-            dec += (num_basis_els_noop_blankaction[i]-1)*multipliers[i]
-
-        cdef INT vec_index
-        cdef INT offset = 0 #number of basis elements preceding our block's elements
-        for i in range(active_block_index):
-            offset += blocksizes[i]
-
-        # self.baseinds specifies the contribution from the "active
-        #  component" digits to the overall vector index.
-        cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] baseinds = _np.empty(embedded_dim,_np.int64)
-        basisInds_action = [ list(range(num_basis_els[i])) for i in action_inds ]
-        for ii,op_b in enumerate(_itertools.product(*basisInds_action)):
-            vec_index = offset
-            for j,bInd in zip(action_inds,op_b):
-                vec_index += multipliers[j]*bInd
-            baseinds[ii] = vec_index
+        cdef EmbeddingArraysCacheEl eaCacheEl = _compute_embedding_quantities(state_space, target_labels,
+                                                                              embedded_rep.dim)
 
         # Need to hold data references to any arrays used by C-type
-        self.noop_incrementers = noop_incrementers
-        self.num_basis_els_noop_blankaction = num_basis_els_noop_blankaction
-        self.baseinds = baseinds
-        self.blocksizes = blocksizes
-        self.num_basis_els = num_basis_els
-        self.action_inds = action_inds
+        self.noop_incrementers = eaCacheEl.noop_incrementers
+        self.num_basis_els_noop_blankaction = eaCacheEl.num_basis_els_noop_blankaction
+        self.baseinds = eaCacheEl.baseinds
+        self.blocksizes = eaCacheEl.blocksizes
+        self.num_basis_els = eaCacheEl.num_basis_els
+        self.action_inds = eaCacheEl.action_inds
         self.embedded_rep = embedded_rep # needed to prevent garbage collection?
 
         assert(self.c_rep == NULL)
         self.c_rep = new OpCRep_Embedded(embedded_rep.c_rep,
-                                        <INT*>noop_incrementers.data, <INT*>num_basis_els_noop_blankaction.data,
-                                        <INT*>baseinds.data, <INT*>blocksizes.data,
-                                        embedded_dim, ncomponents_in_active_block,
-                                        active_block_index, nblocks, dim)
+                                         <INT*>self.noop_incrementers.data, <INT*>self.num_basis_els_noop_blankaction.data,
+                                         <INT*>self.baseinds.data, <INT*>self.blocksizes.data,
+                                         embedded_rep.dim, eaCacheEl.ncomponents_in_active_block,
+                                         eaCacheEl.active_block_index, eaCacheEl.nblocks, state_space.dim)
         self.state_space = state_space
 
     def __reduce__(self):
