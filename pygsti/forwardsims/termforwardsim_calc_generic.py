@@ -353,7 +353,7 @@ def circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, 
          for elbl in elabels], 'd')
 
     mag = _np.zeros(len(elabels), 'd')
-    nPaths = _np.zeros(len(elabels), int)
+    nPaths = _np.zeros(len(elabels), _np.int64)
 
     def count_path(b, mg, incd):
         mag[E_indices[b[-1]]] += mg
@@ -1191,7 +1191,7 @@ def pathmagnitude_threshold(oprep_lists, e_indices, num_elabels, target_sum_of_p
 
     while nIters < 100:  # TODO: allow setting max_nIters as an arg?
         mag = _np.zeros(num_elabels, 'd')
-        nPaths = _np.zeros(num_elabels, int)
+        nPaths = _np.zeros(num_elabels, _np.int64)
 
         traverse_paths_upto_threshold(oprep_lists, threshold, num_elabels,
                                       foat_indices_per_op, count_path)  # sets mag and nPaths
@@ -1226,7 +1226,7 @@ def pathmagnitude_threshold(oprep_lists, e_indices, num_elabels, target_sum_of_p
         nPaths[e_indices[b[-1]]] += 1
 
     mag = _np.zeros(num_elabels, 'd')
-    nPaths = _np.zeros(num_elabels, int)
+    nPaths = _np.zeros(num_elabels, _np.int64)
     traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_elabels,
                                   foat_indices_per_op, count_path_nomax)  # sets mag and nPaths
 

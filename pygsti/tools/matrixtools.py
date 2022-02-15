@@ -222,7 +222,7 @@ def nullspace_qr(m, tol=1e-7):
     return q[:, rank:]
 
 
-def nice_nullspace(m, tol=1e-7):
+def nice_nullspace(m, tol=1e-7, orthogonalize=False):
     """
     Computes the nullspace of a matrix, and tries to return a "nice" basis for it.
 
@@ -240,6 +240,9 @@ def nice_nullspace(m, tol=1e-7):
     tol : float , optional
         Nullspace tolerance, used when comparing diagonal values of R with zero.
 
+    orthogonalize : bool, optional
+        If `True`, the nullspace vectors are additionally orthogonalized.
+
     Returns
     -------
     An matrix of shape (M,K) whose columns contain nullspace basis vectors.
@@ -254,9 +257,13 @@ def nice_nullspace(m, tol=1e-7):
             current_rank = rank
     ret = _np.take(nullsp_projector, keepers, axis=1)
 
+    if orthogonalize: # and not columns_are_orthogonal(ret):
+        ret, _ = _np.linalg.qr(ret)  # Gram-Schmidt orthogonalization
+
     for j in range(ret.shape[1]):  # normalize columns so largest element is +1.0
-        mx = abs(max(ret[:, j]))
-        if mx > 1e-6: ret[:, j] /= mx
+        imax = _np.argmax(_np.abs(ret[:, j]))
+        if abs(ret[imax, j]) > 1e-6: ret[:, j] /= ret[imax, j]
+
     return ret
 
 
@@ -273,8 +280,10 @@ def normalize_columns(m, return_norms=False, ord=None):
         If `True`, also return a 1D array containing the norms
         of the columns (before they were normalized).
 
-    ord : int, optional
-        The order of the norm.  See :function:`numpy.linalg.norm`.
+    ord : int or list of ints, optional
+        The order of the norm.  See :function:`numpy.linalg.norm`.  An
+        array of orders can be given to specify the norm on a per-column
+        basis.
 
     Returns
     -------
@@ -300,19 +309,24 @@ def column_norms(m, ord=None):
     m : numpy.ndarray or scipy sparse matrix
         The matrix.
 
-    ord : int, optional
-        The order of the norm.  See :function:`numpy.linalg.norm`.
+    ord : int or list of ints, optional
+        The order of the norm.  See :function:`numpy.linalg.norm`.  An
+        array of orders can be given to specify the norm on a per-column
+        basis.
 
     Returns
     -------
     numpy.ndarray
         A 1-dimensional array of the column norms (length is number of columns of `m`).
     """
+    ord_list = [ord] * m.shape[1] if (ord is None or isinstance(ord, int)) else ord
+    assert(len(ord_list) == m.shape[1])
+
     if _sps.issparse(m):
         #this could be done more efficiently, e.g. by converting to csc and taking column norms directly
-        norms = _np.array([_np.linalg.norm(m[:, j].todense(), ord=ord) for j in range(m.shape[1])])
+        norms = _np.array([_np.linalg.norm(m[:, j].todense(), ord=o) for j, o in enumerate(ord_list)])
     else:
-        norms = _np.array([_np.linalg.norm(m[:, j], ord=ord) for j in range(m.shape[1])])
+        norms = _np.array([_np.linalg.norm(m[:, j], ord=o) for j, o in enumerate(ord_list)])
     return norms
 
 
@@ -371,7 +385,6 @@ def columns_are_orthogonal(m, tol=1e-7):
     if m.size == 0: return True  # boundary case
     check = _np.dot(m.conj().T, m)
     check[_np.diag_indices_from(check)] = 0.0
-
     return bool(_np.linalg.norm(check) / check.size < tol)
 
 
@@ -1905,7 +1918,6 @@ else:
 
         indices = _np.array(A.indices, dtype=_np.int64)  # convert to 64-bit ints if needed
         indptr = _np.array(A.indptr, dtype=_np.int64)
-
         return _fastcalc.custom_expm_multiply_simple_core(A.data, indptr, indices,
                                                           v.copy(), mu, m_star, s, tol, eta)
 

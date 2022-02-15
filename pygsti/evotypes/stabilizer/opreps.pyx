@@ -88,10 +88,10 @@ cdef class OpRepClifford(OpRep):
         self.basis = basis
 
         #Make sure all arrays are contiguous
-        self.smatrix = _np.ascontiguousarray(self.smatrix)
-        self.svector = _np.ascontiguousarray(self.svector)
-        self.smatrix_inv = _np.ascontiguousarray(self.smatrix_inv)
-        self.svector_inv = _np.ascontiguousarray(self.svector_inv)
+        self.smatrix = _np.ascontiguousarray(self.smatrix, dtype=_np.int64)
+        self.svector = _np.ascontiguousarray(self.svector, dtype=_np.int64)
+        self.smatrix_inv = _np.ascontiguousarray(self.smatrix_inv, dtype=_np.int64)
+        self.svector_inv = _np.ascontiguousarray(self.svector_inv, dtype=_np.int64)
 
         self.state_space = _StateSpace.cast(state_space)
         assert(self.state_space.num_qubits == self.smatrix.shape[0] // 2)

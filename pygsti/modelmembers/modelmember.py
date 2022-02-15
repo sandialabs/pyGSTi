@@ -597,7 +597,9 @@ class ModelMember(ModelChild, _NicelySerializable):
 
             if submembers_already_allocated:
                 tot_new_params = 0
-                submembers_with_params = [subm for subm in self.submembers() if subm.gpindices != slice(0, 0)]
+                submembers_with_params = [subm for subm in self.submembers() if
+                                          ((isinstance(subm.gpindices, slice) and subm.gpindices != slice(0, 0))
+                                           or (not isinstance(subm.gpindices, slice) and len(subm.gpindices) > 0))]
                 num_submembers_with_params = len(submembers_with_params)
                 if num_submembers_with_params == 0:  # Special case (for speed)
                     gpindices_slice_if_possible = slice(0, 0)

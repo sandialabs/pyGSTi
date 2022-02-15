@@ -42,6 +42,7 @@ from pygsti.tools import jamiolkowski as _jt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
+from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
@@ -1433,46 +1434,50 @@ class ExplicitOpModel(_mdl.OpModel):
         self._opcaches['povm-layers'] = simplified_effects
         self._opcaches['op-layers'] = simplified_ops
 
-    def create_processor_spec(self, qubit_labels='auto'):
+    def create_processor_spec(self, qudit_labels='auto'):
         """
-        Create a processor specification from this model with the given qubit labels.
+        Create a processor specification from this model with the given qudit labels.
 
-        Currently this only works for models on qubits.
+        Currently this only works for models on qudits.
 
         Parameters
         ----------
-        qubit_labels : tuple or `"auto"`, optional
-            A tuple of qubit labels, e.g. ('Q0', 'Q1') or (0, 1).  `"auto"`
+        qudit_labels : tuple or `"auto"`, optional
+            A tuple of qudit labels, e.g. ('Q0', 'Q1') or (0, 1).  `"auto"`
             uses the labels in this model's state space labels.
 
         Returns
         -------
-        QubitProcessorSpec
+        QuditProcessorSpec or QubitProcessorSpec
         """
         from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+        from pygsti.processors import QuditProcessorSpec as _QuditProcessorSpec
         #go through ops, building up availability and unitaries, then create procesor spec...
 
-        nqubits = self.state_space.num_qubits
+        nqudits = self.state_space.num_qudits
         gate_unitaries = _collections.OrderedDict()
         all_sslbls = self.state_space.tensor_product_block_labels(0)
+        all_udims = [self.state_space.label_udimension(lbl) for lbl in all_sslbls]
         availability = {}
 
         def extract_unitary(Umx, U_sslbls, extracted_sslbls):
             if extracted_sslbls is None: return Umx  # no extraction to be done
             extracted_sslbls = list(extracted_sslbls)
             extracted_indices = [U_sslbls.index(lbl) for lbl in extracted_sslbls]
-            num_extracted = len(extracted_indices)
-            Nm1 = len(U_sslbls) - 1
+            extracted_udims = [self.state_space.label_udimension(lbl) for lbl in extracted_sslbls]
 
-            # can assume all lbls are qubits, so increment associated with qubit k is 2^(N-1-k)
+            # can assume all lbls are qudits, so increment associated with qudit k is (2^(N-1-k) for qubits):
+            all_inc = _np.flip(_np.cumprod(list(reversed(all_udims[1:] + [1]))))
+            extracted_inc = all_inc[extracted_indices]
+
             # assume this is a kronecker product (check this in FUTURE?), so just fill extracted
-            # unitary by fixing all non-extracted qubits (assumed identity-action on these) to 0
+            # unitary by fixing all non-extracted qudits (assumed identity-action on these) to 0
             # and looping over extracted ones:
-            U_extracted = _np.zeros((2**num_extracted, 2**num_extracted), complex)
-            for ii, itup in enumerate(_itertools.product(range(2), repeat=num_extracted)):
-                i = sum([bit * 2**(Nm1 - k) for k, bit in zip(extracted_indices, itup)])
-                for jj, jtup in enumerate(_itertools.product(range(2), repeat=num_extracted)):
-                    j = sum([bit * 2**(Nm1 - k) for k, bit in zip(extracted_indices, jtup)])
+            U_extracted = _np.zeros((_np.product(extracted_udims), _np.product(extracted_udims)), complex)
+            for ii, itup in enumerate(_itertools.product(*[range(ud) for ud in extracted_udims])):
+                i = _np.dot(extracted_inc, itup)
+                for jj, jtup in enumerate(_itertools.product(*[range(ud) for ud in extracted_udims])):
+                    j = _np.dot(extracted_inc, jtup)
                     U_extracted[ii, jj] = Umx[i, j]
             return U_extracted
 
@@ -1516,16 +1521,24 @@ class ExplicitOpModel(_mdl.OpModel):
         if len(unknown_unitaries) > 0:
             raise ValueError("Unitary not specfied for %s gate(s)!" % str(unknown_unitaries))
 
-        if qubit_labels == 'auto':
-            qubit_labels = self.state_space.tensor_product_block_labels(0)
-            #OR: qubit_labels = self.state_space.qubit_labels  # only works for a QubitSpace
+        if qudit_labels == 'auto':
+            qudit_labels = self.state_space.tensor_product_block_labels(0)
+            #OR: qudit_labels = self.state_space.qudit_labels  # only works for a QuditSpace
+            #OR: qudit_labels = self.state_space.qubit_labels  # only works for a QubitSpace
             #OR: qubit_labels = tuple(sorted(observed_sslbls))
 
-        if qubit_labels is None:  # special case of legacy explicit models where all gates have availability [None]
-            qubit_labels = tuple(range(nqubits))
+        if qudit_labels is None:  # special case of legacy explicit models where all gates have availability [None]
+            qudit_labels = tuple(range(nqudits))
 
-        return _QubitProcessorSpec(nqubits, list(gate_unitaries.keys()), gate_unitaries, availability,
-                                   qubit_labels=qubit_labels)
+        assert(len(qudit_labels) == nqudits), \
+            "Length of `qudit_labels` must equal %d (not %d)!" % (nqudits, len(qudit_labels))
+
+        if all([udim == 2 for udim in all_udims]):
+            return _QubitProcessorSpec(nqudits, list(gate_unitaries.keys()), gate_unitaries, availability,
+                                       qubit_labels=qudit_labels)
+        else:
+            return _QuditProcessorSpec(qudit_labels, all_udims, list(gate_unitaries.keys()), gate_unitaries,
+                                       availability)
 
     def create_modelmember_graph(self):
         return _MMGraph({
@@ -1738,7 +1751,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                   dependent_fogi_action='drop'):
+                   dependent_fogi_action='drop', include_spam=True):
 
         from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
         from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
@@ -1748,9 +1761,8 @@ class ExplicitOpModel(_mdl.OpModel):
         # ExplicitOpModel-specific - and assumes model's ops have specific structure (see extract_std_target*) !!
         primitive_op_labels = list(self.operations.keys())
 
-        #BEGIN NEW STUFF
-        primitive_prep_labels = list(self.preps.keys())
-        primitive_povm_labels = list(self.povms.keys())
+        primitive_prep_labels = list(self.preps.keys()) if include_spam else []
+        primitive_povm_labels = list(self.povms.keys()) if include_spam else []
 
         # "initial" gauge space is the space of error generators initially considered as
         # gauge transformations.  It can be reduced by the errors allowed on operations (by
@@ -1860,8 +1872,8 @@ class ExplicitOpModel(_mdl.OpModel):
             gauge_action_matrices[povm_label] = allowed_rowspace_mx
             gauge_action_gauge_spaces[povm_label] = op_gauge_space
 
-        norm_order = 2  # NOTE - this may should be 1 for normalizing 'S' quantities
-        #  -- FUTURE need to put this intelligence into FOGIStore!
+        norm_order = "auto"  # NOTE - should be 1 for normalizing 'S' quantities and 2 for 'H',
+        # so 'auto' utilizes intelligence within FOGIStore
         self.fogi_store = _FOGIStore(gauge_action_matrices, gauge_action_gauge_spaces,
                                      errorgen_coefficient_labels,  # gauge_errgen_space_labels,
                                      op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
@@ -1915,6 +1927,231 @@ class ExplicitOpModel(_mdl.OpModel):
                 self.povms[op_label].set_errorgen_coefficients(inv_rescale(coeff_dict), truncate=truncate)
             else:
                 self.operations[op_label].set_errorgen_coefficients(inv_rescale(coeff_dict), truncate=truncate)
+
+    def fogi_errorgen_vector(self, normalized_elem_gens=False):
+        """
+        Constructs a vector from all the error generator coefficients involved in the FOGI analysis of this model.
+
+        Parameters
+        ----------
+        normalized_elem_gens : bool, optional
+            Whether or not coefficients correspond to elementary error generators
+            constructed from *normalized* Pauli matrices or not.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        d = self.errorgen_coefficients(normalized_elem_gens=normalized_elem_gens)
+        errvec = _np.zeros(self.fogi_store.fogi_directions.shape[0], 'd')
+        for op_lbl in self.fogi_store.primitive_op_labels:
+            errdict = d[op_lbl]
+            elem_errgen_lbls = self.fogi_store.elem_errorgen_labels_by_op[op_lbl]
+            elem_errgen_indices = _slct.indices(self.fogi_store.op_errorgen_indices[op_lbl])
+            for elemgen_lbl, i in zip(elem_errgen_lbls, elem_errgen_indices):
+                errvec[i] = errdict.get(elemgen_lbl, 0.0)
+        return errvec
+
+    def _fogi_errorgen_vector_projection(self, space, normalized_elem_gens=False):
+        """ A helper function that projects self.errorgen_vector onto the space spanned by the columns of `space` """
+        errvec = self.fogi_errorgen_vector(normalized_elem_gens)
+        Pspace = space @ _np.linalg.pinv(space)  # construct projector
+        return Pspace @ errvec  # projected errvec
+
+    # create map parameter indices <=> fogi_vector_indices (for each fogi store)
+    def _create_model_parameter_to_fogi_errorgen_space_map(self):
+        fogi_store = self.fogi_store
+        num_elem_errgens, num_fogi_vecs = fogi_store.fogi_directions.shape
+        param_to_fogi_errgen_space_mx = _np.zeros((num_elem_errgens, self.num_params), 'd')
+        for op_label in fogi_store.primitive_op_labels:
+            elem_errgen_lbls = fogi_store.elem_errorgen_labels_by_op[op_label]
+            fogi_errgen_indices = _slct.indices(fogi_store.op_errorgen_indices[op_label])
+            assert(len(fogi_errgen_indices) == len(elem_errgen_lbls))
+
+            op = self.operations[op_label]
+            coeff_index_lookup = {elem_lbl: i for i, elem_lbl in enumerate(op.errorgen_coefficient_labels())}
+            coeff_indices = [coeff_index_lookup.get(elem_lbl, None) for elem_lbl in elem_errgen_lbls]
+
+            # For our particularly simple parameterization (H+s) op parameter indices == coeff indices:
+            assert(_np.allclose(op.errorgen_coefficients_array_deriv_wrt_params(), _np.identity(op.num_params))), \
+                "Currently only supported for simple parameterizations where op parameter indices == coeff indices"
+            op_param_indices = coeff_indices
+
+            gpindices = _slct.indices(op.gpindices)
+            mdl_param_indices = [(gpindices[i] if (i is not None) else None)
+                                 for i in op_param_indices]
+            for i_errgen, i_param in zip(fogi_errgen_indices, mdl_param_indices):
+                if i_param is not None:
+                    param_to_fogi_errgen_space_mx[i_errgen, i_param] = 1.0
+        return param_to_fogi_errgen_space_mx
+
+    def fogi_contribution(self, op_label, error_type='H', intrinsic_or_relational='intrinsic',
+                          target='all', hessian_for_errorbars=None):
+        """
+        Computes a contribution to the FOGI error on a single gate.
+
+        This method is used when partitioning the (FOGI) error on a gate in
+        various ways, based on the error type, whether the error is intrinsic
+        or relational, and the upon the error support.
+
+        Parameters
+        ----------
+        op_label : Label
+            The operation to compute a contribution for.
+
+        error_type : {'H', 'S', 'fogi_total_error', 'fogi_infidelity'}
+            The type of errors to include in the partition.  `'H'` means Hamiltonian
+            and `'S'` means Pauli stochastic.  There are two options for including
+            *both* H and S errors: `'fogi_total_error'` adds the Hamiltonian errors
+            linearly with the Pauli tochastic errors, similar to the diamond distance;
+            `'fogi_infidelity'` adds the Hamiltonian errors in quadrature to the linear
+            sum of Pauli stochastic errors, similar to the entanglement or average gate
+            infidelity.
+
+        intrinsic_or_relational : {"intrinsic", "relational", "all"}
+            Restrict to intrinsic or relational errors (or not, using `"all"`).
+
+        target : tuple or "all"
+            A tuple of state space (qubit) labels to restrict to, e.g., `('Q0','Q1')`.
+            Note that including multiple labels selects only those quantities that
+            target *all* the labels. The special `"all"` value includes quantities
+            on all targets (no restriction).
+
+        hessian_for_errorbars : numpy.ndarray, optional
+            If not `None`, a hessian matrix for this model (with shape `(Np, Np)`
+            where `Np == self.num_params`, the number of model paramters) that is
+            used to compute and return 1-sigma error bars.
+
+        Returns
+        -------
+        value : float
+            The value of the requested contribution.
+        errorbar : float
+            The 1-sigma error bar, returned *only* if `hessian_for_errorbars` is given.
+        """
+        if error_type in ('H', 'S'):
+            space = self.fogi_store.create_fogi_aggregate_single_op_space(op_label, error_type,
+                                                                          intrinsic_or_relational, target)
+            return self._fogi_contribution_single_type(error_type, space, hessian_for_errorbars)
+
+        elif error_type in ('fogi_total_error', 'fogi_infidelity'):
+            Hspace = self.fogi_store.create_fogi_aggregate_single_op_space(
+                op_label, 'H', intrinsic_or_relational, target)
+            Sspace = self.fogi_store.create_fogi_aggregate_single_op_space(
+                op_label, 'S', intrinsic_or_relational, target)
+            values = self._fogi_contribution_combined_HS_types(Hspace, Sspace, hessian_for_errorbars)
+            # (total, infidelity) if hessian is None otherwise (total, total_eb, infidelity, infidelity_eb)
+
+            if error_type == 'fogi_total_error':
+                return values[0] if (hessian_for_errorbars is None) else (values[0], values[1])
+            else:  # error_type == 'fogi_infidelity'
+                return values[1] if (hessian_for_errorbars is None) else (values[2], values[3])
+
+        else:
+            raise ValueError("Invalid error type: '%s'" % str(error_type))
+
+    def _fogi_contribution_single_type(self, errorgen_type, space, hessian=None):
+        """
+        Helper function to compute fogi contribution for a single error generator type,
+        where aggregation method is unambiguous.
+        Note: `space` should be a fogi-errgen-space subspace.
+        """
+        fogi_store = self.fogi_store
+        proj_errvec = self._fogi_errorgen_vector_projection(space, normalized_elem_gens=False)
+        if errorgen_type == 'H':
+            val = _np.linalg.norm(proj_errvec)
+        elif errorgen_type == 'S':
+            val = sum(proj_errvec)
+        else:
+            raise ValueError("Invalid `errorgen_type` '%s' - must be 'H' or 'S'!" % str(errorgen_type))
+
+        val = _np.real_if_close(val)
+        if abs(val) < 1e-10: val = 0.0
+
+        if hessian is not None:
+            if space.size == 0:  # special case
+                errbar = 0.0
+            else:
+                T = self._create_model_parameter_to_fogi_errorgen_space_map()
+                H_errgen_space = T @ hessian @ T.T
+
+                errgen_space_to_fogi = fogi_store.fogi_directions.toarray().T
+                pinv_espace_to_fogi = _np.linalg.pinv(errgen_space_to_fogi)
+                H_fogi = errgen_space_to_fogi @ H_errgen_space @ pinv_espace_to_fogi
+
+                inv_H_fogi = _np.linalg.pinv(H_fogi)  # hessian in fogi space
+
+                #convert fogi space back to errgen_space
+                inv_H_errgen_space = pinv_espace_to_fogi @ inv_H_fogi @ errgen_space_to_fogi
+
+                Pspace = space @ _np.linalg.pinv(space)
+                proj_inv_H_errgen_space = Pspace @ inv_H_errgen_space @ Pspace.T  # np.linalg.pinv(Pspace) #.T
+
+                if errorgen_type == 'H':
+                    # elements added in quadrature, val = sqrt( sum(element^2) ) = dot(proj_errvec_hat, proj_errvec)
+                    proj_errvec_hat = proj_errvec / _np.linalg.norm(proj_errvec)
+                    errbar = proj_errvec_hat.T @ proj_inv_H_errgen_space @ proj_errvec_hat
+                elif errorgen_type == "S":
+                    # elements added, val = sum(element) = dot(ones, proj_errvec)
+                    ones = _np.ones((proj_inv_H_errgen_space.shape[0], 1), 'd')
+                    errbar = ones.T @ proj_inv_H_errgen_space @ ones
+                else:
+                    raise ValueError("Invalid `errorgen_type`!")
+
+                if abs(errbar) < 1e-10: errbar = 0.0
+                errbar = _np.sqrt(float(_np.real_if_close(errbar)))
+
+        return val if (hessian is None) else (val, errbar)
+
+    def _fogi_contribution_combined_HS_types(self, Hspace, Sspace, hessian=None):
+        """
+        Helper function to compute fogi contribution for that combined multiple
+        (so far only works for H+S) error generator types, where there are multiple
+        aggregation methods (and all are computed).
+        Note: `space` should be a fogi-errgen-space subspace.
+        """
+        #TODO: maybe can combine with function above?
+        errvec = self.fogi_errorgen_vector(normalized_elem_gens=False)
+
+        Hvec = self._fogi_errorgen_vector_projection(Hspace, normalized_elem_gens=False)
+        Hhat = Hvec / _np.linalg.norm(Hvec)
+        Svec = _np.sum(Sspace, axis=1)  # should be all 1s and zeros
+        assert(all([(_np.isclose(el, 0) or _np.isclose(el, 1.0)) for el in Svec]))
+
+        total_error_vec = Hhat + Svec  # ~ concatenate((Hhat, Svec))
+        total_error_val = _np.dot(total_error_vec, errvec)
+
+        infidelity_vec = Hvec + Svec  # ~ concatenate((Hvec, Svec))
+        infidelity_val = _np.dot(infidelity_vec, errvec)
+
+        if hessian is not None:
+            T = self._create_model_parameter_to_fogi_errorgen_space_map()
+
+            hessian_errgen_space = T @ hessian @ T.T
+
+            errgen_space_to_fogi = self.fogi_store.fogi_directions.toarray().T
+            pinv_espace_to_fogi = _np.linalg.pinv(errgen_space_to_fogi)
+            H_fogi = errgen_space_to_fogi @ hessian_errgen_space @ pinv_espace_to_fogi
+
+            inv_H_fogi = _np.linalg.pinv(H_fogi)  # hessian in fogi space
+
+            #convert fogi space back to errgen_space
+            inv_H_errgen_space = pinv_espace_to_fogi @ inv_H_fogi @ errgen_space_to_fogi
+
+            total_error_eb = total_error_vec[None, :] @ inv_H_errgen_space @ total_error_vec[:, None]
+
+            infidelity_eb_vec = 2 * Hvec + Svec  # ~ concatenate((2 * Hvec, Svec))
+            infidelity_eb = infidelity_eb_vec[None, :] @ inv_H_errgen_space @ infidelity_eb_vec[:, None]
+
+            if abs(total_error_eb) < 1e-10: total_error_eb = 0.0
+            total_error_eb = _np.sqrt(float(_np.real_if_close(total_error_eb)))
+
+            if abs(infidelity_eb) < 1e-10: infidelity_eb = 0.0
+            infidelity_eb = _np.sqrt(float(_np.real_if_close(infidelity_eb)))
+
+            return total_error_val, total_error_eb, infidelity_val, infidelity_eb
+        else:
+            return total_error_val, infidelity_val
 
 
 class ExplicitLayerRules(_LayerRules):
