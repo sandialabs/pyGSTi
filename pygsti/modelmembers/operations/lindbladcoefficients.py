@@ -963,6 +963,21 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         return block_data_deriv
 
+    def elementary_errorgen_deriv_wrt_params(self, v=None):
+        eeg_indices = self.elementary_errorgen_indices
+        blkdata_deriv = self.deriv_wrt_params(v)
+        if blkdata_deriv.ndim == 3:  # (coeff_dim_1, coeff_dim_2, param_dim) => (coeff_dim, param_dim)
+            blkdata_deriv = blkdata_deriv.reshape((blkdata_deriv.shape[0] * blkdata_deriv.shape[1],
+                                                   blkdata_deriv.shape[2]))  # blkdata_deriv rows <=> flat_data indices
+
+        eeg_deriv = _np.zeros((len(eeg_indices), self.num_params), 'd')  # may need to be complex?
+
+        # Note: ordering in eeg_indices matches that of self.elementary_errorgens (as it must for this to be correct)
+        for i, (eeg_lbl, linear_combo) in enumerate(eeg_indices.items()):
+            deriv = _np.sum([coeff * blkdata_deriv[index, :] for coeff, index in linear_combo])
+            eeg_deriv[i, :] = _np.real_if_close(deriv)
+        return eeg_deriv
+
     def superop_deriv_wrt_params(self, superops, v=None, superops_are_flat=False):
         """
         TODO: docstring

@@ -1053,7 +1053,7 @@ class LindbladErrorgen(_LinearOperator):
             if blk._basis not in bases:
                 bases.add(blk._basis)
 
-        #convert to *global* lindblad terms
+        #convert to *global* elementary errorgen labels
         identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
         sslbls = self.state_space.tensor_product_block_labels(0)  # just take first TPB labels as all labels
         elem_errorgens = _collections.OrderedDict(
@@ -1086,9 +1086,14 @@ class LindbladErrorgen(_LinearOperator):
         """
         labels = []
         for blk in self.coefficient_blocks:
-            labels.extend(blk.coefficent_labels)
+            #labels.extend(blk.coefficent_labels)
+            labels.extend(blk.elementary_errorgens.keys())
 
-        return tuple(labels)
+        #convert to *global* elementary errorgen labels
+        identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
+        sslbls = self.state_space.tensor_product_block_labels(0)  # just take first TPB labels as all labels
+        return tuple([_GlobalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q)
+                      for local_eeg_lbl in labels])
 
     def coefficients_array(self):
         """
@@ -1105,7 +1110,8 @@ class LindbladErrorgen(_LinearOperator):
             combination of standard error generators that is this error generator.
         """
         # Note: ret will be complex if any block's data is
-        ret = _np.concatenate([blk.block_data.flat for blk in self.coefficient_blocks])
+        #ret = _np.concatenate([blk.block_data.flat for blk in self.coefficient_blocks])
+        ret = _np.concatenate([list(blk.elementary_errorgens.values()) for blk in self.coefficient_blocks])
         if self._coefficient_weights is not None:
             ret *= self._coefficient_weights
         return ret
@@ -1123,9 +1129,10 @@ class LindbladErrorgen(_LinearOperator):
         """
         blk_derivs = []; off = 0
         for blk in self.coefficient_blocks:
-            bd = blk.deriv_wrt_params(self.paramvals[off:off + blk.num_params])
-            if bd.ndim == 3:  # (coeff_dim_1, coeff_dim_2, param_dim) => (coeff_dim, param_dim)
-                bd = bd.reshape((bd.shape[0] * bd.shape[1], bd.shape[2]))
+            #bd = blk.deriv_wrt_params(self.paramvals[off:off + blk.num_params])
+            #if bd.ndim == 3:  # (coeff_dim_1, coeff_dim_2, param_dim) => (coeff_dim, param_dim)
+            #    bd = bd.reshape((bd.shape[0] * bd.shape[1], bd.shape[2]))
+            bd = blk.elementary_errorgen_deriv_wrt_params(self.paramvals[off:off + blk.num_params])
             blk_derivs.append(bd)
             off += blk.num_params
 
