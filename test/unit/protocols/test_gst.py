@@ -221,7 +221,6 @@ class GateSetTomographyTester(BaseProtocolData, BaseCase):
         proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTP"), 'stdgaugeopt', name="testGST")
         results = proto.run(self.gst_data)
 
-
         mdl_result = results.estimates["testGST"].models['stdgaugeopt']
         twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
         self.assertLessEqual(twoDLogL, 1.0)  # should be near 0 for perfect data

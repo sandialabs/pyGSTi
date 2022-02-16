@@ -621,7 +621,7 @@ class ModelMember(ModelChild, _NicelySerializable):
                                           ((isinstance(subm.gpindices, slice) and subm.gpindices != slice(0, 0))
                                            or (not isinstance(subm.gpindices, slice) and len(subm.gpindices) > 0))]
                 gpindices_slice_if_possible = _merge_indices(
-                        [subm.gpindices for subm in submembers_with_params], submembers_with_params)
+                    [subm.gpindices for subm in submembers_with_params], submembers_with_params)
 
             #Then just set the gpindices of this member to those used by
             # its submembers - assume this object doesn't need to allocate any

@@ -381,12 +381,12 @@ cdef class OpRepExpErrorgen(OpRep):
 cdef class OpRepLindbladErrorgen(OpRep):
     cdef public object Lterms
     cdef public object Lterm_coeffs
-    cdef public object LtermdictAndBasis
+    cdef public object lindblad_coefficient_blocks
 
-    def __cinit__(self, lindblad_term_dict, basis, state_space):
+    def __cinit__(self, lindblad_coefficient_blocks, state_space):
         self.Lterms = None
         self.Lterm_coeffs = None
-        self.LtermdictAndBasis = (lindblad_term_dict, basis)
+        self.lindblad_coefficient_blocks = lindblad_coefficient_blocks
         self.state_space = state_space
 
     def acton(self, StateRep state not None):
@@ -396,4 +396,4 @@ cdef class OpRepLindbladErrorgen(OpRep):
         raise AttributeError("Cannot currently act with statevec.OpRepLindbladErrorgen - for terms only!")
 
     def __reduce__(self):
-        return (OpRepLindbladErrorgen, (self.LtermdictAndBasis[0], self.LtermdictAndBasis[1], self.state_space))
+        return (OpRepLindbladErrorgen, (self.lindblad_coefficient_blocks, self.state_space))

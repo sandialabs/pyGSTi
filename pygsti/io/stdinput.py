@@ -493,7 +493,6 @@ class StdInputParser(object):
 
         with open(filename, 'r') as inputfile:
             for (iLine, line) in enumerate(inputfile):
-                #REMOVE print("Rank %d loading line %d: %d els, %g bytes, %g sizeof bytes" % (comm.rank, iLine, debug_circuit_elements, circuit_bytes, sizeof_bytes))
                 if iLine % nSkip == 0 or iLine + 1 == nLines: display_progress(iLine + 1, nLines, filename)
 
                 line = line.strip()
@@ -573,32 +572,6 @@ class StdInputParser(object):
                                 pass
 
                         #Call this low-level function for performance, so need to construct outcome *index* arrays above
-
-                        #REMOVE DEBUG
-                        #debug_circuit_elements += sum([len(layer.components) for layer in circuit.layertup])
-                        ##circuit._str = None  # HERE
-                        #
-                        ##reduced_tup = []
-                        #import sys
-                        ##from pygsti.baseobjs.label import LabelTupWithArgs
-                        #for layer in circuit:
-                        #    for comp in layer.components:
-                        ##        reduced_tup.append(comp) #tuple(comp) if isinstance(comp, LabelTupWithArgs) else comp)
-                        #        for x in tuple(comp):
-                        #            sizeof_bytes += sys.getsizeof(comp)
-                        #            if isinstance(x, (int, float)): 
-                        #                circuit_bytes += 8
-                        #                #reduced_tup.append(x)
-                        #            else: 
-                        #                #if x.startswith('G') or x.startswith('Q'):
-                        #                #    reduced_tup.append(x)
-                        #                #else:
-                        #                #    reduced_tup.append(x) #float(x))
-                        #                circuit_bytes += 2 * len(x)
-                        #
-                        #debug_test_simple_dict[circuit] = "test"
-                        #circuit = _Circuit(['G%d' % iLine])
-
                         dataset.add_count_arrays(circuit, oliArray, countArray,
                                                  record_zero_counts=record_zero_counts, aux=commentDict)
                     else:

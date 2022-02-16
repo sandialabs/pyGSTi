@@ -19,6 +19,7 @@ from pygsti.models.stencillabel import StencilLabel as _StencilLabel
 from pygsti.tools import listtools as _lt
 from pygsti.tools import optools as _ot
 from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
 from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
@@ -795,8 +796,9 @@ class DepolarizationNoise(OpNoise):
         basis = _BuiltinBasis('pp', basis_size)
         rate_per_pauli = self.depolarization_rate / (basis_size - 1)
         errdict = {('S', bl): rate_per_pauli for bl in basis.labels[1:]}
-        return _op.LindbladErrorgen(errdict, "D", basis, mx_basis='pp',
-                                    truncate=False, evotype=evotype, state_space=state_space)
+        return _op.LindbladErrorgen.from_elementary_errorgens(
+            errdict, "D", basis, mx_basis='pp',
+            truncate=False, evotype=evotype, state_space=state_space)
 
     def create_errormap(self, evotype, state_space):
         """
@@ -885,8 +887,9 @@ class StochasticNoise(OpNoise):
         basis_size = state_space.dim  # e.g. 4 for a single qubit
         basis = _BuiltinBasis('pp', basis_size)
         errdict = {('S', bl): rate for bl, rate in zip(basis.labels[1:], sto_rates)}
-        return _op.LindbladErrorgen(errdict, "S", basis, mx_basis='pp',
-                                    truncate=False, evotype=evotype, state_space=state_space)
+        return _op.LindbladErrorgen.from_elementary_errorgens(
+            errdict, "S", basis, mx_basis='pp',
+            truncate=False, evotype=evotype, state_space=state_space)
 
     def create_errormap(self, evotype, state_space):
         """
@@ -994,19 +997,27 @@ class LindbladNoise(OpNoise):
 
         if ham_coefficients is None and ham_basis is not None:
             ham_coefficients = _np.zeros(len(ham_basis) - 1, 'd')
+
         if nonham_coefficients is None and nonham_basis is not None:
             d = len(nonham_basis) - 1
             if parameterization.nonham_mode == 'all':
                 nonham_coefficients = _np.zeros((d, d), complex)
-            elif parameterization.nonham_mode == 'diag_affine':
-                nonham_coefficients = _np.zeros((2, d), 'd')
+            #REMOVE elif parameterization.nonham_mode == 'diag_affine':
+            #REMOVE     nonham_coefficients = _np.zeros((2, d), 'd')
             else:
                 nonham_coefficients = _np.zeros(d, 'd')
 
-        # coeffs + bases => Ltermdict, basis
-        Ltermdict, _ = _ot.projections_to_lindblad_terms(
-            ham_coefficients, nonham_coefficients, ham_basis, nonham_basis, parameterization.nonham_mode)
-        return cls(Ltermdict, parameterization)
+        # coeffs + bases => elementary errorgen dict
+        elementary_errorgens = {}
+        if ham_basis is not None:
+            blk = _LindbladCoefficientBlock('ham', ham_basis, initial_block_data=ham_coefficients)
+            elementary_errorgens.update(blk.elementary_errorgens)
+        if nonham_basis is not None:
+            blk = _LindbladCoefficientBlock('other' if (parameterization.nonham_mode == 'all') else 'other_diagonal',
+                                            nonham_basis, initial_block_data=nonham_coefficients)
+            elementary_errorgens.update(blk.elementary_errorgens)
+
+        return cls(elementary_errorgens, parameterization)
 
     def __init__(self, error_coeffs, parameterization='auto'):
         self.error_coeffs = error_coeffs  # keys are LocalElementaryErrorgenLabel objects
@@ -1031,8 +1042,9 @@ class LindbladNoise(OpNoise):
         # Build LindbladErrorgen directly to have control over which parameters are set (leads to lower param counts)
         basis_size = state_space.dim  # e.g. 4 for a single qubit
         basis = _BuiltinBasis('pp', basis_size)
-        return _op.LindbladErrorgen(self.error_coeffs, self.parameterization, basis, mx_basis='pp',
-                                    truncate=False, evotype=evotype, state_space=state_space)
+        return _op.LindbladErrorgen.from_elementary_errorgens(
+            self.error_coeffs, self.parameterization, basis, mx_basis='pp',
+            truncate=False, evotype=evotype, state_space=state_space)
 
     def create_errormap(self, evotype, state_space):
         """

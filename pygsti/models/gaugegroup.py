@@ -759,7 +759,7 @@ class UnitaryGaugeGroup(OpGaugeGroup):
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         state.update({'state_space_dimension': int(self._operation.state_space.dim),
-                      'basis': self._operation.errorgen.ham_basis.to_nice_serialization(),
+                      'basis': self._operation.errorgen.coefficient_blocks[0]._basis.to_nice_serialization(),
                       'evotype': str(self._operation.evotype)
                       })
         return state

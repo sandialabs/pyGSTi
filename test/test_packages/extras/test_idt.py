@@ -22,7 +22,7 @@ measDict = { 'X': ('Gy',)*3, 'Y': ('Gx',), 'Z': (),
 #Global switches for debugging
 hamiltonian=True
 stochastic=True
-affine=True
+affine=False
 
 #Mimics a function that used to be in pyGSTi, replaced with create_cloudnoise_model_from_hops_and_weights
 def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
@@ -130,7 +130,7 @@ def make_idle_tomography_data(nQubits, maxLengths=(0,1,2,4), errMags=(0.01,0.001
             print("Wrote fileroot ",fileroot)
 
 def helper_idle_tomography(nQubits, maxLengths=(1,2,4), file_maxLen=4, errMag=0.01, spamMag=0, nSamples=100,
-                         simulator="map", idleErrorInFiducials=True, fitOrder=1, fileroot=None):
+                           simulator="map", idleErrorInFiducials=True, fitOrder=1, fileroot=None):
     if fileroot is None:
         fileroot = get_fileroot(nQubits, file_maxLen, errMag, spamMag, nSamples, simulator, idleErrorInFiducials)
 
@@ -155,10 +155,10 @@ def helper_idle_tomography(nQubits, maxLengths=(1,2,4), file_maxLen=4, errMag=0.
         idt.predicted_intrinsic_rates(nQubits, maxErrWeight, mdl_datagen, hamiltonian, stochastic, affine)
     print("Predicted HAM = ",datagen_ham_rates)
     print("Predicted STO = ",datagen_sto_rates)
-    print("Predicted AFF = ",datagen_aff_rates)
+    #print("Predicted AFF = ",datagen_aff_rates)
     print("Intrinsic HAM = ",ham_intrinsic_rates)
     print("Intrinsic STO = ",sto_intrinsic_rates)
-    print("Intrinsic AFF = ",aff_intrinsic_rates)
+    #print("Intrinsic AFF = ",aff_intrinsic_rates)
 
     ham_diff = sto_diff = aff_diff = [0] # so max()=0 below for types we exclude
     if hamiltonian: ham_diff = np.abs(ham_intrinsic_rates - datagen_ham_rates)
@@ -353,13 +353,13 @@ class IDTTestCase(BaseTestCase):
         target_model = build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
                                                      simulator="map", parameterization="H+S")
 
-        #Note: generate data with affine errors too (H+S+A used below)
+        #REMOVED (no "affine" errors anymore): generate data with affine errors too (H+S+A used below)
         mdl_datagen = build_XYCNOT_cloudnoise_model(nQubits, "line", [(0,1)], 2, 1,
-                                                    simulator="map", parameterization="H+S+A",
+                                                    simulator="map", parameterization="H+S",
                                                     roughNoise=(1234,0.001))
         #This *only* (re)sets Gi errors...
         idt.set_idle_errors(nQubits, mdl_datagen, {}, rand_default=0.001,
-                  hamiltonian=True, stochastic=True, affine=True) # no seed? FUTURE?
+                            hamiltonian=True, stochastic=True, affine=False) # no seed? FUTURE?
         problemStr = pygsti.circuits.Circuit([()], num_lines=nQubits)
 
         #TODO: fix this test later
@@ -404,7 +404,7 @@ class IDTTestCase(BaseTestCase):
                               '-X': ('Gy',), '-Y': ('Gx',)*3, '-Z': ('Gx','Gx')}
 
         target_model = build_XYCNOT_cloudnoise_model(3, "line", [(0,1)], 2, 1,
-                                                     simulator="map", parameterization="H+S+A")
+                                                     simulator="map", parameterization="H+S")
         prepDict, measDict = idt.determine_paulidicts(target_model)
         self.assertEqual(prepDict, expected_prepDict)
         self.assertEqual(measDict, expected_measDict)

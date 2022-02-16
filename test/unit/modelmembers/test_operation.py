@@ -5,6 +5,8 @@ import scipy.sparse as sps
 
 import pygsti.modelmembers.operations as op
 import pygsti.tools.internalgates as itgs
+import pygsti.tools.lindbladtools as lt
+import pygsti.tools.basistools as bt
 import pygsti.tools.optools as gt
 from pygsti.models.modelconstruction import create_spam_vector, create_operation
 from pygsti.evotypes import Evotype
@@ -585,6 +587,47 @@ class ComplexEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
              [(1j, (1, 0)), (-1j, (3, 2))]]   # Im part of 1,0 and 3,2 els (lower triangle); (1,0) and (3,2) must be conjugates
         )
 
+class LindbladErrorgenTester(BaseCase):
+
+    def test_errgen_construction(self):
+        from pygsti.models.gaugegroup import UnitaryGaugeGroupElement
+
+        mx_basis = Basis.cast('pp', 4)
+        basis = Basis.cast('pp', 4)
+        X = basis['X']
+        Y = basis['Y']
+        Z = basis['Z']
+
+        # Build known combination to project back to
+        errgen = (0.1 * lt.create_elementary_errorgen('H', Z)
+                  - 0.01 * lt.create_elementary_errorgen('H', X)
+                  + 0.2 * lt.create_elementary_errorgen('S', X)
+                  + 0.25 * lt.create_elementary_errorgen('S', Y)
+                  + 0.05 * lt.create_elementary_errorgen('C', X, Y)
+                  - 0.01 * lt.create_elementary_errorgen('A', X, Y))
+        errgen = bt.change_basis(errgen, 'std', mx_basis)
+
+        eg = op.LindbladErrorgen.from_error_generator(                                                                                                              
+            errgen, "CPTP", 'pp', truncate=False, mx_basis="pp", evotype='default')
+        self.assertTrue(np.allclose(eg.to_dense(), errgen))
+
+        errgen_copy = eg.copy()
+
+        T = UnitaryGaugeGroupElement(np.identity(4, 'd'))
+        errgen_copy.transform_inplace(T)
+        self.assertTrue(np.allclose(errgen_copy.to_dense(), eg.to_dense()))
+
+    def test_errgen_construction_from_op(self):
+        densemx = np.array([[0, 0, 0, 0],
+                            [0.1, 0, 0, 0],
+                            [0, 0, 0, 1],
+                            [0, 0, -1, 0]], 'd')
+        eg = op.LindbladErrorgen.from_error_generator(
+            densemx, "CPTP", 'pp', truncate=True, mx_basis="pp", evotype='default')
+        errgen_copy = eg.copy()
+        T = UnitaryGaugeGroupElement(np.identity(4, 'd'))
+        errgen_copy.transform_inplace(T)
+        self.assertTrue(np.allclose(errgen_copy.to_dense(), eg.to_dense()))
 
 #TODO - maybe update this to a test of ExpErrorgenOp, which can have dense/sparse versions?
 #class LindbladOpBase(object):

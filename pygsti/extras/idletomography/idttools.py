@@ -205,6 +205,8 @@ def set_idle_errors(nqubits, model, errdict, rand_default=None,
     numpy.ndarray
         The random rates the were used.
     """
+    assert(affine is False), "Affine errors are no longer supported - must set `affine=False`"
+
     rand_rates = []; i_rand_default = 0
     v = model.to_vector()
     #assumes Implicit model w/'globalIdle' as a composed gate...
@@ -228,11 +230,16 @@ def set_idle_errors(nqubits, model, errdict, rand_default=None,
             "Expected idle op to be a composition of possibly embedded exp(errorgen) gates!"
 
         sub_v = v[factor.gpindices]
-        bsH = experrgen_op.errorgen.ham_basis_size
-        bsO = experrgen_op.errorgen.other_basis_size
-        if hamiltonian: hamiltonian_sub_v = sub_v[0:bsH - 1]  # -1s b/c bsH, bsO include identity in basis
-        if stochastic: stochastic_sub_v = sub_v[bsH - 1:bsH - 1 + bsO - 1]
-        if affine: affine_sub_v = sub_v[bsH - 1 + bsO - 1:bsH - 1 + 2 * (bsO - 1)]
+        off = 0; slcH = slcO = slice(0, 0, None)
+        for blk in experrgen_op.errorgen.coefficient_blocks:
+            if blk._block_type == 'ham': slcH = slice(off, off + blk.num_params)
+            if blk._block_type == 'other_diagonal': slcO = slice(off, off + blk.num_params)
+            off += blk.num_params
+        #REMOVE bsH = experrgen_op.errorgen.ham_basis_size
+        #REMOVE bsO = experrgen_op.errorgen.other_basis_size
+        if hamiltonian: hamiltonian_sub_v = sub_v[slcH]  # -1s b/c bsH, bsO include identity in basis
+        if stochastic: stochastic_sub_v = sub_v[slcO]
+        #REMOVE if affine: affine_sub_v = sub_v[bsH - 1 + bsO - 1:bsH - 1 + 2 * (bsO - 1)]
 
         for k, tup in enumerate(nontrivial_paulis(len(targetLabels))):
             lst = ['I'] * nqubits
@@ -276,7 +283,7 @@ def set_idle_errors(nqubits, model, errdict, rand_default=None,
 
             if hamiltonian: hamiltonian_sub_v[k] = Hrate
             if stochastic: stochastic_sub_v[k] = _np.sqrt(Srate)  # b/c param gets squared
-            if affine: affine_sub_v[k] = Arate
+            #if affine: affine_sub_v[k] = Arate
 
     model.from_vector(v)
     return _np.array(rand_rates, 'd')  # the random rates that were chosen (to keep track of them for later)
@@ -284,7 +291,7 @@ def set_idle_errors(nqubits, model, errdict, rand_default=None,
 
 def extract_idle_errors(nqubits, model, hamiltonian=True, stochastic=True, affine=True, scale_for_idt=True):
     """
-    Get error rates on the global idle operation withina :class:`CloudNoiseModel` object.
+    Get error rates on the global idle operation within a :class:`CloudNoiseModel` object.
 
     Parameters
     ----------
@@ -323,11 +330,16 @@ def extract_idle_errors(nqubits, model, hamiltonian=True, stochastic=True, affin
         #print("Factor %d: target = %s, gpindices=%s" % (i,str(factor.targetLabels),str(factor.gpindices)))
         assert(isinstance(factor, _op.EmbeddedOp)), "Expected Gi to be a composition of embedded gates!"
         sub_v = v[factor.gpindices]
-        bsH = factor.embedded_op.errorgen.ham_basis_size
-        bsO = factor.embedded_op.errorgen.other_basis_size
-        if hamiltonian: hamiltonian_sub_v = sub_v[0:bsH - 1]  # -1s b/c bsH, bsO include identity in basis
-        if stochastic: stochastic_sub_v = sub_v[bsH - 1:bsH - 1 + bsO - 1]
-        if affine: affine_sub_v = sub_v[bsH - 1 + bsO - 1:bsH - 1 + 2 * (bsO - 1)]
+        off = 0; slcH = slcO = slice(0, 0, None)
+        for blk in factor.embedded_op.errorgen.coefficient_blocks:
+            if blk._block_type == 'ham': slcH = slice(off, off + blk.num_params)
+            if blk._block_type == 'other_diagonal': slcO = slice(off, off + blk.num_params)
+            off += blk.num_params
+        #bsH = factor.embedded_op.errorgen.ham_basis_size
+        #bsO = factor.embedded_op.errorgen.other_basis_size
+        if hamiltonian: hamiltonian_sub_v = sub_v[slcH]  # -1s b/c bsH, bsO include identity in basis
+        if stochastic: stochastic_sub_v = sub_v[slcO]
+        #if affine: affine_sub_v = sub_v[bsH - 1 + bsO - 1:bsH - 1 + 2 * (bsO - 1)]
 
         nTargetQubits = len(factor.targetLabels)
 
@@ -345,9 +357,9 @@ def extract_idle_errors(nqubits, model, hamiltonian=True, stochastic=True, affin
             if stochastic and abs(stochastic_sub_v[k]) > 1e-6:
                 scale = 1. / (2**nTargetQubits) if scale_for_idt else 1.0
                 sto_rates[label] = stochastic_sub_v[k]**2 * scale
-            if affine and abs(affine_sub_v[k]) > 1e-6:
-                scale = 1. / (_np.sqrt(2)**nTargetQubits) if scale_for_idt else 1.0
-                aff_rates[label] = affine_sub_v[k] * scale
+            #if affine and abs(affine_sub_v[k]) > 1e-6:
+            #    scale = 1. / (_np.sqrt(2)**nTargetQubits) if scale_for_idt else 1.0
+            #    aff_rates[label] = affine_sub_v[k] * scale
 
     return ham_rates, sto_rates, aff_rates
 
@@ -416,8 +428,8 @@ def predicted_intrinsic_rates(nqubits, maxweight, model,
 
         #OLD - before get_errgen_coeffs
         #sub_v = v[factor.gpindices]
-        #bsH = factor.embedded_op.errorgen.ham_basis_size
-        #bsO = factor.embedded_op.errorgen.other_basis_size
+        #REMOVE bsH = factor.embedded_op.errorgen.ham_basis_size
+        #REMOVE bsO = factor.embedded_op.errorgen.other_basis_size
         #if hamiltonian: hamiltonian_sub_v = sub_v[0:bsH - 1]  # -1s b/c bsH, bsO include identity in basis
         #if stochastic: stochastic_sub_v = sub_v[bsH - 1:bsH - 1 + bsO - 1]
         #if affine: affine_sub_v = sub_v[bsH - 1 + bsO - 1:bsH - 1 + 2 * (bsO - 1)]
@@ -442,9 +454,11 @@ def predicted_intrinsic_rates(nqubits, maxweight, model,
 
             result_index = error_labels.index(label)
             if hamiltonian and toGEL(('H', P)) in errgen_coeffs:
-                ham_intrinsic_rates[result_index] = errgen_coeffs[toGEL(('H', P))]
+                scale = _np.sqrt(2)  # needed to add this after updating elementary errorgens
+                ham_intrinsic_rates[result_index] = errgen_coeffs[toGEL(('H', P))] * scale
             if stochastic and toGEL(('S', P)) in errgen_coeffs:
-                sto_intrinsic_rates[result_index] = errgen_coeffs[toGEL(('S', P))]
+                scale = 0.5    # needed to add this after updating elementary errorgens
+                sto_intrinsic_rates[result_index] = errgen_coeffs[toGEL(('S', P))] * scale
             if affine and toGEL(('A', P)) in errgen_coeffs:
                 scale = 1 / (_np.sqrt(2)**nTargetQubits)  # not exactly sure how this is derived
                 aff_intrinsic_rates[result_index] = errgen_coeffs[toGEL(('A', P))] * scale

@@ -199,7 +199,8 @@ cdef class OpRepStochastic(OpRepDenseSuperop):
         self.basis = basis
         self.stochastic_superops = []
         for b in self.basis.elements[1:]:
-            std_superop = _lbt.nonham_lindbladian(b, b, sparse=False)
+            #REMOVE (OLD) std_superop = _lbt.nonham_lindbladian(b, b, sparse=False)
+            std_superop = _lbt.create_elementary_errorgen('S', b, sparse=False)
             self.stochastic_superops.append(_bt.change_basis(std_superop, 'std', self.basis))
 
         state_space = _StateSpace.cast(state_space)

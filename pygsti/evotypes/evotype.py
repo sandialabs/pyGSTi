@@ -132,8 +132,8 @@ class Evotype(object):
     def create_sparse_rep(self, data, indices, indptr, state_space):
         return self.module.OpRepSparse(data, indices, indptr, state_space)
 
-    def create_lindblad_errorgen_rep(self, lindblad_term_dict, basis, state_space):
-        return self.module.OpRepLindbladErrorgen(lindblad_term_dict, basis, state_space)
+    def create_lindblad_errorgen_rep(self, lindblad_coefficient_blocks, state_space):
+        return self.module.OpRepLindbladErrorgen(lindblad_coefficient_blocks, state_space)
 
     # STATE REPS
     def create_dense_state_rep(self, vec, state_space):

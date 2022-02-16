@@ -68,7 +68,7 @@ def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='defau
                 base_povm = create_from_pure_vectors(pure_vectors, ('computational', 'static pure'),
                                                      basis, evotype, state_space)
 
-                proj_basis = 'pp' if state_space.is_entirely_qubits else basis
+                proj_basis = 'PP' if state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
@@ -109,7 +109,7 @@ def create_from_dmvecs(superket_vectors, povm_type, basis='pp', evotype='default
                 base_povm = create_from_dmvecs(superket_vectors, ('computational', 'static'),
                                                basis, evotype, state_space)
 
-                proj_basis = 'pp' if state_space.is_entirely_qubits else basis
+                proj_basis = 'PP' if state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
@@ -156,7 +156,7 @@ def create_effect_from_pure_vector(pure_vector, effect_type, basis='pp', evotype
                 static_effect = create_effect_from_pure_vector(
                     pure_vector, ('computational', 'static pure'), basis, evotype, state_space)
 
-                proj_basis = 'pp' if state_space.is_entirely_qubits else basis
+                proj_basis = 'PP' if state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
@@ -320,7 +320,7 @@ def convert(povm, to_type, basis, extra=None):
                         base_items = [(lbl, convert_effect(vec, 'static', basis)) for lbl, vec in povm.items()]
                     base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
 
-                proj_basis = 'pp' if povm.state_space.is_entirely_qubits else basis
+                proj_basis = 'PP' if povm.state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, to_type, proj_basis,
                                                                   basis, truncate=True, evotype=povm.evotype)
                 return ComposedPOVM(_ExpErrorgenOp(errorgen), base_povm, mx_basis=basis)
@@ -434,7 +434,7 @@ def convert_effect(effect, to_type, basis, extra=None):
         else:  # state.num_params == 0 so it's already static
             static_effect = effect
 
-        proj_basis = 'pp' if state.state_space.is_entirely_qubits else basis
+        proj_basis = 'PP' if state.state_space.is_entirely_qubits else basis
         errorgen = _LindbladErrorgen.from_error_generator(effect.state_space.dim, to_type, proj_basis,
                                                           basis, truncate=True, evotype=effect.evotype)
         return ComposedPOVMEffect(static_effect, _ExpErrorgenOp(errorgen))
