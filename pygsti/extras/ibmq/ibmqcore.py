@@ -174,7 +174,7 @@ class IBMQExperiment(dict):
 
             self['qobj'].append(_qiskit.compiler.assemble(self['qiskit_QuantumCircuits'][batch_idx], shots=num_shots))
 
-    def submit(self, ibmq_backend, start=0, stop=None, ignore_job_limit=False,
+    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=False,
         wait_time=1, wait_steps=10):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
@@ -187,7 +187,10 @@ class IBMQExperiment(dict):
             processor that this experiment has been designed for.
 
         start: int, optional
-            Batch index to start submission (inclusive). Defaults to 0.
+            Batch index to start submission (inclusive). Defaults to None,
+            which will start submission on the first unsubmitted job.
+            Jobs can be resubmitted by manually specifying this,
+            i.e. start=0 will start resubmitting jobs from the beginning.
         
         stop: int, optional
             Batch index to stop submission (exclusive). Defaults to None,
@@ -212,6 +215,10 @@ class IBMQExperiment(dict):
         total_waits = 0
         self['qjob'] = self.get('qjob', [])
         self['job_ids'] = self.get('job_ids', [])
+
+        # Set start and stop to submit the next unsubmitted jobs if not specified
+        if start is None:
+            start = len(self['qjob'])
 
         if stop is not None:
             stop = min(stop, len(self['qobj']))    
