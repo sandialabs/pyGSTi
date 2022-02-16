@@ -1533,7 +1533,7 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "H":
                     if display_as == "boxes":
-                        T = "Fraction %.1g%%" % (100 * info['H projection power'].value)
+                        T = "Captures %.1f%% of E.G." % (100 * info['H projection power'].value)
                         hamProjs, EB = info['H projections'].value_and_errorbar
                         m, M = _get_min_max(hamProjsM, _np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
@@ -1547,7 +1547,7 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "S":
                     if display_as == "boxes":
-                        T = "Fraction %.1g%%" % (100 * info['S projection power'].value)
+                        T = "Captures %.1f%% of E.G." % (100 * info['S projection power'].value)
                         stoProjs, EB = info['S projections'].value_and_errorbar
                         m, M = _get_min_max(stoProjsM, _np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
@@ -1561,7 +1561,7 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "CA":
                     if display_as == "boxes":
-                        T = "Fraction %.1g%%" % (100 * info['CA projection power'].value)
+                        T = "Captures %.1f%% of E.G." % (100 * info['CA projection power'].value)
                         caProjs, EB = info['CA projections'].value_and_errorbar
                         m, M = _get_min_max(caProjsM, _np.max(_np.abs(caProjs)))
                         affdecomp_fig = _wp.ProjectionsBoxPlot(
