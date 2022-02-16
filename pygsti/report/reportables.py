@@ -1779,7 +1779,11 @@ def errorgen_and_projections(errgen, mx_basis):
     #egnorm = _np.linalg.norm(errgen.flatten())
     ret['error generator'] = errgen
 
-    elem_errgen_basis = mx_basis  # aka the "projection basis"
+    #HACK: convert 'pp' => 'PP' here, as that's typically used.  However, other
+    # bases just pass through as before and may have different scalings than earlier
+    # pyGSTi versions because the elementary error generators are scaled differently.
+    elem_errgen_basis = _Basis.cast('PP', mx_basis.dim) \
+        if set(mx_basis.name.split('*')) == set(['pp']) else mx_basis  # aka the "projection basis"
 
     Hproj = _tools.project_errorgen(errgen, 'H', elem_errgen_basis, mx_basis)
     Sproj = _tools.project_errorgen(errgen, 'S', elem_errgen_basis, mx_basis)
