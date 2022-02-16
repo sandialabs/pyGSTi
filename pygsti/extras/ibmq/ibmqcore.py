@@ -213,8 +213,8 @@ class IBMQExperiment(dict):
         None
         """
         total_waits = 0
-        self['qjob'] = self.get('qjob', [])
-        self['job_ids'] = self.get('job_ids', [])
+        self['qjob'] = [] if self['qjob'] is None else self['qjob']
+        self['job_ids'] = [] if self['job_ids'] is None else self['job_ids']
 
         # Set start and stop to submit the next unsubmitted jobs if not specified
         if start is None:
@@ -383,5 +383,10 @@ class IBMQExperiment(dict):
                 except:
                     _warnings.warn("Couldn't unpickle {}, so skipping this attribute.".format(atr))
                     ret[atr] = None
+        
+        try:
+            ret['data'] = _ProtocolData.from_dir(dirname)
+        except:
+            pass
 
         return ret
