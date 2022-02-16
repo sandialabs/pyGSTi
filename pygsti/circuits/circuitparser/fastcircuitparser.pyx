@@ -240,19 +240,21 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
                 i += 1
             else:
                 break
-    name = s[start:i]; last = i
+    name = sys.intern(s[start:i]); last = i
 
     args = []
     while i < end and s[i] == u';':
         i += 1
-        last = i
+        last = i; is_float = True
         while i < end:
             c = s[i]
-            if u'a' <= c <= u'z' or u'0' <= c <= u'9' or c == u'_' or c == u'Q' or c == u'.' or c == u'/' or c == u'-':
+            if u'a' <= c <= u'z' or c == u'_' or c == u'Q' or c == u'/':
+                i += 1; is_float = False
+            elif u'0' <= c <= u'9' or c == u'.' or c == u'-':
                 i += 1
             else:
                 break
-        args.append(s[last:i]); last = i
+        args.append(float(s[last:i]) if is_float else s[last:i]); last = i
 
     sslbls = []
     while i < end and s[i] == u':':
@@ -269,7 +271,7 @@ cdef get_next_simple_lbl(unicode s, INT start, INT end, bool integerize_sslbls, 
         if integerize_sslbls and is_int:
             sslbls.append(int(s[last:i])); last = i
         else:
-            sslbls.append(s[last:i]); last = i
+            sslbls.append(sys.intern(s[last:i])); last = i
 
     if i < end and s[i] == u'!':
         i += 1

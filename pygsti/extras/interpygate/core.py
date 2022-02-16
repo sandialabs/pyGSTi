@@ -27,35 +27,35 @@ try:
 except ImportError:
     use_csaps = False
     import warnings
-    warnings.warn("Warning - Cannot import csaps module for spline interpolation. Interpolated gates will default to linear interpolation.")
+    warnings.warn(("Warning - Cannot import csaps module for spline interpolation. "
+                   "Interpolated gates will default to linear interpolation."))
 
 if use_csaps:
     class custom_interpolator():
-        # This class restructures the csaps.NdGridCubicSmoothingSpline API to be consistent 
-        # with that of scipy.interpolator.LinearNDInterpolator. 
+        # This class restructures the csaps.NdGridCubicSmoothingSpline API to be consistent
+        # with that of scipy.interpolator.LinearNDInterpolator.
         def __init__(self, interpolator):
             self.interpolator = interpolator
+
         def __call__(self, *v):
             output = self.interpolator(v)
             return output[0]
 
     def _cubicSplineMod(points, values, **kwargs):
-
-        grids = []
         points = _np.array(points).T
         values = _np.array(values)
 
         n_variables = len(points)
-        
+
         # Reformat everything to work with the CSAPS interpolator
-        meshgrids = points.reshape((n_variables,)+tuple(kwargs['shape']), order='C')
+        meshgrids = points.reshape((n_variables,) + tuple(kwargs['shape']), order='C')
         values = values.reshape(tuple(kwargs['shape']), order='C')
         grid_points = []
         for idm, mesh in enumerate(meshgrids):
             # Progamatically construct slices like [0,0,:,0]
-            s = (0,)*(idm) + (slice(None),) + (0,)*(n_variables-idm-1)
+            s = (0,) * (idm) + (slice(None),) + (0,) * (n_variables - idm - 1)
             grid_points += [mesh[s]]
-        
+
         return custom_interpolator(_cubicSpline(grid_points, values, smooth=1))
 
     # interpolator_and_args = (spline_interpolator, {'shape': (7,3,3)})
@@ -474,8 +474,8 @@ class InterpolatedQuantityFactory(object):
             Optionally a 2-tuple of an interpolation class and argument dictionary.  If None, the
             default of `(csaps.NdGridCubicSmoothingSpline, {'shape', self.qty__shape})` is used. If
             csaps is not available, then `(scipy.interpolate.LinearNDInterpolator, {'rescale': True})`
-            is used instead. A linear interpolator can be specified explicitly by `linear` and the 
-            default spline interpolator may be explicitly specified by `spline`. 
+            is used instead. A linear interpolator can be specified explicitly by `linear` and the
+            default spline interpolator may be explicitly specified by `spline`.
         """
         self.fn_to_interpolate = fn_to_interpolate
         assert(bool(parameter_ranges is not None) ^ bool(parameter_points is not None)), \
@@ -542,7 +542,8 @@ class InterpolatedQuantityFactory(object):
             global use_csaps
             if use_csaps:
                 use_csaps = False
-                warnings.warn("Cubic spline interpolation requires rectangular grid. Defaulting to linear interpolator.")
+                warnings.warn(("Cubic spline interpolation requires rectangular grid. "
+                               "Defaulting to linear interpolator."))
             points_to_distribute = self._parameter_points
             grouped_axial_pts = []
             all_points = points_to_distribute

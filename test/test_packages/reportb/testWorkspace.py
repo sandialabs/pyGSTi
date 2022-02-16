@@ -156,7 +156,7 @@ class TestWorkspace(ReportBaseCase):
         tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="numbers", gen_type="logTiG") )
         tbls.append( w.ErrgenTable(self.mdl, self.tgt, cr, display_as="numbers", gen_type="logG-logT") )
         tbls.append( w.ErrgenTable(gsGM, self.tgt, cr, display_as="numbers", gen_type="logGTi") )
-        tbls.append( w.ErrgenTable(gsSTD, self.tgt, cr, display_as="numbers", gen_type="logGTi") )
+        #tbls.append( w.ErrgenTable(gsSTD, self.tgt, cr, display_as="numbers", gen_type="logGTi") )  # first el of basis must be I!!!
         tbls.append( w.ErrgenTable(gsQT, stdQT_XYIMS.target_model(), cr, display_as="numbers", gen_type="logGTi") )
         with self.assertRaises(ValueError):
             w.ErrgenTable(self.mdl, self.tgt, cr, display=('foobar',))
@@ -204,10 +204,10 @@ class TestWorkspace(ReportBaseCase):
             tbls.append( w.GatesSingleMetricTable(
                 metric, [self.mdl,None],[self.tgt,self.tgt], ['one','two'])) #1D w/None model
 
-        tbls.append( w.StandardErrgenTable(4, "hamiltonian", "pp") )  # 1Q
-        tbls.append( w.StandardErrgenTable(9, "stochastic", "gm") )   # qutrit
-        tbls.append( w.StandardErrgenTable(16, "hamiltonian", "gm") ) # 2Q
-        tbls.append( w.StandardErrgenTable(64, "stochastic", "pp") )  # >2Q (3Q)
+        tbls.append( w.StandardErrgenTable(4, "H", "pp") )  # 1Q
+        tbls.append( w.StandardErrgenTable(9, "S", "gm") )   # qutrit
+        tbls.append( w.StandardErrgenTable(16, "H", "gm") ) # 2Q
+        tbls.append( w.StandardErrgenTable(64, "S", "pp") )  # >2Q (3Q)
 
         goparams = self.results.estimates['default'].goparameters['go0'].copy()
         goparams.update({'method': "LM", 'cptp_penalty_factor': 1.0}) # for coverage

@@ -300,7 +300,7 @@ class _DataSetRow(object):
         #        seriesDict[outcome_label] = []
 
         if self.reps is None:
-            reps = _np.ones(len(self.time), int)
+            reps = _np.ones(len(self.time), _np.int64)
         else: reps = self.reps
 
         # An alternate implementation that appears to be (surprisingly?) slower...
@@ -314,7 +314,7 @@ class _DataSetRow(object):
         #time_bins_borders.append(len(self.time))
         #nTimes = len(time_bins_borders) - 1
         #
-        #seriesDict = {self.dataset.olIndex[ol]: _np.zeros(nTimes, int) for ol in self.dataset.outcome_labels}
+        #seriesDict = {self.dataset.olIndex[ol]: _np.zeros(nTimes, _np.int64) for ol in self.dataset.outcome_labels}
         #
         #for i in range(nTimes):
         #    slc = slice(time_bins_borders[i],time_bins_borders[i+1])
@@ -353,7 +353,7 @@ class _DataSetRow(object):
         last_time = None
 
         if self.reps is None:
-            reps = list(_np.ones(len(self.time), int))
+            reps = list(_np.ones(len(self.time), _np.int64))
         else: reps = self.reps
 
         for t, outcome_label, rep in zip(self.time, self.outcomes, reps):
@@ -389,7 +389,7 @@ class _DataSetRow(object):
         last_time = None
 
         if self.reps is None:
-            return list(self.time), list(_np.ones(len(self.time), int))
+            return list(self.time), list(_np.ones(len(self.time), _np.int64))
 
         else:
             for t, rep in zip(self.time, self.reps):
@@ -1027,7 +1027,7 @@ class DataSet(object):
             self.olIndex = outcome_label_indices
             self.olIndex_max = max(self.olIndex.values()) if len(self.olIndex) > 0 else -1
         elif outcome_labels is not None:
-            if isinstance(outcome_labels, int):
+            if isinstance(outcome_labels, _np.int64):
                 nqubits = outcome_labels
                 tup_outcomeLabels = [("".join(x),) for x in _itertools.product(*([('0', '1')] * nqubits))]
             else:

@@ -6,7 +6,12 @@ import scipy
 from pygsti.processors import QubitProcessorSpec
 from pygsti.models import modelconstruction as mc
 from pygsti.circuits import Circuit
-from ..util import BaseCase
+from ..util import BaseCase, with_temp_path
+
+
+def save_and_load(obj, pth):
+    obj.write(pth + ".json")
+    return QubitProcessorSpec.read(pth + '.json')
 
 
 class ProcessorSpecTester(BaseCase):
@@ -33,3 +38,27 @@ class ProcessorSpecTester(BaseCase):
         p2 = mdl.probabilities(c2)
         self.assertAlmostEqual(p2['00'], 0.5)
         self.assertAlmostEqual(p2['01'], 0.5)
+
+    @with_temp_path
+    def test_with_spam(self, pth):
+        pspec_defaults = QubitProcessorSpec(4, ['Gxpi2', 'Gypi2'], geometry='line')
+
+        pspec_names = QubitProcessorSpec(4, ['Gxpi2', 'Gypi2'], geometry='line',
+                                         prep_names=("rho1", "rho_1100"), povm_names=("Mz",))
+
+        prep_vec = np.zeros(2**4, complex)
+        prep_vec[4] = 1.0
+        EA = np.zeros(2**4, complex)
+        EA[14] = 1.0
+        EB = np.zeros(2**4, complex)
+        EB[15] = 1.0
+
+        pspec_vecs = QubitProcessorSpec(4, ['Gxpi2', 'Gypi2'], geometry='line',
+                                        prep_names=("rhoA", "rhoC"), povm_names=("Ma", "Mc"),
+                                        nonstd_preps={'rhoA': "rho0", 'rhoC': prep_vec},
+                                        nonstd_povms={'Ma': {'0': "0000", '1': EA},
+                                                      'Mc': {'OutA': "0000", 'OutB': [EA, EB]}})
+
+        pspec_defaults = save_and_load(pspec_defaults, pth)
+        pspec_names = save_and_load(pspec_names, pth)
+        pspec_vecs = save_and_load(pspec_vecs, pth)

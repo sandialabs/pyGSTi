@@ -44,8 +44,8 @@ class BasisToolsTester(BaseCase):
         self.assertEqual(expectedLabels, labels)
 
     def test_basis_longname(self):
-        longnames = {bt.basis_longname(b) for b in {'gm', 'std', 'pp', 'qt'}}
-        self.assertEqual(longnames, {'Gell-Mann basis', 'Matrix-unit basis', 'Pauli-Product basis', 'Qutrit basis'})
+        longnames = {bt.basis_longname(b) for b in {'gm', 'std', 'PP', 'pp', 'qt'}}
+        self.assertEqual(longnames, {'Gell-Mann basis', 'Matrix-unit basis', 'Pauli-Product basis', 'Normalized Pauli-Product basis', 'Qutrit basis'})
         with self.assertRaises(KeyError):
             bt.basis_longname('not a basis')
 

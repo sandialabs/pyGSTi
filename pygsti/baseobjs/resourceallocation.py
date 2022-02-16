@@ -323,7 +323,8 @@ class ResourceAllocation(object):
                 shapes = gather_comm.allgather(local.shape if participating else (0,))
                 sizes = [_np.product(shape) for shape in shapes]
                 gathered_data = _np.empty(sum(sizes), dtype=local.dtype)
-                gather_comm.Allgatherv(local.flatten() if participating else _np.empty(0, dtype=local.dtype), (gathered_data, sizes))
+                gather_comm.Allgatherv(local.flatten() if participating
+                                       else _np.empty(0, dtype=local.dtype), (gathered_data, sizes))
             else:
                 #OLD: gathered_data = gather_comm.gather(local, root=0)  # could change this to Gatherv (?)
                 shapes = gather_comm.gather(local.shape if participating else (0,), root=0)
@@ -335,7 +336,8 @@ class ResourceAllocation(object):
                     recvbuf = (gathered_data, sizes)
                 else:
                     sizes = gathered_data = recvbuf = None
-                gather_comm.Gatherv(local.flatten() if participating else _np.empty(0, dtype=local.dtype), recvbuf, root=0)
+                gather_comm.Gatherv(local.flatten() if participating
+                                    else _np.empty(0, dtype=local.dtype), recvbuf, root=0)
 
             if gather_comm.rank == 0 or all_gather:
                 offset = 0

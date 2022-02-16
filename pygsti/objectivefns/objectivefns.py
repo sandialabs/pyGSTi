@@ -4707,6 +4707,12 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             of circuit outcomes.
         """
 
+        #DEBUG REMOVE - used for memory profiling
+        #import os, psutil
+        #process = psutil.Process(os.getpid())
+        #def print_mem_usage(prefix):
+        #    print("%s: mem usage = %.3f GB" % (prefix, process.memory_info().rss / (1024.0**3)))
+
         tm = _time.time()
         if paramvec is not None:
             self.model.from_vector(paramvec)

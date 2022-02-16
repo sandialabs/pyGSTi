@@ -4,10 +4,12 @@ from unittest import mock
 import numpy as np
 import scipy
 from pygsti.baseobjs.basis import Basis
+from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
 
 import pygsti.tools.basistools as bt
 import pygsti.tools.lindbladtools as lt
 import pygsti.tools.optools as ot
+from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock
 from pygsti.modelpacks.legacy import std2Q_XXYYII
 from ..util import BaseCase, needs_cvxpy
 
@@ -169,164 +171,124 @@ class ErrorGenTester(BaseCase):
         self.mdl_datagen = self.target_model.depolarize(op_noise=0.1, spam_noise=0.001)
 
     def test_std_errgens(self):
-        projectionTypes = ['hamiltonian', 'stochastic', 'affine']
-        basisNames = ['std', 'gm', 'pp']  # , 'qt'] #dim must == 3 for qt
+        projectionTypes = ['H', 'S', 'C', 'A']
+        basisNames = ['gm', 'pp']  # , 'qt'] #dim must == 3 for qt
+        # Note: bases must have first element == identity
 
         for projectionType in projectionTypes:
-            ot.std_scale_factor(4, projectionType)
+            #REMOVE ot.std_scale_factor(4, projectionType)
             for basisName in basisNames:
-                ot.std_error_generators(4, projectionType, basisName)
+                #REMOVE ot.std_error_generators(4, projectionType, basisName)
+                ot.elementary_errorgens_dual(4, projectionType, basisName)
 
     def test_std_errgens_raise_on_bad_projection_type(self):
-        with self.assertRaises(ValueError):
-            ot.std_scale_factor(4, "foobar")
-        with self.assertRaises(ValueError):
-            ot.std_error_generators(4, "foobar", 'gm')
+        with self.assertRaises(AssertionError):
+            #REMOVE ot.std_error_generators(4, "foobar", 'gm')
+            ot.elementary_errorgens_dual(4, "foobar", 'gm')
 
     def test_lind_errgens(self):
-        basis = Basis.cast('gm', 4)
 
-        normalize = False
-        other_mode = "all"
-        H0, O0 = ot.lindblad_error_generators(basis, basis, normalize, other_mode)
-        H1, O1 = ot.lindblad_error_generators(None, basis, normalize, other_mode)
-        H2, O2 = ot.lindblad_error_generators(basis, None, normalize, other_mode)
-        H3, O3 = ot.lindblad_error_generators(None, None, normalize, other_mode)
+        bases = [Basis.cast('gm', 4),
+                 Basis.cast('pp', 4),
+                 Basis.cast('PP', 4)]
 
-        # Check lindblad generators called as expected
-        for i, mi in enumerate(basis[1:]):
-            Hi = lt.hamiltonian_to_lindbladian(mi)
-            self.assertArraysAlmostEqual(Hi, H0[i])
+        for basis in bases:
+            print(basis)
+            Hblk = LindbladCoefficientBlock('ham', basis)
+            Hblk_superops = Hblk.create_lindblad_term_superoperators(mx_basis='std')
 
-            for j, mj in enumerate(basis[1:]):
-                Oij = lt.nonham_lindbladian(mi, mj)
-                self.assertArraysAlmostEqual(Oij, O0[i, j])
+            for i, mi in enumerate(basis[1:]):
+                Hi = lt.create_elementary_errorgen('H', mi)
+                HiB = lt.create_lindbladian_term_errorgen('H', mi)
+                self.assertArraysAlmostEqual(Hi, HiB)
+                self.assertArraysAlmostEqual(Hi, Hblk_superops[i])
 
-        # Check Nones handled properly
-        self.assertEqual(H1, None)
-        self.assertArraysAlmostEqual(O0, O1)
-        self.assertArraysAlmostEqual(H0, H2)
-        self.assertEqual(O2, None)
-        self.assertEqual(H3, None)
-        self.assertEqual(O3, None)
+            ODblk = LindbladCoefficientBlock('other_diagonal', basis)
+            ODblk_superops = ODblk.create_lindblad_term_superoperators(mx_basis='std')
 
-        normalize = True
-        other_mode = "all"
-        H0n, O0n = ot.lindblad_error_generators(basis, basis, normalize, other_mode)
-        H1n, O1n = ot.lindblad_error_generators(None, basis, normalize, other_mode)
-        H2n, O2n = ot.lindblad_error_generators(basis, None, normalize, other_mode)
-        H3n, O3n = ot.lindblad_error_generators(None, None, normalize, other_mode)
+            for i, mi in enumerate(basis[1:]):
+                ODi = lt.create_elementary_errorgen('S', mi)
+                ODiB = lt.create_lindbladian_term_errorgen('O', mi, mi)
+                self.assertArraysAlmostEqual(ODi, ODiB)
+                self.assertArraysAlmostEqual(ODi, ODblk_superops[i])
 
-        # Check normalization against unnormalized version
-        for h, hn in zip(H0, H0n):
-            norm = np.linalg.norm(h)
-            normedh = h if np.isclose(norm, 0) else h / norm
-            self.assertArraysAlmostEqual(normedh, hn)
-        for row, rown in zip(O0, O0n):
-            for o, on in zip(row, rown):
-                norm = np.linalg.norm(o)
-                normedo = o if np.isclose(norm, 0) else o / norm
-                self.assertArraysAlmostEqual(normedo, on)
+            Oblk = LindbladCoefficientBlock('other', basis)
+            Oblk_superops = Oblk.create_lindblad_term_superoperators(mx_basis='std')
 
-        # Check Nones handled properly
-        self.assertEqual(H1n, None)
-        self.assertArraysAlmostEqual(O0n, O1n)
-        self.assertArraysAlmostEqual(H0n, H2n)
-        self.assertEqual(O2n, None)
-        self.assertEqual(H3n, None)
-        self.assertEqual(O3n, None)
+            for i, mi in enumerate(basis[1:]):
+                for j, mj in enumerate(basis[1:]):
+                    Oij = lt.create_lindbladian_term_errorgen('O', mi, mj)
+                    self.assertArraysAlmostEqual(Oij, Oblk_superops[i][j])
 
-        normalize = False
-        other_mode = "diagonal"
-        H0d, O0d = ot.lindblad_error_generators(basis, basis, normalize, other_mode)
-        H1d, O1d = ot.lindblad_error_generators(None, basis, normalize, other_mode)
-        H2d, O2d = ot.lindblad_error_generators(basis, None, normalize, other_mode)
-        H3d, O3d = ot.lindblad_error_generators(None, None, normalize, other_mode)
-
-        # Check diag vs all
-        self.assertArraysAlmostEqual(H0, H0d)
-        for i, od in enumerate(O0d):
-            self.assertArraysEqual(O0[i, i], od)
-
-        # Check Nones handled properly
-        self.assertEqual(H1d, None)
-        self.assertArraysAlmostEqual(O0d, O1d)
-        self.assertArraysAlmostEqual(H0d, H2d)
-        self.assertEqual(O2d, None)
-        self.assertEqual(H3d, None)
-        self.assertEqual(O3d, None)
-
-        normalize = False
-        other_mode = "diag_affine"
-        H0da, O0da = ot.lindblad_error_generators(basis, basis, normalize, other_mode)
-        H1da, O1da = ot.lindblad_error_generators(None, basis, normalize, other_mode)
-        H2da, O2da = ot.lindblad_error_generators(basis, None, normalize, other_mode)
-        H3da, O3da = ot.lindblad_error_generators(None, None, normalize, other_mode)
-
-        # Check diag component
-        self.assertArraysAlmostEqual(H0, H0da)
-        self.assertArraysAlmostEqual(O0d, O0da[0, :])
-        # Check affine component called as expected
-        for i, mi in enumerate(basis[1:]):
-            A = lt.affine_lindbladian(mi)
-            self.assertArraysAlmostEqual(A, O0da[1, i])
-
-        # Check Nones handled properly
-        self.assertEqual(H1da, None)
-        self.assertArraysAlmostEqual(O0da, O1da)
-        self.assertArraysAlmostEqual(H0da, H2da)
-        self.assertEqual(O2da, None)
-        self.assertEqual(H3da, None)
-        self.assertEqual(O3da, None)
+                    # C_PQ = NH_PQ + NH_QP
+                    # A_PQ = i(NH_PQ - NH_QP)
+                    if i < j:
+                        Cij = lt.create_elementary_errorgen('C', mi, mj)
+                        Aij = lt.create_elementary_errorgen('A', mi, mj)
+                        self.assertArraysAlmostEqual(Oij, (Cij + 1j * Aij) / 2.0)
+                    elif j < i:
+                        Cji = lt.create_elementary_errorgen('C', mj, mi)
+                        Aji = lt.create_elementary_errorgen('A', mj, mi)
+                        self.assertArraysAlmostEqual(Oij, (Cji - 1j * Aji) / 2.0)
+                    else:  # i == j
+                        Sii = lt.create_elementary_errorgen('S', mi)
+                        self.assertArraysAlmostEqual(Oij, Sii)
 
     def test_lind_errgen_projects(self):
-        basis = Basis.cast('gm', 4)
-        
+        mx_basis = Basis.cast('pp', 4)
+        basis = Basis.cast('PP', 4)
+        X = basis['X']
+        Y = basis['Y']
+        Z = basis['Z']
+
         # Build known combination to project back to
-        Hgen, Ogen = ot.lindblad_error_generators(basis, basis, True, 'all')
+        errgen = 0.1 * lt.create_elementary_errorgen('H', Z) \
+            - 0.01 * lt.create_elementary_errorgen('H', X) \
+            + 0.2 * lt.create_elementary_errorgen('S', X) \
+            + 0.25 * lt.create_elementary_errorgen('S', Y) \
+            + 0.05 * lt.create_elementary_errorgen('C', X, Y) \
+            - 0.01 * lt.create_elementary_errorgen('A', X, Y)
+        errgen = bt.change_basis(errgen, 'std', mx_basis)
 
-        href = np.array([1/4, 0, 0])
-        oref = np.array([[1/4, 0, 0], [0, 0, 1/4], [0, 0, 1/4]])
-        
-        errgen = np.zeros_like(Hgen[0])
-        for i in range(3):
-            errgen += href[i]*Hgen[i]
-            for j in range(3):
-                errgen += oref[i,j]*Ogen[i,j]
+        Hblk = LindbladCoefficientBlock('ham', basis)
+        ODblk = LindbladCoefficientBlock('other_diagonal', basis)
+        Oblk = LindbladCoefficientBlock('other', basis)
 
-        hc, oc = ot.lindblad_errorgen_projections(errgen, basis, basis, 'std',
-                                                  normalize=True, return_generators=False,
-                                                  other_mode="all", sparse=False)
-        self.assertArraysAlmostEqual(href, hc)
-        self.assertArraysAlmostEqual(oref, oc)
+        Hblk.set_from_errorgen_projections(errgen, errorgen_basis=mx_basis)
+        ODblk.set_from_errorgen_projections(errgen, errorgen_basis=mx_basis)
+        Oblk.set_from_errorgen_projections(errgen, errorgen_basis=mx_basis)
 
-        # Test basis from name (really as base case for sparse)
-        hc, oc = ot.lindblad_errorgen_projections(errgen, 'gm', 'gm', 'std',
-                                       normalize=True, return_generators=False,
-                                       other_mode="all", sparse=False)
-        self.assertArraysAlmostEqual(href, hc)
-        self.assertArraysAlmostEqual(oref, oc)
+        self.assertArraysAlmostEqual(Hblk.block_data, [-0.01, 0, 0.1])
+        self.assertArraysAlmostEqual(ODblk.block_data, [0.2, 0.25, 0])
+        self.assertArraysAlmostEqual(Oblk.block_data,
+                                     np.array([[0.2,          0.05 + 0.01j, 0],
+                                               [0.05 - 0.01j, 0.25,         0],
+                                               [0,            0,            0]]))
 
-        # Test sparse version
-        hc, oc = ot.lindblad_errorgen_projections(errgen, 'gm', 'gm', 'std',
-                                       normalize=True, return_generators=False,
-                                       other_mode="all", sparse=True)
-        self.assertArraysAlmostEqual(href, hc)
-        self.assertArraysAlmostEqual(oref, oc)
+        def dicts_equal(d, f):
+            f = {LEEL.cast(k): v for k, v in f.items()}
+            if set(d.keys()) != set(f.keys()): return False
+            for k in d:
+                if abs(d[k] - f[k]) > 1e-12: return False
+            return True
 
-        # Test diagonal contributions only
-        href = np.array([1/4, 0, 0])
-        odiag = np.array([1/4, 1/4, 1/4])
-        
-        errgen = np.zeros_like(Hgen[0])
-        for i in range(3):
-            errgen += href[i]*Hgen[i]
-            errgen += odiag[i]*Ogen[i, i]
-        hc, oc = ot.lindblad_errorgen_projections(errgen, 'gm', 'gm', 'std',
-                                       normalize=True, return_generators=False,
-                                       other_mode="diagonal", sparse=False)
-        self.assertArraysAlmostEqual(href, hc)
-        self.assertArraysAlmostEqual(odiag, oc)
+        self.assertTrue(dicts_equal(Hblk.elementary_errorgens, {('H','Z'): 0.1, ('H','X'): -0.01, ('H','Y'): 0}))
+        self.assertTrue(dicts_equal(ODblk.elementary_errorgens, {('S','X'): 0.2, ('S','Y'): 0.25, ('S','Z'): 0}))
+        self.assertTrue(dicts_equal(Oblk.elementary_errorgens,
+                                    {('S', 'X'): 0.2,
+                                     ('S', 'Y'): 0.25,
+                                     ('S', 'Z'): 0.0,
+                                     ('C', 'X', 'Y'): 0.05,
+                                     ('A', 'X', 'Y'): -0.01,
+                                     ('C', 'X', 'Z'): 0,
+                                     ('A', 'X', 'Z'): 0,
+                                     ('C', 'Y', 'Z'): 0,
+                                     ('A', 'Y', 'Z'): 0,
+                                     }))
+
+        #TODO: test with sparse bases??
+
+        #TODO: test basis from name (seems unnecessary)?
 
     @fake_minimize
     def test_err_gen(self):
@@ -340,9 +302,10 @@ class ErrorGenTester(BaseCase):
             with self.assertRaises(ValueError):
                 ot.error_generator(gate, gateTarget, self.target_model.basis, 'adsf')
 
-            for projectionType in projectionTypes:
-                for basisName in basisNames:
-                    ot.std_errorgen_projections(errgen, projectionType, basisName)
+            #OLD: tested above
+            #for projectionType in projectionTypes:
+            #    for basisName in basisNames:
+            #        ot.std_errorgen_projections(errgen, projectionType, basisName)
 
             originalGate = ot.operation_from_error_generator(errgen, gateTarget, self.target_model.basis, 'logG-logT')
             altOriginalGate = ot.operation_from_error_generator(altErrgen, gateTarget, self.target_model.basis, 'logTiG')

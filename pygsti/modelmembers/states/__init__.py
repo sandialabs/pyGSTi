@@ -60,7 +60,7 @@ def create_from_pure_vector(pure_vector, state_type, basis='pp', evotype='defaul
                 static_state = create_from_pure_vector(pure_vector, ('computational', 'static pure'),
                                                        basis, evotype, state_space)
 
-                proj_basis = 'pp' if state_space.is_entirely_qubits else basis
+                proj_basis = 'PP' if state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
@@ -241,14 +241,15 @@ def convert(state, to_type, basis, extra=None):
                     except ValueError:
                         purevec = None
 
-                if purevec is not None and state.evotype.minimal_space == 'Hilbert': # Only use pure state if evotype supports it
+                if purevec is not None and state.evotype.minimal_space == 'Hilbert':
+                    # only use pure state if evotype supports it
                     static_state = StaticPureState(purevec, basis, state.evotype, state.state_space)
                 elif state.num_params > 0:  # then we need to convert to a static state
                     static_state = StaticState(state.to_dense(), state.evotype, state.state_space)
                 else:  # state.num_params == 0 so it's already static
                     static_state = state
 
-                proj_basis = 'pp' if state.state_space.is_entirely_qubits else basis
+                proj_basis = 'PP' if state.state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state.state_space.dim, to_type, proj_basis,
                                                                   basis, truncate=True, evotype=state.evotype)
                 return ComposedState(static_state, _ExpErrorgenOp(errorgen))

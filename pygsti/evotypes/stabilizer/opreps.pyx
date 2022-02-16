@@ -88,10 +88,10 @@ cdef class OpRepClifford(OpRep):
         self.basis = basis
 
         #Make sure all arrays are contiguous
-        self.smatrix = _np.ascontiguousarray(self.smatrix)
-        self.svector = _np.ascontiguousarray(self.svector)
-        self.smatrix_inv = _np.ascontiguousarray(self.smatrix_inv)
-        self.svector_inv = _np.ascontiguousarray(self.svector_inv)
+        self.smatrix = _np.ascontiguousarray(self.smatrix, dtype=_np.int64)
+        self.svector = _np.ascontiguousarray(self.svector, dtype=_np.int64)
+        self.smatrix_inv = _np.ascontiguousarray(self.smatrix_inv, dtype=_np.int64)
+        self.svector_inv = _np.ascontiguousarray(self.svector_inv, dtype=_np.int64)
 
         self.state_space = _StateSpace.cast(state_space)
         assert(self.state_space.num_qubits == self.smatrix.shape[0] // 2)
@@ -253,13 +253,13 @@ cdef class OpRepExpErrorgen(OpRep):
 cdef class OpRepLindbladErrorgen(OpRep):
     cdef public object Lterms
     cdef public object Lterm_coeffs
-    cdef public object LtermdictAndBasis
+    cdef public object lindblad_coefficient_blocks
 
-    def __init__(self, lindblad_term_dict, basis, state_space):
+    def __init__(self, lindblad_coefficient_blocks, state_space):
         self.state_space = _StateSpace.cast(state_space)
         self.Lterms = None
         self.Lterm_coeffs = None
-        self.LtermdictAndBasis = (lindblad_term_dict, basis)
+        self.lindblad_coefficient_blocks = lindblad_coefficient_blocks
 
     def acton(self, StateRep state not None):
         raise AttributeError("Cannot currently act with statevec.OpRepLindbladErrorgen - for terms only!")
@@ -268,4 +268,4 @@ cdef class OpRepLindbladErrorgen(OpRep):
         raise AttributeError("Cannot currently act with statevec.OpRepLindbladErrorgen - for terms only!")
 
     def __reduce__(self):
-        return (OpRepLindbladErrorgen, (self.LtermdictAndBasis[0], self.LtermdictAndBasis[1], self.state_space))
+        return (OpRepLindbladErrorgen, (self.lindblad_coefficient_blocks, self.state_space))

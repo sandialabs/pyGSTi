@@ -44,7 +44,7 @@ class EmbeddedOp(_LinearOperator):
         that specifies the only non-trivial action of the EmbeddedOp.
     """
 
-    def __init__(self, state_space, target_labels, operation_to_embed):
+    def __init__(self, state_space, target_labels, operation_to_embed, allocated_to_parent=None):
         self.target_labels = tuple(target_labels) if (target_labels is not None) else None
         self.embedded_op = operation_to_embed
         self._iter_elements_cache = {"Hilbert": None, "HilbertSchmidt": None}  # speeds up _iter_matrix_elements
@@ -77,7 +77,7 @@ class EmbeddedOp(_LinearOperator):
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
 
         _LinearOperator.__init__(self, rep, evotype)
-        self.init_gpindices()  # initialize our gpindices based on sub-members
+        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
         if self._rep_type == 'dense': self._update_denserep()
 
     def _update_denserep(self):

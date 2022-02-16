@@ -44,7 +44,7 @@ class DepolarizeOp(_StochasticNoiseOp):
             Random seed for RandomState (or directly provided RandomState)
             for sampling stochastic superoperators with the 'chp' evotype.
     """
-    def __init__(self, state_space, basis="pp", evotype="default", initial_rate=0, seed_or_state=None):
+    def __init__(self, state_space, basis="PP", evotype="default", initial_rate=0, seed_or_state=None):
         #TODO - need to fix CHP basis dimension issue (dim ~= statevec but acts as density mx)
         #if evotype == 'chp':
         #    assert (basis == 'pp'), "Only Pauli basis is allowed for 'chp' evotype"
