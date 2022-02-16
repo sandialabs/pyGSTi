@@ -174,7 +174,8 @@ class IBMQExperiment(dict):
 
             self['qobj'].append(_qiskit.compiler.assemble(self['qiskit_QuantumCircuits'][batch_idx], shots=num_shots))
 
-    def submit(self, ibmq_backend):
+    def submit(self, ibmq_backend, start=0, stop=None, ignore_job_limit=False,
+        wait_time=1, wait_steps=10):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
         used to create this object.
@@ -185,17 +186,48 @@ class IBMQExperiment(dict):
             The IBM Q backend to submit the jobs to. Should be the backend corresponding to the
             processor that this experiment has been designed for.
 
+        start: int, optional
+            Batch index to start submission (inclusive). Defaults to 0.
+        
+        stop: int, optional
+            Batch index to stop submission (exclusive). Defaults to None,
+            which will submit as many jobs as possible given the backend's
+            maximum job limit.
+        
+        ignore_job_limit: bool, optional
+            If True, then stop is set to submit all remaining jobs.
+            Note that is more jobs are needed than the max limit, this will enter
+            a wait loop until all jobs have been successfully submitted.
+        
+        wait_time: int
+            Number of seconds for each waiting step.
+        
+        wait_steps: int
+            Number of steps to take before retrying job submission.
+
         Returns
         -------
         None
         """
-        wait_time = 1
-        wait_steps = 10
         total_waits = 0
-        self['qjob'] = []
-        self['job_ids'] = []
+        self['qjob'] = self.get('qjob', [])
+        self['job_ids'] = self.get('job_ids', [])
+
+        if stop is not None:
+            stop = min(stop, len(self['qobj']))    
+        elif ignore_job_limit:
+            stop = len(self['qobj'])       
+        else: 
+            job_limit = ibmq_backend.job_limit()
+            allowed_jobs = job_limit.maximum_jobs - job_limit.active_jobs
+            if start + allowed_jobs < len(self['qobj']):
+                print(f'Given job limit and active jobs, only {allowed_jobs} can be submitted')
+            
+            stop = min(start + allowed_jobs, len(self['qobj']))
 
         for batch_idx, qobj in enumerate(self['qobj']):
+            if batch_idx < start or batch_idx >= stop:
+                continue
 
             print("Submitting batch {}".format(batch_idx + 1))
             submit_status = False
