@@ -562,17 +562,11 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gc22'] = 'u3(1.570796326794897, 1.570796326794897, 1.570796326794897)'  # [1, 1, 1]*pi/2
         std_gatenames_to_qasm['Gc23'] = 'u3(0, 0, 4.71238898038469)'  # [0, 0, 3] * pi/2 (this is Gzmpi2 / Gpdag)
 
-        std_gatenames_to_qasm['Gzr'] = 'u3'
-        std_gatenames_to_qasm['Gczr'] = 'czr'
-
-        def Gz_theta_map(gatearg):
-            return '(0, 0, ' + gatearg[0] + ')'
-
-        def Gczr_theta_map(gatearg):
-            return '(' + gatearg[0] + ')'
         std_gatenames_to_argmap = {}
-        std_gatenames_to_argmap['Gzr'] = Gz_theta_map
-        std_gatenames_to_argmap['Gczr'] = Gczr_theta_map
+        std_gatenames_to_argmap['Gzr'] = lambda gatearg: ['u3(0, 0, ' + str(gatearg[0]) + ')']
+        std_gatenames_to_argmap['Gczr'] = lambda gatearg: ['crz(' + str(gatearg[0]) + ')']
+        std_gatenames_to_argmap['Gu3'] = lambda gatearg: ['u3(' + str(gatearg[0]) + ', ' + \
+            str(gatearg[1]) + ', ' + str(gatearg[2]) + ')']
 
     elif version == 'x-sx-rz':
         std_gatenames_to_qasm = {}
@@ -621,14 +615,12 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_qasm['Gt'] = ['rz(0.7853981633974485)']
         std_gatenames_to_qasm['Gtdag'] = ['rz(5.497787143782138)']
 
-        std_gatenames_to_qasm['Gzr'] = 'rz'
-        std_gatenames_to_qasm['Gczr'] = 'crz'
-
-        def Gz_theta_map(gatearg):
-            return '(' + gatearg[0] + ')'
         std_gatenames_to_argmap = {}
-        std_gatenames_to_argmap['Gzr'] = Gz_theta_map
-        std_gatenames_to_argmap['Gczr'] = Gz_theta_map
+        std_gatenames_to_argmap['Gzr'] = lambda gatearg: ['rz(' + str(gatearg[0]) + ')']
+        std_gatenames_to_argmap['Gczr'] = lambda gatearg: ['crz(' + str(gatearg[0]) + ')']
+        std_gatenames_to_argmap['Gu3'] = lambda gatearg: ['rz(' + str(gatearg[2]) +')', 'sx',
+            'rz(' + str(float(gatearg[0]) + _np.pi) + ')', 'sx',
+            'rz(' + str(float(gatearg[1]) + _np.pi) + ')']
     else:
         raise ValueError("Unknown version!")
 
