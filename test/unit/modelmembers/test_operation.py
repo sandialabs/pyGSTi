@@ -512,18 +512,18 @@ class RealEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
     def build_gate():
         mx = np.identity(4, 'd')
         return op.EigenvalueParamDenseOp(
-            mx, include_off_diags_in_degen_2_blocks=False,
+            mx, include_off_diags_in_degen_blocks=False,
             tp_constrained_and_unital=False
         )
 
-    def test_include_off_diags_in_degen_2_blocks(self):
+    def test_include_off_diags_in_degen_blocks(self):
         mx = np.array([[1, 0, 0, 0],
                        [0, 1, 0, 0],
                        [0, 0, -1, 0],
                        [0, 0, 0, -1]], 'complex')
         # 2 degenerate real pairs of evecs => should add off-diag els
         g2 = op.EigenvalueParamDenseOp(
-            mx, include_off_diags_in_degen_2_blocks=True, tp_constrained_and_unital=False
+            mx, include_off_diags_in_degen_blocks=True, tp_constrained_and_unital=False
         )
         self.assertEqual(
             g2.params,
@@ -544,18 +544,18 @@ class ComplexEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
                        [0, 0, 0, 1],
                        [0, 0, -1, 0]], 'd')
         return op.EigenvalueParamDenseOp(
-            mx, include_off_diags_in_degen_2_blocks=False,
+            mx, include_off_diags_in_degen_blocks=False,
             tp_constrained_and_unital=False
         )
 
-    def test_include_off_diags_in_degen_2_blocks(self):
+    def test_include_off_diags_in_degen_blocks(self):
         mx = np.array([[1, -0.1, 0, 0],
                        [0.1, 1, 0, 0],
                        [0, 0, 1 + 1, -0.1],
                        [0, 0, 0.1, 1 + 1]], 'complex')
         # complex pairs of evecs => make sure combined parameters work
         g3 = op.EigenvalueParamDenseOp(
-            mx, include_off_diags_in_degen_2_blocks=True, tp_constrained_and_unital=False
+            mx, include_off_diags_in_degen_blocks=True, tp_constrained_and_unital=False
         )
         self.assertEqual(
             g3.params,
@@ -572,7 +572,7 @@ class ComplexEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
                        [0, 0, 0.1, 1]], 'complex')
         # 2 degenerate complex pairs of evecs => should add off-diag els
         g4 = op.EigenvalueParamDenseOp(
-            mx, include_off_diags_in_degen_2_blocks=True, tp_constrained_and_unital=False
+            mx, include_off_diags_in_degen_blocks=True, tp_constrained_and_unital=False
         )
         self.assertArraysAlmostEqual(g4.evals, [1. + 0.1j, 1. + 0.1j, 1. - 0.1j, 1. - 0.1j])  # Note: evals are sorted!
         self.assertEqual(
