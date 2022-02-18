@@ -55,7 +55,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                        search_mode="random",
                        constrain_to_tp=True,
                        n_random=3, seed=None, verbosity=3,
-                       mem_limit=1024*30)
+                       mem_limit=1024*256)
 
         fidPairs3 = self.runSilent( #larger n_random
             pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
@@ -64,7 +64,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                        search_mode="random",
                        constrain_to_tp=True,
                        n_random=100, seed=None, verbosity=3,
-                       mem_limit=1024*30)
+                       mem_limit=1024*256)
 
         fidPairs3b = self.runSilent( #huge n_random (should cap to all pairs)
             pygsti.alg.find_sufficient_fiducial_pairs_per_germ,
@@ -73,7 +73,7 @@ class FiducialPairReductionTestCase(AlgorithmTestCase):
                        search_mode="random",
                        constrain_to_tp=True,
                        n_random=1000000, seed=None, verbosity=3,
-                       mem_limit=1024*30)
+                       mem_limit=1024*256)
 
     def test_FPR_test_pairs(self):
         target_model = std.target_model()
