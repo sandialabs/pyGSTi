@@ -1515,7 +1515,7 @@ def extract_elementary_errorgen_coefficients(errorgen, elementary_errorgen_label
 
     for i, eeg_lbl in enumerate(elementary_errorgen_labels):
         key = _LocalElementaryErrorgenLabel.cast(eeg_lbl)
-        bel_lbls = eeg_lbl.basis_element_labels
+        bel_lbls = key.basis_element_labels
         bmx0 = elementary_errorgen_basis[bel_lbls[0]]
         bmx1 = elementary_errorgen_basis[bel_lbls[1]] if (len(bel_lbls) > 1) else None
         flat_projector = _lt.create_elementary_errorgen_dual(key.errorgen_type, bmx0, bmx1, sparse=False).flatten()
