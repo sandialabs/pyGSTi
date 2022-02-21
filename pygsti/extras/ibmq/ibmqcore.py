@@ -174,7 +174,7 @@ class IBMQExperiment(dict):
 
             self['qobj'].append(_qiskit.compiler.assemble(self['qiskit_QuantumCircuits'][batch_idx], shots=num_shots))
 
-    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=False,
+    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True,
         wait_time=1, wait_steps=10):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
@@ -198,9 +198,10 @@ class IBMQExperiment(dict):
             maximum job limit.
         
         ignore_job_limit: bool, optional
-            If True, then stop is set to submit all remaining jobs.
-            Note that is more jobs are needed than the max limit, this will enter
-            a wait loop until all jobs have been successfully submitted.
+            If True, then stop is set to submit all remaining jobs. This is set
+            as True to maintain backwards compatibility. Note that is more jobs
+            are needed than the max limit, this will enter a wait loop until all
+            jobs have been successfully submitted.
         
         wait_time: int
             Number of seconds for each waiting step.
@@ -300,6 +301,11 @@ class IBMQExperiment(dict):
             print("Batch {}: {}".format(counter + 1, status))
             if status.name == 'QUEUED':
                 print('  - Queue position is {}'.format(qjob.queue_position()))
+        
+        # Print unsubmitted for any entries in qobj but not qjob
+        for counter in range(len(self['qjob']), len(self['qobj'])):
+            print("Batch {}: NOT SUBMITTED".format(counter + 1))
+
 
     def retrieve_results(self):
         """
