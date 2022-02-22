@@ -26,7 +26,7 @@ from pygsti.tools import matrixtools as _mt
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
-SPAM_TRANSFORM_TRUNCATE = 1e-4
+TODENSE_TRUNCATE = 1e-12
 
 
 class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
@@ -605,6 +605,35 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         """
         return _np.exp(self.errorgen.total_term_magnitude) * self.errorgen.total_term_magnitude_deriv
 
+    def set_dense(self, m):
+        """
+        Set the dense-matrix value of this operation.
+
+        Attempts to modify operation parameters so that the specified raw
+        operation matrix becomes mx.  Will raise ValueError if this operation
+        is not possible.
+
+        Parameters
+        ----------
+        m : array_like or LinearOperator
+            An array of shape (dim, dim) or LinearOperator representing the operation action.
+
+        Returns
+        -------
+        None
+        """
+        mx = _LinearOperator.convert_to_matrix(m)
+        errgen_cls = self.errorgen.__class__
+
+        #Note: this only really works for LindbladErrorGen objects now... make more general in FUTURE?
+        truncate = TODENSE_TRUNCATE  # can't just be 'True' since we need to throw errors when appropriate
+        new_errgen = errgen_cls.from_operation_matrix_and_blocks(
+            mx, self.errorgen.coefficient_blocks, 'auto', self.errorgen.matrix_basis,
+            truncate, self.errorgen.evotype, self.errorgen.state_space)
+        self.errorgen.from_vector(new_errgen.to_vector())
+        self._update_rep()  # needed to rebuild exponentiated error gen
+        self.dirty = True
+
     def transform_inplace(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
@@ -635,11 +664,10 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         Update operation matrix `O` with `inv(s) * O` OR `O * s`, depending on the value of `typ`.
 
         This functions as `transform_inplace(...)` but is used when this
-        Lindblad-parameterized operation is used as a part of a SPAM
-        vector.  When `typ == "prep"`, the spam vector is assumed
-        to be `rho = dot(self, <spamvec>)`, which transforms as
-        `rho -> inv(s) * rho`, so `self -> inv(s) * self`. When
-        `typ == "effect"`, `e.dag = dot(e.dag, self)` (not that
+        operation is used as a part of a SPAM vector.  When `typ == "prep"`,
+        the spam vector is assumed to be `rho = dot(self, <spamvec>)`,
+        which transforms as `rho -> inv(s) * rho`, so `self -> inv(s) * self`.
+        When `typ == "effect"`, `e.dag = dot(e.dag, self)` (note that
         `self` is NOT `self.dag` here), and `e.dag -> e.dag * s`
         so that `self -> self * s`.
 
@@ -670,18 +698,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
                 mx = _mt.safe_dot(Uinv, mx)
             else:
                 mx = _mt.safe_dot(mx, U)
-
-            errgen_cls = self.errorgen.__class__
-            #Note: this only really works for LindbladErrorGen objects now... make more general in FUTURE?
-            truncate = SPAM_TRANSFORM_TRUNCATE  # can't just be 'True' since we need to throw errors when appropriate
-            transformed_errgen = errgen_cls.from_operation_matrix_and_blocks(
-                mx, self.errorgen.coefficient_blocks, 'auto', self.errorgen.matrix_basis,
-                truncate, self.errorgen.evotype, self.errorgen.state_space)
-
-            self.errorgen.from_vector(transformed_errgen.to_vector())
-
-        self._update_rep()  # needed to rebuild exponentiated error gen
-        self.dirty = True
+            self.set_dense(mx)  # calls _update_rep() and sets dirty flag
 
     def __str__(self):
         s = "Exponentiated operation map with dim = %d, num params = %d\n" % \

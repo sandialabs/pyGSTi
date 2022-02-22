@@ -16,6 +16,7 @@ import itertools as _itertools
 import numpy as _np
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.operations.experrorgenop import ExpErrorgenOp as _ExpErrorgenOp
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
@@ -641,6 +642,16 @@ class ComposedOp(_LinearOperator):
         -------
         None
         """
+        if (len(self.factorops) == 2 and self.factorops[0].num_params == 0
+           and isinstance(self.factorops[1], _ExpErrorgenOp)) and self.state_space.dim <= 16:
+            #SPECIAL CASE / HACK: for 1 & 2Q, when holding e^L * T, where T is a static gate
+            # then try to gauge transform by setting e^L directly and leaving T alone:
+            Smx = s.transform_matrix; Si = s.transform_matrix_inverse
+            Tinv = _np.linalg.inv(self.factorops[0].to_dense(on_space='minimal'))
+            trans_eLT = _np.dot(Si, _np.dot(self.to_dense(on_space='minimal'), Smx))
+            self.factorops[1].set_dense(_np.dot(trans_eLT, Tinv))  # set_dense(trans_eL)
+            return
+
         for operation in self.factorops:
             operation.transform_inplace(s)
 

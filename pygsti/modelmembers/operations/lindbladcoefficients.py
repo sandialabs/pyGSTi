@@ -622,7 +622,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             in the case of `'other'` blocks.
         """
         if truncate is False:
-            ttol = 0  # (was -1e-12) # truncation tolerance
+            ttol = -1e-15  # (was -1e-12) # truncation tolerance
         elif truncate is True:
             ttol = -_np.inf
         else:
@@ -1189,6 +1189,13 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 and (self._param_mode == other_coeff_block._param_mode)
                 and (self._bel_labels == other_coeff_block._bel_labels)
                 and (self._basis == other_coeff_block._basis))
+
+    def convert(self, param_mode):
+        """
+        TODO: docstring  - return a *new* LindbladCoefficientBlock with the same block type and data,
+        but with the given parameterization mode.
+        """
+        return LindbladCoefficientBlock(self._block_type, self._basis, self._bel_labels, self.block_data, param_mode)
 
     def __str__(self):
         s = '%s-type lindblad coefficient block with param-mode %s and basis labels %s.' % (

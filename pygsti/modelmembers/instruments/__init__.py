@@ -71,8 +71,9 @@ def instrument_type_from_op_type(op_type):
     return instr_type_preferences
 
 
-def convert(instrument, to_type, basis, extra=None):
+def convert(instrument, to_type, basis, ideal_instrument=None, flatten_structure=False):
     """
+    TODO: update docstring
     Convert intrument to a new type of parameterization.
 
     This potentially creates a new object.
@@ -92,8 +93,15 @@ def convert(instrument, to_type, basis, extra=None):
         Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
         (or a custom basis object).
 
-    extra : object, optional
-        Additional information for conversion.
+    ideal_instrument : Instrument, optional
+        The ideal version of `instrument`, potentially used when
+        converting to an error-generator type.
+
+    flatten_structure : bool, optional
+        When `False`, the sub-members of composed and embedded operations
+        are separately converted, leaving the original instrument's structure
+        unchanged.  When `True`, composed and embedded operations are "flattened"
+        into a single instrument of the requested `to_type`.
 
     Returns
     -------
@@ -102,17 +110,22 @@ def convert(instrument, to_type, basis, extra=None):
         object from the object passed as input.
     """
     to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
+    destination_types = {'full TP': TPInstrument}
+    NoneType = type(None)
+
     for to_type in to_types:
         try:
+            if isinstance(instrument, destination_types.get(to_type, NoneType)):
+                return instrument
+
             if to_type == "full TP":
-                if isinstance(instrument, TPInstrument):
-                    return instrument
-                else:
-                    return TPInstrument(list(instrument.items()), instrument.evotype, instrument.state_space)
+                return TPInstrument(list(instrument.items()), instrument.evotype, instrument.state_space)
             elif to_type in ("full", "static", "static unitary"):
                 from ..operations import convert as _op_convert
-                gate_list = [(k, _op_convert(g, to_type, basis)) for k, g in instrument.items()]
-                return Instrument(gate_list, instrument.evotype, instrument.state_space)
+                ideal_items = dict(ideal_instrument.items()) if (ideal_instrument is not None) else {}
+                members = [(k, _op_convert(g, to_type, basis, ideal_items.get(k, None), flatten_structure))
+                           for k, g in instrument.items()]
+                return Instrument(members, instrument.evotype, instrument.state_space)
             else:
                 raise ValueError("Cannot convert an instrument to type %s" % to_type)
         except:
