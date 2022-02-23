@@ -559,6 +559,12 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         return self._excalc().deriv_wrt_params()
 
+    def compute_nongauge_and_gauge_spaces(self, item_weights=None, non_gauge_mix_mx=None):
+        """
+        TODO: docstring
+        """
+        return self._excalc().nongauge_and_gauge_spaces(item_weights, non_gauge_mix_mx)
+
     def compute_nongauge_projector(self, item_weights=None, non_gauge_mix_mx=None):
         """
         Construct a projector onto the non-gauge parameter space.
