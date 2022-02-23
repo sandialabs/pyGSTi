@@ -109,12 +109,13 @@ def gaugeopt_to_target(model, target_model, item_weights=None,
         will avoid.  If zero, then any gauge-transform failures just terminate the
         optimization.
 
-    convert_model_to : str, optional
+    convert_model_to : str, dict, list, optional
         For use when `model` is an `ExplicitOpModel`.  When not `None`, calls
-        `model.convert_members_inplace(convert_model_to)` and
-        `model.set_default_gauge_group_for_member_type(convert_model_to)` prior to
-        performing the gauge optimization, allowing the gauge optimization to be
-        performed using a differently constrained model.
+        `model.convert_members_inplace(convert_model_to, set_default_gauge_group=False)` if
+        `convert_model_to` is a string, `model.convert_members_inplace(**convert_model_to)` if it
+        is a dict, and repeated calls to either of the above instances when `convert_model_to`
+        is a list or tuple  prior to performing the gauge optimization.  This allows the gauge
+        optimization to be performed using a differently constrained model.
 
     return_all : bool, optional
         When True, return best "goodness" value and gauge matrix in addition to the
@@ -220,12 +221,13 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         will avoid.  If zero, then any gauge-transform failures just terminate the
         optimization.
 
-    convert_model_to : str, optional
+    convert_model_to : str, dict, list, optional
         For use when `model` is an `ExplicitOpModel`.  When not `None`, calls
-        `model.convert_members_inplace(convert_model_to)` and
-        `model.set_default_gauge_group_for_member_type(convert_model_to)` prior to
-        performing the gauge optimization, allowing the gauge optimization to be
-        performed using a differently constrained model.
+        `model.convert_members_inplace(convert_model_to, set_default_gauge_group=False)` if
+        `convert_model_to` is a string, `model.convert_members_inplace(**convert_model_to)` if it
+        is a dict, and repeated calls to either of the above instances when `convert_model_to`
+        is a list or tuple  prior to performing the gauge optimization.  This allows the gauge
+        optimization to be performed using a differently constrained model.
 
     return_all : bool, optional
         When True, return best "goodness" value and gauge matrix in addition to the
@@ -257,8 +259,14 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
     tStart = _time.time()
 
     if convert_model_to is not None:
-        model.convert_members_inplace(convert_model_to)
-        model.set_default_gauge_group_for_member_type(convert_model_to)
+        conversion_args = convert_model_to if isinstance(convert_model_to, (list, tuple)) else (convert_model_to,)
+        for args in conversion_args:
+            if isinstance(args, str):
+                model.convert_members_inplace(args, set_default_gauge_group=True)
+            elif isinstance(args, dict):
+                model.convert_members_inplace(**args)
+            else:
+                raise ValueError("Invalid `convert_model_to` arguments: %s" % str(args))
 
     if comm is not None:
         mdl_cmp = comm.bcast(model if (comm.Get_rank() == 0) else None, root=0)

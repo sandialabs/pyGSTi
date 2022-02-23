@@ -341,9 +341,9 @@ class ExplicitOpModel(_mdl.OpModel):
             raise KeyError("Key %s has an invalid prefix" % label)
 
     def convert_members_inplace(self, to_type, categories_to_convert='all', labels_to_convert='all',
-                                ideal_model=None, flatten_structure=False):
+                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False):
         """
-        TODO: docstring -- like set_all_parameterizations but doesn't set default gauge group...
+        TODO: docstring -- like set_all_parameterizations but doesn't set default gauge group by default
         """
         if isinstance(categories_to_convert, str): categories_to_convert = (categories_to_convert,)
         if any([c in categories_to_convert for c in ('all', 'ops', 'operations')]):
@@ -368,6 +368,8 @@ class ExplicitOpModel(_mdl.OpModel):
                     self.povms[lbl] = _povm.convert(povm, to_type, self.basis, ideal, flatten_structure)
 
         self._clean_paramvec()  # param indices were probabaly updated
+        if set_default_gauge_group:
+            self.set_default_gauge_group_for_member_type(to_type)
 
     def set_default_gauge_group_for_member_type(self, member_type):
         """ TODO: docstring """

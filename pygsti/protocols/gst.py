@@ -883,12 +883,12 @@ class GSTGaugeOptSuite(_NicelySerializable):
     def _update_gaugeopt_dict_from_suitename(self, gaugeopt_suite_dict, root_lbl, suite_name, model,
                                              unreliable_ops, printer):
         if suite_name in ("stdgaugeopt", "stdgaugeopt-unreliable2Q", "stdgaugeopt-tt", "stdgaugeopt-safe",
-                          "stdgaugeopt-noconversion"):
+                          "stdgaugeopt-noconversion", "stdgaugeopt-noconversion-safe"):
 
             stages = []  # multi-stage gauge opt
             gg = model.default_gauge_group
-            convert_to = "full TP" if (suite_name != "stdgaugeopt-noconversion"
-                                       and gg.name not in ("Full", "TP")) else None
+            convert_to = {'to_type': "full TP", 'flatten_structure': True, 'set_default_gauge_group': True} \
+                if ('noconversion' not in suite_name and gg.name not in ("Full", "TP")) else None
 
             if isinstance(gg, _models.gaugegroup.TrivialGaugeGroup) and convert_to is None:
                 if suite_name == "stdgaugeopt-unreliable2Q" and model.dim == 16:
@@ -919,7 +919,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
                         'item_weights': {'gates': 1.0, 'spam': 0.0},
                         'gauge_group': _models.gaugegroup.UnitaryGaugeGroup(model.state_space,
                                                                             model.basis, model.evotype),
-                        'oob_check_interval': 1 if (suite_name == 'stdgaugeopt-safe') else 0,
+                        'oob_check_interval': 1 if ('-safe' in suite_name) else 0,
                         'verbosity': printer
                     })
 
