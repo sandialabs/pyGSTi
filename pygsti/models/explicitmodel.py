@@ -424,7 +424,6 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         typ = gate_type
 
-        basis = self.basis
         assert(extra is None), "`extra` argument is unused and should be left as `None`"
         if extra is None: extra = {}
 

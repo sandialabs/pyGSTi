@@ -14,6 +14,9 @@ import numpy as _np
 
 from pygsti.modelmembers.operations.denseop import DenseUnitaryOperator as _DenseUnitaryOperator
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.tools import basistools as _bt
+from pygsti.tools import matrixtools as _mt
+from pygsti.tools import optools as _ot
 
 
 class FullUnitaryOp(_DenseUnitaryOperator):

@@ -257,7 +257,7 @@ def nice_nullspace(m, tol=1e-7, orthogonalize=False):
             current_rank = rank
     ret = _np.take(nullsp_projector, keepers, axis=1)
 
-    if orthogonalize: # and not columns_are_orthogonal(ret):
+    if orthogonalize:  # and not columns_are_orthogonal(ret):
         ret, _ = _np.linalg.qr(ret)  # Gram-Schmidt orthogonalization
 
     for j in range(ret.shape[1]):  # normalize columns so largest element is +1.0
