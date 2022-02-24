@@ -413,8 +413,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
         if projection_type == 'none':
             projected_hessian = self.hessian
         elif projection_type == 'std':
-            Q = model._excalc().gauge_orbit_curvature()  # CORRECTION
-            projected_hessian = self._project_hessian(self.hessian, nongauge_space, gauge_space, self.jacobian, Q)
+            projected_hessian = self._project_hessian(self.hessian, nongauge_space, gauge_space, self.jacobian)
         elif projection_type == 'optimal gate CIs':
             projected_hessian = self._opt_projection_for_operation_cis("L-BFGS-B", maxiter, maxiter,
                                                                        tol, verbosity=3)  # verbosity for DEBUG
@@ -564,7 +563,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
         #    _warnings.warn("Number of non-gauge parameters in model and confidence region do "
         #                   + " not match.  This indicates an internal logic error.")
 
-    def _project_hessian(self, hessian, nongauge_space, gauge_space, gradient=None, gauge_orbit_curvature=None):
+    def _project_hessian(self, hessian, nongauge_space, gauge_space, gradient=None):
         # as from model.nongauge_gauge_spaces(self, item_weights=None, non_gauge_mix_mx=None)
 
         # Step1: transform hessian into a (nongauge + gauge) coordinate system
@@ -584,31 +583,6 @@ class ConfidenceRegionFactory(_NicelySerializable):
                 _warnings.warn("Gauge-nongauge mixed partials have unusually high magnitude: \n"
                                + "|off-diag blk| = %.2g should be ~ |gradient| = %.2g" %
                                (_np.linalg.norm(coupling), _np.linalg.norm(gradient)))
-
-        #DEBUG
-        #n = nongauge_space.shape[1]
-        #nrm = _np.linalg.norm(hessian)
-        #if gradient is not None:
-        #    print("CRF DEBUG: |J| = %.3g" % _np.linalg.norm(gradient_for_correction))
-        #print("CRF DEBUG |H| = %.3g" % nrm)
-        #print("CRF DEBUG: [%6.2g  %6.2g]" % (_np.linalg.norm(hessian[0:n, 0:n]) / nrm, _np.linalg.norm(hessian[0:n, n:]) / nrm))
-        #print("CRF DEBUG: [%6.2g  %6.2g]" % (_np.linalg.norm(hessian[n:, 0:n]) / nrm, _np.linalg.norm(hessian[n:, n:]) / nrm))
-        #
-        #nrm = _np.linalg.norm(Hprime)
-        #print("CRF DEBUG |Hprime| = %.3g" % nrm)
-        #print("CRF DEBUG: [%6.2g  %6.2g]" % (_np.linalg.norm(Hprime[0:n, 0:n]) / nrm, _np.linalg.norm(coupling) / nrm))
-        #print("CRF DEBUG: [%6.2g  %6.2g]" % (_np.linalg.norm(Hprime[n:, 0:n]) / nrm, _np.linalg.norm(Hprime[n:, n:]) / nrm))
-
-        #CORRECTION - test this then REMOVE to confirm we know where gauge block of Hprime comes from
-        if gradient is not None and gauge_orbit_curvature is not None:
-            n = nongauge_space.shape[1]
-            grad = B @ gradient
-            assert(_np.linalg.norm(grad[n:]) < 1e-6), "Grad should be 0 on gauge space!"
-            correction = _np.einsum('ijk,i->jk', gauge_orbit_curvature, grad[0:n])
-            print("CRF DEBUG: before correction Hgauge = ",_np.linalg.norm(Hprime[n:, n:]))
-            Hprime[n:, n:] += correction
-            print("CRF DEBUG: after correction Hgauge (should be ~ 0?) = ",_np.linalg.norm(Hprime[n:, n:]))
-            assert(_np.linalg.norm(Hprime[n:, n:]) < 1e-7)
 
         # Step2: zero out gauge-space block and coupling blocks (essentially project to non-gauge)
         n = nongauge_space.shape[1]

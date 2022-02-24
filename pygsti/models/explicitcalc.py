@@ -624,7 +624,8 @@ class ExplicitOpModelCalc(object):
         assert(nongauge_space.shape[0] == gauge_space.shape[0] == nongauge_space.shape[1] + gauge_space.shape[1])
         return nongauge_space, gauge_space
 
-    def gauge_orbit_curvature(self, item_weights=None, non_gauge_mix_mx=None):
+    #UNUSED - just used for checking understanding of where the nonzero logL Hessian on gauge space comes from.
+    def _gauge_orbit_curvature(self, item_weights=None, non_gauge_mix_mx=None):
 
         nParams = self.Np
         dPG = self._buildup_dpg()
