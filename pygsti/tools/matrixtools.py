@@ -675,7 +675,7 @@ def unitary_superoperator_matrix_log(m, mx_basis):
     evals = _np.linalg.eigvals(M_std)
     assert(_np.allclose(_np.abs(evals), 1.0))  # simple but technically incomplete check for a unitary superop
     # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
-    U = _ot.process_mx_to_unitary(M_std)
+    U = _ot.std_process_mx_to_unitary(M_std)
     H = _spl.logm(U) / -1j  # U = exp(-iH)
     logM_std = _lt.create_elementary_errorgen('H', H)  # rho --> -i[H, rho]
     logM = change_basis(logM_std, "std", mx_basis)

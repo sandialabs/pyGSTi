@@ -1090,7 +1090,17 @@ def dmvec_to_state(dmvec, tol=1e-6):
     return psi
 
 
+def unitary_to_superop(u, superop_mx_basis='pp'):
+    """ TODO: docstring """
+    return _bt.change_basis(unitary_to_std_process_mx(u), 'std', superop_mx_basis)
+
+
+@_deprecated_fn('pygsti.tools.unitary_to_std_process_mx(...) or unitary_to_superop(...)')
 def unitary_to_process_mx(u):
+    return unitary_to_std_process_mx(u)
+
+
+def unitary_to_std_process_mx(u):
     """
     Compute the superoperator corresponding to unitary matrix `u`.
 
@@ -1729,7 +1739,7 @@ def create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, norma
 
 
 #TODO: replace two_qubit_gate, one_qubit_gate, unitary_to_pauligate_* with
-# calls to this one and unitary_to_processmx
+# calls to this one and unitary_to_std_processmx
 def rotation_gate_mx(r, mx_basis="gm"):
     """
     Construct a rotation operation matrix.
@@ -1773,11 +1783,8 @@ def rotation_gate_mx(r, mx_basis="gm"):
     for rot, pp_mx in zip(r, pp[1:]):
         ex += rot / 2.0 * pp_mx * _np.sqrt(d)
     U = _spl.expm(-1j * ex)
-    stdGate = unitary_to_process_mx(U)
 
-    ret = _bt.change_basis(stdGate, 'std', mx_basis)
-
-    return ret
+    return unitary_to_superop(U, mx_basis)
 
 
 def project_model(model, target_model,
@@ -2259,7 +2266,7 @@ def unitary_to_pauligate(u):
         vectorized as d**2 vectors in the Pauli basis.
     """
     assert u.shape[0] == u.shape[1], '"Unitary" matrix is not square'
-    return _bt.change_basis(unitary_to_process_mx(u), 'std', 'pp')
+    return unitary_to_superop(u, 'pp')
 
 
 def is_valid_lindblad_paramtype(typ):

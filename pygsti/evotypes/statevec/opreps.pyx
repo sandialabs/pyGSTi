@@ -95,7 +95,7 @@ cdef class OpRepDenseUnitary(OpRep):
         if on_space in ('minimal', 'Hilbert'):
             return self.base
         elif on_space == 'HilbertSchmidt':
-            return _bt.change_basis(_ot.unitary_to_process_mx(self.base), 'std', self.basis)
+            return _ot.unitary_to_superop(self.base, self.basis)
         else:
             raise ValueError("Invalid `on_space` argument: %s" % str(on_space))
 

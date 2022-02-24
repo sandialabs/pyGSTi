@@ -59,7 +59,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
             elif typ == "full unitary":
                 op = FullUnitaryOp(U, basis, evotype, state_space)
             elif typ in ('static', 'full', 'full TP', 'linear'):
-                superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(U), 'std', basis)
+                superop_mx = _ot.unitary_to_superop(U, basis)
                 op = create_from_superop_mx(superop_mx, op_type, basis, stdname, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):  # maybe "lindblad XXX" where XXX is a valid lindblad type?
                 if _np.allclose(U, _np.identity(U.shape[0], 'd')):
@@ -78,7 +78,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                     else ComposedOp([unitary_postfactor, ExpErrorgenOp(errorgen)])
 
                 if op.dim <= 16:  # only do this for up to 2Q operations, otherwise to_dense is too expensive
-                    expected_superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(U), 'std', basis)
+                    expected_superop_mx = _ot.unitary_to_superop(U, basis)
                     assert (_np.linalg.norm(op.to_dense('HilbertSchmidt') - expected_superop_mx) < 1e-6), \
                         "Failure to create Lindblad operation (maybe due the complex log's branch cut?)"
             else:

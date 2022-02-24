@@ -1135,8 +1135,7 @@ class ExplicitOpModel(_mdl.OpModel):
             # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
             randUnitary = _scipy.linalg.expm(-1j * randMat)
 
-            randOp = _ot.unitary_to_process_mx(randUnitary)  # in std basis
-            randOp = _bt.change_basis(randOp, "std", self.basis)
+            randOp = _ot.unitary_to_superop(randUnitary, self.basis)
 
             mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(
                 _np.dot(randOp, gate))
@@ -1520,8 +1519,7 @@ class ExplicitOpModel(_mdl.OpModel):
                     #    observed_sslbls.update(sslbls)
 
                 if gn not in gate_unitaries or gate_unitaries[gn] is None:
-                    U = _ot.process_mx_to_unitary(_bt.change_basis(
-                        op.to_dense('HilbertSchmidt'), self.basis, 'std')) \
+                    U = _ot.superop_to_unitary(op.to_dense('HilbertSchmidt'), self.basis) \
                         if (op is not None) else None  # U == None indicates "unknown, up until this point"
 
                     Ulocal = extract_unitary(U, all_sslbls, sslbls)
