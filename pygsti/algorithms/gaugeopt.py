@@ -304,7 +304,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
     else:
         _call_jacobian_fn = None
 
-    printer.log("--- Gauge Optimization (%s method) ---" % method, 2)
+    printer.log("--- Gauge Optimization (%s method, %s) ---" % (method, str(type(gauge_group))), 2)
     if method == 'ls':
         #minSol  = _opt.least_squares(_call_objective_fn, x0, #jac=_call_jacobian_fn,
         #                            max_nfev=maxfev, ftol=tol)
