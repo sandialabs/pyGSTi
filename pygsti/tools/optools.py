@@ -26,6 +26,7 @@ from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -1113,13 +1114,31 @@ def unitary_to_process_mx(u):
     return _np.kron(u, _np.conjugate(u))
 
 
+def superop_is_unitary(superop_mx, mx_basis='pp', rank_tol=1e-6):
+    """ TODO: docstring """
+    J = _jam.fast_jamiolkowski_iso_std(superop_mx, op_mx_basis=mx_basis)  # (Choi mx basis doesn't matter)
+    return bool(_np.linalg.matrix_rank(J, rank_tol) == 1)
+
+
+def superop_to_unitary(superop_mx, mx_basis='pp', check_superop_is_unitary=True):
+    """ TODO: docstring"""
+    if check_superop_is_unitary and not superop_is_unitary(superop_mx, mx_basis):
+        raise ValueError("Superoperator matrix does not perform a unitary action!")
+    return std_process_mx_to_unitary(_bt.change_basis(superop_mx, mx_basis, 'std'))
+
+
+@_deprecated_fn('pygsti.tools.std_process_mx_to_unitary(...) or superop_to_unitary(...)')
 def process_mx_to_unitary(superop):
+    return std_process_mx_to_unitary(superop)
+
+
+def std_process_mx_to_unitary(superop_mx):
     """
     Compute the unitary corresponding to the (unitary-action!) super-operator `superop`.
 
     This function assumes `superop` acts on (row)-vectorized
-    density matrices.  The super-operator must be of the form
-    `kron(U,U.conj)` or an error will be thrown.
+    density matrices, and that the super-operator is of the form
+    `kron(U,U.conj)`.
 
     Parameters
     ----------
@@ -1132,17 +1151,17 @@ def process_mx_to_unitary(superop):
     numpy array
         The unitary matrix which acts on state vectors.
     """
-    d2 = superop.shape[0]; d = int(round(_np.sqrt(d2)))
+    d2 = superop_mx.shape[0]; d = int(round(_np.sqrt(d2)))
     U = _np.empty((d, d), 'complex')
 
     for i in range(d):
         densitymx_i = _np.zeros((d, d), 'd'); densitymx_i[i, i] = 1.0  # |i><i|
-        UiiU = _np.dot(superop, densitymx_i.flat).reshape((d, d))  # U|i><i|U^dag
+        UiiU = _np.dot(superop_mx, densitymx_i.flat).reshape((d, d))  # U|i><i|U^dag
 
         if i > 0:
             j = 0
-            densitymx_ij = _np.zeros((d, d), 'd'); densitymx_ij[i, j] = 1.0  # |i><i|
-            UijU = _np.dot(superop, densitymx_ij.flat).reshape((d, d))  # U|i><j|U^dag
+            densitymx_ij = _np.zeros((d, d), 'd'); densitymx_ij[i, j] = 1.0  # |i><j|
+            UijU = _np.dot(superop_mx, densitymx_ij.flat).reshape((d, d))  # U|i><j|U^dag
             Uj = U[:, j]
             Ui = _np.dot(UijU, Uj)
         else:
@@ -1156,7 +1175,9 @@ def process_mx_to_unitary(superop):
             #method2: get eigenvector corresponding to largest eigenvalue (more robust)
             evals, evecs = _np.linalg.eig(UiiU)
             imaxeval = _np.argmax(_np.abs(evals))
-            #TODO: assert other eigenvalues are much smaller?
+            #Check that other eigenvalue are small? (not sure if this is sufficient condition though...)
+            #assert(all([abs(ev / evals[imaxeval]) < 1e-6 for i, ev in enumerate(evals) if i != imaxeval])), \
+            #    "Superoperator matrix does not perform a unitary action!"
             Ui = evecs[:, imaxeval]
             Ui /= _np.linalg.norm(Ui)
         U[:, i] = Ui

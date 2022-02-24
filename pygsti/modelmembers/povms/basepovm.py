@@ -61,7 +61,8 @@ class _BasePOVM(_POVM):
         if preserve_sum:
             assert(len(items) > 1), "Cannot create a TP-POVM with < 2 effects!"
             self.complement_label = items[-1][0]
-            comp_val = _np.array(items[-1][1])  # current value of complement vec
+            comp_obj = items[-1][1]  # current object & then value of complement vec
+            comp_val = comp_obj.to_dense() if isinstance(comp_obj, _POVMEffect) else _np.array(comp_obj)
         else:
             self.complement_label = None
 
@@ -100,7 +101,7 @@ class _BasePOVM(_POVM):
         #Add a complement effect if desired
         if self.complement_label is not None:  # len(items) > 0 by assert
             non_comp_effects = [v for k, v in items]
-            identity_for_complement = _np.array(sum([v.reshape(comp_val.shape) for v in non_comp_effects])
+            identity_for_complement = _np.array(sum([v.to_dense().reshape(comp_val.shape) for v in non_comp_effects])
                                                 + comp_val, 'd')  # ensure shapes match before summing
             complement_effect = _ComplementPOVMEffect(
                 identity_for_complement, non_comp_effects)
