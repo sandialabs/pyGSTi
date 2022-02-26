@@ -199,10 +199,10 @@ class FullUnitaryOp(_DenseUnitaryOperator):
             U = s.transform_matrix
             Uinv = s.transform_matrix_inverse
 
-            my_superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(self._ptr), 'std', self._basis)  # to_dense()?
+            my_superop_mx = _ot.unitary_to_superop(self._ptr, self._basis)
             my_superop_mx = _mt.safe_dot(Uinv, _mt.safe_dot(my_superop_mx, U))
 
-            self._ptr[:, :] = _ot.process_mx_to_unitary(_bt.change_basis(my_superop_mx, self._basis, 'std'))
+            self._ptr[:, :] = _ot.superop_to_unitary(my_superop_mx, self._basis)
             self._ptr_has_changed()
             self.dirty = True
         else:
@@ -246,7 +246,7 @@ class FullUnitaryOp(_DenseUnitaryOperator):
             U = s.transform_matrix
             Uinv = s.transform_matrix_inverse
 
-            my_superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(self._ptr), 'std', self._basis)  # to_dense()?
+            my_superop_mx = _ot.unitary_to_superop(self._ptr, self._basis)
 
             #Note: this code may need to be tweaked to work with sparse matrices
             if typ == "prep":
@@ -254,7 +254,7 @@ class FullUnitaryOp(_DenseUnitaryOperator):
             else:
                 my_superop_mx = _mt.safe_dot(my_superop_mx, U)
 
-            self._ptr[:, :] = _ot.process_mx_to_unitary(_bt.change_basis(my_superop_mx, self._basis, 'std'))
+            self._ptr[:, :] = _ot.superop_to_unitary(my_superop_mx, self._basis)
             self._ptr_has_changed()
             self.dirty = True
         else:

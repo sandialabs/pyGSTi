@@ -427,7 +427,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
                 # Special case when a *superop* was provided instead of a unitary mx
                 superop_mx = mx.real  # used as a convenience case that really shouldn't be used
             else:
-                superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(mx), 'std', basis)
+                superop_mx = _ot.unitary_to_superop(mx, basis)
             rep = evotype.create_dense_superop_rep(superop_mx, state_space)
             self._reptype = 'superop'
             self._unitary = mx
@@ -445,7 +445,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         """ Derived classes should override this function to handle rep updates
             when the `_ptr` property is changed. """
         if self._reptype == 'superop':
-            self._rep.base[:, :] = _bt.change_basis(_ot.unitary_to_process_mx(self._unitary), 'std', self._basis)
+            self._rep.base[:, :] = _ot.unitary_to_superop(self._unitary, self._basis)
         self._rep.base_has_changed()
 
     def to_dense(self, on_space='minimal'):
