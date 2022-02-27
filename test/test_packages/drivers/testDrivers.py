@@ -241,7 +241,7 @@ class TestDriversMethods(DriversTestCase):
         bootgs_p_defaultMaxLens = \
             pygsti.drivers.create_bootstrap_models(
                 2, ds_defaultMaxLens, 'parametric', std.fiducials, std.fiducials,
-                std.germs, default_maxLens, input_model=mdl,
+                std.germs, default_maxLens, input_model=mdl, target_model=tp_target,
                 return_data=False) #test when max_lengths == None ?
 
 

@@ -56,7 +56,7 @@ class BootstrapModelTester(BootstrapBase):
         # TODO optimize
         bootgs_p = bs.create_bootstrap_models(
             2, self.ds, 'parametric', self.fiducials, self.fiducials,
-            self.germs, self.maxLengths, input_model=self.target_mdl,
+            self.germs, self.maxLengths, input_model=self.mdl, target_model=self.target_mdl,
             return_data=False
         )
         # TODO assert correctness
@@ -68,7 +68,7 @@ class BootstrapModelTester(BootstrapBase):
         )
         bootgs_p_custom = bs.create_bootstrap_models(
             2, self.ds, 'parametric', None, None, None, None,
-            lsgst_lists=custom_strs, input_model=self.target_mdl,
+            lsgst_lists=custom_strs, input_model=self.mdl, target_model=self.target_mdl,
             return_data=False
         )
         # TODO assert correctness
@@ -89,13 +89,16 @@ class BootstrapModelTester(BootstrapBase):
                 self.germs, self.maxLengths, return_data=False
             )
 
-    def test_make_bootstrap_models_raises_on_conflicting_model_input(self):
-        with self.assertRaises(ValueError):
-            bs.create_bootstrap_models(
-                2, self.ds, 'parametric', self.fiducials, self.fiducials,
-                self.germs, self.maxLengths, input_model=self.mdl, target_model=self.target_mdl,
-                return_data=False
-            )
+    # Giving both an input and target model is fine now, and even required in most cases
+    # (because the (ideal) target model is able to create a processor-spec whereas a noisy
+    #  ExplicitOpModel typically cannot, causing an inability to create circuits)
+    #def test_make_bootstrap_models_raises_on_conflicting_model_input(self):
+    #    with self.assertRaises(ValueError):
+    #        bs.create_bootstrap_models(
+    #            2, self.ds, 'parametric', self.fiducials, self.fiducials,
+    #            self.germs, self.maxLengths, input_model=self.mdl, target_model=self.target_mdl,
+    #            return_data=False
+    #        )
 
 
 class BootstrapUtilityTester(BootstrapBase):
@@ -105,7 +108,7 @@ class BootstrapUtilityTester(BootstrapBase):
         maxLengths = [0]
         cls.bootgs_p = bs.create_bootstrap_models(
             2, cls.ds, 'parametric', cls.fiducials, cls.fiducials,
-            cls.germs, maxLengths, input_model=cls.target_mdl,
+            cls.germs, maxLengths, input_model=cls.mdl, target_model=cls.target_mdl,
             return_data=False
         )
 
