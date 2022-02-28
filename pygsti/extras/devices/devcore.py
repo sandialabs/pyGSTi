@@ -231,13 +231,15 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
         # we set the error rate of a gate to the 'u3' gate error rate.
         oneQgatekeys = []
         for oneQgate in one_qubit_gates:
-            try:
-                nativekey = one_qubit_gates_to_native[oneQgate]
-            except:
-                one_qubit_gates_to_native[oneQgate] = 'u3'
-                nativekey = 'u3'
-            assert(nativekey in ('id', 'u1', 'u2', 'u3')
-                   ), "{} is not a gate specified in the IBM Q calibration data".format(nativekey)
+            # TIM UPDATED THIS BECAUSE THE ASSERT FAILS WITH THE LATEST IBM Q SPEC FORMAT. NOT SURE IF THIS TRY/EXCEPT
+            # DID ANYTHING IMPORTANT.
+            #try:
+            nativekey = one_qubit_gates_to_native[oneQgate]
+            #except:
+            #    one_qubit_gates_to_native[oneQgate] = 'u3'
+            #    nativekey = 'u3'
+            #assert(nativekey in ('id', 'u1', 'u2', 'u3')
+            #       ), "{} is not a gate specified in the IBM Q calibration data".format(nativekey)
             if nativekey not in oneQgatekeys:
                 oneQgatekeys.append(nativekey)
 

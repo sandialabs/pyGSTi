@@ -13,6 +13,7 @@ Defines the OplessModel class
 import numpy as _np
 
 from pygsti.models.model import Model as _Model
+from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.opcalc import float_product as prod
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs import Label as _Label
