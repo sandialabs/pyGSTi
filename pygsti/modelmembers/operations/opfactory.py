@@ -822,8 +822,8 @@ class UnitaryOpFactory(OpFactory):
         assert(sslbls is None), "UnitaryOpFactory.create_object must be called with `sslbls=None`!"
         U = self.fn(args)
 
-        # Expanded call to _bt.change_basis(_ot.unitary_to_process_mx(U), 'std', self.basis) for speed
-        std_superop = _ot.unitary_to_process_mx(U)
+        # Expanded call to _bt.change_basis(_ot.unitary_to_std_process_mx(U), 'std', self.basis) for speed
+        std_superop = _ot.unitary_to_std_process_mx(U)
         superop_mx = _np.dot(self.transform_std_to_basis, _np.dot(std_superop, self.transform_basis_to_std))
         if self.basis.real:
             assert(_np.linalg.norm(superop_mx.imag) < 1e-8)

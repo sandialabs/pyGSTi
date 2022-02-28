@@ -63,7 +63,7 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         #Note: assumes other effects are also ConjugatedStatePOVMEffect objects
         base1d = self.state._ptr
         base1d.flags.writeable = True
-        base1d[:] = self.identity.to_dense() - sum([vec.state.to_dense() for vec in self.other_effects])
+        base1d[:] = self.identity.to_dense() - sum([vec.to_dense() for vec in self.other_effects])
         base1d.flags.writeable = False
         self._ptr_has_changed()
 

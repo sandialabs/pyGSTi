@@ -129,7 +129,7 @@ class OpRepStandard(OpRepDenseSuperop):
             raise ValueError("Name '%s' not in standard unitaries" % self.name)
 
         U = std_unitaries[self.name]
-        superop = _bt.change_basis(_ot.unitary_to_process_mx(U), 'std', basis)
+        superop = _ot.unitary_to_superop(U, basis)
         state_space = _StateSpace.cast(state_space)
         assert(superop.shape[0] == state_space.dim)
 

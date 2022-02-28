@@ -158,7 +158,7 @@ def create_bootstrap_models(num_models, input_data_set, generation_method,
     target_model : Model, optional
         Mandatory model to use for as the target model for MLGST when
         generation_method is set to 'nonparametric'.  When 'parametric'
-        is selected, input_model is used as the target.
+        is selected, this should be the ideal version of `input_model`.
 
     start_seed : int, optional
         The initial seed value for numpy's random number generator when
@@ -196,10 +196,10 @@ def create_bootstrap_models(num_models, input_data_set, generation_method,
 
     if (input_model is None and target_model is None):
         raise ValueError("Must supply either input_model or target_model!")
-    if (input_model is not None and target_model is not None):
-        raise ValueError("Cannot supply both input_model and target_model!")
+    #if (input_model is not None and target_model is not None):
+    #    raise ValueError("Cannot supply both input_model and target_model!")
 
-    if generation_method == 'parametric':
+    if generation_method == 'parametric' and target_model is None:
         target_model = input_model
 
     datasetList = []

@@ -14,6 +14,9 @@ import numpy as _np
 
 from pygsti.modelmembers.operations.denseop import DenseUnitaryOperator as _DenseUnitaryOperator
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.tools import basistools as _bt
+from pygsti.tools import matrixtools as _mt
+from pygsti.tools import optools as _ot
 
 
 class FullUnitaryOp(_DenseUnitaryOperator):
@@ -168,3 +171,91 @@ class FullUnitaryOp(_DenseUnitaryOperator):
         bool
         """
         return False
+
+    def transform_inplace(self, s):
+        """
+        Update operation matrix `O` with `inv(s) * O * s`.
+
+        Generally, the transform function updates the *parameters* of
+        the operation such that the resulting operation matrix is altered as
+        described above.  If such an update cannot be done (because
+        the operation parameters do not allow for it), ValueError is raised.
+
+        Parameters
+        ----------
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
+            (and it's inverse) used in the above similarity transform.
+
+        Returns
+        -------
+        None
+        """
+        from pygsti.models import gaugegroup as _gaugegroup
+        if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
+           isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
+
+            #Just to this the brute force way for now - there should be a more elegant & faster way!
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
+
+            my_superop_mx = _ot.unitary_to_superop(self._ptr, self._basis)
+            my_superop_mx = _mt.safe_dot(Uinv, _mt.safe_dot(my_superop_mx, U))
+
+            self._ptr[:, :] = _ot.superop_to_unitary(my_superop_mx, self._basis)
+            self._ptr_has_changed()
+            self.dirty = True
+        else:
+            raise ValueError("Invalid transform for this FullUnitaryOp: type %s" % str(type(s)))
+
+    def spam_transform_inplace(self, s, typ):
+        """
+        Update operation matrix `O` with `inv(s) * O` OR `O * s`, depending on the value of `typ`.
+
+        This functions as `transform_inplace(...)` but is used when this
+        Lindblad-parameterized operation is used as a part of a SPAM
+        vector.  When `typ == "prep"`, the spam vector is assumed
+        to be `rho = dot(self, <spamvec>)`, which transforms as
+        `rho -> inv(s) * rho`, so `self -> inv(s) * self`. When
+        `typ == "effect"`, `e.dag = dot(e.dag, self)` (not that
+        `self` is NOT `self.dag` here), and `e.dag -> e.dag * s`
+        so that `self -> self * s`.
+
+        Parameters
+        ----------
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
+            (and it's inverse) used in the above similarity transform.
+
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+
+        Returns
+        -------
+        None
+        """
+        assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
+
+        from pygsti.models import gaugegroup as _gaugegroup
+        if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
+           isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
+
+            #Just to this the brute force way for now - there should be a more elegant & faster way!
+            U = s.transform_matrix
+            Uinv = s.transform_matrix_inverse
+
+            my_superop_mx = _ot.unitary_to_superop(self._ptr, self._basis)
+
+            #Note: this code may need to be tweaked to work with sparse matrices
+            if typ == "prep":
+                my_superop_mx = _mt.safe_dot(Uinv, my_superop_mx)
+            else:
+                my_superop_mx = _mt.safe_dot(my_superop_mx, U)
+
+            self._ptr[:, :] = _ot.superop_to_unitary(my_superop_mx, self._basis)
+            self._ptr_has_changed()
+            self.dirty = True
+        else:
+            raise ValueError("Invalid transform for this FullUnitaryOp: type %s" % str(type(s)))

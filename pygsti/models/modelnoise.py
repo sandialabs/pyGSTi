@@ -990,31 +990,17 @@ class LindbladNoise(OpNoise):
         LindbladNoise
         """
         lindblad_basis = _Basis.cast(lindblad_basis, state_space)
-
         parameterization = _op.LindbladParameterization.cast(parameterization)
-        ham_basis = lindblad_basis if parameterization.ham_params_allowed else None
-        nonham_basis = lindblad_basis if parameterization.nonham_params_allowed else None
 
-        if ham_coefficients is None and ham_basis is not None:
-            ham_coefficients = _np.zeros(len(ham_basis) - 1, 'd')
-
-        if nonham_coefficients is None and nonham_basis is not None:
-            d = len(nonham_basis) - 1
-            if parameterization.nonham_mode == 'all':
-                nonham_coefficients = _np.zeros((d, d), complex)
-            #REMOVE elif parameterization.nonham_mode == 'diag_affine':
-            #REMOVE     nonham_coefficients = _np.zeros((2, d), 'd')
-            else:
-                nonham_coefficients = _np.zeros(d, 'd')
+        assert(len(parameterization.block_types) <= 2
+               and len(parameterization.block_types) == len(set(parameterization.block_types))), \
+            "Parameterization must have distinct block types and at most 2!"
 
         # coeffs + bases => elementary errorgen dict
         elementary_errorgens = {}
-        if ham_basis is not None:
-            blk = _LindbladCoefficientBlock('ham', ham_basis, initial_block_data=ham_coefficients)
-            elementary_errorgens.update(blk.elementary_errorgens)
-        if nonham_basis is not None:
-            blk = _LindbladCoefficientBlock('other' if (parameterization.nonham_mode == 'all') else 'other_diagonal',
-                                            nonham_basis, initial_block_data=nonham_coefficients)
+        for blk_type, blk_param in zip(parameterization.block_types, parameterization.param_modes):
+            initial_data = ham_coefficients if blk_type == 'ham' else nonham_coefficients
+            blk = _LindbladCoefficientBlock(blk_type, lindblad_basis, initial_block_data=initial_data)
             elementary_errorgens.update(blk.elementary_errorgens)
 
         return cls(elementary_errorgens, parameterization)

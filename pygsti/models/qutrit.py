@@ -18,7 +18,7 @@ from pygsti.models.gaugegroup import FullGaugeGroup as _FullGaugeGroup
 from pygsti.modelmembers.operations import FullArbitraryOp as _FullArbitraryOp
 from pygsti.modelmembers.povms import UnconstrainedPOVM as _UnconstrainedPOVM
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel
-from pygsti.tools import unitary_to_process_mx, change_basis
+from pygsti.tools import unitary_to_superop, change_basis
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
 A = _np.matrix([[1, 0, 0, 0],
@@ -270,14 +270,10 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
         gateImx = _np.dot(gateImx, Irand)
 
     #Change gate representation to superoperator in Gell-Mann basis
-    gateISO = unitary_to_process_mx(gateImx)
-    gateISOfinal = change_basis(gateISO, "std", basis)
-    gateXSO = unitary_to_process_mx(gateXmx)
-    gateXSOfinal = change_basis(gateXSO, "std", basis)
-    gateYSO = unitary_to_process_mx(gateYmx)
-    gateYSOfinal = change_basis(gateYSO, "std", basis)
-    gateMSO = unitary_to_process_mx(gateMmx)
-    gateMSOfinal = change_basis(gateMSO, "std", basis)
+    gateISOfinal = unitary_to_superop(gateImx, basis)
+    gateXSOfinal = unitary_to_superop(gateXmx, basis)
+    gateYSOfinal = unitary_to_superop(gateYmx, basis)
+    gateMSOfinal = unitary_to_superop(gateMmx, basis)
 
     rho0final = change_basis(_np.reshape(rho0, (9, 1)), "std", basis)
     E0final = change_basis(_np.reshape(E0, (9, 1)), "std", basis)
