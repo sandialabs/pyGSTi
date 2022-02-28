@@ -122,6 +122,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
         for atom in layout.atoms:
             #assert(_slct.length(atom.element_slice) == atom.num_elements)  # for debugging
+            #print("DEBUG: Atom %d of %d slice=%s" % (iDB, len(layout.atoms), str(atom.element_slice)))
 
             if pr_array_to_fill is not None:
                 self._bulk_fill_probs_atom(pr_array_to_fill[atom.element_slice], atom, atom_resource_alloc)

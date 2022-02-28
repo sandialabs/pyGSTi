@@ -43,7 +43,7 @@ from . import randomcircuit as _rc
 #     d = circ.depth
 #     if pauli_labels is None: pauli_labels = ['Gi', 'Gxpi', 'Gypi', 'Gzpi']
 #     qubits = circ.line_labels
-#     identity = _np.identity(2 * n, int)
+#     identity = _np.identity(2 * n, _np.int64)
 #     zrotname = 'Gzr'
 #     # qubit_labels = ['G{}'.format(i) for i in range(n)]
 
@@ -326,7 +326,7 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
 #     d = circ.depth
 #     pauli_labels = ['I', 'X', 'Y', 'Z']
 #     qubits = circ.line_labels
-#     identity = _np.identity(2 * n, int)
+#     identity = _np.identity(2 * n, _np.int64)
 #     zrotname = 'Gzr'
 #     # qubit_labels = ['G{}'.format(i) for i in range(n)]
 

@@ -310,6 +310,8 @@ class DensePureState(DenseStateInterface, _State):
         numpy.ndarray
         """
         #don't use scratch since we already have memory allocated
+        if self._reptype == 'superket' and on_space == 'Hilbert':
+            return self._purevec
         return self._rep.to_dense(on_space)  # both types of possible state reps implement 'to_dense'
 
     def to_memoized_dict(self, mmg_memo):
@@ -332,14 +334,14 @@ class DensePureState(DenseStateInterface, _State):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['dense_state_vector'] = self.to_dense('Hilbert').tolist()
+        mm_dict['dense_state_vector'] = self._encodemx(self.to_dense('Hilbert'))
         mm_dict['basis'] = self._basis.to_nice_serialization()
 
         return mm_dict
 
     @classmethod
     def _from_memoized_dict(cls, mm_dict, serial_memo):
-        vec = _np.array(mm_dict['dense_state_vector'])
+        vec = cls._decodemx(mm_dict['dense_state_vector'])
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         basis = _Basis.from_nice_serialization(mm_dict['basis'])
         return cls(vec, basis, mm_dict['evotype'], state_space)

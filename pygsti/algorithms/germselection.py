@@ -28,7 +28,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                num_gs_copies=5, seed=None, candidate_germ_counts=None,
                candidate_seed=None, force="singletons", algorithm='greedy',
                algorithm_kwargs=None, mem_limit=None, comm=None,
-               profiler=None, verbosity=1):
+               profiler=None, verbosity=1, num_nongauge_params=None):
     """
     Generate a germ set for doing GST with a given target model.
 
@@ -126,6 +126,9 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         The verbosity level of the :class:`~pygsti.objects.VerbosityPrinter`
         used to print log messages.
 
+    num_nongauge_params : int, optional
+        Force the number of nongauge parameters rather than rely on automated gauge optimization.
+
     Returns
     -------
     list of Circuit
@@ -160,10 +163,12 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'seed': seed,
             'verbosity': max(0, verbosity - 1),
             'force': force,
+            'op_penalty': 0.0,
             'score_func': 'all',
             'comm': comm,
             'mem_limit': mem_limit,
-            'profiler': profiler
+            'profiler': profiler,
+            'num_nongauge_params': num_nongauge_params
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -173,10 +178,12 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         if germList is not None:
             germsetScore = compute_germ_set_score(
                 germList, neighborhood=modelList,
-                score_func=algorithm_kwargs['score_func'])
+                score_func=algorithm_kwargs['score_func'],
+                op_penalty=algorithm_kwargs['op_penalty'],
+                num_nongauge_params=num_nongauge_params)
             printer.log('Constructed germ set:', 1)
             printer.log(str([germ.str for germ in germList]), 1)
-            printer.log('Score: {}'.format(germsetScore), 1)
+            printer.log(germsetScore, 1)
     elif algorithm == 'grasp':
         printer.log('Using GRASP algorithm.', 1)
         # Define defaults for parameters that currently have no default or
@@ -186,10 +193,13 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'germs_list': availableGermsList,
             'randomize': False,
             'seed': seed,
+            'l1_penalty': 0.0,
+            'op_penalty': 0.0,
             'verbosity': max(0, verbosity - 1),
             'force': force,
             'return_all': False,
             'score_func': 'all',
+            'num_nongauge_params': num_nongauge_params,
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -201,14 +211,21 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         if algorithm_kwargs['return_all'] and germList[0] is not None:
             germsetScore = compute_germ_set_score(
                 germList[0], neighborhood=modelList,
-                score_func=algorithm_kwargs['score_func'])
+                score_func=algorithm_kwargs['score_func'],
+                op_penalty=algorithm_kwargs['op_penalty'],
+                l1_penalty=algorithm_kwargs['l1_penalty'],
+                num_nongauge_params=num_nongauge_params)
             printer.log(str([germ.str for germ in germList[0]]), 1)
-            printer.log('Score: {}'.format(germsetScore))
+            printer.log(germsetScore)
         elif not algorithm_kwargs['return_all'] and germList is not None:
-            germsetScore = compute_germ_set_score(germList,
-                                                  neighborhood=modelList)
+            germsetScore = compute_germ_set_score(
+                germList, neighborhood=modelList,
+                score_func=algorithm_kwargs['score_func'],
+                op_penalty=algorithm_kwargs['op_penalty'],
+                l1_penalty=algorithm_kwargs['l1_penalty'],
+                num_nongauge_params=num_nongauge_params)
             printer.log(str([germ.str for germ in germList]), 1)
-            printer.log('Score: {}'.format(germsetScore), 1)
+            printer.log(germsetScore, 1)
     elif algorithm == 'slack':
         printer.log('Using slack algorithm.', 1)
         # Define defaults for parameters that currently have no default or
@@ -218,6 +235,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'randomize': False,
             'seed': seed,
             'verbosity': max(0, verbosity - 1),
+            'l1_penalty': 0.0,
+            'op_penalty': 0.0,
             'force': force,
             'score_func': 'all',
         }
@@ -232,10 +251,13 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         if germList is not None:
             germsetScore = compute_germ_set_score(
                 germList, neighborhood=modelList,
-                score_func=algorithm_kwargs['score_func'])
+                score_func=algorithm_kwargs['score_func'],
+                op_penalty=algorithm_kwargs['op_penalty'],
+                l1_penalty=algorithm_kwargs['l1_penalty'],
+                num_nongauge_params=num_nongauge_params)
             printer.log('Constructed germ set:', 1)
             printer.log(str([germ.str for germ in germList]), 1)
-            printer.log('Score: {}'.format(germsetScore), 1)
+            printer.log(germsetScore, 1)
     else:
         raise ValueError("'{}' is not a valid algorithm "
                          "identifier.".format(algorithm))
@@ -246,7 +268,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
 def compute_germ_set_score(germs, target_model=None, neighborhood=None,
                            neighborhood_size=5,
                            randomization_strength=1e-2, score_func='all',
-                           op_penalty=0.0, l1_penalty=0.0):
+                           op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None):
     """
     Calculate the score of a germ set with respect to a model.
 
@@ -284,6 +306,9 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
     l1_penalty : float, optional
         Coefficient for a penalty linear in the number of germs.
 
+    num_nongauge_params : int, optional
+        Force the number of nongauge parameters rather than rely on automated gauge optimization.
+
     Returns
     -------
     CompositeScore
@@ -296,7 +321,8 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
     scores = [compute_composite_germ_set_score(score_fn, model=model,
                                                partial_germs_list=germs,
                                                op_penalty=op_penalty,
-                                               l1_penalty=l1_penalty)
+                                               l1_penalty=l1_penalty,
+                                               num_nongauge_params=num_nongauge_params)
               for model in neighborhood]
 
     return max(scores)
@@ -381,8 +407,8 @@ def _setup_model_list(model_list, randomize, randomization_strength,
 
 def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
                                      partial_deriv_dagger_deriv=None, model=None,
-                                     partial_germs_list=None, eps=None, num_gauge_params=None,
-                                     op_penalty=0.0, germ_lengths=None, l1_penalty=0.0):
+                                     partial_germs_list=None, eps=None, germ_lengths=None,
+                                     op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None):
     """
     Compute the score for a germ set when it is not AC against a model.
 
@@ -436,10 +462,6 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
         eigenvalues are equal (see :func:`_bulk_twirled_deriv` for details). Not
         used if `partial_deriv_dagger_deriv` is provided.
 
-    num_gauge_params : int
-        The number of gauge parameters of the model. Not needed if `model`
-        is provided.
-
     op_penalty : float, optional
         Coefficient for a penalty linear in the sum of the germ lengths.
 
@@ -449,6 +471,9 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
 
     l1_penalty : float, optional
         Coefficient for a penalty linear in the number of germs.
+
+    num_nongauge_params : int, optional
+        Force the number of nongauge parameters rather than rely on automated gauge optimization.
 
     Returns
     -------
@@ -468,11 +493,12 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
                 pDDD_kwargs['germ_lengths'] = germ_lengths
             partial_deriv_dagger_deriv = _compute_bulk_twirled_ddd(**pDDD_kwargs)
 
-    if num_gauge_params is None:
+    if num_nongauge_params is None:
         if model is None:
             raise ValueError("Must provide either num_gauge_params or model!")
         else:
-            num_gauge_params = _remove_spam_vectors(model).num_gauge_params
+            reduced_model = _remove_spam_vectors(model)
+            num_nongauge_params = reduced_model.num_params - reduced_model.num_gauge_params
 
     # Calculate penalty scores
     numGerms = partial_deriv_dagger_deriv.shape[0]
@@ -490,7 +516,7 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
 
     combinedDDD = _np.sum(partial_deriv_dagger_deriv, axis=0)
     sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedDDD)))
-    observableEigenvals = sortedEigenvals[num_gauge_params:]
+    observableEigenvals = sortedEigenvals[-num_nongauge_params:]
     N_AC = 0
     AC_score = _np.inf
     for N in range(init_n, len(observableEigenvals) + 1):
@@ -1223,7 +1249,7 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
                                    randomization_strength, num_copies, seed)
 
     (reducedModelList,
-     numGaugeParams, _, _) = _get_model_params(model_list)
+     numGaugeParams, numNonGaugeParams, _) = _get_model_params(model_list)
 
     germLengths = _np.array([len(germ) for germ in germs_list], _np.int64)
     numGerms = len(germs_list)
@@ -1262,7 +1288,7 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
     nonAC_kwargs = {
         'score_fn': lambda x: _scoring.list_score(x, score_func=score_func),
         'threshold_ac': threshold,
-        'num_gauge_params': numGaugeParams,
+        'num_nongauge_params': numNonGaugeParams,
         'op_penalty': op_penalty,
         'germ_lengths': germLengths,
     }
@@ -1306,7 +1332,7 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
                             randomization_strength=1e-3, num_copies=None, seed=0,
                             op_penalty=0, score_func='all', tol=1e-6, threshold=1e6,
                             check=False, force="singletons", pretest=True, mem_limit=None,
-                            comm=None, profiler=None, verbosity=0):
+                            comm=None, profiler=None, verbosity=0, num_nongauge_params=None):
     """
     Greedy algorithm starting with 0 germs.
 
@@ -1390,6 +1416,9 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
     verbosity : int, optional
         Level of detail printed to stdout.
 
+    num_nongauge_params : int, optional
+        Force the number of nongauge parameters rather than rely on automated gauge optimization.
+
     Returns
     -------
     list
@@ -1414,6 +1443,10 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
 
     (_, numGaugeParams,
      numNonGaugeParams, _) = _get_model_params(model_list)
+    if num_nongauge_params is not None:
+        numGaugeParams = numGaugeParams + numNonGaugeParams - num_nongauge_params
+        numNonGaugeParams = num_nongauge_params
+
     germLengths = _np.array([len(germ) for germ in germs_list], _np.int64)
 
     numGerms = len(germs_list)
@@ -1513,7 +1546,7 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
     nonAC_kwargs = {
         'score_fn': lambda x: _scoring.list_score(x, score_func=score_func),
         'threshold_ac': threshold,
-        'num_gauge_params': numGaugeParams,
+        'num_nongauge_params': numNonGaugeParams,
         'op_penalty': op_penalty,
         'germ_lengths': germLengths,
     }
@@ -1940,14 +1973,19 @@ def _germ_set_score_grasp(germ_set, germs_list, twirled_deriv_dagger_deriv_list,
         The worst score over all models of the germ set.
     """
     weights = _np.zeros(len(germs_list))
+    germ_lengths = []
     for germ in germ_set:
         weights[germs_list.index(germ)] = 1
+        germ_lengths.append(len(germ))
     germsVsModelScores = []
     for derivDaggerDeriv in twirled_deriv_dagger_deriv_list:
         # Loop over all models
         partialDDD = derivDaggerDeriv[_np.where(weights == 1)[0], :, :]
+        kwargs = non_ac_kwargs.copy()
+        if 'germ_lengths' in non_ac_kwargs:
+            kwargs['germ_lengths'] = germ_lengths
         germsVsModelScores.append(compute_composite_germ_set_score(
-            partial_deriv_dagger_deriv=partialDDD, init_n=init_n, **non_ac_kwargs))
+            partial_deriv_dagger_deriv=partialDDD, init_n=init_n, **kwargs))
     # Take the score for the current germ set to be its worst score over all
     # models.
     return max(germsVsModelScores)
@@ -1959,7 +1997,7 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
                      score_func='all', tol=1e-6, threshold=1e6,
                      check=False, force="singletons",
                      iterations=5, return_all=False, shuffle=False,
-                     verbosity=0):
+                     verbosity=0, num_nongauge_params=None):
     """
     Use GRASP to find a high-performing germ set.
 
@@ -2060,6 +2098,9 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
     verbosity : int, optional
         Integer >= 0 indicating the amount of detail to print.
 
+    num_nongauge_params : int, optional
+        Force the number of nongauge parameters rather than rely on automated gauge optimization.
+
     Returns
     -------
     finalGermList : list of Circuit
@@ -2072,6 +2113,9 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
 
     (_, numGaugeParams,
      numNonGaugeParams, _) = _get_model_params(model_list)
+    if num_nongauge_params is not None:
+        numGaugeParams = numGaugeParams + numNonGaugeParams - num_nongauge_params
+        numNonGaugeParams = num_nongauge_params
 
     germLengths = _np.array([len(germ) for germ in germs_list], _np.int64)
 
@@ -2112,9 +2156,9 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
     nonAC_kwargs = {
         'score_fn': lambda x: _scoring.list_score(x, score_func=score_func),
         'threshold_ac': threshold,
-        'num_gauge_params': numGaugeParams,
         'op_penalty': op_penalty,
         'germ_lengths': germLengths,
+        'num_nongauge_params': numNonGaugeParams,
     }
 
     final_nonAC_kwargs = nonAC_kwargs.copy()

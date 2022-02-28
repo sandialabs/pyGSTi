@@ -210,13 +210,13 @@ class OpRepRepeated(OpRep):
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
         for i in range(self.num_repetitions):
-            state = self.repated_rep.adjoint_acton(state)
+            state = self.repeated_rep.adjoint_acton(state)
         return state
 
 
 class OpRepLindbladErrorgen(OpRep):
-    def __init__(self, lindblad_term_dict, basis, state_space):
+    def __init__(self, lindblad_coefficient_blocks, state_space):
         super(OpRepLindbladErrorgen, self).__init__(state_space)
         self.Lterms = None
         self.Lterm_coeffs = None
-        self.LtermdictAndBasis = (lindblad_term_dict, basis)
+        self.lindblad_coefficient_blocks = lindblad_coefficient_blocks

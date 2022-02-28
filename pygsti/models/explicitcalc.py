@@ -430,15 +430,15 @@ class ExplicitOpModelCalc(object):
         numpy array
             2D array of derivatives.
         """
-        num_els = sum([obj.size for _, obj in self.all_objects()])
+        num_els = sum([obj.hilbert_schmidt_size for _, obj in self.all_objects()])
         num_op_params = self.Np if (self.interposer is None) else self.interposer.num_op_params
         deriv = _np.zeros((num_els, num_op_params), 'd')
 
         eo = 0  # element offset
         for lbl, obj in self.all_objects():
             #Note: no overlaps possible b/c of independent *elements*
-            deriv[eo:eo + obj.size, obj.gpindices] = obj.deriv_wrt_params()
-            eo += obj.size
+            deriv[eo:eo + obj.hilbert_schmidt_size, obj.gpindices] = obj.deriv_wrt_params()
+            eo += obj.hilbert_schmidt_size
 
         if self.interposer is not None:
             deriv = _np.dot(deriv, self.interposer.deriv_op_params_wrt_model_params())
@@ -473,7 +473,7 @@ class ExplicitOpModelCalc(object):
         # effect vecs, which is historically what we've done, even though
         # this seems somewhat wrong.  Not skipping them will alter the
         # number of "gauge params" since a complement Evec has a *fixed*
-        # identity from the perspective of the Model params (which
+        # identity from the perspective of the Model params (which are
         # *varied* in gauge optimization, even though it's not a POVMEffect
         # param, creating a weird inconsistency...) SKIP
         if bSkipEcs:
@@ -492,10 +492,10 @@ class ExplicitOpModelCalc(object):
         dim = self.dim
         nParams = self.Np
 
-        nElements = sum([obj.size for _, obj in self.all_objects()])
-        #nElements = sum([o.size for o in self_operations.values()]) + \
-        #            sum([o.size for o in self_preps.values()]) + \
-        #            sum([o.size for o in self_effects.values()])
+        nElements = sum([obj.hilbert_schmidt_size for _, obj in self.all_objects()])
+        #nElements = sum([o.hilbert_schmidt_size for o in self_operations.values()]) + \
+        #            sum([o.hilbert_schmidt_size for o in self_preps.values()]) + \
+        #            sum([o.hilbert_schmidt_size for o in self_effects.values()])
 
         #This was considered as optional behavior, but better to just delete qtys from Model
         ##whether elements of the raw model matrices/SPAM vectors that are not
@@ -503,16 +503,16 @@ class ExplicitOpModelCalc(object):
         ## elements, they are treated as not being a part of the "model"
         #bIgnoreUnparameterizedEls = True
 
-        #Note: model object (gsDeriv) must have all elements of gate
+        #Note: model object (mdlDeriv) must have all elements of gate
         # mxs and spam vectors as parameters (i.e. be "fully parameterized") in
         # order to match deriv_wrt_params call, which gives derivatives wrt
         # *all* elements of a model.
 
         mdlDeriv_ops = _collections.OrderedDict(
             [(label, _np.zeros((dim, dim), 'd')) for label in self_operations])
-        gsDeriv_preps = _collections.OrderedDict(
+        mdlDeriv_preps = _collections.OrderedDict(
             [(label, _np.zeros((dim, 1), 'd')) for label in self_preps])
-        gsDeriv_effects = _collections.OrderedDict(
+        mdlDeriv_effects = _collections.OrderedDict(
             [(label, _np.zeros((dim, 1), 'd')) for label in self_effects])
 
         dPG = _np.empty((nElements, nParams + dim**2), 'd')
@@ -520,9 +520,9 @@ class ExplicitOpModelCalc(object):
             for j in range(dim):  # *generator* mx, not gauge mx itself
                 unitMx = _bc.mut(i, j, dim)
                 for lbl, rhoVec in self_preps.items():
-                    gsDeriv_preps[lbl] = _np.dot(unitMx, rhoVec)
+                    mdlDeriv_preps[lbl] = _np.dot(unitMx, rhoVec)
                 for lbl, EVec in self_effects.items():
-                    gsDeriv_effects[lbl] = -_np.dot(EVec.T, unitMx).T
+                    mdlDeriv_effects[lbl] = -_np.dot(EVec.T, unitMx).T
 
                 for lbl, gate in self_operations.items():
                     #if isinstance(gate,_op.DenseOperator):
@@ -546,12 +546,162 @@ class ExplicitOpModelCalc(object):
                 # equal to the number of model *elements*.
                 to_vector = _np.concatenate(
                     [obj.flatten() for obj in _itertools.chain(
-                        gsDeriv_preps.values(), gsDeriv_effects.values(),
+                        mdlDeriv_preps.values(), mdlDeriv_effects.values(),
                         mdlDeriv_ops.values())], axis=0)
                 dPG[:, nParams + i * dim + j] = to_vector
 
         dPG[:, 0:nParams] = self.deriv_wrt_params()
         return dPG
+
+    def nongauge_and_gauge_spaces(self, item_weights=None, non_gauge_mix_mx=None):
+        nParams = self.Np
+        dPG = self._buildup_dpg()
+
+        #print("DB: shapes = ",dP.shape,dG.shape)
+        nullsp = _mt.nullspace_qr(dPG)  # columns are nullspace basis vectors
+        gauge_space = nullsp[0:nParams, :]  # take upper (gate-param-segment) of vectors for basis
+        # of subspace intersection in gate-parameter space
+        #Note: gauge_space is (nParams)x(nullSpaceDim==gaugeSpaceDim)
+
+        # Build final non-gauge space by getting a mx of column vectors
+        # orthogonal (w.r.t. some metric) to the cols of gauge_space:
+        #     gauge_space^T @ metric @ nongauge_space = 0
+        #       => nongauge_space = nullspace(gauge_space^T @ metric)
+        #                         = nullspace(orthog_to^T) below
+
+        if non_gauge_mix_mx is not None:
+            msg = "You've set both non_gauge_mix_mx and item_weights, both of which"\
+                + " set the gauge metric... You probably don't want to do this."
+            assert(item_weights is None), msg
+
+            # BEGIN GAUGE MIX ----------------------------------------
+            # Let metric^T = I + mix_gauge_to_nongauge so
+            # orthog_to = metric^T @ gauge_space
+            #           = gauge_space + mix_gauge_to_nongauge @ gauge_space
+            #           = gauge_space + nongauge_directions @ nongauge_mix_mx
+            #
+            # where the last line is motivated by the fact that we don't change the space we're
+            # orthogonalizing with respect to if we just add gauge directions.
+            nonGaugeDirections = _mt.nullspace_qr(gauge_space.T)
+
+            #for each column of gen_dG, which is a gauge direction in model parameter space,
+            # we add some amount of non-gauge direction, given by coefficients of the
+            # numNonGaugeParams non-gauge directions.
+            orthog_to = gauge_space + _np.dot(nonGaugeDirections, non_gauge_mix_mx)  # add non-gauge components in
+            # dims: (nParams,n_gauge_params) + (nParams,n_non_gauge_params) * (n_non_gauge_params,n_gauge_params)
+            # non_gauge_mix_mx is a (n_non_gauge_params,n_gauge_params) matrix whose i-th column specifies the
+            #  coefficents to multipy each of the non-gauge directions by before adding them to the i-th
+            #  direction to project out (i.e. what were the pure gauge directions).
+
+        elif item_weights is not None:
+            metric_diag = _np.ones(self.Np, 'd')
+            opWeight = item_weights.get('gates', 1.0)
+            spamWeight = item_weights.get('spam', 1.0)
+            for lbl, gate in self.operations.items():
+                metric_diag[gate.gpindices] = item_weights.get(lbl, opWeight)
+            for lbl, vec in _itertools.chain(iter(self.preps.items()),
+                                             iter(self.effects.items())):
+                metric_diag[vec.gpindices] = item_weights.get(lbl, spamWeight)
+            metric = _np.diag(metric_diag)
+            #OLD: gen_ndG = _mt.nullspace(_np.dot(gen_dG.T,metric))
+            orthog_to = _np.dot(metric.T, gauge_space)
+
+        else:
+            orthog_to = gauge_space
+
+        #OLD: nongauge_space = _mt.nullspace(orthog_to.T) #cols are non-gauge directions
+        nongauge_space = _mt.nullspace_qr(orthog_to.T)  # cols are non-gauge directions
+        # print("DB: nullspace of gen_dG (shape = %s, rank=%d) = %s" \
+        #       % (str(gen_dG.shape),_np.linalg.matrix_rank(gen_dG),str(gen_ndG.shape)))
+
+        #REMOVE
+        ## reduce gen_dG if it doesn't have full rank
+        #u, s, vh = _np.linalg.svd(gen_dG, full_matrices=False)
+        #rank = _np.count_nonzero(s > P_RANK_TOL)
+        #if rank < gen_dG.shape[1]:
+        #    gen_dG = u[:, 0:rank]
+
+        assert(nongauge_space.shape[0] == gauge_space.shape[0] == nongauge_space.shape[1] + gauge_space.shape[1])
+        return nongauge_space, gauge_space
+
+    #UNUSED - just used for checking understanding of where the nonzero logL Hessian on gauge space comes from.
+    def _gauge_orbit_curvature(self, item_weights=None, non_gauge_mix_mx=None):
+
+        nParams = self.Np
+        dPG = self._buildup_dpg()
+        nongauge_space, gauge_space = self.nongauge_and_gauge_spaces(item_weights, non_gauge_mix_mx)
+
+        #Fill Heps == hessian d2/d(eps_j)d(eps_i) exp(sum(eps_k unit_k)) G exp(-sum(eps_k unit_k)) for ops, etc.
+        from ..modelmembers.povms.complementeffect import ComplementPOVMEffect as _ComplementPOVMEffect
+        on_space = 'minimal'
+        try:
+            self_operations = _collections.OrderedDict([(lbl, gate.to_dense(on_space=on_space))
+                                                        for lbl, gate in self.operations.items()])
+            self_preps = _collections.OrderedDict([(lbl, vec.to_dense(on_space=on_space)[:, None])
+                                                   for lbl, vec in self.preps.items()])
+            self_effects = _collections.OrderedDict([(lbl, vec.to_dense(on_space=on_space)[:, None])
+                                                     for lbl, vec in self.effects.items()])
+        except:
+            raise NotImplementedError(("Cannot (yet) extract gauge/non-gauge "
+                                       "parameters for Models with non-dense "
+                                       "member representations"))
+
+        bSkipEcs = True  # see above
+        if bSkipEcs:
+            newSelf = self.copy()
+            newSelf.effects = self.effects.copy()  # b/c ForwardSimulator.__init__ doesn't copy members (for efficiency)
+            for effectlbl, EVec in self.effects.items():
+                if isinstance(EVec, _ComplementPOVMEffect):
+                    del newSelf.effects[effectlbl]
+            self = newSelf  # HACK!!! replacing self for remainder of this fn with version without Ecs
+
+            #recompute effects in case we deleted any ComplementPOVMEffects
+            self_effects = _collections.OrderedDict([(lbl, vec.to_dense(on_space=on_space)[:, None])
+                                                     for lbl, vec in self.effects.items()])
+
+        #Use a Model object to hold & then vectorize the derivatives wrt each gauge transform basis element (each ij)
+        dim = self.dim
+        nParams = self.Np
+
+        nElements = sum([obj.hilbert_schmidt_size for _, obj in self.all_objects()])
+        mdlHess_ops = _collections.OrderedDict(
+            [(label, _np.zeros((dim, dim), 'd')) for label in self_operations])
+        mdlHess_preps = _collections.OrderedDict(
+            [(label, _np.zeros((dim, 1), 'd')) for label in self_preps])
+        mdlHess_effects = _collections.OrderedDict(
+            [(label, _np.zeros((dim, 1), 'd')) for label in self_effects])
+
+        Heps = _np.empty((nElements, dim**2, dim**2), 'd')  # dim**2 == num of gauge "units"
+        for i1 in range(dim):      # always range over all rows: this is the
+            for i2 in range(dim):      # always range over all rows: this is the
+                unitMx_i = _bc.mut(i1, i2, dim)
+                for j1 in range(dim):  # *generator* mx, not gauge mx itself
+                    for j2 in range(dim):  # *generator* mx, not gauge mx itself
+                        unitMx_j = _bc.mut(j1, j2, dim)
+                        antiComm = (unitMx_i @ unitMx_j + unitMx_j @ unitMx_i)
+                        for lbl, rhoVec in self_preps.items():
+                            mdlHess_preps[lbl] = 0.5 * _np.dot(antiComm, rhoVec)
+                        for lbl, EVec in self_effects.items():
+                            mdlHess_effects[lbl] = 0.5 * _np.dot(EVec.T, antiComm).T
+                        for lbl, gate in self_operations.items():
+                            mdlHess_ops[lbl] = 0.5 * (antiComm @ gate + gate @ antiComm) \
+                                - unitMx_i @ gate @ unitMx_j - unitMx_j @ gate @ unitMx_i
+
+                        to_vector = _np.concatenate(
+                            [obj.flatten() for obj in _itertools.chain(
+                                mdlHess_preps.values(), mdlHess_effects.values(),
+                                mdlHess_ops.values())], axis=0)
+                        Heps[:, i1 * dim + i2, j1 * dim + j2] = to_vector
+
+        paramspace_to_elspace = dPG[:, 0:nParams]
+        nongauge_to_elspace = paramspace_to_elspace @ nongauge_space
+        elspace_to_nongauge = _np.linalg.pinv(nongauge_to_elspace)
+        physHeps = _np.einsum('kij,lk->lij', Heps, elspace_to_nongauge)
+
+        T = _mt.nullspace_qr(dPG)[nParams:, :]  # cols = gauge directions in eps space (gauge -> eps)
+        # coord change physHeps from eps => gauge = invT @ eps, so H => T.T @ H @ T
+        Q = _np.einsum('ik,jkl,lm->jim', T.T, physHeps, T)  # ~ inv(T) @ physHeps @ T
+        return Q
 
     def nongauge_projector(self, item_weights=None, non_gauge_mix_mx=None):
         """
@@ -648,86 +798,7 @@ class ExplicitOpModelCalc(object):
         #
         #   Still, we just substitue these dParams_ij vectors (as many as the nullspace dimension) for dG_ij
         #   above to get the general case projector.
-
-        nParams = self.Np
-        dPG = self._buildup_dpg()
-
-        #print("DB: shapes = ",dP.shape,dG.shape)
-        nullsp = _mt.nullspace_qr(dPG)  # columns are nullspace basis vectors
-        gen_dG = nullsp[0:nParams, :]  # take upper (gate-param-segment) of vectors for basis
-        # of subspace intersection in gate-parameter space
-        #Note: gen_dG == "generalized dG", and is (nParams)x(nullSpaceDim==gaugeSpaceDim), so P
-        #  (below) is (nParams)x(nParams) as desired.
-
-        #DEBUG
-        #nElements = self.num_elements
-        #for iRow in range(nElements):
-        #    pNorm = _np.linalg.norm(dP[iRow])
-        #    if pNorm < 1e-6:
-        #        print "Row %d of dP is zero" % iRow
-        #
-        #print "------------------------------"
-        #print "nParams = ",nParams
-        #print "nElements = ",nElements
-        #print " shape(M) = ",M.shape
-        #print " shape(dG) = ",dG.shape
-        #print " shape(dP) = ",dP.shape
-        #print " shape(gen_dG) = ",gen_dG.shape
-        #print " shape(nullsp) = ",nullsp.shape
-        #print " rank(dG) = ",_np.linalg.matrix_rank(dG)
-        #print " rank(dP) = ",_np.linalg.matrix_rank(dP)
-        #print "------------------------------"
-        #assert(_np.linalg.norm(_np.imag(gen_dG)) < 1e-9) #gen_dG is real
-
-        if non_gauge_mix_mx is not None:
-            msg = "You've set both non_gauge_mix_mx and item_weights, both of which"\
-                + " set the gauge metric... You probably don't want to do this."
-            assert(item_weights is None), msg
-
-            # BEGIN GAUGE MIX ----------------------------------------
-            # nullspace of gen_dG^T (mx with gauge direction vecs as rows) gives non-gauge directions
-            # columns are the non-gauge directions *orthogonal* to the gauge directions
-            nonGaugeDirections = _mt.nullspace_qr(gen_dG.T)
-
-            #for each column of gen_dG, which is a gauge direction in model parameter space,
-            # we add some amount of non-gauge direction, given by coefficients of the
-            # numNonGaugeParams non-gauge directions.
-            gen_dG = gen_dG + _np.dot(nonGaugeDirections, non_gauge_mix_mx)  # add non-gauge direction components in
-            # dims: (nParams,n_gauge_params) + (nParams,n_non_gauge_params) * (n_non_gauge_params,n_gauge_params)
-            # non_gauge_mix_mx is a (n_non_gauge_params,n_gauge_params) matrix whose i-th column specifies the
-            #  coefficents to multipy each of the non-gauge directions by before adding them to the i-th
-            #  direction to project out (i.e. what were the pure gauge directions).
-
-            #DEBUG
-            #print "gen_dG shape = ",gen_dG.shape
-            #print "NGD shape = ",nonGaugeDirections.shape
-            #print "NGD rank = ",_np.linalg.matrix_rank(nonGaugeDirections, P_RANK_TOL)
-            #END GAUGE MIX ----------------------------------------
-
-        # Build final non-gauge projector by getting a mx of column vectors
-        # orthogonal to the cols fo gen_dG:
-        #     gen_dG^T * gen_ndG = 0 => nullspace(gen_dG^T)
-        # or for a general metric W:
-        #     gen_dG^T * W * gen_ndG = 0 => nullspace(gen_dG^T * W)
-        # (This is instead of construction as I - gaugeSpaceProjector)
-
-        if item_weights is not None:
-            metric_diag = _np.ones(self.Np, 'd')
-            opWeight = item_weights.get('gates', 1.0)
-            spamWeight = item_weights.get('spam', 1.0)
-            for lbl, gate in self.operations.items():
-                metric_diag[gate.gpindices] = item_weights.get(lbl, opWeight)
-            for lbl, vec in _itertools.chain(iter(self.preps.items()),
-                                             iter(self.effects.items())):
-                metric_diag[vec.gpindices] = item_weights.get(lbl, spamWeight)
-            metric = _np.diag(metric_diag)
-            #OLD: gen_ndG = _mt.nullspace(_np.dot(gen_dG.T,metric))
-            gen_ndG = _mt.nullspace_qr(_np.dot(gen_dG.T, metric))
-        else:
-            #OLD: gen_ndG = _mt.nullspace(gen_dG.T) #cols are non-gauge directions
-            gen_ndG = _mt.nullspace_qr(gen_dG.T)  # cols are non-gauge directions
-            # print("DB: nullspace of gen_dG (shape = %s, rank=%d) = %s" \
-            #       % (str(gen_dG.shape),_np.linalg.matrix_rank(gen_dG),str(gen_ndG.shape)))
+        gen_ndG, _ = self.nongauge_and_gauge_spaces(item_weights, non_gauge_mix_mx)
 
         # ORIG WAY: use psuedo-inverse to normalize projector.  Ran into problems where
         #  default rcond == 1e-15 didn't work for 2-qubit case, but still more stable than inv method below

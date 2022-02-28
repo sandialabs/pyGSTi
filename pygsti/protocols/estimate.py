@@ -78,6 +78,8 @@ class Estimate(object):
         """
         ret = cls.__new__(cls)
         ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
+        for crf in ret.confidence_region_factories.values():
+            crf.set_parent(ret)  # re-link confidence_region_factories
         return ret
 
     @classmethod

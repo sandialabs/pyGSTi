@@ -32,7 +32,7 @@ from pygsti import models as _models
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti import baseobjs as _baseobjs
-from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+from pygsti.processors import QuditProcessorSpec as _QuditProcessorSpec
 from pygsti.modelmembers import operations as _op
 from pygsti.models import Model as _Model
 from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup, GaugeGroupElement as _GaugeGroupElement
@@ -54,7 +54,7 @@ class HasProcessorSpec(object):
 
     Parameters
     ----------
-    processorspec_filename_or_obj : QubitProcessorSpec or str
+    processorspec_filename_or_obj : QuditProcessorSpec or str
         The processor API used by this experiment design.
     """
 
@@ -109,7 +109,7 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
 
     Parameters
     ----------
-    processorspec_filename_or_obj : QubitProcessorSpec or str
+    processorspec_filename_or_obj : QuditProcessorSpec or str
         The processor API used by this experiment design.
 
     circuit_lists : list
@@ -147,7 +147,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
     Parameters
     ----------
-    processorspec_filename_or_obj : QubitProcessorSpec or str
+    processorspec_filename_or_obj : QuditProcessorSpec or str
         The processor API used by this experiment design.
 
     prep_fiducial_list_or_filename : list or str
@@ -882,11 +882,15 @@ class GSTGaugeOptSuite(_NicelySerializable):
 
     def _update_gaugeopt_dict_from_suitename(self, gaugeopt_suite_dict, root_lbl, suite_name, model,
                                              unreliable_ops, printer):
-        if suite_name in ("stdgaugeopt", "stdgaugeopt-unreliable2Q", "stdgaugeopt-tt", "stdgaugeopt-safe"):
+        if suite_name in ("stdgaugeopt", "stdgaugeopt-unreliable2Q", "stdgaugeopt-tt", "stdgaugeopt-safe",
+                          "stdgaugeopt-noconversion", "stdgaugeopt-noconversion-safe"):
 
             stages = []  # multi-stage gauge opt
             gg = model.default_gauge_group
-            if isinstance(gg, _models.gaugegroup.TrivialGaugeGroup):
+            convert_to = {'to_type': "full TP", 'flatten_structure': True, 'set_default_gauge_group': True} \
+                if ('noconversion' not in suite_name and gg.name not in ("Full", "TP")) else None
+
+            if isinstance(gg, _models.gaugegroup.TrivialGaugeGroup) and convert_to is None:
                 if suite_name == "stdgaugeopt-unreliable2Q" and model.dim == 16:
                     if any([gl in model.operations.keys() for gl in unreliable_ops]):
                         gaugeopt_suite_dict[root_lbl] = {'verbosity': printer}
@@ -910,11 +914,12 @@ class GSTGaugeOptSuite(_NicelySerializable):
                 #         expense of spam if needed)
                 stages.append(
                     {
+                        'convert_model_to': convert_to,
                         'gates_metric': metric, 'spam_metric': metric,
                         'item_weights': {'gates': 1.0, 'spam': 0.0},
                         'gauge_group': _models.gaugegroup.UnitaryGaugeGroup(model.state_space,
                                                                             model.basis, model.evotype),
-                        'oob_check_interval': 1 if (suite_name == 'stdgaugeopt-safe') else 0,
+                        'oob_check_interval': 1 if ('-safe' in suite_name) else 0,
                         'verbosity': printer
                     })
 
@@ -925,6 +930,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
                     _models.gaugegroup.TPSpamGaugeGroup
                 stages.append(
                     {
+                        'convert_model_to': convert_to,
                         'gates_metric': metric, 'spam_metric': metric,
                         'item_weights': {'gates': 0.0, 'spam': 1.0},
                         'spam_penalty_factor': 1.0,
@@ -1221,7 +1227,6 @@ class GateSetTomography(_proto.Protocol):
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
         mdl_start = self.initial_model.retrieve_model(data.edesign, self.gaugeopt_suite.gaugeopt_target,
                                                       data.dataset, comm)
-        hack_mdl_start_copy = mdl_start.copy()  # HACK TODO REMOVE LATER - in case edesign can't make a target model
 
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
 
@@ -1253,12 +1258,7 @@ class GateSetTomography(_proto.Protocol):
             target_model = self.gaugeopt_suite.gaugeopt_target
         elif self.gaugeopt_suite.is_empty() is False:
             if isinstance(data.edesign, HasProcessorSpec):
-                try:
-                    target_model = data.edesign.create_target_model()
-                except:
-                    _warnings.warn(("Could not create target model for gauge opt. from edesign"
-                                    " - falling back to initial model!"))
-                    target_model = hack_mdl_start_copy
+                target_model = data.edesign.create_target_model()
             else:
                 target_model = None
         else:
@@ -1612,7 +1612,7 @@ class StandardGST(_proto.Protocol):
 # ------------------ HELPER FUNCTIONS -----------------------------------
 
 def _load_pspec(processorspec_filename_or_obj):
-    if not isinstance(processorspec_filename_or_obj, _QubitProcessorSpec):
+    if not isinstance(processorspec_filename_or_obj, _QuditProcessorSpec):
         with open(processorspec_filename_or_obj, 'rb') as f:
             return _pickle.load(f)
     else:
@@ -1818,6 +1818,9 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
     badfit_options = GSTBadFitOptions.cast(badfit_options)
     base_estimate = results.estimates[base_estimate_label]
     parameters = base_estimate.parameters
+
+    if len(badfit_options.actions) == 0:
+        return  # nothing to do - and exit before we try to evaluate objective fn.
 
     #Resource alloc gets sent to these estimate methods for building
     # a distributed-layout outjective fn / MDC store if one doesn't exist.

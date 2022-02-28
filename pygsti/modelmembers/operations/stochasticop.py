@@ -58,7 +58,7 @@ class StochasticNoiseOp(_LinearOperator):
     # Difficult to parameterize and maintain the p_i conditions - Initially just store positive p_i's
     # and don't bother restricting their sum to be < 1?
 
-    def __init__(self, state_space, basis="pp", evotype="default", initial_rates=None, seed_or_state=None):
+    def __init__(self, state_space, basis="PP", evotype="default", initial_rates=None, seed_or_state=None):
         state_space = _statespace.StateSpace.cast(state_space)
         self.basis = _Basis.cast(basis, state_space.dim, sparse=False)
         assert(state_space.dim == self.basis.dim), "Dimension of `basis` must match the dimension (`dim`) of this op."

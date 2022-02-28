@@ -1,14 +1,24 @@
 import numpy as np
 import scipy
 import unittest
+import itertools
+from functools import reduce
 
 import pygsti
+from pygsti.modelpacks import smq1Q_XYI
+from pygsti.modelpacks import smq2Q_XYICNOT
 import pygsti.models.modelconstruction as mc
 import pygsti.modelmembers.operations as op
+import pygsti.modelmembers.states as st
 import pygsti.tools.basistools as bt
 from pygsti.processors.processorspec import QubitProcessorSpec as _ProcessorSpec
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as GEEL
 from ..util import BaseCase
+
+
+def save_and_load_pspec(pspec):
+    s = pspec.dumps()
+    return pygsti.processors.QubitProcessorSpec.loads(s)
 
 
 class ModelConstructionTester(BaseCase):
@@ -16,6 +26,46 @@ class ModelConstructionTester(BaseCase):
         #OK for these tests, since we test user interface?
         #Set Model objects to "strict" mode for testing
         pygsti.models.ExplicitOpModel._strict = False
+
+    def test_model_states(self):
+        mdl1Q = smq1Q_XYI.target_model()
+        E0, E1 = mdl1Q.povms['Mdefault']['0'].to_dense(), mdl1Q.povms['Mdefault']['1'].to_dense()
+
+        mdl2Q = smq2Q_XYICNOT.target_model()
+        E01 = mdl2Q.povms['Mdefault']['01']
+
+        self.assertArraysAlmostEqual(np.kron(E0, E1), E01.to_dense())
+
+    def test_create_spam_vector(self):
+        def multikron(args):
+            return reduce(np.kron, args)
+
+        mdl1Q = smq1Q_XYI.target_model()
+        mdlE0, mdlE1 = mdl1Q.povms['Mdefault']['0'].to_dense(), mdl1Q.povms['Mdefault']['1'].to_dense()
+        ss1Q = pygsti.baseobjs.statespace.QubitSpace(1)
+        E0 = mc.create_spam_vector(0, ss1Q, 'pp').flatten()
+        E1 = mc.create_spam_vector(1, ss1Q, 'pp').flatten()
+
+        self.assertArraysAlmostEqual(mdlE0, E0)
+        self.assertArraysAlmostEqual(mdlE1, E1)
+
+        E0_chk = st.create_from_pure_vector(np.array([1, 0]), 'static', 'pp', 'default', state_space=ss1Q).to_dense()
+        E1_chk = st.create_from_pure_vector(np.array([0, 1]), 'static', 'pp', 'default', state_space=ss1Q).to_dense()
+        self.assertArraysAlmostEqual(E0_chk, E0)
+        self.assertArraysAlmostEqual(E1_chk, E1)
+
+        nQubits = 4
+        ssNQ = pygsti.baseobjs.statespace.QubitSpace(nQubits)
+        E = {'0': E0, '1': E1}
+        for i in range(2**nQubits):
+            bin_i = '{{0:0{}b}}'.format(nQubits).format(i)  # first .format creates format str, e.g. '{0:04b}'
+            print("Testing state %d (%s)" % (i, bin_i))
+            created = mc.create_spam_vector(i, ssNQ, 'pp').flatten()
+            krond = multikron([E[digit] for digit in bin_i])
+            v = np.zeros(2**nQubits, complex); v[i] = 1.0
+            alt_created = st.create_from_pure_vector(v, 'static', 'pp', 'default', state_space=ssNQ).to_dense()
+            self.assertArraysAlmostEqual(created, krond)
+            self.assertArraysAlmostEqual(created, alt_created)
 
     def test_build_basis_gateset(self):
         modelA = mc.create_explicit_model_from_expressions(
@@ -83,7 +133,7 @@ class ModelConstructionTester(BaseCase):
         )
         assert(set(mdl.operation_blks['gates'].keys()) == set(["Gi", "Gx", "Gy", "Gcnot"]))
         assert(set(mdl.operation_blks['layers'].keys()) == set(
-            [('Gi', 0), ('Gi', 1), ('Gx', 0), ('Gx', 1), ('Gy', 0), ('Gy', 1), ('Gcnot', 0, 1), ('Gcnot', 1, 0), '(auto_global_idle)']))
+            [('Gi', 0), ('Gi', 1), ('Gx', 0), ('Gx', 1), ('Gy', 0), ('Gy', 1), ('Gcnot', 0, 1), ('Gcnot', 1, 0), '{auto_global_idle}']))
         self.assertEqual(mdl.num_params, 0)
 
         addlErr = pygsti.modelmembers.operations.FullTPOp(np.identity(4, 'd'))  # adds 12 params
@@ -111,11 +161,11 @@ class ModelConstructionTester(BaseCase):
         self.assertEqual(mdl.operation_blks['gates']['Gi'].gpindices, slice1)
 
         # Case: ensure_composed_gates=False, independent_gates=True
-        pspec = _ProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'idle'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
+        pspec = _ProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Gidle'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
                                geometry='line')
         cfmdl = mc.create_crosstalk_free_model(
             pspec,
-            depolarization_strengths={'Gx': 0.1, 'idle': 0.01, 'prep': 0.01, 'povm': 0.01},
+            depolarization_strengths={'Gx': 0.1, 'Gidle': 0.01, 'prep': 0.01, 'povm': 0.01},
             stochastic_error_probs={'Gy': (0.02, 0.02, 0.02)},
             lindblad_error_coeffs={
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
@@ -128,7 +178,7 @@ class ModelConstructionTester(BaseCase):
         # Case: ensure_composed_gates=True, independent_gates=False
         cfmdl2 = mc.create_crosstalk_free_model(
             pspec,
-            depolarization_strengths={'Gx': 0.1, 'idle': 0.01, 'prep': 0.01, 'povm': 0.01},
+            depolarization_strengths={'Gx': 0.1, 'Gidle': 0.01, 'prep': 0.01, 'povm': 0.01},
             stochastic_error_probs={'Gy': (0.02, 0.02, 0.02)},
             lindblad_error_coeffs={
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
@@ -140,7 +190,7 @@ class ModelConstructionTester(BaseCase):
         # Same as above but add ('Gx','qb0') to test giving qubit-specific error rates
         cfmdl3 = mc.create_crosstalk_free_model(
             pspec,
-            depolarization_strengths={'Gx': 0.1, ('Gx', 'qb0'): 0.2, 'idle': 0.01, 'prep': 0.01, 'povm': 0.01},
+            depolarization_strengths={'Gx': 0.1, ('Gx', 'qb0'): 0.2, 'Gidle': 0.01, 'prep': 0.01, 'povm': 0.01},
             stochastic_error_probs={'Gy': (0.02, 0.02, 0.02)},
             lindblad_error_coeffs={
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
@@ -409,6 +459,142 @@ class ModelConstructionTester(BaseCase):
             mc.create_explicit_model_from_expressions([('Q0',)], ['Gi', 'Gx', 'Gy'],
                                                       ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
                                                       effect_labels=['0', '1'], effect_expressions=["FooBar", "1"])
+
+    def test_default_spam_in_processorspecs(self):
+        pspec_defaults = pygsti.processors.QubitProcessorSpec(4, ['Gxpi2', 'Gypi2'], geometry='line')
+        pspec_defaults = save_and_load_pspec(pspec_defaults)  # make sure serialization works too
+
+        self.assertEqual(pspec_defaults.prep_names, ('rho0',))
+        self.assertEqual(pspec_defaults.povm_names, ('Mdefault',))
+
+        mdl_default = pygsti.models.modelconstruction.create_crosstalk_free_model(pspec_defaults)
+
+        all4Qoutcomes = list(map(lambda x: ''.join(x), itertools.product(['0','1'], repeat=4)))
+        self.assertArraysAlmostEqual(mdl_default.prep_blks['layers']['rho0']._zvals, [0, 0, 0, 0])
+        self.assertEqual(list(mdl_default.povm_blks['layers']['Mdefault'].keys()), all4Qoutcomes)
+
+        mdl_default_explicit = pygsti.models.modelconstruction.create_explicit_model(pspec_defaults)
+        self.assertArraysAlmostEqual(mdl_default_explicit.preps['rho0']._zvals, [0, 0, 0, 0])
+        self.assertEqual(list(mdl_default_explicit.povms['Mdefault'].keys()), all4Qoutcomes)
+
+        mdl_default_cloud = pygsti.models.modelconstruction.create_cloud_crosstalk_model(pspec_defaults)
+        self.assertArraysAlmostEqual(mdl_default_cloud.prep_blks['layers']['rho0']._zvals, [0, 0, 0, 0])
+        self.assertEqual(list(mdl_default_cloud.povm_blks['layers']['Mdefault'].keys()), all4Qoutcomes)
+
+    def test_named_spam_in_processorspecs(self):
+        pspec_names = pygsti.processors.QubitProcessorSpec(4, ['Gxpi2', 'Gypi2'], geometry='line',
+                                                           prep_names=("rho1", "rho_1100"), povm_names=("Mz",))
+        pspec_names = save_and_load_pspec(pspec_names)  # make sure serialization works too
+
+        self.assertEqual(pspec_names.prep_names, ('rho1', 'rho_1100'))
+        self.assertEqual(pspec_names.povm_names, ('Mz',))
+
+        mdl_names = pygsti.models.modelconstruction.create_crosstalk_free_model(pspec_names)
+
+        all4Qoutcomes = list(map(lambda x: ''.join(x), itertools.product(['0','1'], repeat=4)))
+        self.assertArraysAlmostEqual(mdl_names.prep_blks['layers']['rho1']._zvals, [0, 0, 0, 1])
+        self.assertArraysAlmostEqual(mdl_names.prep_blks['layers']['rho_1100']._zvals, [1, 1, 0, 0])
+        self.assertEqual(list(mdl_names.povm_blks['layers']['Mz'].keys()), all4Qoutcomes)
+
+    def test_spamvecs_in_processorspecs(self):
+        prep_vec = np.zeros(2**4, complex)
+        prep_vec[4] = 1.0
+        EA = np.zeros(2**4, complex)
+        EA[14] = 1.0
+        EB = np.zeros(2**4, complex)
+        EB[15] = 1.0
+
+        pspec_vecs = pygsti.processors.QubitProcessorSpec(4, ['Gxpi2', 'Gypi2'], geometry='line',
+                                                          prep_names=("rhoA", "rhoC"), povm_names=("Ma", "Mc"),
+                                                          nonstd_preps={'rhoA': "rho0", 'rhoC': prep_vec},
+                                                          nonstd_povms={'Ma': {'0': "0000", '1': EA},
+                                                                        'Mc': {'OutA': "0000", 'OutB': [EA, EB]}})
+        pspec_vecs = save_and_load_pspec(pspec_vecs)  # make sure serialization works too
+
+        self.assertEqual(pspec_vecs.prep_names, ('rhoA', 'rhoC'))
+        self.assertEqual(pspec_vecs.povm_names, ('Ma','Mc'))
+
+        mdl_vecs = pygsti.models.modelconstruction.create_crosstalk_free_model(pspec_vecs, ideal_spam_type='full TP')
+
+        from pygsti.tools import state_to_dmvec, change_basis
+        prep_supervec = change_basis(state_to_dmvec(prep_vec), 'std', 'pp')
+        prep0_vec = np.zeros(2**4, complex); prep0_vec[0] = 1.0
+        prep0_supervec = change_basis(state_to_dmvec(prep0_vec), 'std', 'pp')
+
+        self.assertArraysAlmostEqual(mdl_vecs.prep_blks['layers']['rhoA'].to_dense(), prep0_supervec)
+        self.assertArraysAlmostEqual(mdl_vecs.prep_blks['layers']['rhoC'].to_dense(), prep_supervec)
+
+        self.assertEqual(list(mdl_vecs.povm_blks['layers']['Ma'].keys()), ['0', '1'])
+        self.assertEqual(list(mdl_vecs.povm_blks['layers']['Mc'].keys()), ['OutA', 'OutB'])
+
+        def Zeffect(index):
+            v = np.zeros(2**4, complex); v[index] = 1.0
+            return change_basis(state_to_dmvec(v), 'std', 'pp')
+
+        self.assertArraysAlmostEqual(mdl_vecs.povm_blks['layers']['Ma']['0'].to_dense(), Zeffect(0))
+        self.assertArraysAlmostEqual(mdl_vecs.povm_blks['layers']['Ma']['1'].to_dense(), Zeffect(14))
+
+        self.assertArraysAlmostEqual(mdl_vecs.povm_blks['layers']['Mc']['OutA'].to_dense(), Zeffect(0))
+        self.assertArraysAlmostEqual(mdl_vecs.povm_blks['layers']['Mc']['OutB'].to_dense(), Zeffect(14) + Zeffect(15))
+
+    def test_instruments_in_processorspecs(self):
+        #Instruments
+        pspec_with_instrument = pygsti.processors.QubitProcessorSpec(4, ['Gxpi2', 'Gypi2'], geometry='line',
+                                                                     instrument_names=('Iz',))
+        mdl_default_explicit = pygsti.models.modelconstruction.create_explicit_model(pspec_with_instrument)
+
+        all4Qoutcomes = list(map(lambda x: ''.join(x), itertools.product(['0','1'], repeat=4)))
+        self.assertEqual(list(mdl_default_explicit.instruments['Iz'].keys()), all4Qoutcomes)
+
+        pspec_with_instrument2 = pygsti.processors.QubitProcessorSpec(
+            2, ['Gxpi2', 'Gypi2'], geometry='line', instrument_names=('Iparity',),
+            nonstd_instruments={'Iparity': {'plus': [('00', '00'), ('11','11')],
+                                            'minus': [('10', '10'), ('01','01')]}})
+        mdl_default_explicit2 = pygsti.models.modelconstruction.create_explicit_model(pspec_with_instrument2)
+        self.assertEqual(list(mdl_default_explicit2.instruments['Iparity']), ['plus', 'minus'])
+
+        from pygsti.tools import state_to_dmvec, change_basis
+
+        def Ivec(index):
+            v = np.zeros(2**2, complex); v[index] = 1.0
+            return v
+
+        def Isupervec(index):
+            return change_basis(state_to_dmvec(Ivec(index)), 'std', 'pp')
+
+        sv00 = Isupervec(0)
+        sv01 = Isupervec(1)
+        sv10 = Isupervec(2)
+        sv11 = Isupervec(3)
+        Iplus = np.outer(sv00, sv00) + np.outer(sv11, sv11)
+        Iminus = np.outer(sv01, sv01) + np.outer(sv10, sv10)
+        Itot = Iplus + Iminus
+        self.assertAlmostEqual(Itot[0,0], 1.0)
+        self.assertArraysAlmostEqual(mdl_default_explicit2.instruments['Iparity']['plus'].to_dense(), Iplus)
+        self.assertArraysAlmostEqual(mdl_default_explicit2.instruments['Iparity']['minus'].to_dense(), Iminus)
+        
+        
+        # In[14]:
+        
+        
+        v00 = Ivec(0)
+        v01 = Ivec(1)
+        v10 = Ivec(2)
+        v11 = Ivec(3)
+        
+        pspec_with_instrument3 = pygsti.processors.QubitProcessorSpec(
+            2, ['Gxpi2', 'Gypi2'], geometry='line', instrument_names=('Iparity',),
+            nonstd_instruments={'Iparity': {'plus': [(v00, v00), (v11,v11)],
+                                            'minus': [(v10, v10), (v01,v01)]}})
+        mdl_default_explicit3 = pygsti.models.modelconstruction.create_explicit_model(pspec_with_instrument3)
+        self.assertEqual(list(mdl_default_explicit3.instruments['Iparity']), ['plus', 'minus'])
+        
+        self.assertArraysAlmostEqual(mdl_default_explicit3.instruments['Iparity']['plus'].to_dense(), Iplus)
+        self.assertArraysAlmostEqual(mdl_default_explicit3.instruments['Iparity']['minus'].to_dense(), Iminus)
+
+
+
+
 
 
 class GateConstructionBase(object):

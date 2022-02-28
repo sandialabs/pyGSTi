@@ -71,7 +71,7 @@ class OpRepDenseUnitary(OpRep):
         if on_space in ('minimal', 'Hilbert'):
             return self.base
         elif on_space == 'HilbertSchmidt':
-            return _bt.change_basis(_ot.unitary_to_process_mx(self.base), 'std', self.basis)
+            return _ot.unitary_to_superop(self.base, self.basis)
         else:
             raise ValueError("Invalid `on_space` argument: %s" % str(on_space))
 
@@ -297,8 +297,8 @@ class OpRepRepeated(OpRep):
 
 
 class OpRepLindbladErrorgen(OpRep):
-    def __init__(self, lindblad_term_dict, basis, state_space):
+    def __init__(self, lindblad_coefficient_blocks, state_space):
         super(OpRepLindbladErrorgen, self).__init__(state_space)
         self.Lterms = None
         self.Lterm_coeffs = None
-        self.LtermdictAndBasis = (lindblad_term_dict, basis)
+        self.lindblad_coefficient_blocks = lindblad_coefficient_blocks

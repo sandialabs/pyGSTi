@@ -388,7 +388,7 @@ class ErrorRatesModel(SuccessFailModel):
         #             if q not in usedQs:
         #                 inds_to_mult.append(g_inds[q])
 
-        #         inds_to_mult_by_layer.append(_np.array(inds_to_mult, int))
+        #         inds_to_mult_by_layer.append(_np.array(inds_to_mult, _np.int64))
 
         # else:
 
@@ -410,13 +410,14 @@ class ErrorRatesModel(SuccessFailModel):
 
         if self._idlename is not None:
             layers_with_idles = [circuit.layer_label_with_idles(i, idle_gate_name=self._idlename) for i in range(depth)]
-            inds_to_mult_by_layer = [_np.array(indices_for_label(layer), int) for layer in layers_with_idles]
+            inds_to_mult_by_layer = [_np.array(indices_for_label(layer), _np.int64) for layer in layers_with_idles]
         else:
-            inds_to_mult_by_layer = [_np.array(indices_for_label(circuit.layer_label(i)), int) for i in range(depth)]
+            inds_to_mult_by_layer = [_np.array(indices_for_label(circuit.layer_label(i)), _np.int64)
+                                     for i in range(depth)]
 
         # Bit-flip readout error as a pre-measurement depolarizing channel.
         inds_to_mult = [r_inds[q] for q in circuit.line_labels]
-        inds_to_mult_by_layer.append(_np.array(inds_to_mult, int))
+        inds_to_mult_by_layer.append(_np.array(inds_to_mult, _np.int64))
 
         # The scaling constant such that lambda = 1 - alpha * epsilon where lambda is the diagonal of a depolarizing
         # channel with entanglement infidelity of epsilon.
@@ -574,7 +575,7 @@ class TwirledGatesModel(ErrorRatesModel):
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
         all_inds_to_mult = _np.concatenate(inds_to_mult_by_layer[:-1])
         readout_inds_to_mult = inds_to_mult_by_layer[-1]
-        all_inds_to_mult_cnt = _np.zeros(self.num_params, int)
+        all_inds_to_mult_cnt = _np.zeros(self.num_params, _np.int64)
         for i in all_inds_to_mult:
             all_inds_to_mult_cnt[i] += 1
         return width, depth, alpha, one_over_2_width, all_inds_to_mult, readout_inds_to_mult, all_inds_to_mult_cnt
@@ -680,7 +681,7 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
     def _circuit_cache(self, circuit):
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
         all_inds_to_mult = _np.concatenate(inds_to_mult_by_layer)
-        all_inds_to_mult_cnt = _np.zeros(self.num_params, int)
+        all_inds_to_mult_cnt = _np.zeros(self.num_params, _np.int64)
         for i in all_inds_to_mult:
             all_inds_to_mult_cnt[i] += 1
         return all_inds_to_mult, all_inds_to_mult_cnt
@@ -762,7 +763,7 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
     def _circuit_cache(self, circuit):
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
         all_inds_to_mult = _np.concatenate(inds_to_mult_by_layer)
-        all_inds_to_mult_cnt = _np.zeros(self.num_params, int)
+        all_inds_to_mult_cnt = _np.zeros(self.num_params, _np.int64)
         for i in all_inds_to_mult:
             all_inds_to_mult_cnt[i] += 1
         return one_over_2_width, all_inds_to_mult, all_inds_to_mult_cnt

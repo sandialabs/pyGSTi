@@ -39,8 +39,9 @@ class TPPOVM(_BasePOVM):
         an error is raised.
     """
 
-    def __init__(self, effects, evotype=None, state_space=None):
-        super(TPPOVM, self).__init__(effects, evotype, state_space, preserve_sum=True)
+    def __init__(self, effects, evotype=None, state_space=None, called_from_reduce=False):
+        super(TPPOVM, self).__init__(effects, evotype, state_space, preserve_sum=True,
+                                     called_from_reduce=called_from_reduce)
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
@@ -53,4 +54,5 @@ class TPPOVM(_BasePOVM):
         effects.append((self.complement_label,
                         self[self.complement_label].to_dense().reshape((-1, 1))))
 
-        return (TPPOVM, (effects, self.evotype, self.state_space), {'_gpindices': self._gpindices})
+        return (TPPOVM, (effects, self.evotype, self.state_space, True),
+                {'_gpindices': self._gpindices, '_submember_rpindices': self._submember_rpindices})

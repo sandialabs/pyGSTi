@@ -1429,7 +1429,7 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
     #Gy = tgt1Q.operations[('Gypi2', 0)]
     #Gcnot = tgt2Q.operations[('Gcnot', 0, 1)]
     #Gii = tgt2Q.operations[()]
-    #gatedict = _collections.OrderedDict([('Gx', Gx), ('Gy', Gy), ('Gcnot', Gcnot), ('(idle)', Gii)])
+    #gatedict = _collections.OrderedDict([('Gx', Gx), ('Gy', Gy), ('Gcnot', Gcnot), ('{idle}', Gii)])
     availability = {}
     if cnot_edges is not None: availability['Gcnot'] = cnot_edges
 
@@ -1439,7 +1439,7 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
     else:
         singleQfiducials = [(), ('Gx',), ('Gy',), ('Gx', 'Gx')]
 
-    processor_spec = _QubitProcessorSpec(num_qubits, ['Gx', 'Gy', 'Gcnot', '(idle)'],
+    processor_spec = _QubitProcessorSpec(num_qubits, ['Gx', 'Gy', 'Gcnot', '{idle}'],
                                          availability=availability, geometry=geometry)
     return create_cloudnoise_circuits(processor_spec, max_lengths, singleQfiducials,
                                       max_idle_weight, maxhops,
@@ -1653,7 +1653,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         extra_gate_weight, verbosity=printer - 5,
         simulator=_TermFSim(mode="taylor-order", max_order=1),
         gate_type=parameterization, spam_type=parameterization, evotype=evotype,
-        errcomp_type="gates")
+        implicit_idle_mode="add_global", errcomp_type="gates")
     idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
     # these are the params we want to amplify at first...
     idle_params = idle_model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices
@@ -1736,7 +1736,8 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
                     max_idle_weight, 0, maxhops, extra_weight_1_hops,
                     extra_gate_weight, verbosity=printer - 5,
                     simulator=_TermFSim(mode="taylor-order", max_order=1),
-                    gate_type=parameterization, spam_type=parameterization, evotype=evotype, errcomp_type="gates")
+                    gate_type=parameterization, spam_type=parameterization, evotype=evotype,
+                    implicit_idle_mode="add_global", errcomp_type="gates")
                 sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
                 # these are the params we want to amplify...
                 idle_params = sidle_model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices
