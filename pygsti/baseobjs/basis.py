@@ -427,10 +427,29 @@ class Basis(_NicelySerializable):
         return self.size
 
     def __eq__(self, other):
+        return self.is_equivalent(other, sparseness_must_match=True)
+
+    def is_equivalent(self, other, sparseness_must_match=True):
+        """
+        Tests whether this basis is equal to another basis, optionally ignoring sparseness.
+
+        Parameters
+        -----------
+        other : Basis or str
+            The basis to compare with.
+
+        sparseness_must_match : bool, optional
+            If `False` then comparison ignores differing sparseness, and this function
+            returns `True` when the two bases are equal except for their `.sparse` values.
+
+        Returns
+        -------
+        bool
+        """
         otherIsBasis = isinstance(other, Basis)
 
-        if otherIsBasis and (self.sparse != other.sparse):  # sparseness mismatch => not equal
-            return False
+        if otherIsBasis and sparseness_must_match and (self.sparse != other.sparse):
+            return False  # sparseness mismatch => not equal when sparseness_must_match == True
 
         if self.sparse:
             if self.dim > 256:
@@ -1090,10 +1109,27 @@ class BuiltinBasis(LazyBasis):
     def _copy_with_toggled_sparsity(self):
         return BuiltinBasis(self.name, self.state_space, not self.sparse)
 
-    def __eq__(self, other):
+    def is_equivalent(self, other, sparseness_must_match=True):
+        """
+        Tests whether this basis is equal to another basis, optionally ignoring sparseness.
+
+        Parameters
+        -----------
+        other : Basis or str
+            The basis to compare with.
+
+        sparseness_must_match : bool, optional
+            If `False` then comparison ignores differing sparseness, and this function
+            returns `True` when the two bases are equal except for their `.sparse` values.
+
+        Returns
+        -------
+        bool
+        """
         if isinstance(other, BuiltinBasis):  # then can compare quickly
-            return ((self.name == other.name) and (self.state_space == other.state_space)
-                    and (self.sparse == other.sparse))
+            return ((self.name == other.name) 
+                    and (self.state_space == other.state_space)
+                    and (not sparseness_must_match or (self.sparse == other.sparse)))
         elif isinstance(other, str):
             return self.name == other  # see if other is a string equal to our name
         else:
@@ -1284,11 +1320,28 @@ class DirectSumBasis(LazyBasis):
         return DirectSumBasis([cb._copy_with_toggled_sparsity() for cb in self.component_bases],
                               self.name, self.longname)
 
-    def __eq__(self, other):
+    def is_equivalent(self, other, sparseness_must_match=True):
+        """
+        Tests whether this basis is equal to another basis, optionally ignoring sparseness.
+
+        Parameters
+        -----------
+        other : Basis or str
+            The basis to compare with.
+
+        sparseness_must_match : bool, optional
+            If `False` then comparison ignores differing sparseness, and this function
+            returns `True` when the two bases are equal except for their `.sparse` values.
+
+        Returns
+        -------
+        bool
+        """
         otherIsBasis = isinstance(other, DirectSumBasis)
         if not otherIsBasis: return False  # can't be equal to a non-DirectSumBasis
         if len(self.component_bases) != len(other.component_bases): return False
-        return all([c1 == c2 for (c1, c2) in zip(self.component_bases, other.component_bases)])
+        return all([c1.is_equivalent(c2, sparseness_must_match)
+                    for (c1, c2) in zip(self.component_bases, other.component_bases)])
 
     @property
     def vector_elements(self):
@@ -1578,12 +1631,29 @@ class TensorProdBasis(LazyBasis):
         return TensorProdBasis([cb._copy_with_toggled_sparsity() for cb in self.component_bases],
                                self.name, self.longname)
 
-    def __eq__(self, other):
+    def is_equivalent(self, other, sparseness_must_match=True):
+        """
+        Tests whether this basis is equal to another basis, optionally ignoring sparseness.
+
+        Parameters
+        -----------
+        other : Basis or str
+            The basis to compare with.
+
+        sparseness_must_match : bool, optional
+            If `False` then comparison ignores differing sparseness, and this function
+            returns `True` when the two bases are equal except for their `.sparse` values.
+
+        Returns
+        -------
+        bool
+        """
         otherIsBasis = isinstance(other, TensorProdBasis)
         if not otherIsBasis: return False  # can't be equal to a non-DirectSumBasis
         if len(self.component_bases) != len(other.component_bases): return False
         if self.sparse != other.sparse: return False
-        return all([c1 == c2 for (c1, c2) in zip(self.component_bases, other.component_bases)])
+        return all([c1.is_equivalent(c2, sparseness_must_match)
+                    for (c1, c2) in zip(self.component_bases, other.component_bases)])
 
     def create_equivalent(self, builtin_basis_name):
         """
@@ -1863,12 +1933,28 @@ class EmbeddedBasis(LazyBasis):
                              self.target_labels,
                              self.name, self.longname)
 
-    def __eq__(self, other):
+    def is_equivalent(self, other, sparseness_must_match=True):
+        """
+        Tests whether this basis is equal to another basis, optionally ignoring sparseness.
+
+        Parameters
+        -----------
+        other : Basis or str
+            The basis to compare with.
+
+        sparseness_must_match : bool, optional
+            If `False` then comparison ignores differing sparseness, and this function
+            returns `True` when the two bases are equal except for their `.sparse` values.
+
+        Returns
+        -------
+        bool
+        """
         otherIsBasis = isinstance(other, EmbeddedBasis)
         if not otherIsBasis: return False  # can't be equal to a non-EmbeddedBasis
         if self.target_labels != other.target_labels or self.state_space != other.state_space:
             return False
-        return self.embedded_basis == other.embedded_basis
+        return self.embedded_basis.is_equivalent(other.embedded_basis, sparseness_must_match)
 
     def create_equivalent(self, builtin_basis_name):
         """
