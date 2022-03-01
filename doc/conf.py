@@ -35,22 +35,21 @@ sys.path.insert(0, os.path.abspath('..'))  # so can import 'pygsti'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'autoapi.extension',
+    'sphinx.ext.autodoc',
+    'sphinx.ext.autosummary',
     'sphinx.ext.doctest',
     'sphinx.ext.coverage',
     'sphinx.ext.napoleon',
     'numpydoc'
 ]
 
-autoapi_type = 'python'
-autoapi_dirs = ['../pygsti']
-autosummary_generate = False
-#autosummary_imported_members = True
-#autodoc_default_options = {
-#    'members': None,
-#    'inherited-members': None,
-#    'show-inheritance': None,
-#}
+autosummary_generate = True
+autosummary_imported_members = True
+autodoc_default_options = {
+    'members': None,
+    'inherited-members': None,
+    'show-inheritance': None,
+}
 napoleon_numpy_docstring = True
 napoleon_use_rtype = False
 

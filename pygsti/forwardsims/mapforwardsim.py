@@ -148,14 +148,19 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         if method_name == 'bulk_fill_timedep_dchi2': return ('p',)  # just an additional parameter vector
         return super()._array_types_for_method(method_name)
 
-    def __init__(self, model=None, max_cache_size=0, num_atoms=None, processor_grid=None, param_blk_sizes=None):
+    def __init__(self, model=None, max_cache_size=0, num_atoms=None, processor_grid=None, param_blk_sizes=None,
+                 derivative_eps=1e-7, hessian_eps=1e-5):
         #super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
         _DistributableForwardSimulator.__init__(self, model, num_atoms, processor_grid, param_blk_sizes)
         self._max_cache_size = max_cache_size
+        self.derivative_eps = derivative_eps  # for finite difference derivative calculations
+        self.hessian_eps = hessian_eps
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'max_cache_size': self._max_cache_size
+        state.update({'max_cache_size': self._max_cache_size,
+                      'derivative_epsilon': self.derivative_eps,
+                      'hessian_epsilon': self.hessian_eps,
                       # (don't serialize parent model or processor distribution info)
                       })
         return state
@@ -163,7 +168,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
     @classmethod
     def _from_nice_serialization(cls, state):
         #Note: resets processor-distribution information
-        return cls(None, state['max_cache_size'])
+        return cls(None, state['max_cache_size'],
+                   derivative_eps=state.get('derivative_epsilon', 1e-7),
+                   hessian_eps=state.get('hessian_epsilon', 1e-5))
 
     def copy(self):
         """
@@ -276,7 +283,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
             GB = 1.0 / 1024.0**3
             if mem_estimate > mem_limit:
-                raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB" % (
+                raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB)" % (
                     mem_limit * GB, mem_estimate * GB))
             else:
                 printer.log("   Esimated memory required = %.1fGB" % (mem_estimate * GB))
@@ -293,7 +300,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim * _slct.length(param_slice))
         self.calclib.mapfill_dprobs_atom(self, array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice,
-                                         layout_atom, param_slice, resource_alloc)
+                                         layout_atom, param_slice, resource_alloc, self.derivative_eps)
 
     def _bulk_fill_hprobs_atom(self, array_to_fill, dest_param_slice1, dest_param_slice2, layout_atom,
                                param_slice1, param_slice2, resource_alloc):
@@ -301,16 +308,16 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         resource_alloc.check_can_allocate_memory(layout_atom.cache_size * self.model.dim
                                                  * _slct.length(param_slice1) * _slct.length(param_slice2))
         self._mapfill_hprobs_atom(array_to_fill, slice(0, array_to_fill.shape[0]), dest_param_slice1,
-                                  dest_param_slice2, layout_atom, param_slice1, param_slice2, resource_alloc)
+                                  dest_param_slice2, layout_atom, param_slice1, param_slice2, resource_alloc,
+                                  self.hessian_eps)
 
     #Not used enough to warrant pushing to evotypes yet... just keep a slow version
     def _mapfill_hprobs_atom(self, array_to_fill, dest_indices, dest_param_indices1, dest_param_indices2,
-                             layout_atom, param_indices1, param_indices2, resource_alloc):
+                             layout_atom, param_indices1, param_indices2, resource_alloc, eps):
 
         """
         Helper function for populating hessian values by block.
         """
-        eps = 1e-4  # hardcoded?
         shared_mem_leader = resource_alloc.is_host_leader if (resource_alloc is not None) else True
 
         if param_indices1 is None:
@@ -335,7 +342,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         dprobs, shm = _smt.create_shared_ndarray(resource_alloc, (nEls, nP2), 'd')
         dprobs2, shm2 = _smt.create_shared_ndarray(resource_alloc, (nEls, nP2), 'd')
         self.calclib.mapfill_dprobs_atom(self, dprobs, slice(0, nEls), None, layout_atom, param_indices2,
-                                         resource_alloc)
+                                         resource_alloc, eps)
 
         orig_vec = self.model.to_vector().copy()
         for i in range(self.model.num_params):
@@ -344,7 +351,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 vec = orig_vec.copy(); vec[i] += eps
                 self.model.from_vector(vec, close=True)
                 self.calclib.mapfill_dprobs_atom(self, dprobs2, slice(0, nEls), None, layout_atom,
-                                                 param_indices2, resource_alloc)
+                                                 param_indices2, resource_alloc, eps)
                 if shared_mem_leader:
                     _fas(array_to_fill, [dest_indices, iFinal, dest_param_indices2], (dprobs2 - dprobs) / eps)
         self.model.from_vector(orig_vec)

@@ -177,7 +177,7 @@ def diagonal_as_vec(m):
     numpy.ndarray
     """
     l = _np.shape(m)[0]
-    vec = _np.zeros(l, int)
+    vec = _np.zeros(l, _np.int64)
     for i in range(0, l):
         vec[i] = m[i, i]
     return vec
@@ -220,7 +220,7 @@ def diagonal_as_matrix(m):
     numpy.ndarray
     """
     l = _np.shape(m)[0]
-    out = _np.zeros((l, l), int)
+    out = _np.zeros((l, l), _np.int64)
 
     for i in range(0, l):
         out[i, i] = m[i, i]
@@ -394,7 +394,7 @@ def onesify(a, failcount=0, maxfailcount=100):
 
     M = _np.array(M, dtype='int')
 
-    if _np.array_equal(dot_mod2(M, inv_mod2(M)), _np.identity(t, int)):
+    if _np.array_equal(dot_mod2(M, inv_mod2(M)), _np.identity(t, _np.int64)):
         return _np.array(M)
     else:
         return onesify(a, failcount + 1, maxfailcount=maxfailcount)

@@ -387,6 +387,27 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         Direct access to the underlying process matrix data.
     """
 
+    @classmethod
+    def quick_init(cls, unitary_mx, superop_mx, basis, evotype, state_space):
+        # mx must be a numpy array for a unitary operator
+        # state_space as StateSpace
+        # evotyp an Evotype
+        # basis a Basis
+        self = cls.__new__(cls)
+        try:
+            rep = evotype.create_dense_unitary_rep(unitary_mx, basis, state_space)
+            self._reptype = 'unitary'
+            self._unitary = None
+        except Exception:
+            rep = evotype.create_dense_superop_rep(superop_mx, state_space)
+            self._reptype = 'superop'
+            self._unitary = unitary_mx
+
+        self._basis = basis
+        _LinearOperator.__init__(self, rep, evotype)
+        DenseOperatorInterface.__init__(self)
+        return self
+
     def __init__(self, mx, basis, evotype, state_space):
         """ Initialize a new LinearOperator """
         mx = _LinearOperator.convert_to_matrix(mx)
@@ -406,7 +427,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
                 # Special case when a *superop* was provided instead of a unitary mx
                 superop_mx = mx.real  # used as a convenience case that really shouldn't be used
             else:
-                superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(mx), 'std', basis)
+                superop_mx = _ot.unitary_to_superop(mx, basis)
             rep = evotype.create_dense_superop_rep(superop_mx, state_space)
             self._reptype = 'superop'
             self._unitary = mx
@@ -424,7 +445,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         """ Derived classes should override this function to handle rep updates
             when the `_ptr` property is changed. """
         if self._reptype == 'superop':
-            self._rep.base[:, :] = _bt.change_basis(_ot.unitary_to_process_mx(self._unitary), 'std', self._basis)
+            self._rep.base[:, :] = _ot.unitary_to_superop(self._unitary, self._basis)
         self._rep.base_has_changed()
 
     def to_dense(self, on_space='minimal'):
@@ -446,95 +467,9 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         -------
         numpy.ndarray
         """
+        if self._reptype == 'superop' and on_space == 'Hilbert':
+            return self._unitary
         return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
-
-    def transform_inplace(self, s):
-        """
-        Update operation matrix `O` with `inv(s) * O * s`.
-
-        Generally, the transform function updates the *parameters* of
-        the operation such that the resulting operation matrix is altered as
-        described above.  If such an update cannot be done (because
-        the operation parameters do not allow for it), ValueError is raised.
-
-        Parameters
-        ----------
-        s : GaugeGroupElement
-            A gauge group element which specifies the "s" matrix
-            (and it's inverse) used in the above similarity transform.
-
-        Returns
-        -------
-        None
-        """
-        from pygsti.models import gaugegroup as _gaugegroup
-        if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
-           isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-
-            #Just to this the brute force way for now - there should be a more elegant & faster way!
-            U = s.transform_matrix
-            Uinv = s.transform_matrix_inverse
-
-            my_superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(self._ptr), 'std', self._basis)  # to_dense()?
-            my_superop_mx = _mt.safe_dot(Uinv, _mt.safe_dot(my_superop_mx, U))
-
-            self._ptr[:, :] = _ot.process_mx_to_unitary(_bt.change_basis(my_superop_mx, self._basis, 'std'))
-            self._ptr_has_changed()
-            self.dirty = True
-        else:
-            raise ValueError("Invalid transform for this DenseUnitaryOperation: type %s" % str(type(s)))
-
-    def spam_transform_inplace(self, s, typ):
-        """
-        Update operation matrix `O` with `inv(s) * O` OR `O * s`, depending on the value of `typ`.
-
-        This functions as `transform_inplace(...)` but is used when this
-        Lindblad-parameterized operation is used as a part of a SPAM
-        vector.  When `typ == "prep"`, the spam vector is assumed
-        to be `rho = dot(self, <spamvec>)`, which transforms as
-        `rho -> inv(s) * rho`, so `self -> inv(s) * self`. When
-        `typ == "effect"`, `e.dag = dot(e.dag, self)` (not that
-        `self` is NOT `self.dag` here), and `e.dag -> e.dag * s`
-        so that `self -> self * s`.
-
-        Parameters
-        ----------
-        s : GaugeGroupElement
-            A gauge group element which specifies the "s" matrix
-            (and it's inverse) used in the above similarity transform.
-
-        typ : { 'prep', 'effect' }
-            Which type of SPAM vector is being transformed (see above).
-
-        Returns
-        -------
-        None
-        """
-        assert(typ in ('prep', 'effect')), "Invalid `typ` argument: %s" % typ
-
-        from pygsti.models import gaugegroup as _gaugegroup
-        if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) or \
-           isinstance(s, _gaugegroup.TPSpamGaugeGroupElement):
-            U = s.transform_matrix
-            Uinv = s.transform_matrix_inverse
-
-            #Just to this the brute force way for now - there should be a more elegant & faster way!
-            U = s.transform_matrix
-            Uinv = s.transform_matrix_inverse
-
-            my_superop_mx = _bt.change_basis(_ot.unitary_to_process_mx(self._ptr), 'std', self._basis)  # to_dense()?
-
-            #Note: this code may need to be tweaked to work with sparse matrices
-            if typ == "prep":
-                my_superop_mx = _mt.safe_dot(Uinv, my_superop_mx)
-            else:
-                my_superop_mx = _mt.safe_dot(my_superop_mx, U)
-
-            self._ptr[:, :] = _ot.process_mx_to_unitary(_bt.change_basis(my_superop_mx, self._basis, 'std'))
-            self._ptr_has_changed()
-            self.dirty = True
-        else:
-            raise ValueError("Invalid transform for this DenseUnitaryOperation: type %s" % str(type(s)))
 
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.
@@ -556,14 +491,14 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
-        mm_dict['dense_matrix'] = self.to_dense('Hilbert').tolist()
+        mm_dict['dense_matrix'] = self._encodemx(self.to_dense('Hilbert'))
         mm_dict['basis'] = self._basis.to_nice_serialization()
 
         return mm_dict
 
     @classmethod
     def _from_memoized_dict(cls, mm_dict, serial_memo):
-        m = _np.array(mm_dict['dense_matrix'])
+        m = cls._decodemx(mm_dict['dense_matrix'])
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         basis = _Basis.from_nice_serialization(mm_dict['basis'])
         return cls(m, basis, mm_dict['evotype'], state_space)

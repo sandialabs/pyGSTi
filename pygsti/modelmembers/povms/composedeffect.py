@@ -396,8 +396,8 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         return cls(static_effect, error_map)
 
     @property
-    def size(self):
-        return self.effect_vec.size
+    def hilbert_schmidt_size(self):
+        return self.effect_vec.hilbert_schmidt_size
 
     def submembers(self):
         """

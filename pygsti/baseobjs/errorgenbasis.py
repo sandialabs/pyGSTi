@@ -10,6 +10,7 @@ Defines the ElementaryErrorgenBasis class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
 import itertools as _itertools
 import collections as _collections
 
@@ -134,6 +135,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
     @classmethod
     def _create_diag_labels_for_support(cls, support, type_str, nontrivial_bels):
+        assert(type_str in ('H', 'S'))  # the types of "diagonal" generators
         weight = len(support)
 
         def _basis_el_strs(possible_bels, wt):
@@ -144,11 +146,60 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
                 for bel in _basis_el_strs(nontrivial_bels, weight)]
 
     @classmethod
+    def _create_uptriangle_labels_for_support(cls, support, left_support, type_str, trivial_bel, nontrivial_bels):
+        ret = []
+        n = len(support)  # == weight
+        all_bels = trivial_bel + nontrivial_bels
+        left_weight = len(left_support)
+        left_factors = [nontrivial_bels if x in left_support else trivial_bel for x in support]
+        left_indices = [range(len(factors)) for factors in left_factors]
+        right_factors = [all_bels if x in left_support else nontrivial_bels for x in support]
+        right_lengths = [len(factors) for factors in right_factors]
+        placevals = _np.cumprod(list(reversed(right_lengths[1:] + [1])))[::-1]
+        ifirst_trivial = min([i for i in range(n) if support[i] not in left_support] + [n])  # [n] prevents empty list
+
+        for left_inds in _itertools.product(*left_indices):  # better itertools call here TODO
+            left_bel = ''.join([factors[i] for i, factors in zip(left_inds, left_factors)])
+            right_offsets = [(i + 1 if ii < ifirst_trivial else 0) for ii, i in enumerate(left_inds)]
+            if left_weight == n:  # n1 == n, so left_support == entire support (== no I's on left side)
+                right_offsets[-1] += 1  # advance past diagonal element
+            right_base_it = _itertools.product(*right_factors)
+            start_at = _np.dot(right_offsets, placevals)
+            right_it = _itertools.islice(right_base_it, start_at, None)
+            for right_beltup in right_it:
+                ret.append(_GlobalElementaryErrorgenLabel(type_str, (left_bel, ''.join(right_beltup)), support))
+        return ret
+
+    @classmethod
+    def _count_uptriangle_labels_for_support(cls, support, left_support, type_str, trivial_bel, nontrivial_bels):
+        cnt = 0
+        n = len(support)  # == weight
+        n1 = len(left_support)  # == left_weight
+        all_bels = trivial_bel + nontrivial_bels
+        n1Q_nontrivial_bels = len(nontrivial_bels)
+        n1Q_bels = len(all_bels)
+        left_indices = [range(n1Q_nontrivial_bels if x in left_support else 1) for x in support]
+        right_lengths = [(n1Q_bels if x in left_support else n1Q_nontrivial_bels) for x in support]
+        placevals = _np.cumprod(list(reversed(right_lengths[1:] + [1])))[::-1]
+        ifirst_trivial = min([i for i in range(n) if support[i] not in left_support] + [n])  # [n] prevents empty list
+
+        for left_inds in _itertools.product(*left_indices):  # better itertools call here TODO
+            # offsets for leading elements of right side corresponding to non-trivial (left_support) elements on right
+            # side.  "+1" in "i+1" because right side indexes *all* bels whereas left index is into nontrivial bels.
+            right_offsets = [(i + 1 if ii < ifirst_trivial else 0) for ii, i in enumerate(left_inds)]
+            if n1 == n: right_offsets[-1] += 1  # advance past diagonal element
+            start_at = _np.dot(right_offsets, placevals)
+            cnt += _np.product(right_lengths) - start_at
+
+        return cnt
+
+    #UNUSED NOW
+    @classmethod
     def _create_all_labels_for_support(cls, support, left_support, type_str, trivial_bel, nontrivial_bels):
         n = len(support)  # == weight
         all_bels = trivial_bel + nontrivial_bels
         left_weight = len(left_support)
-        if len(left_weight) < n:  # n1 < n
+        if left_weight < n:  # n1 < n
             factors = [nontrivial_bels if x in left_support else trivial_bel for x in support] \
                 + [all_bels if x in left_support else nontrivial_bels for x in support]
             return [_GlobalElementaryErrorgenLabel(type_str, (''.join(beltup[0:n]), ''.join(beltup[n:])), support)
@@ -159,16 +210,16 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             for left_beltup in _itertools.product(*([nontrivial_bels] * n)):  # better itertools call here TODO
                 left_bel = ''.join(left_beltup)
                 right_it = _itertools.product(*([all_bels] * n))  # better itertools call here TODO
-                right_it.next()  # advance past first (all I) element - assume trivial el = first!!
+                next(right_it)  # advance past first (all I) element - assume trivial el = first!!
                 ret.extend([_GlobalElementaryErrorgenLabel(type_str, (left_bel, ''.join(right_beltup)), support)
                             for right_beltup in right_it])
             return ret
 
     @classmethod
-    def _create_ordered_labels(cls, type_str, basis_1q, state_space, mode='diagonal',
+    def _create_ordered_labels(cls, type_str, basis_1q, state_space,
                                max_weight=None, must_overlap_with_these_sslbls=None,
-                               include_offsets=False):
-        offsets = {}
+                               include_offsets=False, initial_offset=0):
+        offsets = {'BEGIN': initial_offset}
         labels = []
         #labels_by_support = _collections.OrderedDict()
         #all_bels = basis_1q.labels[0:]
@@ -181,29 +232,28 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             max_weight = len(sslbls)
 
         # Let k be len(nontrivial_bels)
-        if mode == "diagonal":
+        if type_str in ('H', 'S'):
             # --> for each set of n qubit labels, there are k^n Hamiltonian terms with weight n
             for weight in range(1, max_weight + 1):
                 for support in _itertools.combinations(sslbls, weight):  # NOTE: combinations *MUST* be deterministic
                     if (must_overlap_with_these_sslbls is not None
                        and len(set(must_overlap_with_these_sslbls).intersection(support)) == 0):
                         continue
-                    offsets[support] = len(labels)
+                    offsets[support] = len(labels) + initial_offset
                     labels.extend(cls._create_diag_labels_for_support(support, type_str, nontrivial_bels))
 
-        elif mode == "all":
-            # --> for each weight n, must compute all *pairs* that have this weight.
+        elif type_str in ('C', 'A'):
+            # --> for each weight n, must compute all non-diagonal and upper-triangle *pairs* that have this weight.
             #  This is done via algorithm:
-            #    Given n qubit labels (the support, number of labels == weight),
+            #    Given n qubit labels (the support, len(support) == weight),
             #    loop over all left-hand weights n1 ranging from 1 to n
             #      loop over all left-supports of size n1 (choose some number of left factors to be nontrivial)
-            #        Note: right-side *must* be nontrivial on complement of left support, can can be anything
+            #        Note: right-side *must* be nontrivial on complement of left support, and can be anything
             #              on factors in the left support (since the left side is nontrivial here) *except*
             #              the right side can't be all the trivial element.
             #        loop over all left-side elements (nNontrivialBELs^n1 of them)
-            #          loop over right factors - the number of elements will be:
-            #          nNontrivialBELs^(n-n1) * n1QBasisEls^n1 if (n1 < n) else (n1QBasisEls^n - 1)
-
+            #          loop over right factors - the number of elements will be complicated...
+            #                      (see _create_ordered_label_offsets)
             for weight in range(1, max_weight + 1):
                 for support in _itertools.combinations(sslbls, weight):
                     if (must_overlap_with_these_sslbls is not None
@@ -212,22 +262,24 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
                     for left_weight in range(1, weight + 1):
                         for left_support in _itertools.combinations(support, left_weight):
-                            offsets[(support, left_support)] = len(labels)
-                            labels.extend(cls._create_all_labels_for_support(support, left_support, type_str,
-                                                                             trivial_bel, nontrivial_bels))
+                            offsets[(support, left_support)] = len(labels) + initial_offset
+                            labels.extend(cls._create_uptriangle_labels_for_support(support, left_support, type_str,
+                                                                                    trivial_bel, nontrivial_bels))
         else:
-            raise ValueError("Invalid mode: %s" % str(mode))
-        offsets['END'] = len(labels)
+            raise ValueError("Invalid elementary type: %s" % str(type_str))
+        offsets['END'] = len(labels) + initial_offset
 
         return (labels, offsets) if include_offsets else labels
 
     @classmethod
-    def _create_ordered_label_offsets(cls, type_str, basis_1q, state_space, mode='diagonal',
+    def _create_ordered_label_offsets(cls, type_str, basis_1q, state_space,
                                       max_weight=None, must_overlap_with_these_sslbls=None,
-                                      return_total_support=False):
+                                      return_total_support=False, initial_offset=0):
         """ same as _create_ordered_labels but doesn't actually create the labels - just counts them to get offsets. """
-        offsets = {}
+        offsets = {'BEGIN': initial_offset}
         off = 0  # current number of labels that we would have created
+        trivial_bel = [basis_1q.labels[0]]
+        nontrivial_bels = basis_1q.labels[1:]  # assume first element is identity
         n1Q_bels = len(basis_1q.labels)
         n1Q_nontrivial_bels = n1Q_bels - 1  # assume first element is identity
         total_support = set()
@@ -238,30 +290,18 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             max_weight = len(sslbls)
 
         # Let k be len(nontrivial_bels)
-        if mode == "diagonal":
+        if type_str in ('H', 'S'):
             # --> for each set of n qubit labels, there are k^n Hamiltonian terms with weight n
             for weight in range(1, max_weight + 1):
                 for support in _itertools.combinations(sslbls, weight):  # NOTE: combinations *MUST* be deterministic
                     if (must_overlap_with_these_sslbls is not None
                        and len(set(must_overlap_with_these_sslbls).intersection(support)) == 0):
                         continue
-                    offsets[support] = off
+                    offsets[support] = off + initial_offset
                     off += n1Q_nontrivial_bels**weight
                     total_support.update(support)
 
-        elif mode == "all":
-            # --> for each weight n, must compute all *pairs* that have this weight.
-            #  This is done via algorithm:
-            #    Given n qubit labels (the support, number of labels == weight),
-            #    loop over all left-hand weights n1 ranging from 1 to n
-            #      loop over all left-supports of size n1 (choose some number of left factors to be nontrivial)
-            #        Note: right-side *must* be nontrivial on complement of left support, can can be anything
-            #              on factors in the left support (since the left side is nontrivial here) *except*
-            #              the right side can't be all the trivial element.
-            #        loop over all left-side elements (nNontrivialBELs^n1 of them)
-            #          loop over right factors - the number of elements will be:
-            #          nNontrivialBELs^(n-n1) * n1QBasisEls^n1 if (n1 < n) else (n1QBasisEls^n - 1)
-
+        elif type_str in ('C', 'A'):
             for weight in range(1, max_weight + 1):
                 for support in _itertools.combinations(sslbls, weight):
                     if (must_overlap_with_these_sslbls is not None
@@ -270,41 +310,58 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
                     total_support.update(support)
                     for left_weight in range(1, weight + 1):
-                        n, n1 = weight, left_weight
                         for left_support in _itertools.combinations(support, left_weight):
-                            offsets[(support, left_support)] = off
-                            off += (n1Q_nontrivial_bels**(n - n1) * n1Q_bels**n1) if (n1 < n) else (n1Q_bels**n - 1)
+                            offsets[(support, left_support)] = off + initial_offset
+                            off += cls._count_uptriangle_labels_for_support(support, left_support, type_str,
+                                                                            trivial_bel, nontrivial_bels)
         else:
-            raise ValueError("Invalid mode: %s" % str(mode))
-        offsets['END'] = off
+            raise ValueError("Invalid elementary type: %s" % str(type_str))
+        offsets['END'] = off + initial_offset
 
         return (offsets, total_support) if return_total_support else offsets
 
-    def __init__(self, basis_1q, state_space, other_mode, max_ham_weight=None, max_other_weight=None,
-                 must_overlap_with_these_sslbls=None):
+    def __init__(self, basis_1q, state_space, elementary_errorgen_types=('H', 'S', 'C', 'A'),
+                 max_ham_weight=None, max_other_weight=None, must_overlap_with_these_sslbls=None):
         self._basis_1q = basis_1q
-        self._other_mode = other_mode
+        self._elementary_errorgen_types = tuple(elementary_errorgen_types)  # so works for strings like "HSCA"
+        #REMOVE self._other_mode = other_mode
         self.state_space = state_space
         self._max_ham_weight = max_ham_weight
         self._max_other_weight = max_other_weight
         self._must_overlap_with_these_sslbls = must_overlap_with_these_sslbls
 
         assert(self.state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
+        assert(all([eetyp in ('H', 'S', 'C', 'A') for eetyp in elementary_errorgen_types])), \
+            "Invalid elementary errorgen type in %s" % str(elementary_errorgen_types)
 
-        self._h_offsets, hsup = self._create_ordered_label_offsets('H', self._basis_1q, self.state_space,
-                                                                   'diagonal', self._max_ham_weight,
-                                                                   self._must_overlap_with_these_sslbls,
-                                                                   return_total_support=True)
-        self._hs_border = self._h_offsets['END']
-        self._s_offsets, ssup = self._create_ordered_label_offsets('S', self._basis_1q, self.state_space,
-                                                                   other_mode, self._max_other_weight,
-                                                                   self._must_overlap_with_these_sslbls,
-                                                                   return_total_support=True)
+        self._offsets = _collections.OrderedDict()
+        present_sslbls = set()
+        istart = 0
+
+        for eetyp in elementary_errorgen_types:
+            self._offsets[eetyp], sup = self._create_ordered_label_offsets(
+                eetyp, self._basis_1q, self.state_space,
+                (self._max_ham_weight if eetyp == 'H' else self._max_other_weight),
+                self._must_overlap_with_these_sslbls, return_total_support=True, initial_offset=istart)
+            present_sslbls = present_sslbls.union(sup)  # set union
+            istart = self._offsets[eetyp]['END']
+
+#TODO REMOVE
+#        self._h_offsets, hsup = self._create_ordered_label_offsets('H', self._basis_1q, self.state_space,
+#                                                                   'diagonal', self._max_ham_weight,
+#                                                                   self._must_overlap_with_these_sslbls,
+#                                                                   return_total_support=True)
+#        self._hs_border = self._h_offsets['END']
+#        self._s_offsets, ssup = self._create_ordered_label_offsets('S', self._basis_1q, self.state_space,
+#                                                                   other_mode, self._max_other_weight,
+#                                                                   self._must_overlap_with_these_sslbls,
+#                                                                   return_total_support=True)
+#       present_sslbls = hsup.union(ssup)  # set union
 
         #Note: state space can have additional labels that aren't in support
         # (this is, I think, only true when must_overlap_with_these_sslbls != None)
         sslbls = self.state_space.tensor_product_block_labels(0)  # all the model's state space labels
-        present_sslbls = hsup.union(ssup)  # set union
+
         if set(sslbls) == present_sslbls:
             self.sslbls = sslbls  # the "support" of this space - the qubit labels
         elif present_sslbls.issubset(sslbls):
@@ -344,27 +401,27 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
 
     def __len__(self):
         """ Number of elementary errorgen elements in this basis """
-        return self._h_offsets['END'] + self._s_offsets['END']
+        return self._offsets[self._elementary_errorgen_types[-1]]['END']
 
     def to_explicit_basis(self):
         return ExplicitElementaryErrorgenBasis(self.state_space, self.labels, self._basis_1q)
 
     @property
     def labels(self):
-        hlabels = self._create_ordered_labels('H', self._basis_1q, self.state_space,
-                                              'diagonal', self._max_ham_weight,
-                                              self._must_overlap_with_these_sslbls)
-        slabels = self._create_ordered_labels('S', self._basis_1q, self.state_space,
-                                              self._other_mode, self._max_other_weight,
-                                              self._must_overlap_with_these_sslbls)
-        return tuple(hlabels + slabels)
+        labels = []
+        for eetype in self._elementary_errorgen_types:
+            labels.extend(self._create_ordered_labels(eetype, self._basis_1q, self.state_space,
+                                                      self._max_ham_weight if eetype == 'H' else self._max_other_weight,
+                                                      self._must_overlap_with_these_sslbls))
+        return tuple(labels)
 
     @property
     def elemgen_supports_and_matrices(self):
         return tuple(((elemgen_label.sslbls,
-                       _ot.lindblad_error_generator(elemgen_label.errorgen_type, elemgen_label.basis_element_labels,
-                                                    self._basis_1q, normalize=True, sparse=False,
-                                                    tensorprod_basis=True))
+                       _ot.create_elementary_errorgen_nqudit(
+                           elemgen_label.errorgen_type, elemgen_label.basis_element_labels,
+                           self._basis_1q, normalize=False, sparse=False,
+                           tensorprod_basis=True))  # Note: normalize was set to True...
                       for elemgen_label in self.labels))
 
     def label_index(self, elemgen_label):
@@ -372,26 +429,25 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         TODO: docstring
         """
         support = elemgen_label.sslbls
-        elemgen_type = elemgen_label.errorgen_type
+        eetype = elemgen_label.errorgen_type
         bels = elemgen_label.basis_element_labels
         trivial_bel = self._basis_1q.labels[0]  # assumes first element is identity
         nontrivial_bels = self._basis_1q.labels[1:]
 
-        if elemgen_type == 'H' or (elemgen_type == 'S' and self._other_mode == 'diagonal'):
-            base = self._h_offsets[support] if (elemgen_type == 'H') else (self._hs_border + self._s_offsets[support])
-            indices = {lbl: i for i, lbl in enumerate(self._create_diag_labels_for_support(support, elemgen_type,
+        if eetype in ('H', 'S'):
+            base = self._offsets[eetype][support]
+            indices = {lbl: i for i, lbl in enumerate(self._create_diag_labels_for_support(support, eetype,
                                                                                            nontrivial_bels))}
-        elif elemgen_type == 'S':
-            assert(self._other_mode == 'all'), "Invalid 'other' mode: %s" % str(self._other_mode)
+        elif eetype in ('C', 'A'):
             assert(len(trivial_bel) == 1)  # assumes this is a single character
             nontrivial_inds = [i for i, letter in enumerate(bels[0]) if letter != trivial_bel]
             left_support = tuple([self.sslbls[i] for i in nontrivial_inds])
-            base = self._hs_border + self._s_offsets[(support, left_support)]
+            base = self._offsets[eetype][(support, left_support)]
 
-            indices = {lbl: i for i, lbl in enumerate(self._create_all_labels_for_support(
-                support, left_support, 'S', [trivial_bel], nontrivial_bels))}
+            indices = {lbl: i for i, lbl in enumerate(self._create_uptriangle_labels_for_support(
+                support, left_support, eetype, [trivial_bel], nontrivial_bels))}
         else:
-            raise ValueError("Invalid label type: %s" % str(elemgen_type))
+            raise ValueError("Invalid elementary errorgen type: %s" % str(eetype))
 
         return base + indices[elemgen_label]
 
@@ -407,7 +463,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         """
         #Note: state_space is automatically reduced within __init__ when necessary, e.g., when
         # `must_overlap_with_these_sslbls` is non-None and considerably reduces the basis.
-        return CompleteElementaryErrorgenBasis(self._basis_1q, self.state_space, self._other_mode,
+        return CompleteElementaryErrorgenBasis(self._basis_1q, self.state_space, self._elementary_errorgen_types,
                                                self._max_ham_weight if retain_max_weights else None,
                                                self._max_other_weight if retain_max_weights else None,
                                                must_overlap_with_these_sslbls)

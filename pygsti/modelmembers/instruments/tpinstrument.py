@@ -69,7 +69,7 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
     # M4 = -(sum(Di)+(4-2=2)*MT) = -(sum(all)+(4-3=1)*MT)
     #n=2 case: (M1-MT) = (MT-M2)-MT = -M2, so M2 = -sum(Di)
 
-    def __init__(self, op_matrices, evotype="default", state_space=None, items=[]):
+    def __init__(self, op_matrices, evotype="default", state_space=None, called_from_reduce=False, items=[]):
 
         self._readonly = False  # until init is done
         if len(items) > 0:
@@ -125,7 +125,8 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
 
         _collections.OrderedDict.__init__(self, items)
         _mm.ModelMember.__init__(self, state_space, evotype)
-        self.init_gpindices()
+        if not called_from_reduce:  # if called from reduce, gpindices are already initialized
+            self.init_gpindices()  # initialize our gpindices based on sub-members
         self._readonly = True
 
     def submembers(self):
@@ -197,11 +198,13 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         # strip the numpy array from each element and call __init__ again when
         # unpickling:
         op_matrices = [(lbl, _np.asarray(val)) for lbl, val in self.items()]
-        return (TPInstrument, (op_matrices, self.evotype, self.state_space, []), {'init_gpindices': self._gpindices})
+        return (TPInstrument, (op_matrices, self.evotype, self.state_space, []),
+                {'init_gpindices': self._gpindices, '_submember_rpindices': self._submember_rpindices})
 
     def __setstate__(self, state):
         # Re-initialize sub-members (which aren't pickled by re-created via __init__) using the saved gpindices
         # Note: the parent Model will later re-link to itself, so ok that parent is None here
+        self._submember_rpindices = state['_submember_rpindices']
         self.set_gpindices(state['init_gpindices'], parent=None)
 
     def __pygsti_reduce__(self):

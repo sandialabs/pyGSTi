@@ -486,6 +486,11 @@ class StdInputParser(object):
 
         last_circuit = last_commentDict = None
 
+        #REMOVE DEBUG
+        #from mpi4py import MPI
+        #comm = MPI.COMM_WORLD
+        #debug_circuit_elements = 0; debug_test_simple_dict = {}; circuit_bytes = 0; sizeof_bytes = 0
+
         with open(filename, 'r') as inputfile:
             for (iLine, line) in enumerate(inputfile):
                 if iLine % nSkip == 0 or iLine + 1 == nLines: display_progress(iLine + 1, nLines, filename)
@@ -605,6 +610,7 @@ class StdInputParser(object):
                         else:
                             raise ValueError("Invalid circuit data-line prefix: '%s'" % parts[0])
 
+        #REMOVE print("Rank %d DONE load loop.  circuit bytes = %g" % (comm.rank, circuit_bytes))
         if looking_for in ("circuit_data", "circuit_data_or_line") and current_item:
             #add final circuit info (no blank line at end of file)
             dataset.add_raw_series_data(current_item['circuit'], current_item.get('outcomes', []),
@@ -1142,11 +1148,11 @@ def parse_model(filename):
 
         elif prefix + "UnitaryMx" in props:
             ar = _eval_row_list(props[prefix + "UnitaryMx"], b_complex=True)
-            lmx = _tools.change_basis(_tools.unitary_to_process_mx(ar), 'std', basis)
+            lmx = _tools.unitary_to_superop(ar, basis)
 
         elif prefix + "UnitaryMxExp" in props:
             ar = _eval_row_list(props[prefix + "UnitaryMxExp"], b_complex=True)
-            lmx = _tools.change_basis(_tools.unitary_to_process_mx(_expm(-1j * ar)), 'std', basis)
+            lmx = _tools.unitary_to_superop(_expm(-1j * ar), basis)
 
         elif prefix + "LiouvilleMx" in props:
             lmx = _eval_row_list(props[prefix + "LiouvilleMx"], b_complex=False)

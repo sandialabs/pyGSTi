@@ -199,6 +199,10 @@ class ComposedPOVM(_POVM):
         list
         """
         return [self.error_map, self.base_povm] if (self.base_povm is not None) else [self.error_map]
+        # Note: could also include existing valuts: ret.extend(_collections.OrderedDict.values(self))
+        #  but this would also require we update self._submember_rpindices as well (tricky, but maybe
+        #  do in FUTURE if it's a significant performance boost).  For now, we simply clear all the cached
+        #  effects whenever our gpindices are set (see set_gpindices) so effect gpindices stay updated.
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
@@ -221,6 +225,7 @@ class ComposedPOVM(_POVM):
         """
         assert(self.base_povm.num_params == 0)  # so no need to do anything w/base_povm
         self.terms = {}  # clear terms cache since param indices have changed now
+        _collections.OrderedDict.clear(self)  # since cached elements may have invalid gpindices
         return super().set_gpindices(gpindices, parent, memo)
 
     def simplify_effects(self, prefix=""):

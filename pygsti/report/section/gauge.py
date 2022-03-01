@@ -223,7 +223,7 @@ class GaugeVariantsErrorGenSection(_Section):
                                        errgen_type='logGTi', **kwargs):
         return workspace.ErrgenTable(
             switchboard.mdl_final, switchboard.mdl_target, _cri(1, switchboard, confidence_level, ci_brevity),
-            ('errgen', 'H', 'S', 'A'), 'boxes', errgen_type
+            ('errgen', 'H', 'S', 'CA'), 'boxes', errgen_type
         )
 
     @_Section.figure_factory(4)

@@ -557,7 +557,7 @@ class ModelMember(ModelChild, _NicelySerializable):
                     else max(self.gpidices)  # an array
                 return 0, max_existing_index
 
-    def allocate_gpindices(self, starting_index, parent, memo=None):
+    def allocate_gpindices(self, starting_index, parent, memo=None, submembers_already_allocated=False):
         """
         Sets gpindices array for this object or any objects it contains (i.e. depends upon).
 
@@ -578,6 +578,11 @@ class ModelMember(ModelChild, _NicelySerializable):
             `memo` contains an object's id (`id(self)`) then this routine
             will exit immediately.
 
+        submembers_already_allocated : bool, optional
+            Whether submembers of this object are known to already have their
+            parameter indices allocated to `parent`.  Leave this as `False`
+            unless you know what you're doing.
+
         Returns
         -------
         num_new : int
@@ -589,16 +594,34 @@ class ModelMember(ModelChild, _NicelySerializable):
         elif id(self) in memo: return 0
 
         if len(self.submembers()) > 0:
-            #Allocate sub-members
-            tot_new_params = 0; all_gpindices = []
-            for subm in self.submembers():
-                num_new_params = subm.allocate_gpindices(starting_index, parent, memo)  # *same* parent as this member
-                starting_index += num_new_params
-                tot_new_params += num_new_params
-                all_gpindices.extend(subm.gpindices_as_array())
 
-            _lt.remove_duplicates_in_place(all_gpindices)  # in case multiple submembers have the same params
-            all_gpindices.sort()
+            if submembers_already_allocated:
+                tot_new_params = 0
+                submembers_with_params = [subm for subm in self.submembers() if
+                                          ((isinstance(subm.gpindices, slice) and subm.gpindices != slice(0, 0))
+                                           or (not isinstance(subm.gpindices, slice) and len(subm.gpindices) > 0))]
+                num_submembers_with_params = len(submembers_with_params)
+                if num_submembers_with_params == 0:  # Special case (for speed)
+                    gpindices_slice_if_possible = slice(0, 0)
+                elif num_submembers_with_params == 1:  # Special case (for speed)
+                    gpindices_slice_if_possible = submembers_with_params[0].gpindices
+                else:
+                    gpindices_slice_if_possible = _merge_indices(
+                        [subm.gpindices for subm in submembers_with_params], submembers_with_params)
+            else:
+                #print("ALLOC SUBMEMBERS!")
+                #Allocate sub-members
+                tot_new_params = 0
+                for subm in self.submembers():
+                    num_new_params = subm.allocate_gpindices(starting_index, parent, memo)  # *same* parent as self
+                    starting_index += num_new_params
+                    tot_new_params += num_new_params
+
+                submembers_with_params = [subm for subm in self.submembers() if
+                                          ((isinstance(subm.gpindices, slice) and subm.gpindices != slice(0, 0))
+                                           or (not isinstance(subm.gpindices, slice) and len(subm.gpindices) > 0))]
+                gpindices_slice_if_possible = _merge_indices(
+                    [subm.gpindices for subm in submembers_with_params], submembers_with_params)
 
             #Then just set the gpindices of this member to those used by
             # its submembers - assume this object doesn't need to allocate any
@@ -608,9 +631,7 @@ class ModelMember(ModelChild, _NicelySerializable):
             # need to set (really, "allocate") *just* the ._gpindices of this
             # object, not the submembers as this is already done above.
             memo.add(id(self))  # would have been called in a proper set_gpindices call
-            self._set_only_my_gpindices(
-                _slct.list_to_slice(all_gpindices, array_ok=True, require_contiguous=True),
-                parent)
+            self._set_only_my_gpindices(gpindices_slice_if_possible, parent)
 
             #parameter index allocation also freezes the relative indices
             # between this object's parameter indices and those of its submembers
@@ -650,7 +671,7 @@ class ModelMember(ModelChild, _NicelySerializable):
             cnt += subm._obj_refcount(obj)
         return cnt
 
-    def init_gpindices(self):
+    def init_gpindices(self, allocated_to_parent=None):
         """
         Initializes this model member's parameter indices by allocating them to an "anticipated" parent model.
 
@@ -671,6 +692,14 @@ class ModelMember(ModelChild, _NicelySerializable):
         will see that this member's indices are already allocated to it, and won't need
         to re-allocate them.
         """
+        if allocated_to_parent is not None:
+            #Shortcut - assume that all submembers are already allocated to *this* (common) parent
+            num_new_params = self.allocate_gpindices(starting_index=0, parent=allocated_to_parent,
+                                                     submembers_already_allocated=True)
+            assert(num_new_params == 0), \
+                "No new parameters should have needed to be added (all sub-members were already allocated)!"
+            return
+
         all_parents = self._collect_parents()
         if len(all_parents) == 1:  # all sub-members have a common (non-None) parent model
             # Next, check that all the sub-members are also *allocated* (have non-None gpindices) to this common parent
@@ -1074,3 +1103,21 @@ def _decompose_gpindices(parent_gpindices, sibling_gpindices):
         parent_lookup = {j: i for i, j in enumerate(parent_gpindices)}
         return _np.array([parent_lookup[j] for j in sibInds], _np.int64)
         #Note: this will work even for "null array" when sibling_gpindices is empty
+
+
+_merge_indices_cache = {}
+
+
+def _merge_indices(gpindices_list, member_list):
+    cache_key = tuple([(('slc', gpi.start, gpi.stop) if isinstance(gpi, slice) else tuple(gpi))
+                       for gpi in gpindices_list])
+
+    if cache_key not in _merge_indices_cache:
+        all_gpindices = []
+        for m in member_list:
+            all_gpindices.extend(m.gpindices_as_array())
+        _lt.remove_duplicates_in_place(all_gpindices)  # in case multiple members have the same param
+        all_gpindices.sort()
+        _merge_indices_cache[cache_key] = _slct.list_to_slice(all_gpindices, array_ok=True,
+                                                              require_contiguous=True)
+    return _merge_indices_cache[cache_key]

@@ -69,9 +69,9 @@ class POVMEffect(_modelmember.ModelMember):
         return self.state_space.dim
 
     @property
-    def size(self):
+    def hilbert_schmidt_size(self):
         """
-        Return the number of independent elements in this gate (when viewed as a dense array)
+        Return the number of independent elements in this effect as a dense Hilbert-Schmidt super-bra.
 
         Returns
         -------

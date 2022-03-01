@@ -68,7 +68,7 @@ def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='defau
                 base_povm = create_from_pure_vectors(pure_vectors, ('computational', 'static pure'),
                                                      basis, evotype, state_space)
 
-                proj_basis = 'pp' if state_space.is_entirely_qubits else basis
+                proj_basis = 'PP' if state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
@@ -109,7 +109,7 @@ def create_from_dmvecs(superket_vectors, povm_type, basis='pp', evotype='default
                 base_povm = create_from_dmvecs(superket_vectors, ('computational', 'static'),
                                                basis, evotype, state_space)
 
-                proj_basis = 'pp' if state_space.is_entirely_qubits else basis
+                proj_basis = 'PP' if state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
@@ -137,6 +137,8 @@ def create_effect_from_pure_vector(pure_vector, effect_type, basis='pp', evotype
                                    on_construction_error='warn'):
     """ TODO: docstring -- create a State from a state vector """
     effect_type_preferences = (effect_type,) if isinstance(effect_type, str) else effect_type
+    if state_space is None:
+        state_space = _statespace.default_space_for_udim(len(pure_vector))
 
     for typ in effect_type_preferences:
         try:
@@ -151,12 +153,14 @@ def create_effect_from_pure_vector(pure_vector, effect_type, basis='pp', evotype
             elif typ in ('static', 'full'):
                 superket = _bt.change_basis(_ot.state_to_dmvec(pure_vector), 'std', basis)
                 ef = create_effect_from_dmvec(superket, typ, basis, evotype, state_space)
+            elif typ == 'static clifford':
+                ef = ComputationalBasisPOVMEffect.from_pure_vector(pure_vector.flatten())
             elif _ot.is_valid_lindblad_paramtype(typ):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
                 static_effect = create_effect_from_pure_vector(
                     pure_vector, ('computational', 'static pure'), basis, evotype, state_space)
 
-                proj_basis = 'pp' if state_space.is_entirely_qubits else basis
+                proj_basis = 'PP' if state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
@@ -178,6 +182,8 @@ def create_effect_from_pure_vector(pure_vector, effect_type, basis='pp', evotype
 def create_effect_from_dmvec(superket_vector, effect_type, basis='pp', evotype='default', state_space=None,
                              on_construction_error='warn'):
     effect_type_preferences = (effect_type,) if isinstance(effect_type, str) else effect_type
+    if state_space is None:
+        state_space = _statespace.default_space_for_dim(len(superket_vector))
 
     for typ in effect_type_preferences:
         try:
@@ -185,6 +191,18 @@ def create_effect_from_dmvec(superket_vector, effect_type, basis='pp', evotype='
                 ef = StaticPOVMEffect(superket_vector, evotype, state_space)
             elif typ == "full":
                 ef = FullPOVMEffect(superket_vector, evotype, state_space)
+            elif _ot.is_valid_lindblad_paramtype(typ):
+                from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                try:
+                    dmvec = _bt.change_basis(superket_vector, basis, 'std')
+                    purevec = _ot.dmvec_to_state(dmvec)  # raises error if dmvec does not correspond to a pure state
+                    static_effect = StaticPOVMPureEffect(purevec, basis, evotype, state_space)
+                except ValueError:
+                    static_effect = StaticPOVMEffect(superket_vector, evotype, state_space)
+                proj_basis = 'PP' if state_space.is_entirely_qubits else basis
+                errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis,
+                                                                  basis, truncate=True, evotype=evotype)
+                ef = ComposedPOVMEffect(static_effect, _ExpErrorgenOp(errorgen))
             else:
                 # Anything else we try to convert to a pure vector and convert the pure state vector
                 dmvec = _bt.change_basis(superket_vector, basis, 'std')
@@ -256,8 +274,9 @@ def povm_type_from_op_type(op_type):
     return povm_type_preferences
 
 
-def convert(povm, to_type, basis, extra=None):
+def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
     """
+    TODO: update docstring
     Convert a POVM to a new type of parameterization.
 
     This potentially creates a new object.  Raises ValueError for invalid conversions.
@@ -267,7 +286,7 @@ def convert(povm, to_type, basis, extra=None):
     povm : POVM
         POVM to convert
 
-    to_type : {"full","full TP","static","static unitary","H+S terms",
+    to_type : {"full","full TP","static","static pure","H+S terms",
         "H+S clifford terms","clifford"}
         The type of parameterizaton to convert to.  See
         :method:`Model.set_all_parameterizations` for more details.
@@ -278,8 +297,15 @@ def convert(povm, to_type, basis, extra=None):
         Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
         (or a custom basis object).
 
-    extra : object, optional
-        Unused.
+    ideal_povm : POVM, optional
+        The ideal version of `povm`, potentially used when
+        converting to an error-generator type.
+
+    flatten_structure : bool, optional
+        When `False`, the sub-members of composed and embedded operations
+        are separately converted, leaving the original POVM's structure
+        unchanged.  When `True`, composed and embedded operations are "flattened"
+        into a single POVM of the requested `to_type`.
 
     Returns
     -------
@@ -288,20 +314,27 @@ def convert(povm, to_type, basis, extra=None):
         object from the object passed as input.
     """
     to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
+
+    destination_types = {'full TP': TPPOVM,
+                         'static clifford': ComputationalBasisPOVM}
+    NoneType = type(None)
+
     for to_type in to_types:
         try:
-            if to_type in ("full", "static", "static unitary"):
-                converted_effects = [(lbl, convert_effect(vec, to_type, basis))
+            if isinstance(povm, destination_types.get(to_type, NoneType)):
+                return povm
+
+            idl = dict(ideal_povm.item()) if ideal_povm is not None else {}  # ideal effects
+
+            if to_type in ("full", "static", "static pure"):
+                converted_effects = [(lbl, convert_effect(vec, to_type, basis, idl.get(lbl, None), flatten_structure))
                                      for lbl, vec in povm.items()]
                 return UnconstrainedPOVM(converted_effects, povm.evotype, povm.state_space)
 
             elif to_type == "full TP":
-                if isinstance(povm, TPPOVM):
-                    return povm  # no conversion necessary
-                else:
-                    converted_effects = [(lbl, convert_effect(vec, "full", basis))
-                                         for lbl, vec in povm.items()]
-                    return TPPOVM(converted_effects, povm.evotype, povm.state_space)
+                converted_effects = [(lbl, convert_effect(vec, "full", basis, idl.get(lbl, None), flatten_structure))
+                                     for lbl, vec in povm.items()]
+                return TPPOVM(converted_effects, povm.evotype, povm.state_space)
 
             elif _ot.is_valid_lindblad_paramtype(to_type):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
@@ -311,28 +344,23 @@ def convert(povm, to_type, basis, extra=None):
                     base_povm = ComputationalBasisPOVM(povm.state_space.num_qubits, povm.evotype)  # just copy it?
                 else:
                     try:
-                        base_items = [(lbl, convert_effect(vec, 'static unitary', basis)) for lbl, vec in povm.items()]
+                        if povm.evotype.minimal_space == 'Hilbert':
+                            base_items = [(lbl, convert_effect(vec, 'static pure', basis,
+                                                               idl.get(lbl, None), flatten_structure))
+                                          for lbl, vec in povm.items()]
+                        else:
+                            raise RuntimeError('Evotype must be compatible with Hilbert ops to use pure effects')
                     except Exception:  # try static mixed states next:
-                        base_items = [(lbl, convert_effect(vec, 'static', basis)) for lbl, vec in povm.items()]
+                        base_items = [(lbl, convert_effect(vec, 'static', basis, idl.get(lbl, None), flatten_structure))
+                                      for lbl, vec in povm.items()]
                     base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
 
-                proj_basis = 'pp' if povm.state_space.is_entirely_qubits else basis
+                proj_basis = 'PP' if povm.state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, to_type, proj_basis,
                                                                   basis, truncate=True, evotype=povm.evotype)
                 return ComposedPOVM(_ExpErrorgenOp(errorgen), base_povm, mx_basis=basis)
 
             elif to_type == "static clifford":
-                if isinstance(povm, ComputationalBasisPOVM):
-                    return povm
-
-                #OLD
-                ##Try to figure out whether this POVM acts on states or density matrices
-                #if any([ (isinstance(Evec,DenseSPAMVec) and _np.iscomplexobj(Evec.base)) # PURE STATE?
-                #         for Evec in povm.values()]):
-                #    nqubits = int(round(_np.log2(povm.dim)))
-                #else:
-                #    nqubits = int(round(_np.log2(povm.dim))) // 2
-
                 #Assume `povm` already represents state-vec ops, since otherwise we'd
                 # need to change dimension
                 nqubits = int(round(_np.log2(povm.dim)))
@@ -355,7 +383,7 @@ def convert(povm, to_type, basis, extra=None):
     raise ValueError("Could not convert POVM to to type(s): %s" % str(to_types))
 
 
-def convert_effect(effect, to_type, basis, extra=None):
+def convert_effect(effect, to_type, basis, ideal_effect=None, flatten_structure=False):
     """
     TODO: update docstring
     Convert POVM effect vector to a new type of parameterization.
@@ -368,7 +396,7 @@ def convert_effect(effect, to_type, basis, extra=None):
     effect : POVMEffect
         POVM effect vector to convert
 
-    to_type : {"full","TP","static","static unitary","clifford",LINDBLAD}
+    to_type : {"full","TP","static","static pure","clifford",LINDBLAD}
         The type of parameterizaton to convert to.  "LINDBLAD" is a placeholder
         for the various Lindblad parameterization types.  See
         :method:`Model.set_all_parameterizations` for more details.
@@ -387,63 +415,46 @@ def convert_effect(effect, to_type, basis, extra=None):
         The converted POVM effect vector, usually a distinct
         object from the object passed as input.
     """
-    if to_type == "full":
-        if isinstance(effect, FullPOVMEffect):
-            return effect  # no conversion necessary
-        else:
-            return FullPOVMEffect(effect.to_dense(), effect.evotype, effect.state_space)
+    to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
+    destination_types = {'full': FullPOVMEffect,
+                         'static': StaticPOVMEffect,
+                         #'static pure': StaticPOVMPureEffect,
+                         'static clifford': ComputationalBasisPOVMEffect}
+    NoneType = type(None)
 
-    elif to_type == "static":
-        if isinstance(effect, StaticPOVMEffect):
-            return effect  # no conversion necessary
-        else:
-            return StaticPOVMEffect(effect.to_dense(), effect.evotype, effect.state_space)
+    for to_type in to_types:
+        try:
+            if isinstance(effect, destination_types.get(to_type, NoneType)):
+                return effect
 
-    elif to_type == "static unitary":
-        dmvec = _bt.change_basis(effect.to_dense('HilbertSchmidt'), basis, 'std')
-        purevec = _ot.dmvec_to_state(dmvec)
-        return StaticPOVMPureEffect(purevec, basis, effect.evotype, effect.state_space)
+            if not flatten_structure and isinstance(effect, ComposedPOVMEffect):
+                return ComposedPOVMEffect(effect.effect_vec.copy(),  # don't convert (usually static) effect vec
+                                          _mm.operations.convert(effect.error_map, to_type, basis, "identity",
+                                                                 flatten_structure))
 
-    elif _ot.is_valid_lindblad_paramtype(to_type):
+            elif _ot.is_valid_lindblad_paramtype(to_type) and (ideal_effect is not None or effect.num_params == 0):
+                from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                ef = ideal_effect if (ideal_effect is not None) else effect
+                if ef is not effect and not _np.allclose(ef.to_dense(), effect.to_dense()):
+                    raise NotImplementedError("Must supply ideal or a static effect to convert to a Lindblad type!")
 
-        from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
-        from ..states import FullState as _FullState, TPState as _TPState, StaticState as _StaticState
-        from ..states import StaticPureState as _StaticPureState
+                proj_basis = 'PP' if effect.state_space.is_entirely_qubits else basis
+                errorgen = _LindbladErrorgen.from_error_generator(effect.state_space.dim, to_type, proj_basis,
+                                                                  basis, truncate=True, evotype=effect.evotype)
+                return ComposedPOVMEffect(ef, _ExpErrorgenOp(errorgen))
 
-        pureeffect = None
-        if isinstance(effect, ConjugatedStatePOVMEffect) \
-           and isinstance(effect.state, (_FullState, _TPState, _StaticState)):
-            #Similar to conversion for states
-            state = effect.state
-            try:
-                dmvec = _bt.change_basis(state.to_dense(), basis, 'std')
-                purevec = _ot.dmvec_to_state(dmvec)  # raises error if dmvec does not correspond to a pure state
-                pureeffect = ConjugatedStatePOVMEffect(_StaticPureState(purevec, basis,
-                                                                        state.evotype, state.state_space))
-            except ValueError:
-                pureeffect = None
+            else:
+                min_space = effect.evotype.minimal_space
+                vec = effect.to_dense(min_space)
+                if min_space == 'Hilbert':
+                    return create_effect_from_pure_vector(vec, to_type, basis, effect.evotype, effect.state_space,
+                                                          on_construction_error='raise')
+                else:
+                    return create_effect_from_dmvec(vec, to_type, basis, effect.evotype, effect.state_space)
+        except ValueError:
+            pass
 
-        if pureeffect is not None:
-            static_effect = pureeffect
-        elif effect.num_params > 0:  # then we need to convert to a static state
-            static_effect = StaticPOVMEffect(effect.to_dense(), effect.evotype, effect.state_space)
-        else:  # state.num_params == 0 so it's already static
-            static_effect = effect
-
-        proj_basis = 'pp' if state.state_space.is_entirely_qubits else basis
-        errorgen = _LindbladErrorgen.from_error_generator(effect.state_space.dim, to_type, proj_basis,
-                                                          basis, truncate=True, evotype=effect.evotype)
-        return ComposedPOVMEffect(static_effect, _ExpErrorgenOp(errorgen))
-
-    elif to_type == "static clifford":
-        if isinstance(effect, ComputationalBasisPOVMEffect):
-            return effect  # no conversion necessary
-
-        purevec = effect.to_dense().flatten()  # assume a pure state (otherwise would need to change Model dim)
-        return ComputationalBasisPOVMEffect.from_pure_vector(purevec)
-
-    else:
-        raise ValueError("Invalid to_type argument: %s" % to_type)
+    raise ValueError("Could not convert effect to type(s): %s" % str(to_types))
 
 
 def optimize_effect(vec_to_optimize, target_vec):

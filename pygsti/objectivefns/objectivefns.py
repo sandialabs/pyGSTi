@@ -1282,6 +1282,52 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
                 dpercircuit[i] = _np.sum(dterms[self.layout.indices_for_index(i)], axis=0)
             return dpercircuit
 
+    def lsvec_percircuit(self, paramvec=None):
+        """
+        Compute the square root of per-circuit contributions to this objective function.
+
+        These values are primarily useful for interfacing with a least-squares
+        optimizer.
+
+        Parameters
+        ----------
+        paramvec : numpy.ndarray, optional
+            The vector of (model) parameters to evaluate the objective function at.
+            If `None`, then the model's current parameter vector is used (held internally).
+
+        Returns
+        -------
+        numpy.ndarray
+            An array of shape `(nCircuits,)` where `nCircuits` is the number
+            of circuits (specified when this objective function was constructed).
+        """
+        return _np.sqrt(self.percircuit(paramvec))
+
+    def dlsvec_percircuit(self, paramvec=None):
+        """
+        Compute the jacobian of the sqrt(per-circuit) values given by :method:`lsvec_percircuit`.
+
+        This jacobian is primarily useful for interfacing with a least-squares optimizer.
+
+        Parameters
+        ----------
+        paramvec : numpy.ndarray, optional
+            The vector of (model) parameters to evaluate the objective function at.
+            If `None`, then the model's current parameter vector is used (held internally).
+
+        Returns
+        -------
+        numpy.ndarray
+            An array of shape `(nCircuits, nParams)` where `nCircuits` is the number
+            of circuits and `nParams` is the number of model parameters (the circuits
+            and model were specified when this objective function was constructed).
+        """
+        denom = self.lsvec_percircuit(paramvec)
+        denom = _np.clip(denom, 1e-10, None)
+
+        # Note: don't need paramvec here since above call sets it
+        return (0.5 / denom)[:, None] * self.dpercircuit()
+
     def fn_local(self, paramvec=None):
         """
         Evaluate the *local* value of this objective function.
@@ -4706,6 +4752,12 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
             An array of shape `(nElements,)` where `nElements` is the number
             of circuit outcomes.
         """
+
+        #DEBUG REMOVE - used for memory profiling
+        #import os, psutil
+        #process = psutil.Process(os.getpid())
+        #def print_mem_usage(prefix):
+        #    print("%s: mem usage = %.3f GB" % (prefix, process.memory_info().rss / (1024.0**3)))
 
         tm = _time.time()
         if paramvec is not None:

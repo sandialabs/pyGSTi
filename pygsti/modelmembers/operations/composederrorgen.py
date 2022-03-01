@@ -668,7 +668,7 @@ class ComposedErrorgen(_LinearOperator):
         for eg in self.factors:
             eg_terms = [t.copy() for t in eg.taylor_order_terms(order, max_polynomial_vars, return_coeff_polys)]
             mapvec = _np.ascontiguousarray(_modelmember._decompose_gpindices(
-                self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.arange(eg.num_params))))
+                self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.arange(eg.num_params))), _np.int64)
             for t in eg_terms:
                 # t.map_indices_inplace(lambda x: tuple(_modelmember._decompose_gpindices(
                 #     # map global to *local* indices

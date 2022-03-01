@@ -39,6 +39,7 @@ from pygsti.baseobjs.opcalc import fastopcalc as _fastopcalc
 #from scipy.sparse.linalg import LinearOperator
 
 cdef double SMALL = 1e-5
+cdef double LOGSMALL = -5
 # a number which is used in place of zero within the
 # product of term magnitudes to keep a running path
 # magnitude from being zero (and losing memory of terms).
@@ -941,7 +942,7 @@ cdef vector[PolynomialCRep*] c_compute_pruned_polynomials_given_threshold(
     ## -------------------------------
 
     add_paths(addpath_fn, b, factor_lists, foat_indices_per_op, numEs, nops, e_indices, 0, log_thres,
-              current_mag, current_logmag, 0, &prps, &prop1, &prop2, &leftSaved, &rightSaved, &coeffSaved)
+              current_mag, current_logmag, 0, &prps, &prop1, &prop2, &leftSaved, &rightSaved, &coeffSaved, 0)
 
     del prop1
     del prop2
@@ -1186,7 +1187,8 @@ cdef void add_paths(addpathfn_ptr addpath_fn, vector[INT]& b, vector[vector_Term
                     vector[INT]& nops, vector[INT]& e_indices, INT incd, double log_thres,
                     double current_mag, double current_logmag, INT order,
                     vector[PolynomialCRep*]* prps, StateCRep **pprop1, StateCRep **pprop2,
-                    vector[StateCRep*]* pleftSaved, vector[StateCRep*]* prightSaved, vector[PolynomialCRep]* pcoeffSaved):
+                    vector[StateCRep*]* pleftSaved, vector[StateCRep*]* prightSaved, vector[PolynomialCRep]* pcoeffSaved,
+                    INT current_nzeros):
     """ first_order means only one b[i] is incremented, e.g. b == [0 1 0] or [4 0 0] """
     cdef INT i, j, k, orig_bi, orig_bn
     cdef INT n = b.size()
@@ -1208,19 +1210,24 @@ cdef void add_paths(addpathfn_ptr addpath_fn, vector[INT]& b, vector[vector_Term
 
         logmag = current_logmag + (deref(oprep_lists[i])[b[i]]._logmagnitude - deref(oprep_lists[i])[b[i]-1]._logmagnitude)
         if logmag >= log_thres:
-            if deref(oprep_lists[i])[b[i]-1]._magnitude == 0:
-                mag = 0
-            else:
-                mag = current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[b[i]-1]._magnitude)
+            numerator = deref(oprep_lists[i])[b[i]]._magnitude
+            denom = deref(oprep_lists[i])[b[i]-1]._magnitude
+            nzeros = current_nzeros
+            if denom == 0:
+                denom = SMALL; nzeros -= 1; logmag  = logmag - LOGSMALL
+            if numerator == 0:
+                numerator = SMALL; nzeros += 1; logmag = logmag + LOGSMALL
+            mag = current_mag * (numerator / denom)
 
             ## fn_visitpath(b, mag, i) ##
-            addpath_fn(prps, b, i, oprep_lists, pprop1, pprop2, &e_indices, pleftSaved, prightSaved, pcoeffSaved)
+            if nzeros == 0:
+                addpath_fn(prps, b, i, oprep_lists, pprop1, pprop2, &e_indices, pleftSaved, prightSaved, pcoeffSaved)
             ## --------------------------
 
             #add any allowed paths beneath this one
             add_paths(addpath_fn, b, oprep_lists, foat_indices_per_op, num_elabels, nops, e_indices,
                       i, log_thres, mag, logmag, sub_order, prps, pprop1, pprop2,
-                      pleftSaved, prightSaved, pcoeffSaved)
+                      pleftSaved, prightSaved, pcoeffSaved, nzeros)
 
         elif sub_order <= 1:
             #We've rejected term-index b[i] (in column i) because it's too small - the only reason
@@ -1232,11 +1239,14 @@ cdef void add_paths(addpathfn_ptr addpath_fn, vector[INT]& b, vector[vector_Term
             for j in deref(foat_indices_per_op[i]):
                 if j >= orig_bi:
                     b[i] = j
-                    mag = 0 if deref(oprep_lists[i])[orig_bi-1]._magnitude == 0 else \
-                        current_mag * (deref(oprep_lists[i])[b[i]]._magnitude / deref(oprep_lists[i])[orig_bi-1]._magnitude)
+                    nzeros = current_nzeros
+                    numerator = deref(oprep_lists[i])[b[i]]._magnitude
+                    denom = deref(oprep_lists[i])[orig_bi - 1]._magnitude
+                    if denom == 0: denom = SMALL
 
                     ## fn_visitpath(b, mag, i) ##
-                    addpath_fn(prps, b, i, oprep_lists, pprop1, pprop2, &e_indices, pleftSaved, prightSaved, pcoeffSaved)
+                    if nzeros == 0:
+                        addpath_fn(prps, b, i, oprep_lists, pprop1, pprop2, &e_indices, pleftSaved, prightSaved, pcoeffSaved)
                     ## --------------------------
 
                     if i != n-1:
@@ -1245,10 +1255,11 @@ cdef void add_paths(addpathfn_ptr addpath_fn, vector[INT]& b, vector[vector_Term
                         orig_bn = b[n-1]
                         for k in range(1,num_elabels):
                             b[n-1] = k
-                            mag2 = mag * (deref(oprep_lists[n-1])[b[n-1]]._magnitude / deref(oprep_lists[i])[orig_bn]._magnitude)
+                            #mag2 = mag * (deref(oprep_lists[n-1])[b[n-1]]._magnitude / deref(oprep_lists[i])[orig_bn]._magnitude)
 
                             ## fn_visitpath(b, mag2, n-1) ##
-                            addpath_fn(prps, b, n-1, oprep_lists, pprop1, pprop2, &e_indices, pleftSaved, prightSaved, pcoeffSaved)
+                            if nzeros == 0:
+                                addpath_fn(prps, b, n-1, oprep_lists, pprop1, pprop2, &e_indices, pleftSaved, prightSaved, pcoeffSaved)
                             ## --------------------------
                         b[n-1] = orig_bn
             b[i] = orig_bi
@@ -1291,9 +1302,9 @@ cdef bool count_paths(vector[INT]& b, vector[vector_TermCRep_ptr_ptr]& oprep_lis
             denom = deref(oprep_lists[i])[b[i]-1]._magnitude
             nzeros = current_nzeros
             if denom == 0:
-                denom = SMALL; nzeros -= 1
+                denom = SMALL; nzeros -= 1; logmag = logmag - LOGSMALL
             if numerator == 0:
-                numerator = SMALL; nzeros += 1
+                numerator = SMALL; nzeros += 1; logmag = logmag + LOGSMALL
             mag = current_mag * (numerator / denom)
 
             ## fn_visitpath(b, mag, i) ##

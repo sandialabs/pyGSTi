@@ -81,6 +81,23 @@ class ErrorgenSpace(object):
         """
         raise NotImplementedError("TODO in FUTURE")
 
+    def normalize(self, norm_order=2):
+        """
+        Normalize the vectors defining this space according to a given norm.
+
+        Parameters
+        ----------
+        norm_order : int, optional
+            The order of the norm to use.
+
+        Returns
+        -------
+        None
+        """
+        for j in range(self.vectors.shape[1]):
+            sign = +1 if max(self.vectors[:, j]) >= -min(self.vectors[:, j]) else -1
+            self.vectors[:, j] /= sign * _np.linalg.norm(self.vectors[:, j], ord=norm_order)
+
 
 #class LowWeightErrorgenSpace(ErrorgenSpace):
 #    """
