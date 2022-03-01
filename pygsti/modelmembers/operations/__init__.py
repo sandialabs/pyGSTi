@@ -44,6 +44,7 @@ from pygsti.tools import optools as _ot
 def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
     """ TODO: docstring - note that op_type can be a list/tuple of types in order of precedence """
     op_type_preferences = verbose_type_from_op_type(op_type)
+
     U = unitary_mx
     if state_space is None:
         state_space = _statespace.default_space_for_udim(U.shape[0])
@@ -85,9 +86,9 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                 raise ValueError("Unknown operation type '%s'!" % str(typ))
 
             return op  # if we get to here, then we've successfully created an op to return
-        except (ValueError, AssertionError, AttributeError):  # as e:
+        except (ValueError, AssertionError, AttributeError):
             #_warnings.warn('Failed to create operator with type %s with error: %s' % (typ, e))
-            pass  # move on to next type
+            pass  # move on to text type
 
     raise ValueError("Could not create an operator of type(s) %s from the given unitary op!" % (str(op_type)))
 
@@ -193,6 +194,7 @@ def verbose_type_from_op_type(op_type):
 def convert_errorgen(errorgen, to_type, basis, flatten_structure=False):
     """ TODO: docstring """
     to_types = verbose_type_from_op_type(to_type)
+    error_msgs = {}
 
     for to_type in to_types:
         try:
@@ -222,10 +224,10 @@ def convert_errorgen(errorgen, to_type, basis, flatten_structure=False):
             else:
                 raise ValueError("%s is not a valid error generator type!" % str(to_type))
 
-        except:
-            pass  # try next to_type
+        except Exception as e:
+            error_msgs[to_type] = str(e)  # try next to_type
 
-    raise ValueError("Could not convert error generator to to type(s): %s" % str(to_types))
+    raise ValueError("Could not convert error generator to type(s): %s\n%s" % (str(to_types), str(error_msgs)))
 
 
 def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=False):
@@ -269,6 +271,7 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
         object from the operation object passed as input.
     """
     to_types = verbose_type_from_op_type(to_type)
+    error_msgs = {}
 
     destination_types = {'full': FullArbitraryOp,
                          'full TP': FullTPOp,
@@ -331,10 +334,10 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
                 else:
                     return create_from_superop_mx(mx, to_type, basis, None, operation.evotype, operation.state_space)
 
-        except:
-            pass  # try next to_type
+        except Exception as e:
+            error_msgs[to_type] = str(e)  # try next to_type
 
-    raise ValueError("Could not convert operation to to type(s): %s" % str(to_types))
+    raise ValueError("Could not convert operation to to type(s): %s\n%s" % (str(to_types), str(error_msgs)))
 
 
 def check_deriv_wrt_params(operation, deriv_to_check=None, wrt_filter=None, eps=1e-7):

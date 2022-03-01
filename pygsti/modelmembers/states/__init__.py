@@ -11,6 +11,8 @@ Sub-package holding model state preparation objects.
 #***************************************************************************************************
 
 import numpy as _np
+import scipy.linalg as _spl
+import scipy.optimize as _spo
 import warnings as _warnings
 
 from numpy.lib.arraysetops import isin
@@ -214,6 +216,7 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
         object from the object passed as input.
     """
     to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
+    error_msgs = {}
 
     destination_types = {'full': FullState,
                          'full TP': TPState,
@@ -236,12 +239,25 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
             elif _ot.is_valid_lindblad_paramtype(to_type) and (ideal_state is not None or state.num_params == 0):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
                 st = ideal_state if (ideal_state is not None) else state
-                if st is not state and not _np.allclose(st.to_dense(), state.to_dense()):
-                    raise NotImplementedError("Must supply ideal or a static state to convert to a Lindblad type!")
-
                 proj_basis = 'PP' if state.state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state.state_space.dim, to_type, proj_basis,
                                                                   basis, truncate=True, evotype=state.evotype)
+                if st is not state and not _np.allclose(st.to_dense(), state.to_dense()):
+                    #Need to set errorgen so exp(errorgen)|st> == |state>
+                    dense_st = st.to_dense()
+                    dense_state = state.to_dense()
+
+                    def _objfn(v):
+                        errorgen.from_vector(v)
+                        return _np.linalg.norm(_spl.expm(errorgen.to_dense()) @ dense_st - dense_state)
+                    #def callback(x): print("callbk: ",_np.linalg.norm(x),_objfn(x))  # REMOVE
+                    soln = _spo.minimize(_objfn, _np.zeros(errorgen.num_params, 'd'), method="CG", options={},
+                                         tol=1e-8)  # , callback=callback)
+                    #print("DEBUG: opt done: ",soln.success, soln.fun, soln.x)  # REMOVE
+                    if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
+                        raise ValueError("Failed to find an errorgen such that exp(errorgen)|ideal> = |state>")
+                    errorgen.from_vector(soln.x)
+
                 return ComposedState(st, _ExpErrorgenOp(errorgen))
             else:
                 min_space = state.evotype.minimal_space
@@ -253,10 +269,10 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                     return create_from_dmvec(vec, to_type, basis, state.evotype, state.state_space)
 
         except ValueError as e:
-            _warnings.warn('Failed to convert state to type %s with error: %s' % (to_type, e))
-            pass
+            #_warnings.warn('Failed to convert state to type %s with error: %s' % (to_type, e))
+            error_msgs[to_type] = str(e)  # try next to_type
 
-    raise ValueError("Could not convert state to type(s): %s" % str(to_types))
+    raise ValueError("Could not convert state to to type(s): %s\n%s" % (str(to_types), str(error_msgs)))
 
 
 def finite_difference_deriv_wrt_params(state, wrt_filter=None, eps=1e-7):
