@@ -127,6 +127,7 @@ class AdvancedParameterizationTestCase(BaseTestCase):
         Gx_depol.set_error_rates( {('S','X'): 0.01, ('S','Y'): 0.01, ('S','Z'): 0.01} )
         print("Infidelity = ", pygsti.tools.entanglement_infidelity(Gx_depol.to_dense("HilbertSchmidt"),
                                                                     mdl_std1Q_HS.operations['Gx'].to_dense("HilbertSchmidt")))
+
         self.assertAlmostEqual(pygsti.tools.entanglement_infidelity(Gx_depol.to_dense(), mdl_std1Q_HS.operations['Gx'].to_dense()), depol_err)
 
         

@@ -16,11 +16,13 @@ import itertools as _itertools
 import numpy as _np
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.operations.experrorgenop import ExpErrorgenOp as _ExpErrorgenOp
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
 from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import listtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import slicetools as _slct
@@ -51,7 +53,7 @@ class ComposedOp(_LinearOperator):
         error generator being composed.
     """
 
-    def __init__(self, ops_to_compose, evotype="auto", state_space="auto"):
+    def __init__(self, ops_to_compose, evotype="auto", state_space="auto", allocated_to_parent=None):
         assert(len(ops_to_compose) > 0 or state_space != "auto"), \
             "Must compose at least one operation when state_space='auto'!"
         self.factorops = list(ops_to_compose)
@@ -96,7 +98,7 @@ class ComposedOp(_LinearOperator):
         self.local_term_poly_coeffs = {}
 
         _LinearOperator.__init__(self, rep, evotype)
-        self.init_gpindices()  # initialize our gpindices based on sub-members
+        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
         if self._rep_type == 'dense': self._update_denserep()  # update dense rep if needed
 
     def _update_denserep(self):
@@ -466,10 +468,16 @@ class ComposedOp(_LinearOperator):
 
     def _compute_taylor_order_terms(self, order, max_polynomial_vars, gpindices_array):  # separated for profiling
         terms = []
-        for p in _lt.partition_into(order, len(self.factorops)):
-            factor_lists = [self.factorops[i].taylor_order_terms(pi, max_polynomial_vars) for i, pi in enumerate(p)]
-            for factors in _itertools.product(*factor_lists):
-                terms.append(_term.compose_terms(factors))
+        if len(self.factorops) > 0:
+            for p in _lt.partition_into(order, len(self.factorops)):
+                factor_lists = [self.factorops[i].taylor_order_terms(pi, max_polynomial_vars) for i, pi in enumerate(p)]
+                for factors in _itertools.product(*factor_lists):
+                    terms.append(_term.compose_terms(factors))
+        elif order == 0:  # special case: ComposedOp with no factors == identity
+            identityTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, max_polynomial_vars),
+                                                                     None, None, self._evotype, self.state_space)
+            terms.append(identityTerm)
+
         self.terms[order] = terms
 
         #def _decompose_indices(x):
@@ -634,6 +642,16 @@ class ComposedOp(_LinearOperator):
         -------
         None
         """
+        if (len(self.factorops) == 2 and self.factorops[0].num_params == 0
+           and isinstance(self.factorops[1], _ExpErrorgenOp)) and self.state_space.dim <= 16:
+            #SPECIAL CASE / HACK: for 1 & 2Q, when holding e^L * T, where T is a static gate
+            # then try to gauge transform by setting e^L directly and leaving T alone:
+            Smx = s.transform_matrix; Si = s.transform_matrix_inverse
+            Tinv = _np.linalg.inv(self.factorops[0].to_dense(on_space='minimal'))
+            trans_eLT = _np.dot(Si, _np.dot(self.to_dense(on_space='minimal'), Smx))
+            self.factorops[1].set_dense(_np.dot(trans_eLT, Tinv))  # set_dense(trans_eL)
+            return
+
         for operation in self.factorops:
             operation.transform_inplace(s)
 

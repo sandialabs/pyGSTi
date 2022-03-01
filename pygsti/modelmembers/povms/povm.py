@@ -210,7 +210,7 @@ class POVM(_mm.ModelMember, _collections.OrderedDict):
         -------
         int
         """
-        return sum([E.size for E in self.values()])
+        return sum([E.hilbert_schmidt_size for E in self.values()])
 
     def acton(self, state):
         """

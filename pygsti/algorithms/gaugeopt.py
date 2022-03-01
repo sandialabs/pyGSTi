@@ -28,7 +28,8 @@ def gaugeopt_to_target(model, target_model, item_weights=None,
                        gates_metric="frobenius", spam_metric="frobenius",
                        gauge_group=None, method='auto', maxiter=100000,
                        maxfev=None, tol=1e-8, oob_check_interval=0,
-                       return_all=False, comm=None, verbosity=0, check_jac=False):
+                       convert_model_to=None, return_all=False, comm=None,
+                       verbosity=0, check_jac=False):
     """
     Optimize the gauge degrees of freedom of a model to that of a target.
 
@@ -108,6 +109,14 @@ def gaugeopt_to_target(model, target_model, item_weights=None,
         will avoid.  If zero, then any gauge-transform failures just terminate the
         optimization.
 
+    convert_model_to : str, dict, list, optional
+        For use when `model` is an `ExplicitOpModel`.  When not `None`, calls
+        `model.convert_members_inplace(convert_model_to, set_default_gauge_group=False)` if
+        `convert_model_to` is a string, `model.convert_members_inplace(**convert_model_to)` if it
+        is a dict, and repeated calls to either of the above instances when `convert_model_to`
+        is a list or tuple  prior to performing the gauge optimization.  This allows the gauge
+        optimization to be performed using a differently constrained model.
+
     return_all : bool, optional
         When True, return best "goodness" value and gauge matrix in addition to the
         gauge optimized model.
@@ -152,7 +161,8 @@ def gaugeopt_to_target(model, target_model, item_weights=None,
 
     result = gaugeopt_custom(model, objective_fn, gauge_group, method,
                              maxiter, maxfev, tol, oob_check_interval,
-                             return_all, jacobian_fn, comm, verbosity)
+                             convert_model_to, return_all,
+                             jacobian_fn, comm, verbosity)
 
     #If we've gauge optimized to a target model, declare that the
     # resulting model is now in the same basis as the target.
@@ -165,8 +175,8 @@ def gaugeopt_to_target(model, target_model, item_weights=None,
 
 def gaugeopt_custom(model, objective_fn, gauge_group=None,
                     method='L-BFGS-B', maxiter=100000, maxfev=None, tol=1e-8,
-                    oob_check_interval=0, return_all=False, jacobian_fn=None,
-                    comm=None, verbosity=0):
+                    oob_check_interval=0, convert_model_to=None,
+                    return_all=False, jacobian_fn=None, comm=None, verbosity=0):
     """
     Optimize the gauge of a model using a custom objective function.
 
@@ -211,6 +221,14 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
         will avoid.  If zero, then any gauge-transform failures just terminate the
         optimization.
 
+    convert_model_to : str, dict, list, optional
+        For use when `model` is an `ExplicitOpModel`.  When not `None`, calls
+        `model.convert_members_inplace(convert_model_to, set_default_gauge_group=False)` if
+        `convert_model_to` is a string, `model.convert_members_inplace(**convert_model_to)` if it
+        is a dict, and repeated calls to either of the above instances when `convert_model_to`
+        is a list or tuple  prior to performing the gauge optimization.  This allows the gauge
+        optimization to be performed using a differently constrained model.
+
     return_all : bool, optional
         When True, return best "goodness" value and gauge matrix in addition to the
         gauge optimized model.
@@ -239,6 +257,16 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     tStart = _time.time()
+
+    if convert_model_to is not None:
+        conversion_args = convert_model_to if isinstance(convert_model_to, (list, tuple)) else (convert_model_to,)
+        for args in conversion_args:
+            if isinstance(args, str):
+                model.convert_members_inplace(args, set_default_gauge_group=True)
+            elif isinstance(args, dict):
+                model.convert_members_inplace(**args)
+            else:
+                raise ValueError("Invalid `convert_model_to` arguments: %s" % str(args))
 
     if comm is not None:
         mdl_cmp = comm.bcast(model if (comm.Get_rank() == 0) else None, root=0)
@@ -276,7 +304,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
     else:
         _call_jacobian_fn = None
 
-    printer.log("--- Gauge Optimization (%s method) ---" % method, 2)
+    printer.log("--- Gauge Optimization (%s method, %s) ---" % (method, str(type(gauge_group))), 2)
     if method == 'ls':
         #minSol  = _opt.least_squares(_call_objective_fn, x0, #jac=_call_jacobian_fn,
         #                            max_nfev=maxfev, ftol=tol)
@@ -366,7 +394,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
 
         if frobenius_transform_target:
             full_target_model = target_model.copy()
-            full_target_model.set_all_parameterizations("full")  # so we can gauge-transform the target model.
+            full_target_model.convert_members_inplace("full")  # so we can gauge-transform the target model.
         else:
             full_target_model = None  # in case it get's referenced by mistake
 
@@ -572,7 +600,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
 
             if gates_metric == "frobeniustt" or spam_metric == "frobeniustt":
                 full_target_model = target_model.copy()
-                full_target_model.set_all_parameterizations("full")  # so we can gauge-transform the target model.
+                full_target_model.convert_members_inplace("full")  # so we can gauge-transform the target model.
                 transformed_target = _transform_with_oob_check(full_target_model, gauge_group_el.inverse(), oob_check)
             else:
                 transformed_target = None

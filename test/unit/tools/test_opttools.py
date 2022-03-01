@@ -60,5 +60,7 @@ class TestTimeHash(BaseCase):
         value1 = opt.time_hash()
         self.assertTrue(isinstance(value1, str), "time hash is not a string")
 
+        sleep(1) # Actually guarantee time hashes are different
+
         value2 = opt.time_hash()
         self.assertNotEqual(value1, value2, "different time hashes are equal")

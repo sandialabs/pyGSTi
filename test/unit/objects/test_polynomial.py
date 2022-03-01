@@ -20,11 +20,11 @@ class CompactPolynomialTester(BaseCase):
         self.assertArraysAlmostEqual(c2, np.array([4.0, 5.0, 6.0]))
         # 6x2^2 x3 + 5 x1^2 + 4
 
-        v = np.concatenate((v, v2))
+        v = np.concatenate((v, v2)).astype(np.int64)
         c = np.concatenate((c, c2))
         c = np.ascontiguousarray(c, complex)
 
-        vout, cout = compact_deriv(v, c, np.array([1, 2, 3]))
+        vout, cout = compact_deriv(v, c, np.array([1, 2, 3], dtype=np.int64))
         compact_polys = poly.bulk_load_compact_polynomials(vout, cout, keep_compact=True)
 
         def assertCompactPolysEqual(vctups1, vctups2):

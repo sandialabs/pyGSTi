@@ -1113,7 +1113,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
             GB = 1.0 / 1024.0**3
             if mem_estimate > mem_limit:
-                raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB" % (
+                raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB)" % (
                     mem_limit * GB, mem_estimate * GB))
             else:
                 printer.log("   Esimated memory required = %.1fGB" % (mem_estimate * GB))

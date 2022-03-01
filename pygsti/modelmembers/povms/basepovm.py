@@ -27,7 +27,7 @@ from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 class _BasePOVM(_POVM):
     """ The base behavior for both UnconstrainedPOVM and TPPOVM """
 
-    def __init__(self, effects, evotype=None, state_space=None, preserve_sum=False):
+    def __init__(self, effects, evotype=None, state_space=None, preserve_sum=False, called_from_reduce=False):
         """
         Creates a new BasePOVM object.
 
@@ -61,7 +61,8 @@ class _BasePOVM(_POVM):
         if preserve_sum:
             assert(len(items) > 1), "Cannot create a TP-POVM with < 2 effects!"
             self.complement_label = items[-1][0]
-            comp_val = _np.array(items[-1][1])  # current value of complement vec
+            comp_obj = items[-1][1]  # current object & then value of complement vec
+            comp_val = comp_obj.to_dense() if isinstance(comp_obj, _POVMEffect) else _np.array(comp_obj)
         else:
             self.complement_label = None
 
@@ -100,14 +101,14 @@ class _BasePOVM(_POVM):
         #Add a complement effect if desired
         if self.complement_label is not None:  # len(items) > 0 by assert
             non_comp_effects = [v for k, v in items]
-            identity_for_complement = _np.array(sum([v.reshape(comp_val.shape) for v in non_comp_effects])
+            identity_for_complement = _np.array(sum([v.to_dense().reshape(comp_val.shape) for v in non_comp_effects])
                                                 + comp_val, 'd')  # ensure shapes match before summing
             complement_effect = _ComplementPOVMEffect(
                 identity_for_complement, non_comp_effects)
             items.append((self.complement_label, complement_effect))
 
         super(_BasePOVM, self).__init__(state_space, evotype, items)
-        self.init_gpindices()  # initialize our gpindices based on sub-members
+        if not called_from_reduce: self.init_gpindices()  # initialize our gpindices based on sub-members
         self._paramlbls = _np.array(paramlbls, dtype=object)
 
     def submembers(self):

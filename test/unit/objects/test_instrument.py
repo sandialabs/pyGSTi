@@ -33,7 +33,7 @@ class InstrumentMethodBase(object):
 
     def test_constructor_raises_on_non_none_param_conflict(self):
         with self.assertRaises(AssertionError):
-            self.constructor(["Non-none-matrices"], 'default', None, ["Non-none-items"])  # can't both be non-None
+            self.constructor(["Non-none-matrices"], 'default', None, False, ["Non-none-items"])  # can't both be non-None
 
     def test_constructor_raises_on_bad_op_matrices_type(self):
         with self.assertRaises(ValueError):

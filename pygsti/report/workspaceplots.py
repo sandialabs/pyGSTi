@@ -935,12 +935,18 @@ def _opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_b
         mx_basis_y = _baseobjs.BuiltinBasis(mx_basis_y, op_matrix.shape[0])
 
     if mx_basis is not None:
-        xlabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis.labels]
+        if len(mx_basis.labels) - 1 == op_matrix.shape[1]:
+            xlabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis.labels[1:]]
+        else:
+            xlabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis.labels]
     else:
         xlabels = [""] * op_matrix.shape[1]
 
     if mx_basis_y is not None:
-        ylabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis_y.labels]
+        if len(mx_basis_y.labels) - 1 == op_matrix.shape[0]:
+            ylabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis_y.labels[1:]]
+        else:
+            ylabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis_y.labels]
     else:
         ylabels = [""] * op_matrix.shape[0]
 
@@ -2526,7 +2532,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
         if color_min is None: color_min = -absMax
         if color_max is None: color_max = absMax
 
-        d2 = len(projections)  # number of projections == dim of gate
+        d2 = len(projections) + 1  # number of projections == dim of gate  (+1 b/c identity is not included)
         d = _np.sqrt(d2)  # dim of density matrix
         nQubits = _np.log2(d)
 
@@ -2535,20 +2541,35 @@ class ProjectionsBoxPlot(WorkspacePlot):
             projections = projections.reshape((1, projections.size))
             xlabel = ""; ylabel = ""
         elif nQubits == 1:
-            projections = projections.reshape((1, 4))
-            xlabel = "Q1"; ylabel = ""
+            if projections.size == 3:
+                projections = projections.reshape((1, 3))
+                xlabel = "Q1"; ylabel = ""
+                xd, yd = 4, 1  # include identity in basis dimensions
+            else:  # projections.size == 3*3 = 9
+                projections = projections.reshape((3, 3))
+                xlabel = ""; ylabel = ""
+                xd = yd = 4
         elif nQubits == 2:
-            projections = projections.reshape((4, 4))
-            xlabel = "Q2"; ylabel = "Q1"
+            if projections.size == 15:
+                projections = _np.concatenate(([0.0], projections)).reshape((4, 4))
+                xlabel = "Q2"; ylabel = "Q1"
+                xd, yd = projections.shape
+            else:  # projections.size == 15*15
+                projections = projections.reshape((15, 15))
+                xlabel = ""; ylabel = ""
+                xd = yd = 16  # include identity in basis dimensions
         else:
-            projections = projections.reshape((4, projections.size // 4))
-            xlabel = "Q*"; ylabel = "Q1"
+            if projections.size == 4**nQubits - 1:
+                projections = _np.concatenate(([0.0], projections)).reshape((4, projections.size // 4))
+                xlabel = "Q*"; ylabel = "Q1"
+                xd, yd = projections.shape
+            else:  # projections.size == (4**nQ)**2
+                projections = projections.reshape((4**nQubits - 1, 4**nQubits - 1))
+                xlabel = ""; ylabel = ""
+                xd = yd = 4**nQubits
 
         if eb_matrix is not None:
             eb_matrix = eb_matrix.reshape(projections.shape)
-
-        xd = projections.shape[1]  # x-basis-dim
-        yd = projections.shape[0]  # y-basis-dim
 
         if isinstance(projection_basis, _baseobjs.Basis):
             if isinstance(projection_basis, _baseobjs.TensorProdBasis) and len(projection_basis.component_bases) == 2 \
