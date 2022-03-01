@@ -1133,7 +1133,7 @@ class BuiltinBasis(LazyBasis):
         elif isinstance(other, str):
             return self.name == other  # see if other is a string equal to our name
         else:
-            return LazyBasis.__eq__(self, other)
+            return LazyBasis.is_equivalent(self, other)
 
 
 class DirectSumBasis(LazyBasis):
