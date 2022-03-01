@@ -226,6 +226,9 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         trivial_bel = [basis_1q.labels[0]]
         nontrivial_bels = basis_1q.labels[1:]  # assume first element is identity
 
+        if must_overlap_with_these_sslbls is not None and not isinstance(must_overlap_with_these_sslbls, set):
+            must_overlap_with_these_sslbls = set(must_overlap_with_these_sslbls)
+
         if max_weight is None:
             assert(state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
             sslbls = state_space.tensor_product_block_labels(0)  # all the model's state space labels
@@ -237,7 +240,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             for weight in range(1, max_weight + 1):
                 for support in _itertools.combinations(sslbls, weight):  # NOTE: combinations *MUST* be deterministic
                     if (must_overlap_with_these_sslbls is not None
-                       and len(set(must_overlap_with_these_sslbls).intersection(support)) == 0):
+                       and len(must_overlap_with_these_sslbls.intersection(support)) == 0):
                         continue
                     offsets[support] = len(labels) + initial_offset
                     labels.extend(cls._create_diag_labels_for_support(support, type_str, nontrivial_bels))
@@ -284,6 +287,9 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         n1Q_nontrivial_bels = n1Q_bels - 1  # assume first element is identity
         total_support = set()
 
+        if must_overlap_with_these_sslbls is not None and not isinstance(must_overlap_with_these_sslbls, set):
+            must_overlap_with_these_sslbls = set(must_overlap_with_these_sslbls)
+
         if max_weight is None:
             assert(state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
             sslbls = state_space.tensor_product_block_labels(0)  # all the model's state space labels
@@ -295,7 +301,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             for weight in range(1, max_weight + 1):
                 for support in _itertools.combinations(sslbls, weight):  # NOTE: combinations *MUST* be deterministic
                     if (must_overlap_with_these_sslbls is not None
-                       and len(set(must_overlap_with_these_sslbls).intersection(support)) == 0):
+                       and len(must_overlap_with_these_sslbls.intersection(support)) == 0):
                         continue
                     offsets[support] = off + initial_offset
                     off += n1Q_nontrivial_bels**weight
