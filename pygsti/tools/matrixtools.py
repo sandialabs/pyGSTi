@@ -2520,3 +2520,38 @@ def zvals_int64_to_dense(zvals_int, nqubits, outvec=None, trust_outvec_sparsity=
         outvec[finalIndx] = -abs_elval if minus_sign else abs_elval
 
     return outvec
+
+
+def sign_fix_qr(q, r, tol=1e-6):
+    """
+    Change the signs of the columns of Q and rows of R to follow a convention.
+
+    Flips the signs of Q-columns and R-rows from a QR decomposition so that the
+    largest absolute element in each Q-column is positive.  This is an arbitrary
+    but consisten convention that resolves sign-ambiguity in the output of a QR
+    decomposition.
+
+    Parameters
+    ----------
+    q, r : numpy.ndarray
+        Input Q and R matrices from QR decomposition.
+
+    tol : float, optional
+        Tolerance for computing the maximum element, i.e., anything
+        within `tol` of the true max is counted as a maximal element,
+        the *first* of which is set positive by the convention.
+
+    Returns
+    -------
+    qq, rr : numpy.ndarray
+        Updated versions of `q` and `r`.
+    """
+    qq = q.copy()
+    rr = r.copy()
+    for i in range(q.shape[1]):
+        max_abs = max(_np.abs(q[:, i]))
+        k = _np.argmax(_np.abs(q[:, i]) > (max_abs - tol))
+        if q[k, i] < 0.0:
+            qq[:, i] = -q[:, i]
+            rr[i, :] = -r[i, :]
+    return qq, rr
