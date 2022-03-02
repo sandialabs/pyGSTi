@@ -886,39 +886,10 @@ class CacheForwardSimulator(ForwardSimulator):
                                                                    outcomes, layout.resource_alloc(), cache, time=None)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice):
-
-        try:
-            for element_indices, circuit, outcomes, cache in layout.iter_unique_circuits_with_cache():
-                self._compute_circuit_outcome_probability_derivatives_with_cache(
-                    array_to_fill[element_indices, dest_param_slice], circuit, outcomes, param_slice,
-                    layout.resource_alloc(), cache)
-            return
-        except NotImplementedError:
-            pass  # otherwise, proceed to compute derivatives via finite difference.
-        eps = 1e-7  # hardcoded?
-        if param_slice is None:
-            param_slice = slice(0, self.model.num_params)
-        param_indices = _slct.to_array(param_slice)
-
-        if dest_param_slice is None:
-            dest_param_slice = slice(0, len(param_indices))
-        dest_param_indices = _slct.to_array(dest_param_slice)
-
-        iParamToFinal = {i: dest_param_indices[ii] for ii, i in enumerate(param_indices)}
-
-        probs = _np.empty(len(layout), 'd')
-        self._bulk_fill_probs_block(probs, layout)
-
-        probs2 = _np.empty(len(layout), 'd')
-        orig_vec = self.model.to_vector().copy()
-        for i in range(self.model.num_params):
-            if i in iParamToFinal:
-                iFinal = iParamToFinal[i]
-                vec = orig_vec.copy(); vec[i] += eps
-                self.model.from_vector(vec, close=True)
-                self._bulk_fill_probs_block(probs2, layout)
-                array_to_fill[:, iFinal] = (probs2 - probs) / eps
-        self.model.from_vector(orig_vec, close=True)
+        for element_indices, circuit, outcomes, cache in layout.iter_unique_circuits_with_cache():
+            self._compute_circuit_outcome_probability_derivatives_with_cache(
+                array_to_fill[element_indices, dest_param_slice], circuit, outcomes, param_slice,
+                layout.resource_alloc(), cache)
 
 
     def _compute_circuit_outcome_probabilities_with_cache(self, array_to_fill, circuit, outcomes, resource_alloc,
