@@ -112,3 +112,4 @@ scripts/profiling/data
 # Other Local-only Files #
 ############################
 local
+pygsti/_version.py
