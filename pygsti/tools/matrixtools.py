@@ -257,7 +257,7 @@ def nice_nullspace(m, tol=1e-7, orthogonalize=False):
             current_rank = rank
     ret = _np.take(nullsp_projector, keepers, axis=1)
 
-    if orthogonalize: # and not columns_are_orthogonal(ret):
+    if orthogonalize:  # and not columns_are_orthogonal(ret):
         ret, _ = _np.linalg.qr(ret)  # Gram-Schmidt orthogonalization
 
     for j in range(ret.shape[1]):  # normalize columns so largest element is +1.0
@@ -675,7 +675,7 @@ def unitary_superoperator_matrix_log(m, mx_basis):
     evals = _np.linalg.eigvals(M_std)
     assert(_np.allclose(_np.abs(evals), 1.0))  # simple but technically incomplete check for a unitary superop
     # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
-    U = _ot.process_mx_to_unitary(M_std)
+    U = _ot.std_process_mx_to_unitary(M_std)
     H = _spl.logm(U) / -1j  # U = exp(-iH)
     logM_std = _lt.create_elementary_errorgen('H', H)  # rho --> -i[H, rho]
     logM = change_basis(logM_std, "std", mx_basis)
@@ -2520,3 +2520,38 @@ def zvals_int64_to_dense(zvals_int, nqubits, outvec=None, trust_outvec_sparsity=
         outvec[finalIndx] = -abs_elval if minus_sign else abs_elval
 
     return outvec
+
+
+def sign_fix_qr(q, r, tol=1e-6):
+    """
+    Change the signs of the columns of Q and rows of R to follow a convention.
+
+    Flips the signs of Q-columns and R-rows from a QR decomposition so that the
+    largest absolute element in each Q-column is positive.  This is an arbitrary
+    but consisten convention that resolves sign-ambiguity in the output of a QR
+    decomposition.
+
+    Parameters
+    ----------
+    q, r : numpy.ndarray
+        Input Q and R matrices from QR decomposition.
+
+    tol : float, optional
+        Tolerance for computing the maximum element, i.e., anything
+        within `tol` of the true max is counted as a maximal element,
+        the *first* of which is set positive by the convention.
+
+    Returns
+    -------
+    qq, rr : numpy.ndarray
+        Updated versions of `q` and `r`.
+    """
+    qq = q.copy()
+    rr = r.copy()
+    for i in range(q.shape[1]):
+        max_abs = max(_np.abs(q[:, i]))
+        k = _np.argmax(_np.abs(q[:, i]) > (max_abs - tol))
+        if q[k, i] < 0.0:
+            qq[:, i] = -q[:, i]
+            rr[i, :] = -r[i, :]
+    return qq, rr

@@ -104,7 +104,7 @@ cdef class OpRepClifford(OpRep):
         if on_space in ('minimal', 'Hilbert'):
             return self.unitary
         elif on_space == 'HilbertSchmidt':
-            return _bt.change_basis(_ot.unitary_to_process_mx(self.unitary), 'std', self.basis)
+            return _ot.unitary_to_superop(self.unitary, self.basis)
         else:
             raise ValueError("Invalid `on_space` argument: %s" % str(on_space))
 

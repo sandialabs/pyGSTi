@@ -574,6 +574,38 @@ class LinearOperator(_modelmember.ModelMember):
         Si = s.transform_matrix_inverse
         self.set_dense(_np.dot(Si, _np.dot(self.to_dense(on_space='minimal'), Smx)))
 
+    def spam_transform_inplace(self, s, typ):
+        """
+        Update operation matrix `O` with `inv(s) * O` OR `O * s`, depending on the value of `typ`.
+
+        This functions as `transform_inplace(...)` but is used when this
+        operation is used as a part of a SPAM vector.  When `typ == "prep"`,
+        the spam vector is assumed to be `rho = dot(self, <spamvec>)`,
+        which transforms as `rho -> inv(s) * rho`, so `self -> inv(s) * self`.
+        When `typ == "effect"`, `e.dag = dot(e.dag, self)` (note that
+        `self` is NOT `self.dag` here), and `e.dag -> e.dag * s`
+        so that `self -> self * s`.
+
+        Parameters
+        ----------
+        s : GaugeGroupElement
+            A gauge group element which specifies the "s" matrix
+            (and it's inverse) used in the above similarity transform.
+
+        typ : { 'prep', 'effect' }
+            Which type of SPAM vector is being transformed (see above).
+
+        Returns
+        -------
+        None
+        """
+        if typ == 'prep':
+            self.set_dense(_np.dot(s.transform_matrix_inverse, self.to_dense(on_space='minimal')))
+        elif typ == 'effect':
+            self.set_dense(_np.dot(self.to_dense(on_space='minimal'), s.transform_matrix))
+        else:
+            raise ValueError("Invalid `typ` argument: %s" % typ)
+
     def depolarize(self, amount):
         """
         Depolarize this operation by the given `amount`.

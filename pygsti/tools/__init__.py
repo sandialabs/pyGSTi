@@ -12,6 +12,7 @@ pyGSTi Tools Python Package
 
 from .basistools import *
 from .chi2fns import *
+from .edesigntools import *
 from .hypothesis import *
 # Import the most important/useful routines of each module into
 # the package namespace

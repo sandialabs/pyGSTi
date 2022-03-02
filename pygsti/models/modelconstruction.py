@@ -387,7 +387,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             Utot[i2, i2] = Uop[1, 1]
 
             # dmDim^2 x dmDim^2 mx operating on vectorized total densty matrix
-            opTermInStdBasis = _ot.unitary_to_process_mx(Utot)
+            opTermInStdBasis = _ot.unitary_to_std_process_mx(Utot)
 
             # contract [3] to [2, 1]
             embedded_std_basis = _Basis.cast('std', 9)  # [2]

@@ -340,6 +340,48 @@ class ExplicitOpModel(_mdl.OpModel):
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
 
+    def convert_members_inplace(self, to_type, categories_to_convert='all', labels_to_convert='all',
+                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False):
+        """
+        TODO: docstring -- like set_all_parameterizations but doesn't set default gauge group by default
+        """
+        if isinstance(categories_to_convert, str): categories_to_convert = (categories_to_convert,)
+        if any([c in categories_to_convert for c in ('all', 'ops', 'operations')]):
+            for lbl, gate in self.operations.items():
+                if labels_to_convert == 'all' or lbl in labels_to_convert:
+                    ideal = ideal_model.operations.get(lbl, None) if (ideal_model is not None) else None
+                    self.operations[lbl] = _op.convert(gate, to_type, self.basis, ideal, flatten_structure)
+        if any([c in categories_to_convert for c in ('all', 'instruments')]):
+            for lbl, inst in self.instruments.items():
+                if labels_to_convert == 'all' or lbl in labels_to_convert:
+                    ideal = ideal_model.instruments.get(lbl, None) if (ideal_model is not None) else None
+                    self.instruments[lbl] = _instrument.convert(inst, to_type, self.basis, ideal, flatten_structure)
+        if any([c in categories_to_convert for c in ('all', 'preps')]):
+            for lbl, prep in self.preps.items():
+                if labels_to_convert == 'all' or lbl in labels_to_convert:
+                    ideal = ideal_model.preps.get(lbl, None) if (ideal_model is not None) else None
+                    self.preps[lbl] = _state.convert(prep, to_type, self.basis, ideal, flatten_structure)
+        if any([c in categories_to_convert for c in ('all', 'povms')]):
+            for lbl, povm in self.povms.items():
+                if labels_to_convert == 'all' or lbl in labels_to_convert:
+                    ideal = ideal_model.povms.get(lbl, None) if (ideal_model is not None) else None
+                    self.povms[lbl] = _povm.convert(povm, to_type, self.basis, ideal, flatten_structure)
+
+        self._clean_paramvec()  # param indices were probabaly updated
+        if set_default_gauge_group:
+            self.set_default_gauge_group_for_member_type(to_type)
+
+    def set_default_gauge_group_for_member_type(self, member_type):
+        """ TODO: docstring """
+        if member_type == 'full':
+            self.default_gauge_group = _gg.FullGaugeGroup(self.state_space, self.evotype)
+        elif member_type in ['full TP', 'TP']:  # TODO: get from verbose_conversion dictionary of modelmembers?
+            self.default_gauge_group = _gg.TPGaugeGroup(self.state_space, self.evotype)
+        elif member_type == 'CPTP':
+            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, self.basis, self.evotype)
+        else:  # typ in ('static','H+S','S', 'H+S terms', ...)
+            self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
+
     def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
                                   instrument_type="auto", extra=None):
         """
@@ -382,39 +424,18 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         typ = gate_type
 
-        basis = self.basis
+        assert(extra is None), "`extra` argument is unused and should be left as `None`"
         if extra is None: extra = {}
 
         rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
         povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
         ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
 
-        for lbl, gate in self.operations.items():
-            self.operations[lbl] = _op.convert(gate, typ, basis,
-                                               extra.get(lbl, None))
-
-        for lbl, inst in self.instruments.items():
-            self.instruments[lbl] = _instrument.convert(inst, ityp, basis,
-                                                        extra.get(lbl, None))
-
-        for lbl, vec in self.preps.items():
-            self.preps[lbl] = _state.convert(vec, rtyp, basis,
-                                             extra.get(lbl, None))
-
-        for lbl, povm in self.povms.items():
-            self.povms[lbl] = _povm.convert(povm, povmtyp, basis,
-                                            extra.get(lbl, None))
-
-        if typ == 'full':
-            self.default_gauge_group = _gg.FullGaugeGroup(self.state_space, self.evotype)
-        elif typ in ['full TP', 'TP']:  # TODO: get from verbose_conversion dictionary of modelmembers?
-            self.default_gauge_group = _gg.TPGaugeGroup(self.state_space, self.evotype)
-        elif typ == 'CPTP':
-            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, basis, self.evotype)
-        else:  # typ in ('static','H+S','S', 'H+S terms', ...)
-            self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
-
-        self._clean_paramvec()  # param indices were probabaly updated
+        self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True)
+        self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True)
+        self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True)
+        self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True)
+        self.set_default_gauge_group_for_member_type(typ)
 
     def __setstate__(self, state_dict):
 
@@ -537,6 +558,12 @@ class ExplicitOpModel(_mdl.OpModel):
             2D array of derivatives.
         """
         return self._excalc().deriv_wrt_params()
+
+    def compute_nongauge_and_gauge_spaces(self, item_weights=None, non_gauge_mix_mx=None):
+        """
+        TODO: docstring
+        """
+        return self._excalc().nongauge_and_gauge_spaces(item_weights, non_gauge_mix_mx)
 
     def compute_nongauge_projector(self, item_weights=None, non_gauge_mix_mx=None):
         """
@@ -1108,8 +1135,7 @@ class ExplicitOpModel(_mdl.OpModel):
             # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
             randUnitary = _scipy.linalg.expm(-1j * randMat)
 
-            randOp = _ot.unitary_to_process_mx(randUnitary)  # in std basis
-            randOp = _bt.change_basis(randOp, "std", self.basis)
+            randOp = _ot.unitary_to_superop(randUnitary, self.basis)
 
             mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(
                 _np.dot(randOp, gate))
@@ -1493,8 +1519,7 @@ class ExplicitOpModel(_mdl.OpModel):
                     #    observed_sslbls.update(sslbls)
 
                 if gn not in gate_unitaries or gate_unitaries[gn] is None:
-                    U = _ot.process_mx_to_unitary(_bt.change_basis(
-                        op.to_dense('HilbertSchmidt'), self.basis, 'std')) \
+                    U = _ot.superop_to_unitary(op.to_dense('HilbertSchmidt'), self.basis) \
                         if (op is not None) else None  # U == None indicates "unknown, up until this point"
 
                     Ulocal = extract_unitary(U, all_sslbls, sslbls)

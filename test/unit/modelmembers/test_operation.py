@@ -339,9 +339,13 @@ class FullOpTester(MutableDenseOpBase, BaseCase):
     #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_linear))
     #    self.assertEqual(type(c), op.FullArbitraryOp)
 
+    def test_convert_to_linear(self):
+        converted = op.convert(self.gate, "linear", "gm")
+        self.assertArraysAlmostEqual(converted.to_dense(), self.gate.to_dense())
+
     def test_raises_on_unallowed_conversion(self):
-        with self.assertRaises(ValueError):
-            op.convert(self.gate, "linear", "gm")  # unallowed
+        #with self.assertRaises(ValueError):
+        #op.convert(self.gate, "linear", "gm")  # unallowed
         with self.assertRaises(ValueError):
             op.convert(self.gate, "foobar", "gm")
 

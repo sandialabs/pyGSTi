@@ -527,6 +527,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             # an orthogonal set of fogi directions.  Don't worry about normalization yet.
                             test_fogi_dirs = _np.dot(inv_diff_gauge_action, intersection_space)  # dot("M", epsilons)
                             Q, R = _np.linalg.qr(test_fogi_dirs)  # gram-schmidt orthogonalize cols
+                            Q, R = _mt.sign_fix_qr(Q, R)  # removes sign ambiguity in QR decomp (simplifies comparisons)
                             # test_fogi_dirs = M * epsilons = Q * R
                             # => want orthogonalized dirs "Q" as new dirs: Q = M * epsilons * inv(R) = M * epsilons'
                             intersection_space = _np.dot(intersection_space, _np.linalg.inv(R))  # a "good" basis

@@ -228,20 +228,17 @@ class LindbladErrorgen(_LinearOperator):
         """
         TODO: docstring - take from now-private version below Note: errogen_or_dim can be an integer => zero errgen
         """
-        parameterization = LindbladParameterization.cast(parameterization)
-        ham_basis = lindblad_basis if parameterization.ham_params_allowed else None
-        nonham_basis = lindblad_basis if parameterization.nonham_params_allowed else None
-
         errgen = _np.zeros((errgen_or_dim, errgen_or_dim), 'd') \
             if isinstance(errgen_or_dim, (int, _np.int64)) else errgen_or_dim
-        return cls._from_error_generator(errgen, parameterization, ham_basis, nonham_basis,
+        return cls._from_error_generator(errgen, parameterization, lindblad_basis,
                                          mx_basis, truncate, evotype, state_space)
 
     @classmethod
-    def _from_error_generator(cls, errgen, parameterization="CPTP", ham_basis="PP", nonham_basis="PP",
+    def _from_error_generator(cls, errgen, parameterization="CPTP", lindblad_basis="PP",
                               mx_basis="pp", truncate=True, evotype="default", state_space=None):
         """
         Create a Lindblad-form error generator from an error generator matrix and a basis.
+        TODO: fix docstring -- ham/nonham_basis ==> lindblad_basis
 
         The basis specifies how to decompose (project) the error generator.
 
@@ -312,22 +309,16 @@ class LindbladErrorgen(_LinearOperator):
         # given to us are sparse or not and make them all consistent
         # (maybe this is needed by lindblad_errorgen_projections call below?)
         sparse = None
-        if ham_basis is not None:
-            if isinstance(ham_basis, _Basis): sparse = ham_basis.sparse
-            elif isinstance(ham_basis, str): sparse = _sps.issparse(errgen)
-            elif len(ham_basis) > 0: sparse = _sps.issparse(ham_basis[0])
-        if sparse is None and nonham_basis is not None:
-            if isinstance(nonham_basis, _Basis): sparse = nonham_basis.sparse
-            elif isinstance(nonham_basis, str): sparse = _sps.issparse(errgen)
-            elif len(nonham_basis) > 0: sparse = _sps.issparse(nonham_basis[0])
+        if isinstance(lindblad_basis, _Basis):
+            sparse = lindblad_basis.sparse
+        else:
+            if isinstance(lindblad_basis, str): sparse = _sps.issparse(errgen)
+            elif len(lindblad_basis) > 0: sparse = _sps.issparse(lindblad_basis[0])
+            lindblad_basis = _Basis.cast(lindblad_basis, dim, sparse=sparse)
+
         if sparse is None: sparse = False  # the default
 
-        #Create or convert bases to consistent sparsity
-        if not isinstance(ham_basis, _Basis):
-            # needed b/c ham_basis could be a Basis w/dim=0 which can't be cast as dim=dim
-            ham_basis = _Basis.cast(ham_basis, dim, sparse=sparse)
-        if not isinstance(nonham_basis, _Basis):
-            nonham_basis = _Basis.cast(nonham_basis, dim, sparse=sparse)
+        #Create or convert matrix basis to consistent sparsity
         if not isinstance(mx_basis, _Basis):
             matrix_basis = _Basis.cast(mx_basis, dim, sparse=sparse)
         else: matrix_basis = mx_basis
@@ -337,25 +328,9 @@ class LindbladErrorgen(_LinearOperator):
 
         # Create blocks based on bases along - no specific errorgen labels
         blocks = []
-        if ham_basis is not None and len(ham_basis) > 0:
-            mode = 'elements' if parameterization.ham_params_allowed else 'static'
-            blk = _LindbladCoefficientBlock('ham', ham_basis, param_mode=mode)
-            blk.set_from_errorgen_projections(errgen, matrix_basis)
-            blocks.append(blk)
-
-        if nonham_basis is not None and len(nonham_basis) > 0:
-            if not parameterization.nonham_params_allowed: mode = 'static'
-            elif parameterization.param_mode == 'cptp': mode = 'cholesky'
-            elif parameterization.param_mode == 'unconstrained': mode = 'elements'
-            else: mode = parameterization.param_mode
-
-            if parameterization.nonham_mode == 'diagonal':
-                blk = _LindbladCoefficientBlock('other_diagonal', nonham_basis, param_mode=mode)
-                blk.set_from_errorgen_projections(errgen, matrix_basis, truncate=truncate)
-
-            elif parameterization.nonham_mode == 'all':
-                blk = _LindbladCoefficientBlock('other', nonham_basis, param_mode=mode)
-                blk.set_from_errorgen_projections(errgen, matrix_basis, truncate=truncate)
+        for blk_type, blk_param_mode in zip(parameterization.block_types, parameterization.param_modes):
+            blk = _LindbladCoefficientBlock(blk_type, lindblad_basis, param_mode=blk_param_mode)
+            blk.set_from_errorgen_projections(errgen, matrix_basis, truncate=truncate)
             blocks.append(blk)
 
         return cls(blocks, "auto", mx_basis, evotype, state_space)
@@ -371,38 +346,25 @@ class LindbladErrorgen(_LinearOperator):
             [(_LocalElementaryErrorgenLabel.cast(lbl, sslbls, identity_label_1Q), val)
              for lbl, val in elementary_errorgens.items()])
 
-        parameterization = LindbladParameterization.from_lindblad_terms(elementary_errorgens) \
+        parameterization = LindbladParameterization.minimal_from_elementary_errorgens(elementary_errorgens) \
             if parameterization == "auto" else LindbladParameterization.cast(parameterization)
 
         state_space = _statespace.StateSpace.cast(state_space)
         dim = state_space.dim  # Store superop dimension
         basis = _Basis.cast(elementary_errorgen_basis, dim)
 
+        eegs_by_typ = {
+            'ham': {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'H'},
+            'other_diagonal': {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'S'},
+            'other': {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type != 'H'}
+        }
+
         blocks = []
-        ham_errorgens = {eeg_lbl: v for eeg_lbl, v in elementary_errorgens.items() if eeg_lbl.errorgen_type == 'H'}
-        if len(ham_errorgens) > 0:
-            mode = 'elements' if parameterization.ham_params_allowed else 'static'
-            bels = sorted(set(_itertools.chain(*[lbl.basis_element_labels for lbl in ham_errorgens.keys()])))
-            blk = _LindbladCoefficientBlock('ham', basis, bels, param_mode=mode)
-            blk.set_elementary_errorgens(ham_errorgens)
-            blocks.append(blk)
-
-        diag_errorgens = {eeg_lbl: v for eeg_lbl, v in elementary_errorgens.items() if eeg_lbl.errorgen_type == 'S'}
-        nonH_errorgens = {eeg_lbl: v for eeg_lbl, v in elementary_errorgens.items() if eeg_lbl.errorgen_type != 'H'}
-        if len(diag_errorgens) > 0:
-            if not parameterization.nonham_params_allowed: mode = 'static'
-            elif parameterization.param_mode == 'cptp': mode = 'cholesky'
-            elif parameterization.param_mode == 'unconstrained': mode = 'elements'
-            else: mode = parameterization.param_mode
-
-            if len(diag_errorgens) == len(nonH_errorgens):  # then all non-H errorgens are S-type => otherdiag block
-                bels = sorted(set(_itertools.chain(*[lbl.basis_element_labels for lbl in diag_errorgens.keys()])))
-                blk = _LindbladCoefficientBlock('other_diagonal', basis, bels, param_mode=mode)
-                blk.set_elementary_errorgens(diag_errorgens, truncate=truncate)
-            else:  # need a full 'other'-type block, as there are off diagonal elementary generators
-                bels = sorted(set(_itertools.chain(*[lbl.basis_element_labels for lbl in nonH_errorgens.keys()])))
-                blk = _LindbladCoefficientBlock('other', basis, bels, param_mode=mode)
-                blk.set_elementary_errorgens(nonH_errorgens, truncate=truncate)
+        for blk_type, blk_param_mode in zip(parameterization.block_types, parameterization.param_modes):
+            relevant_eegs = eegs_by_typ[blk_type]  # KeyError => unrecognized block type!
+            bels = sorted(set(_itertools.chain(*[lbl.basis_element_labels for lbl in relevant_eegs.keys()])))
+            blk = _LindbladCoefficientBlock(blk_type, basis, bels, param_mode=blk_param_mode)
+            blk.set_elementary_errorgens(relevant_eegs, truncate=truncate)
             blocks.append(blk)
 
         return cls(blocks, basis, mx_basis, evotype, state_space)
@@ -1634,7 +1596,7 @@ class LindbladParameterization(_NicelySerializable):
     """
 
     @classmethod
-    def from_lindblad_terms(cls, errs):
+    def minimal_from_elementary_errorgens(cls, errs):
         """
         Helper function giving minimal Lindblad parameterization needed for specified errors.
 
@@ -1685,57 +1647,54 @@ class LindbladParameterization(_NicelySerializable):
         if isinstance(obj, LindbladParameterization):
             return obj
 
-        param_type = obj
-        if param_type == "CPTP":
-            nonham_mode = "all"; param_mode = "cptp"
-        elif param_type == "H":
-            nonham_mode = "all"; param_mode = "cptp"  # these don't matter since there's no non-ham errors
-        elif param_type in ("H+S", "S"):
-            nonham_mode = "diagonal"; param_mode = "cptp"
-        elif param_type in ("H+s", "s"):
-            nonham_mode = "diagonal"; param_mode = "unconstrained"
-        #elif param_type in ("H+S+A", "S+A"):
-        #    nonham_mode = "diag_affine"; param_mode = "cptp"
-        #elif param_type in ("H+s+A", "s+A"):
-        #    nonham_mode = "diag_affine"; param_mode = "unconstrained"
-        elif param_type in ("H+D", "D"):
-            nonham_mode = "diagonal"; param_mode = "depol"
-        elif param_type in ("H+d", "d"):
-            nonham_mode = "diagonal"; param_mode = "reldepol"
-        #elif param_type in ("H+D+A", "D+A"):
-        #    nonham_mode = "diag_affine"; param_mode = "depol"
-        #elif param_type in ("H+d+A", "d+A"):
-        #    nonham_mode = "diag_affine"; param_mode = "reldepol"
-        elif param_type == "GLND":
-            nonham_mode = "all"; param_mode = "unconstrained"
+        if isinstance(obj, str):
+            abbrev = obj
+            if abbrev == "CPTP":
+                block_types = ['ham', 'other']; param_modes = ['elements', 'cholesky']
+            elif abbrev == "GLND":
+                block_types = ['ham', 'other']; param_modes = ['elements', 'elements']
+            else:
+                block_types = []; param_modes = []
+                for p in abbrev.split('+'):
+                    if p == 'H':
+                        block_types.append('ham'); param_modes.append('elements')
+                    elif p in ('S', 's'):
+                        block_types.append('other_diagonal')
+                        param_modes.append('cholesky' if p == 'S' else 'elements')
+                    elif p in ('D', 'd'):
+                        block_types.append('other_diagonal')
+                        param_modes.append('depol' if p == 'D' else 'reldepol')
+                    else:
+                        raise ValueError("Unrecognized symbol '%s' in `%s`" % (p, abbrev))
+            return cls(block_types, param_modes, abbrev)
         else:
-            raise ValueError("Unrecognized base type in `param_type`=%s" % param_type)
+            raise ValueError("Cannot convert %s to LindbladParameterization!" % str(type(obj)))
 
-        ham_allowed = True if (("H" == param_type)
-                               or ("H+" in param_type)
-                               or param_type in ("CPTP", "GLND")) else False
-        nonham_allowed = False if param_type == "H" else True
-        return cls(nonham_mode, param_mode, ham_allowed, nonham_allowed, param_type)
-
-    def __init__(self, nonham_mode, param_mode, ham_params_allowed, nonham_params_allowed, abbrev=None):
-        self.nonham_mode = nonham_mode
-        self.param_mode = param_mode
-        self.ham_params_allowed = ham_params_allowed
-        self.nonham_params_allowed = nonham_params_allowed
+    def __init__(self, block_types, param_modes, abbrev=None):
+        self.block_types = tuple(block_types)
+        self.param_modes = tuple(param_modes)
         self.abbrev = abbrev
 
+        #REMOVE
+        #self.nonham_block_type = nonham_block_type  #nonham_mode
+        #self.nonham_param_mode = nonham_param_mode  #param_mode
+        #self.include_ham_block = include_ham_block #ham_params_allowed = ham_params_allowed
+        #self.include_nonham_block = include_nonham_block  #nonham_params_allowed = nonham_params_allowed
+
     def __hash__(self):
-        return hash((self.nonham_mode, self.param_mode, self.ham_params_allowed, self.nonham_params_allowed))
+        return hash((self.block_types, self.param_modes))
 
     def __eq__(self, other):
         if not isinstance(other, LindbladParameterization): return False
-        return (self.nonham_mode == other.nonham_mode
-                and self.param_mode == other.param_mode
-                and self.ham_params_allowed == other.ham_params_allowed
-                and self.nonham_params_allowed == other.nonham_params_allowed)
+        return (self.param_modes == other.param_modes
+                and self.block_types == other.block_types)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
+        state.update({'block_types': self.block_types,
+                      'block_parameter_modes': self.param_modes,
+                      'abbreviation': self.abbrev})
+
         state.update({'mode': self.param_mode,
                       'non_hamiltonian_mode': self.nonham_mode,
                       'hamiltonian_parameters_allowed': self.ham_params_allowed,
@@ -1745,12 +1704,25 @@ class LindbladParameterization(_NicelySerializable):
 
     @classmethod
     def _from_nice_serialization(cls, state):
-        return cls(state['non_hamiltonian_mode'], state['mode'], state['hamiltonian_parameters_allowed'],
-                   state['non_hamiltonian_parameters_allowed'], state['abbreviation'])
+        if 'non_hamiltonian_mode' in state:  # FOR BACKWARD COMPATIBILITY (REMOVE in FUTURE)
+            if state['hamiltonian_parameters_allowed']:
+                state['block_types'] = ['ham']
+                state['block_parameter_modes'] = ['elements']
+            else:
+                state['block_types'] = []
+                state['block_parameter_modes'] = []
+            if state['non_hamiltonian_parameters_allowed']:
+                nonham_blktyp = 'other' if state['non_hamiltonian_mode'] == 'all' else 'other_diagonal'
+                nonham_mode = state['mode']
+                if nonham_mode == 'cptp': nonham_mode = 'cholesky'
+                elif nonham_mode == 'unconstrained': nonham_mode = 'elements'
+                state['block_types'].append(nonham_blktyp)
+                state['block_parameter_modes'].append(nonham_mode)
+
+        return cls(state['block_types'], state['block_parameter_modes'], state['abbreviation'])
 
     def __str__(self):
         if self.abbrev is not None:
             return self.abbrev
         else:
-            return "CustomLindbladParam(%s,%s,%s,%s)" % (self.nonham_mode, self.param_mode,
-                                                         str(self.ham_params_allowed), str(self.nonham_params_allowed))
+            return "CustomLindbladParam(%s,%s)" % ('+'.join(self.block_types), '+'.join(self.param_modes))

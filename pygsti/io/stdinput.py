@@ -1148,11 +1148,11 @@ def parse_model(filename):
 
         elif prefix + "UnitaryMx" in props:
             ar = _eval_row_list(props[prefix + "UnitaryMx"], b_complex=True)
-            lmx = _tools.change_basis(_tools.unitary_to_process_mx(ar), 'std', basis)
+            lmx = _tools.unitary_to_superop(ar, basis)
 
         elif prefix + "UnitaryMxExp" in props:
             ar = _eval_row_list(props[prefix + "UnitaryMxExp"], b_complex=True)
-            lmx = _tools.change_basis(_tools.unitary_to_process_mx(_expm(-1j * ar)), 'std', basis)
+            lmx = _tools.unitary_to_superop(_expm(-1j * ar), basis)
 
         elif prefix + "LiouvilleMx" in props:
             lmx = _eval_row_list(props[prefix + "LiouvilleMx"], b_complex=False)
