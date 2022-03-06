@@ -2579,7 +2579,7 @@ class Circuit(object):
                 "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
 
             def _get_compilation(gate):
-                return compilation.specific_compilations.get(gate, None)
+                return compilation.retrieve_compilation_of(gate)
 
         else:  # Otherwise, we assume it's a dict.
             assert(allowed_filter is None), \
@@ -2589,22 +2589,29 @@ class Circuit(object):
                 return compilation.get(gate, None)
 
         for ilayer in range(self.num_layers - 1, -1, -1):
-            icomps_to_remove = []
-            for icomp, l in enumerate(self._layer_components(ilayer)):  # loop over labels in this layer
-                replacement_circuit = _get_compilation(l)
-                if replacement_circuit is not None:
-                    # Replace the gate with a circuit: remove the gate and add insert
-                    # the replacement circuit as the following layers.
-                    icomps_to_remove.append(icomp)
-                    self.insert_labels_into_layers_inplace(replacement_circuit, ilayer + 1)
-                else:
-                    # We never consider not having a compilation for the identity to be a failure.
-                    if not allow_unchanged_gates:
-                        raise ValueError(
-                            "`compilation` does not contain, or cannot generate a compilation for {}!".format(l))
+            if len(self._layer_components(ilayer)):
+                icomps_to_remove = []
+                for icomp, l in enumerate(self._layer_components(ilayer)):  # loop over labels in this layer
+                    replacement_circuit = _get_compilation(l)
+                    if replacement_circuit is not None:
+                        # Replace the gate with a circuit: remove the gate and add insert
+                        # the replacement circuit as the following layers.
+                        icomps_to_remove.append(icomp)
+                        self.insert_labels_into_layers_inplace(replacement_circuit, ilayer + 1)
+                    else:
+                        # We never consider not having a compilation for the identity to be a failure.
+                        if not allow_unchanged_gates:
+                            raise ValueError(
+                                "`compilation` does not contain, or cannot generate a compilation for {}!".format(l))
 
-            for icomp in reversed(icomps_to_remove):
-                self._remove_layer_component(ilayer, icomp)
+                for icomp in reversed(icomps_to_remove):
+                    self._remove_layer_component(ilayer, icomp)
+            else:
+                # Also allow replacement of empty layers
+                replacement_circuit = _get_compilation(_Label(()))
+                if replacement_circuit is not None:
+                    # This is not a layer insertion, we want to overwrite the empty layer
+                    self.replace_layer_with_circuit_inplace(replacement_circuit, ilayer)
 
         # If specified, perform the depth compression.
         # It is better to do this *after* the identity name has been changed.
