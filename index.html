@@ -54,123 +54,19 @@
     <div id="main_content_wrap" class="outer">
       <section id="main_content" class="inner">
 
-<h2>
-<a id="intro" class="anchor" href="#intro" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>What is pyGSTi?</h2>
-<p><strong>pyGSTi</strong> is an open-source software for <em>modeling and characterizing noisy quantum information processors</em> (QIPs), i.e., systems of one or more qubits.  It is licensed under the Apache License, Version 2.0. Copyright information can be found in <code>NOTICE</code>, and the license itself in <code>LICENSE</code>.</p>
-<p>There are three main objects in pyGSTi:</p>
+<h2><a id="intro" class="anchor" href="#intro" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>The pyGSTi website is being rebuilt!</h2>
+
+<p><strong>pyGSTi</strong> is an open-source software for <em>modeling and characterizing noisy quantum information processors</em> (QIPs), i.e., systems of one or more qubits.
+<br>
+<br>
+Currently (as of March 2022) the pyGSTi website is undergoing a redesign; here are some relevant pages in the meantime:
+<br>
 <ul>
-<li><code>Circuit</code>: a quantum circuit (can have many qubits).</li>
-<li><code>Model</code>: a description of a QIP&#39;s gate and SPAM operations (a noise model).</li>
-<li><code>DataSet</code>: a dictionary-like container holding experimental data.</li>
+<li><a href="https://github.com/pyGSTio/pyGSTi">The pyGSTi GitHub page</a> (if you want to install pyGSTi from source)</li>
+<li><a href="https://pypi.org/project/pyGSTi">The pyGSTi PyPI page</a> (if you want to install pyGSTi via pip)</li>
+<li><a href="https://qpl.sandia.gov">The Quantum Performance Laboratory (QPL) page</a> (The QPL is the research group at <a href=https://www.sandia.gov>Sandia National Laboratories</a> that develops and maintains pyGSTi.)</li>
 </ul>
-<p>You can do various things by with these objects:</p>
-<ul>
-<li><strong>Circuit simulation</strong>: compute a the outcome probabilities of a <code>Circuit</code> using a <code>Model</code>.</li>
-<li><strong>Data simulation</strong>: simulate experimental data (a <code>DataSet</code>) using a <code>Model</code>.</li>
-<li><strong>Model testing</strong>: Test whether a given <code>Model</code> fits the data in a <code>DataSet</code>.</li>
-<li><strong>Model estimation</strong>: Estimate a <code>Model</code> from a <code>DataSet</code> (e.g. using GST).</li>
-<li><strong>Model-less characterization</strong>: Perform Randomized Benchmarking on a <code>DataSet</code>.</li>
-</ul>
-<p>In particular, there are a number of characterization protocols currently implemented in pyGSTi:</p>
-<ul>
-<li><strong>Gate Set Tomography (GST)</strong> is the most complex and is where the software derives its name (a &quot;python GST implementation&quot;).</li>
-<li><strong>Randomized Benchmarking (RB)</strong> is a well-known method for assessing the quality of a QIP in an average sense.  PyGSTi implements standard &quot;Clifford&quot; RB as well as the more scalable &quot;Direct&quot; RB methods.</li>
-<li><strong>Robust Phase Estimation (RPE)</strong> is a method designed for quickly learning a few noise parameters of a QIP that particularly useful for tuning up qubits.</li>
-</ul>
-<p>PyGSTi is designed with a modular structure so as to be highly customizable and easily integrated to new or existing python software.  It runs using python2.7 or python3.  To faclilitate integration with software for running cloud-QIP experiments, pyGSTi <code>Circuit</code> objects can be converted to IBM&#39;s <strong>OpenQASM</strong> and Rigetti Quantum Computing&#39;s <strong>Quil</strong> circuit description languages.</p>
-
-<h2>
-  <a id="installation" class="anchor" href="#installation" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Installation</h2>
-<p>Apart from several optional Cython modules, pyGSTi is written entirely in Python. To install pyGSTi and only its required dependencies run:</p>
-<p><code>pip install pygsti</code></p>
-<p><strong>Or</strong>, to install pyGSTi with all its optional dependencies too, run:</p>
-<p><code>pip install pygsti[complete]</code></p>
-<p>The disadvantage to these approaches is that the numerous tutorials included in the package will then be buried within your Python&#39;s <code>site_packages</code> directory, which you&#39;ll likely want to access later on. <strong>Alternatively</strong>, you can <strong>locally install</strong> pyGSTi using the following commands:</p>
-<pre><code>cd &lt;install_directory&gt;
-git clone https://github.com/pyGSTio/pyGSTi.git
-cd pyGSTi
-pip install -e .[complete]
-</code></pre><p>As above, you can leave off the <code>.[complete]</code> if you only went the minimal set of dependencies installed.  You could also replace the <code>git clone ...</code> command with <code>unzip pygsti-0.9.x.zip</code> where the latter file is a downloaded pyGSTi source archive.  Any of the above installations <em>should</em> build the set of optional Cython extension modules if a working C/C++ compiler and the <code>Cython</code> package are present.  If, however, compilation fails or you later decided to add Cython support, you can rebuild the extension modules (without reinstalling) if you&#39;ve followed the local installation approach above using the command:</p>
-<p><code>python setup.py build_ext --inplace</code></p>
-<p>Finally, <a href="http://jupyter.org/">Jupyter notebook</a> is highly recommended as it is generally convenient and the format of the included tutorials and examples.  It is installed automatically when <code>[complete]</code> is used, otherwise it can be installed separately.</p>
-
-<h2>
-  <a id="getting-started" class="anchor" href="#getting-started" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Getting Started</h2>
-<p>Here&#39;s a couple of simple examples to get you started.</p>
-<h4 id="circuit-simulation">Circuit simulation</h4>
-<p>To compute the outcome probabilities of a circuit, you just need to create a <code>Circuit</code> object (describing your circuit) and a <code>Model</code> object containing the operations contained in your circuit.  Here we use a &quot;stock&quot; single-qubit <code>Model</code> containing <em>Idle</em>, <em>X(&pi;/2)</em>, and <em>Y(&pi;/2)</em> gates labelled <code>Gi</code>, <code>Gx</code>, and <code>Gy</code>, respectively:</p>
-<pre><code>import pygsti
-from pygsti.construction import std1Q_XYI
-
-mycircuit = pygsti.obj.Circuit( (&#39;Gx&#39;,&#39;Gy&#39;,&#39;Gx&#39;) )
-model = std1Q_XYI.target_model()
-outcome_probabilities = model.probs(mycircuit)
-</code></pre><h4 id="gate-set-tomography">Gate Set Tomography</h4>
-<p>Gate Set Tomography is used to characterize the operations performed by hardware designed to implement a (small) system of quantum bits (qubits). Here&#39;s the basic idea:</p>
-<ol>
-<li>you tell pyGSTi what gates you&#39;d ideally like to perform</li>
-<li>pyGSTi tells you what circuits it want&#39;s data for</li>
-<li><p>you perform the requested experiments and place the resulting data (outcome counts) into a text file that looks something like:</p>
-<pre><code>## Columns = 0 count, 1 count
-{} 0 100  # the empty sequence (just prep then measure)
-Gx 10 90  # prep, do a X(pi/2) gate, then measure
-GxGy 40 60  # prep, do a X(pi/2) gate followed by a Y(pi/2), then measure
-Gx^4 20 80  # etc...
-</code></pre></li>
-<li><p>pyGSTi takes the data file and outputs a &quot;report&quot; - currently a HTML web page.</p>
-</li>
-</ol>
-<p>In code, running GST looks something like this:</p>
-<pre><code>import pygsti
-from pygsti.construction import std1Q_XYI
-
-# 1) get the ideal &quot;target&quot; Model (a &quot;stock&quot; model in this case)
-mdl_ideal = std1Q_XYI.target_model()
-
-# 2) get the building blocks needed to specify which circuits are needed
-prepfids, measfids, germs = std1Q_XYI.prepStrs, std1Q_XYI.effectStrs, std1Q_XYI.germs
-maxLengths = [1,2,4] # user-defined: how long do you want the circuits?
-
-# 3) generate a list of circuits for GST &amp; write a data-set template
-listOfExperiments = pygsti.construction.make_lsgst_experiment_list(
-    mdl_ideal, prepfids, measfids, germs, maxLengths)
-pygsti.io.write_empty_dataset(&quot;MyData.txt&quot;, listOfExperiments, &quot;## Columns = 0 count, 1 count&quot;)
-
-# STOP! &quot;MyData.txt&quot; now has columns of zeros where actual data should go.
-# REPLACE THE ZEROS WITH ACTUAL DATA, then proceed with:
-ds = pygsti.io.load_dataset(&quot;MyData.txt&quot;) # load data -&gt; DataSet object
-
-# 4) run GST
-results = pygsti.do_stdpractice_gst(ds, mdl_ideal, prepfids, measfids, germs, maxLengths)
-
-# 5) Create a nice HTML report detailing the results
-pygsti.report.create_standard_report(results, filename=&quot;myReport&quot;, title=&quot;Sample Report&quot;)
-</code></pre>
-
-<h2>
-  <a id="tutorials" class="anchor" href="#tutorials" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Tutorials and Examples</h2>
-<p>There are numerous tutorials (meant to be pedagogical) and examples (meant to be demonstrate how to do some particular thing) in the form of Jupyter notebooks beneath the <code>pyGSTi/jupyter_notebooks</code> directory.  The root <q>START HERE</q> notebook will direct you where to go based on what you&#39;re most interested in learning about.  You can view the read-only <a href="https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/START_HERE.ipynb">GitHub version of this notebook</a> or you can <a href="https://mybinder.org/v2/gh/pyGSTio/pyGSTi/master">explore the tutorials interactively</a> using JupyterHub via Binder.  Note the existence of a <a href="https://github.com/pyGSTio/pyGSTi/blob/master/jupyter_notebooks/FAQ.ipynb">FAQ</a>, which addresses common issues.</p>
-<h4 id="running-notebooks-locally">Running notebooks <em>locally</em></h4>
-<p>While it&#39;s possible to view the notebooks on GitHub using the links above, it&#39;s usually nicer to run them <em>locally</em> so you can mess around with the code as you step through it.  To do this, you&#39;ll need to start up a Jupyter notebook server using the following steps (this assumes you&#39;ve followed the <em>local installation</em> directions above):</p>
-<ul>
-<li><p>Changing to the notebook directory, by running:<br>  <code>cd jupyter_notebooks/Tutorials/</code></p>
-</li>
-<li><p>Start up the Jupyter notebook server by running:<br><code>jupyter notebook</code></p>
-</li>
-</ul>
-<p>The Jupyter server should open up your web browser to the server root, from where you can start the first &quot;START_HERE.ipynb&quot; notebook.  Note that the key command to execute a cell within the Jupyter notebook is <code>Shift+Enter</code>, not just <code>Enter</code>.</p>
-
-<h2>
-<a id="documentation" class="anchor" href="#documentation" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Documentation</h2>
-
-<p>Detailed documentation of the pyGSTi code (automatically generated from
-the source code's docstrings) can be found <a href="http://pygsti.readthedocs.io">here</a>.  These pages provide a searchable reference for just about everything pyGSTi can do.  Please let us know if you find any errors.</p>
-
-<!-- <h2>
-<a id="online-web-based-gst-tool" class="anchor" href="#online-web-based-gst-tool" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Online web-based GST tool</h2>
-
-<p>Don't want to go through all the trouble of installing pyGSTi (even though it's really not that much trouble)?  We've setup a simple online tool where, if you just want to run plain vanilla 1-qubit GST on some data, you can!  First we need to set up an account for you. We hope to automate this in the future, but for now you need to email us at <a href="mailto:pygsti@sandia.gov">pygsti@sandia.gov</a>. We'll send you an email with a link to the online tool and credentials to login; from there you can download a template data file, fill it with data, upload it back to the site, and run GST.  It's like taking candy from a baby...</p>
--->
+<br>
 
 <h2>
 <a id="license" class="anchor" href="#license" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>License</h2>
