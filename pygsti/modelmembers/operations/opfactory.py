@@ -55,11 +55,10 @@ def op_from_factories(factory_dict, lbl):
     """
     lbl_args = lbl.collect_args()
 
-    if lbl_args:
-        lbl_without_args = lbl.strip_args()
-        if lbl_without_args in factory_dict:
-            return factory_dict[lbl_without_args].create_simplified_op(args=lbl_args)
-            # E.g. an EmbeddedOpFactory
+    lbl_without_args = lbl.strip_args() if lbl_args else lbl
+    if lbl_without_args in factory_dict:
+        return factory_dict[lbl_without_args].create_simplified_op(args=lbl_args)
+        # E.g. an EmbeddedOpFactory or any factory labeled by a Label with sslbls
 
     lbl_name = _Lbl(lbl.name)
     if lbl_name in factory_dict:

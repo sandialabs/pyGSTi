@@ -338,6 +338,10 @@ class LindbladErrorgen(_LinearOperator):
     @classmethod
     def from_elementary_errorgens(cls, elementary_errorgens, parameterization='auto', elementary_errorgen_basis='PP',
                                   mx_basis="pp", truncate=True, evotype="default", state_space=None):
+        """TODO: docstring"""
+        state_space = _statespace.StateSpace.cast(state_space)
+        dim = state_space.dim  # Store superop dimension
+        basis = _Basis.cast(elementary_errorgen_basis, dim)
 
         #convert elementary errorgen labels to *local* labels (ok to specify w/global labels)
         identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
@@ -348,10 +352,6 @@ class LindbladErrorgen(_LinearOperator):
 
         parameterization = LindbladParameterization.minimal_from_elementary_errorgens(elementary_errorgens) \
             if parameterization == "auto" else LindbladParameterization.cast(parameterization)
-
-        state_space = _statespace.StateSpace.cast(state_space)
-        dim = state_space.dim  # Store superop dimension
-        basis = _Basis.cast(elementary_errorgen_basis, dim)
 
         eegs_by_typ = {
             'ham': {eeglbl: v for eeglbl, v in elementary_errorgens.items() if eeglbl.errorgen_type == 'H'},
@@ -371,6 +371,13 @@ class LindbladErrorgen(_LinearOperator):
 
     def __init__(self, lindblad_coefficient_blocks, lindblad_basis='auto', mx_basis='pp',
                  evotype="default", state_space=None):
+
+        if isinstance(lindblad_coefficient_blocks, dict):  # backward compat warning
+            _warnings.warn(("You're trying to create a LindbladErrorgen object using a dictionary.  This"
+                            " constructor was recently updated to take a list of LindbladCoefficientBlock"
+                            " objects (not a dict) for increased flexibility.  You probably want to call"
+                            " a LindbladErrorgen.from_elementary_errorgens(...) instead."))
+
         state_space = _statespace.StateSpace.cast(state_space)
 
         #Decide on our rep-type ahead of time so we know whether to make bases sparse

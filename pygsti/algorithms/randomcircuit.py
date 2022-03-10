@@ -43,6 +43,15 @@ def sample_haar_random_one_qubit_unitary_parameters():
     theta3 = _comp.mod_2pi(psi + chi)
     return (theta1, theta2, theta3)
 
+def sample_random_clifford_one_qubit_unitary_parameters():
+    """
+    TODO: docstring
+    """
+    theta1 = _comp.mod_2pi(_np.random.randint(4) * _np.pi / 2)
+    theta2 = _comp.mod_2pi(_np.random.randint(4) * _np.pi / 2)
+    theta3 = _comp.mod_2pi(_np.random.randint(4) * _np.pi / 2)
+    return (theta1, theta2, theta3)
+
 
 def sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr', xname='Gxpi2', qubit_labels=None):
     """
@@ -72,8 +81,37 @@ def sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr'
     circ.done_editing()
     return circ
 
+def sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr', xname='Gxpi2', qubit_labels=None):
+    """
+    TODO: docstring  #generate layer of random unitaries and make a series of circuit layers with the compiled versions
+     of these
+    """
+    if qubit_labels is not None:
+        n = len(qubit_labels)
+        qubits = qubit_labels[:]  # copy this list
+    else:
+        n = pspec.num_qubits
+        qubits = pspec.qubit_labels[:]  # copy this list
+
+    Xpi2layer = _cir.Circuit(layer_labels=[[(xname, qubits[t]) for t in range(n)], ])
+
+    # samples random rotation angles.
+    rot_angles = [sample_random_clifford_one_qubit_unitary_parameters() for q in qubits]
+
+    circ = _cir.Circuit(layer_labels=[[_lbl.Label(zname, qubits[t], args=(str(rot_angles[t][0]),))
+                                       for t in range(n)], ], editable=True)
+    circ.append_circuit_inplace(Xpi2layer)
+    circ.append_circuit_inplace(_cir.Circuit(layer_labels=[[_lbl.Label(zname, qubits[t], args=(str(rot_angles[t][1]),))
+                                                           for t in range(n)], ]))
+    circ.append_circuit_inplace(Xpi2layer)
+    circ.append_circuit_inplace(_cir.Circuit(layer_labels=[[_lbl.Label(zname, qubits[t], args=(str(rot_angles[t][2]),))
+                                                            for t in range(n)], ]))
+    circ.done_editing()
+    return circ
+
 
 def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, two_q_gate_density=0.25,
+                                    one_q_gate_type = 'haar',
                                    two_q_gate_args_lists={'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}):
     '''
     TODO: docstring
@@ -84,7 +122,12 @@ def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, two_q_gate_
     circuit = _cir.Circuit(layer_labels=[], line_labels=qubit_labels, editable=True)
     for a in range(length):
         #generate random 1q unitary layer
-        new_layer = sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
+        if one_q_gate_type == 'haar':
+            new_layer = sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
+        elif one_q_gate_type == 'clifford':
+            new_layer = sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)       
+        else:
+            raise ValueError("Unknown value {} for `one_q_gate_type`!".format(one_q_gate_type))
         #append new layer to circuit
         circuit.append_circuit_inplace(new_layer)
         #generate 2q gate layer
@@ -96,7 +139,12 @@ def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, two_q_gate_
         #append new layer to circuit
         circuit.append_circuit_inplace(new_layer)
     #add one more layer of Haar-random 1Q unitaries
-    new_layer = sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
+    if one_q_gate_type == 'haar':
+        new_layer = sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
+    elif one_q_gate_type == 'clifford':
+        new_layer = sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)       
+    else:
+        raise ValueError("Unknown value {} for `one_q_gate_type`!".format(one_q_gate_type))
     circuit.append_circuit_inplace(new_layer)
     circuit.done_editing()
     return circuit

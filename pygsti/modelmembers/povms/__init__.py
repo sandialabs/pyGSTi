@@ -314,6 +314,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
         object from the object passed as input.
     """
     to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
+    error_msgs = {}
 
     destination_types = {'full TP': TPPOVM,
                          'static clifford': ComputationalBasisPOVM}
@@ -324,7 +325,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
             if isinstance(povm, destination_types.get(to_type, NoneType)):
                 return povm
 
-            idl = dict(ideal_povm.item()) if ideal_povm is not None else {}  # ideal effects
+            idl = dict(ideal_povm.items()) if ideal_povm is not None else {}  # ideal effects
 
             if to_type in ("full", "static", "static pure"):
                 converted_effects = [(lbl, convert_effect(vec, to_type, basis, idl.get(lbl, None), flatten_structure))
@@ -377,10 +378,10 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
 
             else:
                 raise ValueError("Invalid to_type argument: %s" % to_type)
-        except:
-            pass  # try next to_type
+        except Exception as e:
+            error_msgs[to_type] = str(e)  # try next to_type
 
-    raise ValueError("Could not convert POVM to to type(s): %s" % str(to_types))
+    raise ValueError("Could not convert POVM to to type(s): %s\n%s" % (str(to_types), str(error_msgs)))
 
 
 def convert_effect(effect, to_type, basis, ideal_effect=None, flatten_structure=False):

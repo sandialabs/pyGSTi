@@ -891,6 +891,7 @@ class CacheForwardSimulator(ForwardSimulator):
                 array_to_fill[element_indices, dest_param_slice], circuit, outcomes, param_slice,
                 layout.resource_alloc(), cache)
 
+
     def _compute_circuit_outcome_probabilities_with_cache(self, array_to_fill, circuit, outcomes, resource_alloc,
                                                           cache, time=None):
         raise NotImplementedError("Derived classes should implement this!")

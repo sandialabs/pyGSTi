@@ -243,7 +243,7 @@ class DenseOperatorInterface(object):
     def __floordiv__(self, x): return self._ptr // x
     def __rfloordiv__(self, x): return x // self._ptr
     def __pow__(self, x): return self._ptr ** x
-    def __eq__(self, x): return self._ptr == x
+    def __eq__(self, x): return _np.array_equal(self._ptr, x)
     def __len__(self): return len(self._ptr)
     def __int__(self): return int(self._ptr)
     def __long__(self): return int(self._ptr)
