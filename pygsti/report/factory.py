@@ -38,7 +38,7 @@ from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
-DEFAULT_BAD_FIT_THRESHOLD = 2.0
+DEFAULT_NONMARK_ERRBAR_THRESHOLD = 100000.0  # essentially disable since we have better ways of quantifying this now
 
 
 def _add_new_labels(running_lbls, current_lbls):
@@ -547,7 +547,7 @@ def _create_single_metric_switchboard(ws, results_dict, b_gauge_inv,
 def create_general_report(results, filename, title="auto",
                           confidence_level=None,
                           linlog_percentile=5, errgen_type="logGTi",
-                          nmthreshold=50, precision=None,
+                          nmthreshold=DEFAULT_NONMARK_ERRBAR_THRESHOLD, precision=None,
                           comm=None, ws=None, auto_open=False,
                           cachefile=None, brief=False, connected=False,
                           link_to=None, resizable=True, autosize='initial',
@@ -1178,7 +1178,7 @@ def construct_standard_report(results, title="auto",
 
     advanced_options = advanced_options or {}
     linlogPercentile = advanced_options.get('linlog percentile', 5)
-    nmthreshold = advanced_options.get('nmthreshold', DEFAULT_BAD_FIT_THRESHOLD)
+    nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
     embed_figures = advanced_options.get('embed_figures', True)
     combine_robust = advanced_options.get('combine_robust', True)
     idtPauliDicts = advanced_options.get('idt_basis_dicts', 'auto')
@@ -1403,7 +1403,7 @@ def construct_nqnoise_report(results, title="auto",
 
     advanced_options = advanced_options or {}
     linlogPercentile = advanced_options.get('linlog percentile', 5)
-    nmthreshold = advanced_options.get('nmthreshold', DEFAULT_BAD_FIT_THRESHOLD)
+    nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
     embed_figures = advanced_options.get('embed_figures', True)
     combine_robust = advanced_options.get('combine_robust', True)
     idtPauliDicts = advanced_options.get('idt_basis_dicts', 'auto')
