@@ -821,7 +821,9 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                                                                     None, evotype, state_space)
 
                     #TODO: check for modelnoise on *local* gate, i.e. create_errormap(gn, ...)??
-                    noiseop = modelnoise.create_errormap(key, evotype, state_space, target_labels=inds)
+                    #Note: set target_labels=None (NOT target_labels=inds) below so that n-qubit noise can
+                    # be applied to this gate.
+                    noiseop = modelnoise.create_errormap(key, evotype, state_space, target_labels=None)
                     layer = _op.ComposedOp([ideal_gate, noiseop]) if (noiseop is not None) else ideal_gate
                     ret.operations[key] = layer
 
