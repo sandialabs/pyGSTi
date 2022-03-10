@@ -1,5 +1,6 @@
 import pickle
 
+import sys
 import numpy as np
 import scipy.sparse as sps
 
@@ -17,6 +18,8 @@ from pygsti.baseobjs import statespace, basisconstructors as bc
 from pygsti.models.gaugegroup import FullGaugeGroupElement, UnitaryGaugeGroupElement
 from pygsti.baseobjs import Basis
 from ..util import BaseCase, needs_cvxpy
+
+SKIP_DIAMONDIST_ON_WIN = True
 
 
 class OpBase(object):
@@ -73,6 +76,7 @@ class OpBase(object):
 
     @needs_cvxpy
     def test_diamonddist(self):
+        if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
         self.assertAlmostEqual(self.gate.diamonddist(self.gate), 0.0)
 
     def test_deriv_wrt_params(self):

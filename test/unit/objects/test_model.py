@@ -3,6 +3,7 @@
 import pickle
 from contextlib import contextmanager
 
+import sys
 import numpy as np
 
 import pygsti.circuits as pc
@@ -15,6 +16,8 @@ from pygsti.models import ExplicitOpModel
 from pygsti.circuits import Circuit
 from pygsti.models.gaugegroup import FullGaugeGroupElement
 from ..util import BaseCase, needs_cvxpy
+
+SKIP_DIAMONDIST_ON_WIN = True
 
 
 @contextmanager
@@ -189,6 +192,7 @@ class GeneralMethodBase(object):
 
     @needs_cvxpy
     def test_diamonddist(self):
+        if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
         cp = self.model.copy()
         self.assertAlmostEqual(self.model.diamonddist(cp), 0)
         # TODO non-trivial case
