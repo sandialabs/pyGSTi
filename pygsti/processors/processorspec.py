@@ -13,7 +13,9 @@ Defines the QubitProcessorSpec class and supporting functionality.
 import numpy as _np
 import itertools as _itertools
 import collections as _collections
+import warnings as _warnings
 from functools import lru_cache
+
 
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import symplectic as _symplectic
@@ -298,9 +300,9 @@ class QuditProcessorSpec(ProcessorSpec):
             elif isinstance(obj, dict): return {k: _unserialize_instrument_member(v) for k, v in obj.items()}
             raise ValueError("Cannot unserialize Instrument specifier of type %s!" % str(type(obj)))
 
-        nonstd_preps = {k: _unserialize_state(obj) for k, obj in state['nonstd_preps'].items()}
-        nonstd_povms = {k: _unserialize_povm(obj) for k, obj in state['nonstd_povms'].items()}
-        nonstd_instruments = {k: _unserialize_instrument(obj) for k, obj in state['nonstd_instruments'].items()}
+        nonstd_preps = {k: _unserialize_state(obj) for k, obj in state.get('nonstd_preps', {}).items()}
+        nonstd_povms = {k: _unserialize_povm(obj) for k, obj in state.get('nonstd_povms', {}).items()}
+        nonstd_instruments = {k: _unserialize_instrument(obj) for k, obj in state.get('nonstd_instruments', {}).items()}
 
         return nonstd_gate_unitaries, nonstd_preps, nonstd_povms, nonstd_instruments
 
@@ -853,9 +855,15 @@ class QubitProcessorSpec(QuditProcessorSpec):
         availability = {k: _tuplize(v) for k, v in state['availability'].items()}
         geometry = _qgraph.QubitGraph.from_nice_serialization(state['geometry'])
 
+        if 'prep_names' not in state:
+            _warnings.warn(("Loading an old-format QubitProcessorSpec that doesn't contain SPAM information."
+                            " You should check to make sure you don't want/need to add this information and"
+                            " then re-save this processor spec."))
+
         return cls(len(state['qubit_labels']), state['gate_names'], nonstd_gate_unitaries, availability,
-                   geometry, state['qubit_labels'], symplectic_reps, state['prep_names'], state['povm_names'],
-                   state['instrument_names'], nonstd_preps, nonstd_povms, nonstd_instruments, state['aux_info'])
+                   geometry, state['qubit_labels'], symplectic_reps, state.get('prep_names', []),
+                   state.get('povm_names', []), state.get('instrument_names', []), nonstd_preps, nonstd_povms,
+                   nonstd_instruments, state['aux_info'])
 
     @property
     def qubit_labels(self):
