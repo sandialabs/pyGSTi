@@ -43,6 +43,7 @@ def sample_haar_random_one_qubit_unitary_parameters():
     theta3 = _comp.mod_2pi(psi + chi)
     return (theta1, theta2, theta3)
 
+
 def sample_random_clifford_one_qubit_unitary_parameters():
     """
     TODO: docstring
@@ -81,6 +82,7 @@ def sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr'
     circ.done_editing()
     return circ
 
+
 def sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr', xname='Gxpi2', qubit_labels=None):
     """
     TODO: docstring  #generate layer of random unitaries and make a series of circuit layers with the compiled versions
@@ -111,7 +113,7 @@ def sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, zname='
 
 
 def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, two_q_gate_density=0.25,
-                                    one_q_gate_type = 'haar',
+                                   one_q_gate_type='haar',
                                    two_q_gate_args_lists={'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}):
     '''
     TODO: docstring
@@ -125,7 +127,7 @@ def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, two_q_gate_
         if one_q_gate_type == 'haar':
             new_layer = sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
         elif one_q_gate_type == 'clifford':
-            new_layer = sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)       
+            new_layer = sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
         else:
             raise ValueError("Unknown value {} for `one_q_gate_type`!".format(one_q_gate_type))
         #append new layer to circuit
@@ -142,7 +144,7 @@ def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, two_q_gate_
     if one_q_gate_type == 'haar':
         new_layer = sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
     elif one_q_gate_type == 'clifford':
-        new_layer = sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)       
+        new_layer = sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
     else:
         raise ValueError("Unknown value {} for `one_q_gate_type`!".format(one_q_gate_type))
     circuit.append_circuit_inplace(new_layer)

@@ -1127,7 +1127,7 @@ class BuiltinBasis(LazyBasis):
         bool
         """
         if isinstance(other, BuiltinBasis):  # then can compare quickly
-            return ((self.name == other.name) 
+            return ((self.name == other.name)
                     and (self.state_space == other.state_space)
                     and (not sparseness_must_match or (self.sparse == other.sparse)))
         elif isinstance(other, str):

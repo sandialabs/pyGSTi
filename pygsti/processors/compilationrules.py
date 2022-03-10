@@ -75,10 +75,11 @@ class CompilationRules(object):
     def __init__(self, compilation_rules_dict=None):
         self.gate_unitaries = _collections.OrderedDict()  # gate_name => unitary mx, fn, or None
         self.local_templates = _collections.OrderedDict()  # gate_name => Circuit on gate's #qubits
-        self.function_templates = _collections.OrderedDict()  # gate_name => fn(sslbls, args=None, time=None) that returns Circuit on absolute qubits
+        self.function_templates = _collections.OrderedDict()  # gate_name => fn(sslbls, args=None, time=None)
+        # that returns a Circuit on absolute qubits
         self.specific_compilations = _collections.OrderedDict()  # gate_label => Circuit on absolute qubits
 
-        self._compiled_cache = _collections.OrderedDict() # compiled gate_label => Circuit on absolute qubits
+        self._compiled_cache = _collections.OrderedDict()  # compiled gate_label => Circuit on absolute qubits
 
         if compilation_rules_dict is not None:
             for gate_key, (gate_unitary, gate_template) in compilation_rules_dict.items():
@@ -92,8 +93,10 @@ class CompilationRules(object):
                             "Values to gate name template must be functions or Circuits, not %s" % type(gate_template)
                         self.local_templates[gate_key] = gate_template
                 else:
-                    assert isinstance(gate_key, _Label), "Keys to compilation_rules_dict must be str or Labels, not %s" % type(gate_key)
-                    assert isinstance(gate_template, _Circuit), "Values to specific compilations must be Circuits, not %s" % type(gate_template)
+                    assert isinstance(gate_key, _Label), \
+                        "Keys to compilation_rules_dict must be str or Labels, not %s" % type(gate_key)
+                    assert isinstance(gate_template, _Circuit), \
+                        "Values to specific compilations must be Circuits, not %s" % type(gate_template)
                     self.specific_compilations[gate_key] = gate_template
 
     def add_compilation_rule(self, gate_name, template_circuit_or_fn, unitary=None):
@@ -175,7 +178,7 @@ class CompilationRules(object):
         dict
         """
         return {}
-    
+
     def retrieve_compilation_of(self, oplabel, force=False):
         """
         Get a compilation of `oplabel`, computing one from local templates if necessary.
@@ -197,23 +200,23 @@ class CompilationRules(object):
         # First look up in cache
         if not force and oplabel in self._compiled_cache:
             return self._compiled_cache[oplabel]
-        
-        if oplabel in self.specific_compilations: # Second, look up in specific compilations
+
+        if oplabel in self.specific_compilations:  # Second, look up in specific compilations
             self._compiled_cache[oplabel] = self.specific_compilations[oplabel]
-        elif oplabel.name in self.local_templates: # Third, construct from local template
+        elif oplabel.name in self.local_templates:  # Third, construct from local template
             template_to_use = self.local_templates[oplabel.name]
-            
-            # Template compilations always use integer qubit labels: 0 to N 
+
+            # Template compilations always use integer qubit labels: 0 to N
             to_real_label = {i: oplabel.sslbls[i] for i in template_to_use.line_labels}
 
             self._compiled_cache[oplabel] = template_to_use.map_state_space_labels(to_real_label)
-        elif oplabel.name in self.function_templates: # Fourth, construct from local function template
+        elif oplabel.name in self.function_templates:  # Fourth, construct from local function template
             template_fn_to_use = self.function_templates[oplabel.name]
             self._compiled_cache[oplabel] = _Circuit(template_fn_to_use(oplabel.sslbls, oplabel.args, oplabel.time))
         else:
             # Failed to compile
             return None
-        
+
         return self._compiled_cache[oplabel]
 
     def apply_to_processorspec(self, processor_spec, action="replace", gates_to_skip=None):
@@ -229,7 +232,7 @@ class CompilationRules(object):
         action : {"replace", "add"}
             Whether the existing gates in `processor_spec` are conveyed to the the returned
             processor spec.  If `"replace"`, then they are not conveyed, if `"add"` they are.
-        
+
         gates_to_skip : list
             Gate names or labels to skip during processor specification construction.
 
@@ -246,7 +249,7 @@ class CompilationRules(object):
         for gn in gate_names:
             if gn in gates_to_skip:
                 continue
-            
+
             if gn in self.local_templates:
                 # merge availabilities from gates in local template
                 compilation_circuit = self.local_templates[gn]
@@ -336,7 +339,7 @@ class CompilationRules(object):
                                   processor_spec.qubit_graph, processor_spec.qubit_labels, aux_info=aux_info)
         ret.compiled_from = (processor_spec, self)
         return ret
-    
+
     def apply_to_circuits(self, circuits, **kwargs):
         """
         Use these compilation rules to convert one list of circuits into another one.
@@ -359,7 +362,7 @@ class CompilationRules(object):
         for circ in compiled_circuits:
             circ.change_gate_library(self, **kwargs)
             circ.done_editing()
-        
+
         return compiled_circuits
 
 
