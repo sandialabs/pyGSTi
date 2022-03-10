@@ -2612,6 +2612,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         cpy.circuit_lists = _copy.deepcopy(self.circuit_lists)
         for est_key, est in self.estimates.items():
             cpy.estimates[est_key] = est.copy()
+            cpy.estimates[est_key].set_parent(cpy)
         return cpy
 
     def __setstate__(self, state_dict):

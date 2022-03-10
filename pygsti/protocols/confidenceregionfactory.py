@@ -178,7 +178,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
                   cls._decodemx(state['hessian_matrix']) if (state['hessian_matrix'] is not None) else None,
                   state['nonmarkovian_radius_squared'])
         if 'hessian_projection_parameters' in state:  # for backward compatibility
-            for projection_lbl, params in state['hessian_projection_parameters']:
+            for projection_lbl, params in state['hessian_projection_parameters'].items():
                 ret.hessian_projection_parameters[projection_lbl] = params  # (param dict is entirely JSON-able)
                 ret.inv_hessian_projections[projection_lbl] = cls._decodemx(
                     state['inverse_hessian_projections'][projection_lbl])

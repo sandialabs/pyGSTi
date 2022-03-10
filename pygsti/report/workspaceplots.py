@@ -2552,7 +2552,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
         elif nQubits == 2:
             if projections.size == 15:
                 projections = _np.concatenate(([0.0], projections)).reshape((4, 4))
-                eb_matrix = _np.concatenate(([0.0], eb_matrix))
+                eb_matrix = _np.concatenate(([0.0], eb_matrix)) if (eb_matrix is not None) else None
                 xlabel = "Q2"; ylabel = "Q1"
                 xd, yd = projections.shape
             else:  # projections.size == 15*15
@@ -2562,7 +2562,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
         else:
             if projections.size == 4**nQubits - 1:
                 projections = _np.concatenate(([0.0], projections)).reshape((4, projections.size // 4))
-                eb_matrix = _np.concatenate(([0.0], eb_matrix))
+                eb_matrix = _np.concatenate(([0.0], eb_matrix)) if (eb_matrix is not None) else None
                 xlabel = "Q*"; ylabel = "Q1"
                 xd, yd = projections.shape
             else:  # projections.size == (4**nQ)**2
