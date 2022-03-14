@@ -44,6 +44,7 @@ from pygsti.tools import optools as _ot
 def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
     """ TODO: docstring - note that op_type can be a list/tuple of types in order of precedence """
     op_type_preferences = verbose_type_from_op_type(op_type)
+    error_msgs = {}
 
     U = unitary_mx
     if state_space is None:
@@ -86,15 +87,17 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                 raise ValueError("Unknown operation type '%s'!" % str(typ))
 
             return op  # if we get to here, then we've successfully created an op to return
-        except (ValueError, AssertionError, AttributeError):
+        except (ValueError, AssertionError, AttributeError) as e:
             #_warnings.warn('Failed to create operator with type %s with error: %s' % (typ, e))
-            pass  # move on to text type
+            error_msgs[typ] = str(e)  # # move on to text type
 
-    raise ValueError("Could not create an operator of type(s) %s from the given unitary op!" % (str(op_type)))
+    raise ValueError("Could not create an operator of type(s) %s from the given unitary op:\n%s"
+                     % (str(op_type), str(error_msgs)))
 
 
 def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
     op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+    error_msgs = {}
 
     for typ in op_type_preferences:
         try:
@@ -133,10 +136,11 @@ def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotyp
                 op = create_from_unitary_mx(unitary_mx, typ, basis, stdname, evotype, state_space)
 
             return op  # if we get to here, then we've successfully created an op to return
-        except (ValueError, AssertionError):
-            pass  # move on to next type
+        except (ValueError, AssertionError) as e:
+            error_msgs[typ] = str(e)  # # move on to text type
 
-    raise ValueError("Could not create an operator of type(s) %s from the given superop!" % (str(op_type)))
+    raise ValueError("Could not create an operator of type(s) %s from the given superop:\n%s"
+                     % (str(op_type), str(error_msgs)))
 
 
 def verbose_type_from_op_type(op_type):
