@@ -1444,8 +1444,7 @@ def elementary_errorgens(dim, typ, basis):
     basis = _Basis.cast(basis, d2)
     basis_lbls = basis.labels[1:]  # skip identity
     basis_mxs = basis.elements[1:]  # skip identity
-    assert(_np.allclose(basis.elements[0], _np.identity(d) * (_np.linalg.norm(basis.elements[0]) / _np.sqrt(d)))), \
-        "First element of basis must be the identity!"
+    assert(basis.first_element_is_identity), "First element of basis must be the identity!"
     assert(len(basis_mxs) < d2)  # OK if there are fewer basis matrices (e.g. for bases w/multiple blocks)
 
     elem_errgens = {}
@@ -1503,8 +1502,7 @@ def elementary_errorgens_dual(dim, typ, basis):
     basis = _Basis.cast(basis, d2)
     basis_lbls = basis.labels[1:]  # skip identity
     basis_mxs = basis.elements[1:]  # skip identity
-    assert(_np.allclose(basis.elements[0], _np.identity(d) * (_np.linalg.norm(basis.elements[0]) / _np.sqrt(d)))), \
-        "First element of basis must be the identity!"
+    assert(basis.first_element_is_identity), "First element of basis must be the identity!"
     assert(len(basis_mxs) < d2)  # OK if there are fewer basis matrices (e.g. for bases w/multiple blocks)
 
     elem_errgens = {}

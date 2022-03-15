@@ -1779,13 +1779,12 @@ def errorgen_and_projections(errgen, mx_basis):
     #egnorm = _np.linalg.norm(errgen.flatten())
     ret['error generator'] = errgen
 
-    d = mx_basis.elshape[0]  # should also be sqrt(errgen.shape[0])
     if set(mx_basis.name.split('*')) == set(['pp']):
         #HACK: convert 'pp' => 'PP' here, as that's typically used.  However, other
         # bases just pass through as before and may have different scalings than earlier
         # pyGSTi versions because the elementary error generators are scaled differently.
         elem_errgen_basis = _Basis.cast('PP', mx_basis.dim)  # aka the "projection basis"
-    elif _np.allclose(mx_basis.elements[0], _np.identity(d) * (_np.linalg.norm(mx_basis.elements[0]) / _np.sqrt(d))):
+    elif mx_basis.first_element_is_identity:
         elem_errgen_basis = mx_basis  # aka the "projection basis"
     else:  # when mx_basis doesn't have identity as its first element,
         elem_errgen_basis = mx_basis.create_simple_equivalent('gm')  # fall back to Gell-Mann basis

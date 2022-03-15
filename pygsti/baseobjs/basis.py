@@ -334,6 +334,15 @@ class Basis(_NicelySerializable):
         if self.elshape is None: return 0
         return int(_np.product(self.elshape))
 
+    @property
+    def first_element_is_identity(self):
+        """
+        True if the first element of this basis is *proportional* to the identity matrix, False otherwise.
+        """
+        if self.elndim != 2 or self.elshape[0] != self.elshape[1]: return False
+        d = self.elshape[0]
+        return _np.allclose(self.elements[0], _np.identity(d) * (_np.linalg.norm(self.elements[0]) / _np.sqrt(d)))
+
     def is_simple(self):
         """
         Whether the flattened-element vector space is the *same* space as the space this basis's vectors belong to.
@@ -1043,6 +1052,7 @@ class BuiltinBasis(LazyBasis):
 
         longname = _basis_constructor_dict[name].longname
         real = _basis_constructor_dict[name].real
+        self._first_element_is_identity = _basis_constructor_dict[name].first_element_is_identity
 
         super(BuiltinBasis, self).__init__(name, longname, real, sparse)
 
@@ -1091,6 +1101,13 @@ class BuiltinBasis(LazyBasis):
         assert(not self.sparse or len(elshape) == 2), "`sparse == True` is only allowed for *matrix*-valued bases!"
 
         return elshape
+
+    @property
+    def first_element_is_identity(self):
+        """
+        True if the first element of this basis is *proportional* to the identity matrix, False otherwise.
+        """
+        return self._first_element_is_identity
 
     def __hash__(self):
         return hash((self.name, self.state_space, self.sparse))
