@@ -104,50 +104,51 @@ class GSTInitialModelTester(BaseCase):
 
     def setUp(self):
         self.edesign = smq1Q_XYI.get_gst_experiment_design(max_max_length=2)
+        self.target_model = smq1Q_XYI.target_model()
 
     def tearDown(self):
         pass  # TODO
 
     def test_create_from(self):
-        im = gst.GSTInitialModel.cast(None)  # default is to use the target
+        im = gst.GSTInitialModel.cast(self.target_model)
         im2 = gst.GSTInitialModel.cast(im)
         self.assertTrue(im2 is im)
 
-        im3 = gst.GSTInitialModel.cast(self.edesign.create_target_model())
+        im3 = gst.GSTInitialModel.cast(self.target_model)
         self.assertEqual(im3.starting_point, "User-supplied-Model")
 
     def test_get_model_target(self):
         #Default
-        im = gst.GSTInitialModel()  # default is to use the target
+        im = gst.GSTInitialModel(target_model=self.target_model)
         mdl = im.retrieve_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, 'target')
-        self.assertTrue(self.edesign.create_target_model().frobeniusdist(mdl) < 1e-6)
+        self.assertTrue(self.target_model.frobeniusdist(mdl) < 1e-6)
 
     def test_get_model_custom(self):
         #Custom model
-        custom_model = self.edesign.create_target_model('full','full').rotate(max_rotate=0.05, seed=1234)
-        im = gst.GSTInitialModel(custom_model)  # default is to use the target
+        custom_model = self.target_model.rotate(max_rotate=0.05, seed=1234)
+        im = gst.GSTInitialModel(custom_model)
         mdl = im.retrieve_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, "User-supplied-Model")
         self.assertTrue(mdl is custom_model)
 
     def test_get_model_depolarized(self):
         #Depolarized start
-        depol_model = self.edesign.create_target_model('full', 'full').depolarize(op_noise=0.1)
-        im = gst.GSTInitialModel(depolarize_start=0.1)  # default is to use the target
+        depol_model = self.target_model.depolarize(op_noise=0.1)
+        im = gst.GSTInitialModel(target_model=self.target_model, depolarize_start=0.1)
         mdl = im.retrieve_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, 'target')
         self.assertTrue(depol_model.frobeniusdist(mdl) < 1e-6)
 
     def test_get_model_lgst(self):
         #LGST
-        datagen_model = self.edesign.create_target_model('full').depolarize(op_noise=0.1)
+        datagen_model = self.target_model.depolarize(op_noise=0.1)
         ds = simulate_data(datagen_model, self.edesign.all_circuits_needing_data, 1000, sample_error='none')  # no error for reproducibility
 
-        im1 = gst.GSTInitialModel(self.edesign.create_target_model('full'), "LGST")
+        im1 = gst.GSTInitialModel(self.target_model, "LGST")
         mdl1 = im1.retrieve_model(self.edesign, None, ds, None)
 
-        im2 = gst.GSTInitialModel(self.edesign.create_target_model('full'), "LGST-if-possible")
+        im2 = gst.GSTInitialModel(self.target_model, "LGST-if-possible")
         mdl2 = im2.retrieve_model(self.edesign, None, ds, None)
 
         self.assertTrue(mdl1.frobeniusdist(mdl2) < 1e-6)

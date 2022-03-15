@@ -37,7 +37,7 @@ def build_XYCNOT_cloudnoise_model(nQubits, geometry="line", cnot_edges=None,
         extraWeight1Hops, extraGateWeight,
         simulator, evotype, parameterization, parameterization,
         "add_global" if addIdleNoiseToAllGates else "none",
-        errcomp_type, True, True, True, verbosity)
+        errcomp_type, True, True, True, 'pp', verbosity)
 
     if return_clouds:
         #FUTURE - just return cloud *keys*? (operation label values are never used
