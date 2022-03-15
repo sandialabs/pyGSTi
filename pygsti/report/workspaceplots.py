@@ -2540,6 +2540,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
             #Non-integral # of qubits, so just show as a single row
             projections = projections.reshape((1, projections.size))
             xlabel = ""; ylabel = ""
+            yd, xd = projections.shape
         elif nQubits == 1:
             if projections.size == 3:
                 projections = projections.reshape((1, 3))
@@ -2554,7 +2555,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
                 projections = _np.concatenate(([0.0], projections)).reshape((4, 4))
                 eb_matrix = _np.concatenate(([0.0], eb_matrix)) if (eb_matrix is not None) else None
                 xlabel = "Q2"; ylabel = "Q1"
-                xd, yd = projections.shape
+                yd, xd = projections.shape
             else:  # projections.size == 15*15
                 projections = projections.reshape((15, 15))
                 xlabel = ""; ylabel = ""
@@ -2564,7 +2565,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
                 projections = _np.concatenate(([0.0], projections)).reshape((4, projections.size // 4))
                 eb_matrix = _np.concatenate(([0.0], eb_matrix)) if (eb_matrix is not None) else None
                 xlabel = "Q*"; ylabel = "Q1"
-                xd, yd = projections.shape
+                yd, xd = projections.shape
             else:  # projections.size == (4**nQ)**2
                 projections = projections.reshape((4**nQubits - 1, 4**nQubits - 1))
                 xlabel = ""; ylabel = ""

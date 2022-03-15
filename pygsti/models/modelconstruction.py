@@ -1903,7 +1903,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         implicit_idle_mode="none", errcomp_type="gates",
         independent_gates=True, independent_spam=True,
         connected_highweight_errors=True,
-        verbosity=0):
+        basis='pp', verbosity=0):
     """
     Create a "cloud crosstalk" model based on maximum error weights and hops along the processor's qudit graph.
 
@@ -2045,6 +2045,10 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         target = qudit-2, then weight-2 errors on 1-2 and 2-3 would be allowed, but errors on
         1-3 would be forbidden.  When `False`, no constraint is imposed.
 
+    basis : Basis or str, optional
+        The basis to use when constructing operator representations for the elements
+        of the created model.
+
     verbosity : int or VerbosityPrinter, optional
         An integer >= 0 dictating how must output to send to stdout.
 
@@ -2100,7 +2104,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
 
     return _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates,
                                          evotype, simulator, independent_gates, independent_spam,
-                                         errcomp_type, implicit_idle_mode, verbosity)
+                                         errcomp_type, implicit_idle_mode, basis, verbosity)
 
 
 def _iter_basis_inds(weight):

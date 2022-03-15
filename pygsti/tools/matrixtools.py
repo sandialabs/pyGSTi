@@ -1814,7 +1814,7 @@ def expm_multiply_prep(a, tol=EXPM_DEFAULT_TOL):
     Parameters
     ----------
     a : numpy.ndarray
-        the matrix that will belater exponentiated.
+        the matrix that will be later exponentiated.
 
     tol : float, optional
         Tolerance used to within matrix exponentiation routines.
