@@ -40,10 +40,10 @@ from pygsti.objectivefns import objectivefns as _objfns, wildcardbudget as _wild
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.modelmembers import states as _states, povms as _povms
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
+
 
 #For results object:
-
-
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
 
@@ -63,44 +63,14 @@ class HasProcessorSpec(object):
             if (processorspec_filename_or_obj is not None) else None
         self.auxfile_types['processor_spec'] = 'serialized-object'
 
+    @_deprecated_fn('This function stub will be removed soon.')
     def create_target_model(self, gate_type='auto', prep_type='auto', povm_type='auto'):
         """
-        Create a target model for this experiment design.
-
-        An explicit model is created based on the processor spec.  If a different type
-        of model is needed, consider creating the model manually via the construction
-        functions in the `pygsti.models.modelconstruction` module using this experiment
-        design's `.processor_spec` attribute.
-
-        Parameters
-        ----------
-        gate_type : str, optional
-            The type of gate objects to create.  Currently `"auto"` is the same as `"static"`.
-
-        prep_type : str, optional
-            The type of state preparation objects to create.  `"auto"` selects a type based
-            on the value of `gate_type`.
-
-        povm_type : str, optional
-            The type of POVM objects to create.  `"auto"` selects a type based
-            on the value of `gate_type`.
-
-        Returns
-        -------
-        Model
+        Deprecated function.
         """
-        # Create a static explicit model as the target model, based on the processor spec
-        if gate_type == "auto":
-            gate_type = "static"
-        if prep_type == "auto":
-            prep_type = _states.state_type_from_op_type(gate_type)
-        if povm_type == "auto":
-            povm_type = _povms.povm_type_from_op_type(gate_type)
-
-        return _models.modelconstruction._create_explicit_model(
-            self.processor_spec, None, evotype='default', simulator='auto',
-            ideal_gate_type=gate_type, ideal_prep_type=prep_type, ideal_povm_type=povm_type,
-            embed_gates=False, basis='pp')
+        raise NotImplementedError(("This function has been removed because is was an API hack.  To properly create"
+                                   " a model from a processor spec, you should use one of the model creation functions"
+                                   " in pygsti.models.modelconstruction"))
 
 
 class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
@@ -289,7 +259,7 @@ class StandardGSTDesign(GateSetTomographyDesign):
             processor_spec = processor_spec_or_model.create_processor_spec() \
                 if isinstance(processor_spec_or_model, _Model) else processor_spec_or_model
         except Exception:
-            _warnings.warn("Failed to create a processor spec for GST experiment design!")
+            _warnings.warn("Given model failed to create a processor spec for StdGST experiment design!")
             processor_spec = None  # allow this to bail out
 
         super().__init__(processor_spec, lists, None, qubit_labels, self.nested)
@@ -431,21 +401,6 @@ class GSTInitialModel(_NicelySerializable):
         -------
         Model
         """
-
-        def _get_target_model():  # a fn so we don't run this code unless we actually need a target model
-            if self.target_model is None:
-                if isinstance(edesign, HasProcessorSpec):
-                    typ = 'full' if (self.starting_point in ("LGST", "LGST-if-possible")
-                                     or self.contract_start_to_cptp
-                                     or self.depolarize_start > 0
-                                     or self.randomize_start > 0) else 'auto'
-                    target_model = edesign.create_target_model(typ)
-                else:
-                    target_model = None
-            else:
-                target_model = self.target_model.copy()  # copy so don't give actual target as starting point
-            return target_model
-
         #Get starting point (model), which is used to compute other quantities
         # Note: should compute on rank 0 and distribute?
         starting_pt = self.starting_point
@@ -455,10 +410,16 @@ class GSTInitialModel(_NicelySerializable):
         elif starting_pt in ("LGST", "LGST-if-possible"):
             #lgst_advanced = advancedOptions.copy(); lgst_advanced.update({'estimateLabel': "LGST", 'onBadFit': []})
 
-            mdl_start = self.model if (self.model is not None) else _get_target_model()
+            if self.model is not None:
+                mdl_start = self.model
+            elif self.target_model is not None:
+                mdl_start = self.target_model.copy()
+            else:
+                mdl_start = None
+
             if mdl_start is None:
                 raise ValueError(("LGST requires a model. Specify an initial model or use an experiment"
-                                  " design with a target model"))
+                                  " design with a processor specification"))
 
             lgst = LGST(mdl_start,
                         gaugeopt_suite=GSTGaugeOptSuite(
@@ -484,14 +445,17 @@ class GSTInitialModel(_NicelySerializable):
                     mdl_start = self.model
                 else:
                     starting_pt = "target"
-                    mdl_start = _get_target_model()
+                    # mdl_start = mdl_start (either the target model or constructed from edesign pspec)
 
             if starting_pt == "LGST":
                 lgst_results = lgst.run(lgst_data)
                 mdl_start = lgst_results.estimates['LGST'].models['lgst_gaugeopt']
 
         elif starting_pt == "target":
-            mdl_start = _get_target_model()
+            if self.target_model is not None:
+                mdl_start = self.target_model.copy()
+            else:
+                raise ValueError("Starting point == 'target' and target model not specified!")
         else:
             raise ValueError("Invalid starting point: %s" % starting_pt)
 
@@ -1253,19 +1217,17 @@ class GateSetTomography(_proto.Protocol):
 
         ret = ModelEstimateResults(data, self)
 
-        #Get target model for post-processing if we can...
+        #Set target model for post-processing -- assume that this is the initial model unless overridden by the
+        # gauge opt suite
         if self.gaugeopt_suite.gaugeopt_target is not None:
             target_model = self.gaugeopt_suite.gaugeopt_target
-        elif self.gaugeopt_suite.is_empty() is False:
-            if isinstance(data.edesign, HasProcessorSpec):
-                target_model = data.edesign.create_target_model()
-            else:
-                target_model = None
+        elif self.initial_model.target_model is not None:
+            target_model = self.initial_model.target_model.copy()
+        elif self.initial_model.model is not None and self.gaugeopt_suite.is_empty() is False:
+            # when we desparately need a target model but none have been specifically given: use initial model
+            target_model = self.initial_model.model.copy()
         else:
             target_model = None
-        #Note: above code prefers target model in gaugeopt suite to that of edesign - this is TEMPORARY until
-        # processor specs can reliably reconstruct target models (e.g. they don't support instruments yet).
-        # After processor specs work all the way, we should prefer it over the gaugeopt suite's target here.
 
         estimate = _Estimate.create_gst_estimate(ret, target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
@@ -1347,8 +1309,7 @@ class LinearGateSetTomography(_proto.Protocol):
         if self.target_model is not None:
             target_model = self.target_model
         else:
-            target_model = edesign.create_target_model()
-            target_model.set_all_parameterizations('full')  # so LGST can modify them
+            raise ValueError("LGST requires a target model and none was given!")
 
         if isinstance(target_model, _models.ExplicitOpModel):
             if not all([(isinstance(g, _op.FullArbitraryOp)
@@ -1385,8 +1346,7 @@ class LinearGateSetTomography(_proto.Protocol):
         if self.target_model is not None:
             target_model = self.target_model
         else:
-            target_model = edesign.create_target_model()
-            target_model.set_all_parameterizations('full')  # so LGST can modify them
+            raise ValueError("No target model specified.  Cannot run LGST.")
 
         if isinstance(edesign, _proto.CircuitListsDesign):
             circuit_list = edesign.circuit_lists[0]
@@ -1497,15 +1457,13 @@ class StandardGST(_proto.Protocol):
         be used.
     """
 
-    def __init__(self, modes="full TP,CPTP,Target",
-                 gaugeopt_suite='stdgaugeopt',
-                 models_to_test=None,
-                 objfn_builders=None, optimizer=None,
-                 badfit_options=None, verbosity=2, name=None):
+    def __init__(self, modes="full TP,CPTP,Target", gaugeopt_suite='stdgaugeopt', target_model=None,
+                 models_to_test=None, objfn_builders=None, optimizer=None, badfit_options=None, verbosity=2, name=None):
 
         super().__init__(name)
         self.modes = modes.split(',')
         self.models_to_test = models_to_test
+        self.target_model = target_model
         self.gaugeopt_suite = GSTGaugeOptSuite.cast(gaugeopt_suite)
         self.objfn_builders = objfn_builders
         self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
@@ -1517,14 +1475,12 @@ class StandardGST(_proto.Protocol):
             # by default, set special "first_fditer=auto" behavior (see logic in GateSetTomography.__init__)
             self.optimizer.first_fditer = None
 
+        self.auxfile_types['target_model'] = 'serialized-object'
         self.auxfile_types['models_to_test'] = 'dict:serialized-object'
         self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
         self.auxfile_types['objfn_builders'] = 'serialized-object'
         self.auxfile_types['optimizer'] = 'serialized-object'
         self.auxfile_types['badfit_options'] = 'serialized-object'
-
-        self._hack_target_model = None  # TODO REMOVE this hack once ProcessorSpec objects can hold qutrits/qudits
-        self.auxfile_types['_hack_target_model'] = 'reset'
 
         #Advanced options that could be changed by users who know what they're doing
         self.starting_point = {}  # a dict whose keys are modes
@@ -1568,22 +1524,29 @@ class StandardGST(_proto.Protocol):
             elif len(self.objfn_builders.iteration_builders) > 0:
                 mt_builder = self.objfn_builders.iteration_builders[0]
 
+        if self.target_model is not None:
+            target_model = self.target_model
+        elif isinstance(data.edesign, HasProcessorSpec):
+            # warnings.warn(...) -- or try/except and warn if fails?
+            target_model = _models.modelconstruction._create_explicit_model(
+                data.edesign.processor_spec, None, evotype='default', simulator='auto',
+                ideal_gate_type='static', ideal_prep_type='auto', ideal_povm_type='auto',
+                embed_gates=False, basis='pp')  # HARDCODED basis!
+
         ret = ModelEstimateResults(data, self)
         with printer.progress_logging(1):
             for i, mode in enumerate(modes):
                 printer.show_progress(i, len(modes), prefix='-- Std Practice: ', suffix=' (%s) --' % mode)
 
                 if mode == "Target":
-                    #model_to_test = data.edesign.create_target_model()  # no parameterization change
-                    model_to_test = data.edesign.create_target_model() \
-                        if (self._hack_target_model is None) else self._hack_target_model  # HACK - REMOVE later
-                    mdltest = _ModelTest(model_to_test, self._hack_target_model, self.gaugeopt_suite,
+                    model_to_test = target_model
+                    mdltest = _ModelTest(model_to_test, target_model, self.gaugeopt_suite,
                                          mt_builder, self.badfit_options, verbosity=printer - 1, name=mode)
                     result = mdltest.run(data, memlimit, comm)
                     ret.add_estimates(result)
 
                 elif mode in models_to_test:
-                    mdltest = _ModelTest(models_to_test[mode], self._hack_target_model, self.gaugeopt_suite,
+                    mdltest = _ModelTest(models_to_test[mode], target_model, self.gaugeopt_suite,
                                          None, self.badfit_options, verbosity=printer - 1, name=mode)
                     result = mdltest.run(data, memlimit, comm)
                     ret.add_estimates(result)
@@ -1591,8 +1554,7 @@ class StandardGST(_proto.Protocol):
                 else:
                     #Try to interpret `mode` as a parameterization
                     parameterization = mode  # for now, 1-1 correspondence
-                    initial_model = data.edesign.create_target_model() \
-                        if (self._hack_target_model is None) else self._hack_target_model  # HACK - REMOVE later
+                    initial_model = target_model
 
                     try:
                         initial_model.set_all_parameterizations(parameterization)

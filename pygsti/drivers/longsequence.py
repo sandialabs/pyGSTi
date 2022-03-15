@@ -12,11 +12,13 @@ End-to-end functions for performing long-sequence GST
 
 import os as _os
 import pickle as _pickle
+import warnings as _warnings
 
 from pygsti import circuits as _circuits
 from pygsti import io as _io
 from pygsti import baseobjs as _baseobjs
 from pygsti import protocols as _proto
+from pygsti.processors import ProcessorSpec as _ProcessorSpec
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.baseobjs.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
 from pygsti.models.model import Model as _Model
@@ -161,7 +163,7 @@ def run_model_test(model_filename_or_object,
     return results
 
 
-def run_linear_gst(data_filename_or_set, processorspec_filename_or_object,
+def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
                    prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                    gauge_opt_params=None, advanced_options=None, comm=None,
                    mem_limit=None, output_pkl=None, verbosity=2):
@@ -183,11 +185,9 @@ def run_linear_gst(data_filename_or_set, processorspec_filename_or_object,
         or by the filename of a dataset file (assumed to be a pickled `DataSet`
         if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
 
-    processorspec_filename_or_object : ProcessorSpec or string
-        A specification of the processor that LGST is to be run on, given either
-        directly or by the filename of a processor-spec file (text format).  The
-        processor specification contains basic interface-level information about the
-        processor being tested, e.g., its state space and available gates.
+    target_model_filename_or_object : Model or string
+        The target model specifying the gates and SPAM elements that LGST is to be run on,
+        given either directly or by the filename of a model file (text format).
 
     prep_fiducial_list_or_filename : (list of Circuits) or string
         The state preparation fiducial circuits, specified either directly
@@ -237,12 +237,17 @@ def run_linear_gst(data_filename_or_set, processorspec_filename_or_object,
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
+    target_model = _load_model(target_model_filename_or_object)
 
-    pspec = processorspec_filename_or_object  # _load_processorspec TODO
-    germs = _circuits.to_circuits([()] + [(gl,) for gl in pspec.primitive_op_labels])  # just the single gates
+    if isinstance(target_model, _ProcessorSpec):  # for backward compatibility
+        _warnings.warn(("You passed a processor spec to 'run_linear_gst' when you really should have passed a"
+                        " model.  Trying to create an explicit model from the pspec w/Pauli prod basis and use it."))
+        target_model = _create_explicit_model(target_model, None, ideal_gate_type='full', basis='pp')
+
+    germs = _circuits.to_circuits([()] + [(gl,) for gl in target_model.primitive_op_labels])  # just the single gates
     max_lengths = [1]  # we only need maxLength == 1 when doing LGST
 
-    exp_design = _proto.StandardGSTDesign(pspec,
+    exp_design = _proto.StandardGSTDesign(target_model.create_processor_spec(),
                                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                                           germs, max_lengths,
                                           sequenceRules=advanced_options.get('string_manipulation_rules', None),
@@ -255,7 +260,7 @@ def run_linear_gst(data_filename_or_set, processorspec_filename_or_object,
         gauge_opt_params = {'item_weights': {'gates': 1.0, 'spam': 0.001}}
     gopt_suite = {'go0': gauge_opt_params} if gauge_opt_params else None
 
-    proto = _proto.LinearGateSetTomography(pspec.create_target_model('full', 'full'), gopt_suite, None,
+    proto = _proto.LinearGateSetTomography(target_model, gopt_suite, None,
                                            _get_badfit_options(advanced_options), printer,
                                            name=advanced_options.get('estimate_label', None))
     proto.profile = advanced_options.get('profile', 1)
@@ -555,12 +560,11 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     return results
 
 
-def run_stdpractice_gst(data_filename_or_set, processorspec_filename_or_object,
-                        prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
-                        germs_list_or_filename, max_lengths, modes="full TP,CPTP,Target",
-                        gaugeopt_suite='stdgaugeopt',
-                        gaugeopt_target=None, models_to_test=None, comm=None, mem_limit=None,
-                        advanced_options=None, output_pkl=None, verbosity=2):
+def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, prep_fiducial_list_or_filename,
+                        meas_fiducial_list_or_filename, germs_list_or_filename, max_lengths,
+                        modes="full TP,CPTP,Target", gaugeopt_suite='stdgaugeopt', gaugeopt_target=None,
+                        models_to_test=None, comm=None, mem_limit=None, advanced_options=None, output_pkl=None,
+                        verbosity=2):
     """
     Perform end-to-end GST analysis using standard practices.
 
@@ -578,11 +582,9 @@ def run_stdpractice_gst(data_filename_or_set, processorspec_filename_or_object,
         or by the filename of a dataset file (assumed to be a pickled `DataSet`
         if extension is 'pkl' otherwise assumed to be in pyGSTi's text format).
 
-    processorspec_filename_or_object : ProcessorSpec or string
-        A specification of the processor that GST is to be run on, given either
-        directly or by the filename of a processor-spec file (text format).  The
-        processor specification contains basic interface-level information about the
-        processor being tested, e.g., its state space and available gates.
+    target_model_filename_or_object : Model or string
+        A specification of the target model that GST is to be run on, given either
+        directly or by the filename of a model (text format).
 
     prep_fiducial_list_or_filename : (list of Circuits) or string
         The state preparation fiducial circuits, specified either directly
@@ -678,8 +680,14 @@ def run_stdpractice_gst(data_filename_or_set, processorspec_filename_or_object,
         advanced_options = advanced_options['all']  # backward compatibility
     advanced_options = _GSTAdvancedOptions(advanced_options or {})
     ds = _load_dataset(data_filename_or_set, comm, printer)
+    target_model = _load_model(target_model_filename_or_object)
 
-    exp_design = _proto.StandardGSTDesign(processorspec_filename_or_object,
+    if isinstance(target_model, _ProcessorSpec):  # for backward compatibility
+        _warnings.warn(("You passed a processor spec to 'run_stdpractice_gst' when you really should have passed a"
+                        " model.  Trying to create an explicit model from the pspec w/Pauli prod basis and use it."))
+        target_model = _create_explicit_model(target_model, None, ideal_gate_type='static', basis='pp')
+
+    exp_design = _proto.StandardGSTDesign(target_model.create_processor_spec(),
                                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                                           germs_list_or_filename, max_lengths,
                                           advanced_options.get('germ_length_limits', None),
@@ -695,21 +703,16 @@ def run_stdpractice_gst(data_filename_or_set, processorspec_filename_or_object,
         gaugeopt_suite = _proto.GSTGaugeOptSuite.cast(gaugeopt_suite)
         gaugeopt_suite.gaugeopt_target = gaugeopt_target
 
-    optimizer_target = processorspec_filename_or_object \
-        if isinstance(processorspec_filename_or_object, _Model) else exp_design.create_target_model()
+    optimizer_target = target_model
     # Note: could also try to get a target model from gaugeopt_suite...
 
     ds = _load_dataset(data_filename_or_set, comm, printer)
     data = _proto.ProtocolData(exp_design, ds)
-    proto = _proto.StandardGST(modes, gaugeopt_suite, models_to_test,
-                               _get_gst_builders(advanced_options),
-                               _get_optimizer(advanced_options, optimizer_target),
-                               _get_badfit_options(advanced_options), printer,
+    proto = _proto.StandardGST(modes, gaugeopt_suite, target_model, models_to_test=models_to_test,
+                               objfn_builders=_get_gst_builders(advanced_options),
+                               optimizer=_get_optimizer(advanced_options, optimizer_target),
+                               badfit_options=_get_badfit_options(advanced_options), verbosity=printer,
                                name=advanced_options.get('estimate_label', None))
-
-    # HACK to allow StandardGST to be run with explicit models that can't be described by a pspec (e.g. qutrits)
-    if isinstance(processorspec_filename_or_object, _Model):  # REMOVE this once a qutrit/qudit pspec exists.
-        proto._hack_target_model = processorspec_filename_or_object
 
     results = proto.run(data, mem_limit, comm)
     _output_to_pickle(results, output_pkl, comm)

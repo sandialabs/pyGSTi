@@ -151,17 +151,7 @@ class ModelTest(_proto.Protocol):
         ModelEstimateResults
         """
         the_model = self.model_to_test
-
-        if self.target_model is not None:
-            target_model = self.target_model
-        elif hasattr(data.edesign, 'create_target_model'):
-            try:
-                target_model = data.edesign.create_target_model()
-            except:
-                _warnings.warn("Experiment design failed to create a target model.")
-                target_model = None
-        else:
-            target_model = None  # target model isn't necessary
+        target_model = self.target_model  # can be None; target model isn't necessary
 
         #Create profiler
         profile = self.profile
