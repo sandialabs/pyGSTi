@@ -434,7 +434,8 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     proto = _proto.GateSetTomography(initial_model, gopt_suite,
                                      _get_gst_builders(advanced_options),
                                      _get_optimizer(advanced_options, target_model),
-                                     _get_badfit_options(advanced_options), printer)
+                                     _get_badfit_options(advanced_options), printer,
+                                     advanced_options.get('estimate_label', None))
     #Note: we give target_model as gaugeopt_target above b/c this is more robust than creating
     # a target model from the edesign's processor spec (e.g. pspec doesn't hold instruments yet)
 
