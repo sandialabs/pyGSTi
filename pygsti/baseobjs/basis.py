@@ -848,8 +848,8 @@ class ExplicitBasis(Basis):
     """
     A `Basis` whose elements are specified directly.
 
-    All explicit bases are simple: their vector space is always taken to be that
-    of the the flattened elements.
+    All explicit bases are simple: their vector space is taken to be that
+    of the the flattened elements unless separate `vector_elements` are given.
 
     Parameters
     ----------
@@ -877,6 +877,10 @@ class ExplicitBasis(Basis):
         type of the initial object: `elements[0]` (`sparse=False` is used
         when `len(elements) == 0`).
 
+    vector_elements : numpy.ndarray, optional
+        A list or array of the 1D *vectors* corresponding to each element.
+        If `None`, then the flattened elements are used as vectors.  The size
+        of these vectors sets the dimension of the basis.
 
     Attributes
     ----------
@@ -885,7 +889,7 @@ class ExplicitBasis(Basis):
     """
     Count = 0  # The number of custom bases, used for serialized naming
 
-    def __init__(self, elements, labels=None, name=None, longname=None, real=False, sparse=None):
+    def __init__(self, elements, labels=None, name=None, longname=None, real=False, sparse=None, vector_elements=None):
         '''
         Create a new ExplicitBasis.
 
@@ -915,6 +919,11 @@ class ExplicitBasis(Basis):
             vectors.  If `None`, then this is automatically determined by the
             type of the initial object: `elements[0]` (`sparse=False` is used
             when `len(elements) == 0`).
+
+        vector_elements : numpy.ndarray, optional
+            A list or array of the 1D *vectors* corresponding to each element.
+            If `None`, then the flattened elements are used as vectors.  The size
+            of these vectors sets the dimension of the basis.
         '''
         if name is None:
             name = 'ExplicitBasis_{}'.format(ExplicitBasis.Count)
@@ -929,6 +938,7 @@ class ExplicitBasis(Basis):
         self.labels = tuple(labels)  # so hashable - see __hash__
         self.elements = []
         size = len(elements)
+
         if size == 0:
             elshape = (); dim = 0; sparse = False
         else:
@@ -948,6 +958,17 @@ class ExplicitBasis(Basis):
                 self.elements.append(el)
             dim = int(_np.product(elshape))
         self.ellookup = {lbl: el for lbl, el in zip(self.labels, self.elements)}  # fast by-label element lookup
+
+        if vector_elements is not None:
+            assert(len(vector_elements) == size), "Must have the same number of `elements` and `vector_elements`"
+            if sparse:
+                self._vector_elements = [(el if _sps.issparse(el) else _sps.lil_matrix(el)) for el in vector_elements]
+            else:
+                self._vector_elements = _np.array(vector_elements)  # rows are *vectors*
+            dim = self._vector_elements.shape[1]
+        else:
+            self._vector_elements = None
+
         self._dim = dim
         self._size = size
         self._elshape = elshape
@@ -961,15 +982,19 @@ class ExplicitBasis(Basis):
                       'real': self.real,
                       'sparse': self.sparse,
                       'labels': self.labels,
-                      'elements': [self._encodemx(el) for el in self.elements]
+                      'elements': [self._encodemx(el) for el in self.elements],
+                      'vector_elements': ([self._encodemx(vel) for vel in self._vector_elements]
+                                          if (self._vector_elements is not None) else None)
                       })
         return state
 
     @classmethod
     def _from_nice_serialization(cls, state):
+        vels = [cls._decodemx(vel) for vel in state['vector_elements']] \
+            if (state.get('vector_elements', None) is not None) else None
         return cls([cls._decodemx(el) for el in state['elements']],
                    state['labels'], state['name'], state['longname'], state['real'],
-                   state['sparse'])
+                   state['sparse'], vels)
 
     @property
     def dim(self):
@@ -1000,8 +1025,24 @@ class ExplicitBasis(Basis):
         # shape of "natural" elements - size may be > self.dim (to display naturally)
         return self._elshape
 
+    @property
+    def vector_elements(self):
+        """
+        The "vectors" of this basis, always 1D (sparse or dense) arrays.
+
+        Returns
+        -------
+        list
+            A list of 1D arrays.
+        """
+        if self._vector_elements is not None:
+            return self._vector_elements
+        else:
+            return Basis.vector_elements.fget(self)  # call base class get-property fn
+
     def _copy_with_toggled_sparsity(self):
-        return ExplicitBasis(self.elements, self.labels, self.name, self.longname, self.real, not self.sparse)
+        return ExplicitBasis(self.elements, self.labels, self.name, self.longname, self.real, not self.sparse,
+                             self._vector_elements)
 
     def __hash__(self):
         if self.sparse:
@@ -1009,7 +1050,7 @@ class ExplicitBasis(Basis):
                                  for el in self.elements))   # hash sparse matrices
         else:
             els_to_hash = tuple((_np.round(el, 6).tostring() for el in self.elements))
-        return hash((self.dim, self.elshape, self.sparse, self.labels, els_to_hash))
+        return hash((self.dim, self.elshape, self.sparse, self.labels, els_to_hash))  # TODO: hash vector els?
         # OLD return hash((self.name, self.dim, self.elshape, self.sparse))  # better?
 
 
