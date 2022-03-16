@@ -13,6 +13,7 @@ The TPState class and supporting functionality.
 
 import numpy as _np
 
+from pygsti.baseobjs import Basis as _Basis
 from pygsti.modelmembers.states.densestate import DenseState as _DenseState
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.baseobjs.protectedarray import ProtectedArray as _ProtectedArray
@@ -50,9 +51,11 @@ class TPState(_DenseState):
     # alpha = 1/sqrt(d) to obtain a trace-1 matrix, i.e., finding alpha
     # s.t. Tr(alpha*[1/sqrt(d)*I]) == 1 => alpha*d/sqrt(d) == 1 =>
     # alpha = 1/sqrt(d) = 1/(len(vec)**0.25).
-    def __init__(self, vec, evotype="default", state_space=None):
+    def __init__(self, vec, basis="pp", evotype="default", state_space=None):
         vector = _State._to_vector(vec)
-        firstEl = len(vector)**-0.25
+        if not isinstance(basis, _Basis):
+            basis = _Basis.cast(basis, len(vector))  # don't perform this cast if we're given a basis
+        firstEl = basis.elsize**-0.25  # not dim, as the dimension of the vector space may be less
         if not _np.isclose(vector[0], firstEl):
             raise ValueError("Cannot create TPState: "
                              "first element must equal %g!" % firstEl)

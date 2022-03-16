@@ -93,7 +93,7 @@ def create_from_dmvec(superket_vector, state_type, basis='pp', evotype='default'
             elif typ == "full":
                 st = FullState(superket_vector, evotype, state_space)
             elif typ == "full TP":
-                st = TPState(superket_vector, evotype, state_space)
+                st = TPState(superket_vector, basis, evotype, state_space)
             elif typ == "TrueCPTP":  # a non-lindbladian CPTP state that hasn't worked well...
                 truncate = False
                 st = CPTPState(superket_vector, basis, truncate, evotype, state_space)

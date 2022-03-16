@@ -1172,8 +1172,7 @@ def parse_model(filename):
             mdl.preps[cur_label] = _state.FullState(
                 _get_liouville_mx(obj))
         elif cur_typ == "TP-PREP":
-            mdl.preps[cur_label] = _state.TPState(
-                _get_liouville_mx(obj))
+            mdl.preps[cur_label] = _state.TPState(_get_liouville_mx(obj))
         elif cur_typ == "CPTP-PREP":
             props = obj['properties']
             assert("PureVec" in props and "ErrgenMx" in props)  # must always be Liouville reps!

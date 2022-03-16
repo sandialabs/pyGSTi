@@ -203,8 +203,7 @@ class TPStateTester(MutableDenseStateBase, BaseCase):
 
     @staticmethod
     def build_vec():
-        return states.TPState([1.0 / np.sqrt(2), 0, 0, 1.0 / np.sqrt(2)],
-                              'default', state_space=None)
+        return states.TPState([1.0 / np.sqrt(2), 0, 0, 1.0 / np.sqrt(2)], evotype='default', state_space=None)
 
     def test_raises_on_bad_initial_element(self):
         with self.assertRaises(ValueError):
