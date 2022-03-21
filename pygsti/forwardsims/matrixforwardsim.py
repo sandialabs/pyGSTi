@@ -190,6 +190,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
             deriv_wrt_op_params[:, gate.gpindices] = gate.deriv_wrt_params()  # *don't* apply wrt filter here
             deriv_wrt_params = _np.dot(deriv_wrt_op_params,
                                        self.model._param_interposer.deriv_op_params_wrt_model_params())
+
             # deriv_wrt_params is a derivative matrix with respect to *all* the model's parameters, so
             # now just take requested subset:
             flattened_dprod = deriv_wrt_params[:, wrt_filter] if (wrt_filter is not None) else deriv_wrt_params
@@ -216,18 +217,28 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         """
         Return the hessian of a length-1 (single-gate) sequence
         """
+        if isinstance(wrt_filter1, slice): wrt_filter1 = _slct.indices(wrt_filter1)
+        if isinstance(wrt_filter2, slice): wrt_filter2 = _slct.indices(wrt_filter2)
+
         dim = self.model.evotype.minimal_dim(self.model.state_space)
-
         gate = self.model.circuit_layer_operator(op_label, 'op')
-        op_wrtFilter1, gpindices1 = self._process_wrt_filter(wrt_filter1, gate)
-        op_wrtFilter2, gpindices2 = self._process_wrt_filter(wrt_filter2, gate)
 
-        # Allocate memory for the final result
+        # Get operation parameters corresponding to model parameters in wrt filters if needed
+        interposer = self.model._param_interposer
+        ops_wrt_filter1 = interposer.ops_params_dependent_on_model_params(wrt_filter1) \
+            if (interposer is not None and wrt_filter1 is not None) else wrt_filter1
+        ops_wrt_filter2 = interposer.ops_params_dependent_on_model_params(wrt_filter2) \
+            if (interposer is not None and wrt_filter2 is not None) else wrt_filter2
+
+        # Allocate memory for the op-param Hessian (possibly the final result)
         num_op_params = self.model._param_interposer.num_op_params \
             if (self.model._param_interposer is not None) else self.model.num_params
-        num_deriv_cols1 = num_op_params if (wrt_filter1 is None) else len(wrt_filter1)
-        num_deriv_cols2 = num_op_params if (wrt_filter2 is None) else len(wrt_filter2)
+        num_deriv_cols1 = num_op_params if (ops_wrt_filter1 is None) else len(ops_wrt_filter1)
+        num_deriv_cols2 = num_op_params if (ops_wrt_filter2 is None) else len(ops_wrt_filter2)
         flattened_hprod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2), 'd')
+
+        op_wrtFilter1, gpindices1 = self._process_wrt_filter(ops_wrt_filter1, gate)
+        op_wrtFilter2, gpindices2 = self._process_wrt_filter(ops_wrt_filter2, gate)
 
         if _slct.length(gpindices1) > 0 and _slct.length(gpindices2) > 0:  # works for arrays too
             # Compute the derivative of the entire circuit with respect to the
@@ -238,10 +249,17 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         #Note: deriv_wrt_params is more accurately derive wrt *op* params when there is an interposer
         # d2(op)/d(p1)d(p2) = d2(op)/d(op_p1)d(op_p2) * d(op_p1)/d(p1) d(op_p2)/d(p2)
         if self.model._param_interposer is not None:
-            assert(wrt_filter1 is None and wrt_filter2 is None), "Interposers not compatible with wrt-filters yet"
+            def smx(mx, rows, cols):  # extract sub-matrix, as you might like mx[rows, cols] to work...
+                rows = _np.array(rows).reshape(-1, 1); cols = _np.array(cols).reshape(1, -1)
+                return mx[rows, cols]  # row index is m x 1, cols index is 1 x n so numpy broadcast works
             d_opp_wrt_p = self.model._param_interposer.deriv_op_params_wrt_model_params()
-            flattened_hprod = _np.einsum('ijk,jl,km->ilm', flattened_hprod, d_opp_wrt_p, d_opp_wrt_p)
-            num_deriv_cols1 = num_deriv_cols2 = self.model._param_interposer.num_params  # num *model* params
+            d_opp_wrt_p1 = d_opp_wrt_p if (wrt_filter1 is None) else smx(d_opp_wrt_p, ops_wrt_filter1, wrt_filter1)
+            d_opp_wrt_p2 = d_opp_wrt_p if (wrt_filter2 is None) else smx(d_opp_wrt_p, ops_wrt_filter2, wrt_filter2)
+            flattened_hprod = _np.einsum('ijk,jl,km->ilm', flattened_hprod, d_opp_wrt_p1, d_opp_wrt_p2)
+
+            #Update num_deriv_cols variabls (currently = # of op-params) to # of model params in each dimension
+            num_deriv_cols1 = self.model._param_interposer.num_params if (wrt_filter1 is None) else len(wrt_filter1)
+            num_deriv_cols2 = self.model._param_interposer.num_params if (wrt_filter2 is None) else len(wrt_filter2)
 
         if flat:
             return flattened_hprod
@@ -1153,10 +1171,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         rhoVec = self.model.circuit_layer_operator(rholabel, 'prep')  # distinct from rho,e b/c rho,e are
         EVec = self.model.circuit_layer_operator(elabel, 'povm')   # arrays, these are State/POVMEffect objects
         nCircuits = gs.shape[0]
-        rho_wrtFilter, rho_gpindices = self._process_wrt_filter(
-            wrt_slice, self.model.circuit_layer_operator(rholabel, 'prep'))
-        E_wrtFilter, E_gpindices = self._process_wrt_filter(
-            wrt_slice, self.model.circuit_layer_operator(elabel, 'povm'))
+
         nDerivCols = self.model.num_params if wrt_slice is None else _slct.length(wrt_slice)
 
         # GATE DERIVS (assume d_gs is already sized/filtered) -------------------
@@ -1178,28 +1193,53 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         #SPAM -------------
 
-        # Get: dp_drhos[i, rho_gpindices] = dot(e,gs[i],drho/drhoP)
-        # dp_drhos[i,J0+J] = sum_kl e[0,k] gs[i,k,l] drhoP[l,J]
-        # dp_drhos[i,J0+J] = dot(e, gs, drhoP)[0,i,J]
-        # dp_drhos[:,J0+J] = squeeze(dot(e, gs, drhoP),axis=(0,))[:,J]
+        if self.model._param_interposer is not None:
+            #When there is an interposer, we compute derivs wrt *all* the ops params (inefficient?),
+            # then apply interposer, then take desired wrt_filter columns:
+            nOpDerivCols = self.model._param_interposer.num_op_params
 
-        dp_drhos = _np.zeros((nCircuits, nDerivCols))
-        _fas(dp_drhos, [None, rho_gpindices],
-             _np.squeeze(_np.dot(_np.dot(e, gs),
-                                 rhoVec.deriv_wrt_params(rho_wrtFilter)),
-                         axis=(0,)) * scale_vals[:, None])  # may overflow, but OK
+            dp_drhos = _np.zeros((nCircuits, nOpDerivCols))
+            _fas(dp_drhos, [None, rhoVec.gpindices],
+                 _np.squeeze(_np.dot(_np.dot(e, gs), rhoVec.deriv_wrt_params()),  # *don't* apply wrt filter here
+                             axis=(0,)) * scale_vals[:, None])  # may overflow, but OK
+            dp_drhos = _np.dot(dp_drhos, self.model._param_interposer.deriv_op_params_wrt_model_params())
 
-        # Get: dp_dEs[i, E_gpindices] = dot(transpose(dE/dEP),gs[i],rho))
-        # dp_dEs[i,J0+J] = sum_lj dEPT[J,j] gs[i,j,l] rho[l,0]
-        # dp_dEs[i,J0+J] = sum_j dEP[j,J] dot(gs, rho)[i,j]
-        # dp_dEs[i,J0+J] = sum_j dot(gs, rho)[i,j,0] dEP[j,J]
-        # dp_dEs[i,J0+J] = dot(squeeze(dot(gs, rho),2), dEP)[i,J]
-        # dp_dEs[:,J0+J] = dot(squeeze(dot(gs, rho),axis=(2,)), dEP)[:,J]
-        dp_dEs = _np.zeros((nCircuits, nDerivCols))
-        # may overflow, but OK (deriv w.r.t any of self.effects - independent of which)
-        dp_dAnyE = _np.squeeze(_np.dot(gs, rho), axis=(2,)) * scale_vals[:, None]
-        _fas(dp_dEs, [None, E_gpindices],
-             _np.dot(dp_dAnyE, EVec.deriv_wrt_params(E_wrtFilter)))
+            dp_dEs = _np.zeros((nCircuits, nOpDerivCols))
+            dp_dAnyE = _np.squeeze(_np.dot(gs, rho), axis=(2,)) * scale_vals[:, None]
+            _fas(dp_dEs, [None, EVec.gpindices], _np.dot(dp_dAnyE, EVec.deriv_wrt_params()))
+            dp_dEs = _np.dot(dp_dEs, self.model._param_interposer.deriv_op_params_wrt_model_params())
+
+        else:
+            #Simpler case of no interposer
+            nOpDerivCols = nDerivCols
+
+            rho_wrtFilter, rho_gpindices = self._process_wrt_filter(
+                wrt_slice, self.model.circuit_layer_operator(rholabel, 'prep'))
+            E_wrtFilter, E_gpindices = self._process_wrt_filter(
+                wrt_slice, self.model.circuit_layer_operator(elabel, 'povm'))
+
+            # Get: dp_drhos[i, rho_gpindices] = dot(e,gs[i],drho/drhoP)
+            # dp_drhos[i,J0+J] = sum_kl e[0,k] gs[i,k,l] drhoP[l,J]
+            # dp_drhos[i,J0+J] = dot(e, gs, drhoP)[0,i,J]
+            # dp_drhos[:,J0+J] = squeeze(dot(e, gs, drhoP),axis=(0,))[:,J]
+
+            dp_drhos = _np.zeros((nCircuits, nOpDerivCols))
+            _fas(dp_drhos, [None, rho_gpindices],
+                 _np.squeeze(_np.dot(_np.dot(e, gs),
+                                     rhoVec.deriv_wrt_params(rho_wrtFilter)),
+                             axis=(0,)) * scale_vals[:, None])  # may overflow, but OK
+
+            # Get: dp_dEs[i, E_gpindices] = dot(transpose(dE/dEP),gs[i],rho))
+            # dp_dEs[i,J0+J] = sum_lj dEPT[J,j] gs[i,j,l] rho[l,0]
+            # dp_dEs[i,J0+J] = sum_j dEP[j,J] dot(gs, rho)[i,j]
+            # dp_dEs[i,J0+J] = sum_j dot(gs, rho)[i,j,0] dEP[j,J]
+            # dp_dEs[i,J0+J] = dot(squeeze(dot(gs, rho),2), dEP)[i,J]
+            # dp_dEs[:,J0+J] = dot(squeeze(dot(gs, rho),axis=(2,)), dEP)[:,J]
+            dp_dEs = _np.zeros((nCircuits, nOpDerivCols))
+            # may overflow, but OK (deriv w.r.t any of self.effects - independent of which)
+            dp_dAnyE = _np.squeeze(_np.dot(gs, rho), axis=(2,)) * scale_vals[:, None]
+            _fas(dp_dEs, [None, E_gpindices],
+                 _np.dot(dp_dAnyE, EVec.deriv_wrt_params(E_wrtFilter)))
 
         sub_vdp = dp_drhos + dp_dEs + dp_dOps
         return sub_vdp

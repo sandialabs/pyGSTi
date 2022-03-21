@@ -181,8 +181,8 @@ def first_order_gauge_action_matrix_for_prep(prep_superket_vec, target_sslbls, m
         new_i = elemgen_row_basis.label_index(glbl)
         if _np.linalg.norm(action_mx_pre[i, :]) > 1e-8:
             action_mx[new_i, :] = action_mx_pre[i, :]
-            nonzero_rows.add(i)
-            nonzero_row_labels[i] = glbl
+            nonzero_rows.add(new_i)
+            nonzero_row_labels[new_i] = glbl
 
     #Remove all all-zero rows and cull these elements out of the row_basis.  Actually,
     # just construct a new matrix and basis
@@ -190,9 +190,9 @@ def first_order_gauge_action_matrix_for_prep(prep_superket_vec, target_sslbls, m
     labels = [nonzero_row_labels[i] for i in nonzero_row_indices]
 
     data = []; col_indices = []; rowptr = [0]  # build up a CSR matrix manually from nonzero rows
-    for ii, i in enumerate(nonzero_row_indices):
-        col_indices.extend(action_mx.rows[i])
-        data.extend(action_mx.data[i])
+    for i in nonzero_row_indices:
+        col_indices.extend(action_mx.rows[i])  # .rows[i] is list of column indices of i-th row.
+        data.extend(action_mx.data[i])  # .data[i] is i-th row for a lil (list-of-lists) matrix
         rowptr.append(len(data))
     culled_action_mx = _sps.csr_matrix((data, col_indices, rowptr),
                                        shape=(len(nonzero_rows), len(elemgen_gauge_basis)), dtype=action_mx.dtype)
@@ -238,15 +238,15 @@ def first_order_gauge_action_matrix_for_povm(povm_superbra_vecs, target_sslbls, 
         # should always be all the sslbls of the model (I think...)
 
         #Currently, this applies same vector to *all* povm effects - i.e. treats as a ComposedPOVM
-        # Note: gauge acts on effects as: dot(v, gen_expanded.T.conj) = dot(gen_expanded.conj, v)
+        # Note: gauge acts on effects as: dot(v, -gen_expanded) = dot(-gen_expanded.T.conj, v)
         gen_expanded = _embed(gen, gen_sslbls, action_space)  # expand gen to shared action_space
         if _sps.issparse(gen_expanded):
-            gauge_action_deriv = _sps.vstack([gen_expanded.conjugate().dot(v) for v in povm_superbra_vecs])
+            gauge_action_deriv = _sps.vstack([-gen_expanded.transpose().conjugate().dot(v) for v in povm_superbra_vecs])
         else:
-            gauge_action_deriv = _np.concatenate([_np.dot(gen_expanded.conjugate(), v) for v in povm_superbra_vecs])
+            gauge_action_deriv = _np.concatenate([_np.dot(-gen_expanded.T.conjugate(), v) for v in povm_superbra_vecs])
         element_action_mx[:, j] = gauge_action_deriv[:, None]
 
-    #FROM HERE DOWN same as for prep vector (concat effects treated like one big prep vector)
+    #FROM HERE DOWN ~same as for prep vector (concat effects treated like one big prep vector)
 
     #To identify set of vectors {v_i} such that {element_action_mx * v_i} span the range of element_action_mx,
     # we find the SVD of element_action_mx and use the columns of V:
@@ -261,8 +261,8 @@ def first_order_gauge_action_matrix_for_povm(povm_superbra_vecs, target_sslbls, 
             relevant_basis[:, j] /= relevant_basis[i_max, j]
     relevant_basis = _mt.normalize_columns(relevant_basis)
 
-    # "gauge action" matrix is just the identity on the *relevant* space of gauge transformations:
-    action_mx_pre = _np.dot(relevant_basis, relevant_basis.T.conjugate())  # row basis == elemgen_gauge_basis
+    # "gauge action" matrix is just the -identity on the *relevant* space of gauge transformations:
+    action_mx_pre = -_np.dot(relevant_basis, relevant_basis.T.conjugate())  # row basis == elemgen_gauge_basis
     action_mx = _sps.lil_matrix((len(elemgen_row_basis), len(elemgen_gauge_basis)),
                                 dtype=povm_superbra_vecs[0].dtype)
     nonzero_rows = set()
@@ -273,8 +273,8 @@ def first_order_gauge_action_matrix_for_povm(povm_superbra_vecs, target_sslbls, 
         new_i = elemgen_row_basis.label_index(glbl)
         if _np.linalg.norm(action_mx_pre[i, :]) > 1e-8:
             action_mx[new_i, :] = action_mx_pre[i, :]
-            nonzero_rows.add(i)
-            nonzero_row_labels[i] = glbl
+            nonzero_rows.add(new_i)
+            nonzero_row_labels[new_i] = glbl
 
     #Remove all all-zero rows and cull these elements out of the row_basis.  Actually,
     # just construct a new matrix and basis
@@ -282,7 +282,7 @@ def first_order_gauge_action_matrix_for_povm(povm_superbra_vecs, target_sslbls, 
     labels = [nonzero_row_labels[i] for i in nonzero_row_indices]
 
     data = []; col_indices = []; rowptr = [0]  # build up a CSR matrix manually from nonzero rows
-    for ii, i in enumerate(nonzero_row_indices):
+    for i in nonzero_row_indices:
         col_indices.extend(action_mx.rows[i])
         data.extend(action_mx.data[i])
         rowptr.append(len(data))

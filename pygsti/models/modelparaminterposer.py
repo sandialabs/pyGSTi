@@ -34,6 +34,9 @@ class ModelParamsInterposer(object):
         assert(self.num_params == self.num_op_params)
         return _np.identity(self.num_params, 'd')
 
+    def ops_params_dependent_on_model_params(self, model_param_indices):
+        return _np.array(sorted(model_param_indices), _np.int64)
+
 
 class LinearInterposer(ModelParamsInterposer):
     """
@@ -67,3 +70,10 @@ class LinearInterposer(ModelParamsInterposer):
 
     def deriv_op_params_wrt_model_params(self):
         return self.transform_matrix
+
+    def ops_params_dependent_on_model_params(self, model_param_indices):
+        """ TODO: docstring: returns the indices of op parameters that are influenced by the given model params"""
+        op_param_indices = set()
+        for j in model_param_indices:
+            op_param_indices.update([i for i, el in enumerate(self.transform_matrix[:, j]) if el != 0.0])
+        return _np.array(sorted(op_param_indices), _np.int64)
