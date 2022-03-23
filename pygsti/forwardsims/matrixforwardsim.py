@@ -1203,11 +1203,13 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                  _np.squeeze(_np.dot(_np.dot(e, gs), rhoVec.deriv_wrt_params()),  # *don't* apply wrt filter here
                              axis=(0,)) * scale_vals[:, None])  # may overflow, but OK
             dp_drhos = _np.dot(dp_drhos, self.model._param_interposer.deriv_op_params_wrt_model_params())
+            if wrt_slice is not None: dp_drhos = dp_drhos[:, wrt_slice]
 
             dp_dEs = _np.zeros((nCircuits, nOpDerivCols))
             dp_dAnyE = _np.squeeze(_np.dot(gs, rho), axis=(2,)) * scale_vals[:, None]
             _fas(dp_dEs, [None, EVec.gpindices], _np.dot(dp_dAnyE, EVec.deriv_wrt_params()))
             dp_dEs = _np.dot(dp_dEs, self.model._param_interposer.deriv_op_params_wrt_model_params())
+            if wrt_slice is not None: dp_dEs = dp_dEs[:, wrt_slice]
 
         else:
             #Simpler case of no interposer
