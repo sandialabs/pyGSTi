@@ -16,12 +16,13 @@ import itertools as _itertools
 import functools as _functools
 import numpy as _np
 
+from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.modelmembers.povms.computationaleffect import ComputationalBasisPOVMEffect as _ComputationalBasisPOVMEffect
 from pygsti.modelmembers.povms.povm import POVM as _POVM
 from pygsti.baseobjs import statespace as _statespace
 
 
-class ComputationalBasisPOVM(_POVM):
+class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface):
     """
     A POVM that "measures" states in the computational "Z" basis.
 

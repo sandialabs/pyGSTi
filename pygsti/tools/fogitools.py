@@ -67,7 +67,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
         # - a full basis for gauge_action_deriv
         #global_row_space.add_labels(row_space.labels)  # labels would need to contain sslbls too
         action_row_labels = action_row_basis.labels
-        global_row_indices = elemgen_row_basis.label_indices(action_row_labels)
+        global_row_indices = elemgen_row_basis.label_indices(action_row_labels, ok_if_missing=True)
 
         # Note: can avoid this projection and conjugation math above if we know gen is Pauli action and U is clifford
         for i, row_label, (gen2_sslbls, gen2) in zip(global_row_indices, action_row_labels,

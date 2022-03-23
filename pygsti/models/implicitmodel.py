@@ -13,6 +13,7 @@ Defines the ImplicitOpModel class and supporting functionality.
 import collections as _collections
 import itertools as _itertools
 import uuid as _uuid
+import numpy as _np
 
 from pygsti.models import model as _mdl
 from pygsti.modelmembers import operations as _op
@@ -20,7 +21,7 @@ from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.baseobjs.label import Label as _Label
 
-from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.baseobjs.basis import Basis as _Basis, TensorProdBasis as _TensorProdBasis
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
@@ -366,6 +367,190 @@ class ImplicitOpModel(_mdl.OpModel):
             root_key, sub_key = mm_key.split('|')
             root_dicts[root_key][sub_key].update(mm_dict)  # Note: sub_keys should already be created
         return mdl
+
+    def errorgen_coefficients(self, normalized_elem_gens=True):
+        """TODO: docstring - returns a nested dict containing all the error generator coefficients for all
+           the operations in this model. """
+        if not normalized_elem_gens:
+            def rescale(coeffs):
+                """ HACK: rescales errorgen coefficients for normalized-Pauli-basis elementary error gens
+                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens.  This
+                         is only needed in the Hamiltonian case, as the non-ham "elementary" gen has a
+                         factor of d2 baked into it.
+                """
+                d2 = _np.sqrt(self.dim); d = _np.sqrt(d2)
+                return {lbl: (val / d if lbl.errorgen_type == 'H' else val) for lbl, val in coeffs.items()}
+
+            op_coeffs = {op_label: rescale(self.operation_blks['layers'][op_label].errorgen_coefficients())
+                         for op_label in self.operation_blks['layers']}
+            op_coeffs.update({prep_label: rescale(self.prep_blks['layers'][prep_label].errorgen_coefficients())
+                              for prep_label in self.prep_blks['layers']})
+            op_coeffs.update({povm_label: rescale(self.povm_blks['layers'][povm_label].errorgen_coefficients())
+                              for povm_label in self.povm_blks['layers']})
+        else:
+            op_coeffs = {op_label: self.operation_blks['layers'][op_label].errorgen_coefficients()
+                         for op_label in self.operation_blks['layers']}
+            op_coeffs.update({prep_label: self.prep_blks['layers'][prep_label].errorgen_coefficients()
+                              for prep_label in self.prep_blks['layers']})
+            op_coeffs.update({povm_label: self.povm_blks['layers'][povm_label].errorgen_coefficients()
+                              for povm_label in self.povm_blks['layers']})
+
+        return op_coeffs
+
+    def _add_reparameterization(self, primitive_op_labels, fogi_dirs, errgenset_space_labels):
+        raise NotImplementedError("TODO: need to implement this for implicit model FOGI parameterization to work!")
+
+    def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
+                   op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
+                   dependent_fogi_action='drop', include_spam=True):
+
+        from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
+        from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
+        from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
+        import scipy.sparse as _sps
+
+        from pygsti.tools import basistools as _bt
+        from pygsti.tools import fogitools as _fogit
+        from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FOGIStore
+
+        # ExplicitOpModel-specific - and assumes model's ops have specific structure (see extract_std_target*) !!
+        primitive_op_labels = self.primitive_op_labels
+
+        primitive_prep_labels = self.primitive_prep_labels if include_spam else []
+        primitive_povm_labels = self.primitive_povm_labels if include_spam else []
+
+        # "initial" gauge space is the space of error generators initially considered as
+        # gauge transformations.  It can be reduced by the errors allowed on operations (by
+        # their type and support).
+
+        def extract_std_target_mx(op, op_basis):
+            # TODO: more general decomposition of op - here it must be Composed(UnitaryOp, ExpErrorGen)
+            #       or just ExpErrorGen
+            if isinstance(op, _op.ExpErrorgenOp):  # assume just an identity op
+                U = _np.identity(op.state_space.dim, 'd')
+            elif isinstance(op, _op.ComposedOp):  # assume first element gives unitary
+                op_mx = op.factorops[0].to_dense()  # assumes a LindbladOp and low num qubits
+                nQubits = int(round(_np.log(op_mx.shape[0]) / _np.log(4))); assert(op_mx.shape[0] == 4**nQubits)
+                tensorprod_std_basis = _Basis.cast('std', [(4,) * nQubits])
+                U = _bt.change_basis(op_mx, op_basis, tensorprod_std_basis)  # 'std' is incorrect
+            else:
+                raise ValueError("Could not extract target matrix from %s op!" % str(type(op)))
+            return U
+
+        def extract_std_target_vec(v):
+            #TODO - make more sophisticated...
+            dim = v.state_space.dim
+            nQubits = int(round(_np.log(dim) / _np.log(4))); assert(dim == 4**nQubits)
+            tensorprod_std_basis = _Basis.cast('std', [(4,) * nQubits])
+            v = _bt.change_basis(v.to_dense(), self.basis, tensorprod_std_basis)  # 'std' is incorrect
+            return v
+
+        if create_complete_basis_fn is None:
+            assert(isinstance(initial_gauge_basis, _CompleteElementaryErrorgenBasis)), \
+                ("Must supply a custom `create_complete_basis_fn` if initial gauge basis is not a complete basis!")
+
+            def create_complete_basis_fn(target_sslbls):
+                return initial_gauge_basis  #.create_subbasis(target_sslbls, retain_max_weights=False)
+
+        # get gauge action matrices on the initial space
+        gauge_action_matrices = _collections.OrderedDict()
+        gauge_action_gauge_spaces = _collections.OrderedDict()
+        errorgen_coefficient_labels = _collections.OrderedDict()  # by operation
+        for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
+            print("DB FOGI: ",op_label)
+            if hasattr(self.operation_blks['layers'][op_label], 'embedded_op'):
+                op = self.operation_blks['layers'][op_label].embedded_op
+                target_lbls = self.operation_blks['layers'][op_label].target_labels
+            else:  # then assume gate is on *all* qubits
+                op = self.operation_blks['layers'][op_label]
+                target_lbls = self.state_space.tensor_product_block_labels(0)
+            assert(self.state_space.num_tensor_product_blocks == 1)  # so that all_sslbls is correct below
+            all_sslbls = self.state_space.tensor_product_block_labels(0)
+            op_component_bases = [self.basis.component_bases[all_sslbls.index(lbl)] for lbl in target_lbls]
+            op_basis = _TensorProdBasis(op_component_bases)
+            U = extract_std_target_mx(op, op_basis)
+
+            # below: special logic for, e.g., 2Q explicit models with 2Q gate matched with Gx:0 label
+            target_sslbls = op_label.sslbls if (op_label.sslbls is not None and U.shape[0] < self.state_space.dim) \
+                else self.state_space.tensor_product_block_labels(0)
+            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
+            # Note: can assume gauge action is zero (U acts as identity) on all basis elements not in op_gauge_basis
+
+            initial_row_basis = create_complete_basis_fn(target_sslbls)
+
+            #support_sslbls, gauge_errgen_basis = get_overlapping_labels(gauge_errgen_space_labels, target_sslbls)
+            #FOGI DEBUG print("DEBUG -- ", op_label)
+            mx, row_basis = _fogit.first_order_gauge_action_matrix(U, target_sslbls, self.state_space,
+                                                                   op_gauge_basis, initial_row_basis)
+            print("DB FOGI: action mx: ", mx.shape)
+            #FOGI DEBUG print("DEBUG => mx is ", mx.shape)
+            # Note: mx is a sparse lil matrix
+            # mx cols => op_gauge_basis, mx rows => row_basis, as zero rows have already been removed
+            # (DONE: - remove all all-zero rows from mx (and corresponding basis labels) )
+            # Note: row_basis is a simple subset of initial_row_basis
+
+            allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
+                self._format_gauge_action_matrix(mx, op, reduce_to_model_space, row_basis, op_gauge_basis,
+                                                 create_complete_basis_fn)
+            print("DB FOGI: action matrix formatting done")
+
+            errorgen_coefficient_labels[op_label] = allowed_row_basis.labels
+            gauge_action_matrices[op_label] = allowed_rowspace_mx
+            gauge_action_gauge_spaces[op_label] = op_gauge_space
+            #FOGI DEBUG print("DEBUG => final allowed_rowspace_mx shape =", allowed_rowspace_mx.shape)
+
+        # Similar for SPAM
+        for prep_label in primitive_prep_labels:
+            prep = self.preps[prep_label]
+            v = extract_std_target_vec(prep)
+            target_sslbls = prep_label.sslbls if (prep_label.sslbls is not None and v.shape[0] < self.state_space.dim) \
+                else self.state_space.tensor_product_block_labels(0)
+            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
+            initial_row_basis = create_complete_basis_fn(target_sslbls)
+
+            mx, row_basis = _fogit.first_order_gauge_action_matrix_for_prep(v, target_sslbls, self.state_space,
+                                                                            op_gauge_basis, initial_row_basis)
+
+            allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
+                self._format_gauge_action_matrix(mx, prep, reduce_to_model_space, row_basis, op_gauge_basis,
+                                                 create_complete_basis_fn)
+
+            errorgen_coefficient_labels[prep_label] = allowed_row_basis.labels
+            gauge_action_matrices[prep_label] = allowed_rowspace_mx
+            gauge_action_gauge_spaces[prep_label] = op_gauge_space
+
+        for povm_label in primitive_povm_labels:
+            povm = self.povms[povm_label]
+            vecs = [extract_std_target_vec(effect) for effect in povm.values()]
+            target_sslbls = povm_label.sslbls if (povm_label.sslbls is not None
+                                                  and vecs[0].shape[0] < self.state_space.dim) \
+                else self.state_space.tensor_product_block_labels(0)
+            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
+            initial_row_basis = create_complete_basis_fn(target_sslbls)
+
+            mx, row_basis = _fogit.first_order_gauge_action_matrix_for_povm(vecs, target_sslbls, self.state_space,
+                                                                            op_gauge_basis, initial_row_basis)
+
+            allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
+                self._format_gauge_action_matrix(mx, povm, reduce_to_model_space, row_basis, op_gauge_basis,
+                                                 create_complete_basis_fn)
+
+            errorgen_coefficient_labels[povm_label] = allowed_row_basis.labels
+            gauge_action_matrices[povm_label] = allowed_rowspace_mx
+            gauge_action_gauge_spaces[povm_label] = op_gauge_space
+
+        norm_order = "auto"  # NOTE - should be 1 for normalizing 'S' quantities and 2 for 'H',
+        # so 'auto' utilizes intelligence within FOGIStore
+        self.fogi_store = _FOGIStore(gauge_action_matrices, gauge_action_gauge_spaces,
+                                     errorgen_coefficient_labels,  # gauge_errgen_space_labels,
+                                     op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
+                                     norm_order=norm_order)
+
+        if reparameterize:
+            self.param_interposer = self._add_reparameterization(
+                primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
+                self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
+                self.fogi_store.errorgen_space_op_elem_labels)
 
 
 def _init_spam_layers(model, prep_layers, povm_layers):

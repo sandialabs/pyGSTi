@@ -27,9 +27,9 @@ class ElementaryErrorgenBasis(object):
     Intersection and union can be performed as a set.
     """
 
-    def label_indices(self, labels):
+    def label_indices(self, labels, ok_if_missing=False):
         """ TODO: docstring """
-        return [self.label_index(lbl) for lbl in labels]
+        return [self.label_index(lbl, ok_if_missing) for lbl in labels]
 
     def __len__(self):
         """ Number of elementary errorgen elements in this basis """
@@ -64,10 +64,14 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
                  for elemgen_label in self.labels))
         return self._cached_elements
 
-    def label_index(self, label):
+    def label_index(self, label, ok_if_missing=False):
         """
         TODO: docstring
+        ok_if_missing : bool
+           If True, then returns `None` instead of an integer when the given label is not present.
         """
+        if ok_if_missing and label not in self._label_indices:
+            return None
         return self._label_indices[label]
 
     #@property
@@ -430,9 +434,11 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
                            tensorprod_basis=True))  # Note: normalize was set to True...
                       for elemgen_label in self.labels))
 
-    def label_index(self, elemgen_label):
+    def label_index(self, elemgen_label, ok_if_missing=False):
         """
         TODO: docstring
+        ok_if_missing : bool
+           If True, then returns `None` instead of an integer when the given label is not present.
         """
         support = elemgen_label.sslbls
         eetype = elemgen_label.errorgen_type
@@ -440,7 +446,12 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         trivial_bel = self._basis_1q.labels[0]  # assumes first element is identity
         nontrivial_bels = self._basis_1q.labels[1:]
 
+        if ok_if_missing and eetype not in self._offsets:
+            return None
+
         if eetype in ('H', 'S'):
+            if ok_if_missing and support not in self._offsets[eetype]:
+                return None
             base = self._offsets[eetype][support]
             indices = {lbl: i for i, lbl in enumerate(self._create_diag_labels_for_support(support, eetype,
                                                                                            nontrivial_bels))}
@@ -448,6 +459,9 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             assert(len(trivial_bel) == 1)  # assumes this is a single character
             nontrivial_inds = [i for i, letter in enumerate(bels[0]) if letter != trivial_bel]
             left_support = tuple([self.sslbls[i] for i in nontrivial_inds])
+
+            if ok_if_missing and (support, left_support) not in self._offsets[eetype]:
+                return None
             base = self._offsets[eetype][(support, left_support)]
 
             indices = {lbl: i for i, lbl in enumerate(self._create_uptriangle_labels_for_support(
