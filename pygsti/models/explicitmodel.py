@@ -23,6 +23,7 @@ from pygsti.models import model as _mdl, gaugegroup as _gg
 from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.modelparaminterposer import LinearInterposer as _LinearInterposer
+from pygsti.models.modelparaminterposer import ModelParamsInterposer as _ModelParamsInterposer
 from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FOGIStore
 from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
@@ -1589,7 +1590,9 @@ class ExplicitOpModel(_mdl.OpModel):
                       'evotype': str(self.evotype),  # TODO or serialize?
                       'simulator': self.sim.to_nice_serialization(),
                       'default_gauge_group': (self.default_gauge_group.to_nice_serialization()
-                                              if (self.default_gauge_group is not None) else None)
+                                              if (self.default_gauge_group is not None) else None),
+                      'parameter_interposer': (self._param_interposer.to_nice_serialization()
+                                               if (self._param_interposer is not None) else None)
                       })
 
         mmgraph = self.create_modelmember_graph()
@@ -1604,6 +1607,8 @@ class ExplicitOpModel(_mdl.OpModel):
         simulator = _FSim.from_nice_serialization(state['simulator'])
         default_gauge_group = _GaugeGroup.from_nice_serialization(state['default_gauge_group']) \
             if (state['default_gauge_group'] is not None) else None
+        param_interposer = _ModelParamsInterposer.from_nice_serialization(state['parameter_interposer']) \
+            if (state['parameter_interposer'] is not None) else None
 
         mdl = cls(state_space, basis, state['default_gate_type'],
                   state['default_prep_type'], state['default_povm_type'],
@@ -1618,6 +1623,7 @@ class ExplicitOpModel(_mdl.OpModel):
         mdl.factories.update(modelmembers.get('factories', {}))
         mdl._clean_paramvec()
         mdl.default_gauge_group = default_gauge_group
+        mdl.param_interposer = param_interposer
         return mdl
 
     def errorgen_coefficients(self, normalized_elem_gens=True):
