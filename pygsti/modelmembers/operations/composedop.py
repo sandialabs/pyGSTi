@@ -869,7 +869,7 @@ class ComposedOp(_LinearOperator):
         -------
         None
         """
-        sslbls = self.state_space.tensor_product_block_labels(0)
+        sslbls = self.state_space.sole_tensor_product_block_labels
         values_to_set = {_GlobalElementaryErrorgenLabel.cast(k, sslbls): v for k, v in lindblad_term_dict.items()}
 
         for op in self.factorops:

@@ -269,7 +269,7 @@ class EmbeddedOp(_LinearOperator):
         #def tosymplectic(self):
         #    #Embed operation's symplectic rep in larger "full" symplectic rep
         #    #Note: (qubit) labels are in first (and only) tensor-product-block
-        #    qubitLabels = self.state_space.tensor_product_block_labels(0)
+        #    qubitLabels = self.state_space.sole_tensor_product_block_labels
         #    smatrix, svector = _symp.embed_clifford(self.embedded_op.smatrix,
         #                                            self.embedded_op.svector,
         #                                            self.qubit_indices,len(qubitLabels))

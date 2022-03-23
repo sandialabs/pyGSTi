@@ -93,6 +93,18 @@ class StateSpace(_NicelySerializable):
         raise NotImplementedError("Derived classes should implement this!")
 
     @property
+    def sole_tensor_product_block_labels(self):
+        """
+        The labels of the first and only tensor product block within this state space.
+
+        If there are multiple blocks, a ValueError is raised.
+        """
+        if self.num_tensor_product_blocks > 1:
+            raise ValueError(("Attribute `sole_tensor_product_block_labels` was used but this state space has"
+                              " %d blocks!") % self.num_tensor_product_blocks)
+        return self.tensor_product_block_labels(0)
+
+    @property
     def tensor_product_blocks_labels(self):
         """
         The labels for all the tensor-product blocks.

@@ -27,7 +27,7 @@ class OpRep(_basereps.OpRep):
 
         assert(self.state_space.num_qubits >= 0), 'State space for "chp" evotype must consist entirely of qubits!'
         assert(self.state_space.num_tensor_product_blocks == 1)  # should be redundant with above assertion
-        self.qubit_labels = self.state_space.tensor_product_block_labels(0)
+        self.qubit_labels = self.state_space.sole_tensor_product_block_labels
         self.qubit_label_to_index = {lbl: i for i, lbl in enumerate(self.qubit_labels)}
 
     @property
@@ -100,12 +100,12 @@ class OpRepEmbedded(OpRep):
         # how to embed cliffords on qubits...
         state_space = _StateSpace.cast(state_space)
         assert(state_space.num_tensor_product_blocks == 1
-               and all([state_space.label_udimension(l) == 2 for l in state_space.tensor_product_block_labels(0)])), \
+               and all([state_space.label_udimension(l) == 2 for l in state_space.sole_tensor_product_block_labels])), \
             "All state space labels must correspond to *qubits*"
 
         #Cache info to speedup representation's acton(...) methods:
         # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
-        qubitLabels = state_space.tensor_product_block_labels(0)
+        qubitLabels = state_space.sole_tensor_product_block_labels
         qubit_indices = _np.array([qubitLabels.index(targetLbl)
                                    for targetLbl in target_labels], _np.int64)
 

@@ -30,7 +30,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
     from pygsti.modelmembers.operations import EmbeddedOp as _EmbeddedOp, StaticArbitraryOp as _StaticArbitraryOp
     from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 
-    def _embed(mx, target_labels, state_space):
+    def _embed(mx, target_labels, state_space):  # BOTTLENECK
         if mx.shape[0] == state_space.dim:
             return mx  # no embedding needed
         else:
@@ -51,7 +51,9 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
     nonzero_row_labels = {}
     TOL = 1e-12  # ~ machine precision
 
-    for j, (gen_sslbls, gen) in enumerate(elemgen_gauge_basis.elemgen_supports_and_matrices):
+    print("DB fogi action mx: outer iter, initial action mx shape = %s"  % (str(action_mx.shape)))
+    db_seen_sslbls = set()  # DEBUG!!!
+    for j, (gen_sslbls, gen) in enumerate(elemgen_gauge_basis.elemgen_supports_and_matrices):  # BOTTLENECK eval attribute
         action_sslbls = tuple(sorted(set(gen_sslbls).union(target_sslbls)))  # (union) - joint support of ops
         action_space = model_state_space.create_subspace(action_sslbls)
 
@@ -69,12 +71,21 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
         action_row_labels = action_row_basis.labels
         global_row_indices = elemgen_row_basis.label_indices(action_row_labels, ok_if_missing=True)
 
+        if gen_sslbls not in db_seen_sslbls:
+            db_num_skipped = db_num_nonzero = 0
+            print("DB fogi action mx: inner iter for gen_sslbls=%s; action_sslbls=%s, action_row_basis size = %d"
+                  % (str(gen_sslbls), str(action_sslbls), len(global_row_indices)))
+
         # Note: can avoid this projection and conjugation math above if we know gen is Pauli action and U is clifford
         for i, row_label, (gen2_sslbls, gen2) in zip(global_row_indices, action_row_labels,
                                                      action_row_basis.elemgen_supports_and_matrices):
             #if not is_subset(gen2_sslbls, space):
-            #    continue  # no overlap/component when gen2 is nontrivial (and assumed orthogonal to identity)
-            #              # on a factor space where gauge_action_deriv is zero
+            if not set(gen2_sslbls).issubset(action_sslbls):
+                db_num_skipped += 1
+                continue  # no overlap/component when gen2 is nontrivial (and assumed orthogonal to identity)
+                # on a factor space where gauge_action_deriv is zero
+
+            #TODO: add more shortcuts here, e.g., if errorgens are different H/S types result is zero?
 
             gen2_expanded = _embed(gen2, gen2_sslbls, action_space)  # embed gen2 into action_space
             if _sps.issparse(gen2_expanded):
@@ -86,10 +97,15 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
 
             assert(abs(val.imag) < TOL)  # all values should be real, I think...
             if abs(val) > TOL:
+                db_num_nonzero += 1
                 if i not in nonzero_rows:
                     nonzero_rows.add(i)
                     nonzero_row_labels[i] = row_label
                 action_mx[i, j] = val
+
+        if gen_sslbls not in db_seen_sslbls:
+            print("  -- skipped %d, processed %d -- %d of which were nonzero" % (db_num_skipped, len(global_row_indices) - db_num_skipped, db_num_nonzero))
+            db_seen_sslbls.add(gen_sslbls)
 
         #TODO HERE: check that decomposition into components adds to entire gauge_action_deriv
         #  (checks "completeness" of row basis)
@@ -98,6 +114,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
 
     #Remove all all-zero rows and cull these elements out of the row_basis.  Actually,
     # just construct a new matrix and basis
+    print("DB fogi action mx: beginning matrix reduction...")
     nonzero_row_indices = list(sorted(nonzero_rows))
     labels = [nonzero_row_labels[i] for i in nonzero_row_indices]
 
@@ -109,6 +126,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
     culled_action_mx = _sps.csr_matrix((data, col_indices, rowptr),
                                        shape=(len(nonzero_rows), len(elemgen_gauge_basis)), dtype=action_mx.dtype)
     updated_row_basis = _ExplicitElementaryErrorgenBasis(elemgen_row_basis.state_space, labels)
+    print("DB fogi action mx: culled action matrix to shape", culled_action_mx.shape)
 
     return culled_action_mx, updated_row_basis
 

@@ -1483,7 +1483,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         nqudits = self.state_space.num_qudits
         gate_unitaries = _collections.OrderedDict()
-        all_sslbls = self.state_space.tensor_product_block_labels(0)
+        all_sslbls = self.state_space.sole_tensor_product_block_labels
         all_udims = [self.state_space.label_udimension(lbl) for lbl in all_sslbls]
         availability = {}
 
@@ -1548,7 +1548,7 @@ class ExplicitOpModel(_mdl.OpModel):
             raise ValueError("Unitary not specfied for %s gate(s)!" % str(unknown_unitaries))
 
         if qudit_labels == 'auto':
-            qudit_labels = self.state_space.tensor_product_block_labels(0)
+            qudit_labels = self.state_space.sole_tensor_product_block_labels
             #OR: qudit_labels = self.state_space.qudit_labels  # only works for a QuditSpace
             #OR: qudit_labels = self.state_space.qubit_labels  # only works for a QubitSpace
             #OR: qubit_labels = tuple(sorted(observed_sslbls))
@@ -1778,7 +1778,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
             # below: special logic for, e.g., 2Q explicit models with 2Q gate matched with Gx:0 label
             target_sslbls = op_label.sslbls if (op_label.sslbls is not None and U.shape[0] < self.state_space.dim) \
-                else self.state_space.tensor_product_block_labels(0)
+                else self.state_space.sole_tensor_product_block_labels
             op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
             # Note: can assume gauge action is zero (U acts as identity) on all basis elements not in op_gauge_basis
 
@@ -1808,7 +1808,7 @@ class ExplicitOpModel(_mdl.OpModel):
             prep = self.preps[prep_label]
             v = extract_std_target_vec(prep)
             target_sslbls = prep_label.sslbls if (prep_label.sslbls is not None and v.shape[0] < self.state_space.dim) \
-                else self.state_space.tensor_product_block_labels(0)
+                else self.state_space.sole_tensor_product_block_labels
             op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
             initial_row_basis = create_complete_basis_fn(target_sslbls)
 
@@ -1828,7 +1828,7 @@ class ExplicitOpModel(_mdl.OpModel):
             vecs = [extract_std_target_vec(effect) for effect in povm.values()]
             target_sslbls = povm_label.sslbls if (povm_label.sslbls is not None
                                                   and vecs[0].shape[0] < self.state_space.dim) \
-                else self.state_space.tensor_product_block_labels(0)
+                else self.state_space.sole_tensor_product_block_labels
             op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
             initial_row_basis = create_complete_basis_fn(target_sslbls)
 

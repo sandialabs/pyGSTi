@@ -1694,7 +1694,7 @@ class OpModel(Model):
         # - make linear combos of basis els so that all (nonzero) disallowed rows become zero, i.e.,
         #    find nullspace of the matrix formed from the (nonzero) disallowed rows of mx.
         # - promote op_gauge_basis => op_gauge_space (linear combos of the same elementary basis - op_gauge_basis)
-        all_sslbls = self.state_space.tensor_product_block_labels(0)
+        all_sslbls = self.state_space.sole_tensor_product_block_labels
 
         if reduce_to_model_space:
             allowed_lbls = op.errorgen_coefficient_labels()

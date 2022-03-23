@@ -465,7 +465,7 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
             if idt_pauli_dicts is None:
                 continue  # automatic creation failed -> skip
 
-        qubit_labels = idt_target.state_space.tensor_product_block_labels(0)
+        qubit_labels = idt_target.state_space.sole_tensor_product_block_labels
         GiStr = _Circuit((idt_idle_op,), line_labels=qubit_labels)
 
         circuits_final = results.circuit_lists['final']
@@ -1077,7 +1077,7 @@ def find_std_clifford_compilation(model, verbosity=0):
     for module_name in smq_modules:
         mod = importlib.import_module("pygsti.modelpacks." + module_name)
         if model.state_space.num_tensor_product_blocks > 1: continue  # only try to match for single-TPB cases
-        qubit_labels = model.state_space.tensor_product_block_labels(0)  # this usually gets the qubit labels
+        qubit_labels = model.state_space.sole_tensor_product_block_labels  # usually the qubit labels
         if len(mod._sslbls) != len(qubit_labels): continue  # wrong number of qubits!
         if _StateSpace.cast(mod._sslbls).dim != _StateSpace.cast(qubit_labels).dim: continue
 
