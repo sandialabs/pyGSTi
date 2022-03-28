@@ -10,6 +10,9 @@ Defines the WeakForwardSimulator calculator class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
+import time as _time
+
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
 from pygsti.baseobjs import outcomelabeldict as _ld
 
@@ -24,7 +27,7 @@ class WeakForwardSimulator(_ForwardSimulator):
     function of ForwardSimulators.
     """
 
-    def __init__(self, shots, model=None):
+    def __init__(self, shots, model=None, base_seed=None):
         """
         Construct a new WeakForwardSimulator object.
 
@@ -34,11 +37,17 @@ class WeakForwardSimulator(_ForwardSimulator):
             Number of times to run each circuit to obtain an approximate probability
         model : Model
             Optional parent Model to be stored with the Simulator
+        base_seed: int, optional
+            Base seed for RNG of probabilitic operations during circuit simulation.
+            Incremented for every shot such that deterministic seeding behavior can be
+            carried out with both serial or MPI execution.
+            If not provided, falls back to using time.time() to get a valid seed.
         """
         self.shots = shots
+        self.base_seed = base_seed if base_seed is not None else int(_time.time())
         super().__init__(model)
 
-    def _compute_circuit_outcome_for_shot(self, spc_circuit, resource_alloc, time=None):
+    def _compute_circuit_outcome_for_shot(self, spc_circuit, resource_alloc, time=None, rand_state=None):
         """Compute outcome for a single shot of a circuit.
 
         Parameters
@@ -54,6 +63,9 @@ class WeakForwardSimulator(_ForwardSimulator):
         time : float, optional
             The *start* time at which `circuit` is evaluated.
 
+        rand_state: RandomState, optional
+            RNG object to use for probabilistic operations
+
         Returns
         -------
         outcome_label: tuple
@@ -64,13 +76,52 @@ class WeakForwardSimulator(_ForwardSimulator):
     def _compute_sparse_circuit_outcome_probabilities(self, circuit, resource_alloc, time=None):
         probs = _ld.OutcomeLabelDict()
 
-        # TODO: For parallelization, block over this for loop
-        for _ in range(self.shots):
-            outcome = self._compute_circuit_outcome_for_shot(circuit, resource_alloc, time)
-            if outcome in probs:
-                probs[outcome] += 1.0 / self.shots
-            else:
-                probs[outcome] = 1.0 / self.shots
+        comm = None if resource_alloc is None else resource_alloc.comm
+        if comm is None:
+            # No MPI, just serial execution
+            for i in range(self.shots):
+                rand_state = _np.random.RandomState(self.base_seed + i)
+
+                outcome = self._compute_circuit_outcome_for_shot(circuit, resource_alloc, time, rand_state)
+                if outcome in probs:
+                    probs[outcome] += 1.0 / self.shots
+                else:
+                    probs[outcome] = 1.0 / self.shots   
+        else:
+            # Have a comm, so use MPI to parallelize over shots
+            rank = comm.Get_rank()
+            size = comm.Get_size()
+
+            shots_per_rank = self.shots // size
+            remainder = self.shots % size
+            # Take care of any leftover shots
+            if rank < remainder:
+                shots_per_rank += 1
+
+            # Calculate how many shots other ranks are computing so we get the correct seed offset
+            seed_offset = shots_per_rank * rank + min(rank, remainder)
+
+            # Each rank runs their set of shots (with no resource alloc since we are using it at this level)
+            outcomes_per_rank = []
+            for i in range(shots_per_rank):
+                rand_state = _np.random.RandomState(self.base_seed + seed_offset + i)
+                outcomes_per_rank.append(self._compute_circuit_outcome_for_shot(circuit, None, time, rand_state))
+
+            # Collect all outcomes
+            outcomes = comm.gather(outcomes_per_rank, root=0)
+            if rank == 0:
+                for opr in outcomes:
+                    for outcome in opr:
+                        if outcome in probs:
+                            probs[outcome] += 1.0 / self.shots
+                        else:
+                            probs[outcome] = 1.0 / self.shots
+
+            # Distribute final probabilities
+            probs = comm.bcast(probs, root=0)
+        
+        # Update seed for next run
+        self.base_seed += self.shots
 
         return probs
 

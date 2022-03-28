@@ -10,16 +10,6 @@ Defines the CHPForwardSimulator calculator class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-#from . import povm as _povm
-from ..baseobjs.label import Label as _Label
-# ***************************************************************************************************
-# Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
-# Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
-# in this software.
-# Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
-# in compliance with the License.  You may obtain a copy of the License at
-# http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
-# ***************************************************************************************************
 import os as _os
 import re as _re
 import subprocess as _sp
@@ -27,6 +17,7 @@ import tempfile as _tf
 import numpy as _np
 from pathlib import Path as _Path
 
+from ..baseobjs.label import Label as _Label
 from pygsti.forwardsims.weakforwardsim import WeakForwardSimulator as _WeakForwardSimulator
 from pygsti.modelmembers import states as _state
 from pygsti.modelmembers import operations as _op
@@ -57,8 +48,10 @@ class CHPForwardSimulator(_WeakForwardSimulator):
 
         super().__init__(shots, model)
 
-    def _compute_circuit_outcome_for_shot(self, circuit, resource_alloc, time=None):
+    def _compute_circuit_outcome_for_shot(self, circuit, resource_alloc, time=None, shot_seed=None):
         assert(time is None), "CHPForwardSimulator cannot be used to simulate time-dependent circuits yet"
+
+        rand_state = _np.random.RandomState(shot_seed)
 
         # Don't error on POVM, in case it's just an issue of marginalization
         prep_label, op_labels, povm_label = self.model.split_circuit(circuit, erroron=('prep',))
@@ -79,16 +72,16 @@ class CHPForwardSimulator(_WeakForwardSimulator):
 
                 # Prep
                 rho = self.model.circuit_layer_operator(prep_label, 'prep')
-                self._process_state(rho, tmp)
+                self._process_state(rho, tmp, rand_state)
 
                 # Op layers
                 for op_label in op_labels:
                     op = self.model.circuit_layer_operator(op_label, 'op')
-                    tmp.write(op._rep.chp_str())
+                    tmp.write(op._rep.chp_str(seed_or_state=rand_state))
 
                 # POVM (sort of, actually using it more like a straight PVM)
                 povm = self.model.circuit_layer_operator(_Label(povm_label.name), 'povm')
-                self._process_povm(povm, povm_label, tmp)
+                self._process_povm(povm, povm_label, tmp, rand_state)
 
             # Run CHP
             process = _sp.Popen([f'{self.chpexe.resolve()}', f'{path}'], stdout=_sp.PIPE, stderr=_sp.PIPE)
@@ -98,7 +91,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
             _os.remove(path)
 
         # Extract outputs
-        pattern = _re.compile('Outcome of measuring qubit (\d): (\d)')
+        pattern = _re.compile('Outcome of measuring qubit (\d+): (\d)')
         qubit_outcomes = []
         for match in pattern.finditer(out.decode('utf-8')):
             qubit_outcomes.append((int(match.group(1)), match.group(2)))
@@ -109,7 +102,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
 
         return outcome_label
 
-    def _process_state(self, rho, file_handle):
+    def _process_state(self, rho, file_handle, rand_state):
         """Helper function to process state prep for CHP circuits.
 
         Recursively handles TensorProd > Composed > Computational
@@ -131,7 +124,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
             bitflip = _op.StaticStandardOp('Gxpi', 'pp', evotype='chp', state_space=None)
             for i, zval in enumerate(rho._zvals):
                 if zval:
-                    file_handle.write(bitflip.chp_str)
+                    file_handle.write(bitflip.chp_str(seed_or_state=rand_state))
                     #OLD: file_handle.write(bitflip.get_chp_str([target_offset + i]))
 
         # Handle ComposedState of ComputationalBasisState + noise op with chp evotype
@@ -141,7 +134,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 process_computational_state(rho.state_vec, target_offset)
                 #nqubits = rho.state_space.num_qubits
                 #targets = _np.array(range(nqubits)) + target_offset  # Stefan - this used to be an arg to chp_str (?)
-                file_handle.write(rho.error_map.chp_str)
+                file_handle.write(rho.error_map.chp_str(seed_or_state=rand_state))
             else:
                 process_computational_state(rho, target_offset)
 
@@ -155,7 +148,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
         else:
             process_composed_state(rho, target_offset)
 
-    def _process_povm(self, povm, povm_label, file_handle):
+    def _process_povm(self, povm, povm_label, file_handle, rand_state):
         """Helper function to process measurement for CHP circuits.
 
         Recursively handles TensorProd > Composed > ComputationalBasis
@@ -200,7 +193,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
                 #OLD REMOVE: nqubits = povm.state_space.num_qubits
                 #OLD REMOVE: targets = _np.array(range(nqubits)) + target_offset
                 #OLD REMOVE: file_handle.write(povm.error_map.get_chp_str(targets))
-                file_handle.write(povm.error_map.chp_str)
+                file_handle.write(povm.error_map.chp_str(seed_or_state=rand_state))
 
                 process_computational_povm(povm.base_povm, qubit_indices, target_offset)
             else:
