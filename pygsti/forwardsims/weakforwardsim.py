@@ -82,7 +82,7 @@ class WeakForwardSimulator(_ForwardSimulator):
             for i in range(self.shots):
                 rand_state = _np.random.RandomState(self.base_seed + i)
 
-                outcome = self._compute_circuit_outcome_for_shot(circuit, resource_alloc, time, rand_state)
+                outcome = self._compute_circuit_outcome_for_shot(circuit, None, time, rand_state)
                 if outcome in probs:
                     probs[outcome] += 1.0 / self.shots
                 else:
@@ -119,9 +119,6 @@ class WeakForwardSimulator(_ForwardSimulator):
 
             # Distribute final probabilities
             probs = comm.bcast(probs, root=0)
-        
-        # Update seed for next run
-        self.base_seed += self.shots
 
         return probs
 

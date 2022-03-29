@@ -86,7 +86,7 @@ class OpRepComposed(OpRep):
     def chp_ops(self, seed_or_state=None):
         ops = []
         for factor in self.factor_reps:
-            ops.extend(factor.chp_ops)
+            ops.extend(factor.chp_ops(seed_or_state=seed_or_state))
 
         return ops
 
@@ -116,7 +116,6 @@ class OpRepEmbedded(OpRep):
         chp_ops = [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep.chp_ops()]
         super(OpRepEmbedded, self).__init__(chp_ops, state_space)
 
-    @property
     def chp_ops(self, seed_or_state=None):
         return [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep.chp_ops(seed_or_state=seed_or_state)]
 
@@ -185,7 +184,7 @@ class OpRepStochastic(OpRep):
 
         # If final entry, no operation selected
         if index == self.basis.size - 1:
-            return ''
+            return []
 
         rep = self.stochastic_superop_reps[index]
-        return rep.chp_ops
+        return rep.chp_ops()

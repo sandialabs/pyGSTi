@@ -30,7 +30,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
     """
     A WeakForwardSimulator returning probabilities with Scott Aaronson's CHP code
     """
-    def __init__(self, chpexe, shots, model=None):
+    def __init__(self, chpexe, shots, model=None, base_seed=None):
         """
         Construct a new CHPForwardSimulator.
 
@@ -42,27 +42,22 @@ class CHPForwardSimulator(_WeakForwardSimulator):
             Number of times to run each circuit to obtain an approximate probability
         model : Model
             Optional parent Model to be stored with the Simulator
+        base_seed: int, optional
+            Base seed for RNG of probabilitic operations during circuit simulation.
+            Incremented for every shot such that deterministic seeding behavior can be
+            carried out with both serial or MPI execution.
+            If not provided, falls back to using time.time() to get a valid seed.
         """
         self.chpexe = _Path(chpexe)
         assert self.chpexe.is_file(), "A valid CHP executable must be passed to CHPForwardSimulator"
 
-        super().__init__(shots, model)
+        super().__init__(shots, model, base_seed)
 
-    def _compute_circuit_outcome_for_shot(self, circuit, resource_alloc, time=None, shot_seed=None):
+    def _compute_circuit_outcome_for_shot(self, circuit, resource_alloc, time=None, rand_state=None):
         assert(time is None), "CHPForwardSimulator cannot be used to simulate time-dependent circuits yet"
+        assert(resource_alloc is None), "CHPForwardSimulator cannot use a resource_alloc for one shot."
 
-        rand_state = _np.random.RandomState(shot_seed)
-
-        # Don't error on POVM, in case it's just an issue of marginalization
-        prep_label, op_labels, povm_label = self.model.split_circuit(circuit, erroron=('prep',))
-        # Try to get unmarginalized POVM
-        if povm_label is None:
-            #OLD way (perhaps to avoid constructing a MarginalizedPOVM on many qubits?):
-            #default_povm_label = self.model._default_primitive_povm_layer_lbl(None)
-            #povm_label = _Label(default_povm_label.name, state_space_labels=circuit.line_labels)
-            povm_label = self.model._default_primitive_povm_layer_lbl(circuit.line_labels)
-        assert (povm_label is not None), \
-            "Unable to get default POVM for %s" % str(circuit)
+        prep_label, op_labels, povm_label = self.model.split_circuit(circuit)
 
         # Use temporary file as per https://stackoverflow.com/a/8577225
         fd, path = _tf.mkstemp()
@@ -72,7 +67,7 @@ class CHPForwardSimulator(_WeakForwardSimulator):
 
                 # Prep
                 rho = self.model.circuit_layer_operator(prep_label, 'prep')
-                self._process_state(rho, tmp, rand_state)
+                tmp.write(rho._rep.chp_str(seed_or_state=rand_state))
 
                 # Op layers
                 for op_label in op_labels:
@@ -102,57 +97,12 @@ class CHPForwardSimulator(_WeakForwardSimulator):
 
         return outcome_label
 
-    def _process_state(self, rho, file_handle, rand_state):
-        """Helper function to process state prep for CHP circuits.
-
-        Recursively handles TensorProd > Composed > Computational
-        SPAMVec objects (e.g. those created by create_crosstalk_free_model).
-
-        Parameters
-        ----------
-        rho: State
-            State vector to process
-
-        file_handle: TextIOWrapper
-            Open file handle for dumping CHP strings
-        """
-        # Handle ComputationalBasisState, applying bitflips as needed
-        def process_computational_state(rho, target_offset=0):
-            assert isinstance(rho, _state.ComputationalBasisState), \
-                "CHP prep must be ComputationalBasisState (may be inside ComposedState/TensorProductState)"
-
-            bitflip = _op.StaticStandardOp('Gxpi', 'pp', evotype='chp', state_space=None)
-            for i, zval in enumerate(rho._zvals):
-                if zval:
-                    file_handle.write(bitflip.chp_str(seed_or_state=rand_state))
-                    #OLD: file_handle.write(bitflip.get_chp_str([target_offset + i]))
-
-        # Handle ComposedState of ComputationalBasisState + noise op with chp evotype
-        def process_composed_state(rho, target_offset=0):
-            if isinstance(rho, _state.ComposedState):
-                assert(rho._evotype == 'chp'), "ComposedState must have `chp` evotype for noise op"
-                process_computational_state(rho.state_vec, target_offset)
-                #nqubits = rho.state_space.num_qubits
-                #targets = _np.array(range(nqubits)) + target_offset  # Stefan - this used to be an arg to chp_str (?)
-                file_handle.write(rho.error_map.chp_str(seed_or_state=rand_state))
-            else:
-                process_computational_state(rho, target_offset)
-
-        # Handle TensorProductSTate made of ComposedState or ComputationalBasisStates
-        target_offset = 0
-        if isinstance(rho, _state.TensorProductState):
-            for rho_factor in rho.factors:
-                nqubits = (rho_factor.noise_op.dim - 1).bit_length()
-                process_composed_state(rho_factor, target_offset)
-                target_offset += nqubits
-        else:
-            process_composed_state(rho, target_offset)
-
+    # TODO: This should be somehow part of the evotype reps, but effect/povm is weird for CHP
     def _process_povm(self, povm, povm_label, file_handle, rand_state):
         """Helper function to process measurement for CHP circuits.
 
-        Recursively handles TensorProd > Composed > ComputationalBasis
-        POVM objects (e.g. those created by create_crosstalk_free_model).
+        Recursively handles ComposedPOVM > ComputationalBasisPOVM objects
+        (e.g. those created by create_crosstalk_free_model).
 
         Parameters
         ----------
@@ -175,36 +125,25 @@ class CHPForwardSimulator(_WeakForwardSimulator):
             qubit_indices = [flat_sslbls.index(q) for q in povm_label.sslbls]
 
         # Handle ComputationalBasisPOVM
-        def process_computational_povm(povm, qubit_indices, target_offset=0):
+        def process_computational_povm(povm, qubit_indices):
             assert isinstance(povm, _povm.ComputationalBasisPOVM), \
                 "CHP povm must be ComputationalPOVM (may be inside ComposedPOVM/TensorProdPOVM)"
 
-            povm_qubits = _np.array(range(povm.nqubits)) + target_offset
+            povm_qubits = _np.array(range(povm.nqubits))
             for target in povm_qubits:
                 if qubit_indices is None or target in qubit_indices:
                     file_handle.write(f'm {target}\n')
 
         # Handle ComposedPOVM of ComputationalBasisPOVM + noise op with chp evotype
-        def process_composed_povm(povm, qubit_indices, target_offset=0):
+        def process_composed_povm(povm, qubit_indices):
             if isinstance(povm, _povm.ComposedPOVM):
                 assert povm._evotype == 'chp', \
                     "ComposedPOVM must have `chp` evotype for noise op"
 
-                #OLD REMOVE: nqubits = povm.state_space.num_qubits
-                #OLD REMOVE: targets = _np.array(range(nqubits)) + target_offset
-                #OLD REMOVE: file_handle.write(povm.error_map.get_chp_str(targets))
-                file_handle.write(povm.error_map.chp_str(seed_or_state=rand_state))
+                file_handle.write(povm.error_map._rep.chp_str(seed_or_state=rand_state))
 
-                process_computational_povm(povm.base_povm, qubit_indices, target_offset)
+                process_computational_povm(povm.base_povm, qubit_indices)
             else:
-                process_computational_povm(povm, qubit_indices, target_offset)
-
-        # Handle TensorProductPOVM made of ComposedPOVM or ComputationalBasisPOVMs
-        target_offset = 0
-        if isinstance(povm, _povm.TensorProductPOVM):
-            for povm_factor in povm.factors:
-                nqubits = povm_factor.error_map.state_space.num_qubits
-                process_composed_povm(povm_factor, qubit_indices, target_offset)
-                target_offset += nqubits
-        else:
-            process_composed_povm(povm, qubit_indices, target_offset)
+                process_computational_povm(povm, qubit_indices)
+        
+        process_composed_povm(povm, qubit_indices)
