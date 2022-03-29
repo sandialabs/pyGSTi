@@ -427,7 +427,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
                                                   pre_povm_tuples="first",
                                                   search_mode="sequential", constrain_to_tp=True,
                                                   trunc_scheme="whole germ powers",
-                                                  n_random=100, seed=None,
+                                                  n_random=100, min_iterations=None, base_loweig_tol= 1e-1, condition_number_tol=10, seed=None,
                                                   verbosity=0, mem_limit=None):
     """
     Finds a per-germ set of fiducial pairs that are amplificationally complete.
@@ -499,6 +499,24 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
 
     n_random : int, optional
         The number of random-pair-sets to consider for a given set size.
+    
+    min_iterations: int, optional
+        The number of random-pair-sets to consider before we allow the algorithm
+        to terminate early if it has found an acceptable candidate fiducial set.
+        If left with the default value of None then this is 1/2 the value of
+        n_random.
+        
+    base_loweig_tol: float, optional
+        A relative tolerance to apply to candidate fiducial pair sets. 
+        Gives the multiplicative reduction in the magnitude of the minimum
+        eigenvalue relative to the value for the full fiducial set
+        the user is willing to tolerate.
+    
+    condition_number_tol: float, optional
+        A relative tolerance to apply to candidate fiducial pair sets. 
+        Gives the multiplicative increase in the condition number
+        relative to the value for the full fiducial set
+        the user is willing to tolerate.
 
     seed : int, optional
         The seed to use for generating random-pair-sets.
@@ -517,6 +535,22 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
         list of fiducial pairs for a particular germ (indices are into
         `prep_fiducials` and `meas_fiducials`).
     """
+    
+    #debugging
+    print('--------------User Input Parameters-------------')
+    print('Target Model: ', target_model)
+    print('Prep Fiducials: ', prep_fiducials)
+    print('Measurement Fiducials: ', meas_fiducials)
+    print('Germs: ', germs)
+    print('Max Lengths: ', max_lengths)
+    print('pre_povm_tuples: ', pre_povm_tuples)
+    print('Search Mode: ', search_mode)
+    print('Truncation Scheme: ', trunc_scheme)
+    print('Number of Random Iterations?: ', n_random)
+    print('RNG Seed: ', seed)
+    print('Verbosity: ', verbosity)
+    print('Memory Limit: ', mem_limit)
+    
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
@@ -524,18 +558,27 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
         firstRho = list(target_model.preps.keys())[0]
         firstPOVM = list(target_model.povms.keys())[0]
         pre_povm_tuples = [(firstRho, firstPOVM)]
+        
+        #debugging
+        #print('First Rho: ', firstRho)
+        #print('First POVM: ', firstPOVM)
     pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
                        for prepLbl, povmLbl in pre_povm_tuples]
-
+    #debugging
+    #print('pre_povm_tuples: ', pre_povm_tuples)
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
     low_eigvals = {}
-    base_loweig_threshold = 1e-2  # HARDCODED
+    #base_loweig_threshold = 1e-2  # HARDCODED
 
     printer.log("------  Per Germ-Power Fiducial Pair Reduction --------")
     printer.log("  Using %s germ power truncation scheme" % trunc_scheme)
     with printer.progress_logging(1):
         for i, germ_power in enumerate(_itertools.product(germs, max_lengths)):
             germ, L = germ_power
+            
+            #debugging
+            print('Current Germ: ', germ)
+            print('Current Power: ', L)
 
             # TODO: Could check for when we become identity and skip rest
 
@@ -545,17 +588,31 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             gsGerm = target_model.copy()
             gsGerm.set_all_parameterizations("static")
             germMx = gsGerm.sim.product(germ)
+            
+            #debugging
+            #print('Current Germ Matrix: ', germMx)
+            
             gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
+                
+            #debugging
+            #print('Current Germ EigenvalueParamDenseOp: ', gsGerm.operations["Ggerm"])
 
             # SS: Difference from _per_germ version
             if trunc_scheme == "whole germ powers":
                 power = _gsc.repeat_count_with_max_length(germ, L)
+  
+                #debugging
+                print('Truncated Power: ', power)
+                
             # TODO: Truncation doesn't work nicely with a single "germ"
             #elif trunc_scheme == "truncated germ powers":
             #    germPowerCirc = _gsc.repeat_and_truncate(germ, L)
             elif trunc_scheme == "length as exponent":
                 power = L
+                
+                #debugging
+                print('Truncated Power: ', power)
             else:
                 raise ValueError("Truncation scheme %s not allowed" % trunc_scheme)
 
@@ -570,31 +627,63 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
                                   suffix='-- %s germ, %d L (%d params)' %
                                   (repr(germ), L, gsGerm.num_params))
             #Debugging
-            #print(gsGerm.operations["Ggerm"].evals)
-            #print(gsGerm.operations["Ggerm"].params)
+            #print('Current Germ Eigenvals: ', gsGerm.operations["Ggerm"].evals)
+            #print('Current Germ Parameters: ', gsGerm.operations["Ggerm"].params)
 
             #Determine which fiducial-pair indices to iterate over
-            min_iterations = min(n_random // 2, 1000) if search_mode == 'random' else 10  # HARDCODED
-            condition_number_threshold = 1e6  # HARDCODED
-
+            #TODO: Evaluate the value of the minimum number of iterations before the algorithm for
+            #getting candidate fiducial pairs is allowed to exit early.
+            if min_iterations is None:
+                min_iterations = min(n_random // 2, 1000) if search_mode == 'random' else 10  # HARDCODED
+            #also assert that the number of iterations is less than the number of random samples
+            if search_mode=='random':
+                assert(min_iterations<=n_random)
+            #debugging
+            #print('Minimum Iterations: ', min_iterations)
+            
+            #condition_number_threshold = 1e6  # HARDCODED
+            #debugging
+            #print('Condition Number Threshold: ', condition_number_threshold)
+            
+            
             if germ in low_eigvals:
+                #debugging
+                #print('Germ in dictionary low_eigvals')
                 largest_past_L = max([l for l in low_eigvals[germ].keys()])
+                #debugging
+                #print('Largest past length for which germ was in low_eigvals: ', largest_past_L)
                 past_low_eigval = low_eigvals[germ][largest_past_L]
-                lowest_eigenval_threshold = 0.8 * past_low_eigval * (L / largest_past_L)**2
+                #debugging
+                #print('Eigenvalue at that past length: ', past_low_eigval)
+                #with the switch to a relative scaling based off of the full
+                #fiducial set, skip this adjustment to the eigenvalue acceptance threshold.
+                #lowest_eigenval_threshold = 0.8 * past_low_eigval * (L / largest_past_L)**2
+                #debugging
+                #print('Lowest Eigenvalue Threshold: ', lowest_eigenval_threshold)
                 # Above gives expected increase in sensitivity (0.8 b/c this is just approximate, based on J.T*J)
-            else:
-                lowest_eigenval_threshold = base_loweig_threshold
+            #else:
+                #lowest_eigenval_threshold = base_loweig_threshold
+                #debugging
+                #print('Lowest Eigenvalue Threshold: ', lowest_eigenval_threshold)
 
             goodPairList, low_eigval = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
                                                                     gsGerm, power, mem_limit,
                                                                     printer, search_mode, seed, n_random,
-                                                                    min_iterations, lowest_eigenval_threshold,
-                                                                    condition_number_threshold)
+                                                                    min_iterations, base_loweig_tol,
+                                                                    condition_number_tol)
+            #debugging
+            #print('Current goodPairList: ', goodPairList)
+            #print('Current Low Eigenvalue: ', low_eigval)
             if germ not in low_eigvals:
                 low_eigvals[germ] = {}
             low_eigvals[germ][L] = low_eigval
-
-            assert(goodPairList is not None)
+            #debugging
+            #print('Current Low Eigenvals Dictionary: ', low_eigvals)
+            try:
+                assert(goodPairList is not None)
+            except AssertionError as err:
+                print('Failed to find an acceptable fiducial set for germ power pair: ', germ_power)
+                print(err)
             pairListDict[germ_power] = goodPairList  # add to final list of per-germ-power pairs
 
     return pairListDict
@@ -726,18 +815,29 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
 # Helper function for per_germ and per_germ_power FPR
 def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
                                  gsGerm, power, mem_limit, printer, search_mode, seed, n_random,
-                                 min_iterations=1, lowest_eigenval_threshold=1e-2, condition_number_threshold=1e10):
+                                 min_iterations=1, lowest_eigenval_tol=1e-1, condition_number_tol=10):
     #Get dP-matrix for full set of fiducials, where
     # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
     #   j is similar, and derivs are wrt the "eigenvalues" of the germ
     #  (i.e. the parameters of the gsGerm model).
+    
+    #debugging
+    print('Entered helper function _get_per_germ_power_fidpairs')
+    
     lst = _gsc.create_circuits(
         "pp[0]+f0+germ*power+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
         germ=_circuits.Circuit('Ggerm'), pp=pre_povm_tuples, power=power,
         order=('f0', 'f1', 'pp'))
+    #debugging
+    #print('List of circuits: ', lst)
 
     resource_alloc = _baseobjs.ResourceAllocation(comm=None, mem_limit=mem_limit)
     layout = gsGerm.sim.create_layout(lst, None, resource_alloc, array_types=('ep',), verbosity=0)
+
+    #debugging:
+    #print('Num Prep Fids: ', len(prep_fiducials))
+    #print('Num Measurement Fids: ', len(meas_fiducials))
+    
 
     elIndicesForPair = [[] for i in range(len(prep_fiducials) * len(meas_fiducials))]
     nPrepPOVM = len(pre_povm_tuples)
@@ -760,6 +860,25 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     # want sensitivity to.
     RANK_TOL = 1e-7
     rank = _np.linalg.matrix_rank(_np.dot(dPall, dPall.T), RANK_TOL)
+    
+    spectrum_full_fid_set= list(sorted(_np.abs(_np.linalg.eigvals(_np.dot(dPall, dPall.T)))))
+    imin_full_fid_set = len(spectrum_full_fid_set) - gsGerm.num_params
+    condition_full_fid_set = spectrum_full_fid_set[-1] / spectrum_full_fid_set[imin_full_fid_set] if (spectrum_full_fid_set[imin_full_fid_set] > 0) else _np.inf
+    
+    
+    #debugging
+    print('J J^T Rank Full Fiducial Set: ', rank)
+    print('Num Parameters (should equal above rank): ', gsGerm.num_params)
+    print('Full Fiducial Set Min Eigenvalue: ', spectrum_full_fid_set[imin_full_fid_set])
+    print('Full Fiducial Set Max Eigenvalue: ', spectrum_full_fid_set[-1])
+    print('Full Fiducial Set Condition Number: ', condition_full_fid_set)
+    #print('Complete Spectrum of Full Fiducial Set: ', spectrum_full_fid_set[imin_full_fid_set:])
+    
+            
+    #debugging
+    #print('J J^T Spectrum: ', spectrum)
+    
+    
     if rank < gsGerm.num_params:  # full fiducial set should work!
         print(rank)
         raise ValueError("Incomplete fiducial-pair set!")
@@ -771,61 +890,113 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     # nRhoStrs, nEStrs = len(prep_fiducials), len(meas_fiducials)
     nEStrs = len(meas_fiducials)
     nPossiblePairs = len(prep_fiducials) * len(meas_fiducials)
+    
     allPairIndices = list(range(nPossiblePairs))
+    
+    #debugging
+    #print('Number of possible pairs: ', nPossiblePairs)
 
 
     #Determine which fiducial-pair indices to iterate over
     goodPairList = None; bestFirstEval = 0; bestPairs = None
+    #loops over a number of pairs between num_params and up to and not including the number of possible pairs
     for nNeededPairs in range(gsGerm.num_params, nPossiblePairs):
         printer.log("Beginning search for a good set of %d pairs (%d pair lists to test)" %
                     (nNeededPairs, _nCr(nPossiblePairs, nNeededPairs)), 2)
-        printer.log("  Low eigenvalue must be >= %g and condition # < %g" %
-                    (lowest_eigenval_threshold, condition_number_threshold))
-
+        printer.log("  Low eigenvalue must be >= %g and condition number < %g relative to the values of the full fiducial set" %
+                    (lowest_eigenval_tol, condition_number_tol))
+        
+        #debugging
+        print('Searching for a good set with this many pairs: ', nNeededPairs)
+        #print('Set must have and eigenvalue and condition number greater than and less than respectively: ', lowest_eigenval_threshold, condition_number_threshold)
 
         if search_mode == "sequential":
+            #debugging
+            print("Performing sequential search")
             pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
 
         elif search_mode == "random":
+            #debugging
+            #print("Performing random search")
             _random.seed(seed)  # ok if seed is None
             nTotalPairCombos = _nCr(len(allPairIndices), nNeededPairs)
+            #debugging
+            #print('Number of total possible pair combos we could test: ', nTotalPairCombos)
             if n_random < nTotalPairCombos:
                 pairIndicesToIterateOver = [_random_combination(
                     allPairIndices, nNeededPairs) for i in range(n_random)]
+                #debugging
+                #print('Iterating over less than this because n_random is less.')
             else:
                 pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs)
-
+                
+            #debugging
+            #print('Actual pairs to iterate over: ', pairIndicesToIterateOver)
+        #debugging
+        #print('Testing phase')
         for i, pairIndicesToTest in enumerate(pairIndicesToIterateOver, start=1):
-
+            #debugging
+            #print('Current pair indices being tested: ', pairIndicesToTest)
+            
             #Get list of pairs as tuples for printing & returning
             pairList = []
             for i in pairIndicesToTest:
                 prepfid_index = i // nEStrs; iEStr = i - prepfid_index * nEStrs
                 pairList.append((prepfid_index, iEStr))
-
+            
             # Same computation of rank as above, but with only a
             # subset of the total fiducial pairs.
             elementIndicesToTest = _np.concatenate([elIndicesForPair[i] for i in pairIndicesToTest])
             dP = _np.take(dPall, elementIndicesToTest, axis=0)  # subset_of_num_elements x num_params
             spectrum = list(sorted(_np.abs(_np.linalg.eigvals(_np.dot(dP, dP.T)))))
+            
+            
             imin = len(spectrum) - gsGerm.num_params
+            
+            
             condition = spectrum[-1] / spectrum[imin] if (spectrum[imin] > 0) else _np.inf
-
-            if (spectrum[imin] >= lowest_eigenval_threshold
-               and condition <= condition_number_threshold):
+            #debugging
+            #print('minimium eigenvalue, maximum eigenvalue and condition number: ', spectrum[imin], spectrum[-1], condition)
+            #if nNeededPairs==gsGerm.num_params:
+            #    print('Full J J^T Spectrum: ', spectrum)
+            
+            
+            #debugging
+            #print('Condition Number: ', condition)
+            #print('Is this the same as from numpy?: ', _np.linalg.cond(_np.dot(dP, dP.T)))
+            
+            #print('Is minimum eigenvalue greater than the threshold?: ', spectrum[imin] >= lowest_eigenval_threshold)
+            #print('Is condition number less than the threshold?: ', condition <= condition_number_threshold)
+            
+            
+            if (spectrum[imin] >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set]) and condition <= (condition_number_tol*condition_full_fid_set)):
                 bestFirstEval = spectrum[imin]
+                
+                #debugging:
+                #print("Adding to bestPairs list")
+                #print("The first eigenvalue for this list is: ", bestFirstEval)
+      
                 bestPairs = pairList
 
             printer.log("Pair list %s ==> min/max eval = %g/%g"
                         % (" ".join(map(str, pairList)), spectrum[imin], spectrum[-1]), 3)
 
-            if i >= min_iterations and bestFirstEval >= lowest_eigenval_threshold:
+            if i >= min_iterations and bestFirstEval >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set]):
+            #debugging
+                print('we have looked long enough and have found an acceptable solution')
                 break  # we've looked long enough and have found an acceptable solution
 
-        if bestFirstEval >= lowest_eigenval_threshold:
+        if bestFirstEval >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set]):
+            #debugging
+            print('Found a good set of pairs with length :', nNeededPairs)
+            #print('The good pairs list is: ', bestPairs)
+            
             printer.log("Found a good set of %d pairs (lowest eigval = %g): %s" %
                         (nNeededPairs, bestFirstEval, " ".join(map(str, pairList))), 2)
             goodPairList = bestPairs
             break
-
+    #debugging
+    if goodPairList is None:
+        print('Failed to find a sufficient fiducial set.')
+    print('Exiting _get_per_germ_power_fidpairs')
     return goodPairList, bestFirstEval
