@@ -51,6 +51,10 @@ class EmbeddedOp(_LinearOperator):
 
         assert(_StateSpace.cast(state_space).contains_labels(target_labels)), \
             "`target_labels` (%s) not found in `state_space` (%s)" % (str(target_labels), str(state_space))
+        assert(self.embedded_op.state_space.num_tensor_product_blocks == 1), \
+            "EmbeddedOp objects can only embed operations whose state spaces contain just a single tensor product block"
+        assert(len(self.embedded_op.state_space.sole_tensor_product_block_labels) == len(target_labels)), \
+            "Embedded operation's state space has a different number of components than the number of target labels!"
 
         evotype = operation_to_embed._evotype
 
@@ -578,7 +582,29 @@ class EmbeddedOp(_LinearOperator):
             keys of `lindblad_term_dict` to basis matrices.
         """
         #*** Note: this function is nearly identical to EmbeddedErrorgen.coefficients() ***
-        return self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham)
+        embedded_coeffs = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham)
+        if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
+            mapdict = {loc: tgt for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
+                                                    self.target_labels)}
+            embedded_coeffs = {k.map_state_space_labels(mapdict): v for k, v in embedded_coeffs.items()}
+        return embedded_coeffs
+
+    def errorgen_coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        embedded_labels = self.embedded_op.errorgen_coefficient_labels()
+        if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
+            mapdict = {loc: tgt for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
+                                                    self.target_labels)}
+            embedded_labels = [k.map_state_space_labels(mapdict) for k in embedded_labels]
+        return embedded_labels
 
     def errorgen_coefficients_array(self):
         """
@@ -688,7 +714,14 @@ class EmbeddedOp(_LinearOperator):
         -------
         None
         """
-        self.embedded_op.set_errorgen_coefficients(lindblad_term_dict, action, logscale_nonham, truncate)
+        if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
+            mapdict = {tgt: loc for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
+                                                    self.target_labels)}
+            unembedded_coeffs = {k.map_state_space_labels(mapdict): v for k, v in lindblad_term_dict.items()}
+        else:
+            unembedded_coeffs = lindblad_term_dict
+
+        self.embedded_op.set_errorgen_coefficients(unembedded_coeffs, action, logscale_nonham, truncate)
         if self._rep_type == 'dense': self._update_denserep()
         self.dirty = True
 

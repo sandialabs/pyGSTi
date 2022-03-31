@@ -31,7 +31,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
     from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 
     def _embed(mx, target_labels, state_space):  # BOTTLENECK
-        if mx.shape[0] == state_space.dim:
+        if mx.shape[0] == state_space.dim and target_labels == state_space.sole_tensor_product_block_labels:
             return mx  # no embedding needed
         else:
             dummy_op = _EmbeddedOp(state_space, target_labels,
@@ -52,6 +52,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
     TOL = 1e-12  # ~ machine precision
 
     print("DB fogi action mx: outer iter, initial action mx shape = %s"  % (str(action_mx.shape)))
+    #import bpdb; bpdb.set_trace()
     db_seen_sslbls = set()  # DEBUG!!!
     for j, (gen_sslbls, gen) in enumerate(elemgen_gauge_basis.elemgen_supports_and_matrices):  # BOTTLENECK eval attribute
         action_sslbls = tuple(sorted(set(gen_sslbls).union(target_sslbls)))  # (union) - joint support of ops
@@ -144,7 +145,7 @@ def first_order_gauge_action_matrix_for_prep(prep_superket_vec, target_sslbls, m
     from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 
     def _embed(mx, target_labels, state_space):  # SAME as in fn above
-        if mx.shape[0] == state_space.dim:
+        if mx.shape[0] == state_space.dim and target_labels == state_space.sole_tensor_product_block_labels:
             return mx  # no embedding needed
         else:
             dummy_op = _EmbeddedOp(state_space, target_labels,
@@ -232,7 +233,7 @@ def first_order_gauge_action_matrix_for_povm(povm_superbra_vecs, target_sslbls, 
     from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
 
     def _embed(mx, target_labels, state_space):  # SAME as in fn above
-        if mx.shape[0] == state_space.dim:
+        if mx.shape[0] == state_space.dim and target_labels == state_space.sole_tensor_product_block_labels:
             return mx  # no embedding needed
         else:
             dummy_op = _EmbeddedOp(state_space, target_labels,
@@ -392,7 +393,8 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         return norm_order_array
 
     for op_label in primitive_op_labels:
-        #FOGI DEBUG print("##", op_label)
+        #FOGI DEBUG
+        print("##", op_label)
         ga = gauge_action_matrices[op_label]
         # currently `ga` is a dense matrix, if SPARSE need to update nullspace and pinv math below
 
@@ -467,7 +469,8 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                 new_set = tuple(sorted(existing_set + (op_label,)))
                 if new_set in larger_sets: continue
 
-                #FOGI DEBUG print("\n##", existing_set, "+", op_label)
+                #FOGI DEBUG
+                print("\n##", existing_set, "+", op_label)
 
                 # Merge existing set + op_label => new set of larger size
                 ccommA = ccomms.get(existing_set, None)  # Note: commutant-complements are in *gauge* space,
@@ -535,6 +538,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(gauge_action[0:n, :], rcond=1e-7),
                                                                  -_np.linalg.pinv(gauge_action[n:, :], rcond=1e-7)),
                                                                 axis=1).T
+
                         #Equivalent:
                         #inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(gauge_action[0:n, :].T, rcond=1e-7),
                         #                                         -_np.linalg.pinv(gauge_action[n:, :].T, rcond=1e-7)),
@@ -589,7 +593,45 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             [errorgen_coefficient_labels[ol] for ol in existing_set + (op_label,)],
                             norm_order)
 
-                        assert(_np.linalg.norm(_np.dot(gauge_action.T, local_fogi_dirs)) < 1e-8)
+                        try:
+                            assert(_np.linalg.norm(_np.dot(gauge_action.T, local_fogi_dirs)) < 1e-8)
+                        except:
+                            #TODO: REMOVE !!!!!!!!!!!!!!!!!!!!!!!!!!!
+                            g = intersection_space
+                            A = gauge_action[0:n, :]
+                            B = gauge_action[n:, :]
+                            Na = _mt.nice_nullspace(A, orthogonalize=True)
+                            Nb = _mt.nice_nullspace(B, orthogonalize=True)
+                            pinvA = _np.linalg.pinv(A, rcond=1e-7)
+                            pinvB = _np.linalg.pinv(B, rcond=1e-7)
+                            testA = pinvA @ A
+                            testA2 = intersection_space.T @ testA @ intersection_space
+                            testB = pinvB @ B
+                            testB2 = intersection_space.T @ testB @ intersection_space
+                            gtestA = testA @ g
+                            gtestB = testB @ g
+                            import scipy.linalg as _spl
+                            tg = _mt.intersection_space(ccommA, ccommB, use_nice_nullspace=False)
+                            ttg = _mt.intersection_space(ccommA, ccommB, use_nice_nullspace=True)
+                            print("Hermitian")
+                            print(_np.linalg.norm(testA - testA.T.conjugate()))
+                            print(_np.linalg.norm(testB - testB.T.conjugate()))
+                            print("Nullspace")
+                            print(_np.linalg.norm(g.T.conjugate() @ Na))
+                            print(_np.linalg.norm(g.T.conjugate() @ Nb))
+                            print("pinvA * A acts as identity on g")
+                            print(_np.linalg.norm(g.T @ testA - g.T))
+                            print(_np.linalg.norm(g.T @ testB - g.T))
+                            print(_np.linalg.norm(testA @ g - g))
+                            print(_np.linalg.norm(testB @ g - g))
+                            print("g in span")
+                            print(_np.linalg.matrix_rank(_np.concatenate((ccommA, g), axis=1)))
+                            print(_np.linalg.matrix_rank(_np.concatenate((ccommB, g), axis=1)))
+                            print("tg in span")
+                            print(_np.linalg.matrix_rank(_np.concatenate((ccommA, tg), axis=1)))
+                            print(_np.linalg.matrix_rank(_np.concatenate((ccommB, tg), axis=1)))
+                            import bpdb; bpdb.set_trace()
+                            print("ERROR!")
                         # transpose => dot(local_fogi_dirs.T, gauge_action) = 0
                         # = int_spc.T * [ pinv_gA  -pinv_gB ] * [[ga] [gB]]
                         # = int_spc.T * (pinv_gA * gA - pinv_gB * gB) = 0 b/c int_vec lies in "support" of A & B,
