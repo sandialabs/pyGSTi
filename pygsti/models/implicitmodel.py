@@ -426,10 +426,15 @@ class ImplicitOpModel(_mdl.OpModel):
         def extract_std_target_mx(op, op_basis):
             # TODO: more general decomposition of op - here it must be Composed(UnitaryOp, ExpErrorGen)
             #       or just ExpErrorGen
-            if isinstance(op, _op.ExpErrorgenOp):  # assume just an identity op
+            if isinstance(op, _op.EmbeddedOp):
+                all_sslbls = op.state_space.sole_tensor_product_block_labels
+                op_component_bases = [op_basis.component_bases[all_sslbls.index(lbl)] for lbl in op.target_labels]
+                op_basis = _TensorProdBasis(op_component_bases)
+                return extract_std_target_mx(op.embedded_op, op_basis)
+            elif isinstance(op, _op.ExpErrorgenOp):  # assume just an identity op
                 U = _np.identity(op.state_space.dim, 'd')
-            elif isinstance(op, _op.ComposedOp):  # assume first element gives unitary
-                op_mx = op.factorops[0].to_dense()  # assumes a LindbladOp and low num qubits
+            elif isinstance(op, _op.ComposedOp):  # ASSUMES first element gives unitary
+                op_mx = op.factorops[0].to_dense()  # ASSUMES first factor is ideal gate
                 nQubits = int(round(_np.log(op_mx.shape[0]) / _np.log(4))); assert(op_mx.shape[0] == 4**nQubits)
                 tensorprod_std_basis = _Basis.cast('std', [(4,) * nQubits])
                 U = _bt.change_basis(op_mx, op_basis, tensorprod_std_basis)  # 'std' is incorrect
@@ -450,7 +455,7 @@ class ImplicitOpModel(_mdl.OpModel):
                 ("Must supply a custom `create_complete_basis_fn` if initial gauge basis is not a complete basis!")
 
             def create_complete_basis_fn(target_sslbls):
-                return initial_gauge_basis  #.create_subbasis(target_sslbls, retain_max_weights=False)
+                return initial_gauge_basis.create_subbasis(target_sslbls, retain_max_weights=False)
 
         # get gauge action matrices on the initial space
         gauge_action_matrices = _collections.OrderedDict()
@@ -458,25 +463,21 @@ class ImplicitOpModel(_mdl.OpModel):
         errorgen_coefficient_labels = _collections.OrderedDict()  # by operation
         for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
             print("DB FOGI: ",op_label)
-            if hasattr(self.operation_blks['layers'][op_label], 'embedded_op'):
-                op = self.operation_blks['layers'][op_label].embedded_op
-                target_lbls = self.operation_blks['layers'][op_label].target_labels
-            else:  # then assume gate is on *all* qubits
-                op = self.operation_blks['layers'][op_label]
-                target_lbls = self.state_space.sole_tensor_product_block_labels
-            assert(self.state_space.num_tensor_product_blocks == 1)  # so that all_sslbls is correct below
+            op = self.operation_blks['layers'][op_label]
+            U = extract_std_target_mx(op, self.basis)
             all_sslbls = self.state_space.sole_tensor_product_block_labels
-            op_component_bases = [self.basis.component_bases[all_sslbls.index(lbl)] for lbl in target_lbls]
-            op_basis = _TensorProdBasis(op_component_bases)
-            U = extract_std_target_mx(op, op_basis)
 
-            # below: special logic for, e.g., 2Q explicit models with 2Q gate matched with Gx:0 label
-            target_sslbls = op_label.sslbls if (op_label.sslbls is not None and U.shape[0] < self.state_space.dim) \
-                else self.state_space.sole_tensor_product_block_labels
+            if op_label.sslbls is None:
+                target_sslbls = all_sslbls
+            elif U.shape[0] == self.state_space.dim and len(op_label.sslbls) < len(all_sslbls):  # don't "trust" sslbls
+                target_sslbls = all_sslbls  # e.g., for 2Q explicit models with 2Q gate matched with Gx:0 label
+            else:
+                target_sslbls = op_label.sslbls
+
             op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
             # Note: can assume gauge action is zero (U acts as identity) on all basis elements not in op_gauge_basis
 
-            initial_row_basis = create_complete_basis_fn(target_sslbls)
+            initial_row_basis = create_complete_basis_fn(all_sslbls)  #target_sslbls)
 
             #support_sslbls, gauge_errgen_basis = get_overlapping_labels(gauge_errgen_space_labels, target_sslbls)
             #FOGI DEBUG print("DEBUG -- ", op_label)
@@ -492,7 +493,12 @@ class ImplicitOpModel(_mdl.OpModel):
             allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
                 self._format_gauge_action_matrix(mx, op, reduce_to_model_space, row_basis, op_gauge_basis,
                                                  create_complete_basis_fn)
-            print("DB FOGI: action matrix formatting done")
+            print("DB FOGI: action matrix formatting done:")
+            if allowed_rowspace_mx.shape[0] < 10:
+                print(_np.round(allowed_rowspace_mx.toarray(), 4))
+            else:
+                print(repr(allowed_rowspace_mx))
+            print(" on ", allowed_row_basis.labels)
 
             errorgen_coefficient_labels[op_label] = allowed_row_basis.labels
             gauge_action_matrices[op_label] = allowed_rowspace_mx
@@ -501,7 +507,7 @@ class ImplicitOpModel(_mdl.OpModel):
 
         # Similar for SPAM
         for prep_label in primitive_prep_labels:
-            prep = self.preps[prep_label]
+            prep = self.prep_blks['layers'][prep_label]
             v = extract_std_target_vec(prep)
             target_sslbls = prep_label.sslbls if (prep_label.sslbls is not None and v.shape[0] < self.state_space.dim) \
                 else self.state_space.sole_tensor_product_block_labels
@@ -520,7 +526,7 @@ class ImplicitOpModel(_mdl.OpModel):
             gauge_action_gauge_spaces[prep_label] = op_gauge_space
 
         for povm_label in primitive_povm_labels:
-            povm = self.povms[povm_label]
+            povm = self.povm_blks['layers'][povm_label]
             vecs = [extract_std_target_vec(effect) for effect in povm.values()]
             target_sslbls = povm_label.sslbls if (povm_label.sslbls is not None
                                                   and vecs[0].shape[0] < self.state_space.dim) \
