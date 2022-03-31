@@ -186,7 +186,7 @@ def nullspace(m, tol=1e-7):
     """
     _, s, vh = _np.linalg.svd(m)
     rank = (s > tol).sum()
-    return vh[rank:].T.copy()
+    return vh[rank:].T.conjugate().copy()
 
 
 def nullspace_qr(m, tol=1e-7):
