@@ -290,7 +290,7 @@ def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, ter
     prev_L = None
     
     #Check whether we need to add in addtional circuits from _additonal_circuit by checking if it is empty.
-    if not circuits._additional_circuits:
+    if circuits._additional_circuits:
         
         unique_circs = list(set(circuits._additional_circuits) - seen_circs)
         fim_term = calculate_fisher_information_matrix(regularized_model, unique_circs, num_shots,
