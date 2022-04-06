@@ -52,7 +52,8 @@ class FirstOrderGaugeInvariantStore(object):
                 common_gauge_space = gauge_space
             else:
                 common_gauge_space = common_gauge_space.intersection(gauge_space,
-                                                                     free_on_unspecified_space=True)
+                                                                     free_on_unspecified_space=True,
+                                                                     use_nice_nullspace=True)
 
         # column space of self.fogi_directions
         #FOGI DEBUG print("DEBUG common gauge space of has dim", common_gauge_space.vectors.shape[1])
