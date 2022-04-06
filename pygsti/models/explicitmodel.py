@@ -1773,6 +1773,7 @@ class ExplicitOpModel(_mdl.OpModel):
         gauge_action_gauge_spaces = _collections.OrderedDict()
         errorgen_coefficient_labels = _collections.OrderedDict()  # by operation
         for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
+            #print("DB FOGI: ",op_label) #REMOVE
             op = self.operations[op_label]
             U = extract_std_target_mx(op)
 
@@ -1788,7 +1789,9 @@ class ExplicitOpModel(_mdl.OpModel):
             #FOGI DEBUG print("DEBUG -- ", op_label)
             mx, row_basis = _fogit.first_order_gauge_action_matrix(U, target_sslbls, self.state_space,
                                                                    op_gauge_basis, initial_row_basis)
-            #FOGI DEBUG print("DEBUG => mx is ", mx.shape)
+            #print("DB FOGI: action mx: ", mx.shape)  #REMOVE
+            #FOGI DEBUG print("DEBUG => mx is ", mx.shape) #REMOVE
+
             # Note: mx is a sparse lil matrix
             # mx cols => op_gauge_basis, mx rows => row_basis, as zero rows have already been removed
             # (DONE: - remove all all-zero rows from mx (and corresponding basis labels) )
@@ -1797,6 +1800,13 @@ class ExplicitOpModel(_mdl.OpModel):
             allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
                 self._format_gauge_action_matrix(mx, op, reduce_to_model_space, row_basis, op_gauge_basis,
                                                  create_complete_basis_fn)
+            #DEBUG
+            #print("DB FOGI: action matrix formatting done:")
+            #if allowed_rowspace_mx.shape[0] < 10:
+            #    print(_np.round(allowed_rowspace_mx.toarray(), 4))
+            #else:
+            #    print(repr(allowed_rowspace_mx))
+            #print(" on ", allowed_row_basis.labels)
 
             errorgen_coefficient_labels[op_label] = allowed_row_basis.labels
             gauge_action_matrices[op_label] = allowed_rowspace_mx

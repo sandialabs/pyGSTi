@@ -37,12 +37,11 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
             dummy_op = _EmbeddedOp(state_space, target_labels,
                                    _StaticArbitraryOp(_np.identity(mx.shape[0], 'd'), 'densitymx_slow'))
             embeddedOp = _sps.identity(state_space.dim, mx.dtype, format='lil')
-            scale = _np.sqrt(4**len(target_labels) / state_space.dim)  # is this correct??
 
             #fill in embedded_op contributions (always overwrites the diagonal
             # of finalOp where appropriate, so OK it starts as identity)
             for i, j, gi, gj in dummy_op._iter_matrix_elements('HilbertSchmidt'):
-                embeddedOp[i, j] = mx[gi, gj] * scale
+                embeddedOp[i, j] = mx[gi, gj]
             #return embeddedOp.tocsr()  # Note: if sparse, assure that this is in CSR or CSC for fast products
             return embeddedOp.toarray()
 
@@ -51,9 +50,10 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
     nonzero_row_labels = {}
     TOL = 1e-12  # ~ machine precision
 
-    print("DB fogi action mx: outer iter, initial action mx shape = %s"  % (str(action_mx.shape)))
-    #import bpdb; bpdb.set_trace()
-    db_seen_sslbls = set()  # DEBUG!!!
+    #print("DB fogi action mx: outer iter, initial action mx shape = %s"  % (str(action_mx.shape)))  # DEBUG REMOVE
+    #print("DB superop = \n", clifford_superop_mx)  # DEBUG REMOVE
+    #import bpdb; bpdb.set_trace()  # REMOVE
+    #db_seen_sslbls = set()  # DEBUG!!!  REMOVE
     for j, (gen_sslbls, gen) in enumerate(elemgen_gauge_basis.elemgen_supports_and_matrices):  # BOTTLENECK eval attribute
         action_sslbls = tuple(sorted(set(gen_sslbls).union(target_sslbls)))  # (union) - joint support of ops
         action_space = model_state_space.create_subspace(action_sslbls)
@@ -72,41 +72,56 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
         action_row_labels = action_row_basis.labels
         global_row_indices = elemgen_row_basis.label_indices(action_row_labels, ok_if_missing=True)
 
-        if gen_sslbls not in db_seen_sslbls:
-            db_num_skipped = db_num_nonzero = 0
-            print("DB fogi action mx: inner iter for gen_sslbls=%s; action_sslbls=%s, action_row_basis size = %d"
-                  % (str(gen_sslbls), str(action_sslbls), len(global_row_indices)))
+        #DEBUG REMOVE
+        #db_num_skipped = db_num_nonzero = 0
+        #db_row_lbl = elemgen_gauge_basis.labels[j]
+        #print("U_expanded embeds ", target_sslbls, " onto ", action_sslbls)  # DEBUG
+        #print("gen_expanded embeds ", db_row_lbl, gen_sslbls, " onto ", action_sslbls)  # DEBUG
+        #import bpdb; bpdb.set_trace()
+        #if gen_sslbls not in db_seen_sslbls:
+        #    db_num_skipped = db_num_nonzero = 0
+        #    print("DB fogi action mx: inner iter for gen_sslbls=%s; action_sslbls=%s, action_row_basis size = %d"
+        #          % (str(gen_sslbls), str(action_sslbls), len(global_row_indices)))
 
         # Note: can avoid this projection and conjugation math above if we know gen is Pauli action and U is clifford
         for i, row_label, (gen2_sslbls, gen2) in zip(global_row_indices, action_row_labels,
-                                                     action_row_basis.elemgen_supports_and_matrices):
+                                                     action_row_basis.elemgen_supports_and_dual_matrices):
             #if not is_subset(gen2_sslbls, space):
             if not set(gen2_sslbls).issubset(action_sslbls):
-                db_num_skipped += 1
+                #print("  -> ", row_label, ' skipped b/c gen ssbls not fully within action space')  # REMOVE
+                #db_num_skipped += 1  # REMOVE
                 continue  # no overlap/component when gen2 is nontrivial (and assumed orthogonal to identity)
                 # on a factor space where gauge_action_deriv is zero
 
             #TODO: add more shortcuts here, e.g., if errorgens are different H/S types result is zero?
 
+            # When we embed gen2 (a *dual* generator) into action_space, we really want the *dual* of
+            # the identity to act on the complement of gen2's space, not the identity itself, to create
+            # an embedded dual generator.  Since Tr(I I) = Tr(I) = 4^(number of non-embedded qubits), we
+            # simply scale by 1/4^(num non-embedded) below.
+            scale = 4**len(gen2_sslbls) / action_space.dim  # 4^(number of non-embedded qubits)
             gen2_expanded = _embed(gen2, gen2_sslbls, action_space)  # embed gen2 into action_space
+            gen2_expanded *= scale  # so that gen2_expanded is an embedded *dual* generator
             if _sps.issparse(gen2_expanded):
-                flat_gen2_expanded_conj = gen2_expanded.reshape((1, _np.product(gen2_expanded.shape))).conjugate()
+                flat_gen2_expanded = gen2_expanded.reshape((1, _np.product(gen2_expanded.shape)))
                 flat_gauge_action_deriv = gauge_action_deriv.reshape((_np.product(gauge_action_deriv.shape), 1))
-                val = flat_gen2_expanded_conj.dot(flat_gauge_action_deriv)[0, 0]
+                val = flat_gen2_expanded.dot(flat_gauge_action_deriv)[0, 0]  # Note: gen2 is a *dual* generator
             else:
                 val = _np.vdot(gen2_expanded.flat, gauge_action_deriv.flat)
 
             assert(abs(val.imag) < TOL)  # all values should be real, I think...
             if abs(val) > TOL:
-                db_num_nonzero += 1
+                #print("  -> ", db_row_lbl, ", ", row_label, ' val = ', val)  # REMOVE
+                #db_num_nonzero += 1   # REMOVE
                 if i not in nonzero_rows:
                     nonzero_rows.add(i)
                     nonzero_row_labels[i] = row_label
                 action_mx[i, j] = val
 
-        if gen_sslbls not in db_seen_sslbls:
-            print("  -- skipped %d, processed %d -- %d of which were nonzero" % (db_num_skipped, len(global_row_indices) - db_num_skipped, db_num_nonzero))
-            db_seen_sslbls.add(gen_sslbls)
+        #DEBUG REMOVE
+        #if gen_sslbls not in db_seen_sslbls:
+            #print("  -- skipped %d, processed %d -- %d of which were nonzero" % (db_num_skipped, len(global_row_indices) - db_num_skipped, db_num_nonzero))
+            #db_seen_sslbls.add(gen_sslbls)
 
         #TODO HERE: check that decomposition into components adds to entire gauge_action_deriv
         #  (checks "completeness" of row basis)
@@ -115,7 +130,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
 
     #Remove all all-zero rows and cull these elements out of the row_basis.  Actually,
     # just construct a new matrix and basis
-    print("DB fogi action mx: beginning matrix reduction...")
+    #print("DB fogi action mx: beginning matrix reduction...")  # REMOVE
     nonzero_row_indices = list(sorted(nonzero_rows))
     labels = [nonzero_row_labels[i] for i in nonzero_row_indices]
 
@@ -127,7 +142,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
     culled_action_mx = _sps.csr_matrix((data, col_indices, rowptr),
                                        shape=(len(nonzero_rows), len(elemgen_gauge_basis)), dtype=action_mx.dtype)
     updated_row_basis = _ExplicitElementaryErrorgenBasis(elemgen_row_basis.state_space, labels)
-    print("DB fogi action mx: culled action matrix to shape", culled_action_mx.shape)
+    #print("DB fogi action mx: culled action matrix to shape", culled_action_mx.shape)  # REMOVE
 
     return culled_action_mx, updated_row_basis
 
@@ -351,6 +366,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         vector_L2_norm2s = _mt.column_norms(vecs_to_add)**2  # L2 norm squared
         vector_L2_norm2s[vector_L2_norm2s == 0.0] = 1.0  # avoid division of zero-column by zero
         dirs_to_add = _mt.scale_columns(vecs_to_add, 1 / vector_L2_norm2s)
+
         # above gives us *dir*-norm we want  # DUAL NORM
         # f_hat = f_hat_vec / L2^2 = f / (nrm * L2^2) = (1 / (nrm * L2^2)) * f
 
@@ -369,6 +385,11 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                              'gaugespace_dir': gauge_dirs[:, j], 'opset': new_opset})
             # Note intersection_space is a subset of the *gauge-space*, and so its basis,
             # placed under gaugespace_dirs keys, is for gauge-space, not errorgen-space.
+
+            #DEBUG REMOVE
+            #print("DB: name = ",name, " norm order = ",norm_orders[j])
+            #print("Norm order = ", norm_orders[j], ":", [el for el in vecs_to_add[:,j].toarray()[:,0] if not _np.isclose(el, 0)])
+            #print("Post scaling = ", [el for el in dirs_to_add[:,j].toarray()[:,0] if not _np.isclose(el, 0)], '\n')
 
         return resulting_dirs
 
@@ -393,8 +414,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
         return norm_order_array
 
     for op_label in primitive_op_labels:
-        #FOGI DEBUG
-        print("##", op_label)
+        #FOGI DEBUG print("##", op_label)
         ga = gauge_action_matrices[op_label]
         # currently `ga` is a dense matrix, if SPARSE need to update nullspace and pinv math below
 
@@ -469,8 +489,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                 new_set = tuple(sorted(existing_set + (op_label,)))
                 if new_set in larger_sets: continue
 
-                #FOGI DEBUG
-                print("\n##", existing_set, "+", op_label)
+                #FOGI DEBUG print("\n##", existing_set, "+", op_label)
 
                 # Merge existing set + op_label => new set of larger size
                 ccommA = ccomms.get(existing_set, None)  # Note: commutant-complements are in *gauge* space,
@@ -557,9 +576,20 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         # start w/normalizd epsilon vecs (normalize according to norm_order, then divide by L2-norm^2
                         # so that the resulting intersection-space vector, after action by "M", projects the component
                         # of the norm_order-normalized gauge-space vector)
-                        ord_to_use = resolve_norm_order(intersection_space, [gauge_space.elemgen_basis.labels],
+                        int_space_in_gauge_elemgen_basis = _np.dot(gauge_space.vectors, intersection_space)
+                        ord_to_use = resolve_norm_order(int_space_in_gauge_elemgen_basis,
+                                                        #intersection_space,
+                                                        [gauge_space.elemgen_basis.labels],
                                                         norm_order)
-                        int_vecs = _mt.normalize_columns(intersection_space, ord=ord_to_use)
+                        #DEBUG!!! REMOVE
+                        #print("DB: gauge norm_order to use = ", ord_to_use)
+                        #if list(ord_to_use) == [2, 2, 2, 2, 2, 2, 1, 1, 1]:
+                        #    import bpdb; bpdb.set_trace()
+                        #    print("HERE")
+
+                        int_vecs_in_geb = _mt.normalize_columns(int_space_in_gauge_elemgen_basis, ord=ord_to_use)
+                        int_vecs = _np.linalg.pinv(gauge_space.vectors) @ int_vecs_in_geb
+
                         vector_L2_norm2s = [_np.linalg.norm(int_vecs[:, j])**2 for j in range(int_vecs.shape[1])]
                         intersection_space = int_vecs / _np.array(vector_L2_norm2s)[None, :]  # DUAL NORM
 

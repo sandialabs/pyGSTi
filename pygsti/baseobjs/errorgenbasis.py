@@ -426,6 +426,15 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         return tuple(labels)
 
     @property
+    def elemgen_supports_and_dual_matrices(self):
+        return tuple(((elemgen_label.sslbls,
+                       _ot.create_elementary_errorgen_nqudit_dual(
+                           elemgen_label.errorgen_type, elemgen_label.basis_element_labels,
+                           self._basis_1q, normalize=False, sparse=False,
+                           tensorprod_basis=True))  # Note: normalize was set to True...
+                      for elemgen_label in self.labels))
+
+    @property
     def elemgen_supports_and_matrices(self):
         return tuple(((elemgen_label.sslbls,
                        _ot.create_elementary_errorgen_nqudit(
