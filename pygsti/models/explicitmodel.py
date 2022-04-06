@@ -1722,7 +1722,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                   dependent_fogi_action='drop', include_spam=True):
+                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None):
 
         from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
         from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
@@ -1730,7 +1730,8 @@ class ExplicitOpModel(_mdl.OpModel):
         import scipy.sparse as _sps
 
         # ExplicitOpModel-specific - and assumes model's ops have specific structure (see extract_std_target*) !!
-        primitive_op_labels = list(self.operations.keys())
+        if primitive_op_labels is None:
+            primitive_op_labels = list(self.operations.keys())
 
         primitive_prep_labels = list(self.preps.keys()) if include_spam else []
         primitive_povm_labels = list(self.povms.keys()) if include_spam else []

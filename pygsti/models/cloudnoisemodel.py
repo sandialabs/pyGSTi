@@ -377,7 +377,7 @@ class CloudNoiseModel(_ImplicitOpModel):
 
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
-                   dependent_fogi_action='drop', include_spam=True):
+                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None):
 
         from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
         from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
@@ -389,7 +389,8 @@ class CloudNoiseModel(_ImplicitOpModel):
         from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FOGIStore
 
         # ExplicitOpModel-specific - and assumes model's ops have specific structure (see extract_std_target*) !!
-        primitive_op_labels = self.primitive_op_labels
+        if primitive_op_labels is None:
+            primitive_op_labels = self.primitive_op_labels
 
         primitive_prep_labels = self.primitive_prep_labels if include_spam else []
         primitive_povm_labels = self.primitive_povm_labels if include_spam else []
