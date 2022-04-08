@@ -16,5 +16,6 @@ from .circuitstructure import CircuitPlaquette, FiducialPairPlaquette, \
     GermFiducialPairPlaquette, PlaquetteGridCircuitStructure
 
 from .circuitconstruction import *
+from .cloudcircuitconstruction import *
 from .gstcircuits import *
 # Unused: from rpecircuits import *
