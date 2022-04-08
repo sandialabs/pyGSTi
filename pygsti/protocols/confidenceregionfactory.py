@@ -317,7 +317,10 @@ class ConfidenceRegionFactory(_NicelySerializable):
         #Expand operation label aliases used in DataSet lookups
         ds_circuit_list = _tools.apply_aliases_to_circuits(circuit_list, aliases)
 
-        nModelParams = model.num_nongauge_params
+        try:
+            nModelParams = model.num_nongauge_params
+        except AttributeError:
+            nModelParams = model.num_params  # fallback for models that don't implement num_nongauge_params
         nDataParams = dataset.degrees_of_freedom(ds_circuit_list)
         #number of independent parameters in dataset (max. model # of params)
 
