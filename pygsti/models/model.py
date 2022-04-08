@@ -22,6 +22,7 @@ import numpy as _np
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.models.layerrules import LayerRules as _LayerRules
+from pygsti.models.modelparaminterposer import LinearInterposer as _LinearInterposer
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims import forwardsim as _fwdsim
 from pygsti.forwardsims import mapforwardsim as _mapfwdsim
@@ -475,6 +476,7 @@ class OpModel(Model):
         self.sim = simulator  # property setter does nontrivial initialization (do this *last*)
         self._param_interposer = None
         self._reinit_opcaches()
+        self.fogi_store = None
 
     def __setstate__(self, state_dict):
         self.__dict__.update(state_dict)
@@ -1267,15 +1269,15 @@ class OpModel(Model):
         raise NotImplementedError("Derived classes must implement this!")
 
     @property
-    def _primitive_povm_labels_dict(self):
+    def _primitive_povm_label_dict(self):
         raise NotImplementedError("Derived classes must implement this!")
 
     @property
-    def _primitive_op_labels_dict(self):
+    def _primitive_op_label_dict(self):
         raise NotImplementedError("Derived classes must implement this!")
 
     @property
-    def _primitive_instrument_labels_dict(self):
+    def _primitive_instrument_label_dict(self):
         raise NotImplementedError("Derived classes must implement this!")
 
     # These are the public properties that return tuples
@@ -1744,6 +1746,63 @@ class OpModel(Model):
 
         return allowed_rowspace_mx, allowed_row_basis, op_gauge_space
 
+    def _add_reparameterization(self, primitive_op_labels, fogi_dirs, errgenset_space_labels):
+        # Create re-parameterization map from "fogi" parameters to old/existing model parameters
+        # Note: fogi_coeffs = dot(ham_fogi_dirs.T, errorgen_vec)
+        #       errorgen_vec = dot(pinv(ham_fogi_dirs.T), fogi_coeffs)
+        # Ingredients:
+        #  MX : fogi_coeffs -> op_coeffs  e.g. pinv(ham_fogi_dirs.T)
+        #  deriv =  op_params -> op_coeffs  e.g. d(op_coeffs)/d(op_params) implemented by ops
+        #  fogi_deriv = d(fogi_coeffs)/d(fogi_params) : fogi_params -> fogi_coeffs  - near I (these are
+        #                                                    nearly identical apart from some squaring?)
+        #
+        #  so:    d(op_params) = inv(Deriv) * MX * fogi_deriv * d(fogi_params)
+        #         d(op_params)/d(fogi_params) = inv(Deriv) * MX * fogi_deriv
+        #  To first order: op_params = (inv(Deriv) * MX * fogi_deriv) * fogi_params := F * fogi_params
+        # (fogi_params == "model params")
+
+        # To compute F,
+        # -let fogi_deriv == I   (shape nFogi,nFogi)
+        # -MX is shape (nFullSpace, nFogi) == pinv(fogi_dirs.T)
+        # -deriv is shape (nOpCoeffs, nOpParams), inv(deriv) = (nOpParams, nOpCoeffs)
+        #    - need Deriv of shape (nOpParams, nFullSpace) - build by placing deriv mxs in gpindices rows and
+        #      correct cols).  We'll require that deriv be square (op has same #params as coeffs) and is *invertible*
+        #      (raise error otherwise).  Then we can construct inv(Deriv) by placing inv(deriv) into inv(Deriv) by
+        #      rows->gpindices and cols->elem_label-match.
+
+        nOpParams = self.num_params  # the number of parameters *before* any reparameterization.  TODO: better way?
+        errgenset_space_labels_indx = _collections.OrderedDict(
+            [(lbl, i) for i, lbl in enumerate(errgenset_space_labels)])
+
+        invDeriv = _np.zeros((nOpParams, fogi_dirs.shape[0]), 'd')
+
+        used_param_indices = set()
+        for op_label in primitive_op_labels:
+
+            op = self._circuit_layer_operator(op_label, 'auto')  # works for preps, povms, & ops
+            lbls = op.errorgen_coefficient_labels()  # length num_coeffs
+            param_indices = op.gpindices_as_array()  # length num_params
+            deriv = op.errorgen_coefficients_array_deriv_wrt_params()  # shape == (num_coeffs, num_params)
+            inv_deriv = _np.linalg.inv(deriv)
+            used_param_indices.update(param_indices)
+
+            for i, lbl in enumerate(lbls):
+                invDeriv[param_indices, errgenset_space_labels_indx[(op_label, lbl)]] = inv_deriv[:, i]
+
+        unused_param_indices = sorted(list(set(range(nOpParams)) - used_param_indices))
+        prefix_mx = _np.zeros((nOpParams, len(unused_param_indices)), 'd')
+        for j, indx in enumerate(unused_param_indices):
+            prefix_mx[indx, j] = 1.0
+
+        F = _np.dot(invDeriv, _np.linalg.pinv(fogi_dirs.T))
+        F = _np.concatenate((prefix_mx, F), axis=1)
+
+        #Not sure if these are needed: "coefficients" have names, but maybe "parameters" shoudn't?
+        #fogi_param_names = ["P%d" % i for i in range(len(unused_param_indices))] \
+        #    + ham_fogi_vec_names + other_fogi_vec_names
+
+        return _LinearInterposer(F)
+
     def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
                    op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
                    dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None):
@@ -1856,7 +1915,7 @@ class OpModel(Model):
 
         # Similar for SPAM
         for prep_label in primitive_prep_labels:
-            prep = self._primitive_prep_label_dict[prep_label]
+            prep = self._circuit_layer_operator(prep_label, 'prep')
             v = extract_std_target_vec(prep)
             target_sslbls = prep_label.sslbls if (prep_label.sslbls is not None and v.shape[0] < self.state_space.dim) \
                 else self.state_space.sole_tensor_product_block_labels
@@ -1875,7 +1934,7 @@ class OpModel(Model):
             gauge_action_gauge_spaces[prep_label] = op_gauge_space
 
         for povm_label in primitive_povm_labels:
-            povm = self._primitive_povm_label_dict[povm_label]
+            povm = self._circuit_layer_operator(povm_label, 'povm')
             vecs = [extract_std_target_vec(effect) for effect in povm.values()]
             target_sslbls = povm_label.sslbls if (povm_label.sslbls is not None
                                                   and vecs[0].shape[0] < self.state_space.dim) \
@@ -1942,13 +2001,8 @@ class OpModel(Model):
             def inv_rescale(coeffs): return coeffs
 
         for op_label, coeff_dict in op_coeffs.items():
-            #TODO: update this conditional to something more robust (same conditiona in fogitools.py too)
-            if isinstance(op_label, str) and op_label.startswith('rho'):
-                self.preps[op_label].set_errorgen_coefficients(inv_rescale(coeff_dict), truncate=truncate)
-            elif isinstance(op_label, str) and op_label.startswith('M'):
-                self.povms[op_label].set_errorgen_coefficients(inv_rescale(coeff_dict), truncate=truncate)
-            else:
-                self.operations[op_label].set_errorgen_coefficients(inv_rescale(coeff_dict), truncate=truncate)
+            op = self._circuit_layer_operator(op_label, 'auto')  # works for preps, povms, & ops
+            op.set_errorgen_coefficients(inv_rescale(coeff_dict), truncate=truncate)
 
     def fogi_errorgen_vector(self, normalized_elem_gens=False):
         """
@@ -1990,7 +2044,7 @@ class OpModel(Model):
             fogi_errgen_indices = _slct.indices(fogi_store.op_errorgen_indices[op_label])
             assert(len(fogi_errgen_indices) == len(elem_errgen_lbls))
 
-            op = self.operations[op_label]
+            op = self._circuit_layer_operator(op_label, 'auto')  # works for preps, povms, & ops
             coeff_index_lookup = {elem_lbl: i for i, elem_lbl in enumerate(op.errorgen_coefficient_labels())}
             coeff_indices = [coeff_index_lookup.get(elem_lbl, None) for elem_lbl in elem_errgen_lbls]
 

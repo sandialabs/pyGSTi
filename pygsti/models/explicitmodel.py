@@ -22,7 +22,6 @@ from pygsti.models import explicitcalc as _explicitcalc
 from pygsti.models import model as _mdl, gaugegroup as _gg
 from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.models.layerrules import LayerRules as _LayerRules
-from pygsti.models.modelparaminterposer import LinearInterposer as _LinearInterposer
 from pygsti.models.modelparaminterposer import ModelParamsInterposer as _ModelParamsInterposer
 from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FOGIStore
 from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup
@@ -137,7 +136,6 @@ class ExplicitOpModel(_mdl.OpModel):
         self.factories = _OrderedMemberDict(self, default_gate_type, gate_prefix, flagfn("factory"))
         self.effects_prefix = effect_prefix
         self._default_gauge_group = None
-        self.fogi_info = None
 
         super(ExplicitOpModel, self).__init__(state_space, basis, evotype, ExplicitLayerRules(), simulator)
 
@@ -1655,70 +1653,6 @@ class ExplicitOpModel(_mdl.OpModel):
                               for povm_label in self.povms})
 
         return op_coeffs
-
-    def _add_reparameterization(self, primitive_op_labels, fogi_dirs, errgenset_space_labels):
-        # Create re-parameterization map from "fogi" parameters to old/existing model parameters
-        # Note: fogi_coeffs = dot(ham_fogi_dirs.T, errorgen_vec)
-        #       errorgen_vec = dot(pinv(ham_fogi_dirs.T), fogi_coeffs)
-        # Ingredients:
-        #  MX : fogi_coeffs -> op_coeffs  e.g. pinv(ham_fogi_dirs.T)
-        #  deriv =  op_params -> op_coeffs  e.g. d(op_coeffs)/d(op_params) implemented by ops
-        #  fogi_deriv = d(fogi_coeffs)/d(fogi_params) : fogi_params -> fogi_coeffs  - near I (these are
-        #                                                    nearly identical apart from some squaring?)
-        #
-        #  so:    d(op_params) = inv(Deriv) * MX * fogi_deriv * d(fogi_params)
-        #         d(op_params)/d(fogi_params) = inv(Deriv) * MX * fogi_deriv
-        #  To first order: op_params = (inv(Deriv) * MX * fogi_deriv) * fogi_params := F * fogi_params
-        # (fogi_params == "model params")
-
-        # To compute F,
-        # -let fogi_deriv == I   (shape nFogi,nFogi)
-        # -MX is shape (nFullSpace, nFogi) == pinv(fogi_dirs.T)
-        # -deriv is shape (nOpCoeffs, nOpParams), inv(deriv) = (nOpParams, nOpCoeffs)
-        #    - need Deriv of shape (nOpParams, nFullSpace) - build by placing deriv mxs in gpindices rows and
-        #      correct cols).  We'll require that deriv be square (op has same #params as coeffs) and is *invertible*
-        #      (raise error otherwise).  Then we can construct inv(Deriv) by placing inv(deriv) into inv(Deriv) by
-        #      rows->gpindices and cols->elem_label-match.
-
-        nOpParams = self.num_params  # the number of parameters *before* any reparameterization.  TODO: better way?
-        errgenset_space_labels_indx = _collections.OrderedDict(
-            [(lbl, i) for i, lbl in enumerate(errgenset_space_labels)])
-
-        invDeriv = _np.zeros((nOpParams, fogi_dirs.shape[0]), 'd')
-
-        used_param_indices = set()
-        for op_label in primitive_op_labels:
-
-            #TODO: update this conditional to something more robust (same conditiona in fogitools.py too)
-            if isinstance(op_label, str) and op_label.startswith('rho'):
-                op = self.preps[op_label]
-            elif isinstance(op_label, str) and op_label.startswith('M'):
-                op = self.povms[op_label]
-            else:
-                op = self.operations[op_label]
-
-            lbls = op.errorgen_coefficient_labels()  # length num_coeffs
-            param_indices = op.gpindices_as_array()  # length num_params
-            deriv = op.errorgen_coefficients_array_deriv_wrt_params()  # shape == (num_coeffs, num_params)
-            inv_deriv = _np.linalg.inv(deriv)
-            used_param_indices.update(param_indices)
-
-            for i, lbl in enumerate(lbls):
-                invDeriv[param_indices, errgenset_space_labels_indx[(op_label, lbl)]] = inv_deriv[:, i]
-
-        unused_param_indices = sorted(list(set(range(nOpParams)) - used_param_indices))
-        prefix_mx = _np.zeros((nOpParams, len(unused_param_indices)), 'd')
-        for j, indx in enumerate(unused_param_indices):
-            prefix_mx[indx, j] = 1.0
-
-        F = _np.dot(invDeriv, _np.linalg.pinv(fogi_dirs.T))
-        F = _np.concatenate((prefix_mx, F), axis=1)
-
-        #Not sure if these are needed: "coefficients" have names, but maybe "parameters" shoudn't?
-        #fogi_param_names = ["P%d" % i for i in range(len(unused_param_indices))] \
-        #    + ham_fogi_vec_names + other_fogi_vec_names
-
-        return _LinearInterposer(F)
 
     def _op_decomposition(self, op_label):
         """Returns the target and error-generator-containing error map parts of the operation for `op_label` """

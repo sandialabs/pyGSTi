@@ -368,35 +368,6 @@ class ImplicitOpModel(_mdl.OpModel):
             root_dicts[root_key][sub_key].update(mm_dict)  # Note: sub_keys should already be created
         return mdl
 
-    def errorgen_coefficients(self, normalized_elem_gens=True):
-        """TODO: docstring - returns a nested dict containing all the error generator coefficients for all
-           the operations in this model. """
-        if not normalized_elem_gens:
-            def rescale(coeffs):
-                """ HACK: rescales errorgen coefficients for normalized-Pauli-basis elementary error gens
-                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens.  This
-                         is only needed in the Hamiltonian case, as the non-ham "elementary" gen has a
-                         factor of d2 baked into it.
-                """
-                d2 = _np.sqrt(self.dim); d = _np.sqrt(d2)
-                return {lbl: (val / d if lbl.errorgen_type == 'H' else val) for lbl, val in coeffs.items()}
-
-            op_coeffs = {op_label: rescale(self.operation_blks['layers'][op_label].errorgen_coefficients())
-                         for op_label in self.operation_blks['layers']}
-            op_coeffs.update({prep_label: rescale(self.prep_blks['layers'][prep_label].errorgen_coefficients())
-                              for prep_label in self.prep_blks['layers']})
-            op_coeffs.update({povm_label: rescale(self.povm_blks['layers'][povm_label].errorgen_coefficients())
-                              for povm_label in self.povm_blks['layers']})
-        else:
-            op_coeffs = {op_label: self.operation_blks['layers'][op_label].errorgen_coefficients()
-                         for op_label in self.operation_blks['layers']}
-            op_coeffs.update({prep_label: self.prep_blks['layers'][prep_label].errorgen_coefficients()
-                              for prep_label in self.prep_blks['layers']})
-            op_coeffs.update({povm_label: self.povm_blks['layers'][povm_label].errorgen_coefficients()
-                              for povm_label in self.povm_blks['layers']})
-
-        return op_coeffs
-
 
 def _init_spam_layers(model, prep_layers, povm_layers):
     """ Helper function for initializing the .prep_blks and .povm_blks elements of an implicit model"""
