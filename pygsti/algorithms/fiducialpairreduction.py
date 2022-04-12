@@ -769,11 +769,18 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             else:
                 candidate_set_seed= None
             
-            goodPairList, low_eigval = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
+            goodPairList, _ = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
                                                                 gsGerm, power, mem_limit,
                                                                 printer, search_mode, seed, n_random,
                                                                 min_iterations, base_loweig_tol,
-                                                                condition_number_tol, candidate_set_seed)
+                                                                condition_number_tol, candidate_set_seed,
+                                                                num_soln_returned=1, type_soln_returned='best')
+                                                                
+                                                                
+            
+            #This should now return a dictionary with a single entry. pull that entry out.
+            goodPairList= list(goodPairlist.values())[0]
+            
             #debugging
             #print('Current goodPairList: ', goodPairList)
             #print('Current Low Eigenvalue: ', low_eigval)
