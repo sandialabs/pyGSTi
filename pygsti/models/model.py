@@ -1830,7 +1830,10 @@ class OpModel(Model):
             #       or just ExpErrorGen
             if isinstance(op, _op.EmbeddedOp):
                 all_sslbls = op.state_space.sole_tensor_product_block_labels
-                op_component_bases = [op_basis.component_bases[all_sslbls.index(lbl)] for lbl in op.target_labels]
+                if len(all_sslbls) == 1 and all_sslbls == op.target_labels:  # then basis may not have components
+                    op_component_bases = [op_basis]
+                else:
+                    op_component_bases = [op_basis.component_bases[all_sslbls.index(lbl)] for lbl in op.target_labels]
                 embedded_op_basis = _TensorProdBasis(op_component_bases)
                 return extract_std_target_mx(op.embedded_op, embedded_op_basis)
             elif isinstance(op, _op.ExpErrorgenOp):  # assume just an identity op

@@ -1648,7 +1648,8 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         # - actually better to pass qubitGraph here so we get the correct qubit labels (node labels of graph)
         # - actually *don't* pass qubitGraph as this gives the wrong # of qubits when max_idle_weight < num_qubits!
         printer.log("Creating \"idle error\" model on %d qubits" % max_idle_weight)
-        idle_pspec = _QubitProcessorSpec(max_idle_weight, processor_spec.gate_names, processor_spec.nonstd_gate_unitaries,
+        idle_pspec = _QubitProcessorSpec(max_idle_weight, processor_spec.gate_names,
+                                         processor_spec.nonstd_gate_unitaries,
                                          {}, 'line')  # qubitGraph
         idle_model = _create_cloud_crosstalk_model_from_hops_and_weights(
             idle_pspec, None,

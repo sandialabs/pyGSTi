@@ -181,15 +181,15 @@ class CloudNoiseModel(_ImplicitOpModel):
         idle_names = self.processor_spec.idle_gate_names
         global_idle_name = self.processor_spec.global_idle_gate_name
 
-        # Set noisy_global_idle_name == global_idle_name if the global idle gate isn't the perfect identity
+        # Set noisy_global_idle_layer = pspec.global_idle_layer_label if the global idle gate isn't the perfect identity
         #  and if we're generating cloudnoise members (if we're not then layer rules could encouter a key error
-        #  if we let noisy_global_idle_name be non-None).
+        #  if we let noisy_global_idle_layer be non-None).
         global_idle_gate = mm_gatedict.get(global_idle_name, None)
         if (global_idle_gate is not None) and (build_cloudnoise_fn is not None) \
            and (build_cloudnoise_fn(self.processor_spec.global_idle_layer_label) is not None):
-            noisy_global_idle_name = global_idle_name
+            noisy_global_idle_layer = self.processor_spec.global_idle_layer_label
         else:
-            noisy_global_idle_name = None
+            noisy_global_idle_layer = None
 
         singleq_idle_layer_labels = {}
         for idle_name in idle_names:
@@ -203,7 +203,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         #    "Only global idle operations are allowed in a CloudNoiseModel!"
 
         layer_rules = CloudNoiseLayerRules(errcomp_type, qudit_labels, implicit_idle_mode, singleq_idle_layer_labels,
-                                           noisy_global_idle_name)
+                                           noisy_global_idle_layer)
         super(CloudNoiseModel, self).__init__(state_space, layer_rules, "pp", simulator=simulator, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_statespace': False,
