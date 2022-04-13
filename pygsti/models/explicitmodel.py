@@ -1138,8 +1138,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
             randOp = _ot.unitary_to_superop(randUnitary, self.basis)
 
-            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(
-                _np.dot(randOp, gate))
+            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(_np.dot(randOp, gate))
 
         #Note: this function does NOT randomize instruments
 
@@ -1214,7 +1213,7 @@ class ExplicitOpModel(_mdl.OpModel):
             newOp = _np.zeros((new_dimension, new_dimension))
             newOp[0:curDim, 0:curDim] = gate[:, :]
             for i in range(curDim, new_dimension): newOp[i, i] = 1.0
-            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp, evotype, state_space)
+            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp, dumb_basis, evotype, state_space)
 
         for instLabel, inst in self.instruments.items():
             inst_ops = []
@@ -1222,7 +1221,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 newOp = _np.zeros((new_dimension, new_dimension))
                 newOp[0:curDim, 0:curDim] = gate[:, :]
                 for i in range(curDim, new_dimension): newOp[i, i] = 1.0
-                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp, evotype, state_space)))
+                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp, dumb_basis, evotype, state_space)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops, evotype, state_space)
 
         if len(self.factories) > 0:
@@ -1290,14 +1289,14 @@ class ExplicitOpModel(_mdl.OpModel):
             assert(gate.shape == (curDim, curDim))
             newOp = _np.zeros((new_dimension, new_dimension))
             newOp[:, :] = gate[0:new_dimension, 0:new_dimension]
-            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp, self.evotype, state_space)
+            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp, evotype=self.evotype, state_space=state_space)
 
         for instLabel, inst in self.instruments.items():
             inst_ops = []
             for outcomeLbl, gate in inst.items():
                 newOp = _np.zeros((new_dimension, new_dimension))
                 newOp[:, :] = gate[0:new_dimension, 0:new_dimension]
-                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp, self.evotype, state_space)))
+                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp, evotype=self.evotype, state_space=state_space)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops, self.evotype, state_space)
 
         if len(self.factories) > 0:
@@ -1334,8 +1333,7 @@ class ExplicitOpModel(_mdl.OpModel):
         rndm = _np.random.RandomState(seed)
         for opLabel, gate in self.operations.items():
             delta = absmag * 2.0 * (rndm.random_sample(gate.shape) - 0.5) + bias
-            kicked_gs.operations[opLabel] = _op.FullArbitraryOp(
-                kicked_gs.operations[opLabel] + delta)
+            kicked_gs.operations[opLabel] = _op.FullArbitraryOp(kicked_gs.operations[opLabel] + delta)
 
         #Note: does not alter intruments!
         return kicked_gs

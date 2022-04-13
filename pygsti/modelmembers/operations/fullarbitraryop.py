@@ -28,6 +28,11 @@ class FullArbitraryOp(_DenseOperator):
         a square 2D array-like or LinearOperator object representing the operation action.
         The shape of m sets the dimension of the operation.
 
+    basis : Basis or {'pp','gm','std'} or None
+        The basis used to construct the Hilbert-Schmidt space representation
+        of this state as a super-operator.  If None, certain functionality,
+        such as access to Kraus operators, will be unavailable.
+
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
@@ -37,8 +42,8 @@ class FullArbitraryOp(_DenseOperator):
         with the appropriate number of qubits is used.
     """
 
-    def __init__(self, m, evotype="default", state_space=None):
-        _DenseOperator.__init__(self, m, evotype, state_space)
+    def __init__(self, m, basis=None, evotype="default", state_space=None):
+        _DenseOperator.__init__(self, m, basis, evotype, state_space)
         self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(self.dim) for j in range(self.dim)],
                                     dtype=object)
 

@@ -533,7 +533,7 @@ class FullGaugeGroup(OpGaugeGroup):
 
     def __init__(self, state_space, evotype='default'):
         state_space = _StateSpace.cast(state_space)
-        operation = _op.FullArbitraryOp(_np.identity(state_space.dim, 'd'), evotype, state_space)
+        operation = _op.FullArbitraryOp(_np.identity(state_space.dim, 'd'), None, evotype, state_space)
         OpGaugeGroup.__init__(self, operation, FullGaugeGroupElement, "Full")
 
 
@@ -577,7 +577,7 @@ class TPGaugeGroup(OpGaugeGroup):
 
     def __init__(self, state_space, evotype='default'):
         state_space = _StateSpace.cast(state_space)
-        operation = _op.FullTPOp(_np.identity(state_space.dim, 'd'), evotype, state_space)
+        operation = _op.FullTPOp(_np.identity(state_space.dim, 'd'), None, evotype, state_space)
         OpGaugeGroup.__init__(self, operation, TPGaugeGroupElement, "TP")
 
 
@@ -641,10 +641,8 @@ class DiagGaugeGroup(OpGaugeGroup):
         baseMx = _np.identity(dim, 'd')
         parameterArray = _np.zeros(dim, 'd')
         parameterToBaseIndicesMap = {i: [(i, i)] for i in range(dim)}
-        operation = _op.LinearlyParamArbitraryOp(baseMx, parameterArray,
-                                                 parameterToBaseIndicesMap,
-                                                 ltrans, rtrans, real=True,
-                                                 evotype=evotype, state_space=state_space)
+        operation = _op.LinearlyParamArbitraryOp(baseMx, parameterArray, parameterToBaseIndicesMap, ltrans, rtrans,
+                                                 real=True, evotype=evotype, state_space=state_space)
         OpGaugeGroup.__init__(self, operation, DiagGaugeGroupElement, "Diagonal")
 
 
@@ -699,10 +697,8 @@ class TPDiagGaugeGroup(TPGaugeGroup):
         baseMx = _np.identity(dim, 'd')
         parameterArray = _np.zeros(dim - 1, 'd')
         parameterToBaseIndicesMap = {i: [(i + 1, i + 1)] for i in range(dim - 1)}
-        operation = _op.LinearlyParamArbitraryOp(baseMx, parameterArray,
-                                                 parameterToBaseIndicesMap,
-                                                 ltrans, rtrans, real=True,
-                                                 evotype=evotype, state_space=state_space)
+        operation = _op.LinearlyParamArbitraryOp(baseMx, parameterArray, parameterToBaseIndicesMap, ltrans, rtrans,
+                                                 real=True, evotype=evotype, state_space=state_space)
         OpGaugeGroup.__init__(self, operation, TPDiagGaugeGroupElement, "TP Diagonal")
 
 
@@ -825,10 +821,8 @@ class SpamGaugeGroup(OpGaugeGroup):
         parameterArray = _np.zeros(2, 'd')
         parameterToBaseIndicesMap = {0: [(0, 0)],
                                      1: [(i, i) for i in range(1, dim)]}
-        operation = _op.LinearlyParamArbitraryOp(baseMx, parameterArray,
-                                                 parameterToBaseIndicesMap,
-                                                 ltrans, rtrans, real=True,
-                                                 evotype=evotype, state_space=state_space)
+        operation = _op.LinearlyParamArbitraryOp(baseMx, parameterArray, parameterToBaseIndicesMap, ltrans, rtrans,
+                                                 real=True, evotype=evotype, state_space=state_space)
         OpGaugeGroup.__init__(self, operation, SpamGaugeGroupElement, "Spam")
 
 
@@ -884,10 +878,8 @@ class TPSpamGaugeGroup(OpGaugeGroup):
         baseMx = _np.identity(dim, 'd')
         parameterArray = _np.zeros(1, 'd')
         parameterToBaseIndicesMap = {0: [(i, i) for i in range(1, dim)]}
-        operation = _op.LinearlyParamArbitraryOp(baseMx, parameterArray,
-                                                 parameterToBaseIndicesMap,
-                                                 ltrans, rtrans, real=True,
-                                                 evotype=evotype, state_space=state_space)
+        operation = _op.LinearlyParamArbitraryOp(baseMx, parameterArray, parameterToBaseIndicesMap, ltrans, rtrans,
+                                                 real=True, evotype=evotype, state_space=state_space)
         OpGaugeGroup.__init__(self, operation, TPSpamGaugeGroupElement, "TP Spam")
 
 

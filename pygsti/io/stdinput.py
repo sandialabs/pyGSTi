@@ -1221,11 +1221,9 @@ def parse_model(filename):
             else: assert(False), "Logic error!"
 
         elif cur_typ == "GATE":
-            mdl.operations[cur_label] = _op.FullArbitraryOp(
-                _get_liouville_mx(obj))
+            mdl.operations[cur_label] = _op.FullArbitraryOp(_get_liouville_mx(obj))
         elif cur_typ == "TP-GATE":
-            mdl.operations[cur_label] = _op.FullTPOp(
-                _get_liouville_mx(obj))
+            mdl.operations[cur_label] = _op.FullTPOp(_get_liouville_mx(obj))
         elif cur_typ == "COMPOSED-GATE":
             i = 0; qtys = []
             while True:

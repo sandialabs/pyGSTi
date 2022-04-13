@@ -783,7 +783,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     elif isinstance(custom_gates[key], _op.LinearOperator):
                         ret.operations[key] = custom_gates[key]
                     else:  # presumably a numpy array or something like it.
-                        ret.operations[key] = _op.StaticArbitraryOp(custom_gates[key], evotype,
+                        ret.operations[key] = _op.StaticArbitraryOp(custom_gates[key], basis, evotype,
                                                                     state_space)  # static gates by default
                     continue
 

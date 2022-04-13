@@ -102,14 +102,15 @@ def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotyp
     for typ in op_type_preferences:
         try:
             if typ == "static":  # "static arbitrary"?
-                op = StaticArbitraryOp(superop_mx, evotype, state_space)
+                op = StaticArbitraryOp(superop_mx, basis, evotype, state_space)
             elif typ == "full":  # "full arbitrary"?
-                op = FullArbitraryOp(superop_mx, evotype, state_space)
+                op = FullArbitraryOp(superop_mx, basis, evotype, state_space)
             elif typ in ["TP", "full TP"]:
-                op = FullTPOp(superop_mx, evotype, state_space)
+                op = FullTPOp(superop_mx, basis, evotype, state_space)
             elif typ == "linear":  # "linear arbitrary"?
                 real = _np.isclose(_np.linalg.norm(superop_mx.imag), 0)
-                op = LinearlyParamArbitraryOp(superop_mx, _np.array([]), {}, None, None, real, evotype, state_space)
+                op = LinearlyParamArbitraryOp(superop_mx, _np.array([]), {}, None, None, real, basis,
+                                              evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):  # maybe "lindblad XXX" where XXX is a valid lindblad type?
                 proj_basis = 'PP' if state_space.is_entirely_qubits else basis
                 if _ot.superop_is_unitary(superop_mx, basis):

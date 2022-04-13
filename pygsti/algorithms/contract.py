@@ -287,7 +287,7 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
             it += 1
             if it > maxiter: break
 
-        mdl.operations[opLabel] = _op.FullArbitraryOp(new_op, mdl.evotype, mdl.state_space)
+        mdl.operations[opLabel] = _op.FullArbitraryOp(new_op, evotype=mdl.evotype, state_space=mdl.state_space)
 
         if it > maxiter:
             printer.warning("Max iterations exceeded in contract_to_cp_direct")
