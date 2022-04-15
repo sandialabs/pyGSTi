@@ -120,6 +120,9 @@ class WeakForwardSimulator(_ForwardSimulator):
             # Distribute final probabilities
             probs = comm.bcast(probs, root=0)
 
+        # Update seed so subsequent circuits have different RNG
+        self.base_seed += self.shots
+
         return probs
 
     # For WeakForwardSimulator, provide "bulk" interface based on the sparse interface
