@@ -129,6 +129,66 @@ cdef class OpRepDenseSuperop(OpRep):
         return OpRepDenseSuperop(self.base.copy(), self.state_space)
 
 
+cdef class OpRepDenseUnitary(OpRep):
+    cdef public object basis
+    cdef public _np.ndarray base
+    cdef public _np.ndarray superop_base
+
+    def __init__(self, mx, basis, state_space):
+        state_space = _StateSpace.cast(state_space)
+        if mx is None:
+            mx = _np.identity(state_space.dim, 'd')
+        assert(mx.ndim == 2 and mx.shape[0] == state_space.udim)
+
+        self.basis = basis
+        self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        self.superop_base = _np.require(_ot.unitary_to_superop(mx, self.basis),
+                                        requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        assert(self.c_rep == NULL)
+        self.c_rep = new OpCRep_Dense(<double*>self.superop_base.data,
+                                      <INT>self.superop_base.shape[0])
+        self.state_space = state_space
+
+    def base_has_changed(self):
+        self.superop_base[:, :] = _ot.unitary_to_superop(self.base, self.basis)
+
+    def to_dense(self, on_space):
+        if on_space in ('minimal', 'HilbertSchmidt'):
+            return self.to_dense_superop()
+        else:  # 'Hilbert'
+            return self.base
+
+    def to_dense_superop(self):
+        return self.superop_base
+
+    def __reduce__(self):
+        # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
+        # (so self.base *owns* it's data) and manually convey the writeable flag.
+        return (OpRepDenseUnitary.__new__, (self.__class__,), (self.state_space, self.basis,
+                                                               self.base, self.base.flags.writeable,
+                                                               self.superop_base, self.superop_base.flags.writeable))
+
+    def __setstate__(self, state):
+
+        state_space, basis, data, writable, superop_data, superop_writable = state
+        self.state_space = state_space
+        self.basis = basis
+        self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        self.base.flags.writeable = writable
+        self.superop_base = _np.require(superop_data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        self.superop_base.flags.writeable = superop_writable
+
+        assert(self.c_rep == NULL)  # if setstate is call, __init__ shouldn't have been
+        self.c_rep = new OpCRep_Dense(<double*>self.superop_base.data,
+                                      <INT>self.superop_base.shape[0])
+
+    def __str__(self):
+        return "OpRepDenseUnitary:\n" + str(self.base)
+
+    def copy(self):
+        return OpRepDenseUnitary(self.base.copy(), self.basis, self.state_space)
+
+
 cdef class OpRepSparse(OpRep):
     cdef public _np.ndarray data
     cdef public _np.ndarray indices
@@ -190,34 +250,193 @@ cdef class OpRepStandard(OpRepDenseSuperop):
         pass  # must define this becuase base class does - need to override it
 
 
-cdef class OpRepStochastic(OpRepDenseSuperop):
+cdef class OpRepKraus(OpRep):
     cdef public object basis
+    cdef public object kraus_reps
+
+    def __init__(self, basis, kraus_reps, seed_or_state, state_space):        
+        cdef INT i
+        cdef INT nkraus = len(kraus_reps)
+        cdef vector[OpCRep*] kraus_creps = vector[OpCRep_ptr](nkraus)
+        for i in range(nkraus):
+            kraus_creps[i] = (<OpRep?>kraus_reps[i]).c_rep
+        self.basis = basis
+        self.kraus_reps = kraus_reps
+        self.state_space = _StateSpace.cast(state_space)
+        assert(self.basis.dim == state_space.dim)
+        self.c_rep = new OpCRep_Sum(kraus_creps, NULL, self.state_space.dim)
+
+    def __str__(self):
+        return "OpRepKraus:\n" + " rates: " + str(self.kraus_rates)  # maybe show ops too?
+
+    def __reduce__(self):
+        return (OpRepKraus, (self.basis, self.kraus_reps, None, self.state_space))
+
+    def copy(self):
+        return OpRepKraus([k.copy() for k in self.kraus_reps], self.state_space)
+
+    def to_dense(self, on_space):
+        return sum([rep.to_dense(on_space) for rep in self.kraus_reps])
+
+
+cdef class OpRepRandomUnitary(OpRep):
+    cdef public object basis
+    cdef public _np.ndarray unitary_rates
+    cdef public object unitary_reps
+
+    def __init__(self, basis, _np.ndarray[double, ndim=1] unitary_rates,
+                 unitary_reps, seed_or_state, state_space):
+        cdef INT i
+        cdef INT nreps = len(unitary_reps)
+        cdef vector[OpCRep*] unitary_creps = vector[OpCRep_ptr](nreps)
+        self.basis = basis
+        self.unitary_reps = unitary_reps
+        self.unitary_rates = _np.require(unitary_rates.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        for i in range(nreps):
+            unitary_creps[i] = (<OpRep?>unitary_reps[i]).c_rep
+        self.state_space = _StateSpace.cast(state_space)
+        assert(self.basis.dim == state_space.dim)
+        self.c_rep = new OpCRep_Sum(unitary_creps, <double*>self.unitary_rates.data, self.state_space.dim)
+
+    def __reduce__(self):
+        return (OpRepRandomUnitary, (self.basis, self.unitary_rates, self.unitary_reps, None, self.state_space))
+
+    def __str__(self):
+        return "OpRepRandomUnitary:\n" + " rates: " + str(self.unitary_rates)  # maybe show ops too?
+
+    def copy(self):
+        return OpRepRandomUnitary(self.basis, self.unitary_rates.copy(),
+                                  [u.copy() for u in self.unitary_reps], None, self.state_space)
+
+    def update_unitary_rates(self, rates):
+        self.unitary_rates[:] = rates
+
+    def to_dense(self, on_space):
+        return sum([rate * rep.to_dense(on_space) for rate, rep in zip(self.unitary_rates, self.unitary_reps)])
+
+#    def __setstate__(self, state):
+#        pass  # must define this becuase base class does - need to override it
+
+
+# NEEDED? TODO REMOVE
+#cdef class OpRepDenseKraus(OpRepDenseSuperop):  
+#    cdef public object basis
+#    cdef public object kraus_rates
+#    cdef public object kraus_superops
+#
+#    def __init__(self, basis, kraus_ops, kraus_rates, seed_or_state, state_space):
+#        self.basis = basis
+#        self.kraus_ops = kraus_ops
+#        self.kraus_superops = [_ot.unitary_to_superop(kraus_op, self.basis) for kraus_op in kraus_ops]
+#        if kraus_rates is None:
+#            self.kraus_rates = _np.ones(len(self.kraus_ops), 'd')
+#        else:
+#            assert(len(kraus_rates) == len(self.kraus_ops))
+#            self.kraus_rates = _np.array(kraus_rates)
+#
+#        state_space = _StateSpace.cast(state_space)
+#        assert(self.basis.dim == state_space.dim)
+#
+#        super(OpRepKraus, self).__init__(None, state_space)
+#        self._update_base()
+#
+#    def _update_base(self):
+#        errormap = _np.zeros((self.basis.dim, self.basis.dim),
+#                             self.kraus_superops[0].dtype if (len(self.kraus_superops) > 0) else 'd')
+#        for rate, superop in zip(self.kraus_rates, self.kraus_superops):
+#            errormap += rate * superop
+#        self.base[:, :] = errormap
+#
+#    def update_kraus_rates(self, kraus_rates):
+#        self.kraus_rates[:] = kraus_rates
+#        self._update_base()
+#
+#    def update_kraus_ops(self, kraus_ops, kraus_rates):
+#        assert(len(kraus_ops) == len(self.kraus_ops))
+#        for i, kraus_op in enumerate(kraus_ops):
+#            self.kraus_op[i][:, :] = kraus_op
+#            self.kraus_superops[:, :] = _ot.unitary_to_superop(kraus_op, self.basis)
+#
+#        if kraus_rates is not None:
+#            self.update_kraus_rates(kraus_rates)
+#        else:
+#            self._update_base()
+#
+#    def __reduce__(self):
+#        return (OpRepKraus, (self.basis, self.kraus_ops, self.kraus_rates, self.state_space))
+#
+#    def __setstate__(self, state):
+#        pass  # must define this becuase base class does - need to override it
+#
+#
+#cdef class OpRepStandardKraus(OpRepKraus):
+#    cdef public object basis
+#    cdef public object kraus_rates
+#    cdef public object kraus_superops
+#
+#    def __init__(self, basis, kraus_op_std_names, kraus_rates, seed_or_state, state_space):
+#        self.kraus_op_std_names = kraus_op_std_names  # a list w/elements == std name or tuple of standard names
+#
+#        std_unitaries = _itgs.standard_gatename_unitaries()
+#        kraus_ops = []
+#        for std_name_tup in kraus_op_std_names:
+#            if isinstance(std_name_tup, str): std_name_tup = (std_name_tup,)
+#            kraus_ops.append(_functools.reduce(_np.dot, (std_unitaries[nm] for nm in std_name_tup)))
+#        super(OpRepStandardKraus, self).__init__(basis, kraus_ops, kraus_rates, seed_or_state, state_space)
+#
+#    def __reduce__(self):
+#        return (OpRepStandardKraus, (self.basis, self.kraus_op_std_names, self.kraus_rates, self.state_space))
+#
+#    def __setstate__(self, state):
+#        pass  # must define this becuase base class does - need to override it
+
+
+cdef class OpRepStochastic(OpRepRandomUnitary):
+    cdef public object stochastic_basis
     cdef public object stochastic_superops
     cdef public object rates
 
-    def __init__(self, basis, rate_poly_dicts, initial_rates, seed_or_state, state_space):
-        self.basis = basis
-        self.stochastic_superops = []
-        for b in self.basis.elements[1:]:
-            #REMOVE (OLD) std_superop = _lbt.nonham_lindbladian(b, b, sparse=False)
-            std_superop = _lbt.create_elementary_errorgen('S', b, sparse=False)
-            self.stochastic_superops.append(_bt.change_basis(std_superop, 'std', self.basis))
+    # E.g. depol channel is : (1-3r/4)IpI + r/4(xpx + ypy + zpz) 
+    #                        = IpI + r/4(xpx-IpI) + r/4(ypy-IpI) + r/4(zpz-IpI)
+    def __init__(self, stochastic_basis, basis, initial_rates, seed_or_state, state_space):
+        #OLD:
+        #stochastic_superops = []
+        #for b in self.basis.elements[1:]:
+        #    std_superop = _lbt.create_elementary_errorgen('S', b, sparse=False)
+        #    self.stochastic_superops.append(_bt.change_basis(std_superop, 'std', self.basis))
+        self.rates = initial_rates
+        self.stochastic_basis = stochastic_basis
+        rates = [1 - sum(initial_rates)] + list(initial_rates)
+        reps = [OpRepDenseUnitary(bel, basis, state_space) for bel in stochastic_basis.elements]
+        assert(len(reps) == len(rates))
 
         state_space = _StateSpace.cast(state_space)
-        assert(self.basis.dim == state_space.dim)
+        assert(basis.dim == state_space.dim)
+        self.basis = basis
 
-        super(OpRepStochastic, self).__init__(None, state_space)
-        self.update_rates(initial_rates)
+        super(OpRepStochastic, self).__init__(basis, _np.array(rates, 'd'), reps, seed_or_state, state_space)
+
+        #OLD REMOVE:
+        #self.stochastic_superops = []
+        #for b in self.basis.elements[1:]:
+        #    #REMOVE (OLD) std_superop = _lbt.nonham_lindbladian(b, b, sparse=False)
+        #    std_superop = _lbt.create_elementary_errorgen('S', b, sparse=False)
+        #    self.stochastic_superops.append(_bt.change_basis(std_superop, 'std', self.basis))
+        #self.update_rates(initial_rates)
 
     def update_rates(self, rates):
-        self.rates = rates
-        errormap = _np.identity(self.basis.dim)
-        for rate, ss in zip(self.rates, self.stochastic_superops):
-            errormap += rate * ss
-        self.base[:, :] = errormap
+        unitary_rates = [1 - sum(rates)] + list(rates)
+        self.rates[:] = rates
+        self.update_unitary_rates(unitary_rates)
+
+        #OLD REMOVE
+        #errormap = _np.identity(self.basis.dim)
+        #for rate, ss in zip(self.rates, self.stochastic_superops):
+        #    errormap += rate * ss
+        #self.base[:, :] = errormap
 
     def __reduce__(self):
-        return (OpRepStochastic, (self.basis, None, self.rates, None, self.state_space))
+        return (OpRepStochastic, (self.stochastic_basis, self.basis, self.rates, None, self.state_space))
 
     def __setstate__(self, state):
         pass  # must define this becuase base class does - need to override it
@@ -262,7 +481,7 @@ cdef class OpRepSum(OpRep):
         for i in range(nfactors):
             factor_creps[i] = (<OpRep?>factor_reps[i]).c_rep
         self.state_space = _StateSpace.cast(state_space)
-        self.c_rep = new OpCRep_Sum(factor_creps, self.state_space.dim)
+        self.c_rep = new OpCRep_Sum(factor_creps, NULL, self.state_space.dim)
 
     def __reduce__(self):
         return (OpRepSum, (self.factor_reps, self.state_space))

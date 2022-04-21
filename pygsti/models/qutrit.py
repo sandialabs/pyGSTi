@@ -286,10 +286,10 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
     qutritMDL.povms['Mdefault'] = _UnconstrainedPOVM([('0bright', E0final),
                                                       ('1bright', E1final),
                                                       ('2bright', E2final)], evotype=evotype)
-    qutritMDL.operations['Gi'] = _FullArbitraryOp(arrType(gateISOfinal), evotype, state_space)
-    qutritMDL.operations['Gx'] = _FullArbitraryOp(arrType(gateXSOfinal), evotype, state_space)
-    qutritMDL.operations['Gy'] = _FullArbitraryOp(arrType(gateYSOfinal), evotype, state_space)
-    qutritMDL.operations['Gm'] = _FullArbitraryOp(arrType(gateMSOfinal), evotype, state_space)
+    qutritMDL.operations['Gi'] = _FullArbitraryOp(arrType(gateISOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gx'] = _FullArbitraryOp(arrType(gateXSOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gy'] = _FullArbitraryOp(arrType(gateYSOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gm'] = _FullArbitraryOp(arrType(gateMSOfinal), basis, evotype, state_space)
     qutritMDL.default_gauge_group = _FullGaugeGroup(state_space, evotype)
 
     return qutritMDL

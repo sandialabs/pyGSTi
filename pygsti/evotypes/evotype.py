@@ -114,8 +114,8 @@ class Evotype(object):
     def create_experrorgen_rep(self, errorgen_rep):
         return self.module.OpRepExpErrorgen(errorgen_rep)
 
-    def create_stochastic_rep(self, basis, rate_poly_dicts, initial_rates, seed_or_state, state_space):
-        return self.module.OpRepStochastic(basis, rate_poly_dicts, initial_rates, seed_or_state, state_space)
+    def create_stochastic_rep(self, stochastic_basis, basis, initial_rates, seed_or_state, state_space):
+        return self.module.OpRepStochastic(stochastic_basis, basis, initial_rates, seed_or_state, state_space)
 
     def create_sum_rep(self, factor_reps, state_space):
         return self.module.OpRepSum(factor_reps, state_space)
