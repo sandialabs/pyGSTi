@@ -493,7 +493,7 @@ class EmbeddingOpFactory(OpFactory):
             Can be any type of operation, e.g. a LinearOperator, State,
             Instrument, or POVM, depending on the label requested.
         """
-        assert(sslbls is not None), ("EmbeddedOpFactory objects should be asked to create "
+        assert(sslbls is not None), ("EmbeddingOpFactory objects should be asked to create "
                                      "operations with specific `sslbls`")
         assert(self.num_target_labels is None or len(sslbls) == self.num_target_labels), \
             ("EmbeddingFactory.create_op called with the wrong number (%s) of target labels!"
