@@ -1783,7 +1783,7 @@ class OpModel(Model):
             lbls = op.errorgen_coefficient_labels()  # length num_coeffs
             param_indices = op.gpindices_as_array()  # length num_params
             deriv = op.errorgen_coefficients_array_deriv_wrt_params()  # shape == (num_coeffs, num_params)
-            inv_deriv = _np.linalg.inv(deriv)
+            inv_deriv = _np.linalg.inv(deriv)  # cols for given op errorgen coefficient, rows = op params
             used_param_indices.update(param_indices)
 
             for i, lbl in enumerate(lbls):
@@ -1794,7 +1794,13 @@ class OpModel(Model):
         for j, indx in enumerate(unused_param_indices):
             prefix_mx[indx, j] = 1.0
 
-        F = _np.dot(invDeriv, _np.linalg.pinv(fogi_dirs.T))
+        fogi_vecs = _np.linalg.pinv(fogi_dirs.T)
+
+        #DEBUG REMOVE - debugging locality of fogi_vecs not matching that of fogi_dirs...
+        #assert(_np.allclose(fogi_dirs.T @ fogi_vecs, _np.identity(fogi_vecs.shape[1], 'd')))
+        #import bpdb; bpdb.set_trace()
+
+        F = _np.dot(invDeriv, fogi_vecs)
         F = _np.concatenate((prefix_mx, F), axis=1)
 
         #Not sure if these are needed: "coefficients" have names, but maybe "parameters" shoudn't?
