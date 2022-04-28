@@ -128,14 +128,16 @@ class CloudNoiseModel(_ImplicitOpModel):
         *generators*, i.e. a map that acts as the exponentiated sum of error
         generators (ordering is irrelevant in this case).
 
-    implicit_idle_mode : {'none', 'add_global', 'pad_1Q'}
+    implicit_idle_mode : {'none', 'add_global', 'pad_1Q', 'only_global'}
         The way idle operations are added implicitly within the created model. `"none"`
         doesn't add any "extra" idle operations when there is a layer that contains some
         gates but not gates on all the qubits.  `"add_global"` adds the global idle operation,
         i.e., the operation for a global idle layer (zero gates - a completely empty layer),
         to every layer that is simulated, using the global idle as a background idle that always
         occurs regardless of the operation.  `"pad_1Q"` applies the 1-qubit idle gate (if one
-        exists) to all idling qubits within a circuit layer.
+        exists) to all idling qubits within a circuit layer.  `"only_global"` uses a global idle
+        operation, if one exists, to simulate the completely empty layer but nothing else, i.e.,
+        this idle operation is *not* added to other layers as in `"add_global"`.
 
     verbosity : int, optional
         An integer >= 0 dictating how must output to send to stdout.
@@ -415,12 +417,16 @@ class CloudNoiseLayerRules(_LayerRules):
         self.implied_global_idle_label = implied_global_idle_label
         self.single_qubit_idle_layer_labels = singleq_idle_layer_labels
         self.implicit_idle_mode = implicit_idle_mode  # how to handle implied idles ("blanks") in circuits
+        self._use_global_idle = False
         self._add_global_idle_to_all_layers = False
         self._add_padded_idle = False
 
         if implicit_idle_mode is None or implicit_idle_mode == "none":  # no noise on idles
             pass  # just use defaults above
+        elif implicit_idle_mode == "only_global" and self.implied_global_idle_label is not None:
+            self._use_global_idle = True  # use global idle only in emtpy (implied global idle) layers
         elif implicit_idle_mode == "add_global" and self.implied_global_idle_label is not None:
+            self._use_global_idle = True  # use global idle in emtpy (implied global idle) layers
             self._add_global_idle_to_all_layers = True    # add global idle to all layers
         elif implicit_idle_mode == "pad_1Q" and self.single_qubit_idle_layer_labels is not None:
             self._add_padded_idle = True
@@ -537,6 +543,7 @@ class CloudNoiseLayerRules(_LayerRules):
         Composed = _op.ComposedOp
         ExpErrorgen = _op.ExpErrorgenOp
         Sum = _op.ComposedErrorgen
+        use_global_idle = self._use_global_idle
         add_global_idle = self._add_global_idle_to_all_layers
         add_padded_idle = self._add_padded_idle
 
@@ -545,7 +552,7 @@ class CloudNoiseLayerRules(_LayerRules):
 
         components = layerlbl.components
         if len(components) == 0:
-            if add_global_idle:
+            if use_global_idle:
                 if self.errcomp_type == "gates":
                     return model.operation_blks['cloudnoise'][self.implied_global_idle_label]  # idle!
                 elif self.errcomp_type == "errorgens":

@@ -23,7 +23,6 @@ from pygsti.models import model as _mdl, gaugegroup as _gg
 from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.modelparaminterposer import ModelParamsInterposer as _ModelParamsInterposer
-from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FOGIStore
 from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
