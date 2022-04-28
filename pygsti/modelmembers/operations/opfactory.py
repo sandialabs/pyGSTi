@@ -502,7 +502,7 @@ class EmbeddingOpFactory(OpFactory):
             raise ValueError("Not allowed to embed onto sslbls=" + str(sslbls))
 
         if self.embeds_factory:
-            op = self.embedded_factory_or_op.create_op(args, sslbls)  # Note: will have its gpindices set already
+            op = self.embedded_factory_or_op.create_op(args, None)  # Note: will have its gpindices set already
         else:
             op = self.embedded_factory_or_op
         embedded_op = _EmbeddedOp(self.state_space, sslbls, op)
