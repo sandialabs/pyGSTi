@@ -1732,7 +1732,8 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
             if syntheticIdleWt not in cache['Idle gatename fidpair lists']:
                 printer.log("Getting sequences needed for max-weight=%d errors" % syntheticIdleWt)
                 printer.log(" on the idle gate (for %d-Q synthetic idles)" % gateWt)
-                gate_names_including_idle = list(processor_spec.gate_names)  # so we can append() to below
+                gate_names_including_idle = [gn for gn in processor_spec.gate_names
+                                             if processor_spec.gate_num_qudits(gn) <= syntheticIdleWt]
                 if global_idle_lbl is None:
                     gate_names_including_idle.append('{idle}')  # or any recognized-as-idle gate
 
