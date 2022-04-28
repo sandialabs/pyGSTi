@@ -1032,7 +1032,7 @@ class LindbladNoise(OpNoise):
         """
         # Build LindbladErrorgen directly to have control over which parameters are set (leads to lower param counts)
         basis_size = state_space.dim  # e.g. 4 for a single qubit
-        basis = _BuiltinBasis('pp', basis_size)
+        basis = _BuiltinBasis('PP', basis_size)
         return _op.LindbladErrorgen.from_elementary_errorgens(
             self.error_coeffs, self.parameterization, basis, mx_basis='pp',
             truncate=False, evotype=evotype, state_space=state_space)
