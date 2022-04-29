@@ -416,10 +416,11 @@ def render_as_latex(qtys, render_options, verbosity):
 def _make_jinja_env(static_path, template_dir=None, render_options=None, link_to=None):
     """Build a jinja2 environment for generating pyGSTi reports"""
     try:
+        import markupsafe  # import locally since we don't want to require jinja to import pygsti
         import jinja2  # import locally since we don't want to require jinja to import pygsti
     except ImportError:
-        raise ImportError(("The 'jinja2' optional package is required to create pyGSTi "
-                           "reports, and appears to be missing.  Try 'pip install jinja2'."))
+        raise ImportError(("The 'markupsafe' and/or 'jinja2' optional packages are required to create pyGSTi "
+                           "reports, and appears to be missing.  Try 'pip install MarkupSafe jinja2'."))
 
     # Indirect access to offline template elements at generation time
     offline_loader = jinja2.PackageLoader('pygsti', 'report/templates/offline/')
@@ -463,13 +464,13 @@ def _make_jinja_env(static_path, template_dir=None, render_options=None, link_to
         """Embed an offline file's contents directly in the document, in a script tag."""
         # XXX we gotta find a better way, this is so wild dude
         contents = offline_loader.get_source(env, filename)[0]
-        return jinja2.Markup(contents)
+        return markupsafe.Markup(contents)
 
     @jinja_filter
-    @jinja2.evalcontextfilter
+    @jinja2.pass_eval_context
     def render(eval_ctx, value):
         html = _render_as_html(value, render_options or {}, link_to)
-        return jinja2.Markup(html) if eval_ctx.autoescape else html
+        return markupsafe.Markup(html) if eval_ctx.autoescape else html
 
     return env
 

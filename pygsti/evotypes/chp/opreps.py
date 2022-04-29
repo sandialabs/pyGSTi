@@ -34,12 +34,11 @@ class OpRep(_basereps.OpRep):
     def num_qubits(self):
         return self.state_space.num_qubits
 
-    @property
-    def chp_ops(self):
+    def chp_ops(self, seed_or_state=None):
         return self.base_chp_ops
 
-    def chp_str(self):
-        op_str = '\n'.join(self.chp_ops)
+    def chp_str(self, seed_or_state=None):
+        op_str = '\n'.join(self.chp_ops(seed_or_state=seed_or_state))
         if len(op_str) > 0: op_str += '\n'
         return op_str
 
@@ -84,11 +83,10 @@ class OpRepComposed(OpRep):
     def reinit_factor_op_reps(self, factor_op_reps):
         self.factors_reps = factor_op_reps
 
-    @property
-    def chp_ops(self):
+    def chp_ops(self, seed_or_state=None):
         ops = []
         for factor in self.factor_reps:
-            ops.extend(factor.chp_ops)
+            ops.extend(factor.chp_ops(seed_or_state=seed_or_state))
 
         return ops
 
@@ -115,12 +113,11 @@ class OpRepEmbedded(OpRep):
         self.embedded_to_local_qubit_indices = {str(i): str(j) for i, j in enumerate(qubit_indices)}
 
         # TODO: This doesn't work as nicely for the stochastic op, where chp_ops can be reset between chp_str calls
-        chp_ops = [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep.chp_ops]
+        chp_ops = [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep.chp_ops()]
         super(OpRepEmbedded, self).__init__(chp_ops, state_space)
 
-    @property
-    def chp_ops(self):
-        return [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep.chp_ops]
+    def chp_ops(self, seed_or_state=None):
+        return [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep.chp_ops(seed_or_state=seed_or_state)]
 
 
 class OpRepRepeated(OpRep):
@@ -128,14 +125,14 @@ class OpRepRepeated(OpRep):
         state_space = _StateSpace.cast(state_space)
         self.repeated_rep = rep_to_repeat
         self.num_repetitions = num_repetitions
-        super(OpRepRepeated, self).__init__(self.repeated_rep.chp_ops * self.num_repetitions, state_space)
+        super(OpRepRepeated, self).__init__(self.repeated_rep.chp_ops() * self.num_repetitions, state_space)
 
 
 class OpRepRandomUnitary(OpRep):
 
     def __init__(self, basis, unitary_rates, unitary_reps, seed_or_state, state_space):
         self.basis = basis
-        assert (basis.name == 'pp'), "Only Pauli basis is allowed for 'chp' evotype"
+        assert (basis.name in ['pp', 'PP']), "Only Pauli basis is allowed for 'chp' evotype"
 
         state_space = _StateSpace.cast(state_space)
         nqubits = state_space.num_qubits
@@ -158,12 +155,20 @@ class OpRepRandomUnitary(OpRep):
     def update_unitary_rates(self, rates):
         self.unitary_rates[:] = rates
 
-    @property
-    def chp_ops(self):
+    def chp_ops(self, seed_or_state=None):
+        # Optionally override RNG for this call
+        if seed_or_state is not None:
+            if isinstance(seed_or_state, _np.random.RandomState):
+                rand_state = seed_or_state
+            else:
+                rand_state = _np.random.RandomState(seed_or_state)
+        else:
+            rand_state = self.rand_state
+
         rates = self.unitary_rates
-        index = self.rand_state.choice(len(self.unitary_rates), p=rates)
+        index = rand_state.choice(len(self.unitary_rates), p=rates)
         rep = self.unitary_reps[index]
-        return rep.chp_ops
+        return rep.chp_ops()
 
 
 class OpRepStochastic(OpRepRandomUnitary):
@@ -229,16 +234,24 @@ class OpRepStochastic(OpRepRandomUnitary):
         self.rates[:] = rates
         self.update_unitary_rates(unitary_rates)
 
-    #TODO REMOVE - covered by OpRepKraus
-    #@property
-    #def chp_ops(self):
+    #TODO REMOVE - covered by OpRepRandomUnitary
+    #def chp_ops(self, seed_or_state=None):
+    #    # Optionally override RNG for this call
+    #    if seed_or_state is not None:
+    #        if isinstance(seed_or_state, _np.random.RandomState):
+    #            rand_state = seed_or_state
+    #        else:
+    #            rand_state = _np.random.RandomState(seed_or_state)
+    #    else:
+    #        rand_state = self.rand_state
+    #
     #    rates = self.rates
     #    all_rates = [*rates, 1.0 - sum(rates)]  # Include identity so that probabilities are 1
-    #    index = self.rand_state.choice(self.basis.size, p=all_rates)
+    #    index = rand_state.choice(self.basis.size, p=all_rates)
     #
     #    # If final entry, no operation selected
     #    if index == self.basis.size - 1:
-    #        return ''
+    #        return []
     #
     #    rep = self.stochastic_superop_reps[index]
-    #    return rep.chp_ops
+    #    return rep.chp_ops()
