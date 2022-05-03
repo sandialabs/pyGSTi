@@ -451,7 +451,7 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         self.set_dense(superop)  # this may fail if derived class doesn't allow it
 
 
-class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
+class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOperator):
     """
     TODO: update docstring
     An operator that behaves like a dense (unitary) operator matrix.
@@ -538,6 +538,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         #Try to create a dense unitary rep.  If this fails, see if a dense superop rep
         # can be created, as this type of rep can also hold arbitrary unitary ops.
         try:
+            mx = mx.astype('complex', casting='safe', copy=False)  # copy only when necessary
             rep = evotype.create_dense_unitary_rep(mx, basis, state_space)
             self._reptype = 'unitary'
             self._unitary = None

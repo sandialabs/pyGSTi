@@ -287,6 +287,29 @@ class StochasticNoiseOp(_LinearOperator, _KrausOperatorInterface):
 
     #Transform functions? (for gauge opt)
 
+    @property
+    def kraus_operators(self):
+        """A list of this operation's Kraus operators as numpy arrays."""
+        kraus_ops = [_np.sqrt(urate) * urep.to_dense('Hilbert')
+                     for urate, urep in zip(self._rep.unitary_rates, self._rep.unitary_reps)]
+        return kraus_ops
+
+    def set_kraus_operators(self, kraus_operators):
+        """
+        Set the parameters of this operation by specifying its Kraus operators.
+
+        Parameters
+        ----------
+        kraus_operators : list
+            A list of numpy arrays, each of which specifies a Kraus operator.
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError(("The Kraus operators are set and fixed at the construction of a StochasticNoiseOp.  "
+                          "You cannot change them now."))
+
     def to_memoized_dict(self, mmg_memo):
         """Create a serializable dict with references to other objects in the memo.
 

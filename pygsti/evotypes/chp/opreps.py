@@ -42,6 +42,10 @@ class OpRep(_basereps.OpRep):
         if len(op_str) > 0: op_str += '\n'
         return op_str
 
+    def to_dense(self, on_space):
+        raise NotImplementedError("CHP op '%s' cannot convert themselves to dense %s-space matrices (yet)" %
+                                  str(self.chpops), on_space)
+
 
 class OpRepClifford(OpRep):
     def __init__(self, unitarymx, symplecticrep, basis, state_space):
