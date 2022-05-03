@@ -23,6 +23,7 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools import jamiolkowski as _jt
 from pygsti.tools import optools as _ot
 
 
@@ -392,16 +393,43 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
     @property
     def kraus_operators(self):
         """A list of this operation's Kraus operators as numpy arrays."""
-        # op(rho) = sum_ij choi_ij Bi rho Bj_dag = sum_ij (unit_i^T evecs_lk D_kk evecs_inv_km unit_j) Bi rho Bj_dag
-        # if {Bi} is the set of matrix units then ... TODO work out math
+        # Let I index a basis element, rho be a d x d matrix, and (I // d, I mod d) := (i,ii) be the "2D"
+        #  index corresponding to I.
+        # op(rho) = sum_IJ choi_IJ BI rho BJ_dag = sum_IJ (evecs_IK D_KK evecs_inv_KJ) BI rho BJ_dag
+        # Note: evecs can be and are assumed chosen to be orthonormal, so evecs_inv = evecs^dag
+        # if {Bi} is the set of matrix units then ...
+        #  = sum_IJK(i',j') (evecs_IK D_KK evecs_inv_KJ) unitI_ii' rho_i'j' unitJ_j'j
+        #  = sum_IJK(i',j') (evecs_(Ia,Ib)K D_KK evecs_inv_K(Ja,Jb)) unitI_ii' rho_i'j' unitJ_j'j
+        #   using fact that sum(i') unitI_ii' ==> i'=Ib and delta_i,Ia factor
+        #  = sum_IJK (evecs_(Ia,Ib)K D_KK evecs_inv_K(Ja,Jb)) rho_IbJa * delta_i,Ia, delta_j,Jb
+        #  = sum_K D_KK [ sum_(Ib,Ja) evector[K]_(i,Ib) rho_IbJa dual_evector[K]_(Ja,j) ]
+        #   -> let reshaped K-th evector be called O_K and dual O_K^dag
+        #  = sum_K D_KK O_K rho O_K^dag
         assert(self._basis is not None), "Kraus operator functionality requires specifying a superoperator basis"
         superop_mx = self.to_dense('HilbertSchmidt'); d = int(_np.round(_np.sqrt(superop_mx.shape[0])))
-        choi_mx = _ot.jamiolkowski_iso(superop_mx, self._basis, 'std')
+        std_basis = _Basis.cast('std', superop_mx.shape[0])
+        choi_mx = _jt.jamiolkowski_iso(superop_mx, self._basis, std_basis) * d  # see NOTE below
+        # NOTE: multiply by `d` (density mx dimension) to un-normalize choi_mx as given by
+        # jamiolkowski_iso.  Here we *want* the trace of choi_mx to be `d`, not 1, so that
+        # op(rho) = sum_IJ choi_IJ BI rho BJ_dag is true.
+
+        #CHECK 1 (to unit test?) REMOVE
+        #tmp_std = _bt.change_basis(superop_mx, self._basis, 'std')
+        #B = _bt.basis_matrices('std', superop_mx.shape[0])
+        #check_superop = sum([ choi_mx[i,j] * _np.kron(B[i], B[j].T) for i in range(d*d) for j in range(d*d)])
+        #assert(_np.allclose(check_superop, tmp_std))
+
         evals, evecs = _np.linalg.eig(choi_mx)
+        #assert(_np.allclose(evecs @ _np.diag(evals) @ (evecs.conjugate().T), choi_mx))
         TOL = 1e-7
         if any([ev <= -TOL for ev in evals]):
             raise ValueError("Cannot compute Kraus decomposition of non-positive-definite superoperator!")
         kraus_ops = [evecs[:, i].reshape(d, d) * _np.sqrt(ev) for i, ev in enumerate(evals) if abs(ev) > TOL]
+
+        #CHECK 2 (to unit test?) REMOVE
+        #std_superop = sum([_ot.unitary_to_std_process_mx(kop) for kop in kraus_ops])
+        #assert(_np.allclose(std_superop, tmp_std))
+
         return kraus_ops
 
     def set_kraus_operators(self, kraus_operators):
