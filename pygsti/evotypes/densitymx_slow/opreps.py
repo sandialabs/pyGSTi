@@ -235,7 +235,7 @@ class OpRepStochastic(OpRepRandomUnitary):
         assert(len(reps) == len(rates))
 
         state_space = _StateSpace.cast(state_space)
-        assert(basis.dim == state_space.udim)
+        assert(basis.dim == state_space.dim)
         self.basis = basis
 
         super(OpRepStochastic, self).__init__(basis, _np.array(rates, 'd'), reps, seed_or_state, state_space)

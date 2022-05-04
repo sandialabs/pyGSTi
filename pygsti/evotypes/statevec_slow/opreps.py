@@ -15,6 +15,7 @@ import copy as _copy
 
 import numpy as _np
 from scipy.sparse.linalg import LinearOperator
+from numpy.random import RandomState as _RandomState
 
 from .statereps import StateRepDensePure as _StateRepDensePure
 from .. import basereps as _basereps
@@ -37,6 +38,12 @@ class OpRep(_basereps.OpRep):
 
     def adjoint_acton(self, state):
         raise NotImplementedError()
+
+    def acton_random(self, state, rand_state):
+        return self.acton(state)  # default is to ignore rand_state
+
+    def adjoint_acton_random(self, state, rand_state):
+        return self.adjoint_acton(state)  # default is to ignore rand_state
 
     def aslinearoperator(self):
         def mv(v):
@@ -109,7 +116,7 @@ class OpRepComposed(OpRep):
     # exactly the same as densitymx case
     def __init__(self, factor_op_reps, state_space):
         #assert(len(factor_op_reps) > 0), "Composed gates must contain at least one factor gate!"
-        self.factors_reps = factor_op_reps
+        self.factor_reps = factor_op_reps
         super(OpRepComposed, self).__init__(state_space)
 
     def acton(self, state):
@@ -122,6 +129,18 @@ class OpRepComposed(OpRep):
         """ Act the adjoint of this operation matrix on an input state """
         for gate in reversed(self.factor_reps):
             state = gate.adjoint_acton(state)
+        return state
+
+    def acton_random(self, state, rand_state):
+        """ Act this gate map on an input state """
+        for gate in self.factor_reps:
+            state = gate.acton_random(state, rand_state)
+        return state
+
+    def adjoint_acton_random(self, state, rand_state):
+        """ Act the adjoint of this operation matrix on an input state """
+        for gate in reversed(self.factor_reps):
+            state = gate.adjoint_acton_random(state, rand_state)
         return state
 
     def reinit_factor_op_reps(self, new_factor_op_reps):
@@ -147,6 +166,20 @@ class OpRepSum(OpRep):
         output_state = _StateRepDensePure(_np.zeros(state.data.shape, complex), state.state_space, state.basis)
         for f in self.factor_reps:
             output_state.data += f.adjoint_acton(state).data
+        return output_state
+
+    def acton_random(self, state, rand_state):
+        """ Act this gate map on an input state """
+        output_state = _StateRepDensePure(_np.zeros(state.data.shape, complex), state.state_space, state.basis)
+        for f in self.factor_reps:
+            output_state.data += f.acton_random(state, rand_state).data
+        return output_state
+
+    def adjoint_acton_random(self, state, rand_state):
+        """ Act the adjoint of this operation matrix on an input state """
+        output_state = _StateRepDensePure(_np.zeros(state.data.shape, complex), state.state_space, state.basis)
+        for f in self.factor_reps:
+            output_state.data += f.adjoint_acton_random(state, rand_state).data
         return output_state
 
 
@@ -258,6 +291,52 @@ class OpRepEmbedded(OpRep):
         self._acton_other_blocks_trivially(output_state, state)
         return output_state
 
+    def acton_random(self, state, rand_state):
+        output_state = _StateRepDensePure(_np.zeros(state.data.shape, complex), state.state_space, state.basis)
+        offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
+
+        for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
+            vec_index_noop = _np.dot(self.multipliers, tuple(b))
+            inds = []
+            for op_b in _itertools.product(*self.basisInds_action):
+                vec_index = vec_index_noop
+                for i, bInd in zip(self.action_inds, op_b):
+                    #b[i] = bInd #don't need to do this; just update vec_index:
+                    vec_index += self.multipliers[i] * bInd
+                inds.append(offset + vec_index)
+            embedded_instate = _StateRepDensePure(state.data[inds],
+                                                  state.state_space.create_subspace(self.target_labels), basis=None)
+            embedded_outstate = self.embedded_rep.acton_random(embedded_instate, rand_state)
+            output_state.data[inds] += embedded_outstate.data
+
+        #act on other blocks trivially:
+        self._acton_other_blocks_trivially(output_state, state)
+        return output_state
+
+    def adjoint_acton_random(self, state, rand_state):
+        """ Act the adjoint of this gate map on an input state """
+        #NOTE: Same as acton except uses 'adjoint_acton(...)' below
+        output_state = _StateRepDensePure(_np.zeros(state.data.shape, complex), state.state_space, state.basis)
+        offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
+
+        for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
+            vec_index_noop = _np.dot(self.multipliers, tuple(b))
+            inds = []
+            for op_b in _itertools.product(*self.basisInds_action):
+                vec_index = vec_index_noop
+                for i, bInd in zip(self.action_inds, op_b):
+                    #b[i] = bInd #don't need to do this; just update vec_index:
+                    vec_index += self.multipliers[i] * bInd
+                inds.append(offset + vec_index)
+            embedded_instate = _StateRepDensePure(state.data[inds],
+                                                  state.state_space.create_subspace(self.target_labels), basis=None)
+            embedded_outstate = self.embedded_rep.adjoint_acton_random(embedded_instate, rand_state)
+            output_state.data[inds] += embedded_outstate.data
+
+        #act on other blocks trivially:
+        self._acton_other_blocks_trivially(output_state, state)
+        return output_state
+
 
 class OpRepExpErrorgen(OpRep):
 
@@ -295,6 +374,18 @@ class OpRepRepeated(OpRep):
             state = self.repeated_rep.adjoint_acton(state)
         return state
 
+    def acton_random(self, state, rand_state):
+        """ Act this gate map on an input state """
+        for i in range(self.num_repetitions):
+            state = self.repeated_rep.acton_random(state, rand_state)
+        return state
+
+    def adjoint_acton_random(self, state, rand_state):
+        """ Act the adjoint of this operation matrix on an input state """
+        for i in range(self.num_repetitions):
+            state = self.repeated_rep.adjoint_acton_random(state, rand_state)
+        return state
+
 
 class OpRepLindbladErrorgen(OpRep):
     def __init__(self, lindblad_coefficient_blocks, state_space):
@@ -302,3 +393,68 @@ class OpRepLindbladErrorgen(OpRep):
         self.Lterms = None
         self.Lterm_coeffs = None
         self.lindblad_coefficient_blocks = lindblad_coefficient_blocks
+
+
+class OpRepRandomUnitary(OpRep):
+    def __init__(self, basis, unitary_rates, unitary_reps, seed_or_state, state_space):
+        self.basis = basis
+        self.unitary_reps = unitary_reps
+        self.unitary_rates = unitary_rates.copy()
+
+        if isinstance(seed_or_state, _RandomState):
+            self.rand_state = seed_or_state
+        else:
+            self.rand_state = _RandomState(seed_or_state)
+
+        self.state_space = _StateSpace.cast(state_space)
+        assert(self.basis.dim == self.state_space.dim)
+        super(OpRepRandomUnitary, self).__init__(state_space)
+
+    def acton_random(self, state, rand_state):
+        rand_state = rand_state if rand_state is not None else self.rand_state
+        rates = self.unitary_rates
+        index = rand_state.choice(len(self.unitary_rates), p=rates)
+        rep = self.unitary_reps[index]
+        return rep.acton(state)
+
+    def adjoint_acton_random(self, state, rand_state):
+        rand_state = rand_state if rand_state is not None else self.rand_state
+        rates = self.unitary_rates
+        index = rand_state.choice(len(self.unitary_rates), p=rates)
+        rep = self.unitary_reps[index]
+        return rep.adjoint_acton(state)
+
+    def __str__(self):
+        return "OpRepRandomUnitary:\n" + " rates: " + str(self.unitary_rates)  # maybe show ops too?
+
+    def copy(self):
+        return OpRepRandomUnitary(self.basis, self.unitary_rates, list(self.unitary_reps),
+                                  self.rand_state, self.state_space)
+
+    def update_unitary_rates(self, rates):
+        self.unitary_rates[:] = rates
+
+    def to_dense(self, on_space):
+        assert(on_space == 'HilbertSchmidt')  # below code only works in this case
+        return sum([rate * rep.to_dense(on_space) for rate, rep in zip(self.unitary_rates, self.unitary_reps)])
+
+
+class OpRepStochastic(OpRepRandomUnitary):
+
+    def __init__(self, stochastic_basis, basis, initial_rates, seed_or_state, state_space):
+        self.rates = initial_rates
+        self.stochastic_basis = stochastic_basis
+        rates = [1 - sum(initial_rates)] + list(initial_rates)
+        reps = [OpRepDenseUnitary(bel, basis, state_space) for bel in stochastic_basis.elements]
+        assert(len(reps) == len(rates))
+
+        state_space = _StateSpace.cast(state_space)
+        assert(basis.dim == state_space.dim)
+        self.basis = basis
+
+        super(OpRepStochastic, self).__init__(basis, _np.array(rates, 'd'), reps, seed_or_state, state_space)
+
+    def update_rates(self, rates):
+        unitary_rates = [1 - sum(rates)] + list(rates)
+        self.rates[:] = rates
+        self.update_unitary_rates(unitary_rates)
