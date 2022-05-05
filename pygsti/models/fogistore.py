@@ -103,10 +103,11 @@ class FirstOrderGaugeInvariantStore(object):
 
         self.gauge_action_for_op = gauge_action_matrices_by_op
 
-        (indep_fogi_directions, indep_fogi_metadata, dep_fogi_directions, dep_fogi_metadata) = \
+        (indep_fogi_directions, indep_fogi_metadata, dep_fogi_directions, dep_fogi_metadata, debug_fogi_vecs) = \
             _fogit.construct_fogi_quantities(self.primitive_op_labels, self.gauge_action_for_op,
                                              self.elem_errorgen_labels_by_op, self.op_errorgen_indices,
                                              self.gauge_space, op_label_abbrevs, dependent_fogi_action, norm_order)
+        self.debug_fogi_vecs = debug_fogi_vecs
         self.fogi_directions = _sps.hstack((indep_fogi_directions, dep_fogi_directions))
         self.fogi_metadata = indep_fogi_metadata + dep_fogi_metadata  # list concatenation
         self.dependent_dir_indices = _np.arange(len(indep_fogi_metadata), len(self.fogi_metadata))
