@@ -1824,8 +1824,8 @@ class OpModel(Model):
         if primitive_op_labels is None:
             primitive_op_labels = self.primitive_op_labels
 
-        primitive_prep_labels = self.primitive_prep_labels if include_spam else []
-        primitive_povm_labels = self.primitive_povm_labels if include_spam else []
+        primitive_prep_labels = self.primitive_prep_labels if include_spam else ()
+        primitive_povm_labels = self.primitive_povm_labels if include_spam else ()
 
         # "initial" gauge space is the space of error generators initially considered as
         # gauge transformations.  It can be reduced by the errors allowed on operations (by
