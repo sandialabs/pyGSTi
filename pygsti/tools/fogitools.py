@@ -560,17 +560,8 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         #                               = (I - I) = 0
                         # (A,B are faithful reps of gauge on intersection space, so pinv(ga_A) * ga_A
                         # restricted to intersection space is I:   int_spc.T * pinv(ga_A) * ga_A * int_spc == I
-                        # (when int_spc vecs are orthonormal) and so the above redues to I - I = 0
+                        # (when int_spc vecs are orthonormal) and so the above redues to I - I = 0                        
 
-                        #HERE - need to deal with _np.linalg.pinv(gauge_action[n:, :]
-                        sep_inv_gauge_action = _np.concatenate([_np.linalg.pinv(gauge_action_matrices[ol])
-                                                                for ol in existing_set], axis=1)
-                        inv_gauge_action = _np.linalg.pinv(gauge_action[0:n, :])
-                        if not _np.allclose(sep_inv_gauge_action, inv_gauge_action):
-                            import bpdb; bpdb.set_trace()
-                            print("ERROR")
-                        
-                        
                         inv_diff_gauge_action = _np.concatenate((_np.linalg.pinv(gauge_action[0:n, :], rcond=1e-7),
                                                                  -_np.linalg.pinv(gauge_action[n:, :], rcond=1e-7)),
                                                                 axis=1).T
@@ -591,40 +582,73 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             # => want orthogonalized dirs "Q" as new dirs: Q = M * epsilons * inv(R) = M * epsilons'
                             intersection_space = _np.dot(intersection_space, _np.linalg.inv(R))  # a "good" basis
 
-                        #HERE - attempt to filter intersection space directions, dropping those that were already
-                        # used by any of the present op labels
-                        #already_used_gauge_dir_blks = tuple(_itertools.chain(*[used_gauge_dirs[ol] for ol in new_set]))
-                        already_used_gauge_dir_blks = []
-                        for used_set, used_set_gauge_dirs in used_gauge_dirs.items():
-                            if set(new_set).intersection(used_set) and not set(used_set).issubset(existing_set): # and not set(used_set).issubset(new_set):
-                                # used_set *straddles* new_set, meaning it overlaps but also contains elements
-                                # outside of new_set.  We need to make sure the gauge dirs for new_set are
-                                # orthogonal to those used when used_set was processed.
-                                print("Adding %d used gauge dirs from %s" % (used_set_gauge_dirs.shape[1], str(used_set)))
-                                already_used_gauge_dir_blks.append(used_set_gauge_dirs)
-                            else:
-                                print("NOT adding %d used gauge dirs from %s" % (used_set_gauge_dirs.shape[1], str(used_set)))
+                        # - OLD TODO REMOVE -- attempt to filter doesn't fully work
+                        ##ATTEMPT1 - attempt to filter intersection space directions, dropping those that were already
+                        ## used by any of the present op labels
+                        ##already_used_gauge_dir_blks = tuple(_itertools.chain(*[used_gauge_dirs[ol] for ol in new_set]))
+                        #already_used_gauge_dir_blks = []
+                        #for used_set, used_set_gauge_dirs in used_gauge_dirs.items():
+                        #    if set(new_set).intersection(used_set) and not set(used_set).issubset(existing_set): # and not set(used_set).issubset(new_set):
+                        #        # used_set *straddles* new_set, meaning it overlaps but also contains elements
+                        #        # outside of new_set.  We need to make sure the gauge dirs for new_set are
+                        #        # orthogonal to those used when used_set was processed.
+                        #        print("Adding %d used gauge dirs from %s" % (used_set_gauge_dirs.shape[1], str(used_set)))
+                        #        already_used_gauge_dir_blks.append(used_set_gauge_dirs)
+                        #    else:
+                        #        print("NOT adding %d used gauge dirs from %s" % (used_set_gauge_dirs.shape[1], str(used_set)))
+                        #
+                        #if len(already_used_gauge_dir_blks) > 0:
+                        #    already_used_gauge_dirs = _np.concatenate(already_used_gauge_dir_blks, axis=1)
+                        #    db_orig_dim = intersection_space.shape[1]
+                        #    orthog_to_used = _mt.nice_nullspace(already_used_gauge_dirs.T)
+                        #    intersection_space = _mt.intersection_space(intersection_space, orthog_to_used,
+                        #                                                use_nice_nullspace=True)
+                        #    intersection_space, _ = _np.linalg.qr(intersection_space)  # gram-schmidt orthogonalize cols
+                        #    assert(_mt.columns_are_orthogonal(intersection_space))  # Not always true
+                        #
+                        #    if intersection_space.shape[1] < db_orig_dim:
+                        #        print("DB: reduced intersection space using orthogonal gauge dir constraint (%d already used) %d -> %d"
+                        #              % (already_used_gauge_dirs.shape[1], db_orig_dim, intersection_space.shape[1]))
+                        #    assert(_np.linalg.norm(already_used_gauge_dirs.T @ intersection_space) < 1e-6)
+                        #else:
+                        #    print("DB: no already-used gauge directions")
+                        ##for ol in new_set:
+                        ##    used_gauge_dirs[ol].append(intersection_space)
+                        ##used_gauge_dirs[new_set] = intersection_space
 
-                        if len(already_used_gauge_dir_blks) > 0:
-                            already_used_gauge_dirs = _np.concatenate(already_used_gauge_dir_blks, axis=1)
-                            db_orig_dim = intersection_space.shape[1]
-                            orthog_to_used = _mt.nice_nullspace(already_used_gauge_dirs.T)
-                            intersection_space = _mt.intersection_space(intersection_space, orthog_to_used,
-                                                                        use_nice_nullspace=True)
-                            intersection_space, _ = _np.linalg.qr(intersection_space)  # gram-schmidt orthogonalize cols
-                            assert(_mt.columns_are_orthogonal(intersection_space))  # Not always true
+                        #ATTEMPT2 - filter out or project fogi_vectors onto the orthogonal complement of
+                        # the existing directions that overlap with the current op-label sectors
+                        #First redo some preliminary stuff to get local fogi dirs and vecs:
+                        local_fogi_dirs = _np.dot(inv_diff_gauge_action, intersection_space)  # dot("M", epsilons)
+                        local_fogi_vecs = _np.dot(diff_gauge_action, intersection_space)
+                        assert(_np.allclose(local_fogi_dirs.T @ local_fogi_vecs,
+                                            2 * _np.identity(local_fogi_vecs.shape[1], 'd')))
 
-                            if intersection_space.shape[1] < db_orig_dim:
-                                print("DB: reduced intersection space using orthogonal gauge dir constraint (%d already used) %d -> %d"
-                                      % (already_used_gauge_dirs.shape[1], db_orig_dim, intersection_space.shape[1]))
-                            assert(_np.linalg.norm(already_used_gauge_dirs.T @ intersection_space) < 1e-6)
-                        else:
-                            print("DB: no already-used gauge directions")
-                                
+                        relevant_fogi_dirs_slice = _sps.lil_matrix((local_fogi_dirs.shape[0], fogi_dirs.shape[1]),
+                                                                   dtype=local_fogi_dirs.dtype); off = 0
+                        for ol in existing_set + (op_label,):  # NOT new_set here b/c concat order above
+                            n = len(errorgen_coefficient_labels[ol])
+                            relevant_fogi_dirs_slice[off:off + n, :] = fogi_dirs[op_errgen_indices[ol], :]; off += n
 
-                        #for ol in new_set:
-                        #    used_gauge_dirs[ol].append(intersection_space)
-                        #used_gauge_dirs[new_set] = intersection_space
+                        relevant_fogi_vecs_slice = _sps.lil_matrix((local_fogi_vecs.shape[0], fogi_vecs.shape[1]),
+                                                                   dtype=local_fogi_vecs.dtype); off = 0
+                        for ol in existing_set + (op_label,):  # NOT new_set here b/c concat order above
+                            n = len(errorgen_coefficient_labels[ol])
+                            relevant_fogi_vecs_slice[off:off + n, :] = fogi_vecs[op_errgen_indices[ol], :]; off += n
+
+                        # Note: relevant_fogi_dirs_slice is a sparse mx so zero rows are fine (otherwise could remove?)
+                        # Next: want new_fogi_vecs modified so that relevant_fogi_dirs_slice @ local_fogi_vecs = 0,
+                        #  where local_fogi_vecs = [ gauge_action @ intersection_space ]
+                        #  maybe want to find linear combos of local_fogi_dirs: relevant_fogi_dirs_slice @ local_fogi_vecs @ linear_combo_cols = 0
+                        #  so want to know the rank of (relevant_fogi_dirs_slice @ local_fogi_vecs) -- its nullspace gives
+                        #  valid linear combos:  local_fogi_vecs @ linear_combo_cols = [ gauge_action @ intersection_space ] @ linear_combo_cols
+                        M1 = relevant_fogi_dirs_slice.transpose().dot(local_fogi_vecs)
+                        M2 = relevant_fogi_vecs_slice.transpose().dot(local_fogi_dirs)
+                        M = _np.concatenate((M1, M2), axis=0)
+                        linear_combos = _mt.nice_nullspace(M)  # PUNT on sparse nullspace math (again)
+                        print("DB: reduced intersection space by restricting to orthogonal relationals: %d -> %d"
+                              % (intersection_space.shape[1], linear_combos.shape[1]))
+                        intersection_space = intersection_space @ linear_combos
 
                         # start w/normalizd epsilon vecs (normalize according to norm_order, then divide by L2-norm^2
                         # so that the resulting intersection-space vector, after action by "M", projects the component
@@ -657,6 +681,7 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                         local_fogi_vecs = _np.dot(diff_gauge_action, intersection_space)
                         assert(_np.allclose(local_fogi_dirs.T @ local_fogi_vecs,
                                             2 * _np.identity(local_fogi_vecs.shape[1], 'd')))
+                        assert(_np.linalg.norm(relevant_fogi_dirs_slice.transpose().dot(local_fogi_vecs)) < 1e-6)
                         #assert(_np.linalg.norm(local_fogi_dirs.imag) < 1e-6)  # ok for H+S but not for CPTP models
                         #Note: at this point `local_fogi_dirs` vectors are gauge-space-normalized, not numpy-norm-1
                         if orthogonalize_relationals:
@@ -744,9 +769,16 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                             new_fogi_vecs[op_errgen_indices[ol], :] = local_fogi_vecs[off:off + n, :]; off += n
                         new_fogi_vecs = new_fogi_vecs.tocsc()
 
+                        assert(_np.linalg.norm(fogi_dirs.transpose().dot(new_fogi_vecs).toarray()) < 1e-6)  # TEMPORARY - assertion is fine, but converts to dense!
+                        assert(_np.linalg.norm(new_fogi_dirs.transpose().dot(fogi_vecs).toarray()) < 1e-6)  # TEMPORARY - assertion is fine, but converts to dense!
+                        
                         # figure out which directions are independent
                         indep_cols = _mt.independent_columns(new_fogi_dirs, fogi_dirs)
                         #FOGI DEBUG print(" ==> %d independent columns" % len(indep_cols))
+
+                        #if len(indep_cols) > 0:
+                        #    import bpdb; bpdb.set_trace()
+                        #    print("HERE")
 
                         if dependent_fogi_action == "drop":
                             dep_cols_to_add = []
@@ -768,13 +800,23 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
                                                              norm_order_array[indep_cols])
                         print("Adding %d (of %d possible) new independent relational FOGI vecs -> indices %d->%d"
                               % (len(indep_cols), new_fogi_dirs.shape[1], fogi_dirs.shape[1]-len(indep_cols), fogi_dirs.shape[1]-1))
-                        if len(indep_cols) > 0:
-                            import bpdb; bpdb.set_trace()
 
                         #EXPERIMENTAL - add constructed FOGI *vectors*
                         new_fogi_vecs = _mt.normalize_columns(new_fogi_vecs[:, indep_cols],
                                                               ord=norm_order_array[indep_cols])
                         fogi_vecs = _sps.hstack((fogi_vecs, new_fogi_vecs))
+
+                        if len(indep_cols) > 0:
+                            #import bpdb; bpdb.set_trace()
+                            test_gram = fogi_dirs.transpose().dot(fogi_vecs).toarray(); nfogi = test_gram.shape[0]
+                            for i in range(nfogi):
+                                for j in range(nfogi):
+                                    if abs(test_gram[i,j]) > 1e-6:
+                                        if i != j:
+                                            import bpdb; bpdb.set_trace()
+                                            print(i,j, test_gram[i,j])
+                            #assert(_np.allclose(test_gram, _np.identity(test_gram.shape[0])))
+
 
                         # add new_fogi_dirs[:, dep_cols_to_add] to dep_fogi_dirs w/meta data
                         dep_fogi_dirs = add_relational_fogi_dirs(new_fogi_dirs[:, dep_cols_to_add],
@@ -785,11 +827,13 @@ def construct_fogi_quantities(primitive_op_labels, gauge_action_matrices,
 
                         #if dependent_fogi_action == "drop":  # we could construct these, but would make fogi qtys messy
                         #    assert(_mt.columns_are_orthogonal(fogi_dirs))
-                        if new_set in used_gauge_dirs:
-                            used_gauge_dirs[new_set] = _np.concatenate((used_gauge_dirs[new_set],
-                                                                        intersection_space[:, indep_cols]), axis=1)
-                        else:
-                            used_gauge_dirs[new_set] = intersection_space[:, indep_cols]  # also add dep_cols_to_add?
+
+                        #TODO REMOVE
+                        #if new_set in used_gauge_dirs:
+                        #    used_gauge_dirs[new_set] = _np.concatenate((used_gauge_dirs[new_set],
+                        #                                                intersection_space[:, indep_cols]), axis=1)
+                        #else:
+                        #    used_gauge_dirs[new_set] = intersection_space[:, indep_cols]  # also add dep_cols_to_add?
 
                         #print("Fogi vecs:\n"); _mt.print_mx(local_fogi_dirs)
                         #print("Ham Intersection names: ", intersection_names)
