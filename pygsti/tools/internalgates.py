@@ -140,6 +140,7 @@ def is_gate_this_standard_unitary(gate_unitary, standard_gate_name):
         equal = _np.allclose(pm_input, pm_std)
         return equal
 
+
 # Currently not needed, but might be added in.
 #
 
@@ -220,9 +221,9 @@ def standard_gatename_unitaries():
 
     std_unitaries['Gi'] = _np.array([[1., 0.], [0., 1.]], complex)
 
-    std_unitaries['Gx'] = std_unitaries['Gxpi2'] = u_op(_np.pi / 2 * sigmax)
-    std_unitaries['Gy'] = std_unitaries['Gypi2'] = u_op(_np.pi / 2 * sigmay)
-    std_unitaries['Gz'] = std_unitaries['Gzpi2'] = u_op(_np.pi / 2 * sigmaz)
+    std_unitaries['Gxpi2'] = u_op(_np.pi / 2 * sigmax)
+    std_unitaries['Gypi2'] = u_op(_np.pi / 2 * sigmay)
+    std_unitaries['Gzpi2'] = u_op(_np.pi / 2 * sigmaz)
 
     std_unitaries['Gxpi'] = _np.array([[0., 1.], [1., 0.]], complex)
     std_unitaries['Gypi'] = _np.array([[0., -1j], [1j, 0.]], complex)
@@ -283,7 +284,33 @@ def standard_gatename_unitaries():
     std_unitaries['Gzr'] = Gzr()
     std_unitaries['Gczr'] = Gczr()
 
+    #Add these at the end, since we don't want unitary_to_standard_gatenemt to return these "shorthand" names
+    std_unitaries['Gx'] = std_unitaries['Gxpi2']
+    std_unitaries['Gy'] = std_unitaries['Gypi2']
+    std_unitaries['Gz'] = std_unitaries['Gzpi2']
+
     return std_unitaries
+
+
+def unitary_to_standard_gatename(unitary):
+    """
+    Looks up and returns the standard gate name for a unitary gate matrix, if one exists.
+
+    Parameters
+    ----------
+    unitary : complex np.array
+        The unitary to convert.
+
+    Returns
+    -------
+    str or None
+        If `gate_unitary` matches a standard gate, the standard name of this gate (a
+        key in the dictionary given by :function:`standard_gatename_unitaries`).  `None` otherwise.
+    """
+    for std_name, U in standard_gatename_unitaries().items():
+        if not callable(U) and U.shape == unitary.shape and _np.allclose(unitary, U):
+            return std_name
+    return None
 
 
 def standard_gatenames_cirq_conversions():
@@ -478,6 +505,10 @@ def standard_gatenames_chp_conversions():
     std_gatenames_to_chp['Gh'] = ['h 0']
     std_gatenames_to_chp['Gp'] = ['p 0']
     std_gatenames_to_chp['Gpdag'] = ['p 0', 'p 0', 'p 0']
+
+    std_gatenames_to_chp['Gx'] = ['h 0', 'p 0', 'h 0']
+    std_gatenames_to_chp['Gy'] = ['p 0', 'h 0', 'p 0', 'h 0', 'p 0', 'p 0', 'p 0']
+    std_gatenames_to_chp['Gz'] = ['p 0']
 
     return std_gatenames_to_chp
 

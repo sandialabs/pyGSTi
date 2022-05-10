@@ -221,7 +221,7 @@ class OpRepRandomUnitary(OpRep):
         self.unitary_rates[:] = rates
 
     def to_dense(self, on_space):
-        assert(on_space == 'HilbertSchmidt')  # below code only works in this case
+        assert(on_space in ('minimal', 'HilbertSchmidt'))  # below code only works in this case
         return sum([rate * rep.to_dense(on_space) for rate, rep in zip(self.unitary_rates, self.unitary_reps)])
 
 

@@ -186,7 +186,7 @@ class OpRepStochastic(OpRepRandomUnitary):
         rates = [1 - sum(initial_rates)] + list(initial_rates)
         reps = [OpRep([], state_space)]  # start with identity
         std_chp_ops = _itgs.standard_gatenames_chp_conversions()
-        for label in self.basis.labels[1:]:
+        for label in self.stochastic_basis.labels[1:]:
             combined_chp_ops = []
 
             for i, pauli in enumerate(label):
