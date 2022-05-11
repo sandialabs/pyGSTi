@@ -90,14 +90,18 @@ class WeakForwardSimulator(_ForwardSimulator):
             oprep = self.model._circuit_layer_operator(op_label, 'op')._rep
             st = oprep.acton_random(st, rand_state)
 
-        r = rand_state.rand()  # random number in [0,1]
-        x = 0
-        for elbl, full_elbl in zip(spc.effect_labels, spc.full_effect_labels):
-            erep = self.model._circuit_layer_operator(full_elbl, 'povm')._rep
-            x += erep.probability(st)  # outcome probability
-            if r <= x:
-                return elbl  # outcome label
-        raise ValueError("WeakForwardSimulator failure because probabilties add to %f < 1!" % x)
+        povmrep = self.model.circuit_layer_operator(spc.povm_label, 'povm')._rep
+        if povmrep is None:
+            r = rand_state.rand()  # random number in [0,1]
+            x = 0
+            for elbl, full_elbl in zip(spc.effect_labels, spc.full_effect_labels):
+                erep = self.model._circuit_layer_operator(full_elbl, 'povm')._rep
+                x += erep.probability(st)  # outcome probability
+                if r <= x:
+                    return elbl  # outcome label
+            raise ValueError("WeakForwardSimulator failure because probabilties add to %f < 1!" % x)
+        else:
+            return povmrep.sample_outcome(st, rand_state)
 
         #raise NotImplementedError("WeakForwardSimulator-derived classes should implement this!")
 

@@ -1,5 +1,5 @@
 """
-POVM effect representation classes for the `stabilizer_slow` evolution type.
+POVM effect representation classes for the `chp` evolution type.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).

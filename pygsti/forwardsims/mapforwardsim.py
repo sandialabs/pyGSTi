@@ -53,12 +53,19 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
             # Note: `spc.circuit_without_povm` *always* begins with a prep label.
             indices = [outcome_to_index[o] for o in spc_outcomes]
             if time is None:  # time-independent state propagation
+
                 rhorep = self.model.circuit_layer_operator(spc.circuit_without_povm[0], 'prep')._rep
-                ereps = [self.model.circuit_layer_operator(elabel, 'povm')._rep for elabel in spc.full_effect_labels]
+                povmrep = self.model.circuit_layer_operator(spc.povm_label, 'povm')._rep
                 rhorep = self.calclib.propagate_staterep(rhorep,
                                                          [self.model.circuit_layer_operator(ol, 'op')._rep
                                                           for ol in spc.circuit_without_povm[1:]])
-                array_to_fill[indices] = [erep.probability(rhorep) for erep in ereps]  # outcome probabilities
+                if povmrep is None:
+                    ereps = [self.model.circuit_layer_operator(elabel, 'povm')._rep for elabel in spc.full_effect_labels]
+                    array_to_fill[indices] = [erep.probability(rhorep) for erep in ereps]  # outcome probabilities
+                else:
+                    # using spc.effect_labels ensures returned probabilities are in same order as spc_outcomes
+                    array_to_fill[indices] = povmrep.probabilities(rhorep, None, spc.effect_labels)
+
             else:
                 t = time  # Note: time in labels == duration
                 rholabel = spc.circuit_without_povm[0]

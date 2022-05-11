@@ -164,6 +164,13 @@ class Evotype(object):
     def create_composed_effect_rep(self, errmap_rep, effect_rep, errmap_name, state_space):
         return self.module.EffectRepComposed(errmap_rep, effect_rep, errmap_name, state_space)
 
+    #POVM REPS
+    def create_composed_povm_rep(self, errmap_rep, base_povm_rep, state_space):
+        return self.module.ComposedPOVMRep(errmap_rep, base_povm_rep, state_space)
+
+    def create_computational_povm_rep(self, nqubits, qubit_filter):
+        return self.module.ComputationalPOVMRep(nqubits, qubit_filter)
+
     # TERM REPS
     def create_term_rep(self, coeff, mag, logmag, pre_state, post_state,
                         pre_effect, post_effect, pre_ops, post_ops):
