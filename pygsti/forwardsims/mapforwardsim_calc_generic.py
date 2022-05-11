@@ -42,8 +42,12 @@ def mapfill_probs_atom(fwdsim, mx_to_fill, dest_indices, layout_atom, resource_a
     #Get operationreps and ereps now so we don't make unnecessary ._rep references
     rhoreps = {rholbl: fwdsim.model._circuit_layer_operator(rholbl, 'prep')._rep for rholbl in layout_atom.rho_labels}
     operationreps = {gl: fwdsim.model._circuit_layer_operator(gl, 'op')._rep for gl in layout_atom.op_labels}
-    effectreps = {i: fwdsim.model._circuit_layer_operator(Elbl, 'povm')._rep
-                  for i, Elbl in enumerate(layout_atom.full_effect_labels)}  # cache these in future
+    povmreps = {plbl: fwdsim.model._circuit_layer_operator(plbl, 'povm')._rep for plbl in layout_atom.povm_labels}
+    if any([(povmrep is None) for povmrep in povmreps.values()]):
+        effectreps = {i: fwdsim.model._circuit_layer_operator(Elbl, 'povm')._rep
+                      for i, Elbl in enumerate(layout_atom.full_effect_labels)}  # cache these in future
+    else:
+        effectreps = None  # not needed, as we use povm reps directly
 
     #TODO: if layout_atom is split, distribute somehow among processors(?) instead of punting for all but rank-0 above
     for iDest, iStart, remainder, iCache in layout_atom.table.contents:
@@ -60,12 +64,19 @@ def mapfill_probs_atom(fwdsim, mx_to_fill, dest_indices, layout_atom, resource_a
         final_state = propagate_staterep(init_state, [operationreps[gl] for gl in remainder])
         if iCache is not None: rho_cache[iCache] = final_state  # [:,0] #store this state in the cache
 
-        ereps = [effectreps[j] for j in layout_atom.elbl_indices_by_expcircuit[iDest]]
         final_indices = [dest_indices[j] for j in layout_atom.elindices_by_expcircuit[iDest]]
 
-        if shared_mem_leader:
-            for j, erep in zip(final_indices, ereps):
-                mx_to_fill[j] = erep.probability(final_state)  # outcome probability
+        if effectreps is None:
+            povm_lbl, *effect_labels = layout_atom.povm_and_elbls_by_expcircuit[iDest]
+
+            if shared_mem_leader:
+                mx_to_fill[final_indices] = povmreps[povm_lbl].probabilities(final_state, None, effect_labels)
+        else:
+            ereps = [effectreps[j] for j in layout_atom.elbl_indices_by_expcircuit[iDest]]
+
+            if shared_mem_leader:
+                for j, erep in zip(final_indices, ereps):
+                    mx_to_fill[j] = erep.probability(final_state)  # outcome probability
 
 
 def mapfill_dprobs_atom(fwdsim, mx_to_fill, dest_indices, dest_param_indices, layout_atom, param_indices,

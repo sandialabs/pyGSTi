@@ -13,7 +13,7 @@ Operation representation classes for the `stabilizer_slow` evolution type.
 import numpy as _np
 from numpy.random import RandomState as _RandomState
 
-from .statereps import _update_chp_op
+from .statereps import _update_chp_op, StateRep as _StateRep
 from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import internalgates as _itgs
@@ -34,13 +34,25 @@ class OpRep(_basereps.OpRep):
     def num_qubits(self):
         return self.state_space.num_qubits
 
-    def chp_ops(self, seed_or_state=None):
+    def acton(self, state):
+        return self.acton_random(state, None)  # default is to ignore rand_state
+
+    def adjoint_acton(self, state):
+        return self.adjoint_acton_random(state, None)  # default is to ignore rand_state
+
+    def acton_random(self, state, rand_state):
+        return _StateRep(state.chp_ops + self._chp_ops(rand_state), state.state_space)
+
+    def adjoint_acton_random(self, state, rand_state):
+        raise NotImplementedError()
+
+    def _chp_ops(self, seed_or_state=None):
         return self.base_chp_ops
 
-    def chp_str(self, seed_or_state=None):
-        op_str = '\n'.join(self.chp_ops(seed_or_state=seed_or_state))
-        if len(op_str) > 0: op_str += '\n'
-        return op_str
+    #def chp_str(self, seed_or_state=None):
+    #    op_str = '\n'.join(self.chp_ops(seed_or_state=seed_or_state))
+    #    if len(op_str) > 0: op_str += '\n'
+    #    return op_str
 
     def to_dense(self, on_space):
         raise NotImplementedError("CHP op '%s' cannot convert themselves to dense %s-space matrices (yet)" %
@@ -87,11 +99,10 @@ class OpRepComposed(OpRep):
     def reinit_factor_op_reps(self, factor_op_reps):
         self.factors_reps = factor_op_reps
 
-    def chp_ops(self, seed_or_state=None):
+    def _chp_ops(self, seed_or_state=None):
         ops = []
         for factor in self.factor_reps:
-            ops.extend(factor.chp_ops(seed_or_state=seed_or_state))
-
+            ops.extend(factor._chp_ops(seed_or_state=seed_or_state))
         return ops
 
 
@@ -117,11 +128,11 @@ class OpRepEmbedded(OpRep):
         self.embedded_to_local_qubit_indices = {str(i): str(j) for i, j in enumerate(qubit_indices)}
 
         # TODO: This doesn't work as nicely for the stochastic op, where chp_ops can be reset between chp_str calls
-        chp_ops = [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep.chp_ops()]
+        chp_ops = [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep._chp_ops()]
         super(OpRepEmbedded, self).__init__(chp_ops, state_space)
 
-    def chp_ops(self, seed_or_state=None):
-        return [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep.chp_ops(seed_or_state=seed_or_state)]
+    def _chp_ops(self, seed_or_state=None):
+        return [_update_chp_op(op, self.embedded_to_local_qubit_indices) for op in self.embedded_rep._chp_ops(seed_or_state=seed_or_state)]
 
 
 class OpRepRepeated(OpRep):
@@ -129,7 +140,7 @@ class OpRepRepeated(OpRep):
         state_space = _StateSpace.cast(state_space)
         self.repeated_rep = rep_to_repeat
         self.num_repetitions = num_repetitions
-        super(OpRepRepeated, self).__init__(self.repeated_rep.chp_ops() * self.num_repetitions, state_space)
+        super(OpRepRepeated, self).__init__(self.repeated_rep._chp_ops() * self.num_repetitions, state_space)
 
 
 class OpRepRandomUnitary(OpRep):
@@ -150,16 +161,18 @@ class OpRepRandomUnitary(OpRep):
             self.unitary_rates = _np.array(unitary_rates, 'd')
 
         if isinstance(seed_or_state, _RandomState):
-            self.rand_state = seed_or_state
+            self._rand_state = seed_or_state
+        elif isinstance(seed_or_state, int):
+            self._rand_state = _RandomState(seed_or_state)
         else:
-            self.rand_state = _RandomState(seed_or_state)
+            self._rand_state = None
 
         super(OpRepRandomUnitary, self).__init__([], state_space)  # don't store any chp_ops in base
 
     def update_unitary_rates(self, rates):
         self.unitary_rates[:] = rates
 
-    def chp_ops(self, seed_or_state=None):
+    def _chp_ops(self, seed_or_state=None):
         # Optionally override RNG for this call
         if seed_or_state is not None:
             if isinstance(seed_or_state, _np.random.RandomState):
@@ -167,12 +180,13 @@ class OpRepRandomUnitary(OpRep):
             else:
                 rand_state = _np.random.RandomState(seed_or_state)
         else:
-            rand_state = self.rand_state
+            rand_state = self._rand_state
+        assert(rand_state is not None), "Forward sim must provide a random state to use CHP and OpRepRandomUnitary"
 
         rates = self.unitary_rates
         index = rand_state.choice(len(self.unitary_rates), p=rates)
         rep = self.unitary_reps[index]
-        return rep.chp_ops()
+        return rep._chp_ops()
 
 
 class OpRepStochastic(OpRepRandomUnitary):
@@ -258,4 +272,4 @@ class OpRepStochastic(OpRepRandomUnitary):
     #        return []
     #
     #    rep = self.stochastic_superop_reps[index]
-    #    return rep.chp_ops()
+    #    return rep._chp_ops()
