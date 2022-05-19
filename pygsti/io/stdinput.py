@@ -1170,9 +1170,9 @@ def parse_model(filename):
         #Preps
         if cur_typ == "PREP":
             mdl.preps[cur_label] = _state.FullState(
-                _get_liouville_mx(obj))
+                _get_liouville_mx(obj), basis)
         elif cur_typ == "TP-PREP":
-            mdl.preps[cur_label] = _state.TPState(_get_liouville_mx(obj))
+            mdl.preps[cur_label] = _state.TPState(_get_liouville_mx(obj), basis)
         elif cur_typ == "CPTP-PREP":
             props = obj['properties']
             assert("PureVec" in props and "ErrgenMx" in props)  # must always be Liouville reps!
@@ -1183,10 +1183,10 @@ def parse_model(filename):
             errorgen = _op.LinbladErrorgen.from_operation_matrix(
                 qty, proj_basis, proj_basis, truncate=False, mx_basis=basis)
             errorMap = _op.ExpErrorgenOp(errorgen)
-            pureVec = _state.StaticState(_np.transpose(_eval_row_list(props["PureVec"], b_complex=False)))
+            pureVec = _state.StaticState(_np.transpose(_eval_row_list(props["PureVec"], b_complex=False)), basis)
             mdl.preps[cur_label] = _state.ComposedState(pureVec, errorMap)
         elif cur_typ == "STATIC-PREP":
-            mdl.preps[cur_label] = _state.StaticState(_get_liouville_mx(obj))
+            mdl.preps[cur_label] = _state.StaticState(_get_liouville_mx(obj), basis)
 
         #POVMs
         elif cur_typ in ("POVM", "TP-POVM", "CPTP-POVM"):
@@ -1194,9 +1194,9 @@ def parse_model(filename):
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 if sub_typ == "EFFECT":
-                    Evec = _povm.FullPOVMEffect(_get_liouville_mx(sub_obj))
+                    Evec = _povm.FullPOVMEffect(_get_liouville_mx(sub_obj), basis)
                 elif sub_typ == "STATIC-EFFECT":
-                    Evec = _povm.StaticPOVMEffect(_get_liouville_mx(sub_obj))
+                    Evec = _povm.StaticPOVMEffect(_get_liouville_mx(sub_obj), basis)
                 #elif sub_typ == "CPTP-EFFECT":
                 #    Evec = _objs.LindbladSPAMVec.from_spam_vector(qty,qty,"effect")
                 effects.append((sub_obj['label'], Evec))

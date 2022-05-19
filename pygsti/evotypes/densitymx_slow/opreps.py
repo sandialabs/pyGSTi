@@ -54,12 +54,13 @@ class OpRep(_basereps.OpRep):
 
 
 class OpRepDenseSuperop(OpRep):
-    def __init__(self, mx, state_space):
+    def __init__(self, mx, basis, state_space):
         state_space = _StateSpace.cast(state_space)
         if mx is None:
             mx = _np.identity(state_space.dim, 'd')
         assert(mx.ndim == 2 and mx.shape[0] == state_space.dim)
 
+        self.basis = basis
         self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
         super(OpRepDenseSuperop, self).__init__(state_space)
 
@@ -81,7 +82,7 @@ class OpRepDenseSuperop(OpRep):
         return "OpRepDenseSuperop:\n" + str(self.base)
 
     def copy(self):
-        return OpRepDenseSuperop(self.base.copy(), self.state_space)
+        return OpRepDenseSuperop(self.base.copy(), self.basis, self.state_space)
 
 
 class OpRepDenseUnitary(OpRep):
@@ -170,12 +171,12 @@ class OpRepStandard(OpRepDenseSuperop):
 
 
 class OpRepKraus(OpRep):
-    def __init__(self, basis, kraus_reps, seed_or_state, state_space):
+    def __init__(self, basis, kraus_reps, state_space):
         self.basis = basis
         self.kraus_reps = kraus_reps  # superop reps in this evotype (must be reps of *this* evotype)
         state_space = _StateSpace.cast(state_space)
         assert(self.basis.dim == state_space.dim)
-        self.state_space = state_space
+        super(OpRepKraus, self).__init__(state_space)
 
     def acton(self, state):
         return _StateRepDense(sum([rep.acton(state).data
@@ -186,12 +187,14 @@ class OpRepKraus(OpRep):
                                    for rep in self.kraus_reps]), state.state_space)
 
     def __str__(self):
-        return "OpRepKraus:\n" + " rates: " + str(self.kraus_rates)  # maybe show ops too?
+        return "OpRepKraus with ops\n" + str(self.kraus_reps)
 
     def copy(self):
-        return OpRepKraus(self.basis, list(self.kraus_reps), None, self.state_space)
+        return OpRepKraus(self.basis, list(self.kraus_reps), self.state_space)
 
     def to_dense(self, on_space):
+        assert(on_space in ('minimal', 'HilbertSchmidt')), \
+            'Can only compute OpRepKraus.to_dense on HilbertSchmidt space!'
         return sum([rep.to_dense(on_space) for rep in self.kraus_reps])
 
 

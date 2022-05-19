@@ -188,9 +188,9 @@ def create_effect_from_dmvec(superket_vector, effect_type, basis='pp', evotype='
     for typ in effect_type_preferences:
         try:
             if typ == "static":
-                ef = StaticPOVMEffect(superket_vector, evotype, state_space)
+                ef = StaticPOVMEffect(superket_vector, basis, evotype, state_space)
             elif typ == "full":
-                ef = FullPOVMEffect(superket_vector, evotype, state_space)
+                ef = FullPOVMEffect(superket_vector, basis, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
                 try:
@@ -198,7 +198,7 @@ def create_effect_from_dmvec(superket_vector, effect_type, basis='pp', evotype='
                     purevec = _ot.dmvec_to_state(dmvec)  # raises error if dmvec does not correspond to a pure state
                     static_effect = StaticPOVMPureEffect(purevec, basis, evotype, state_space)
                 except ValueError:
-                    static_effect = StaticPOVMEffect(superket_vector, evotype, state_space)
+                    static_effect = StaticPOVMEffect(superket_vector, basis, evotype, state_space)
                 proj_basis = 'PP' if state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis,
                                                                   basis, truncate=True, evotype=evotype)

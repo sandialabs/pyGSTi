@@ -473,7 +473,10 @@ class LindbladErrorgen(_LinearOperator):
                                                 _np.ascontiguousarray(indptr, _np.int64),
                                                 state_space)
             else:  # self._rep_type = 'dense superop'
-                rep = evotype.create_dense_superop_rep(None, state_space)
+                # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+                #  and should be replaced with the basis of contained ops (if any) once we establish
+                #  a common .basis or ._basis attribute of representations (which could still be None)
+                rep = evotype.create_dense_superop_rep(None, None, state_space)
 
         _LinearOperator.__init__(self, rep, evotype)  # sets self.dim
         self._update_rep()  # updates _rep whether it's a dense or sparse matrix

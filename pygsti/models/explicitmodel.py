@@ -375,9 +375,9 @@ class ExplicitOpModel(_mdl.OpModel):
     def set_default_gauge_group_for_member_type(self, member_type):
         """ TODO: docstring """
         if member_type == 'full':
-            self.default_gauge_group = _gg.FullGaugeGroup(self.state_space, self.evotype)
+            self.default_gauge_group = _gg.FullGaugeGroup(self.state_space, self.basis, self.evotype)
         elif member_type in ['full TP', 'TP']:  # TODO: get from verbose_conversion dictionary of modelmembers?
-            self.default_gauge_group = _gg.TPGaugeGroup(self.state_space, self.evotype)
+            self.default_gauge_group = _gg.TPGaugeGroup(self.state_space, self.basis, self.evotype)
         elif member_type == 'CPTP':
             self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, self.basis, self.evotype)
         else:  # typ in ('static','H+S','S', 'H+S terms', ...)
@@ -1195,7 +1195,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, rhoVec in self.preps.items():
             assert(len(rhoVec) == curDim)
             new_model.preps[lbl] = \
-                _state.FullState(_np.concatenate((rhoVec, vec_zeroPad)), evotype, state_space)
+                _state.FullState(_np.concatenate((rhoVec, vec_zeroPad)), dumb_basis, evotype, state_space)
 
         for lbl, povm in self.povms.items():
             assert(povm.state_space.dim == curDim)
@@ -1273,7 +1273,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, rhoVec in self.preps.items():
             assert(len(rhoVec) == curDim)
             new_model.preps[lbl] = \
-                _state.FullState(rhoVec[0:new_dimension, :], self.evotype, state_space)
+                _state.FullState(rhoVec[0:new_dimension, :], dumb_basis, self.evotype, state_space)
 
         for lbl, povm in self.povms.items():
             assert(povm.state_space.dim == curDim)

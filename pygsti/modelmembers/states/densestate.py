@@ -164,12 +164,13 @@ class DenseState(DenseStateInterface, _State):
         i.e, a (dim,1)-shaped array.
     """
 
-    def __init__(self, vec, evotype, state_space):
+    def __init__(self, vec, basis, evotype, state_space):
         vec = _State._to_vector(vec)
         state_space = _statespace.default_space_for_dim(vec.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_dense_state_rep(vec, state_space)
+        self._basis = _Basis.cast(basis, state_space.dim)
+        rep = evotype.create_dense_state_rep(vec, self._basis, state_space)
 
         _State.__init__(self, rep, evotype)
         DenseStateInterface.__init__(self)
@@ -269,7 +270,7 @@ class DensePureState(DenseStateInterface, _State):
                 superket_vec = purevec.real  # used as a convenience case that really shouldn't be used
             else:
                 superket_vec = _bt.change_basis(_ot.state_to_dmvec(purevec), 'std', basis)
-            rep = evotype.create_dense_state_rep(superket_vec, state_space)
+            rep = evotype.create_dense_state_rep(superket_vec, basis, state_space)
             self._reptype = 'superket'
             self._purevec = purevec; self._basis = basis
 

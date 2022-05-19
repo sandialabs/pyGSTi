@@ -60,7 +60,7 @@ class EmbeddedPureState(_State):
 
     def __init__(self, pure_state, evotype='default', dm_basis='pp'):
         if not isinstance(pure_state, _State):
-            pure_state = _StaticState(_State._to_vector(pure_state), 'statevec')
+            pure_state = _StaticState(_State._to_vector(pure_state), dm_basis, 'statevec')
         self.pure_state = pure_state
         self.basis = dm_basis  # only used for dense conversion
 

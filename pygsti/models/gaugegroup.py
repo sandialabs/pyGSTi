@@ -526,14 +526,18 @@ class FullGaugeGroup(OpGaugeGroup):
         elements of the gauge group act on.  This should be the same as `mdl.state_space`
         where `mdl` is a :class:`Model` you want to gauge-transform.
 
+    model_basis : Basis or str, optional
+        The basis used for the superoperators of the model that this gauge
+         group will act on.
+
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space, evotype='default'):
+    def __init__(self, state_space, model_basis='pp', evotype='default'):
         state_space = _StateSpace.cast(state_space)
-        operation = _op.FullArbitraryOp(_np.identity(state_space.dim, 'd'), None, evotype, state_space)
+        operation = _op.FullArbitraryOp(_np.identity(state_space.dim, 'd'), model_basis, evotype, state_space)
         OpGaugeGroup.__init__(self, operation, FullGaugeGroupElement, "Full")
 
 
@@ -570,14 +574,18 @@ class TPGaugeGroup(OpGaugeGroup):
         elements of the gauge group act on.  This should be the same as `mdl.state_space`
         where `mdl` is a :class:`Model` you want to gauge-transform.
 
+    model_basis : Basis or str, optional
+        The basis used for the superoperators of the model that this gauge
+         group will act on.
+
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
     """
 
-    def __init__(self, state_space, evotype='default'):
+    def __init__(self, state_space, model_basis='pp', evotype='default'):
         state_space = _StateSpace.cast(state_space)
-        operation = _op.FullTPOp(_np.identity(state_space.dim, 'd'), None, evotype, state_space)
+        operation = _op.FullTPOp(_np.identity(state_space.dim, 'd'), model_basis, evotype, state_space)
         OpGaugeGroup.__init__(self, operation, TPGaugeGroupElement, "TP")
 
 

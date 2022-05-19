@@ -314,8 +314,8 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_dense_superop_rep(mx, state_space)
         self._basis = _Basis.cast(basis, state_space.dim) if (basis is not None) else None  # for Hilbert-Schmidt space
+        rep = evotype.create_dense_superop_rep(mx, self._basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
         DenseOperatorInterface.__init__(self)
 
@@ -518,7 +518,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
             self._reptype = 'unitary'
             self._unitary = None
         except Exception:
-            rep = evotype.create_dense_superop_rep(superop_mx, state_space)
+            rep = evotype.create_dense_superop_rep(superop_mx, basis, state_space)
             self._reptype = 'superop'
             self._unitary = unitary_mx
 
@@ -548,7 +548,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
                 superop_mx = mx.real  # used as a convenience case that really shouldn't be used
             else:
                 superop_mx = _ot.unitary_to_superop(mx, basis)
-            rep = evotype.create_dense_superop_rep(superop_mx, state_space)
+            rep = evotype.create_dense_superop_rep(superop_mx, basis, state_space)
             self._reptype = 'superop'
             self._unitary = mx
         self._basis = basis

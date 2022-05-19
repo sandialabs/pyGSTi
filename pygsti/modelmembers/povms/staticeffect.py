@@ -33,8 +33,8 @@ class StaticPOVMEffect(_ConjugatedStatePOVMEffect):
         with the appropriate number of qubits is used.
     """
 
-    def __init__(self, vec, evotype="default", state_space=None):
-        _ConjugatedStatePOVMEffect.__init__(self, _StaticState(vec, evotype, state_space))
+    def __init__(self, vec, basis=None, evotype="default", state_space=None):
+        _ConjugatedStatePOVMEffect.__init__(self, _StaticState(vec, basis, evotype, state_space))
 
     def set_dense(self, vec):
         """

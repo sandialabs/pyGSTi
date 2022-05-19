@@ -80,7 +80,10 @@ class ComposedOp(_LinearOperator):
                     factor_op_reps = [op._rep for op in self.factorops]
                     rep = evotype.create_composed_rep(factor_op_reps, state_space)
                 elif rep_type == 'dense':
-                    rep = evotype.create_dense_superop_rep(None, state_space)
+                    # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+                    #  and should be replaced with the basis of contained ops (if any) once we establish
+                    #  a common .basis or ._basis attribute of representations (which could still be None)
+                    rep = evotype.create_dense_superop_rep(None, None, state_space)
                 else:
                     assert(False), "Logic error!"
 

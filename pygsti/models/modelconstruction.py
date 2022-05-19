@@ -540,9 +540,9 @@ def _create_explicit_model_from_expressions(state_space, basis,
         ret.operations[opLabel] = create_operation(opExpr, state_space, basis, gate_type, evotype)
 
     if gate_type == "full":
-        ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, evotype)
+        ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, basis, evotype)
     elif gate_type == "full TP":
-        ret.default_gauge_group = _gg.TPGaugeGroup(ret.state_space, evotype)
+        ret.default_gauge_group = _gg.TPGaugeGroup(ret.state_space, basis, evotype)
     elif gate_type == 'CPTP':
         ret.default_gauge_group = _gg.UnitaryGaugeGroup(ret.state_space, basis, evotype)
     else:
