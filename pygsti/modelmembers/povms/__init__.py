@@ -246,6 +246,7 @@ def povm_type_from_op_type(op_type):
         'static': 'static',
         'full': 'full',
         'full TP': 'full TP',
+        'full CPTP': 'computational',  # TEMPORARY HACK until we create a legit option here
         'linear': 'full',
     }
 

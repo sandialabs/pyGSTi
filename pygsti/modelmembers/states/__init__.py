@@ -54,7 +54,7 @@ def create_from_pure_vector(pure_vector, state_type, basis='pp', evotype='defaul
                 st = StaticPureState(pure_vector, basis, evotype, state_space)
             elif typ == 'full pure':
                 st = FullPureState(pure_vector, basis, evotype, state_space)
-            elif typ in ('static', 'full', 'full TP', 'TrueCPTP'):
+            elif typ in ('static', 'full', 'full TP', 'full CPTP', 'TrueCPTP'):
                 superket = _bt.change_basis(_ot.state_to_dmvec(pure_vector), 'std', basis)
                 st = create_from_dmvec(superket, typ, basis, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):
@@ -89,12 +89,12 @@ def create_from_dmvec(superket_vector, state_type, basis='pp', evotype='default'
     for typ in state_type_preferences:
         try:
             if typ == "static":
-                st = StaticState(superket_vector, evotype, state_space)
+                st = StaticState(superket_vector, basis, evotype, state_space)
             elif typ == "full":
-                st = FullState(superket_vector, evotype, state_space)
+                st = FullState(superket_vector, basis, evotype, state_space)
             elif typ == "full TP":
                 st = TPState(superket_vector, basis, evotype, state_space)
-            elif typ == "TrueCPTP":  # a non-lindbladian CPTP state that hasn't worked well...
+            elif typ in ("full CPTP", "TrueCPTP"):  # a non-lindbladian CPTP state that hasn't worked well...
                 truncate = False
                 st = CPTPState(superket_vector, basis, truncate, evotype, state_space)
 
@@ -148,6 +148,7 @@ def state_type_from_op_type(op_type):
         'static': 'static',
         'full': 'full',
         'full TP': 'full TP',
+        'full CPTP': 'full CPTP',
         'linear': 'full',
     }
 
@@ -220,7 +221,8 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
 
     destination_types = {'full': FullState,
                          'full TP': TPState,
-                         'TrueCPTP': CPTPState,
+                         'full CPTP': CPTPState,
+                         'TrueCPTP': CPTPState,  # DEPRECATED!!
                          'static': StaticState,
                          'static unitary': StaticPureState,
                          'static clifford': ComputationalBasisState}

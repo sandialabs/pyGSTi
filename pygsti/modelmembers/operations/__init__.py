@@ -24,6 +24,7 @@ from .experrorgenop import ExpErrorgenOp
 from .fullarbitraryop import FullArbitraryOp
 from .fulltpop import FullTPOp
 from .fullunitaryop import FullUnitaryOp
+from .fullcptpop import FullCPTPOp
 from .lindbladerrorgen import LindbladErrorgen, LindbladParameterization
 from .linearop import LinearOperator
 from .linearop import finite_difference_deriv_wrt_params, finite_difference_hessian_wrt_params
@@ -60,7 +61,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                 op = StaticUnitaryOp(U, basis, evotype, state_space)
             elif typ == "full unitary":
                 op = FullUnitaryOp(U, basis, evotype, state_space)
-            elif typ in ('static', 'full', 'full TP', 'linear'):
+            elif typ in ('static', 'full', 'full TP', 'linear', 'full CPTP'):
                 superop_mx = _ot.unitary_to_superop(U, basis)
                 op = create_from_superop_mx(superop_mx, op_type, basis, stdname, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):  # maybe "lindblad XXX" where XXX is a valid lindblad type?
@@ -107,6 +108,8 @@ def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotyp
                 op = FullArbitraryOp(superop_mx, basis, evotype, state_space)
             elif typ in ["TP", "full TP"]:
                 op = FullTPOp(superop_mx, basis, evotype, state_space)
+            elif typ == "full CPTP":
+                op = FullCPTPOp.from_superop_matrix(superop_mx, basis, evotype, state_space)
             elif typ == "linear":  # "linear arbitrary"?
                 real = _np.isclose(_np.linalg.norm(superop_mx.imag), 0)
                 op = LinearlyParamArbitraryOp(superop_mx, _np.array([]), {}, None, None, real, basis,
@@ -167,6 +170,7 @@ def verbose_type_from_op_type(op_type):
         'static': 'static',
         'full': 'full',
         'full TP': 'full TP',
+        'full CPTP': 'full CPTP',
         'TP': 'full TP',
         'linear': 'linear',
     }
@@ -280,6 +284,7 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
 
     destination_types = {'full': FullArbitraryOp,
                          'full TP': FullTPOp,
+                         'full CPTP': FullCPTPOp,
                          'linear': LinearlyParamArbitraryOp,
                          'static': StaticArbitraryOp,
                          'static unitary': StaticUnitaryOp,
