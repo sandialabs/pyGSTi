@@ -75,7 +75,7 @@ class StateRepDense(StateRep):
         pass
 
     def __reduce__(self):
-        return (StateRepDense, (self.base, self.state_space), (self.base.flags.writeable,))
+        return (StateRepDense, (self.base, self.state_space, None), (self.base.flags.writeable,))
 
 
 class StateRepDensePure(StateRep):

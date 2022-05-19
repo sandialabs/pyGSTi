@@ -43,12 +43,12 @@ class OpRep(_basereps.OpRep):
     def aslinearoperator(self):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
-            in_state = _StateRepDense(_np.ascontiguousarray(v, 'd'), self.state_space)
+            in_state = _StateRepDense(_np.ascontiguousarray(v, 'd'), self.state_space, None)
             return self.acton(in_state).to_dense(on_space='HilbertSchmidt')
 
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
-            in_state = _StateRepDense(_np.ascontiguousarray(v, 'd'), self.state_space)
+            in_state = _StateRepDense(_np.ascontiguousarray(v, 'd'), self.state_space, None)
             return self.adjoint_acton(in_state).to_dense(on_space='HilbertSchmidt')
         return LinearOperator((self.dim, self.dim), matvec=mv, rmatvec=rmv)  # transpose, adjoint, dot, matmat?
 
@@ -73,10 +73,10 @@ class OpRepDenseSuperop(OpRep):
         return self.base
 
     def acton(self, state):
-        return _StateRepDense(_np.dot(self.base, state.data), state.state_space)
+        return _StateRepDense(_np.dot(self.base, state.data), state.state_space, None)  # state.basis if it had one
 
     def adjoint_acton(self, state):
-        return _StateRepDense(_np.dot(self.base.T, state.data), state.state_space)  # no conjugate b/c *real* data
+        return _StateRepDense(_np.dot(self.base.T, state.data), state.state_space, None)  # no conjugate b/c *real* data
 
     def __str__(self):
         return "OpRepDenseSuperop:\n" + str(self.base)
@@ -91,7 +91,7 @@ class OpRepDenseUnitary(OpRep):
         state_space = _StateSpace.cast(state_space)
         if mx is None:
             mx = _np.identity(state_space.dim, 'd')
-        assert(mx.ndim == 2 and mx.shape[0] == state_space.dim)
+        assert(mx.ndim == 2 and mx.shape[0] == state_space.udim)
 
         self.basis = basis
         self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
@@ -110,6 +110,13 @@ class OpRepDenseUnitary(OpRep):
 
     def to_dense_superop(self):
         return self.superop_base
+
+    def acton(self, state):
+        return _StateRepDense(_np.dot(self.superop_base, state.data), state.state_space, None)
+
+    def adjoint_acton(self, state):
+        return _StateRepDense(_np.dot(self.superop_base.T, state.data), state.state_space, None)
+        # no conjugate b/c *real* data
 
     def __str__(self):
         return "OpRepDenseUnitary:\n" + str(self.base)
@@ -140,12 +147,12 @@ class OpRepSparse(OpRep):
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        return _StateRepDense(self.A.dot(state.data), state.state_space)
+        return _StateRepDense(self.A.dot(state.data), state.state_space, None)
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
         Aadj = self.A.conjugate(copy=True).transpose()
-        return _StateRepDense(Aadj.dot(state.data), state.state_space)
+        return _StateRepDense(Aadj.dot(state.data), state.state_space, None)
 
     def to_dense(self, on_space):
         if on_space not in ('minimal', 'HilbertSchmidt'):
@@ -180,11 +187,11 @@ class OpRepKraus(OpRep):
 
     def acton(self, state):
         return _StateRepDense(sum([rep.acton(state).data
-                                   for rep in self.kraus_reps]), state.state_space)
+                                   for rep in self.kraus_reps]), state.state_space, None)
 
     def adjoint_acton(self, state):
         return _StateRepDense(sum([rep.adjoint_acton(state).data
-                                   for rep in self.kraus_reps]), state.state_space)
+                                   for rep in self.kraus_reps]), state.state_space, None)
 
     def __str__(self):
         return "OpRepKraus with ops\n" + str(self.kraus_reps)
@@ -208,11 +215,13 @@ class OpRepRandomUnitary(OpRep):
 
     def acton(self, state):
         return _StateRepDense(sum([rate * rep.acton(state).data
-                                   for rate, rep in zip(self.unitary_rates, self.unitary_reps)]), state.state_space)
+                                   for rate, rep in zip(self.unitary_rates, self.unitary_reps)]),
+                              state.state_space, None)
 
     def adjoint_acton(self, state):
         return _StateRepDense(sum([rate * rep.adjoint_acton(state).data
-                                   for rate, rep in zip(self.unitary_rates, self.unitary_reps)]), state.state_space)
+                                   for rate, rep in zip(self.unitary_rates, self.unitary_reps)]),
+                              state.state_space, None)
 
     def __str__(self):
         return "OpRepRandomUnitary:\n" + " rates: " + str(self.unitary_rates)  # maybe show ops too?
@@ -287,14 +296,14 @@ class OpRepSum(OpRep):
 
     def acton(self, state):
         """ Act this gate map on an input state """
-        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space)
+        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space, None)
         for f in self.factor_reps:
             output_state.data += f.acton(state).data
         return output_state
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space)
+        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space, None)
         for f in self.factor_reps:
             output_state.data += f.adjoint_acton(state).data
         return output_state
@@ -368,7 +377,7 @@ class OpRepEmbedded(OpRep):
             offset += blockSize
 
     def acton(self, state):
-        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space)
+        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space, None)
         offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
 
         #print("DB REPLIB ACTON: ",self.basisInds_noop_blankaction)
@@ -383,7 +392,7 @@ class OpRepEmbedded(OpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = _StateRepDense(state.data[inds], state.state_space)
+            embedded_instate = _StateRepDense(state.data[inds], state.state_space, None)
             embedded_outstate = self.embedded.acton(embedded_instate)
             output_state.data[inds] += embedded_outstate.data
 
@@ -394,7 +403,7 @@ class OpRepEmbedded(OpRep):
     def adjoint_acton(self, state):
         """ Act the adjoint of this gate map on an input state """
         #NOTE: Same as acton except uses 'adjoint_acton(...)' below
-        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space)
+        output_state = _StateRepDense(_np.zeros(state.data.shape, 'd'), state.state_space, None)
         offset = self.offset  # if rel_to_block else self.offset (rel_to_block == False here)
 
         for b in _itertools.product(*self.basisInds_noop_blankaction):  # zeros in all action-index locations
@@ -406,7 +415,7 @@ class OpRepEmbedded(OpRep):
                     #b[i] = bInd #don't need to do this; just update vec_index:
                     vec_index += self.multipliers[i] * bInd
                 inds.append(offset + vec_index)
-            embedded_instate = _StateRepDense(state.data[inds], state.state_space)
+            embedded_instate = _StateRepDense(state.data[inds], state.state_space, None)
             embedded_outstate = self.embedded.adjoint_acton(embedded_instate)
             output_state.data[inds] += embedded_outstate.data
 
@@ -461,7 +470,7 @@ class OpRepExpErrorgen(OpRep):
         A = self.errorgen_rep.aslinearoperator()  # ~= a sparse matrix for call below
         statedata = _mt._custom_expm_multiply_simple_core(
             A, statedata, self.mu, self.m_star, self.s, tol, self.eta)
-        return _StateRepDense(statedata, state.state_space)
+        return _StateRepDense(statedata, state.state_space, None)
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """

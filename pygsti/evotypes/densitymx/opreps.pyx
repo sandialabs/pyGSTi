@@ -46,14 +46,14 @@ cdef class OpRep(_basereps_cython.OpRep):
         return self.state_space.dim
 
     def acton(self, StateRep state not None):
-        cdef StateRep out_state = StateRepDense(_np.empty(self.c_rep._dim, dtype='d'), self.state_space)
+        cdef StateRep out_state = StateRepDense(_np.empty(self.c_rep._dim, dtype='d'), self.state_space, None)
         #print("PYX acton called w/dim ", self.c_rep._dim, out_state.c_state._dim)
         # assert(state.c_state._dataptr != out_state.c_state._dataptr) # DEBUG
         self.c_rep.acton(state.c_state, out_state.c_state)
         return out_state
 
     def adjoint_acton(self, StateRep state not None):
-        cdef StateRep out_state = StateRepDense(_np.empty(self.c_rep._dim, dtype='d'), self.state_space)
+        cdef StateRep out_state = StateRepDense(_np.empty(self.c_rep._dim, dtype='d'), self.state_space, None)
         #print("PYX acton called w/dim ", self.c_rep._dim, out_state.c_state._dim)
         # assert(state.c_state._dataptr != out_state.c_state._dataptr) # DEBUG
         self.c_rep.adjoint_acton(state.c_state, out_state.c_state)
@@ -62,11 +62,11 @@ cdef class OpRep(_basereps_cython.OpRep):
     def aslinearoperator(self):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRepDense(_np.ascontiguousarray(v,'d'), self.state_space)
+            in_state = StateRepDense(_np.ascontiguousarray(v,'d'), self.state_space, None)
             return self.acton(in_state).to_dense_superket()
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRepDense(_np.ascontiguousarray(v,'d'), self.state_space)
+            in_state = StateRepDense(_np.ascontiguousarray(v,'d'), self.state_space, None)
             return self.adjoint_acton(in_state).to_dense_superket()
         dim = self.c_rep._dim
         return ScipyLinearOperator((dim,dim), matvec=mv, rmatvec=rmv, dtype='d') # transpose, adjoint, dot, matmat?

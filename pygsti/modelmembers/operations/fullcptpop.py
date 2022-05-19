@@ -140,6 +140,7 @@ class FullCPTPOp(_KrausOperatorInterface, _LinearOperator):
         for i, (kraus_rep, ev) in enumerate(zip(self._rep.kraus_reps, evals)):
             # We know kraus_rep is a unitary op rep, with .base == dense mx that is Kraus op
             kraus_rep.base[:, :] = evecs[:, i].reshape(d, d) * _np.sqrt(ev)  # Note: ev can be ~0 and this is OK
+            kraus_rep.base_has_changed()
 
     def _update_rep(self):
         if self._reptype == 'kraus':
