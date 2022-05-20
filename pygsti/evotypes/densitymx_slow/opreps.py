@@ -477,6 +477,23 @@ class OpRepExpErrorgen(OpRep):
         raise NotImplementedError("No adjoint action implemented for sparse Lindblad LinearOperator Reps yet.")
 
 
+class OpRepIdentityPlusErrorgen(OpRep):
+
+    def __init__(self, errorgen_rep):
+        state_space = errorgen_rep.state_space
+        self.errorgen_rep = errorgen_rep
+        super(OpRepIdentityPlusErrorgen, self).__init__(state_space)
+
+    def acton(self, state):
+        """ Act this gate map on an input state """
+        statedata = state.data + self.errorgen_rep.acton(state).data
+        return _StateRepDense(statedata, state.state_space, None)
+
+    def adjoint_acton(self, state):
+        """ Act the adjoint of this operation matrix on an input state """
+        raise NotImplementedError("No adjoint action implemented for OpRepIdentityPlusErrorgen yet.")
+
+
 class OpRepRepeated(OpRep):
     def __init__(self, rep_to_repeat, num_repetitions, state_space):
         state_space = _StateSpace.cast(state_space)

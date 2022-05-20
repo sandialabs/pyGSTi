@@ -767,7 +767,7 @@ class DepolarizationNoise(OpNoise):
         self.depolarization_rate = depolarization_rate
         self.parameterization = parameterization
 
-        valid_depol_params = ['depolarize', 'stochastic', 'lindblad']
+        valid_depol_params = ['depolarize', 'stochastic', 'lindblad', 'linexp lindblad']
         assert (self.parameterization in valid_depol_params), \
             "The depolarization parameterization must be one of %s, not %s" \
             % (valid_depol_params, self.parameterization)
@@ -788,7 +788,7 @@ class DepolarizationNoise(OpNoise):
         -------
         LinearOperator
         """
-        if self.parameterization != 'lindblad':
+        if self.parameterization not in ('lindblad', 'linexp lindblad'):
             raise ValueError("Can only construct error generators for 'lindblad' parameterization")
 
         # LindbladErrorgen with "depol" or "diagonal" param
@@ -827,9 +827,13 @@ class DepolarizationNoise(OpNoise):
             rates = [rate_per_pauli] * (basis_size - 1)
             return _op.StochasticNoiseOp(state_space, basis="pp", evotype=evotype, initial_rates=rates)
 
-        elif self.parameterization == "lindblad":
+        elif self.parameterization in ("lindblad", "exp(lindblad)"):
             errgen = self.create_errorgen(evotype, state_space)
             return _op.ExpErrorgenOp(errgen)
+
+        elif self.parameterization == "1+lindblad":
+            errgen = self.create_errorgen(evotype, state_space)
+            return _op.IdentityPlusErrorgenOp(errgen)
 
         else:
             raise ValueError("Unknown parameterization %s for depolarizing error specification"
@@ -858,7 +862,7 @@ class StochasticNoise(OpNoise):
         self.error_probs = error_probs
         self.parameterization = parameterization
 
-        valid_sto_params = ['stochastic', 'lindblad']
+        valid_sto_params = ['stochastic', 'lindblad', 'linexp lindblad']
         assert (self.parameterization in valid_sto_params), \
             "The stochastic parameterization must be one of %s, not %s" \
             % (valid_sto_params, self.parameterization)
@@ -881,7 +885,7 @@ class StochasticNoise(OpNoise):
         """
         sto_rates = self.error_probs
 
-        if self.parameterization != 'lindblad':
+        if self.parameterization not in ('lindblad', 'linexp lindblad'):
             raise ValueError("Cannot only construct error generators for 'lindblad' parameterization")
 
         basis_size = state_space.dim  # e.g. 4 for a single qubit
@@ -912,9 +916,14 @@ class StochasticNoise(OpNoise):
         if self.parameterization == "stochastic":  # StochasticNoiseOp
             return _op.StochasticNoiseOp(state_space, basis="pp", evotype=evotype, initial_rates=sto_rates)
 
-        elif self.parameterization == "lindblad":  # LindbladErrorgen with "cptp", "diagonal" parameterization
+        elif self.parameterization in ("lindblad", "exp(lindblad)"):  # LindbladErrorgen with "cptp", "diagonal" param
             errgen = self.create_errorgen(evotype, state_space)
             return _op.ExpErrorgenOp(errgen)
+
+        elif self.parameterization == "1+lindblad":  # LindbladErrorgen with "cptp", "diagonal" parameterization
+            errgen = self.create_errorgen(evotype, state_space)
+            return _op.IdentityPlusErrorgenOp(errgen)
+
         else:
             raise ValueError("Unknown parameterization %s for stochastic error specification"
                              % self.parameterization)
@@ -1049,4 +1058,7 @@ class LindbladNoise(OpNoise):
         LinearOperator
         """
         errgen = self.create_errorgen(evotype, state_space)
-        return _op.ExpErrorgenOp(errgen)
+        if self.parameterization.meta == "1+":
+            return _op.IdentityPlusErrorgenOp(errgen)
+        else:  # meta == 'exp' or None
+            return _op.ExpErrorgenOp(errgen)

@@ -1024,19 +1024,20 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
 
     def _create_nq_noise(lndtype):
         proj_basis = 'PP' if state_space.is_entirely_qubits else basis
+        ExpErrorgen = _op.IdentityPlusErrorgenOp if lndtype.meta == '1+' else _op.ExpErrorgenOp
         if local_noise:
             # create a 1-qudit exp(errorgen) that is applied to each qudit independently
             errgen_1Q = _op.LindbladErrorgen.from_error_generator(singleQ_state_space.dim, lndtype, proj_basis, 'pp',
                                                                   truncate=True, evotype=evotype, state_space=None)
             err_gateNQ = _op.ComposedOp([_op.EmbeddedOp(state_space, [qudit_labels[i]],
-                                                        _op.ExpErrorgenOp(errgen_1Q.copy()))
+                                                        ExpErrorgen(errgen_1Q.copy()))
                                          for i in range(num_qudits)], evotype, state_space)
         else:
             # create an n-qudit exp(errorgen)
             errgen_NQ = _op.LindbladErrorgen.from_error_generator(state_space.dim, lndtype, proj_basis, basis,
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
-            err_gateNQ = _op.ExpErrorgenOp(errgen_NQ)
+            err_gateNQ = _op.ExpErrorgen(errgen_NQ)
         return err_gateNQ
 
     def _decomp_index_to_digits(i, bases):
@@ -1094,11 +1095,9 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                 raise ValueError("Invalid state preparation spec: %s" % str(prep_spec))
 
             prep_ops_to_compose = []
-            if ideal_prep_type.startswith('lindblad '):  # then add a composed exp(errorgen) to computational SPAM
-                lndtype = ideal_prep_type[len('lindblad '):]
-
+            if _ot.is_valid_lindblad_paramtype(ideal_prep_type):
+                lndtype = _op.LindbladParameterization.cast(ideal_prep_type)
                 err_gateNQ = _create_nq_noise(lndtype)
-
                 prep_ops_to_compose.append(err_gateNQ)
 
             # Add noise
@@ -1207,11 +1206,9 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                 raise ValueError("Invalid POVM spec: %s" % str(povm_spec))
 
             povm_ops_to_compose = []
-            if ideal_povm_type.startswith('lindblad '):  # then add a composed exp(errorgen) to computational SPAM
-                lndtype = ideal_povm_type[len('lindblad '):]
-
+            if _ot.is_valid_lindblad_paramtype(ideal_povm_type):
+                lndtype = _op.LindbladParameterization.cast(ideal_povm_type)
                 err_gateNQ = _create_nq_noise(lndtype)
-
                 povm_ops_to_compose.append(err_gateNQ.copy())  # .copy() => POVM errors independent
 
             # Add noise

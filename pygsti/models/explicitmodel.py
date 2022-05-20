@@ -1800,7 +1800,7 @@ class ExplicitOpModel(_mdl.OpModel):
         def extract_std_target_mx(op):
             # TODO: more general decomposition of op - here it must be Composed(UnitaryOp, ExpErrorGen)
             #       or just ExpErrorGen
-            if isinstance(op, _op.ExpErrorgenOp):  # assume just an identity op
+            if isinstance(op, (_op.ExpErrorgenOp, _op.IdentityPlusErrorgenOp)):  # assume just an identity op
                 U = _np.identity(op.state_space.dim, 'd')
             elif isinstance(op, _op.ComposedOp):  # assume first element gives unitary
                 op_mx = op.factorops[0].to_dense()  # assumes a LindbladOp and low num qubits
