@@ -101,6 +101,20 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                 fidOps.remove(gate)
 
     availableFidList = _circuits.list_all_circuits(fidOps, 0, max_fid_length)
+    
+    #TODO: I can speed this up a bit more by looking through the available fiducial list for
+    #circuits that are effective identities. Reducing the search space should be a big time-space
+    #saver.
+    
+    #generate a cache for the allowed preps and effects based on availableFidList
+    prep_cache= create_prep_cache(target_model, availableFidList)
+    #TODO: I can technically speed things up even more if we're using the same
+    #set of available fidcuials for state prep and measurement since we only
+    #would need to do generate the transfer matrices for each circuit once.
+    #probably not the most impactful change for the short-term though, performance
+    #wise.
+    meas_cache= create_meas_cache(target_model, availableFidList)
+    
 
     if algorithm_kwargs is None:
         # Avoid danger of using empty dict for default value.
@@ -160,7 +174,8 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                 algorithm_kwargs[key] = default_kwargs[key]
 
         prepFidList = _find_fiducials_grasp(model=target_model,
-                                            prep_or_meas='prep',
+                                            prep_or_meas='prep', 
+                                            fid_cache= prep_cache,
                                             **algorithm_kwargs)
 
         if algorithm_kwargs['return_all'] and prepFidList[0] is not None:
@@ -180,6 +195,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
 
         measFidList = _find_fiducials_grasp(model=target_model,
                                             prep_or_meas='meas',
+                                            fid_cache=meas_cache,
                                             **algorithm_kwargs)
 
         if algorithm_kwargs['return_all'] and measFidList[0] is not None:
@@ -232,7 +248,71 @@ def xor(*args):
     return output
 
 
-def create_prep_mxs(model, prep_fid_list):
+#new function for generating a cache for the elements of the prep matrices and measurement matrices
+#produced by create_prep_mxs and create_meas_mxs. Will also update those two functions to take a cache as
+#an argument and generate the list returned by them more efficiently.
+
+def create_prep_cache(model, available_prep_fid_list):
+    """
+    Make a dictionary structure mapping native state preps and circuits to numpy
+    column vectors for the corresponding effective state prep.
+    
+    This can then be passed into 'create_prep_mxs' to more efficiently generate the
+    matrices for score function evaluation.
+    Parameters
+    ----------
+    model : Model
+        The model (associates operation matrices with operation labels).
+
+    available_prep_fid_list : list of Circuits
+        Full list of all fiducial circuits avalable for constructing an informationally complete state preparation.
+
+    Returns
+    -------
+    dictionary
+        A dictionary with keys given be tuples of the form (native_prep, ckt) with corresponding
+        entries being the numpy vectors for that state prep.
+    """
+    
+    prep_cache = {}
+    for rho in model.preps.values():
+        for prepFid in available_prep_fid_list:
+            prep_cache[(rho.to_vector().tobytes(),prepFid)] = _np.dot(model.sim.product(prepFid), rho.to_dense())
+    return prep_cache
+    
+
+def create_meas_cache(model, available_meas_fid_list):
+    """
+    Make a dictionary structure mapping native measurements and circuits to numpy
+    column vectors corresponding to the transpose of the effective measurement effects.
+    
+    This can then be passed into 'create_meas_mxs' to more efficiently generate the
+    matrices for score function evaluation.
+    Parameters
+    ----------
+    model : Model
+        The model (associates operation matrices with operation labels).
+
+    available_meas_fid_list : list of Circuits
+        Full list of all fiducial circuits avalable for constructing an informationally complete measurements.
+
+    Returns
+    -------
+    dictionary
+        A dictionary with keys given be tuples of the form (native_povm, native_povm_effect, ckt) with corresponding
+        entries being the numpy vectors for the transpose of that effective measurement effect.
+    """
+    
+    meas_cache = {}
+    for povm in model.povms.values():
+        for E in povm.values():
+            if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+            for measFid in available_meas_fid_list:
+                meas_cache[(povm.to_vector().tobytes(),E.to_vector().tobytes(),measFid)] = _np.dot(E.to_dense(), model.sim.product(measFid))
+    return meas_cache
+  
+
+def create_prep_mxs(model, prep_fid_list, prep_cache=None):
     """
     Make a list of matrices for the model preparation operations.
 
@@ -247,6 +327,11 @@ def create_prep_mxs(model, prep_fid_list):
 
     prep_fid_list : list of Circuits
         List of fiducial circuits for constructing an informationally complete state preparation.
+        
+    prep_cache : dictionary of effective state preps
+        Dictionary of effective state preps cache used to accelerate the generation of the matrices
+        used for score function evaluation. Default value is None.
+    
 
     Returns
     -------
@@ -260,15 +345,32 @@ def create_prep_mxs(model, prep_fid_list):
     #numRho = len(model.preps)
     numFid = len(prep_fid_list)
     outputMatList = []
-    for rho in list(model.preps.values()):
-        outputMat = _np.zeros([dimRho, numFid], float)
-        for i, prepFid in enumerate(prep_fid_list):
-            outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho.to_dense())
-        outputMatList.append(outputMat)
+    #print(prep_fid_list)
+    
+    if prep_cache is not None:
+        #print('Using Prep Cache')
+        for rho in list(model.preps.values()):
+            outputMat = _np.zeros([dimRho, numFid], float)
+            for i, prepFid in enumerate(prep_fid_list):
+                #if the key doesn't exist in the cache for some reason then we'll revert back to
+                #doing the matrix multiplication again.
+                try:
+                    outputMat[:, i] = prep_cache[(rho.to_vector().tobytes(),prepFid)]
+                except KeyError:    
+                    outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho.to_dense())
+            outputMatList.append(outputMat)
+    
+    else:
+        for rho in list(model.preps.values()):
+            outputMat = _np.zeros([dimRho, numFid], float)
+            for i, prepFid in enumerate(prep_fid_list):
+                outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho.to_dense())
+            outputMatList.append(outputMat)    
+    
     return outputMatList
 
 
-def create_meas_mxs(model, meas_fid_list):
+def create_meas_mxs(model, meas_fid_list, meas_cache=None):
     """
     Make a list of matrices for the model measurement operations.
 
@@ -283,6 +385,10 @@ def create_meas_mxs(model, meas_fid_list):
 
     meas_fid_list : list of Circuits
         List of fiducial circuits for constructing an informationally complete measurement.
+       
+    meas_cache : dictionary of effective measurement effects
+        Dictionary of effective measurement effects cache used to accelerate the generation of the matrices
+        used for score function evaluation. Entries are columns of the transpose of the effects. Default value is None.
 
     Returns
     -------
@@ -295,19 +401,36 @@ def create_meas_mxs(model, meas_fid_list):
     dimE = model.dim
     numFid = len(meas_fid_list)
     outputMatList = []
-    for povm in model.povms.values():
-        for E in povm.values():
-            if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
-            outputMat = _np.zeros([dimE, numFid], float)
-            for i, measFid in enumerate(meas_fid_list):
-                outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))
-            outputMatList.append(outputMat)
+    
+    if meas_cache is not None:
+        for povm in model.povms.values():
+            for E in povm.values():
+                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+                outputMat = _np.zeros([dimE, numFid], float)
+                for i, measFid in enumerate(meas_fid_list):
+                    #if the key doesn't exist in the cache for some reason then we'll revert back to
+                    #doing the matrix multiplication again.
+                    try:
+                        outputMat[:, i] = meas_cache[(povm.to_vector().tobytes(),E.to_vector().tobytes(),measFid)] 
+                    except KeyError:    
+                        outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))
+                outputMatList.append(outputMat)
+    
+    else:
+        for povm in model.povms.values():
+            for E in povm.values():
+                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+                outputMat = _np.zeros([dimE, numFid], float)
+                for i, measFid in enumerate(meas_fid_list):
+                    outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))
+                outputMatList.append(outputMat)
+            
     return outputMatList
 
 
 def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='all',
                                      threshold=1e6, return_all=False, op_penalty=0.0,
-                                     l1_penalty=0.0):
+                                     l1_penalty=0.0, fid_cache= None):
     """
     Compute a composite score for a fiducial list.
 
@@ -343,13 +466,20 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
     return_all : bool, optional (default is False)
         Whether the spectrum should be returned along with the score.
 
-    op_penalty : float, optional (defailt is 0.0)
+    op_penalty : float, optional (default is 0.0)
         Coefficient of a penalty linear in the total number of gates in all
         fiducials that is added to ``score.minor``.
 
-    l1_penalty : float, optional (defailt is 0.0)
+    l1_penalty : float, optional (default is 0.0)
         Coefficient of a penalty linear in the number of fiducials that is
         added to ``score.minor``.
+        
+    fid_cache : dict, optional (default is None)
+        A dictionary of either effective state preparations or measurement effects
+        used to accelerate the generation of the matrix used for scoring.
+        It's assumed that the user will pass in the correct cache based on the type
+        of fiducial set being created (if wrong a fall back will revert to redoing all the
+        matrix multiplication again).
 
     Returns
     -------
@@ -361,9 +491,9 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
     """
     # dimRho = model.dim
     if prep_or_meas == 'prep':
-        fidArrayList = create_prep_mxs(model, fid_list)
+        fidArrayList = create_prep_mxs(model, fid_list, fid_cache)
     elif prep_or_meas == 'meas':
-        fidArrayList = create_meas_mxs(model, fid_list)
+        fidArrayList = create_meas_mxs(model, fid_list, fid_cache)
     else:
         raise ValueError('Invalid value "{}" for prep_or_meas (must be "prep" '
                          'or "meas")!'.format(prep_or_meas))
@@ -394,7 +524,7 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
 
 def test_fiducial_list(model, fid_list, prep_or_meas, score_func='all',
                        return_all=False, threshold=1e6, l1_penalty=0.0,
-                       op_penalty=0.0):
+                       op_penalty=0.0, fid_cache=None):
     """
     Tests a prep or measure fiducial list for informational completeness.
 
@@ -433,13 +563,20 @@ def test_fiducial_list(model, fid_list, prep_or_meas, score_func='all',
         Specifies a maximum score for the score matrix, above which the
         fiducial set is rejected as informationally incomplete.
 
-    l1_penalty : float, optional (defailt is 0.0)
+    l1_penalty : float, optional (default is 0.0)
         Coefficient of a penalty linear in the number of fiducials that is
         added to ``score.minor``.
 
-    op_penalty : float, optional (defailt is 0.0)
+    op_penalty : float, optional (default is 0.0)
         Coefficient of a penalty linear in the total number of gates in all
         fiducials that is added to ``score.minor``.
+        
+    fid_cache : dict, optional (default is None)    
+        A dictionary of either effective state preparations or measurement effects
+        used to accelerate the generation of the matrix used for scoring.
+        It's assumed that the user will pass in the correct cache based on the type
+        of fiducial set being created (if wrong a fall back will revert to redoing all the
+        matrix multiplication again).
 
     Returns
     -------
@@ -457,7 +594,7 @@ def test_fiducial_list(model, fid_list, prep_or_meas, score_func='all',
     score, spectrum = compute_composite_fiducial_score(
         model, fid_list, prep_or_meas, score_func=score_func,
         threshold=threshold, return_all=True, l1_penalty=l1_penalty,
-        op_penalty=op_penalty)
+        op_penalty=op_penalty, fid_cache=fid_cache)
 
     if score.N < len(spectrum):
         testResult = False
@@ -864,7 +1001,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
                           iterations=5, score_func='all', op_penalty=0.0,
                           l1_penalty=0.0, return_all=False,
                           force_empty=True, threshold=1e6, seed=None,
-                          verbosity=0):
+                          verbosity=0, fid_cache= None):
     """
     Use GRASP to find a high-performing set of fiducials.
 
@@ -930,6 +1067,14 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
 
     verbosity : int, optional
         How much detail to send to stdout.
+        
+    fid_cache : dict, optional (default is None)
+        A dictionary of either effective state preparations or measurement effects
+        used to accelerate the generation of the matrix used for scoring.
+        It's assumed that the user will pass in the correct cache based on the type
+        of fiducial set being created (if wrong a fall back will revert to redoing all the
+        matrix multiplication again).
+        
 
     Returns
     -------
@@ -952,7 +1097,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
 
     initial_test = test_fiducial_list(model, fids_list, prep_or_meas,
                                       score_func=score_func, return_all=False,
-                                      threshold=threshold)
+                                      threshold=threshold, fid_cache=fid_cache)
     if initial_test:
         printer.log("Complete initial fiducial set succeeds.", 1)
         printer.log("Now searching for best fiducial set.", 1)
@@ -982,6 +1127,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
         'op_penalty': op_penalty,
         'return_all': False,
         'l1_penalty': 0.0,
+        'fid_cache': fid_cache,
     }
 
     final_compute_kwargs = compute_kwargs.copy()
