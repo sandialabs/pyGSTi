@@ -102,18 +102,31 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
 
     availableFidList = _circuits.list_all_circuits(fidOps, 0, max_fid_length)
     
+    circuit_cache= create_circuit_cache(target_model,availableFidList)
+    
+    printer.log('Initial Length Available Fiducial List: '+ str(len(availableFidList)), 1)
+    #print('Initial Length Available Fiducial List: ', len(availableFidList))
+    
+    #Now that we have a cache of PTMs as numpy arrays for the initial list of available fiducials
+    #we can clean this list up to remove any effective identities and circuits with duplicate effects.
+    
+    cleaned_availableFidList, cleaned_circuit_cache = clean_fid_list(target_model, circuit_cache, drop_identities=True, drop_duplicates=True)
+    
+    printer.log('Length Available Fiducial List Dropped Identities and Duplicates: ' + str(len(cleaned_availableFidList)), 1)
+    #print('Length Available Fiducial List Dropped Identities and Duplicates: ', len(cleaned_availableFidList))
+    
     #TODO: I can speed this up a bit more by looking through the available fiducial list for
     #circuits that are effective identities. Reducing the search space should be a big time-space
     #saver.
     
     #generate a cache for the allowed preps and effects based on availableFidList
-    prep_cache= create_prep_cache(target_model, availableFidList)
+    prep_cache= create_prep_cache(target_model, cleaned_availableFidList, cleaned_circuit_cache)
     #TODO: I can technically speed things up even more if we're using the same
     #set of available fidcuials for state prep and measurement since we only
     #would need to do generate the transfer matrices for each circuit once.
     #probably not the most impactful change for the short-term though, performance
     #wise.
-    meas_cache= create_meas_cache(target_model, availableFidList)
+    meas_cache= create_meas_cache(target_model, cleaned_availableFidList, cleaned_circuit_cache)
     
 
     if algorithm_kwargs is None:
@@ -123,7 +136,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     if algorithm == 'slack':
         printer.log('Using slack algorithm.', 1)
         default_kwargs = {
-            'fid_list': availableFidList,
+            'fid_list': cleaned_availableFidList,
             'verbosity': max(0, verbosity - 1),
             'force_empty': force_empty,
             'score_func': 'all',
@@ -161,7 +174,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     elif algorithm == 'grasp':
         printer.log('Using GRASP algorithm.', 1)
         default_kwargs = {
-            'fids_list': availableFidList,
+            'fids_list': cleaned_availableFidList,
             'alpha': 0.1,   # No real reason for setting this value of alpha.
             'op_penalty': 0.1,
             'verbosity': max(0, verbosity - 1),
@@ -246,13 +259,91 @@ def xor(*args):
 
     output = sum(bool(x) for x in args) == 1
     return output
+    
+#function for cleaning up the available fiducial list to drop identities and circuits with duplicate effects
+def clean_fid_list(model, circuit_cache, drop_identities=True, drop_duplicates=True):
+    #initialize an identity matrix of the appropriate dimension
+    
+    cleaned_circuit_cache= circuit_cache.copy()
+    
+    
+    if drop_identities:        
+        Identity = _np.identity(model.dim, 'd')
+        
+        #remove identities
+        for ckt_key, PTM in circuit_cache.items():
+            #Don't remove the empty circuit if it is in the list.
+            if ckt_key==():
+                continue
+            #the default tolerance for allclose is probably fine.
+            if _np.allclose(PTM, Identity):
+                #then delete that circuit from the cleaned dictionary
+                del cleaned_circuit_cache[ckt_key]
+                
+    cleaned_circuit_cache_1= cleaned_circuit_cache.copy()            
+                
+    if drop_duplicates:
+        #remove circuits with duplicate PTMs
+        #The list of available fidcuials is typically
+        #generated in such a way to be listed in increasing order
+        #of depth, so if we search for dups in that order this should
+        #generally favor the shorted of a pair of duplicate PTMs.
+        cleaned_cache_keys= list(cleaned_circuit_cache.keys())
+        cleaned_cache_PTMs= list(cleaned_circuit_cache.values())
+        len_cache= len(cleaned_cache_keys)
+        
+        for i,  PTM in enumerate(cleaned_cache_PTMs):
+            for j in range(i+1, len_cache):
+                #the default tolerance for allclose is probably fine.
+                #the second condition is because it is to check if we've already deleted the duplicate
+                #from the cache at an earlier iteration. Definitely a better way to do this, but couldn't be
+                #arsed to figure that out now.
+                if _np.allclose(cleaned_cache_PTMs[j], PTM) and (cleaned_cache_keys[j] in cleaned_circuit_cache_1):
+                    del cleaned_circuit_cache_1[cleaned_cache_keys[j]]
+        
+    #now that we've de-duped the circuit_cache, we can pull out the keys of cleaned_circuit_cache_1 to get the
+    #new list of available fiducials.
+    cleaned_availableFidList= list(cleaned_circuit_cache_1.keys())    
+        
+    return cleaned_availableFidList, cleaned_circuit_cache_1
+    
+
+#new function for taking a list of available fiducials and generating a cache of the PTMs
+#this will also be useful trimming the list of effective identities and fiducials with
+#duplicated effects.
+
+def create_circuit_cache(model, circuit_list):
+    """
+    Function for generating a cache of PTMs for the available fiducials.
+    
+    Parameters
+    ----------
+    model : Model
+        The model (associates operation matrices with operation labels).
+
+    ckt_list : list of Circuits
+        Full list of all fiducial circuits avalable for constructing an informationally complete state preparation.
+    
+    Returns
+    -------
+    dictionary
+        A dictionary with keys given by circuits with corresponding
+        entries being the PTMs for that circuit.
+    
+    """
+    
+    circuit_cache= {}
+    for circuit in circuit_list:
+        circuit_cache[circuit] = model.sim.product(circuit)
+    
+    return circuit_cache
 
 
 #new function for generating a cache for the elements of the prep matrices and measurement matrices
 #produced by create_prep_mxs and create_meas_mxs. Will also update those two functions to take a cache as
 #an argument and generate the list returned by them more efficiently.
 
-def create_prep_cache(model, available_prep_fid_list):
+def create_prep_cache(model, available_prep_fid_list, circuit_cache=None):
     """
     Make a dictionary structure mapping native state preps and circuits to numpy
     column vectors for the corresponding effective state prep.
@@ -267,6 +358,9 @@ def create_prep_cache(model, available_prep_fid_list):
     available_prep_fid_list : list of Circuits
         Full list of all fiducial circuits avalable for constructing an informationally complete state preparation.
 
+    circuit_cache : dict
+        dictionary of PTMs for the circuits in the available_prep_fid_list
+    
     Returns
     -------
     dictionary
@@ -275,13 +369,20 @@ def create_prep_cache(model, available_prep_fid_list):
     """
     
     prep_cache = {}
-    for rho in model.preps.values():
-        for prepFid in available_prep_fid_list:
-            prep_cache[(rho.to_vector().tobytes(),prepFid)] = _np.dot(model.sim.product(prepFid), rho.to_dense())
+    
+    if circuit_cache is not None:
+        for rho in model.preps.values():
+            for prepFid in available_prep_fid_list:
+                prep_cache[(rho.to_vector().tobytes(),prepFid)] = _np.dot(circuit_cache[prepFid], rho.to_dense())
+    
+    else:
+        for rho in model.preps.values():
+            for prepFid in available_prep_fid_list:
+                prep_cache[(rho.to_vector().tobytes(),prepFid)] = _np.dot(model.sim.product(prepFid), rho.to_dense())
     return prep_cache
     
 
-def create_meas_cache(model, available_meas_fid_list):
+def create_meas_cache(model, available_meas_fid_list, circuit_cache=None):
     """
     Make a dictionary structure mapping native measurements and circuits to numpy
     column vectors corresponding to the transpose of the effective measurement effects.
@@ -295,6 +396,9 @@ def create_meas_cache(model, available_meas_fid_list):
 
     available_meas_fid_list : list of Circuits
         Full list of all fiducial circuits avalable for constructing an informationally complete measurements.
+        
+    circuit_cache : dict
+        dictionary of PTMs for the circuits in the available_meas_fid_list
 
     Returns
     -------
@@ -304,11 +408,20 @@ def create_meas_cache(model, available_meas_fid_list):
     """
     
     meas_cache = {}
-    for povm in model.povms.values():
-        for E in povm.values():
-            if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
-            for measFid in available_meas_fid_list:
-                meas_cache[(povm.to_vector().tobytes(),E.to_vector().tobytes(),measFid)] = _np.dot(E.to_dense(), model.sim.product(measFid))
+    
+    if circuit_cache is not None:
+        for povm in model.povms.values():
+            for E in povm.values():
+                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+                for measFid in available_meas_fid_list:
+                    meas_cache[(povm.to_vector().tobytes(),E.to_vector().tobytes(),measFid)] = _np.dot(E.to_dense(), circuit_cache[measFid])    
+    
+    else:
+        for povm in model.povms.values():
+            for E in povm.values():
+                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+                for measFid in available_meas_fid_list:
+                    meas_cache[(povm.to_vector().tobytes(),E.to_vector().tobytes(),measFid)] = _np.dot(E.to_dense(), model.sim.product(measFid))
     return meas_cache
   
 
