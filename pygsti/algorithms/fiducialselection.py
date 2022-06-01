@@ -369,17 +369,22 @@ def create_prep_cache(model, available_prep_fid_list, circuit_cache=None):
     """
     
     prep_cache = {}
+    keylist=[]
     
     if circuit_cache is not None:
         for rho in model.preps.values():
+            new_key= rho.to_vector().tobytes()
+            keylist.append(new_key)
             for prepFid in available_prep_fid_list:
-                prep_cache[(rho.to_vector().tobytes(),prepFid)] = _np.dot(circuit_cache[prepFid], rho.to_dense())
+                prep_cache[(new_key,prepFid)] = _np.dot(circuit_cache[prepFid], rho.to_dense())
     
     else:
         for rho in model.preps.values():
+            new_key= rho.to_vector().tobytes()
+            keylist.append(new_key)
             for prepFid in available_prep_fid_list:
-                prep_cache[(rho.to_vector().tobytes(),prepFid)] = _np.dot(model.sim.product(prepFid), rho.to_dense())
-    return prep_cache
+                prep_cache[(new_key,prepFid)] = _np.dot(model.sim.product(prepFid), rho.to_dense())
+    return prep_cache, keylist
     
 
 def create_meas_cache(model, available_meas_fid_list, circuit_cache=None):
@@ -402,27 +407,33 @@ def create_meas_cache(model, available_meas_fid_list, circuit_cache=None):
 
     Returns
     -------
-    dictionary
+    tuple with dictionary and lists of POVM and Effect Key pairs.
         A dictionary with keys given be tuples of the form (native_povm, native_povm_effect, ckt) with corresponding
         entries being the numpy vectors for the transpose of that effective measurement effect.
     """
     
     meas_cache = {}
+    keypairlist=[]
     
     if circuit_cache is not None:
         for povm in model.povms.values():
             for E in povm.values():
                 if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+                new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_vector().tobytes())
+                keypairlist.append(new_povm_effect_key_pair)
                 for measFid in available_meas_fid_list:
-                    meas_cache[(povm.to_vector().tobytes(),E.to_vector().tobytes(),measFid)] = _np.dot(E.to_dense(), circuit_cache[measFid])    
+                    meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid)] = _np.dot(E.to_dense(), circuit_cache[measFid])    
     
     else:
         for povm in model.povms.values():
             for E in povm.values():
                 if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+                new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_vector().tobytes())
+                keypairlist.append(new_povm_effect_key_pair)
                 for measFid in available_meas_fid_list:
-                    meas_cache[(povm.to_vector().tobytes(),E.to_vector().tobytes(),measFid)] = _np.dot(E.to_dense(), model.sim.product(measFid))
-    return meas_cache
+                    meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid)] = _np.dot(E.to_dense(), model.sim.product(measFid))
+                    
+    return meas_cache, keypairlist
   
 
 def create_prep_mxs(model, prep_fid_list, prep_cache=None):
@@ -462,19 +473,23 @@ def create_prep_mxs(model, prep_fid_list, prep_cache=None):
     
     if prep_cache is not None:
         #print('Using Prep Cache')
-        for rho in list(model.preps.values()):
+        for rho_key in prep_cache[1]:
             outputMat = _np.zeros([dimRho, numFid], float)
             for i, prepFid in enumerate(prep_fid_list):
                 #if the key doesn't exist in the cache for some reason then we'll revert back to
                 #doing the matrix multiplication again.
+                #Actually, this is slowing things down a good amount, let's just print a
+                #descriptive error message if the key is missing 
                 try:
-                    outputMat[:, i] = prep_cache[(rho.to_vector().tobytes(),prepFid)]
-                except KeyError:    
-                    outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho.to_dense())
+                    outputMat[:, i] = prep_cache[0][(rho_key,prepFid)]
+                except KeyError as err:
+                    print('A (Rho, Circuit) pair is missing from the cache, all such pairs should be available is using the caching option.')
+                    raise err                
+                    #outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho.to_dense())
             outputMatList.append(outputMat)
     
     else:
-        for rho in list(model.preps.values()):
+        for rho in model.preps.values():
             outputMat = _np.zeros([dimRho, numFid], float)
             for i, prepFid in enumerate(prep_fid_list):
                 outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho.to_dense())
@@ -514,20 +529,23 @@ def create_meas_mxs(model, meas_fid_list, meas_cache=None):
     dimE = model.dim
     numFid = len(meas_fid_list)
     outputMatList = []
-    
+     
     if meas_cache is not None:
-        for povm in model.povms.values():
-            for E in povm.values():
-                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
-                outputMat = _np.zeros([dimE, numFid], float)
-                for i, measFid in enumerate(meas_fid_list):
-                    #if the key doesn't exist in the cache for some reason then we'll revert back to
-                    #doing the matrix multiplication again.
-                    try:
-                        outputMat[:, i] = meas_cache[(povm.to_vector().tobytes(),E.to_vector().tobytes(),measFid)] 
-                    except KeyError:    
-                        outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))
-                outputMatList.append(outputMat)
+        
+        for povm_key, E_key in meas_cache[1]:
+            outputMat = _np.zeros([dimE, numFid], float)
+            for i, measFid in enumerate(meas_fid_list):
+                #if the key doesn't exist in the cache for some reason then we'll revert back to
+                #doing the matrix multiplication again.
+                #Actually, this is slowing things down a good amount, let's just print a
+                #descriptive error message if the key is missing 
+                try:
+                    outputMat[:, i] = meas_cache[0][(povm_key, E_key,measFid)] 
+                except KeyError as err:
+                    print('A (POVM, Effect, Circuit) pair is missing from the cache, all such pairs should be available is using the caching option.')
+                    raise err
+                    #outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))
+            outputMatList.append(outputMat)
     
     else:
         for povm in model.povms.values():
@@ -632,9 +650,9 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
             #no need to the absolute value since I did that above
             #Non-np sum and min are faster for small arrays/lists but slower for
             #large ones.
-            nonzero_score = numFids*sum(1. /spectrum[-N_nonzero:])
+            nonzero_score = numFids*_np.sum(1. /spectrum[-N_nonzero:])
         elif score_func == 'worst':
-            nonzero_score = numFids*(1. / min(spectrum[-N_nonzero:]))
+            nonzero_score = numFids*(1. / _np.min(spectrum[-N_nonzero:]))
         else:
             raise ValueError("'%s' is not a valid value for score_func.  "
                              "Either 'all' or 'worst' must be specified!"
