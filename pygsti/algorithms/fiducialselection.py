@@ -614,17 +614,45 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
     numFids = len(fid_list)
     scoreMx = _np.concatenate(fidArrayList, axis=1)  # shape = (dimRho, nFiducials*nPrepsOrEffects)
     scoreSqMx = _np.dot(scoreMx, scoreMx.T)  # shape = (dimRho, dimRho)
-    spectrum = sorted(_np.abs(_np.linalg.eigvalsh(scoreSqMx)))
+    spectrum = _np.sort(_np.abs(_np.linalg.eigvalsh(scoreSqMx)))
+    
     specLen = len(spectrum)
-    N_nonzero = 0
-    nonzero_score = _np.inf
-    for N in range(1, specLen + 1):
-        score = numFids * _scoring.list_score(spectrum[-N:], score_func)
-        if score <= 0 or _np.isinf(score) or score > threshold:
-            break   # We've found a zero eigenvalue.
+    N_nonzero = specLen- _np.sum(_np.isclose(spectrum,0))
+    if N_nonzero==0:
+        nonzero_score = _np.inf
+    else:
+        #The scoring function in list_score is meant to be generic, but for 
+        #performance reasons I want to take advantage of the fact that I know
+        #certain things have already been done to the spectrum, so I'm going to
+        #inline the scoring here and leave list_score alone.
+        
+        #don't need to check for zeros since I already counted the number
+        #of nonzero eigenvalues above and handled that case there
+        if score_func == 'all':
+            #no need to the absolute value since I did that above
+            #Non-np sum and min are faster for small arrays/lists but slower for
+            #large ones.
+            nonzero_score = numFids*sum(1. /spectrum[-N_nonzero:])
+        elif score_func == 'worst':
+            nonzero_score = numFids*(1. / min(spectrum[-N_nonzero:]))
         else:
-            nonzero_score = score
-            N_nonzero = N
+            raise ValueError("'%s' is not a valid value for score_func.  "
+                             "Either 'all' or 'worst' must be specified!"
+                             % score_func)
+    
+        #nonzero_score = numFids * _scoring.list_score(spectrum[-N_nonzero:], score_func)
+        
+#    nonzero_score = _np.inf
+#    for N in range(1, specLen + 1):
+#        print(spectrum[-N:])
+#        score = numFids * _scoring.list_score(spectrum[-N:], score_func)
+#        if score <= 0 or _np.isinf(score) or score > threshold:
+#            break   # We've found a zero eigenvalue.
+#        else:
+#            nonzero_score = score
+#            N_nonzero = N
+
+#the implementation of the above scoring loop can be made much faster
 
     nonzero_score += l1_penalty * len(fid_list)
 
