@@ -635,7 +635,7 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
     spectrum = _np.sort(_np.abs(_np.linalg.eigvalsh(scoreSqMx)))
     
     specLen = len(spectrum)
-    N_nonzero = specLen- _np.sum(_np.isclose(spectrum,0))
+    N_nonzero = specLen- _np.count_nonzero(spectrum<10**-10) #HARDCODED Spectrum Threshold
     if N_nonzero==0:
         nonzero_score = _np.inf
     else:
