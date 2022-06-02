@@ -14,6 +14,7 @@ import warnings as _warnings
 
 import numpy as _np
 import numpy.linalg as _nla
+import itertools
 
 from pygsti.algorithms import grasp as _grasp
 from pygsti.algorithms import scoring as _scoring
@@ -148,6 +149,18 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             seed = None if candidate_seed is None else candidate_seed + germLength
             availableGermsList.extend(_circuits.list_random_circuits_onelen(
                 gates, germLength, count, seed=seed))
+
+    printer.log('Initial Length Available Germ List: '+ str(len(availableGermsList)), 1)
+
+    #Let's try deduping the available germ list too:
+    #build a ckt cache
+    ckt_cache= create_circuit_cache(target_model, availableGermsList)
+    #Then dedupe this cache:
+    #The second value returned is an updated ckt cache which we don't need right now
+    availableGermsList, _ = clean_germ_list(target_model, ckt_cache, eq_thresh= 1e-6)
+    
+    printer.log('Length Available Germ List After Deduping: '+ str(len(availableGermsList)), 1)
+
 
     if algorithm_kwargs is None:
         # Avoid danger of using empty dict for default value.
@@ -2217,3 +2230,85 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
     bestSoln = localSolns[_np.argmin(finalScores)]
 
     return (bestSoln, initialSolns, localSolns) if return_all else bestSoln
+
+
+def clean_germ_list(model, circuit_cache, eq_thresh= 1e-6):
+    #initialize an identity matrix of the appropriate dimension
+    
+    cleaned_circuit_cache= circuit_cache.copy()
+                   
+    
+    #remove circuits with duplicate PTMs
+    #The list of available fidcuials is typically
+    #generated in such a way to be listed in increasing order
+    #of depth, so if we search for dups in that order this should
+    #generally favor the shorted of a pair of duplicate PTMs.
+    #cleaned_cache_keys= list(cleaned_circuit_cache.keys())
+    #cleaned_cache_PTMs= list(cleaned_circuit_cache.values())
+    #len_cache= len(cleaned_cache_keys)
+    
+    #reverse the list so that the longer circuits are at the start and shorter
+    #at the end for better pop behavior.
+    
+    #TODO: add an option to partition the list into smaller chunks to dedupe
+    #separately before regrouping and deduping as a whole. Should be a good deal faster. 
+    
+    unseen_circs  = list(cleaned_circuit_cache.keys())
+    unseen_circs.reverse()
+    unique_circs  = []
+    
+    #While unseen_circs is not empty
+    while unseen_circs:
+        current_ckt = unseen_circs.pop()
+        current_ckt_PTM = cleaned_circuit_cache[current_ckt]
+        unique_circs.append(current_ckt)            
+        #now iterate through the remaining elements of the set of unseen circuits and remove any duplicates.
+        is_not_duplicate=[True]*len(unseen_circs)
+        for i, ckt in enumerate(unseen_circs):
+            #the default tolerance for allclose is probably fine.
+            if _np.linalg.norm(cleaned_circuit_cache[ckt]-current_ckt_PTM)<eq_thresh: #use same threshold as defined in the base find_fiducials function
+                is_not_duplicate[i]=False
+        #reset the set of unseen circuits.
+        unseen_circs=list(itertools.compress(unseen_circs, is_not_duplicate))
+    
+    #rebuild the circuit cache now that it has been de-duped:
+    cleaned_circuit_cache_1= {ckt_key: cleaned_circuit_cache[ckt_key] for ckt_key in unique_circs}
+        
+    #now that we've de-duped the circuit_cache, we can pull out the keys of cleaned_circuit_cache_1 to get the
+    #new list of available fiducials.
+    
+    cleaned_availableGermList= unique_circs
+    
+        
+    return cleaned_availableGermList, cleaned_circuit_cache_1
+    
+
+#new function for taking a list of available fiducials and generating a cache of the PTMs
+#this will also be useful trimming the list of effective identities and fiducials with
+#duplicated effects.
+
+def create_circuit_cache(model, circuit_list):
+    """
+    Function for generating a cache of PTMs for the available fiducials.
+    
+    Parameters
+    ----------
+    model : Model
+        The model (associates operation matrices with operation labels).
+
+    ckt_list : list of Circuits
+        Full list of all fiducial circuits avalable for constructing an informationally complete state preparation.
+    
+    Returns
+    -------
+    dictionary
+        A dictionary with keys given by circuits with corresponding
+        entries being the PTMs for that circuit.
+    
+    """
+    
+    circuit_cache= {}
+    for circuit in circuit_list:
+        circuit_cache[circuit] = model.sim.product(circuit)
+    
+    return circuit_cache
