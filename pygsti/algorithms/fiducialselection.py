@@ -12,6 +12,8 @@ Functions for selecting a complete set of fiducials for a GST analysis.
 
 import numpy as _np
 import scipy
+import itertools
+from math import floor
 
 from pygsti.algorithms import grasp as _grasp
 from pygsti.algorithms import scoring as _scoring
@@ -110,7 +112,9 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     #Now that we have a cache of PTMs as numpy arrays for the initial list of available fiducials
     #we can clean this list up to remove any effective identities and circuits with duplicate effects.
     
-    cleaned_availableFidList, cleaned_circuit_cache = clean_fid_list(target_model, circuit_cache, drop_identities=True, drop_duplicates=True)
+    cleaned_availableFidList, cleaned_circuit_cache = clean_fid_list(target_model, circuit_cache, availableFidList,
+                                                                    drop_identities=True, drop_duplicates=True,
+                                                                    eq_thresh=eq_thresh)
     
     printer.log('Length Available Fiducial List Dropped Identities and Duplicates: ' + str(len(cleaned_availableFidList)), 1)
     #print('Length Available Fiducial List Dropped Identities and Duplicates: ', len(cleaned_availableFidList))
@@ -261,7 +265,7 @@ def xor(*args):
     return output
     
 #function for cleaning up the available fiducial list to drop identities and circuits with duplicate effects
-def clean_fid_list(model, circuit_cache, drop_identities=True, drop_duplicates=True):
+def clean_fid_list(model, circuit_cache, available_fid_list,drop_identities=True, drop_duplicates=True, eq_thresh= 1e-6):
     #initialize an identity matrix of the appropriate dimension
     
     cleaned_circuit_cache= circuit_cache.copy()
@@ -273,10 +277,10 @@ def clean_fid_list(model, circuit_cache, drop_identities=True, drop_duplicates=T
         #remove identities
         for ckt_key, PTM in circuit_cache.items():
             #Don't remove the empty circuit if it is in the list.
-            if ckt_key==():
+            if ckt_key=='{}' or ckt_key==():
                 continue
             #the default tolerance for allclose is probably fine.
-            if _np.allclose(PTM, Identity):
+            if _np.linalg.norm(PTM- Identity)<eq_thresh:
                 #then delete that circuit from the cleaned dictionary
                 del cleaned_circuit_cache[ckt_key]
                 
@@ -288,24 +292,49 @@ def clean_fid_list(model, circuit_cache, drop_identities=True, drop_duplicates=T
         #generated in such a way to be listed in increasing order
         #of depth, so if we search for dups in that order this should
         #generally favor the shorted of a pair of duplicate PTMs.
-        cleaned_cache_keys= list(cleaned_circuit_cache.keys())
-        cleaned_cache_PTMs= list(cleaned_circuit_cache.values())
-        len_cache= len(cleaned_cache_keys)
+        #cleaned_cache_keys= list(cleaned_circuit_cache.keys())
+        #cleaned_cache_PTMs= list(cleaned_circuit_cache.values())
+        #len_cache= len(cleaned_cache_keys)
         
-        for i,  PTM in enumerate(cleaned_cache_PTMs):
-            for j in range(i+1, len_cache):
+        #reverse the list so that the longer circuits are at the start and shorter
+        #at the end for better pop behavior.
+        
+        #TODO: add an option to partition the list into smaller chunks to dedupe
+        #separately before regrouping and deduping as a whole. Should be a good deal faster. 
+        
+        unseen_circs  = list(cleaned_circuit_cache.keys())
+        unseen_circs.reverse()
+        unique_circs  = []
+        
+        #While unseen_circs is not empty
+        while unseen_circs:
+            current_ckt = unseen_circs.pop()
+            current_ckt_PTM = cleaned_circuit_cache_1[current_ckt]
+            unique_circs.append(current_ckt)            
+            #now iterate through the remaining elements of the set of unseen circuits and remove any duplicates.
+            is_not_duplicate=[True]*len(unseen_circs)
+            for i, ckt in enumerate(unseen_circs):
                 #the default tolerance for allclose is probably fine.
-                #the second condition is because it is to check if we've already deleted the duplicate
-                #from the cache at an earlier iteration. Definitely a better way to do this, but couldn't be
-                #arsed to figure that out now.
-                if _np.allclose(cleaned_cache_PTMs[j], PTM) and (cleaned_cache_keys[j] in cleaned_circuit_cache_1):
-                    del cleaned_circuit_cache_1[cleaned_cache_keys[j]]
+                if _np.linalg.norm(cleaned_circuit_cache_1[ckt]-current_ckt_PTM)<eq_thresh: #use same threshold as defined in the base find_fiducials function
+                    is_not_duplicate[i]=False
+            #reset the set of unseen circuits.
+            unseen_circs=list(itertools.compress(unseen_circs, is_not_duplicate))
+        
+        #rebuild the circuit cache now that it has been de-duped:
+        cleaned_circuit_cache_2= {ckt_key: cleaned_circuit_cache_1[ckt_key] for ckt_key in unique_circs}
         
     #now that we've de-duped the circuit_cache, we can pull out the keys of cleaned_circuit_cache_1 to get the
     #new list of available fiducials.
-    cleaned_availableFidList= list(cleaned_circuit_cache_1.keys())    
+    
+    available_fid_list_strings= [ckt.str for ckt in available_fid_list]
+    
+    cleaned_availableFidList=[]
+    for i, fid_string in enumerate(available_fid_list_strings):
+        if fid_string in cleaned_circuit_cache_2:
+            cleaned_availableFidList.append(available_fid_list[i])
+    
         
-    return cleaned_availableFidList, cleaned_circuit_cache_1
+    return cleaned_availableFidList, cleaned_circuit_cache_2
     
 
 #new function for taking a list of available fiducials and generating a cache of the PTMs
@@ -334,7 +363,7 @@ def create_circuit_cache(model, circuit_list):
     
     circuit_cache= {}
     for circuit in circuit_list:
-        circuit_cache[circuit] = model.sim.product(circuit)
+        circuit_cache[circuit.str] = model.sim.product(circuit)
     
     return circuit_cache
 
@@ -376,14 +405,14 @@ def create_prep_cache(model, available_prep_fid_list, circuit_cache=None):
             new_key= rho.to_vector().tobytes()
             keylist.append(new_key)
             for prepFid in available_prep_fid_list:
-                prep_cache[(new_key,prepFid)] = _np.dot(circuit_cache[prepFid], rho.to_dense())
+                prep_cache[(new_key,prepFid.str)] = _np.dot(circuit_cache[prepFid.str], rho.to_dense())
     
     else:
         for rho in model.preps.values():
             new_key= rho.to_vector().tobytes()
             keylist.append(new_key)
             for prepFid in available_prep_fid_list:
-                prep_cache[(new_key,prepFid)] = _np.dot(model.sim.product(prepFid), rho.to_dense())
+                prep_cache[(new_key,prepFid.str)] = _np.dot(model.sim.product(prepFid), rho.to_dense())
     return prep_cache, keylist
     
 
@@ -422,7 +451,7 @@ def create_meas_cache(model, available_meas_fid_list, circuit_cache=None):
                 new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_vector().tobytes())
                 keypairlist.append(new_povm_effect_key_pair)
                 for measFid in available_meas_fid_list:
-                    meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid)] = _np.dot(E.to_dense(), circuit_cache[measFid])    
+                    meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid.str)] = _np.dot(E.to_dense(), circuit_cache[measFid.str])    
     
     else:
         for povm in model.povms.values():
@@ -431,7 +460,7 @@ def create_meas_cache(model, available_meas_fid_list, circuit_cache=None):
                 new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_vector().tobytes())
                 keypairlist.append(new_povm_effect_key_pair)
                 for measFid in available_meas_fid_list:
-                    meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid)] = _np.dot(E.to_dense(), model.sim.product(measFid))
+                    meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid.str)] = _np.dot(E.to_dense(), model.sim.product(measFid))
                     
     return meas_cache, keypairlist
   
@@ -481,7 +510,7 @@ def create_prep_mxs(model, prep_fid_list, prep_cache=None):
                 #Actually, this is slowing things down a good amount, let's just print a
                 #descriptive error message if the key is missing 
                 try:
-                    outputMat[:, i] = prep_cache[0][(rho_key,prepFid)]
+                    outputMat[:, i] = prep_cache[0][(rho_key,prepFid.str)]
                 except KeyError as err:
                     print('A (Rho, Circuit) pair is missing from the cache, all such pairs should be available is using the caching option.')
                     raise err                
@@ -540,7 +569,7 @@ def create_meas_mxs(model, meas_fid_list, meas_cache=None):
                 #Actually, this is slowing things down a good amount, let's just print a
                 #descriptive error message if the key is missing 
                 try:
-                    outputMat[:, i] = meas_cache[0][(povm_key, E_key,measFid)] 
+                    outputMat[:, i] = meas_cache[0][(povm_key, E_key,measFid.str)] 
                 except KeyError as err:
                     print('A (POVM, Effect, Circuit) pair is missing from the cache, all such pairs should be available is using the caching option.')
                     raise err
