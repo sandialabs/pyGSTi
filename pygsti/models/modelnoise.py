@@ -1058,7 +1058,7 @@ class LindbladNoise(OpNoise):
         LinearOperator
         """
         errgen = self.create_errorgen(evotype, state_space)
-        if self.parameterization.meta == "1+":
+        if isinstance(self.parameterization, _op.LindbladParameterization) and self.parameterization.meta == "1+":
             return _op.IdentityPlusErrorgenOp(errgen)
         else:  # meta == 'exp' or None
             return _op.ExpErrorgenOp(errgen)
