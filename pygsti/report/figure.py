@@ -71,3 +71,54 @@ class ReportFigure(object):
             import plotly.graph_objs as go
             state['plotlyfig'] = go.Figure(state['plotlyfig']['__plotlydict__'])
         self.__dict__.update(state)
+
+
+class ReportKivyFigure(object):
+    """
+    A  plotly figure and related metadata that can be rendered in a variety of formats.
+
+    For use in pyGSTi reports.
+
+    Parameters
+    ----------
+    kivywidget : kivy.uix.widget.Widget
+        The Kivy widget to encapsulate (alternative to plotly)
+
+    colormap : ColorMap, optional
+        A pygsti color map object used for this figure.
+
+    python_value : object, optional
+        A python object to be used as the Python-version of
+        this figure (usually the data being plotted in some
+        convenient format).
+
+    kwargs : dict
+        Additional meta-data relevant to this figure
+    """
+
+    def __init__(self, kivywidget, colormap=None, python_value=None, **kwargs):
+        '''
+        Create a table object
+
+        Parameters
+        ----------
+        kivywidget : kivy.uix.widget.Widget
+            The Kivy widget to encapsulate (alternative to plotly)
+
+        colormap : ColorMap, optional
+            A pygsti color map object used for this figure.
+
+        python_value : object, optional
+            A python object to be used as the Python-version of
+            this figure (usually the data being plotted in some
+            convenient format).
+
+        kwargs : dict
+            Additional meta-data relevant to this figure
+        '''
+        self.kivywidget = kivywidget
+        self.colormap = colormap
+        self.pythonvalue = python_value
+        self.metadata = dict(kwargs).copy()
+
+    # Do we need special get/set state to make kivywidget pickleable?

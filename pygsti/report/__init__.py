@@ -20,3 +20,4 @@ from .workspace import Workspace
 
 from .factory import *
 from .vbplot import *
+from .explore import DataExplorerApp

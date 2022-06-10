@@ -20,6 +20,7 @@ from pygsti.report.reportableqty import ReportableQty as _ReportableQty
 from pygsti.report import html
 from pygsti.report import latex
 from pygsti.report import python
+from pygsti.report import kivywidget
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
@@ -44,7 +45,8 @@ def functions_in(module):
 convert_dict = {
     'html': functions_in(html),
     'latex': functions_in(latex),
-    'python': functions_in(python)}
+    'python': functions_in(python),
+    'kivywidget': functions_in(kivywidget)}
 
 
 def calc_dim(x):

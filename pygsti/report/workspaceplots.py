@@ -959,6 +959,25 @@ def _opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_b
                                  eb_matrix, title)
 
 
+def _matrix_color_boxplot_kivy(matrix, xlabels=None, ylabels=None,
+                          xlabel=None, ylabel=None, box_labels=False,
+                          thick_line_interval=None, colorbar=None, colormap=None,
+                          prec=0, scale=1.0, eb_matrix=None, title=None, grid="black"):
+
+    from pygsti.reports.kivygraph import MatrixBoxPlotGraph
+    
+    widget = MatrixBoxPlotGraph(matrix, xlabel=xlabel, ylabel=ylabel, padding=5, #background_color=(1,0,0,1),
+                                x_ticks_major=1.0, y_ticks_major=1.0, x_tick_offset=0.5, y_tick_offset=0.5,
+                                x_grid_labels=xlabels, x_grid_label=True,
+                                y_grid_labels=ylabels, y_grid_label=True)
+    #x_ticks_angle=45, **graph_theme)
+
+    flipped_mx = _np.flipud(matrix)  # FLIP so [0,0] matrix el is at *top* left
+    ylabels = list(reversed(ylabels))  # FLIP y-labels to match
+
+    return ReportKivyFigure(widget, colormap, flipped_mx, plt_data=flipped_mx)
+
+
 def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
                           xlabel=None, ylabel=None, box_labels=False,
                           thick_line_interval=None, colorbar=None, colormap=None,

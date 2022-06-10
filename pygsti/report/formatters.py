@@ -51,7 +51,8 @@ format_dict = dict()
 format_dict['Rho'] = {
     'html': _Formatter(regexreplace=('rho([0-9]+)$', '&rho;<sub>%s</sub>')),
     'latex': _Formatter(regexreplace=('rho([0-9]+)$', '$\\rho_{%s}$')),
-    'python': _no_format}
+    'python': _no_format,
+    'kivywidget': _no_format}
 
 # 'E' (POVM) effect formatting
 format_dict['Effect'] = {
@@ -61,7 +62,8 @@ format_dict['Effect'] = {
                        regexreplace=('E([0-9]+)$', 'E<sub>%s</sub>')),
     'latex': _Formatter(stringreturn=('Ec', '$E_C$'),
                         regexreplace=('E([0-9]+)$', '$E_{%s}$')),
-    'python': _no_format}
+    'python': _no_format,
+    'kivywidget': _no_format}
 
 NormalHTML = _Formatter(html,
                         ebstring='%s <span class="errorbar">&plusmn; %s</span>',
@@ -73,25 +75,29 @@ NormalLatex = _Formatter(latex,
 format_dict['Normal'] = {
     'html': NormalHTML,
     'latex': NormalLatex,  # nmebstring will match
-    'python': _no_format}
+    'python': _no_format,
+    'kivywidget': _no_format}
 
 # 'normal' formatting but round to 2 decimal places regardless of what is passed in to table.render()
 format_dict['Rounded'] = {
     'html': NormalHTML.variant(defaults={'precision': 2, 'sciprecision': 0}),
     'latex': NormalLatex.variant(defaults={'precision': 2, 'sciprecision': 0}),
-    'python': _no_format}
+    'python': _no_format,
+    'kivywidget': _no_format}
 
 # 'small' formating - make text smaller
 format_dict['Small'] = {
     'html': NormalHTML,
     'latex': NormalLatex.variant(formatstring='\\small%s'),
-    'python': _no_format}
+    'python': _no_format,
+    'kivywidget': _no_format}
 
 # 'small' formating - make text smaller
 format_dict['Verbatim'] = {
     'html': NormalHTML,
     'latex': NormalLatex.variant(formatstring='\\spverb!%s!'),
-    'python': _no_format}
+    'python': _no_format,
+    'kivywidget': _no_format}
 
 
 def _pi_python(x, specs):
@@ -110,13 +116,15 @@ format_dict['Pi'] = {
                                nmebstring='%s&pi; <span class="nmerrorbar">&plusmn; %s</span>&pi;'),
     'latex': NormalLatex.variant(formatstring='%s$\\pi$',
                                  ebstring='$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $'),
-    'python': PiPython}
+    'python': PiPython,
+    'kivywidget': _no_format}
 
 # BracketFormatters
 format_dict['Brackets'] = {
     'html': NormalHTML.variant(defaults={'brackets': True}),
     'latex': NormalLatex.variant(defaults={'brackets': True}),
-    'python': _no_format}
+    'python': _no_format,
+    'kivywidget': _no_format}
 
 ##################################################################################
 # 'conversion' formatting: catch all for find/replacing specially formatted text #
@@ -176,24 +184,28 @@ mathtext_htmlorlatex = _Formatter(
 format_dict['Conversion'] = {
     'html': convert_html,
     'latex': convert_latex,
-    'python': _no_format}
+    'python': _no_format,
+    'kivywidget': _no_format}
 
 format_dict['MathText'] = {
     'html': mathtext_htmlorlatex,
     'latex': mathtext_htmlorlatex,
-    'python': _no_format}
+    'python': _no_format,
+    'kivywidget': _no_format}
 
 
 format_dict['Vec'] = {
     'html': NormalHTML,
     'latex': _Formatter(latex, ebstring='%s $\pm$ %s'),
-    'python': _no_format}
+    'python': _no_format,
+    'kivywidget': _no_format}
 
 format_dict['Circuit'] = {
     'html': _Formatter(lambda s, specs: '.'.join(map(str, s)) if s is not None else ''),
     'latex': _Formatter(lambda s, specs: '' if s is None else ('$%s$' % '\\cdot'.join([('\\mbox{%s}' % str(gl))
                                                                                        for gl in s]))),
-    'python': _no_format}
+    'python': _no_format,
+    'kivywidget': _no_format}
 
 '''
 Figure formatters no longer use Formatter objects, because figure formatters are more specialized.
@@ -282,22 +294,46 @@ def python_figure(fig, specs):
                           render_out['python'][plotDivID].get('errorbar', None))
 
 
+def kivy_figure(fig, specs):
+    """
+    Render a Kivy-format figure
+
+    Parameters
+    ----------
+    fig : ReportableQty
+        A reportable quantity holding a `WorkspacePlot` as its value.
+
+    specs : dictionary
+        dictionary of formatting options.
+
+    Returns
+    -------
+    str
+    """
+    #Create figure inline with 'js' set to only handlers (no further plot init)
+    fig_widget = fig.value.render('kivywidget')
+    return {'kivywidget': fig_widget}  # a dictionary with 'kivywidget' key
+
+
 format_dict['Figure'] = {
     'html': html_figure,
     'latex': latex_figure,
-    'python': python_figure}
+    'python': python_figure,
+    'kivywidget': kivy_figure}
 
 # Bold formatting
 format_dict['Bold'] = {
     'html': _Formatter(html, formatstring='<b>%s</b>'),
     'latex': _Formatter(latex, formatstring='\\textbf{%s}'),
-    'python': _no_format}
+    'python': _no_format,
+    'kivywidget': _no_format}
 
 #Special formatting for Hamiltonian and Stochastic model types
 format_dict['GatesetType'] = {
     'html': _Formatter(),
     'latex': _Formatter(stringreplacers=[('H', '$\\mathcal{H}$'), ('S', '$\\mathcal{S}$')]),
-    'python': _no_format}
+    'python': _no_format,
+    'kivywidget': _no_format}
 
 
 '''
