@@ -44,10 +44,12 @@ class TableWidget(GridLayout):
 
         for heading_cell_widget in formatted_headings:
             self.add_widget(heading_cell_widget)
-            
+
         for row in formatted_rows:
             assert(len(row) == self.cols)
             for cell_widget in row:
+                print("Cell widget = ",str(cell_widget))
+                import bpdb; bpdb.set_trace()
                 self.add_widget(cell_widget)
 
     def on_size(self, *args):
@@ -105,8 +107,8 @@ def cell(data, label, spec):
     -------
     string
     """
-    #if isinstance(data, dict) or label is None:
-    #    return data
+    if isinstance(data, Widget):
+        return data  # do this also if label is None?
     return Label(text=str(data))  # use label?
 
 

@@ -311,8 +311,8 @@ def kivy_figure(fig, specs):
     str
     """
     #Create figure inline with 'js' set to only handlers (no further plot init)
-    fig_widget = fig.value.render('kivywidget')
-    return {'kivywidget': fig_widget}  # a dictionary with 'kivywidget' key
+    fig_widget = fig.value.figs[0].kivywidget  # why not: fig.value.render('kivywidget')?
+    return fig_widget
 
 
 format_dict['Figure'] = {

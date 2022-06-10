@@ -22,7 +22,7 @@ from scipy.stats import chi2 as _chi2
 from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 from pygsti.report import colormaps as _colormaps
 from pygsti.report import plothelpers as _ph
-from pygsti.report.figure import ReportFigure
+from pygsti.report.figure import ReportFigure, ReportKivyFigure
 from pygsti.report.workspace import WorkspacePlot
 from pygsti import algorithms as _alg
 from pygsti import baseobjs as _baseobjs
@@ -953,20 +953,29 @@ def _opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_b
     colormap = _colormaps.DivergingColormap(vmin=color_min, vmax=color_max)
     thickLineInterval = 4 if (mx_basis is not None and mx_basis.name == "pp") \
         else None  # TODO: separate X and Y thick lines?
-    return _matrix_color_boxplot(op_matrix, xlabels, ylabels,
-                                 xlabel, ylabel, box_labels, thickLineInterval,
-                                 colorbar, colormap, prec, scale,
-                                 eb_matrix, title)
+
+    return _matrix_color_boxplot_kivy(op_matrix, xlabels, ylabels,
+                                      xlabel, ylabel, box_labels, thickLineInterval,
+                                      colorbar, colormap, prec, scale,
+                                      eb_matrix, title)
+
+    #return _matrix_color_boxplot(op_matrix, xlabels, ylabels,
+    #                             xlabel, ylabel, box_labels, thickLineInterval,
+    #                             colorbar, colormap, prec, scale,
+    #                             eb_matrix, title)
 
 
 def _matrix_color_boxplot_kivy(matrix, xlabels=None, ylabels=None,
-                          xlabel=None, ylabel=None, box_labels=False,
-                          thick_line_interval=None, colorbar=None, colormap=None,
-                          prec=0, scale=1.0, eb_matrix=None, title=None, grid="black"):
+                               xlabel=None, ylabel=None, box_labels=False,
+                               thick_line_interval=None, colorbar=None, colormap=None,
+                               prec=0, scale=1.0, eb_matrix=None, title=None, grid="black"):
 
-    from pygsti.reports.kivygraph import MatrixBoxPlotGraph
+    from pygsti.report.kivygraph import MatrixBoxPlotGraph
     
-    widget = MatrixBoxPlotGraph(matrix, xlabel=xlabel, ylabel=ylabel, padding=5, #background_color=(1,0,0,1),
+    widget = MatrixBoxPlotGraph(matrix,
+                                xlabel=xlabel if (xlabel is not None) else '',
+                                ylabel=ylabel if (ylabel is not None) else '',
+                                padding=5, #background_color=(1,0,0,1),
                                 x_ticks_major=1.0, y_ticks_major=1.0, x_tick_offset=0.5, y_tick_offset=0.5,
                                 x_grid_labels=xlabels, x_grid_label=True,
                                 y_grid_labels=ylabels, y_grid_label=True)
