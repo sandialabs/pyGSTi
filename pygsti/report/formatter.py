@@ -122,15 +122,30 @@ class Formatter(object):
         --------
         formatted item : string
         '''
-        specs = deepcopy(specs)  # Modifying other dictionaries would be rude
-        specs.update(self.defaults)
+        #specs = deepcopy(specs)  # Modifying other dictionaries would be rude
+        #specs.update(self.defaults)
+
+        # Update: we want to allow non-default modification of specs, so instead of
+        # a simple deepcopy and update, we keep track of what defaults were added:
+        added_defaults = {}
+        for k, v in self.defaults.items():
+            if k not in specs:
+                specs[k] = v
+                added_defaults[k] = v
+
+        def remove_added_defaults(sp):  # must do this before we return
+            for k, v in added_defaults.items():
+                if sp[k] == v: del sp[k]
 
         if isinstance(item, _ReportableQty):
             # If values are replaced with dashes or empty, leave them be
             s = str(item.value)
             if s == '--' or s == '':
+                remove_added_defaults(specs)
                 return s
-            return item.render_with(self, specs, self.ebstring, self.nmebstring)
+            rendered = item.render_with(self, specs, self.ebstring, self.nmebstring)
+            remove_added_defaults(specs)
+            return rendered
         # item is not ReportableQty, and custom is defined
         # avoids calling custom twice on ReportableQty objects
         elif self.custom is not None:
@@ -139,6 +154,7 @@ class Formatter(object):
         item = str(item)
         # Avoids replacing commonly used string names with formatting
         if self.stringreturn is not None and item == self.stringreturn[0]:
+            remove_added_defaults(specs)
             return self.stringreturn[1]
 
         # Below is the standard formatter case:
@@ -154,6 +170,7 @@ class Formatter(object):
                 item = item[0:s] + (self.regexreplace[1] % result.group(1)) + item[e:]
         formatstring = specs['formatstring'] if 'formatstring' in specs else self.formatstring
         # Additional formatting, ex $%s$ or <i>%s</i>
+        remove_added_defaults(specs)
         return formatstring % item
 
     def variant(self, **kwargs):

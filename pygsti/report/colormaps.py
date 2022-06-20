@@ -225,7 +225,7 @@ class Colormap(object):
                              for z, (r, g, b) in self.rgb_colors]
         return plotly_colorscale
 
-    def interpolate_color(self, value):
+    def interpolate_color_tuple(self, value, value_is_normalized=False, rgb_ints=True, add_alpha=None):
         """
         Retrieves the color at a particular colormap value.
 
@@ -235,15 +235,26 @@ class Colormap(object):
         Parameters
         ----------
         value : float
-            The value (before normalization) to compute the color for.
+            The value to compute the color for.
+
+        value_is_normalized : bool, optional
+            Whether `value` has already been normalized (True) or not (False).
+
+        rgb_ints : bool, optional
+            If `True`, then the elements of the returned tuple are integers between
+            0 and 255.  If `False`, then elements are floating point values between
+            0.0 and 1.0.
+
+        add_alpha : float, optional
+            Floating point alpha value to add to returned tuple if not `None`.
 
         Returns
         -------
-        str
-            A string representation of the plotly color of the form `"rgb(R,G,B)"`.
+        tuple
+            Tuple of RGB or RGBA values. See `rgb_ints` and `add_alpha` above.
         """
-        normalized_value = self.normalize(value)
-
+        normalized_value = value if value_is_normalized else self.normalize(value)
+        
         for i, (val, color) in enumerate(self.rgb_colors[:-1]):
             next_val, next_color = self.rgb_colors[i + 1]
             if val <= normalized_value < next_val:
@@ -262,9 +273,35 @@ class Colormap(object):
                 raise ValueError(("Normalized value %g should be >= final "
                                   "color value (%g) or an invalid color should"
                                   " be set") % (normalized_value, val))
-        return 'rgb(%d,%d,%d)' % (int(round(interp_rgb[0] * 255)),
-                                  int(round(interp_rgb[1] * 255)),
-                                  int(round(interp_rgb[2] * 255)))
+        if add_alpha is not None:
+            interp_rgb = _np.concatenate((interp_rgb, [add_alpha]))
+
+        if rgb_ints:
+            return tuple([int(round(v * 255)) for v in interp_rgb])
+        else:
+            return interp_rgb
+
+    def interpolate_color(self, value, value_is_normalized):
+        """
+        Retrieves the color at a particular colormap value.
+
+        This function linearly interpolates between the colors of a
+        this colormap's color scale
+
+        Parameters
+        ----------
+        value : float
+            The value to compute the color for.
+
+        value_is_normalized : bool
+           Whether `value` has already been normalized (True) or not (False).
+
+        Returns
+        -------
+        str
+            A string representation of the plotly color of the form `"rgb(R,G,B)"`.
+        """
+        return 'rgb(%d,%d,%d)' % self.interpolate_color_tuple(value, value_is_normalized, rgb_ints=True)
 
     def create_matplotlib_norm_and_cmap(self):
         """

@@ -54,6 +54,7 @@ __all__ = ('Graph', 'Plot', 'MeshLinePlot', 'MeshStemPlot', 'LinePlot',
            'SmoothLinePlot', 'ContourPlot', 'ScatterPlot', 'PointPlot')
 
 import itertools
+import numpy as _np
 
 from kivy.uix.widget import Widget
 from kivy.uix.label import Label
@@ -294,12 +295,18 @@ class Graph(Widget):
                         break
                     count += 1
                     if zero or diff >= min_pos:
-                        if minor and not count_min % minor:
-                            points_major[k] = pos_log
-                            k += 1
-                        else:
+                        if minor and count_min % minor:
                             points_minor[k2] = pos_log
                             k2 += 1
+                        else:
+                            points_major[k] = pos_log
+                            k += 1
+                        # OLD (broken?) if minor and not count_min % minor:
+                        # OLD (broken?)     points_major[k] = pos_log
+                        # OLD (broken?)     k += 1
+                        # OLD (broken?) else:
+                        # OLD (broken?)     points_minor[k2] = pos_log
+                        # OLD (broken?)     k2 += 1
                     count_min += 1
             else:
                 # distance between each tick
@@ -1033,6 +1040,10 @@ class Plot(EventDispatcher):
     '''Color of the plot.
     '''
 
+    colors = ListProperty([])
+    '''Colors for individual points/bars/etc.
+    '''
+    
     points = ListProperty([])
     '''List of (x, y) points to be displayed in the plot.
 
@@ -1054,7 +1065,7 @@ class Plot(EventDispatcher):
     def __init__(self, **kwargs):
         super(Plot, self).__init__(**kwargs)
         self.ask_draw = Clock.create_trigger(self.draw)
-        self.bind(params=self.ask_draw, points=self.ask_draw)
+        self.bind(params=self.ask_draw, points=self.ask_draw, colors=self.ask_draw)
         self._drawings = self.create_drawings()
 
     def funcx(self):
@@ -1215,6 +1226,7 @@ class MeshLinePlot(Plot):
     '''
 
     def create_drawings(self):
+        #Note (by Erik): cannot use self.colors here until we write a custom GL shader
         self._color = Color(*self.color)
         self._mesh = Mesh(mode='line_strip')
         self.bind(
@@ -1345,7 +1357,7 @@ class SmoothLinePlot(Plot):
         with self._grc:
             self._gcolor = Color(*self.color)
             self._gline = Line(
-                points=[], cap='none', width=2.,
+                points=[], cap='none', width=5.,
                 texture=SmoothLinePlot._texture)
 
         return [self._grc]
@@ -1465,11 +1477,42 @@ class BarPlot(Plot):
         #print("DB: point width = ", point_width, " bar width = ", self.bar_width)
 
     def create_drawings(self):
-        self._color = Color(*self.color)
-        self._mesh = Mesh()
-        self.bind(
-            color=lambda instr, value: setattr(self._color, 'rgba', value))
-        return [self._color, self._mesh]
+        from kivy.graphics import RenderContext
+
+        #test = RenderContext(
+        #    use_parent_modelview=True,
+        #    use_parent_projection=True)
+        #print("TEST VERTEX SOURCE:")
+        #print(test.shader.vs)
+        #print("TEST FRAG SOURCE:")
+        #print(test.shader.fs)
+
+        if not self.colors:  # original all-one-color bars
+            self._color = Color(*self.color)
+            self._mesh = Mesh(mode='triangles')
+            self.bind(
+                color=lambda instr, value: setattr(self._color, 'rgba', value))
+            return [self._color, self._mesh]
+
+        else:  # per-bar colors -> need custom shader
+
+            import os
+            self._grc = RenderContext(
+                use_parent_modelview=True,
+                use_parent_projection=True)
+            self._grc.shader.source = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                   'perptcolorshaders.glsl')
+            vertex_format = [
+                (b'vPosition', 2, 'float'),  # <--- GLSL shader variable names.
+                (b'vColor', 4, 'float')
+            ]
+            with self._grc:
+                self._color = Color(*self.color)
+                self._mesh = Mesh(fmt=vertex_format,
+                                  mode='triangles')
+                self.bind(
+                    color=lambda instr, value: setattr(self._color, 'rgba', value))
+            return [self._grc]
 
     def draw(self, *args):
         super(BarPlot, self).draw(*args)
@@ -1484,48 +1527,101 @@ class BarPlot(Plot):
 
         point_len = len(points)
         mesh = self._mesh
-        mesh.mode = 'triangles'
         vert = mesh.vertices
         ind = mesh.indices
-        diff = len(points) * 6 - len(vert) // 4
+
+        vertex_size = 4 if len(self.colors) == 0 else 6
+        diff = len(points) * 6 - len(vert) // vertex_size
         if diff < 0:
-            del vert[24 * point_len:]
+            del vert[6 * vertex_size * point_len:]
             del ind[6 * point_len:]
         elif diff > 0:
             ind.extend(range(len(ind), len(ind) + diff))
-            vert.extend([0] * (diff * 4))
+            vert.extend([0] * (diff * vertex_size))
 
         bounds = self.get_px_bounds()
         x_px = self.x_px()
         y_px = self.y_px()
-        ymin = y_px(0)
+        ymin = y_px(self.graph.ymin)
 
         bar_width = self.bar_width
         if bar_width < 0:
             bar_width = x_px(bar_width) - bounds["xmin"]
 
+        nColors = len(self.colors)
+            
         for k in range(point_len):
             p = points[k]
             x1 = x_px(p[0])
             x2 = x1 + bar_width
             y1 = ymin
             y2 = y_px(p[1])
+            idx = k * 6 * vertex_size
 
-            idx = k * 24
-            # first triangle
-            vert[idx] = x1
-            vert[idx + 1] = y2
-            vert[idx + 4] = x1
-            vert[idx + 5] = y1
-            vert[idx + 8] = x2
-            vert[idx + 9] = y1
-            # second triangle
-            vert[idx + 12] = x1
-            vert[idx + 13] = y2
-            vert[idx + 16] = x2
-            vert[idx + 17] = y2
-            vert[idx + 20] = x2
-            vert[idx + 21] = y1
+            if not self.colors:  # all bars one color - original method
+                # first triangle
+                vert[idx] = x1
+                vert[idx + 1] = y2
+                vert[idx + 4] = x1
+                vert[idx + 5] = y1
+                vert[idx + 8] = x2
+                vert[idx + 9] = y1
+                # second triangle
+                vert[idx + 12] = x1
+                vert[idx + 13] = y2
+                vert[idx + 16] = x2
+                vert[idx + 17] = y2
+                vert[idx + 20] = x2
+                vert[idx + 21] = y1
+            else:
+                # per-vertex coloring: each vertex is (x, y, r, g, b, a)
+                color = self.colors[k % nColors]
+                r, g, b, a = color
+
+                # first triangle
+                vert[idx] = x1
+                vert[idx + 1] = y2
+                vert[idx + 2] = r
+                vert[idx + 3] = g
+                vert[idx + 4] = b
+                vert[idx + 5] = a
+
+                vert[idx + 6] = x1
+                vert[idx + 7] = y1
+                vert[idx + 8] = r
+                vert[idx + 9] = g
+                vert[idx + 10] = b
+                vert[idx + 11] = a
+
+                vert[idx + 12] = x2
+                vert[idx + 13] = y1
+                vert[idx + 14] = r
+                vert[idx + 15] = g
+                vert[idx + 16] = b
+                vert[idx + 17] = a
+
+                # second triangle
+                vert[idx + 18] = x1
+                vert[idx + 19] = y2
+                vert[idx + 20] = r
+                vert[idx + 21] = g
+                vert[idx + 22] = b
+                vert[idx + 23] = a
+
+                vert[idx + 24] = x2
+                vert[idx + 25] = y2
+                vert[idx + 26] = r
+                vert[idx + 27] = g
+                vert[idx + 28] = b
+                vert[idx + 29] = a
+
+                vert[idx + 30] = x2
+                vert[idx + 31] = y1
+                vert[idx + 32] = r
+                vert[idx + 33] = g
+                vert[idx + 34] = b
+                vert[idx + 35] = a
+
         mesh.vertices = vert
 
     def _unbind_graph(self, graph):
@@ -1666,72 +1762,72 @@ class PointPlot(Plot):
 
 
 
-class MeshBoxPlot(Plot):
-    '''MeshBoxPlot class which displays a set of boxes similar to a mesh.
-    '''
-
-    #REMOVE?
-    #def _set_mode(self, value):
-    #    if hasattr(self, '_mesh'):
-    #        self._mesh.mode = value
-    #
-    #mode = AliasProperty(lambda self: self._mesh.mode, _set_mode)
-    #'''VBO Mode used for drawing the points. Can be one of: 'points',
-    #'line_strip', 'line_loop', 'lines', 'triangle_strip', 'triangle_fan'.
-    #See :class:`~kivy.graphics.Mesh` for more details.
-    #
-    #Defaults to 'line_strip'.
-    #'''
-
-    def __init__(self, *ar, **kw):
-        super(BarPlot, self).__init__(*ar, **kw)
-        self.bind(bar_width=self.ask_draw)
-        self.bind(points=self.update_bar_width)
-        self.bind(graph=self.update_bar_width)
-
-
-    def create_drawings(self):
-        self._mesh = Mesh(mode='triangles')
-
-        # Leave this for now, even though we may not need/want it
-        self._color = Color(*self.color)
-        self.bind(
-            color=lambda instr, value: setattr(self._color, "rgba", value))
-
-        return [self._color, self._mesh]
-
-    def draw(self, *args):
-        super(MeshBoxPlot, self).draw(*args)
-        self.plot_mesh()
-
-    def plot_mesh(self):
-        points = [p for p in self.iterate_points()]
-        mesh, vert, _ = self.set_mesh_size(len(points))
-        for k, (x, y) in enumerate(points):
-            vert[k * 4] = x
-            vert[k * 4 + 1] = y
-        mesh.vertices = vert
-
-    def set_mesh_size(self, size):
-        mesh = self._mesh
-        vert = mesh.vertices
-        ind = mesh.indices
-        diff = size - len(vert) // 4
-        if diff < 0:
-            del vert[4 * size:]
-            del ind[size:]
-        elif diff > 0:
-            ind.extend(range(len(ind), len(ind) + diff))
-            vert.extend([0] * (diff * 4))
-        mesh.vertices = vert
-        return mesh, vert, ind
+#class MeshBoxPlot(Plot):
+#    '''MeshBoxPlot class which displays a set of boxes similar to a mesh.
+#    '''
+#
+#    #REMOVE?
+#    #def _set_mode(self, value):
+#    #    if hasattr(self, '_mesh'):
+#    #        self._mesh.mode = value
+#    #
+#    #mode = AliasProperty(lambda self: self._mesh.mode, _set_mode)
+#    #'''VBO Mode used for drawing the points. Can be one of: 'points',
+#    #'line_strip', 'line_loop', 'lines', 'triangle_strip', 'triangle_fan'.
+#    #See :class:`~kivy.graphics.Mesh` for more details.
+#    #
+#    #Defaults to 'line_strip'.
+#    #'''
+#
+#    def __init__(self, *ar, **kw):
+#        super(BarPlot, self).__init__(*ar, **kw)
+#        self.bind(bar_width=self.ask_draw)
+#        self.bind(points=self.update_bar_width)
+#        self.bind(graph=self.update_bar_width)
+#
+#
+#    def create_drawings(self):
+#        self._mesh = Mesh(mode='triangles')
+#
+#        # Leave this for now, even though we may not need/want it
+#        self._color = Color(*self.color)
+#        self.bind(
+#            color=lambda instr, value: setattr(self._color, "rgba", value))
+#
+#        return [self._color, self._mesh]
+#
+#    def draw(self, *args):
+#        super(MeshBoxPlot, self).draw(*args)
+#        self.plot_mesh()
+#
+#    def plot_mesh(self):
+#        points = [p for p in self.iterate_points()]
+#        mesh, vert, _ = self.set_mesh_size(len(points))
+#        for k, (x, y) in enumerate(points):
+#            vert[k * 4] = x
+#            vert[k * 4 + 1] = y
+#        mesh.vertices = vert
+#
+#    def set_mesh_size(self, size):
+#        mesh = self._mesh
+#        vert = mesh.vertices
+#        ind = mesh.indices
+#        diff = size - len(vert) // 4
+#        if diff < 0:
+#            del vert[4 * size:]
+#            del ind[size:]
+#        elif diff > 0:
+#            ind.extend(range(len(ind), len(ind) + diff))
+#            vert.extend([0] * (diff * 4))
+#        mesh.vertices = vert
+#        return mesh, vert, ind
 
 
 class MatrixBoxPlotGraph(Graph):
     '''TODO: docstring
     '''
 
-    def __init__(self, data_matrix, box_labels=True, **kwargs):
+    def __init__(self, data_matrix, box_labels=True, colormap=None, **kwargs):
         self.data_matrix = data_matrix  # allow to be sparse also?
         # maybe allow to send a data layout so data values can be updated quickly?
 
@@ -1743,6 +1839,7 @@ class MatrixBoxPlotGraph(Graph):
         super(MatrixBoxPlotGraph, self).__init__(**kwargs)
 
         # create a 64x1 texture, defaults to rgba / ubyte
+        self.colormap = colormap
         self.tsize = 64  # texture / colorbar size should be a power of 2 for GL efficiency
         texture = Texture.create(size=(self.tsize, 2), colorfmt='rgb', bufferfmt='ubyte')
         texture.add_reload_observer(self.populate_texture)
@@ -1763,7 +1860,11 @@ class MatrixBoxPlotGraph(Graph):
                 for j in range(self.data_matrix.shape[1]):
                     label = CoreLabel(text="%.2g" % self.data_matrix[i, j], font_size=20)
                     label.refresh()
-                    color = Color(0, 0, 0) if (self.data_matrix[i, j] > 0.5) else Color(1, 1, 1)
+                    if self.colormap is not None:
+                        color = Color(0, 0, 0) if (self.colormap.besttxtcolor(self.data_matrix[i, j]) == 'black') \
+                            else Color(1, 1, 1)
+                    else:  # assume black-to-white default colormap
+                        color = Color(0, 0, 0) if (self.data_matrix[i, j] > 0.5) else Color(1, 1, 1)
                     rect = Rectangle(size=label.texture.size, pos=(0, 0), texture=label.texture)
                     row_labels.append(label)
                     row_rects.append(rect)
@@ -1775,11 +1876,15 @@ class MatrixBoxPlotGraph(Graph):
                 self.label_colors.append(row_colors)
                 #self.canvas.add(Color(self.colour, 1-self.colour,0, 1))
 
-
     def populate_texture(self, texture):
-        # create 64x1 rgb colorbar table, and fill with values from 0 to 255
-        # we'll have a gradient from black to white
-        bufline =  list(itertools.chain(*[(int(x * 255 / self.tsize),) * 3 for x in range(self.tsize)]))
+        # create self.tsizex2 rgb colorbar table, and fill with values from 0 to 255
+        if self.colormap is not None:
+            bufline =  list(itertools.chain(
+                *[self.colormap.interpolate_color_tuple(v, value_is_normalized=True)
+                  for v in _np.linspace(0, 1, self.tsize)]))
+        else:
+            # simple black to white color scale
+            bufline =  list(itertools.chain(*[(int(x * 255 / self.tsize),) * 3 for x in range(self.tsize)]))
         buf = bytes(bufline + bufline)
         texture.blit_buffer(buf, colorfmt='rgb', bufferfmt='ubyte')
 
@@ -1827,15 +1932,21 @@ class MatrixBoxPlotGraph(Graph):
             vert.extend([0] * (box_diff * 16))
 
         M, N = self.data_matrix.shape
-        data_max = 1.0 #max(self.data_matrix.flat)
-        data_min = 0.0 #min(self.data_matrix.flat)
+        if self.colormap is not None:
+            data_max = self.colormap.hmax
+            data_min = self.colormap.hmin
+        else:
+            data_max = max(self.data_matrix.flat)
+            data_min = min(self.data_matrix.flat)
 
         for i in range(M):
             for j in range(N):
                 idx = 16 * (i * N + j)  # first vertex index
                 x1, x2 = j * scalex + size[0] + pad, (j + 1) * scalex + size[0] - pad,
                 y1, y2 = (M - 1 - i) * scaley + size[1] + pad, (M - i) * scaley + size[1] - pad
-                u = ((self.data_matrix[i, j] - data_min) / (data_max - data_min))  # * self.tsize)
+                norm_v = self.colormap.normalize(self.data_matrix[i, j]) \
+                    if (self.colormap is not None) else self.data_matrix[i, j]  # in [hmin, hmax]
+                u = ((norm_v - data_min) / (data_max - data_min))  # in [0, 1]
                 delta = 1.0 / self.tsize
 
                 vert[idx] = x2
@@ -1941,6 +2052,207 @@ class MatrixBoxPlotGraph(Graph):
     #    self._background_rect.size = self.size
     #    self._update_ticks(size)
     #    self._update_plots(size)
+
+class NestedMatrixBoxPlotGraph(Graph):
+    '''TODO: docstring
+    '''
+
+    def __init__(self, plt_data_list_of_lists, box_labels=False, colormap=None, **kwargs):
+        self.plt_data_list_of_lists = plt_data_list_of_lists  # better sparse format?
+
+        from kivy.core.window import Window
+        Window.bind(mouse_pos=self.on_mouse_pos)
+
+        data_size = 0
+        for plt_data_list in plt_data_list_of_lists:
+            data_size += sum([plt_data.size for plt_data in plt_data_list])
+        self.data = _np.zeros(data_size, 'd')
+        self.xs = _np.zeros(data_size, int)
+        self.ys = _np.zeros(data_size, int)
+
+        # Same as plotly code; maybe upgrade to allow sub-matrices of different shapes?
+        elRows, elCols = plt_data_list_of_lists[0][0].shape  # nE,nr
+        self.num_rows = len(plt_data_list_of_lists)  # number of rows of plaquettes
+        self.num_cols = len(plt_data_list_of_lists[0])  # number of columns of plaquettes
+
+        k = 0
+        gap = 1.0
+        nRows, nCols = self.num_rows, self.num_cols
+        xmax = elCols * nCols + gap * (nCols - 1)
+        ymax = elRows * nRows + gap * (nRows - 1)
+        for i, plt_data_list in enumerate(plt_data_list_of_lists):  # for each row of data matrices
+            for j, plt_data in enumerate(plt_data_list):  # for each column
+                for ii in range(plt_data.shape[0]):
+                    for jj in range(plt_data.shape[1]):
+                        if _np.isnan(plt_data[ii, jj]):
+                            continue
+                        self.xs[k] = j * (elCols + gap) + jj
+                        self.ys[k] = i * (elRows + gap) + ii
+                        #self.ys[k] = ymax - (i * (elRows + gap) + ii)  # FLIPY (WRONG)
+                        self.data[k] = plt_data[ii, jj]
+                        k += 1
+
+        xspacing = elCols + gap
+        yspacing = elRows + gap
+        kwargs.update(dict(xmin=0, xmax=xmax,
+                           ymin=0, ymax=ymax,
+                           #x_grid=True, y_grid=True,
+                           x_ticks_major=xspacing, y_ticks_major=yspacing,
+                           x_tick_offset=0.5 * xspacing, y_tick_offset=0.5 * yspacing,
+                           ))
+        super(NestedMatrixBoxPlotGraph, self).__init__(**kwargs)
+
+        # create a 64x2 texture, defaults to rgba / ubyte
+        self.colormap = colormap
+        self.tsize = 64  # texture / colorbar size should be a power of 2 for GL efficiency
+        texture = Texture.create(size=(self.tsize, 2), colorfmt='rgb', bufferfmt='ubyte')
+        texture.add_reload_observer(self.populate_texture)
+        self.populate_texture(texture)
+
+        with self._fbo:
+            self._mesh_boxes = Mesh(mode='triangles', texture=texture)
+
+        #if box_labels:
+        #    self.labels = []
+        #    self.label_colors = []
+        #    self.label_rects = []
+        #    for i in range(self.data_matrix.shape[0]):
+        #        row_labels = []
+        #        row_rects = []
+        #        row_colors = []
+        #        for j in range(self.data_matrix.shape[1]):
+        #            label = CoreLabel(text="%.2g" % self.data_matrix[i, j], font_size=20)
+        #            label.refresh()
+        #            color = Color(0, 0, 0) if (self.data_matrix[i, j] > 0.5) else Color(1, 1, 1)
+        #            rect = Rectangle(size=label.texture.size, pos=(0, 0), texture=label.texture)
+        #            row_labels.append(label)
+        #            row_rects.append(rect)
+        #            row_colors.append(color)
+        #            self._fbo.add(color)
+        #            self._fbo.add(rect)
+        #        self.labels.append(row_labels)
+        #        self.label_rects.append(row_rects)
+        #        self.label_colors.append(row_colors)
+        #        #self.canvas.add(Color(self.colour, 1-self.colour,0, 1))
+
+    def populate_texture(self, texture):
+        # create self.tsizex2 rgb colorbar table, and fill with color values
+        if self.colormap is not None:
+            bufline =  list(itertools.chain(
+                *[self.colormap.interpolate_color_tuple(v, value_is_normalized=True)
+                  for v in _np.linspace(0, 1, self.tsize)]))
+        else:
+            # simple black to white color scale
+            bufline =  list(itertools.chain(*[(int(x * 255 / self.tsize),) * 3 for x in range(self.tsize)]))
+        buf = bytes(bufline + bufline)
+        texture.blit_buffer(buf, colorfmt='rgb', bufferfmt='ubyte')
+
+    #def _redraw_all(self, *args):
+    #    super()._redraw_all(*args)
+    #
+    #    self._redraw_boxes(*args)
+    #    #mesh = self._mesh_ticks
+    #    #n_points = (len(xpoints_major) + len(xpoints_minor) +
+    #    #            len(ypoints_major) + len(ypoints_minor))
+    #    #mesh.vertices = [0] * (n_points * 8)
+    #    #mesh.indices = [k for k in range(n_points * 2)]
+
+    def _update_plots(self, size):
+
+        nboxes = self.data.size
+
+        # The mesh only supports (2^16) - 1 indices, so...
+        if nboxes * 4 > 65535:
+            #Logger.error(  "Ignoring extra boxes.")
+            raise ValueError("NestedMatrixBoxPlotGraph: cannot support more than 16383 boxes.")
+
+        mesh = self._mesh_boxes
+        vert = mesh.vertices
+        ind = mesh.indices
+
+        #DEBUG
+        #if len(vert) < 16 * nboxes:
+        #    vert.extend([0] * (16 * nboxes - len(vert)))
+        #    ind.extend(range(len(ind), 4 * nboxes))
+
+        scalex = (size[2] - size[0]) / (self.xmax - self.xmin)
+        scaley = (size[3] - size[1]) / (self.ymax - self.ymin)
+        pad = 2
+
+        current_boxes = len(vert) // 16
+        box_diff = nboxes - current_boxes  # number of vertices
+        if box_diff < 0:
+            del vert[16 * nboxes:]  # 4 entries per vertex * 4 vertices per box
+            del ind[6 * nboxes:]  # 6 indices per box (2 triangles)
+        elif box_diff > 0:
+            for i in range(current_boxes, nboxes):  # assumes vertex order is tr, tl, bl, br
+                ind.extend([4 * i, 4 * i + 1, 4 * i + 2,  # triangle 1
+                            4 * i + 2, 4 * i + 3, 4 * i])  # triangle 2
+            vert.extend([0] * (box_diff * 16))
+
+        if self.colormap is not None:
+            data_max = self.colormap.hmax
+            data_min = self.colormap.hmin
+        else:
+            data_max = max(self.data)
+            data_min = min(self.data)
+
+        for i, (x, y, val) in enumerate(zip(self.xs, self.ys, self.data)):
+            idx = 16 * i  # first vertex index
+            x1, x2 = x * scalex + size[0] + pad, (x + 1) * scalex + size[0] - pad
+            y1, y2 = y * scaley + size[1] + pad, (y + 1) * scaley + size[1] - pad
+            #y1, y2 = y * scaley + size[1] + pad, (y - 1) * scaley + size[1] - pad  # FLIPY (WRONG)
+
+            norm_v = self.colormap.normalize(val) if (self.colormap is not None) else val  # in [hmin, hmax]
+            u = ((norm_v - data_min) / (data_max - data_min))  # in [0, 1]
+            #delta = 1.0 / self.tsize
+
+            vert[idx] = x2
+            vert[idx + 1] = y2
+            vert[idx + 2] = u #+ delta   -- if needed, need to double texture x-size
+            vert[idx + 3] = 1.0
+
+            vert[idx + 4] = x1
+            vert[idx + 5] = y2
+            vert[idx + 6] = u
+            vert[idx + 7] = 1.0
+
+            vert[idx + 8] = x1
+            vert[idx + 9] = y1
+            vert[idx + 10] = u
+            vert[idx + 11] = 0
+
+            vert[idx + 12] = x2
+            vert[idx + 13] = y1
+            vert[idx + 14] = u #+ delta  -- if needed, need to double texture x-size
+            vert[idx + 15] = 0
+
+            #lbl = self.label_rects[i][j]
+            #lbl.pos = ((x1 + x2 - lbl.size[0]) / 2.0, (y1 + y2 - lbl.size[1]) / 2.0)
+        mesh.vertices = vert  # needed?
+
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            tpos = self.to_widget(touch.pos[0], touch.pos[1], relative=True)
+            if (self.view_pos[0] <= tpos[0] <= self.view_pos[0] + self.view_size[0]
+               and self.view_pos[1] <= tpos[1] <= self.view_pos[1] + self.view_size[1]):
+                x, y = self.to_data(*tpos)
+                print("Touch event at ", touch.pos, ' -> ', (x, y))
+                return True
+        return super().on_touch_down(touch)
+
+    def on_mouse_pos(self, *args):
+        if not self.get_root_window():
+            return  # don't proceed if I'm not displayed <=> If have no parent
+        pos = args[1]
+        tpos = self.to_widget(*pos, relative=True)  # needed here for use within a RelativeLayout (?)
+        if self.collide_point(*tpos):
+            #print("Over widget...")
+            #tpos = self.to_widget(*pos, relative=True)
+            if (self.view_pos[0] <= tpos[0] <= self.view_pos[0] + self.view_size[0]
+                and self.view_pos[1] <= tpos[1] <= self.view_pos[1] + self.view_size[1]):
+                x, y = self.to_data(*tpos)
+                print("Move event at ", pos, ' -> ', (x, y))
 
 
 if __name__ == '__main__':

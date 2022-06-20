@@ -145,7 +145,8 @@ class ReportTable(object):
     def render(self, fmt, longtables=False, table_id=None, tableclass=None,
                output_dir=None, precision=6, polarprecision=3, sciprecision=0,
                resizable=False, autosize=False, fontsize=None, complex_as_polar=True,
-               brackets=False, click_to_display=False, link_to=None, render_includes=True):
+               brackets=False, click_to_display=False, link_to=None, render_includes=True,
+               kivywidget_kwargs=None):
         """
         Render a table object
 
@@ -200,6 +201,10 @@ class ReportTable(object):
             whether files included in rendered latex should also be rendered
             (usually as PDFs for use with the 'includegraphics' latex statement)
 
+        kivywidget_kwargs : dict, optional
+            Additional arguments, such as `size_hint`, that get passed to
+            the constructed Kivy widget when `fmt == 'kivywidget'`.
+
         Returns
         -------
         string
@@ -219,7 +224,9 @@ class ReportTable(object):
             'table_id': table_id,
             'tableclass': tableclass,
             'link_to': link_to,
-            'render_includes': render_includes}
+            'render_includes': render_includes,
+            'kivywidget_kwargs': {} if (kivywidget_kwargs is None) else kivywidget_kwargs
+        }
 
         if fmt not in _convert_dict:
             raise NotImplementedError('%s format option is not currently supported' % fmt)

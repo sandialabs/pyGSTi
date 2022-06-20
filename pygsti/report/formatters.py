@@ -15,6 +15,7 @@ Functions for generating report tables in different formats
 from pygsti.report.convert import converter
 html = converter('html')  # Retrieve low-level formatters
 latex = converter('latex')
+kivywidget = converter('kivywidget')
 
 from pygsti.report.formatter import Formatter as _Formatter
 from pygsti.report.reportableqty import ReportableQty as _ReportableQty
@@ -52,7 +53,7 @@ format_dict['Rho'] = {
     'html': _Formatter(regexreplace=('rho([0-9]+)$', '&rho;<sub>%s</sub>')),
     'latex': _Formatter(regexreplace=('rho([0-9]+)$', '$\\rho_{%s}$')),
     'python': _no_format,
-    'kivywidget': _no_format}
+    'kivywidget': _Formatter(regexreplace=('rho([0-9]+)$', '$\\rho_{%s}$'))}
 
 # 'E' (POVM) effect formatting
 format_dict['Effect'] = {
@@ -63,27 +64,30 @@ format_dict['Effect'] = {
     'latex': _Formatter(stringreturn=('Ec', '$E_C$'),
                         regexreplace=('E([0-9]+)$', '$E_{%s}$')),
     'python': _no_format,
-    'kivywidget': _no_format}
+    'kivywidget': _Formatter(stringreturn=('Ec', '$E_C$'),
+                             regexreplace=('E([0-9]+)$', '$E_{%s}$'))}
 
 NormalHTML = _Formatter(html,
                         ebstring='%s <span class="errorbar">&plusmn; %s</span>',
                         nmebstring='%s <span class="nmerrorbar">&plusmn; %s</span>')
 NormalLatex = _Formatter(latex,
                          ebstring='$ \\begin{array}{c} %s \\\\ \pm %s \\end{array} $')  # nmebstring will match
+NormalKivy = _Formatter(kivywidget)  # TODO - add errorbar strings?
+                        
 
 # Normal replacements
 format_dict['Normal'] = {
     'html': NormalHTML,
     'latex': NormalLatex,  # nmebstring will match
     'python': _no_format,
-    'kivywidget': _no_format}
+    'kivywidget': NormalKivy}
 
 # 'normal' formatting but round to 2 decimal places regardless of what is passed in to table.render()
 format_dict['Rounded'] = {
     'html': NormalHTML.variant(defaults={'precision': 2, 'sciprecision': 0}),
     'latex': NormalLatex.variant(defaults={'precision': 2, 'sciprecision': 0}),
     'python': _no_format,
-    'kivywidget': _no_format}
+    'kivywidget': NormalKivy.variant(defaults={'precision': 2, 'sciprecision': 0})}
 
 # 'small' formating - make text smaller
 format_dict['Small'] = {
@@ -117,14 +121,16 @@ format_dict['Pi'] = {
     'latex': NormalLatex.variant(formatstring='%s$\\pi$',
                                  ebstring='$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $'),
     'python': PiPython,
-    'kivywidget': _no_format}
+    'kivywidget': NormalKivy.variant(formatstring='%s$\\pi$',
+                                     ebstring='$ \\begin{array}{c}(%s \\\\ \\pm %s)\\pi \\end{array} $'),
+}
 
 # BracketFormatters
 format_dict['Brackets'] = {
     'html': NormalHTML.variant(defaults={'brackets': True}),
     'latex': NormalLatex.variant(defaults={'brackets': True}),
     'python': _no_format,
-    'kivywidget': _no_format}
+    'kivywidget': NormalKivy.variant(defaults={'brackets': True})}
 
 ##################################################################################
 # 'conversion' formatting: catch all for find/replacing specially formatted text #
@@ -141,6 +147,17 @@ pre_convert_latex = _Formatter(stringreplacers=[
     ('#', '\\#'),
     ("half-width", "$\\nicefrac{1}{2}$-width"),
     ("1/2", "$\\nicefrac{1}{2}$"),
+    ("Diamond", "$\\Diamond$"),
+    ("Check", "\\checkmark"),
+    ('|', '\\\\'),
+    ('<STAR>', '\\bigstar')])
+
+pre_convert_kivy = _Formatter(stringreplacers=[
+    ("\\", "\\textbackslash"),
+    ('%', '\\%'),
+    ('#', '\\#'),
+    ("half-width", "$\\frac{1}{2}$-width"),
+    ("1/2", "$\\frac{1}{2}$"),
     ("Diamond", "$\\Diamond$"),
     ("Check", "\\checkmark"),
     ('|', '\\\\'),
@@ -172,7 +189,33 @@ def special_convert_latex(x, specs):
         return x
 
 
+def special_convert_kivy(x, specs):
+    """
+    Special conversion rules for latex
+
+    Parameters
+    ----------
+    x : object
+        Object to convert
+
+    specs : dictionary
+        dictionary of formatting options.
+
+    Returns
+    -------
+    str
+    """
+    x = pre_convert_kivy(str(x), specs)
+    if '\\bigstar' in x:
+        x = '${}$'.format(x)
+    if "\\\\" in x:
+        return '\\begin{tabular}{c}' + x + '\\end{tabular}'
+    else:
+        return x
+
+
 convert_latex = NormalLatex.variant(custom=special_convert_latex)
+convert_kivy = NormalKivy.variant(custom=special_convert_kivy)
 
 mathtext_htmlorlatex = _Formatter(
     stringreplacers=[('log', '\\log'),
@@ -185,27 +228,28 @@ format_dict['Conversion'] = {
     'html': convert_html,
     'latex': convert_latex,
     'python': _no_format,
-    'kivywidget': _no_format}
+    'kivywidget': convert_kivy}
 
 format_dict['MathText'] = {
     'html': mathtext_htmlorlatex,
     'latex': mathtext_htmlorlatex,
     'python': _no_format,
-    'kivywidget': _no_format}
+    'kivywidget': mathtext_htmlorlatex}
 
 
 format_dict['Vec'] = {
     'html': NormalHTML,
     'latex': _Formatter(latex, ebstring='%s $\pm$ %s'),
     'python': _no_format,
-    'kivywidget': _no_format}
+    'kivywidget': NormalKivy}
 
 format_dict['Circuit'] = {
     'html': _Formatter(lambda s, specs: '.'.join(map(str, s)) if s is not None else ''),
     'latex': _Formatter(lambda s, specs: '' if s is None else ('$%s$' % '\\cdot'.join([('\\mbox{%s}' % str(gl))
                                                                                        for gl in s]))),
     'python': _no_format,
-    'kivywidget': _no_format}
+    'kivywidget': _Formatter(lambda s, specs: '' if s is None else ('$%s$' % '\\cdot'.join(
+        [('\\mbox{%s}' % str(gl)) for gl in s])))}
 
 '''
 Figure formatters no longer use Formatter objects, because figure formatters are more specialized.
@@ -311,7 +355,10 @@ def kivy_figure(fig, specs):
     str
     """
     #Create figure inline with 'js' set to only handlers (no further plot init)
-    fig_widget = fig.value.figs[0].kivywidget  # why not: fig.value.render('kivywidget')?
+    fig_widget_constructor = fig.value.figs[0].kivywidget  # why not: fig.value.render('kivywidget')?
+    fig_class, kwargs = fig_widget_constructor
+    fig_widget = fig_class(**kwargs)
+    fig_widget.size = fig.value.figs[0].metadata.get('natural_size', (300, 300))
     return fig_widget
 
 
@@ -326,14 +373,14 @@ format_dict['Bold'] = {
     'html': _Formatter(html, formatstring='<b>%s</b>'),
     'latex': _Formatter(latex, formatstring='\\textbf{%s}'),
     'python': _no_format,
-    'kivywidget': _no_format}
+    'kivywidget': _Formatter(kivywidget, formatstring='\\textbf{%s}')}
 
 #Special formatting for Hamiltonian and Stochastic model types
 format_dict['GatesetType'] = {
     'html': _Formatter(),
     'latex': _Formatter(stringreplacers=[('H', '$\\mathcal{H}$'), ('S', '$\\mathcal{S}$')]),
     'python': _no_format,
-    'kivywidget': _no_format}
+    'kivywidget': _Formatter(stringreplacers=[('H', '$\\mathcal{H}$'), ('S', '$\\mathcal{S}$')])}
 
 
 '''

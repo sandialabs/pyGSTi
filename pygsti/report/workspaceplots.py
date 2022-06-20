@@ -166,6 +166,106 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
     return ReportFigure(fig, colormap, plt_data, plt_data=plt_data)
 
 
+def _color_boxplot_kivy(plt_data, colormap, colorbar=False, box_label_size=0,
+                        prec=0, hover_label_fn=None, hover_labels=None):
+    """
+    Create a color box plot.
+
+    Creates a plot.ly heatmap figure composed of colored boxes and
+    possibly labels.
+
+    Parameters
+    ----------
+    plt_data : numpy array
+        A 2D array containing the values to be plotted.  None values will
+        show up as white.
+
+    colormap : Colormap
+        The colormap used to determine box color.
+
+    colorbar : bool, optional
+        Whether or not to show the color scale bar.
+
+    box_label_size : int, optional
+        If greater than 0, display static labels on each box with font
+        size equal to `box_label_size`.
+
+    prec : int or {'compact','compacthp'}, optional
+        Precision for box labels.  Allowed values are:
+          'compact' = round to nearest whole number using at most 3 characters
+          'compacthp' = show as much precision as possible using at most 3 characters
+          int >= 0 = fixed precision given by int
+          int <  0 = number of significant figures given by -int
+
+    hover_label_fn : function, optional
+        A function with signature `f(z,i,j)` where `z ==plt_data[i,j]` which
+        computes the hover label for the each element of `plt_data`.  Cannot
+        be used with `hover_labels`.
+
+    hover_labels : list of lists, optional
+        Strings specifying the hover labels for each element of `plt_data`.
+        E.g. `hover_labels[i,j]` is the string for the i-th row (y-value)
+        and j-th column (x-value) of the plot.
+
+    Returns
+    -------
+    plotly.Figure
+    """
+
+    from pygsti.report.kivygraph import MatrixBoxPlotGraph
+
+    #BEGIN FROM PLOTLY VERSION
+    annotations = []
+    if box_label_size:
+        # Write values on colored squares
+        for y in range(plt_data.shape[0]):
+            for x in range(plt_data.shape[1]):
+                if _np.isnan(plt_data[y, x]): continue
+                annotations.append(
+                    dict(
+                        text=_ph._eformat(plt_data[y, x], prec),
+                        x=x, y=y,
+                        xref='x1', yref='y1',
+                        font=dict(size=box_label_size,
+                                  color=colormap.besttxtcolor(plt_data[y, x])),
+                        showarrow=False)
+                )
+
+    if hover_label_fn:
+        assert(not hover_labels), "Cannot specify hover_label_fn and hover_labels!"
+        hover_labels = []
+        for y in range(plt_data.shape[0]):
+            hover_labels.append([hover_label_fn(plt_data[y, x], y, x)
+                                 for x in range(plt_data.shape[1])])
+    #END FROM PLOTLY VERSION
+
+    #masked_data = _np.ma.array(plt_data, mask=_np.isnan(plt_data))
+    #heatmapArgs = {'z': colormap.normalize(masked_data),
+    #               'colorscale': colormap.create_plotly_colorscale(),
+    #               'showscale': colorbar, 'hoverinfo': 'none',
+    #               'zmin': colormap.hmin, 'zmax': colormap.hmax}
+
+    #Hold widget (class, init_kwargs) instead of the widget itself for
+    # ease of copying and serialization.
+    widget_constructor = (MatrixBoxPlotGraph,
+                          dict(data_matrix=plt_data,
+                               xlabel='',
+                               ylabel='',
+                               padding=5, #background_color=(1,0,0,1),
+                               x_ticks_major=1.0, y_ticks_major=1.0, x_tick_offset=0.5, y_tick_offset=0.5,
+                               colormap=colormap))
+                          #x_grid_labels=xlabels, x_grid_label=True,
+                          #y_grid_labels=ylabels, y_grid_label=True))
+    #x_ticks_angle=45, **graph_theme)
+
+    flipped_mx = _np.flipud(plt_data)  # FLIP so [0,0] matrix el is at *top* left
+    #REMOVE ylabels = list(reversed(ylabels))  # FLIP y-labels to match
+    SQUARE_SIZE = 50
+    natural_size = (SQUARE_SIZE * plt_data.shape[1],
+                    SQUARE_SIZE * plt_data.shape[0])
+    return ReportKivyFigure(widget_constructor, colormap, flipped_mx, plt_data=flipped_mx, natural_size=natural_size)
+
+
 def _nested_color_boxplot(plt_data_list_of_lists, colormap,
                           colorbar=False, box_label_size=0, prec=0,
                           hover_label_fn=None):
@@ -255,9 +355,115 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     return fig
 
 
+def _nested_color_boxplot_kivy(plt_data_list_of_lists, colormap,
+                               colorbar=False, box_label_size=0, prec=0,
+                               hover_label_fn=None,
+                               xlabel=None, ylabel=None, xlabels=None, ylabels=None):
+    """
+    Creates a "nested" color box plot.
+
+    Tiles the plaquettes given by `plt_data_list_of_lists`
+    onto a single heatmap.
+
+    Parameters
+    ----------
+    plt_data_list_of_lists : list of lists of numpy arrays
+        A complete square 2D list of lists, such that each element is a
+        2D numpy array of the same size.
+
+    colormap : Colormap
+        The colormap used to determine box color.
+
+    colorbar : bool, optional
+        Whether or not to show the color scale bar.
+
+    box_label_size : int, optional
+        If greater than 0, display static labels on each box with font
+        size equal to `box_label_size`.
+
+    prec : int or {'compact','compacthp'}, optional
+        Precision for box labels.  Allowed values are:
+          'compact' = round to nearest whole number using at most 3 characters
+          'compacthp' = show as much precision as possible using at most 3 characters
+          int >= 0 = fixed precision given by int
+          int <  0 = number of significant figures given by -int
+
+    hover_label_fn : function, optional
+        A function with signature `f(z,i,j)` where `z ==plt_data[i,j]` which
+        computes the hover label for the each element of `plt_data`.  Cannot
+        be used with `hoverLabels`.
+
+    TODO: docstring -- xlabel -> ylabels args
+
+    Returns
+    -------
+    tuple
+        A tuple of `(constructor_fn, kwargs)` for constructing a Kivy widget
+    """
+
+    from pygsti.report.kivygraph import NestedMatrixBoxPlotGraph
+    
+    #Assemble the single 2D grid to pass to _color_boxplot
+    # (assume a complete 2D rectangular list of lists, and that
+    #  each element is a numpy array of the same size)
+    if len(plt_data_list_of_lists) == 0 or len(plt_data_list_of_lists[0]) == 0: return
+
+    #elRows, elCols = plt_data_list_of_lists[0][0].shape  # nE,nr
+    #nRows = len(plt_data_list_of_lists)
+    #nCols = len(plt_data_list_of_lists[0])
+    #
+    #data = _np.zeros((elRows * nRows + (nRows - 1), elCols * nCols + (nCols - 1)))
+    #for i in range(1, nRows):
+    #    data[(elRows + 1) * i - 1:(elRows + 1) * i, :] = _np.nan
+    #for j in range(1, nCols):
+    #    data[:, (elCols + 1) * j - 1:(elCols + 1) * j] = _np.nan
+    #
+    #for i in range(nRows):
+    #    for j in range(nCols):
+    #        data[(elRows + 1) * i:(elRows + 1) * (i + 1) - 1, (elCols + 1)
+    #             * j:(elCols + 1) * (j + 1) - 1] = plt_data_list_of_lists[i][j]
+    #
+    #xtics = []; ytics = []
+    #for i in range(nRows): ytics.append(float((elRows + 1) * i) - 0.5 + 0.5 * float(elRows))
+    #for j in range(nCols): xtics.append(float((elCols + 1) * j) - 0.5 + 0.5 * float(elCols))
+    #
+    #if hover_label_fn:
+    #    hoverLabels = []
+    #    for _ in range(elRows * nRows + (nRows - 1)):
+    #        hoverLabels.append([""] * (elCols * nCols + (nCols - 1)))
+    #
+    #    for i in range(nRows):
+    #        for j in range(nCols):
+    #            for ii in range(elRows):
+    #                for jj in range(elCols):
+    #                    hoverLabels[(elRows + 1) * i + ii][(elCols + 1) * j + jj] = \
+    #                        hover_label_fn(plt_data_list_of_lists[i][j][ii][jj], i, j, ii, jj)
+    #else:
+    #    hoverLabels = None
+
+    widget_constructor = (NestedMatrixBoxPlotGraph,
+                          dict(plt_data_list_of_lists=plt_data_list_of_lists,
+                               xlabel='' if (xlabel is None) else xlabel,
+                               ylabel='' if (ylabel is None) else ylabel,
+                               padding=50,  #background_color=(1,0,0,1),
+                               x_grid_labels=xlabels, x_grid_label=True,
+                               y_grid_labels=ylabels, y_grid_label=True,
+                               colormap=colormap))
+    #x_ticks_angle=45, **graph_theme)
+    SQUARE_SIZE = 30
+    elRows, elCols = plt_data_list_of_lists[0][0].shape  # nE,nr
+    num_rows = len(plt_data_list_of_lists)  # number of rows of plaquettes
+    num_cols = len(plt_data_list_of_lists[0])  # number of columns of plaquettes
+    max_ylabel_len = max([len(lbl) for lbl in ylabels]) if (ylabels is not None) else 0
+    natural_size = (SQUARE_SIZE * (elCols * num_cols + (num_cols - 1)) + max_ylabel_len * 20,
+                    SQUARE_SIZE * (elRows * num_rows + (num_rows - 1)))
+    return ReportKivyFigure(widget_constructor, colormap, plt_data_list_of_lists,
+                            plt_data=plt_data_list_of_lists, natural_size=natural_size)
+
+
 def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
                             colormap, colorbar=False, box_labels=True, prec=0, hover_info=True,
-                            sum_up=False, scale=1.0, bgcolor='white'):
+                            sum_up=False, scale=1.0, bgcolor='white', gui_mode='plotly'):
     """
     A helper function for generating typical nested color box plots used in pyGSTi.
 
@@ -403,8 +609,15 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
         else: hover_label_fn = None
 
         boxLabelSize = 8 * scale if box_labels else 0
-        fig = _color_boxplot(subMxSums, colormap, colorbar, boxLabelSize,
-                             prec, hover_label_fn)
+        if gui_mode == 'plotly':
+            fig = _color_boxplot(subMxSums, colormap, colorbar, boxLabelSize,
+                                 prec, hover_label_fn)
+        elif gui_mode == 'kivy':
+            fig = _color_boxplot_kivy(subMxSums, colormap, colorbar, boxLabelSize,
+                                      prec, hover_label_fn)
+        else:
+            raise ValueError("Invalid gui_mode: %s" % str(gui_mode))
+
         #update tickvals b/c _color_boxplot doesn't do this (unlike _nested_color_boxplot)
         if fig is not None:
             fig.plotlyfig['layout']['xaxis'].update(tickvals=list(range(nXs)))
@@ -429,14 +642,22 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
         else: hover_label_fn = None
 
         boxLabelSize = 8 if box_labels else 0  # do not scale (OLD: 8*scale)
-        fig = _nested_color_boxplot(sub_mxs, colormap, colorbar, boxLabelSize,
-                                    prec, hover_label_fn)
+
+        if gui_mode == 'plotly':
+            fig = _nested_color_boxplot(sub_mxs, colormap, colorbar, boxLabelSize,
+                                        prec, hover_label_fn)
+        elif gui_mode == 'kivy':
+            fig = _nested_color_boxplot_kivy(sub_mxs, colormap, colorbar, boxLabelSize,
+                                             prec, hover_label_fn,
+                                             xlabel, ylabel, val_filter(xlabels), val_filter(ylabels))
+        else:
+            raise ValueError("Invalid gui_mode: %s" % str(gui_mode))
 
         xBoxes = nXs * (nIXs + 1) - 1
         yBoxes = nYs * (nIYs + 1) - 1
 
     #assert(fig is not None), "No data to display!"
-    if fig is not None:  # i.e., if there was data to plot
+    if gui_mode == 'plotly' and fig is not None:  # i.e., if there was data to plot
         pfig = fig.plotlyfig
         if xlabel: pfig['layout']['xaxis'].update(title=xlabel,
                                                   titlefont={'size': 12 * scale, 'color': "black"})
@@ -482,7 +703,7 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
                               margin=go_margin(l=lmargin, r=rmargin, b=bmargin, t=tmargin),
                               plot_bgcolor=bgcolor)
 
-    else:  # fig is None => use a "No data to display" placeholder figure
+    elif gui_mode == 'plotly':  # fig is None => use a "No data to display" placeholder figure
         trace = go.Heatmap(z=_np.zeros((10, 10), 'd'),
                            colorscale=[[0, 'white'], [1, 'black']],
                            showscale=False, zmin=0, zmax=1, hoverinfo='none')
@@ -533,7 +754,8 @@ def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_su
 
 def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
                            colorbar=False, box_labels=True, prec='compact', hover_info=True,
-                           sum_up=False, invert=False, scale=1.0, bgcolor="white", addl_hover_submxs=None):
+                           sum_up=False, invert=False, scale=1.0, bgcolor="white", addl_hover_submxs=None,
+                           gui_mode='plotly'):
     """
     A wrapper around :func:`_summable_color_boxplot` for creating color box plots displaying circuits.
 
@@ -593,6 +815,8 @@ def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
         hover-info of the corresponding boxes.  The keys of this dictionary
         are used as labels within the hover-info text.
 
+    gui_mode : TODO docstring
+
     Returns
     -------
     plotly.Figure
@@ -611,12 +835,12 @@ def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
 
     return _summable_color_boxplot(sub_mxs, circuit_structure.used_xs, circuit_structure.used_ys,
                                    circuit_structure.xlabel, circuit_structure.ylabel, colormap, colorbar,
-                                   box_labels, prec, hover_info, sum_up, scale, bgcolor)
+                                   box_labels, prec, hover_info, sum_up, scale, bgcolor, gui_mode)
 
 
 def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
                                colorbar=False, hover_info=True, sum_up=False,
-                               ylabel="", scale=1.0, addl_hover_submxs=None):
+                               ylabel="", scale=1.0, addl_hover_submxs=None, gui_mode='plotly'):
     """
     Similar to :func:`_circuit_color_boxplot` except a scatter plot is created.
 
@@ -656,6 +880,8 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
         format as `sub_mxs` which specify additional values to add to the
         hover-info of the corresponding boxes.  The keys of this dictionary
         are used as labels within the hover-info text.
+
+    TODO: docstring gui_mode arg
 
     Returns
     -------
@@ -699,47 +925,71 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
                         else:
                             texts.append(str(sub_mxs[iy][ix][iiy][iix]))
 
-    #This GL version works, but behaves badly, sometimes failing to render...
-    #trace = go.Scattergl(x=xs, y=ys, mode="markers",
-    #                     marker=dict(size=8,
-    #                            color=[colormap.interpolate_color(y) for y in ys],
-    #                            #colorscale=colormap.create_plotly_colorscale(),  #doesn't seem to work properly in GL?
-    #                            line=dict(width=1)))
-    trace = go.Scatter(x=xs, y=ys, mode="markers",
-                       marker=dict(size=8,
-                                   color=[colormap.interpolate_color(y) for y in ys],
-                                   colorscale=colormap.create_plotly_colorscale(),
-                                   line=dict(width=1)))
+    if gui_mode == 'ploty':
+        #This GL version works, but behaves badly, sometimes failing to render...
+        #trace = go.Scattergl(x=xs, y=ys, mode="markers",
+        #                     marker=dict(size=8,
+        #                            color=[colormap.interpolate_color(y) for y in ys],
+        #                            #colorscale=colormap.create_plotly_colorscale(),  #doesn't seem to work properly in GL?
+        #                            line=dict(width=1)))
+        trace = go.Scatter(x=xs, y=ys, mode="markers",
+                           marker=dict(size=8,
+                                       color=[colormap.interpolate_color(y) for y in ys],
+                                       colorscale=colormap.create_plotly_colorscale(),
+                                       line=dict(width=1)))
+    
+        if hover_info:
+            trace['hoverinfo'] = 'text'
+            trace['text'] = texts
+        else:
+            trace['hoverinfo'] = 'none'
+    
+        xaxis = go_x_axis(
+            title='sequence length',
+            showline=False,
+            zeroline=True,
+        )
+        yaxis = go_y_axis(
+            title=ylabel
+        )
+    
+        layout = go.Layout(
+            #title="Sum = %.2f" % sum(ys), #DEBUG
+            width=400 * scale,
+            height=400 * scale,
+            hovermode='closest',
+            xaxis=xaxis,
+            yaxis=yaxis,
+        )
+        return ReportFigure(go.Figure(data=[trace], layout=layout), colormap,
+                            {'x': xs, 'y': ys})
 
-    if hover_info:
-        trace['hoverinfo'] = 'text'
-        trace['text'] = texts
+    elif gui_mode == 'kivy':
+        from pygsti.report.kivygraph import Graph, PointPlot
+
+        def build_plot(xs, ys, ylabel):
+            xmax = max(xs)
+            yrng = max(ys) - min(ys)
+            graph = Graph(xlabel='sequence length', ylabel='' if (ylabel is None) else ylabel,
+                          x_ticks_major=10**(_np.floor(_np.log10(xmax)) - 1), x_ticks_minor=2,
+                          y_ticks_major=10**(_np.floor(_np.log10(yrng)) - 1), y_ticks_minor=2,
+                          y_grid_label=True, x_grid_label=True, padding=5,
+                          x_grid=True, y_grid=True, xmin=0, xmax=xmax,
+                          ymin=float(min(ys)), ymax=float(max(ys)))  # float needed b/c Graph doesn't like numpy types
+            plot = PointPlot(color=[0, 0.5, 0, 1], point_size=5.0)
+            plot.points = list(zip(xs, ys))
+            graph.add_plot(plot)
+            return graph
+
+        widget_constructor = (build_plot, dict(xs=xs, ys=ys, ylabel=ylabel))
+        return ReportKivyFigure(widget_constructor, colormap, {'x': xs, 'y': ys})
+
     else:
-        trace['hoverinfo'] = 'none'
-
-    xaxis = go_x_axis(
-        title='sequence length',
-        showline=False,
-        zeroline=True,
-    )
-    yaxis = go_y_axis(
-        title=ylabel
-    )
-
-    layout = go.Layout(
-        #title="Sum = %.2f" % sum(ys), #DEBUG
-        width=400 * scale,
-        height=400 * scale,
-        hovermode='closest',
-        xaxis=xaxis,
-        yaxis=yaxis,
-    )
-    return ReportFigure(go.Figure(data=[trace], layout=layout), colormap,
-                        {'x': xs, 'y': ys})
+        raise ValueError("Invalid gui_mode: %s" % str(gui_mode))
 
 
 def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
-                             ylabel="", scale=1.0):
+                             ylabel="", scale=1.0, gui_mode='plotly'):
     """
     Similar to :func:`_circuit_color_boxplot` except a histogram is created.
 
@@ -762,6 +1012,8 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
 
     scale : float, optional
         Scaling factor to adjust the size of the final figure.
+
+    TODO: docstring gui_mode and return value update
 
     Returns
     -------
@@ -793,76 +1045,117 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
     bincenters = _np.linspace(minval, maxval, nbins)
     bindelta = (maxval - minval) / (nbins - 1)  # spacing between bin centers
 
-    trace = go.Histogram(
-        x=[bincenters[0]] + ys,  # artificially add 1 count in lowest bin so plotly anchors histogram properly
-        autobinx=False,
-        xbins=dict(
-            start=minval - binsize / 2.0,
-            end=maxval + binsize / 2.0,
-            size=binsize
-        ),
-        name="count",
-        marker=dict(
-            color=[colormap.interpolate_color(t) for t in bincenters],
-            line=dict(
-                color='black',
-                width=1.0,
-            )
-        ),
-        cumulative=cumulative,
-        opacity=1.00,
-        showlegend=False,
-    )
-
-    dof = colormap.dof if hasattr(colormap, "dof") else 1
-    line_trace = go.Scatter(
-        x=bincenters,
-        y=[nvals * bindelta * _chi2.pdf(xval, dof) for xval in bincenters],
-        name="expected",
-        showlegend=False,
-        line=dict(
-            color=('rgb(0, 0, 0)'),
-            width=1)  # dash = 'dash') # dash options include 'dash', 'dot', and 'dashdot'
-    )
-
-    hist_values, np_bins = _np.histogram(ys, nbins, range=(minval - binsize / 2.0,
-                                                           maxval + binsize / 2.0))
+    hist_values, bin_edges = _np.histogram(ys, nbins, range=(minval - binsize / 2.0,
+                                                             maxval + binsize / 2.0))
+    assert(len(hist_values) == len(bincenters))
     if len(hist_values) > 0 and len(hist_values[hist_values > 0]) > 0:
         minlog = _np.log10(max(_np.min(hist_values[hist_values > 0]) / 10.0, 1e-3))
         maxlog = _np.log10(1.5 * _np.max(hist_values))
     else:
         minlog, maxlog = -3, 0  # defaults to (1e-3,1) when there's no data
 
-    layout = go.Layout(
-        #title="Sum = %.2f" % sum(ys), #DEBUG
-        width=500 * scale,
-        height=350 * scale,
-        font=dict(size=10),
-        xaxis=dict(
-            title=ylabel,  # b/c "y-values" are along x-axis in histogram
-            showline=True
-        ),
-        yaxis=dict(
-            type='log',
-            #tickformat='g',
-            exponentformat='power',
-            showline=True,
-            range=[minlog, maxlog]
-        ),
-        bargap=0,
-        bargroupgap=0,
-        legend=dict(orientation="h")
-    )
-
+    dof = colormap.dof if hasattr(colormap, "dof") else 1
     pythonVal = {'histogram values': ys}
-    return ReportFigure(go.Figure(data=[trace, line_trace], layout=layout),
-                        colormap, pythonVal)
+
+    if gui_mode == 'plotly':
+        trace = go.Histogram(
+            x=[bincenters[0]] + ys,  # artificially add 1 count in lowest bin so plotly anchors histogram properly
+            autobinx=False,
+            xbins=dict(
+                start=minval - binsize / 2.0,
+                end=maxval + binsize / 2.0,
+                size=binsize
+            ),
+            name="count",
+            marker=dict(
+                color=[colormap.interpolate_color(t) for t in bincenters],
+                line=dict(
+                    color='black',
+                    width=1.0,
+                )
+            ),
+            cumulative=cumulative,
+            opacity=1.00,
+            showlegend=False,
+        )
+
+        line_trace = go.Scatter(
+            x=bincenters,
+            y=[nvals * bindelta * _chi2.pdf(xval, dof) for xval in bincenters],
+            name="expected",
+            showlegend=False,
+            line=dict(
+                color=('rgb(0, 0, 0)'),
+                width=1)  # dash = 'dash') # dash options include 'dash', 'dot', and 'dashdot'
+        )
+
+        layout = go.Layout(
+            #title="Sum = %.2f" % sum(ys), #DEBUG
+            width=500 * scale,
+            height=350 * scale,
+            font=dict(size=10),
+            xaxis=dict(
+                title=ylabel,  # b/c "y-values" are along x-axis in histogram
+                showline=True
+            ),
+            yaxis=dict(
+                type='log',
+                #tickformat='g',
+                exponentformat='power',
+                showline=True,
+                range=[minlog, maxlog]
+            ),
+            bargap=0,
+            bargroupgap=0,
+            legend=dict(orientation="h")
+        )
+
+        return ReportFigure(go.Figure(data=[trace, line_trace], layout=layout),
+                            colormap, pythonVal)
+
+    elif gui_mode == 'kivy':
+        from pygsti.report.kivygraph import Graph, BarPlot, SmoothLinePlot
+
+        colors = [colormap.interpolate_color_tuple(t, rgb_ints=False, add_alpha=1.0) for t in bincenters]
+
+        def build_widget(bin_edges, hist_values, bin_centers, dof, minlog, maxlog, colors):
+            hist_values = [(10**(minlog - 1) if v <= 0 else v) for v in hist_values]
+            xrng = bin_edges[-1] - bin_edges[0]
+            #yrng = 10**maxlog - 10**minlog
+            graph = Graph(xlabel=ylabel, ylabel='counts',
+                          x_ticks_major=round(xrng / 10, 0), #10**(_np.floor(_np.log10(xrng)) - 1),
+                          y_ticks_major=0.2, #10**(_np.floor(_np.log10(yrng)) - 1),
+                          x_grid_label=True, y_grid_label=True, padding=5,
+                          x_grid=True, y_grid=True,
+                          font_size=10,
+                          xmin=float(bin_edges[0]), xmax=float(bin_edges[-1]),
+                          ylog=True, ymin=float(10**minlog), ymax=float(10**maxlog))
+            bplot = BarPlot(color=(0,0,0.5,1), bar_spacing=1.0, colors=colors)
+            graph.add_plot(bplot)
+            bplot.bind_to_graph(graph)
+            bplot.points = [(x, y) for x, y in zip(bin_edges[:-1], hist_values)]
+
+            lplot = SmoothLinePlot(color=(1,0,0,1))
+            lplot.points = [(x, nvals * bindelta * _chi2.pdf(x, dof)) for x in bin_centers]
+            graph.add_plot(lplot)
+
+            return graph
+
+        return ReportKivyFigure((build_widget, {'bin_edges': bin_edges,
+                                                'hist_values': hist_values,
+                                                'bin_centers': bincenters,
+                                                'dof': dof, 'minlog': minlog, 'maxlog': maxlog,
+                                                'colors': colors}),
+                                None, pythonVal)
+
+    else:
+        raise ValueError("Invalid gui_mode: %s" % str(gui_mode))
 
 
 def _opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_basis_y=None,
                             xlabel=None, ylabel=None,
                             box_labels=False, colorbar=None, prec=0, scale=1.0,
-                            eb_matrix=None, title=None):
+                            eb_matrix=None, title=None, gui_mode='plotly'):
     """
     Creates a color box plot for visualizing a single matrix.
 
@@ -954,15 +1247,18 @@ def _opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_b
     thickLineInterval = 4 if (mx_basis is not None and mx_basis.name == "pp") \
         else None  # TODO: separate X and Y thick lines?
 
-    return _matrix_color_boxplot_kivy(op_matrix, xlabels, ylabels,
-                                      xlabel, ylabel, box_labels, thickLineInterval,
-                                      colorbar, colormap, prec, scale,
-                                      eb_matrix, title)
-
-    #return _matrix_color_boxplot(op_matrix, xlabels, ylabels,
-    #                             xlabel, ylabel, box_labels, thickLineInterval,
-    #                             colorbar, colormap, prec, scale,
-    #                             eb_matrix, title)
+    if gui_mode == 'plotly':
+        return _matrix_color_boxplot(op_matrix, xlabels, ylabels,
+                                     xlabel, ylabel, box_labels, thickLineInterval,
+                                     colorbar, colormap, prec, scale,
+                                     eb_matrix, title)
+    elif gui_mode == 'kivy':
+        return _matrix_color_boxplot_kivy(op_matrix, xlabels, ylabels,
+                                          xlabel, ylabel, box_labels, thickLineInterval,
+                                          colorbar, colormap, prec, scale,
+                                          eb_matrix, title)
+    else:
+        raise ValueError("Invalid gui_mode: %s" % str(gui_mode))
 
 
 def _matrix_color_boxplot_kivy(matrix, xlabels=None, ylabels=None,
@@ -971,20 +1267,31 @@ def _matrix_color_boxplot_kivy(matrix, xlabels=None, ylabels=None,
                                prec=0, scale=1.0, eb_matrix=None, title=None, grid="black"):
 
     from pygsti.report.kivygraph import MatrixBoxPlotGraph
+    if ylabels is not None:
+        # Need to flip y-labels around as Graph object expects y_grid_labels in increasing y-value order
+        # Note: we could put this logic within MatrixBoxPlotGraph (?)
+        ylabels = list(reversed(ylabels))  
     
-    widget = MatrixBoxPlotGraph(matrix,
-                                xlabel=xlabel if (xlabel is not None) else '',
-                                ylabel=ylabel if (ylabel is not None) else '',
-                                padding=5, #background_color=(1,0,0,1),
-                                x_ticks_major=1.0, y_ticks_major=1.0, x_tick_offset=0.5, y_tick_offset=0.5,
-                                x_grid_labels=xlabels, x_grid_label=True,
-                                y_grid_labels=ylabels, y_grid_label=True)
+    #Hold widget (class, init_kwargs) instead of the widget itself for
+    # ease of copying and serialization.
+    widget_constructor = (MatrixBoxPlotGraph,
+                          dict(data_matrix=matrix,
+                               xlabel=xlabel if (xlabel is not None) else '',
+                               ylabel=ylabel if (ylabel is not None) else '',
+                               padding=5, #background_color=(1,0,0,1),
+                               x_ticks_major=1.0, y_ticks_major=1.0, x_tick_offset=0.5, y_tick_offset=0.5,
+                               x_grid_labels=xlabels, x_grid_label=True,
+                               y_grid_labels=ylabels, y_grid_label=True,
+                               colormap=colormap))
     #x_ticks_angle=45, **graph_theme)
 
     flipped_mx = _np.flipud(matrix)  # FLIP so [0,0] matrix el is at *top* left
     ylabels = list(reversed(ylabels))  # FLIP y-labels to match
 
-    return ReportKivyFigure(widget, colormap, flipped_mx, plt_data=flipped_mx)
+    SQUARE_SIZE = 80
+    natural_size = (SQUARE_SIZE * matrix.shape[1],
+                    SQUARE_SIZE * matrix.shape[0])
+    return ReportKivyFigure(widget_constructor, colormap, flipped_mx, plt_data=flipped_mx, natural_size=natural_size)
 
 
 def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
@@ -1876,19 +2183,19 @@ class ColorBoxPlot(WorkspacePlot):
                 newfig = _circuit_color_boxplot(circuit_struct, subMxs, colormap,
                                                 colorbar, box_labels, prec,
                                                 hover_info, sum_up, invert,
-                                                scale, bgcolor, addl_hover_info)
+                                                scale, bgcolor, addl_hover_info, self.ws.gui_mode)
 
             elif typ == "scatter":
                 newfig = _circuit_color_scatterplot(circuit_struct, subMxs, colormap,
                                                     colorbar, hover_info, sum_up, ytitle,
-                                                    scale, addl_hover_info)
+                                                    scale, addl_hover_info, self.ws.gui_mode)
             elif typ == "histogram":
                 newfig = _circuit_color_histogram(circuit_struct, subMxs, colormap,
-                                                  ytitle, scale)
+                                                  ytitle, scale, self.ws.gui_mode)
             else:
                 raise ValueError("Invalid `typ` argument: %s" % typ)
 
-            if fig is None:
+            if fig is None or self.ws.gui_mode != 'plotly':
                 fig = newfig
             else:
                 newfig.plotlyfig['data'][0].update(visible=False)
@@ -1897,27 +2204,28 @@ class ColorBoxPlot(WorkspacePlot):
                                    fig.colormap, fig.pythonvalue)  # just add newfig's data
                 #Note: can't do fig.plotlyfig['data'].append(newfig.plotlyfig['data'][0]) as of plotly v3
 
-        nTraces = len(fig.plotlyfig['data'])
-        assert(nTraces >= len(plottypes))  # not == b/c histogram adds line trace
-
-        if len(plottypes) > 1:
-            buttons = []
-            for i, nm in enumerate(plottypes):
-                visible = [False] * nTraces
-                visible[i] = True
-                buttons.append(
-                    dict(args=['visible', visible],
-                         label=nm,
-                         method='restyle'))
-            fig.plotlyfig['layout'].update(
-                updatemenus=list([
-                    dict(buttons=buttons,
-                         direction='left',
-                         pad={'r': 10, 't': 10},
-                         showactive=True, type='buttons',
-                         x=0.1, xanchor='left',
-                         y=1.1, yanchor='top')
-                ]))
+        if self.ws.gui_mode == 'plotly':
+            nTraces = len(fig.plotlyfig['data'])
+            assert(nTraces >= len(plottypes))  # not == b/c histogram adds line trace
+    
+            if len(plottypes) > 1:
+                buttons = []
+                for i, nm in enumerate(plottypes):
+                    visible = [False] * nTraces
+                    visible[i] = True
+                    buttons.append(
+                        dict(args=['visible', visible],
+                             label=nm,
+                             method='restyle'))
+                fig.plotlyfig['layout'].update(
+                    updatemenus=list([
+                        dict(buttons=buttons,
+                             direction='left',
+                             pad={'r': 10, 't': 10},
+                             showactive=True, type='buttons',
+                             x=0.1, xanchor='left',
+                             y=1.1, yanchor='top')
+                    ]))
 
         #colormap2 = _colormaps.LinlogColormap(0, dataMax, n_boxes, linlg_pcntle, dof_per_box, "blue")
         #fig2 = _circuit_color_boxplot(gss, subMxs, colormap2,
@@ -2119,7 +2427,8 @@ class GateMatrixPlot(WorkspacePlot):
 
         return _opmatrix_color_boxplot(
             op_matrix, color_min, color_max, mx_basis, mx_basis_y,
-            xlabel, ylabel, box_labels, colorbar, prec, scale, eb_matrix)
+            xlabel, ylabel, box_labels, colorbar, prec, scale, eb_matrix,
+            None, self.ws.gui_mode)
 
 
 class MatrixPlot(WorkspacePlot):
@@ -2631,7 +2940,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
             basis_for_xlabels,
             basis_for_ylabels,
             xlabel, ylabel, box_labels, colorbar, prec,
-            scale, eb_matrix, title)
+            scale, eb_matrix, title, self.ws.gui_mode)
 
 
 #    def choi_eigenvalue_barplot(evals, errbars=None, size=(8,5), barWidth=1,
@@ -2683,64 +2992,96 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
 
     def _create(self, evals, errbars, scale):
 
-        HOVER_PREC = 7
-        xs = list(range(evals.size))
-        ys = []; colors = []; texts = []
-        for i, ev in enumerate(evals.flatten()):
-            ys.append(abs(ev.real))
-            colors.append('rgb(200,200,200)' if ev.real > 0 else 'red')
-            if errbars is not None:
-                texts.append("%g +/- %g" % (round(ev.real, HOVER_PREC),
-                                            round(errbars.flatten()[i].real, HOVER_PREC)))
-            else:
-                texts.append("%g" % round(ev.real, HOVER_PREC))
+        if self.ws.gui_mode == 'plotly':
+            HOVER_PREC = 7
+            xs = list(range(evals.size))
+            ys = []; colors = []; texts = []
+            for i, ev in enumerate(evals.flatten()):
+                ys.append(abs(ev.real))
+                colors.append('rgb(200,200,200)' if ev.real > 0 else 'red')
+                if errbars is not None:
+                    texts.append("%g +/- %g" % (round(ev.real, HOVER_PREC),
+                                                round(errbars.flatten()[i].real, HOVER_PREC)))
+                else:
+                    texts.append("%g" % round(ev.real, HOVER_PREC))
 
-        trace = go.Bar(
-            x=xs, y=ys, text=texts,
-            marker=dict(color=colors),
-            hoverinfo='text'
-        )
+            trace = go.Bar(
+                x=xs, y=ys, text=texts,
+                marker=dict(color=colors),
+                hoverinfo='text'
+            )
 
-        LOWER_LOG_THRESHOLD = -6  # so don't plot all the way down to, e.g., 1e-13
-        ys = _np.clip(ys, 1e-30, 1e100)  # to avoid log(0) errors
-        log_ys = _np.log10(_np.array(ys, 'd'))
-        minlog = max(_np.floor(min(log_ys)) - 0.1, LOWER_LOG_THRESHOLD)
-        maxlog = max(_np.ceil(max(log_ys)), minlog + 1)
+            LOWER_LOG_THRESHOLD = -6  # so don't plot all the way down to, e.g., 1e-13
+            ys = _np.clip(ys, 1e-30, 1e100)  # to avoid log(0) errors
+            log_ys = _np.log10(_np.array(ys, 'd'))
+            minlog = max(_np.floor(min(log_ys)) - 0.1, LOWER_LOG_THRESHOLD)
+            maxlog = max(_np.ceil(max(log_ys)), minlog + 1)
+    
+            #Set plot size and margins
+            lmargin = rmargin = tmargin = bmargin = 10
+            lmargin += 30  # for y-tics
+            bmargin += 40  # for x-tics & xlabel
+    
+            width = lmargin + max(20 * len(xs), 120) + rmargin
+            height = tmargin + 120 + bmargin
+    
+            width *= scale
+            height *= scale
+            lmargin *= scale
+            rmargin *= scale
+            tmargin *= scale
+            bmargin *= scale
+    
+            data = [trace]
+            layout = go.Layout(
+                width=width,
+                height=height,
+                margin=go_margin(l=lmargin, r=rmargin, b=bmargin, t=tmargin),
+                xaxis=dict(
+                    title="index",
+                    tickvals=xs
+                ),
+                yaxis=dict(
+                    type='log',
+                    range=[minlog, maxlog]
+                ),
+                bargap=0.02
+            )
 
-        #Set plot size and margins
-        lmargin = rmargin = tmargin = bmargin = 10
-        lmargin += 30  # for y-tics
-        bmargin += 40  # for x-tics & xlabel
+            return ReportFigure(go.Figure(data=data, layout=layout),
+                                None, evals, plt_y=evals, plt_yerr=errbars,
+                                pythonErrorBar=errbars)
 
-        width = lmargin + max(20 * len(xs), 120) + rmargin
-        height = tmargin + 120 + bmargin
+        elif self.ws.gui_mode == 'kivy':
+            from pygsti.report.kivygraph import Graph, BarPlot
 
-        width *= scale
-        height *= scale
-        lmargin *= scale
-        rmargin *= scale
-        tmargin *= scale
-        bmargin *= scale
+            xs = list(range(evals.size))
+            ys = []; colors = []; texts = []
+            for i, ev in enumerate(evals.flatten()):
+                ys.append(abs(ev.real))
+                #colors.append('rgb(200,200,200)' if ev.real > 0 else 'red')
+                #if errbars is not None:
+                #    texts.append("%g +/- %g" % (round(ev.real, HOVER_PREC),
+                #                                round(errbars.flatten()[i].real, HOVER_PREC)))
+                #else:
+                #    texts.append("%g" % round(ev.real, HOVER_PREC))
 
-        data = [trace]
-        layout = go.Layout(
-            width=width,
-            height=height,
-            margin=go_margin(l=lmargin, r=rmargin, b=bmargin, t=tmargin),
-            xaxis=dict(
-                title="index",
-                tickvals=xs
-            ),
-            yaxis=dict(
-                type='log',
-                range=[minlog, maxlog]
-            ),
-            bargap=0.02
-        )
+            def build_widget(xvals, yvals):
+                graph = Graph(xlabel='index',  #ylabel='Y',
+                              x_ticks_major=1.0, y_ticks_major=1.0,
+                              y_grid_label=True, x_grid_label=True, padding=5,
+                              x_grid=True, y_grid=True, xmin=0, xmax=len(xvals) + 1, ymin=0, ymax=1)
+                plot = BarPlot(color=(0,0,1,1), bar_spacing=.5)
+                graph.add_plot(plot)
+                plot.bind_to_graph(graph)
+                plot.points = [(x, abs(y)) for x, y in zip(xvals, yvals)]
+                return graph
 
-        return ReportFigure(go.Figure(data=data, layout=layout),
-                            None, evals, plt_y=evals, plt_yerr=errbars,
-                            pythonErrorBar=errbars)
+            return ReportKivyFigure((build_widget, {'xvals': xs, 'yvals': ys}),
+                                    None, evals, plt_y=evals, plt_yerr=errbars,
+                                    pythonErrorBar=errbars)
+        else:
+            raise ValueError("Invalid worksplace gui_mode: %s" % str(self.ws.gui_mode))
 
 
 class GramMatrixBarPlot(WorkspacePlot):

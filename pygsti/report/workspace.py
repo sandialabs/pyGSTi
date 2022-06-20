@@ -195,7 +195,7 @@ class Workspace(object):
         filename with cached workspace results
     """
 
-    def __init__(self, cachefile=None):
+    def __init__(self, cachefile=None, gui_mode='plotly'):
         """
         Initialize a Workspace object.
 
@@ -209,6 +209,7 @@ class Workspace(object):
         if cachefile is not None:
             self.load_cache(cachefile)
         self.smartCache.add_digest(ws_custom_digest)
+        self.gui_mode = gui_mode  # 'plotly' or 'kivy'
 
     def save_cache(self, cachefile, show_unpickled=False):
         """

@@ -5,22 +5,28 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.gridlayout import GridLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.stacklayout import StackLayout
+from kivy.uix.scatterlayout import ScatterLayout
+from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.splitter import Splitter
 from kivy.uix.dropdown import DropDown
 from kivy.uix.treeview import TreeView, TreeViewLabel
 from kivy.uix.spinner import Spinner
+from kivy.uix.behaviors import DragBehavior
 
 from kivy.properties import ObjectProperty, StringProperty
 from kivy.graphics import Color, Rectangle
 
+from .kivyresize import ResizableBehavior
 from .kivygraph import Graph, MeshLinePlot, BarPlot, MatrixBoxPlotGraph
 
 import pygsti
 from pygsti.report import Workspace
 from pygsti.protocols.gst import ModelEstimateResults as _ModelEstimateResults
+from pygsti.protocols.gst import StandardGSTDesign as _StandardGSTDesign
 from pygsti.io import read_results_from_dir as _read_results_from_dir
+from pygsti.objectivefns import objectivefns as _objfns
 
 
 class RootExplorerWidget(BoxLayout):
@@ -36,10 +42,10 @@ class RootExplorerWidget(BoxLayout):
         top_bar.add_widget(Button(text="Analysis"))
 
         sidebar = BoxLayout(orientation='vertical') #, size_hint_x=None, width=100)  # ResultsSelectorWidget??
-        edesign_selector = ExperimentDesignSelectorWidget(results_dir)
-        results_selector = ResultsSelectorWidget(edesign_selector)
+        resultsdir_selector = ResultsDirSelectorWidget(results_dir)
+        results_selector = ResultsSelectorWidget(resultsdir_selector)
         resultdetail_selector = ResultDetailSelectorWidget(results_selector)
-        sidebar.add_widget(edesign_selector)
+        sidebar.add_widget(resultsdir_selector)
         sidebar.add_widget(results_selector)
         sidebar.add_widget(resultdetail_selector)
 
@@ -49,7 +55,7 @@ class RootExplorerWidget(BoxLayout):
 
         sidebar_splt.max_size = 1000
 
-        dataarea = DataAreaWidget(results_selector, resultdetail_selector)
+        dataarea = DataAreaWidget(resultsdir_selector, results_selector, resultdetail_selector)
         #GridLayout(cols=1, rows=1)
 
         under_top_bar = BoxLayout(orientation='horizontal')
@@ -147,30 +153,13 @@ class RootExplorerWidget(BoxLayout):
         #self.add_widget(TableWidget(2,2, size_hint=(1.0,0.1 * 2), pos_hint={'x': 0.0, 'top': 0.9}))
 
 
-class BarPlotWidget(Widget):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-        with self.canvas:
-            self._fbo = Fbo(
-                size=self.size, with_stencilbuffer=True)
-
-
-
-class HistogramPlotWidget(Widget):
-    pass
-    
-
-class BoxPlotWidget(Widget):
-    pass
-
 class TreeViewLabelWithData(TreeViewLabel):
     def __init__(self, data, **kwargs):
         super().__init__(**kwargs)
         self.data = data
 
 
-class ExperimentDesignSelectorWidget(BoxLayout):
+class ResultsDirSelectorWidget(BoxLayout):
     # allows selection of edesign (tree node) and results object (dataset) at tree node.
     selected_results_dir = ObjectProperty(None, allownone=True)
 
@@ -194,12 +183,11 @@ class ExperimentDesignSelectorWidget(BoxLayout):
         tv.select_node(tv.get_root())
 
     def on_change_selected_node(self, instance, new_node):
-        print("Selected edesign: " + new_node.text)  # (new_node is a TreeViewLabel)
+        print("Selected results dir: " + new_node.text)  # (new_node is a TreeViewLabel)
         self.selected_results_dir = new_node.data if hasattr(new_node, 'data') else self.root_results_dir
 
 
 class ResultsSelectorWidget(BoxLayout):
-    # allows selection of edesign (tree node) and results object (dataset) at tree node.
     selected_results = ObjectProperty(None, allownone=True)
 
     def __init__(self, results_dir_selector_widget, **kwargs):
@@ -307,10 +295,11 @@ class ResultDetailSelectorWidget(BoxLayout):
 
 class DataAreaWidget(BoxLayout):
     # needs menus of all available tables/plots to add (for currently selected results/model/data/gaugeopt, etc)
-    def __init__(self, results_selector, resultdetail_selector, **kwargs):
+    def __init__(self, resultsdir_selector, results_selector, resultdetail_selector, **kwargs):
         kwargs['orientation'] = 'vertical'
         super().__init__(**kwargs)
 
+        self.resultsdir_selector_widget = resultsdir_selector
         self.results_selector_widget = results_selector
         self.resultdetail_selector_widget = resultdetail_selector
 
@@ -323,7 +312,8 @@ class DataAreaWidget(BoxLayout):
             'GatesVsTargetTable', 'SpamVsTargetTable', 'ErrgenTable', 'NQubitErrgenTable', 'GateDecompTable',
             'GateEigenvalueTable', 'DataSetOverviewTable', 'FitComparisonTable', 'CircuitTable', 'GatesSingleMetricTable',
             'StandardErrgenTable', 'GaugeOptParamsTable', 'MetadataTable', 'SoftwareEnvTable', 'WildcardBudgetTable',
-            'ExampleTable', 'ColorBoxPlot', 'FitComparisonBarPlot', 'FitComparisonBoxPlot']
+            'ExampleTable', 'ColorBoxPlot', 'ColorScatterPlot', 'ColorHistogramPlot',
+            'FitComparisonBarPlot', 'FitComparisonBoxPlot']
             # 'GateMatrixPlot', 'MatrixPlot', DatasetComparisonHistogramPlot, RandomizedBenchmarkingPlot
             # GaugeRobustModelTable, GaugeRobustMetricTable, GaugeRobustErrgenTable, ProfilerTable
 
@@ -347,7 +337,9 @@ class DataAreaWidget(BoxLayout):
         #add_item_bar.add_widget(Label(text='Add new:', size_hint=(0.2, 1.0)))
         add_item_bar.add_widget(add_dropdown_mainbutton)
 
-        self.data_area = StackLayout(orientation='lr-tb')
+        #self.data_area = StackLayout(orientation='lr-tb')
+        self.data_area = RelativeLayout()
+        #self.data_area = ScatterLayout()  # need to subclass ScatterLayout and fix issues (TODO)
         self.add_widget(add_item_bar)
         self.add_widget(self.data_area)
 
@@ -357,41 +349,150 @@ class DataAreaWidget(BoxLayout):
     def add_item(self, item_text):
         print("Adding item ", item_text)
 
+        resultsdir = self.resultsdir_selector_widget.selected_results_dir
+        data = resultsdir.data
+        edesign = data.edesign
+
         results = self.results_selector_widget.selected_results
+
+        circuit_list = edesign.all_circuits_needing_data
+        dataset = data.dataset
+
+        if isinstance(edesign, _StandardGSTDesign):
+            max_length_list = edesign.maxlengths
+        else:
+            max_length_list = None
+
         if isinstance(results, _ModelEstimateResults):
             estimate = results.estimates[self.resultdetail_selector_widget.estimate_name]
             model = estimate.models[self.resultdetail_selector_widget.model_name]
+            target_model = estimate.models['target'] if 'target' in estimate.models else Nonee
+            models = [model]
+            titles = ['Estimate']
+            objfn_builder = estimate.parameters.get(
+                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
         else:
-            estimate = model = None
+            estimate = model = target_model = None
+            models = titles = []
+            objfn_builder = None
+        cri = None
 
-        ws = Workspace()
+        ws = Workspace(gui_mode='kivy')
+        wstable = None
+        wsplot = None
         if item_text == 'SpamTable':
-            wstable = ws.SpamTable([model])
+            wstable = ws.SpamTable(models, titles, 'boxes', cri, False)  # titles?
+        elif item_text == 'SpamParametersTable':
+            wstable = ws.SpamParametersTable(models, titles, cri)
+        elif item_text == 'GatesTable':
+            wstable = ws.GatesTable(models, titles, 'boxes', cri)
+        elif item_text == 'ChoiTable':
+            wstable = ws.ChoiTable(models, titles, cri)
+        elif item_text == 'ModelVsTargetTable':
+            clifford_compilation = None
+            wstable = ws.ModelVsTargetTable(model, target_model, clifford_compilation, cri)
+        elif item_text == 'GatesVsTargetTable':
+            wstable = ws.GatesVsTargetTable(model, target_model, cri)  # wildcard?
+        elif item_text == 'SpamVsTargetTable':
+            wstable = ws.SpamVsTargetTable(model, target_model, cri)
+        elif item_text == 'ErrgenTable':
+            wstable = ws.ErrgenTable(model, target_model, cri)  # (more options)
+        elif item_text == 'NQubitErrgenTable':
+            wstable = ws.NQubitErrgenTable(model, cri)
+        elif item_text == 'GateDecompTable':
+            wstable = ws.GateDecompTable(model, target_model, cri)
+        elif item_text == 'GateEigenvalueTable':
+            wstable = ws.GateEigenvalueTable(model, target_model, cri,
+                                             display=('evals', 'rel', 'log-evals', 'log-rel'))
+        elif item_text == 'DataSetOverviewTable':
+            wstable = ws.DataSetOverviewTable(dataset, max_length_list)
         elif item_text == 'SoftwareEnvTable':
             wstable = ws.SoftwareEnvTable()
+        elif item_text in ('ColorBoxPlot', 'ColorScatterPlot', 'ColorHistogramPlot'):
+
+            if item_text == 'ColorBoxPlot': plot_type = "boxes"
+            elif item_text == "ColorScatterPlot": plot_type = "scatter"
+            else: plot_type = "histogram"
+
+            linlog_percentile = 5
+            bgcolor = 'white'
+            wsplot = ws.ColorBoxPlot(
+                objfn_builder, circuit_list,
+                dataset, model,  # could use non-gauge-opt model here?
+                linlg_pcntle=linlog_percentile / 100, comm=None, bgcolor=bgcolor,
+                typ=plot_type)
+
         else:
-            wstable = None
+            wstable = wsplot = None
 
         if wstable is not None:
             tbl = wstable.tables[0]
-            out = tbl.render('kivywidget')
+            out = tbl.render('kivywidget', kivywidget_kwargs={'size_hint': (None, None)})
             tblwidget = out['kivywidget']
-            self.data_area.clear_widgets()
-            self.data_area.add_widget(tblwidget)
+            #self.data_area.clear_widgets()
+            self.data_area.add_widget(FigureContainer(tblwidget, size_hint=(None, None)))
+        elif wsplot is not None:
+            plt = wsplot.figs[0]
+            constructor_fn, kwargs = plt.kivywidget
+            natural_size = plt.metadata.get('natural_size', (300, 300))
+            kwargs.update({'size_hint': (None, None)})
+            pltwidget = constructor_fn(**kwargs)
+            pltwidget.size = natural_size
+            print("DB: PLOT Initial size = ", natural_size)
+            #self.data_area.clear_widgets()
+            self.data_area.add_widget(FigureContainer(pltwidget, size_hint=(None, None)))
         else:
             print("Cannot create " + item_text + " yet.")
             
         #possible_items_to_add = [
-        #    'SpamTable', 'SpamParametersTable', 'GatesTable', 'ChoiTable', 'ModelVsTargetTable',
-        #    'GatesVsTargetTable', 'SpamVsTargetTable', 'ErrgenTable', 'NQubitErrgenTable', 'GateDecompTable',
-        #    'GateEigenvalueTable', 'DataSetOverviewTable', 'FitComparisonTable', 'CircuitTable', 'GatesSingleMetricTable',
+        #    'FitComparisonTable', 'CircuitTable', 'GatesSingleMetricTable',
         #    'StandardErrgenTable', 'GaugeOptParamsTable', 'MetadataTable', 'SoftwareEnvTable', 'WildcardBudgetTable',
-        #    'ExampleTable', 'ColorBoxPlot', 'FitComparisonBarPlot', 'FitComparisonBoxPlot']
+        #    'ExampleTable', 'FitComparisonBarPlot', 'FitComparisonBoxPlot']
 
         
         #results = self.results_dir.for_protocol['GateSetTomography']  # HACK for now... (for testing) - in future show list of protocols and subdirs...
 
 
+class FigureContainer(DragBehavior, ResizableBehavior, BoxLayout):
+    def __init__(self, fig_widget, **kwargs):
+        resize_kwargs = dict(
+            resizable_left=False,
+            resizable_right=True,
+            resizable_up=False,
+            resizable_down=True,
+            resizable_border=10,
+            resizable_border_offset=5)
+        ResizableBehavior.__init__(self, **resize_kwargs)
+        BoxLayout.__init__(self, **kwargs)
+        initial_size = fig_widget.size
+
+        with self.canvas.before:
+            Color(0.0, 0.4, 0.4)
+            self.bgrect = Rectangle(pos=self.pos, size=self.size)
+        self.size = initial_size
+
+        fig_widget.size_hint_x = 1.0
+        fig_widget.size_hint_y = 1.0
+        self.content = fig_widget
+        self.add_widget(fig_widget)
+        #self.set_cursor_mode(0)
+
+        db = self.drag_border = 2 * (self.resizable_border - self.resizable_border_offset)  # 2 for extra measure
+        drag_kwargs = {'drag_rectangle': (self.x + db, self.y + db, self.width - 2 * db, self.height - 2 * db),
+                       'drag_timeout': 2000 }  # wait 2 seconds before giving up on drag
+        DragBehavior.__init__(self, **drag_kwargs)
+        print("initial drag rect = ", self.drag_rectangle)
+
+    def on_size(self, *args):
+        self.bgrect.pos = self.pos
+        self.bgrect.size = self.size
+
+    def on_pos(self, *args):
+        self.bgrect.pos = self.pos
+        self.bgrect.size = self.size
+        #print("Pos change: ", self.pos, ' drag_rect = ',self.drag_rectangle)
+        db = self.drag_border
+        self.drag_rectangle = (self.pos[0] + db, self.pos[1] + db, self.size[0] - 2 * db, self.size[1] - 2 * db)
 
 
 class DataTableWidget(FloatLayout):
