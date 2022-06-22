@@ -20,6 +20,7 @@ from kivy.uix.accordion import Accordion, AccordionItem
 from kivy.uix.modalview import ModalView
 from kivy.uix.stencilview import StencilView
 from kivy.uix.popup import Popup
+from kivy.clock import Clock
 
 from kivy.properties import ObjectProperty, StringProperty
 from kivy.graphics import Color, Rectangle, Line
@@ -49,170 +50,14 @@ def set_info_containers(root, sidebar, statusbar):
 class RootExplorerWidget(BoxLayout):
 
     def __init__(self, results_dir, **kwargs):
-        # make sure we aren't overriding any important functionality
-        kwargs['orientation'] = 'vertical'  # self == top 'mode' bar and lower area
-        super(RootExplorerWidget, self).__init__(**kwargs)
+        self.results_dir = results_dir
+        super().__init__(**kwargs)
+        Clock.schedule_once(self.after_created, 0)
 
-        left_sidebar = BoxLayout(orientation='vertical') #, size_hint_x=None, width=100)  # ResultsSelectorWidget??
-        root_select_btn = Button(text='Select Root...', size_hint_y=None, height=40)
-        root_select_btn.bind(on_release=lambda *x: self.show_load())
-        
-        resultsdir_selector = ResultsDirSelectorWidget(results_dir)
-        results_selector = ResultsSelectorWidget(resultsdir_selector)
-        resultdetail_selector = ResultDetailSelectorWidget(results_selector)
-        left_sidebar.add_widget(root_select_btn)
-        left_sidebar.add_widget(resultsdir_selector)
-        left_sidebar.add_widget(results_selector)
-        left_sidebar.add_widget(resultdetail_selector)
-
-        left_sidebar_splt = Splitter(sizable_from='right', size_hint_x=None, width=500, strip_size='7pt')
-        left_sidebar_splt.add_widget(left_sidebar)
-        left_sidebar_splt.min_size = 100
-        left_sidebar_splt.max_size = 1000
-
-        top_bar = BorderedBoxLayout(orientation='horizontal') #, size_hint_y=None, height=200)
-        top_left_stack = BoxLayout(orientation='vertical', size_hint_x=None, width=400)
-        btn1 = Button(text='Processor specification')
-        btn1.bind(on_press=lambda btn: ProcessorSpecModal(resultsdir_selector.selected_results_dir,
-                                                          size_hint=(None, None), size=(500, 500)).open())
-        btn2 = Button(text='Experiment design')
-        btn2.bind(on_press=lambda btn: ExperimentDesignModal(resultsdir_selector.selected_results_dir,
-                                                             size_hint=(None, None), size=(500, 500)).open())
-        btn3 = Button(text='Data set')
-        btn3.bind(on_press=lambda btn: DatasetModal(resultsdir_selector.selected_results_dir,
-                                                    size_hint=(None, None), size=(500, 500)).open())
-        top_left_stack.add_widget(btn1)
-        top_left_stack.add_widget(btn2)
-        top_left_stack.add_widget(btn3)
-        top_bar.add_widget(top_left_stack)
-        top_bar.add_widget(Label(text='Processor Spec graphic?'))
-        #top_bar.add_widget(ProcessorSpecInfoWidget(resultsdir_selector))
-        #top_bar.add_widget(ExperimentDesignInfoWidget(resultsdir_selector))
-        #top_bar.add_widget(DatasetInfoWidget(resultsdir_selector))
-        
-        top_bar_splitter = Splitter(sizable_from='bottom', size_hint_y=None, height=200, strip_size='7pt')
-        top_bar_splitter.add_widget(top_bar)
-
-        center_area = CenterAreaWidget(resultsdir_selector, results_selector, resultdetail_selector)
-        #GridLayout(cols=1, rows=1)
-
-        tabpanel = TabbedPanel(do_default_tab=False)
-        create_tab = TabbedPanelItem(text='Create')
-        create_acc = self.create_add_item_panel(center_area)
-        create_tab.add_widget(create_acc)
-
-        info_tab = TabbedPanelItem(text='Info')
-        info_layout = BoxLayout(orientation='vertical')
-        info_tab.add_widget(info_layout)
-        info_layout.add_widget(Label(text='Info goes here'))
-
-        tabpanel.add_widget(create_tab)
-        tabpanel.add_widget(info_tab)
-
-        right_sidebar = BorderedBoxLayout(orientation='vertical')
-        right_sidebar.add_widget(tabpanel)
-        right_sidebar_splt = Splitter(sizable_from='left', size_hint_x=None, width=500, strip_size='7pt')
-        right_sidebar_splt.add_widget(right_sidebar)
-        right_sidebar_splt.min_size = 100
-        right_sidebar_splt.max_size = 1000
-
-        under_top_bar = BoxLayout(orientation='horizontal')
-        under_top_bar.add_widget(left_sidebar_splt)
-        under_top_bar.add_widget(center_area)
-        under_top_bar.add_widget(right_sidebar_splt)
-
-        bottom_bar = BorderedBoxLayout(orientation='horizontal', size_hint_y=None, height=50)
-        status_label = Label(text="Ready for action.")
-        bottom_bar.add_widget(status_label)
-
-        self.add_widget(top_bar_splitter)
-        self.add_widget(under_top_bar)
-        self.add_widget(bottom_bar)
-
-        #set_info_containers(center_area, info_layout, status_label)
-
-        ## let's add a Widget to this layout
-        #self.add_widget(
-        #    Button(
-        #        text="Hello World",
-        #        size_hint=(.5, .1),
-        #        pos_hint={'center_x': .5, 'top': 1.0}))
-
-
-        #results = self.results_dir.for_protocol['GateSetTomography']  # HACK for now... (for testing) - in future show list of protocols and subdirs...
-
-        #TEST1
-        #ws = Workspace()
-        ##wstable = ws.SoftwareEnvTable()
-        #tbl = wstable.tables[0]
-        #out = tbl.render('kivywidget')
-        #tblwidget = out['kivywidget']
-        #dataarea.data_area.add_widget(tblwidget)
-
-        #TEST2 - kivy plot
-        from math import sin
-        from kivy.utils import get_color_from_hex as rgb
-        graph_theme = {
-                'label_options': {
-                    'color': rgb('444444'),  # color of tick labels and titles
-                    'bold': True},
-                'background_color': rgb('f8f8f2'),  # canvas background color
-                'tick_color': rgb('808080'),  # ticks and grid
-                'border_color': rgb('808080')}  # border drawn around each graph
-
-        #graph = Graph(xlabel='X', ylabel='Y',
-        #              x_ticks_major=25, x_ticks_minor=5,
-        #              y_ticks_major=1.0, y_ticks_minor=2,
-        #              y_grid_label=True, x_grid_label=True, padding=5,
-        #              x_grid=True, y_grid=True, xmin=-0, xmax=100, ymin=-1, ymax=1,
-        #              **graph_theme)
-        #plot = MeshLinePlot(color=[1, 0, 0, 1])
-        #plot.points = [(x, sin(x / 10.)) for x in range(0, 101)]
-
-        #graph = Graph(xlabel='X', ylabel='Y',
-        #              x_ticks_major=10, x_ticks_minor=2,
-        #              y_ticks_major=1.0, y_ticks_minor=2,
-        #              y_grid_label=True, x_grid_label=True, padding=5,
-        #              x_grid=True, y_grid=True, xmin=-0, xmax=70, ymin=0, ymax=1,
-        #              x_grid_labels=["One", "Two", "Three", "4", "5", "6", "7", "-8-", "nine", "ten"],
-        #              x_ticks_angle=45,
-        #              **graph_theme)
-        #plot = BarPlot(color=(0,0,1,1), bar_spacing=.5)
-        #graph.add_plot(plot)
-        #plot.bind_to_graph(graph)
-        #plot.points = [(30, 0.1), (40, 0.2), (50, 0.3), (60, 0.4)]
-
-        #graph = Graph(xlabel='X', ylabel='Y',
-        #              x_ticks_major=25, x_ticks_minor=5,
-        #              y_ticks_major=1.0, y_ticks_minor=2,
-        #              y_grid_label=True, x_grid_label=True, padding=5,
-        #              x_grid=True, y_grid=True, xmin=-0, xmax=100, ymin=-1, ymax=1,
-        #              **graph_theme)
-        #plot = MeshBoxPlot(color=[1, 0, 0, 1])
-        #plot.points = [(x, sin(x / 10.)) for x in range(0, 101)]
-
-        #graph.add_plot(plot)
-        #dataarea.data_area.add_widget(graph)
-
-        #import numpy as np
-        #randmx = np.random.random((6,6))
-        #print("Random mx =\n",randmx)
-        #graph = MatrixBoxPlotGraph(randmx, xlabel='myX', ylabel='myY', padding=5, background_color=(1,0,0,1),
-        #                          x_ticks_major=1.0, y_ticks_major=1.0, x_tick_offset=0.5, y_tick_offset=0.5,
-        #                          x_grid_labels=["A", "B", "C", "D", "E", "F"], x_grid_label=True,
-        #                          y_grid_labels=list(reversed(["a", "b", "c", "d", "e", "f"])), y_grid_label=True)
-        #                          #x_ticks_angle=45,
-        #                          #**graph_theme)
-        #dataarea.data_area.add_widget(graph)
-
-        
-        #TEST3
-        #pltwidget = PlotWidget()
-        #pltwidget = 
-
-
-        #self.add_widget(test_widget)
-        #self.add_widget(TableWidget(2,2, size_hint=(1.0,0.1 * 2), pos_hint={'x': 0.0, 'top': 0.9}))
+    def after_created(self, delta_time):
+        print("Running post-kv-file creation of root widget.")
+        self.ids.create_tab.add_widget(self.create_add_item_panel(self.ids.center_area))
+        set_info_containers(self.ids.center_area, self.ids.info_layout, self.ids.status_label)
 
     def create_add_item_panel(self, center_area):
 
@@ -290,11 +135,13 @@ class BorderedBoxLayout(BoxLayout):
 
 class ResultsDirSelectorWidget(BorderedBoxLayout):
     # allows selection of edesign (tree node) and results object (dataset) at tree node.
+    root_results_dir = ObjectProperty(None, allownone=True)
     selected_results_dir = ObjectProperty(None, allownone=True)
 
-    def __init__(self, root_results_dir, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.root_results_dir = root_results_dir
+
+    def on_root_results_dir(self, inst, val):
         tv = TreeView(root_options=dict(text='Root <filename>'),
                       hide_root=False,
                       indent_level=4)
@@ -305,9 +152,10 @@ class ResultsDirSelectorWidget(BorderedBoxLayout):
                                         parent=parent_tree_node)  # OK if None
                 populate_view(results_dir[ky], tree_node)
 
-        populate_view(root_results_dir, None)
+        populate_view(self.root_results_dir, None)
         tv.bind(_selected_node=self.on_change_selected_node)
 
+        self.clear_widgets()
         self.add_widget(tv)
         tv.select_node(tv.get_root())
 
@@ -317,19 +165,18 @@ class ResultsDirSelectorWidget(BorderedBoxLayout):
 
 
 class ResultsSelectorWidget(BorderedBoxLayout):
+    results_dir_selector_widget = ObjectProperty(None, allownone=True)
     selected_results = ObjectProperty(None, allownone=True)
 
-    def __init__(self, results_dir_selector_widget, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.treeview = None
-        if results_dir_selector_widget.selected_results_dir is not None:
-            self.refresh_tree(results_dir_selector_widget.selected_results_dir)                
-        results_dir_selector_widget.bind(selected_results_dir=self.on_change_selected_results_dir)
 
-        #Select the first selectable node
-        if self.treeview is not None:
-            if len(self.treeview.get_root().nodes) > 0:
-                self.treeview.select_node(self.treeview.get_root().nodes[0])
+    def on_results_dir_selector_widget(self, inst, val):
+        if self.results_dir_selector_widget is None: return
+        if self.results_dir_selector_widget.selected_results_dir is not None:
+            self.refresh_tree(self.results_dir_selector_widget.selected_results_dir)                
+        self.results_dir_selector_widget.bind(selected_results_dir=self.on_change_selected_results_dir)
 
     def refresh_tree(self, current_results_dir):
         tv = TreeView(root_options=dict(text='Results for protocol:'),
@@ -338,8 +185,8 @@ class ResultsSelectorWidget(BorderedBoxLayout):
 
         def populate_view(results_dir, parent_tree_node):
             for protocol_name, protocol_results in results_dir.for_protocol.items():
-                nd = tv.add_node(TreeViewLabelWithData(data=protocol_results, text=str(protocol_name),
-                                                       is_open=True), parent=parent_tree_node)  # OK if None
+                tv.add_node(TreeViewLabelWithData(data=protocol_results, text=str(protocol_name),
+                                                  is_open=True), parent=parent_tree_node)  # OK if None
 
         populate_view(current_results_dir, None)
         tv.bind(_selected_node=self.on_change_selected_node)
@@ -358,21 +205,30 @@ class ResultsSelectorWidget(BorderedBoxLayout):
     def on_change_selected_results_dir(self, instance, new_results_dir):
         self.refresh_tree(new_results_dir)
 
+        #Select the first selectable node
+        if self.treeview is not None:
+            if len(self.treeview.get_root().nodes) > 0:
+                self.treeview.select_node(self.treeview.get_root().nodes[0])
+
 
 class ResultDetailSelectorWidget(BorderedBoxLayout):
+    results_selector_widget = ObjectProperty(None, allownone=True)
     estimate_name = StringProperty(None, allownone=True)
     model_name = StringProperty(None, allownone=True)
 
     # allows selection of model, gaugeopt, etc.
-    def __init__(self, results_selector_widget, **kwargs):
+    def __init__(self, **kwargs):
         kwargs['orientation'] = 'vertical'
         kwargs['size_hint_y'] = None
         super().__init__(**kwargs)
         self.results = None  # the current results object
         self.rows = []  # list of horizontal BoxLayouts, one per row
-        if results_selector_widget.selected_results is not None:
-            self.on_change_selected_results(None, results_selector_widget.selected_results)
-        results_selector_widget.bind(selected_results=self.on_change_selected_results)
+
+    def on_results_selector_widget(self, inst, val):
+        if self.results_selector_widget is None: return
+        if self.results_selector_widget.selected_results is not None:
+            self.on_change_selected_results(None, self.results_selector_widget.selected_results)
+        self.results_selector_widget.bind(selected_results=self.on_change_selected_results)
 
     def rebuild(self):
         self.clear_widgets()
@@ -426,55 +282,20 @@ class ResultDetailSelectorWidget(BorderedBoxLayout):
 
 class CenterAreaWidget(BoxLayout, StencilView):
     # needs menus of all available tables/plots to add (for currently selected results/model/data/gaugeopt, etc)
-    def __init__(self, resultsdir_selector, results_selector, resultdetail_selector, **kwargs):
+    resultsdir_selector_widget = ObjectProperty(None, allownone=True)
+    results_selector_widget = ObjectProperty(None, allownone=True)
+    resultdetail_selector_widget = ObjectProperty(None, allownone=True)
+
+    def __init__(self, **kwargs):
         kwargs['orientation'] = 'vertical'
         super().__init__(**kwargs)
-
-        self.resultsdir_selector_widget = resultsdir_selector
-        self.results_selector_widget = results_selector
-        self.resultdetail_selector_widget = resultdetail_selector
-
-        self.results_selector_widget.bind(selected_results=self.selection_change)
-        self.resultdetail_selector_widget.bind(estimate_name=self.selection_change, model_name=self.selection_change)
         self._sidebar_layout = self._status_label = None
 
-        #OLD Add-item dropdown -- now this functionality is in sidebar (REMOVE later)
-        #add_dropdown = DropDown()  # size_hint=(0.8, 1.0)
-        #possible_items_to_add = [
-        #    'SpamTable', 'SpamParametersTable', 'GatesTable', 'ChoiTable', 'ModelVsTargetTable',
-        #    'GatesVsTargetTable', 'SpamVsTargetTable', 'ErrgenTable', 'NQubitErrgenTable', 'GateDecompTable',
-        #    'GateEigenvalueTable', 'DataSetOverviewTable', 'FitComparisonTable', 'CircuitTable', 'GatesSingleMetricTable',
-        #    'StandardErrgenTable', 'GaugeOptParamsTable', 'MetadataTable', 'SoftwareEnvTable', 'WildcardBudgetTable',
-        #    'ExampleTable', 'ColorBoxPlot', 'ColorScatterPlot', 'ColorHistogramPlot',
-        #    'FitComparisonBarPlot', 'FitComparisonBoxPlot']
-        #    # 'GateMatrixPlot', 'MatrixPlot', DatasetComparisonHistogramPlot, RandomizedBenchmarkingPlot
-        #    # GaugeRobustModelTable, GaugeRobustMetricTable, GaugeRobustErrgenTable, ProfilerTable
-        #
-        #for item_name in possible_items_to_add:
-        #    btn = Button(text=item_name, size_hint_y=None, height=40)  # must specify height manually
-        #    btn.bind(on_release=lambda btn: add_dropdown.select(btn.text))  # pressing button selects dropdown
-        #    btn.bind(on_press=lambda btn: self.add_item(btn.text))  # pressing button selects dropdown
-        #    add_dropdown.add_widget(btn)  # add the button inside the dropdown
-        #add_dropdown_mainbutton = Button(text='Add New', size_hint=(1.0, 1.0))
-        #
-        ## show the dropdown menu when the main button is released
-        ## note: all the bind() calls pass the instance of the caller (here, the
-        ## mainbutton instance) as the first argument of the callback (here, dropdown.open.).
-        #add_dropdown_mainbutton.bind(on_release=lambda instance: add_dropdown.open(instance))
-        ## NOTE: using on_release=add_dropdown.open doesn't work for some reason, despite tutorial instruction.
-        #
-        ## listen for the selection in the dropdown list and assign the data to the button text.
-        #add_dropdown.bind(on_select=lambda instance, x: setattr(add_dropdown_mainbutton, 'text', x))
-        #
-        #add_item_bar = BoxLayout(orientation='horizontal', height=40, size_hint_y=None)
-        ##add_item_bar.add_widget(Label(text='Add new:', size_hint=(0.2, 1.0)))
-        #add_item_bar.add_widget(add_dropdown_mainbutton)
-        #self.add_widget(add_item_bar)
+    def on_results_selector_widget(self, inst, val):
+        self.results_selector_widget.bind(selected_results=self.selection_change)
 
-        #self.data_area = StackLayout(orientation='lr-tb')
-        #self.data_area = ScatterLayout()  # need to subclass ScatterLayout and fix issues (TODO)
-        self.data_area = DataAreaWidget()
-        self.add_widget(self.data_area)
+    def on_resultdetail_selector_widget(self, inst, val):
+        self.resultdetail_selector_widget.bind(estimate_name=self.selection_change, model_name=self.selection_change)
 
     def selection_change(self, instance, value):
         print("Data area noticed a selected results or model change... do something in the future?")
@@ -977,32 +798,5 @@ class DataExplorerApp(App):
         return RootExplorerWidget(self.results_dir)
 
 
-def build_dropdown(options, option_height=40, size_hint=(None, None)):
-    dropdown = DropDown()  # size_hint=(0.8, 1.0)
-    for option_text in options:
-        btn = Button(text=option_text, size_hint_y=None, height=option_height)  # must specify height manually
-        btn.bind(on_release=lambda btn: dropdown.select(btn.text))  # pressing button selects dropdown
-        dropdown.add_widget(btn)  # add the button inside the dropdown
-    dropdown_mainbutton = Button(text=options[0] if (len(options) > 0) else '<empty>', size_hint=size_hint)
-
-    # show the dropdown menu when the main button is released
-    # note: all the bind() calls pass the instance of the caller (here, the
-    # mainbutton instance) as the first argument of the callback (here, dropdown.open.).
-    dropdown_mainbutton.bind(on_release=lambda instance: dropdown.open(instance))
-    # NOTE: using on_release=dropdown.open doesn't work for some reason, despite tutorial instruction.
-
-    # listen for the selection in the dropdown list and assign the data to the button text.
-    dropdown.bind(on_select=lambda instance, x: setattr(dropdown_mainbutton, 'text', x))
-    return dropdown, dropdown_mainbutton
-
-
-if __name__ == '__main__':
-    ws = Workspace()
-    wstable = ws.SoftwareEnvTable()
-    tbl = wstable.tables[0]
-    out = tbl.render('kivywidget')
-    tblwidget = out['kivywidget']
-    #import bpdb; bpdb.set_trace()
-    #print(tbl)
-
-    DataExplorerApp(tblwidget).run()
+#if __name__ == '__main__':
+#    DataExplorerApp(tblwidget).run()

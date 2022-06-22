@@ -1,0 +1,116 @@
+
+<StyledSplitter@Splitter>
+    strip_size: '7pt'
+
+<RootExplorerWidget>:
+    orientation: 'vertical'
+
+    StyledSplitter:
+        id: top_bar_splitter
+        sizable_from: 'bottom'
+        size_hint_y: None
+        height: 250
+        
+        BorderedBoxLayout:
+            id: top_bar
+            orientation: 'horizontal'
+    
+            BoxLayout:
+                id: top_left_stack
+                orientation: 'vertical'
+                size_hint_x: None
+                width: 400
+
+                Button:
+                    text: 'Processor specification'
+                Button:
+                    text: 'Experiment Design'
+                Button:
+                    text: 'Data set'
+    
+            Label:
+                text: 'Processor spec graphic?'
+        
+
+    # Central vertical area (sidebars surrounding centeral area)
+    BoxLayout:
+        id: under_top_bar
+        orientation: 'horizontal'
+
+        StyledSplitter:
+            id: left_sidebar_splitter
+            sizable_from: 'right'
+            size_hint_x: None
+            width: 500
+            min_size: 100
+            max_size: 1000
+            
+            BoxLayout:
+                id: left_sidebar
+                orientation: 'vertical'
+    
+                Button:
+                    text: 'Select Root'
+                    size_hint_y: None
+                    height: 40
+    
+                ResultsDirSelectorWidget:
+                    id: results_dir_selector
+                    root_results_dir: root.results_dir
+    
+                ResultsSelectorWidget:
+                    id: results_selector
+                    results_dir_selector_widget: results_dir_selector
+    
+                ResultDetailSelectorWidget:
+                    id: result_detail_selector
+                    results_selector_widget: results_selector
+
+        CenterAreaWidget:
+            id: center_area
+            data_area: data_area  # so center area has an easy reference to its data area
+            resultsdir_selector_widget : results_dir_selector
+            results_selector_widget: results_selector
+            resultdetail_selector_widget: result_detail_selector
+
+            DataAreaWidget:
+                id: data_area
+
+        StyledSplitter:
+            id: right_sidebar_splitter
+            sizable_from: 'left'
+            size_hint_x: None
+            width: 500
+            min_size: 100
+            max_size: 1000
+            
+            BorderedBoxLayout:
+                id: right_sidebar
+                orientation: 'vertical'
+    
+                TabbedPanel:
+                    do_default_tab: False
+                    TabbedPanelItem:
+                        id: create_tab
+                        text: 'Create'
+    
+                    TabbedPanelItem:
+                        id: info_tab
+                        text: 'Info'
+                        BoxLayout:
+                            id: info_layout
+                            orientation: 'vertical'
+                            Label:
+                                text: "Info goes here"
+
+    BorderedBoxLayout:
+        id: bottom_bar
+        orientation: 'horizontal'
+        size_hint_y: None
+        height: 50
+
+        Label:
+            id: status_label
+            text: 'Ready for action.'
+
+  
