@@ -58,6 +58,7 @@ import numpy as _np
 
 from kivy.uix.widget import Widget
 from kivy.uix.label import Label
+from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.stencilview import StencilView
 from kivy.properties import NumericProperty, BooleanProperty,\
     BoundedNumericProperty, StringProperty, ListProperty, ObjectProperty,\
@@ -71,6 +72,9 @@ from kivy.lang import Builder
 from kivy.logger import Logger
 from kivy import metrics
 from kivy.core.text import Label as CoreLabel
+from kivy.core.window import Window
+
+from pygsti.report.kivywidget import WrappedLabel
 
 from math import log10, floor, ceil
 from decimal import Decimal
@@ -79,6 +83,8 @@ try:
     import numpy as np
 except ImportError as e:
     np = None
+
+from pygsti.report import plothelpers as _ph
 
 
 def identity(x):
@@ -453,6 +459,8 @@ class Graph(Widget):
             ylabel.y = int(
                 y_next + (yextent - y_next) / 2. - ylabel.height / 2.)
             ylabel.angle = 90
+        if x_overlap: print("Graph X overlap -- omitting x labels!")
+        if y_overlap: print("Graph Y overlap -- omitting y labels!")
         if x_overlap:
             for k in range(len(xlabels)):
                 xlabels[k].text = ''
@@ -1036,7 +1044,7 @@ class Plot(EventDispatcher):
                            'ylog': False, 'ymin': 0, 'ymax': 100,
                            'size': (0, 0, 0, 0)})
 
-    color = ListProperty([1, 1, 1, 1])
+    color = ListProperty([1, 0, 0, 1])
     '''Color of the plot.
     '''
 
@@ -1357,7 +1365,7 @@ class SmoothLinePlot(Plot):
         with self._grc:
             self._gcolor = Color(*self.color)
             self._gline = Line(
-                points=[], cap='none', width=5.,
+                points=[], cap='none', width=2.,
                 texture=SmoothLinePlot._texture)
 
         return [self._grc]
@@ -1752,13 +1760,123 @@ class PointPlot(Plot):
         self.fbind('color', update_color)
 
     def create_drawings(self):
-        self._color = Color(*self.color)
-        self._point = Point(pointsize=self.point_size)
-        return [self._color, self._point]
+        from kivy.graphics import RenderContext
+
+        if not self.colors:  # original all-one-color points
+            self._color = Color(*self.color)
+            self._point = Point(pointsize=self.point_size)
+            return [self._color, self._point]
+
+        else:  # per-point colors -> need custom shader
+            import os
+            self._grc = RenderContext(
+                use_parent_modelview=True,
+                use_parent_projection=True)
+            self._grc.shader.source = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                                   'perptcolorshaders.glsl')
+            vertex_format = [
+                (b'vPosition', 2, 'float'),  # <--- GLSL shader variable names.
+                (b'vColor', 4, 'float')
+            ]
+            with self._grc:
+                self._color = Color(*self.color)
+                self._mesh = Mesh(fmt=vertex_format, mode='triangles')
+                self.bind(color=lambda instr, value: setattr(self._color, 'rgba', value))
+            return [self._grc]
 
     def draw(self, *args):
-        super(PointPlot, self).draw(*args)
-        self._point.points = [v for p in self.iterate_points() for v in p]
+        #super(PointPlot, self).draw(*args)  # for some reason, leaving this uncommented causes
+        # problems where the scatterplot just gets cleared and doesn't redraw properly.
+        # I have no idea why this happens for this PointPlot but not others...
+
+        if not self.colors:
+            self._point.points = [v for p in self.iterate_points() for v in p]
+
+        else:
+            points = self.points
+            sz = self.point_size / 2  # offset size of rectangle edges from point center
+
+            point_len = len(points)
+            mesh = self._mesh
+            vert = mesh.vertices
+            ind = mesh.indices
+
+            vertex_size = 6  # 2 pos + 4 color
+            diff = point_len * 6 - len(vert) // vertex_size  # 6 points from 2 triangls
+            if diff < 0:
+                del vert[6 * vertex_size * point_len:]
+                del ind[6 * point_len:]
+            elif diff > 0:
+                ind.extend(range(len(ind), len(ind) + diff))
+                vert.extend([0] * (diff * vertex_size))
+
+            #bounds = self.get_px_bounds()
+            #x_px = self.x_px()
+            #y_px = self.y_px()
+            #ymin = y_px(self.graph.ymin)
+            #
+            #bar_width = self.bar_width
+            #if bar_width < 0:
+            #    bar_width = x_px(bar_width) - bounds["xmin"]
+
+            nColors = len(self.colors)
+
+            for k, p in enumerate(self.iterate_points()):
+                x1 = p[0] - sz
+                x2 = p[0] + sz
+                y1 = p[1] - sz
+                y2 = p[1] + sz
+                idx = k * 6 * vertex_size
+
+                # per-vertex coloring: each vertex is (x, y, r, g, b, a)
+                color = self.colors[k % nColors]
+                r, g, b, a = color
+
+                # first triangle
+                vert[idx] = x1
+                vert[idx + 1] = y2
+                vert[idx + 2] = r
+                vert[idx + 3] = g
+                vert[idx + 4] = b
+                vert[idx + 5] = a
+
+                vert[idx + 6] = x1
+                vert[idx + 7] = y1
+                vert[idx + 8] = r
+                vert[idx + 9] = g
+                vert[idx + 10] = b
+                vert[idx + 11] = a
+
+                vert[idx + 12] = x2
+                vert[idx + 13] = y1
+                vert[idx + 14] = r
+                vert[idx + 15] = g
+                vert[idx + 16] = b
+                vert[idx + 17] = a
+
+                # second triangle
+                vert[idx + 18] = x1
+                vert[idx + 19] = y2
+                vert[idx + 20] = r
+                vert[idx + 21] = g
+                vert[idx + 22] = b
+                vert[idx + 23] = a
+
+                vert[idx + 24] = x2
+                vert[idx + 25] = y2
+                vert[idx + 26] = r
+                vert[idx + 27] = g
+                vert[idx + 28] = b
+                vert[idx + 29] = a
+
+                vert[idx + 30] = x2
+                vert[idx + 31] = y1
+                vert[idx + 32] = r
+                vert[idx + 33] = g
+                vert[idx + 34] = b
+                vert[idx + 35] = a
+
+            mesh.vertices = vert
 
 
 
@@ -1827,16 +1945,18 @@ class MatrixBoxPlotGraph(Graph):
     '''TODO: docstring
     '''
 
-    def __init__(self, data_matrix, box_labels=True, colormap=None, **kwargs):
+    def __init__(self, data_matrix, box_labels=True, colormap=None, prec=0, **kwargs):
         self.data_matrix = data_matrix  # allow to be sparse also?
         # maybe allow to send a data layout so data values can be updated quickly?
 
+        Window.bind(mouse_pos=self.on_mouse_pos)
         kwargs.update(dict(xmin=0, xmax=self.data_matrix.shape[1],
                            ymin=0, ymax=self.data_matrix.shape[0],
                            x_grid=True, y_grid=True,
                            #x_grid_labels=["One", "Two", "Three", "4", "5", "6", "7", "-8-", "nine", "ten"],
                            ))
         super(MatrixBoxPlotGraph, self).__init__(**kwargs)
+        self._sidebar_layout = self._status_label = None
 
         # create a 64x1 texture, defaults to rgba / ubyte
         self.colormap = colormap
@@ -1846,7 +1966,7 @@ class MatrixBoxPlotGraph(Graph):
         self.populate_texture(texture)
 
         with self._fbo:
-            #self._temp_color = Color(0.5, 0.5, 0)  # DEBUG REMOVE
+            Color(1.0, 1.0, 1.0, 1.0)  # use white base so doesn't alter box colors
             self._mesh_boxes = Mesh(mode='triangles', texture=texture)
 
         if box_labels:
@@ -1858,7 +1978,7 @@ class MatrixBoxPlotGraph(Graph):
                 row_rects = []
                 row_colors = []
                 for j in range(self.data_matrix.shape[1]):
-                    label = CoreLabel(text="%.2g" % self.data_matrix[i, j], font_size=20)
+                    label = CoreLabel(text=_ph._eformat(self.data_matrix[i, j], prec), font_size=16)
                     label.refresh()
                     if self.colormap is not None:
                         color = Color(0, 0, 0) if (self.colormap.besttxtcolor(self.data_matrix[i, j]) == 'black') \
@@ -1973,9 +2093,60 @@ class MatrixBoxPlotGraph(Graph):
                 lbl.pos = ((x1 + x2 - lbl.size[0]) / 2.0, (y1 + y2 - lbl.size[1]) / 2.0)
         mesh.vertices = vert  # needed?
 
+    def set_info_containers(self, sidebar_layout, status_label):
+        self._sidebar_layout = sidebar_layout
+        self._status_label = status_label
 
-        #Update label positions
-        
+    def on_touch_down(self, touch):
+
+        #wpos = self.to_widget(*touch.pos, relative=True)  # DON'T do this - we're in a RelativeLayout
+        # and so touch.pos is *not* in window coordinates - it's in RelativeLayout coordinates which area
+        # the same as this widget's local (but not relative) coordinates.
+
+        # Graph.collide_point needs coordinates in the same system as self.pos, which is the
+        # relative coordinate system of a RelativeLayout when this Graph is within such a
+        # layout (and it will be since our data area is a RelativeLayout).  In RelativeLayout.on_touch_down
+        # the touch coordinates are mapped to the RelativeLayout's system, and so we're fine to
+        # use touch.pos as-is
+        if self.collide_point(*touch.pos):
+
+            # self.view_pos, on the other hand, is in *relative* local coordinates,
+            # so we need to transform "local" -> "relative local" coords:
+            tpos = self.to_local(*touch.pos, relative=True)
+            if (self.view_pos[0] <= tpos[0] <= self.view_pos[0] + self.view_size[0]
+               and self.view_pos[1] <= tpos[1] <= self.view_pos[1] + self.view_size[1]):
+                x, y = self.to_data(*tpos)
+                if self._status_label and self._sidebar_layout:
+                    self._sidebar_layout.clear_widgets()
+                    j, i = int(_np.floor(x)), self.data_matrix.shape[0] - 1 - int(_np.floor(y))
+                    if 0 <= i < self.data_matrix.shape[0] and 0 <= j < self.data_matrix.shape[1]:
+                        anchor = AnchorLayout(padding=50, anchor_x='center', anchor_y='top')
+                        #anchor.add_widget(Label(text="Clicked at %f, %f" % (x,y)))
+                        anchor.add_widget(Label(text="Value %g" % (self.data_matrix[i, j])))
+                        self._sidebar_layout.add_widget(anchor)
+                    #self._status_label.text = "Value: %g" % self.data[k]
+                return True
+        return super().on_touch_down(touch)
+
+    def on_mouse_pos(self, *args):
+        if not self.get_root_window():
+            return  # don't proceed if I'm not displayed <=> If have no parent
+
+        pos = args[1]
+        tpos = self.to_widget(*pos, relative=False)  # because pos is in window coords
+        if self.collide_point(*tpos):
+            tpos = self.to_local(*tpos, relative=True)
+            if (self.view_pos[0] <= tpos[0] <= self.view_pos[0] + self.view_size[0]
+               and self.view_pos[1] <= tpos[1] <= self.view_pos[1] + self.view_size[1]):
+                x, y = self.to_data(*tpos)
+                if self._status_label:
+                    j, i = int(_np.floor(x)), self.data_matrix.shape[0] - 1 - int(_np.floor(y))
+                    if 0 <= i < self.data_matrix.shape[0] and 0 <= j < self.data_matrix.shape[1]:
+                        self._status_label.text = "%g" % self.data_matrix[i, j]
+                    elif len(self._status_label.text) > 0:
+                        self._status_label.text = ''
+            elif self._status_label and len(self._status_label.text) > 0:
+                self._status_label.text = ''
 
         #DB REMOVE
         #print("Update vertices: %d vertices, %d indices" % (len(mesh.vertices), len(mesh.indices)))
@@ -2057,10 +2228,9 @@ class NestedMatrixBoxPlotGraph(Graph):
     '''TODO: docstring
     '''
 
-    def __init__(self, plt_data_list_of_lists, box_labels=False, colormap=None, **kwargs):
+    def __init__(self, plt_data_list_of_lists, box_labels=False, colormap=None,
+                 hover_label_fn=None, **kwargs):
         self.plt_data_list_of_lists = plt_data_list_of_lists  # better sparse format?
-
-        from kivy.core.window import Window
         Window.bind(mouse_pos=self.on_mouse_pos)
 
         data_size = 0
@@ -2069,6 +2239,7 @@ class NestedMatrixBoxPlotGraph(Graph):
         self.data = _np.zeros(data_size, 'd')
         self.xs = _np.zeros(data_size, int)
         self.ys = _np.zeros(data_size, int)
+        self.hover_labels = _np.empty(data_size, dtype=object) if hover_label_fn else None
 
         # Same as plotly code; maybe upgrade to allow sub-matrices of different shapes?
         elRows, elCols = plt_data_list_of_lists[0][0].shape  # nE,nr
@@ -2090,7 +2261,17 @@ class NestedMatrixBoxPlotGraph(Graph):
                         self.ys[k] = i * (elRows + gap) + ii
                         #self.ys[k] = ymax - (i * (elRows + gap) + ii)  # FLIPY (WRONG)
                         self.data[k] = plt_data[ii, jj]
+                        if hover_label_fn:
+                            lbl = hover_label_fn(self.data[k], i, j, ii, jj)
+                            lbl = lbl.replace('<br>', '\n').replace('<sup>', '^').replace('</sup>', '')
+                            self.hover_labels[k] = lbl
                         k += 1
+
+        self.xs = self.xs[:k]
+        self.ys = self.ys[:k]
+        self.data = self.data[:k]
+        if self.hover_labels is not None:
+            self.hover_labels = self.hover_labels[:k]
 
         xspacing = elCols + gap
         yspacing = elRows + gap
@@ -2101,6 +2282,7 @@ class NestedMatrixBoxPlotGraph(Graph):
                            x_tick_offset=0.5 * xspacing, y_tick_offset=0.5 * yspacing,
                            ))
         super(NestedMatrixBoxPlotGraph, self).__init__(**kwargs)
+        self._sidebar_layout = self._status_label = None
 
         # create a 64x2 texture, defaults to rgba / ubyte
         self.colormap = colormap
@@ -2110,6 +2292,9 @@ class NestedMatrixBoxPlotGraph(Graph):
         self.populate_texture(texture)
 
         with self._fbo:
+            Color(0, 0, 0, 1)  # box border color
+            self._mesh_box_bg = Mesh(mode='triangles')
+            Color(1, 1, 1, 1)  # base color = white
             self._mesh_boxes = Mesh(mode='triangles', texture=texture)
 
         #if box_labels:
@@ -2170,6 +2355,8 @@ class NestedMatrixBoxPlotGraph(Graph):
         vert = mesh.vertices
         ind = mesh.indices
 
+        vert_bg = self._mesh_box_bg.vertices
+
         #DEBUG
         #if len(vert) < 16 * nboxes:
         #    vert.extend([0] * (16 * nboxes - len(vert)))
@@ -2184,11 +2371,14 @@ class NestedMatrixBoxPlotGraph(Graph):
         if box_diff < 0:
             del vert[16 * nboxes:]  # 4 entries per vertex * 4 vertices per box
             del ind[6 * nboxes:]  # 6 indices per box (2 triangles)
+            del vert_bg[16 * nboxes:]
         elif box_diff > 0:
             for i in range(current_boxes, nboxes):  # assumes vertex order is tr, tl, bl, br
                 ind.extend([4 * i, 4 * i + 1, 4 * i + 2,  # triangle 1
                             4 * i + 2, 4 * i + 3, 4 * i])  # triangle 2
+
             vert.extend([0] * (box_diff * 16))
+            vert_bg.extend([0] * (box_diff * 16))
 
         if self.colormap is not None:
             data_max = self.colormap.hmax
@@ -2227,17 +2417,60 @@ class NestedMatrixBoxPlotGraph(Graph):
             vert[idx + 14] = u #+ delta  -- if needed, need to double texture x-size
             vert[idx + 15] = 0
 
+            x1, x2 = x * scalex + size[0], (x + 1) * scalex + size[0]  # no padding
+            y1, y2 = y * scaley + size[1], (y + 1) * scaley + size[1]  # no padding
+            vert_bg[idx] = x2
+            vert_bg[idx + 1] = y2
+            vert_bg[idx + 4] = x1
+            vert_bg[idx + 5] = y2
+            vert_bg[idx + 8] = x1
+            vert_bg[idx + 9] = y1
+            vert_bg[idx + 12] = x2
+            vert_bg[idx + 13] = y1
+
             #lbl = self.label_rects[i][j]
             #lbl.pos = ((x1 + x2 - lbl.size[0]) / 2.0, (y1 + y2 - lbl.size[1]) / 2.0)
         mesh.vertices = vert  # needed?
+        self._mesh_box_bg.vertices = vert_bg
+        self._mesh_box_bg.indices = ind  # (same indices as color-box mesh)
 
+    def set_info_containers(self, sidebar_layout, status_label):
+        self._sidebar_layout = sidebar_layout
+        self._status_label = status_label
+
+    def _find_index(self, x, y):
+        xx = _np.floor(x)
+        yy = _np.floor(y)
+        kset = set(_np.where(self.xs == xx)[0]).intersection(_np.where(self.ys == yy)[0])
+        assert(len(kset) <= 1)
+        return next(iter(kset)) if kset else None
+        
     def on_touch_down(self, touch):
+        # Graph.collide_point needs coordinates in the same system as self.pos, which is the
+        # relative coordinate system of a RelativeLayout when this Graph is within such a
+        # layout (and it will be since our data area is a RelativeLayout).  In RelativeLayout.on_touch_down
+        # the touch coordinates are mapped to the RelativeLayout's system, and so we're fine to
+        # use touch.pos as-is:
         if self.collide_point(*touch.pos):
-            tpos = self.to_widget(touch.pos[0], touch.pos[1], relative=True)
+
+            # self.view_pos, on the other hand, is in *relative* local coordinates,
+            # so we need to transform "local" -> "relative local" coords:
+            tpos = self.to_local(*touch.pos, relative=True)
             if (self.view_pos[0] <= tpos[0] <= self.view_pos[0] + self.view_size[0]
                and self.view_pos[1] <= tpos[1] <= self.view_pos[1] + self.view_size[1]):
                 x, y = self.to_data(*tpos)
-                print("Touch event at ", touch.pos, ' -> ', (x, y))
+                if self._status_label and self._sidebar_layout:
+                    k = self._find_index(x, y)
+                    self._sidebar_layout.clear_widgets()
+                    if k is not None:
+                        anchor = AnchorLayout(padding=50, anchor_x='center', anchor_y='top')
+                        anchor.add_widget(WrappedLabel(text=self.hover_labels[k]))
+                        self._sidebar_layout.add_widget(anchor)
+                        self._status_label.text = "Value: %g" % self.data[k]
+                        #self._status_label.text = "Touch event at %g, %g => index %d" % (x, y, k)
+                    elif len(self._status_label.text) > 0:
+                        self._status_label.text = ''
+                #print("Touch event at ", touch.pos, ' -> ', (x, y))
                 return True
         return super().on_touch_down(touch)
 
@@ -2245,14 +2478,23 @@ class NestedMatrixBoxPlotGraph(Graph):
         if not self.get_root_window():
             return  # don't proceed if I'm not displayed <=> If have no parent
         pos = args[1]
-        tpos = self.to_widget(*pos, relative=True)  # needed here for use within a RelativeLayout (?)
+        tpos = self.to_widget(*pos, relative=False)  # because pos is in window coords
         if self.collide_point(*tpos):
-            #print("Over widget...")
-            #tpos = self.to_widget(*pos, relative=True)
+            tpos = self.to_local(*tpos, relative=True)
             if (self.view_pos[0] <= tpos[0] <= self.view_pos[0] + self.view_size[0]
-                and self.view_pos[1] <= tpos[1] <= self.view_pos[1] + self.view_size[1]):
+               and self.view_pos[1] <= tpos[1] <= self.view_pos[1] + self.view_size[1]):
                 x, y = self.to_data(*tpos)
-                print("Move event at ", pos, ' -> ', (x, y))
+                if self._status_label:
+                    k = self._find_index(x, y)
+                    if k is not None:
+                        #self._status_label.text = "Move event at %g, %g" % (x, y)
+                        if self.hover_labels is not None:
+                            self._status_label.text = self.hover_labels[k].replace('\n', ', ')
+                        else:
+                            self._status_label.text = "value: %g, " % self.data[k]
+                    elif len(self._status_label.text) > 0:
+                        self._status_label.text = ''
+                #print("Move event at ", pos, ' -> ', (x, y))
 
 
 if __name__ == '__main__':

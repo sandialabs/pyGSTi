@@ -56,7 +56,7 @@ class Row(object):
         if formatters is None:
             formatters = []
         if labels is None:
-            labels = row_data
+            labels = row_data if all([isinstance(l, str) for l in row_data]) else []
 
         lendiff = max(abs(len(formatters) - len(row_data)), 0)
         formatters = list(formatters) + [None] * lendiff

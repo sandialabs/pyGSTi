@@ -253,7 +253,7 @@ def _color_boxplot_kivy(plt_data, colormap, colorbar=False, box_label_size=0,
                                ylabel='',
                                padding=5, #background_color=(1,0,0,1),
                                x_ticks_major=1.0, y_ticks_major=1.0, x_tick_offset=0.5, y_tick_offset=0.5,
-                               colormap=colormap))
+                               colormap=colormap, prec=prec))
                           #x_grid_labels=xlabels, x_grid_label=True,
                           #y_grid_labels=ylabels, y_grid_label=True))
     #x_ticks_angle=45, **graph_theme)
@@ -408,10 +408,10 @@ def _nested_color_boxplot_kivy(plt_data_list_of_lists, colormap,
     #  each element is a numpy array of the same size)
     if len(plt_data_list_of_lists) == 0 or len(plt_data_list_of_lists[0]) == 0: return
 
-    #elRows, elCols = plt_data_list_of_lists[0][0].shape  # nE,nr
-    #nRows = len(plt_data_list_of_lists)
-    #nCols = len(plt_data_list_of_lists[0])
-    #
+    elRows, elCols = plt_data_list_of_lists[0][0].shape  # nE,nr
+    nRows = len(plt_data_list_of_lists)
+    nCols = len(plt_data_list_of_lists[0])
+    
     #data = _np.zeros((elRows * nRows + (nRows - 1), elCols * nCols + (nCols - 1)))
     #for i in range(1, nRows):
     #    data[(elRows + 1) * i - 1:(elRows + 1) * i, :] = _np.nan
@@ -427,19 +427,30 @@ def _nested_color_boxplot_kivy(plt_data_list_of_lists, colormap,
     #for i in range(nRows): ytics.append(float((elRows + 1) * i) - 0.5 + 0.5 * float(elRows))
     #for j in range(nCols): xtics.append(float((elCols + 1) * j) - 0.5 + 0.5 * float(elCols))
     #
-    #if hover_label_fn:
-    #    hoverLabels = []
-    #    for _ in range(elRows * nRows + (nRows - 1)):
-    #        hoverLabels.append([""] * (elCols * nCols + (nCols - 1)))
-    #
-    #    for i in range(nRows):
-    #        for j in range(nCols):
-    #            for ii in range(elRows):
-    #                for jj in range(elCols):
-    #                    hoverLabels[(elRows + 1) * i + ii][(elCols + 1) * j + jj] = \
-    #                        hover_label_fn(plt_data_list_of_lists[i][j][ii][jj], i, j, ii, jj)
-    #else:
-    #    hoverLabels = None
+
+    if hover_label_fn:
+        hoverLabels = []
+        for _ in range(elRows * nRows + (nRows - 1)):
+            hoverLabels.append([""] * (elCols * nCols + (nCols - 1)))
+
+        for i in range(nRows):
+            for j in range(nCols):
+                for ii in range(elRows):
+                    for jj in range(elCols):
+                        hoverLabels[(elRows + 1) * i + ii][(elCols + 1) * j + jj] = \
+                            hover_label_fn(plt_data_list_of_lists[i][j][ii][jj], i, j, ii, jj)
+    else:
+        hoverLabels = None
+
+    graph_theme = {
+        'label_options': {
+            'color': (0,0,0,1),  # color of tick labels and titles
+            'bold': False},
+        'background_color': (1, 1, 1, 1),  # canvas background color
+        'tick_color': (0, 0, 0, 0),  # ticks and grid
+        'border_color': (0, 0, 0, 1),  # border drawn around each graph
+        'font_size': 18
+    }
 
     widget_constructor = (NestedMatrixBoxPlotGraph,
                           dict(plt_data_list_of_lists=plt_data_list_of_lists,
@@ -448,15 +459,16 @@ def _nested_color_boxplot_kivy(plt_data_list_of_lists, colormap,
                                padding=50,  #background_color=(1,0,0,1),
                                x_grid_labels=xlabels, x_grid_label=True,
                                y_grid_labels=ylabels, y_grid_label=True,
-                               colormap=colormap))
-    #x_ticks_angle=45, **graph_theme)
+                               colormap=colormap, hover_label_fn=hover_label_fn, **graph_theme))
     SQUARE_SIZE = 30
     elRows, elCols = plt_data_list_of_lists[0][0].shape  # nE,nr
     num_rows = len(plt_data_list_of_lists)  # number of rows of plaquettes
     num_cols = len(plt_data_list_of_lists[0])  # number of columns of plaquettes
     max_ylabel_len = max([len(lbl) for lbl in ylabels]) if (ylabels is not None) else 0
-    natural_size = (SQUARE_SIZE * (elCols * num_cols + (num_cols - 1)) + max_ylabel_len * 20,
-                    SQUARE_SIZE * (elRows * num_rows + (num_rows - 1)))
+    ylabel_width =   max_ylabel_len * 20 + (40 if ylabel else 0)
+    xlabel_height = (40 if xlabels else 0) + (40 if xlabel else 0)  # very rough TODO better
+    natural_size = (SQUARE_SIZE * (elCols * num_cols + (num_cols - 1)) + ylabel_width,
+                    SQUARE_SIZE * (elRows * num_rows + (num_rows - 1)) + xlabel_height)
     return ReportKivyFigure(widget_constructor, colormap, plt_data_list_of_lists,
                             plt_data=plt_data_list_of_lists, natural_size=natural_size)
 
@@ -967,23 +979,35 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     elif gui_mode == 'kivy':
         from pygsti.report.kivygraph import Graph, PointPlot
 
-        def build_plot(xs, ys, ylabel):
+        def build_plot(xs, ys, ylabel, **kwargs):
+            graph_theme = {
+                'label_options': {
+                    'color': (0,0,0,1),  # color of tick labels and titles
+                    'bold': False},
+                'background_color': (1, 1, 1, 1),  # canvas background color
+                'tick_color': (0, 0, 0, 0),  # ticks and grid
+                'border_color': (0, 0, 0, 1),  # border drawn around each graph
+                'font_size': 18
+            }
+            kwargs.update(graph_theme)
+
             xmax = max(xs)
             yrng = max(ys) - min(ys)
-            graph = Graph(xlabel='sequence length', ylabel='' if (ylabel is None) else ylabel,
+            colors = [colormap.interpolate_color_tuple(y, rgb_ints=False, add_alpha=1.0) for y in ys]
+            graph = Graph(xlabel='Circuit Depth', ylabel='' if (ylabel is None) else ylabel,
                           x_ticks_major=10**(_np.floor(_np.log10(xmax)) - 1), x_ticks_minor=2,
                           y_ticks_major=10**(_np.floor(_np.log10(yrng)) - 1), y_ticks_minor=2,
                           y_grid_label=True, x_grid_label=True, padding=5,
                           x_grid=True, y_grid=True, xmin=0, xmax=xmax,
-                          ymin=float(min(ys)), ymax=float(max(ys)))  # float needed b/c Graph doesn't like numpy types
-            plot = PointPlot(color=[0, 0.5, 0, 1], point_size=5.0)
+                          ymin=float(min(ys)), ymax=float(max(ys)),  # float needed b/c Graph doesn't like numpy types
+                          **kwargs)
+            plot = PointPlot(color=[0, 0.5, 0, 1], point_size=5.0, colors=colors)
             plot.points = list(zip(xs, ys))
             graph.add_plot(plot)
             return graph
 
         widget_constructor = (build_plot, dict(xs=xs, ys=ys, ylabel=ylabel))
-        return ReportKivyFigure(widget_constructor, colormap, {'x': xs, 'y': ys})
-
+        return ReportKivyFigure(widget_constructor, colormap, {'x': xs, 'y': ys}, natural_size=(500, 500))
     else:
         raise ValueError("Invalid gui_mode: %s" % str(gui_mode))
 
@@ -1118,35 +1142,50 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
 
         colors = [colormap.interpolate_color_tuple(t, rgb_ints=False, add_alpha=1.0) for t in bincenters]
 
-        def build_widget(bin_edges, hist_values, bin_centers, dof, minlog, maxlog, colors):
+        def build_widget(bin_edges, hist_values, bin_centers, dof, minlog, maxlog, colors, **kwargs):
             hist_values = [(10**(minlog - 1) if v <= 0 else v) for v in hist_values]
             xrng = bin_edges[-1] - bin_edges[0]
             #yrng = 10**maxlog - 10**minlog
+
+            graph_theme = {
+                'label_options': {
+                    'color': (0,0,0,1),  # color of tick labels and titles
+                    'bold': False},
+                'background_color': (1, 1, 1, 1),  # canvas background color
+                'tick_color': (0, 0, 0, 1),  # ticks and grid
+                'border_color': (0, 0, 0, 1),  # border drawn around each graph
+                'font_size': 18
+            }
+            kwargs.update(graph_theme)
+
             graph = Graph(xlabel=ylabel, ylabel='counts',
                           x_ticks_major=round(xrng / 10, 0), #10**(_np.floor(_np.log10(xrng)) - 1),
                           y_ticks_major=0.2, #10**(_np.floor(_np.log10(yrng)) - 1),
                           x_grid_label=True, y_grid_label=True, padding=5,
                           x_grid=True, y_grid=True,
-                          font_size=10,
                           xmin=float(bin_edges[0]), xmax=float(bin_edges[-1]),
-                          ylog=True, ymin=float(10**minlog), ymax=float(10**maxlog))
+                          ylog=True, ymin=float(10**minlog), ymax=float(10**maxlog), **kwargs)
             bplot = BarPlot(color=(0,0,0.5,1), bar_spacing=1.0, colors=colors)
             graph.add_plot(bplot)
             bplot.bind_to_graph(graph)
             bplot.points = [(x, y) for x, y in zip(bin_edges[:-1], hist_values)]
 
-            lplot = SmoothLinePlot(color=(1,0,0,1))
+            lplot = SmoothLinePlot(color=(0.1, 0.1, 0.1, 1))
             lplot.points = [(x, nvals * bindelta * _chi2.pdf(x, dof)) for x in bin_centers]
             graph.add_plot(lplot)
 
             return graph
+
+        BIN_SIZE = 20
+        nbins = len(bin_edges) - 1
+        natural_size = (BIN_SIZE * nbins + 50, int(BIN_SIZE * nbins * 2 / 3))  # just set aspect ratio to 3/2
 
         return ReportKivyFigure((build_widget, {'bin_edges': bin_edges,
                                                 'hist_values': hist_values,
                                                 'bin_centers': bincenters,
                                                 'dof': dof, 'minlog': minlog, 'maxlog': maxlog,
                                                 'colors': colors}),
-                                None, pythonVal)
+                                None, pythonVal, natural_size=natural_size)
 
     else:
         raise ValueError("Invalid gui_mode: %s" % str(gui_mode))
@@ -1227,19 +1266,20 @@ def _opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_b
     if isinstance(mx_basis_y, str):
         mx_basis_y = _baseobjs.BuiltinBasis(mx_basis_y, op_matrix.shape[0])
 
+    tb, te = ('<i>', '</i>') if (gui_mode == 'plotly') else ('', '')  # tag-begin and tag-end
     if mx_basis is not None:
         if len(mx_basis.labels) - 1 == op_matrix.shape[1]:
-            xlabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis.labels[1:]]
+            xlabels = [("%s%s%s" % (tb, x, te)) if len(x) else "" for x in mx_basis.labels[1:]]
         else:
-            xlabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis.labels]
+            xlabels = [("%s%s%s" % (tb, x, te)) if len(x) else "" for x in mx_basis.labels]
     else:
         xlabels = [""] * op_matrix.shape[1]
 
     if mx_basis_y is not None:
         if len(mx_basis_y.labels) - 1 == op_matrix.shape[0]:
-            ylabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis_y.labels[1:]]
+            ylabels = [("%s%s%s" % (tb, x, te)) if len(x) else "" for x in mx_basis_y.labels[1:]]
         else:
-            ylabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis_y.labels]
+            ylabels = [("%s%s%s" % (tb, x, te)) if len(x) else "" for x in mx_basis_y.labels]
     else:
         ylabels = [""] * op_matrix.shape[0]
 
@@ -1274,23 +1314,35 @@ def _matrix_color_boxplot_kivy(matrix, xlabels=None, ylabels=None,
     
     #Hold widget (class, init_kwargs) instead of the widget itself for
     # ease of copying and serialization.
+    graph_theme = {
+        'label_options': {
+            'color': (0,0,0,1),  # color of tick labels and titles
+            'bold': False},
+        'background_color': (1, 1, 1, 0),  # canvas background color
+        'tick_color': (0, 0, 0, 0),  # ticks and grid
+        'border_color': (0, 0, 0, 1),  # border drawn around each graph
+        'font_size': 18
+    }
     widget_constructor = (MatrixBoxPlotGraph,
                           dict(data_matrix=matrix,
                                xlabel=xlabel if (xlabel is not None) else '',
                                ylabel=ylabel if (ylabel is not None) else '',
-                               padding=5, #background_color=(1,0,0,1),
+                               padding=5,
                                x_ticks_major=1.0, y_ticks_major=1.0, x_tick_offset=0.5, y_tick_offset=0.5,
                                x_grid_labels=xlabels, x_grid_label=True,
                                y_grid_labels=ylabels, y_grid_label=True,
-                               colormap=colormap))
+                               colormap=colormap, prec=prec, **graph_theme))
     #x_ticks_angle=45, **graph_theme)
 
     flipped_mx = _np.flipud(matrix)  # FLIP so [0,0] matrix el is at *top* left
     ylabels = list(reversed(ylabels))  # FLIP y-labels to match
 
     SQUARE_SIZE = 80
-    natural_size = (SQUARE_SIZE * matrix.shape[1],
-                    SQUARE_SIZE * matrix.shape[0])
+    max_ylabel_len = max([len(lbl) for lbl in ylabels]) if (ylabels is not None) else 0
+    ylabel_width =   max_ylabel_len * 20 + (40 if ylabel else 0)
+    xlabel_height = (40 if xlabels else 0) + (40 if xlabel else 0)  # very rough TODO better
+    natural_size = (SQUARE_SIZE * matrix.shape[1] + ylabel_width,
+                    SQUARE_SIZE * matrix.shape[0] + xlabel_height)
     return ReportKivyFigure(widget_constructor, colormap, flipped_mx, plt_data=flipped_mx, natural_size=natural_size)
 
 
@@ -3312,6 +3364,7 @@ class FitComparisonBarPlot(WorkspacePlot):
 
         xs = list(range(len(x_names)))
         xtics = []; ys = []; colors = []; texts = []
+        gmp = bool(self.ws.gui_mode == 'plotly')
 
         if np_by_x is None:
             np_by_x = [mdl.num_modeltest_params if (mdl is not None) else 0
@@ -3329,11 +3382,11 @@ class FitComparisonBarPlot(WorkspacePlot):
                                                           return_all=True, comm=comm)
                 #Note: don't really need return_all=True, but helps w/caching b/c other fns use it.
 
-            if rating == 5: color = "darkgreen"
-            elif rating == 4: color = "lightgreen"
-            elif rating == 3: color = "yellow"
-            elif rating == 2: color = "orange"
-            else: color = "red"
+            if rating == 5: color = "darkgreen" if gmp else (0, 0.2, 0, 1.0)
+            elif rating == 4: color = "lightgreen" if gmp else (0, 0.8, 0, 1.0)
+            elif rating == 3: color = "yellow" if gmp else (0.8, 0.8, 0, 1.0)
+            elif rating == 2: color = "orange" if gmp else (1.0, 0.5, 0, 1.0)
+            else: color = "red" if gmp else (1.0, 0, 0, 1.0)
 
             xtics.append(str(X))
             ys.append(Nsig)
@@ -3342,59 +3395,98 @@ class FitComparisonBarPlot(WorkspacePlot):
 
         MIN_BAR = 1e-4  # so all bars have positive height (since log scale)
         plotted_ys = [max(y, MIN_BAR) for y in ys]
-        trace = go.Bar(
-            x=xs, y=plotted_ys, text=texts,
-            marker=dict(color=colors),
-            hoverinfo='text'
-        )
 
-        #Set plot size and margins
-        lmargin = rmargin = tmargin = bmargin = 10
-        if x_label: bmargin += 20
-        lmargin += 20  # y-label is always present
-        if xtics:
-            max_xl = max([len(xl) for xl in xtics])
-            if max_xl > 0: bmargin += max_xl * 5
-        lmargin += 20  # for y-labels (guess)
+        if self.ws.gui_mode == 'plotly':
+            trace = go.Bar(
+                x=xs, y=plotted_ys, text=texts,
+                marker=dict(color=colors),
+                hoverinfo='text'
+            )
 
-        width = lmargin + max(30 * len(xs), 150) + rmargin
-        height = tmargin + 200 + bmargin
+            #Set plot size and margins
+            lmargin = rmargin = tmargin = bmargin = 10
+            if x_label: bmargin += 20
+            lmargin += 20  # y-label is always present
+            if xtics:
+                max_xl = max([len(xl) for xl in xtics])
+                if max_xl > 0: bmargin += max_xl * 5
+            lmargin += 20  # for y-labels (guess)
 
-        width *= scale
-        height *= scale
-        lmargin *= scale
-        rmargin *= scale
-        tmargin *= scale
-        bmargin *= scale
+            width = lmargin + max(30 * len(xs), 150) + rmargin
+            height = tmargin + 200 + bmargin
 
-        data = [trace]
-        layout = go.Layout(
-            width=width,
-            height=height,
-            margin=go_margin(l=lmargin, r=rmargin, b=bmargin, t=tmargin),
-            xaxis=dict(
-                title=x_label,
-                tickvals=xs,
-                ticktext=xtics
-            ),
-            yaxis=dict(
-                title="N<sub>sigma</sub>",
-                type='log'
-            ),
-            bargap=0.1
-        )
-        if len(plotted_ys) == 0:
-            layout['yaxis']['range'] = [_np.log10(0.1),
-                                        _np.log10(1.0)]  # empty plot: range doesn't matter
-        elif max(plotted_ys) < 1.0:
-            layout['yaxis']['range'] = [_np.log10(min(plotted_ys) / 2.0),
-                                        _np.log10(1.0)]
-        else:
-            layout['yaxis']['range'] = [_np.log10(min(plotted_ys) / 2.0),
-                                        _np.log10(max(plotted_ys) * 2.0)]
+            width *= scale
+            height *= scale
+            lmargin *= scale
+            rmargin *= scale
+            tmargin *= scale
+            bmargin *= scale
 
-        return ReportFigure(go.Figure(data=data, layout=layout),
-                            None, {'x': xs, 'y': ys})
+            data = [trace]
+            layout = go.Layout(
+                width=width,
+                height=height,
+                margin=go_margin(l=lmargin, r=rmargin, b=bmargin, t=tmargin),
+                xaxis=dict(
+                    title=x_label,
+                    tickvals=xs,
+                    ticktext=xtics
+                ),
+                yaxis=dict(
+                    title="N<sub>sigma</sub>",
+                    type='log'
+                ),
+                bargap=0.1
+            )
+            if len(plotted_ys) == 0:
+                layout['yaxis']['range'] = [_np.log10(0.1),
+                                            _np.log10(1.0)]  # empty plot: range doesn't matter
+            elif max(plotted_ys) < 1.0:
+                layout['yaxis']['range'] = [_np.log10(min(plotted_ys) / 2.0),
+                                            _np.log10(1.0)]
+            else:
+                layout['yaxis']['range'] = [_np.log10(min(plotted_ys) / 2.0),
+                                            _np.log10(max(plotted_ys) * 2.0)]
+
+            return ReportFigure(go.Figure(data=data, layout=layout),
+                                None, {'x': xs, 'y': ys})
+
+        elif self.ws.gui_mode == 'kivy':
+            from pygsti.report.kivygraph import Graph, BarPlot
+
+            def build_widget(xs_to_plot, ys_to_plot, colors, **kwargs):
+
+                xrng = max(xs_to_plot) - min(xs_to_plot)
+                yrng = max(ys_to_plot) - min(ys_to_plot)
+
+                graph_theme = {
+                    'label_options': {
+                        'color': (0,0,0,1),  # color of tick labels and titles
+                        'bold': False},
+                    'background_color': (1, 1, 1, 1),  # canvas background color
+                    'tick_color': (0, 0, 0, 1),  # ticks and grid
+                    'border_color': (0, 0, 0, 1),  # border drawn around each graph
+                    'font_size': 18
+                }
+                kwargs.update(graph_theme)
+
+                graph = Graph(xlabel=x_label if x_label else '', ylabel='N_sigma',
+                              x_ticks_major=round(xrng / 10, 0),
+                              y_ticks_major=0.2,
+                              x_grid_label=True, y_grid_label=True, padding=5,
+                              x_grid=True, y_grid=True,
+                              xmin=float(min(xs_to_plot)), xmax=float(max(xs_to_plot)),
+                              ylog=True, ymin=float(min(ys_to_plot)), ymax=float(max(ys_to_plot)), **kwargs)
+                bplot = BarPlot(color=(0,0,0.5,1), bar_spacing=1.0, colors=colors)
+                graph.add_plot(bplot)
+                bplot.bind_to_graph(graph)
+                bplot.points = [(x, y) for x, y in zip(xs_to_plot, ys_to_plot)]
+
+                return graph
+
+            natural_size = (len(xs) * 50, 500)
+            return ReportKivyFigure((build_widget, {'xs_to_plot': xs, 'ys_to_plot': plotted_ys, 'colors': colors}),
+                                    None, {'x': xs, 'y': ys}, natural_size=natural_size)
 
 
 class FitComparisonBoxPlot(WorkspacePlot):

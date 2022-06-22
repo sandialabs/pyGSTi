@@ -11,6 +11,7 @@ Defines the Cell class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
 from pygsti.report.convert import convert_dict as _convert_dict
 from pygsti.report.formatters import format_dict as _format_dict
 
@@ -100,4 +101,10 @@ class Cell(object):
         format_cell = _convert_dict[fmt]['cell']  # Function for rendering a cell in the format "fmt"
         formattedData = self._render_data(fmt, spec)
 
-        return format_cell(formattedData, self.label, spec)
+        # If we aren't given a label and the cell value is a number, use it with full precision as the label:
+        if self.label is None and isinstance(self.data.value, (int, float)) or _np.isscalar(self.data.value):
+            lbl = str(self.data)
+        else:
+            lbl = self.label
+
+        return format_cell(formattedData, lbl, spec)

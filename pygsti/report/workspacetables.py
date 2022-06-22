@@ -2841,6 +2841,7 @@ class FitComparisonTable(WorkspaceTable):
                          'N<sub>sigma</sub>', 'N<sub>s</sub>', 'N<sub>p</sub>', 'Rating'),
                 'python': (x_label, 'chi^2', 'k', 'chi^2-k', 'sqrt{2k}', 'N_{sigma}', 'N_s', 'N_p', 'Rating')
             }
+            colHeadings['kivywidget'] = colHeadings['latex']  # just use latex for now
 
         elif objfn_builder == "logl" or (isinstance(objfn_builder, _objfns.ObjectiveFunctionBuilder)
                                          and objfn_builder.cls_to_build == _objfns.PoissonPicDeltaLogLFunction):
@@ -2853,6 +2854,8 @@ class FitComparisonTable(WorkspaceTable):
                 'python': (x_label, '2*Delta(log L)', 'k', '2*Delta(log L)-k', 'sqrt{2k}',
                            'N_{sigma}', 'N_s', 'N_p', 'Rating')
             }
+            colHeadings['kivywidget'] = colHeadings['latex']  # just use latex for now
+
         else:
             raise ValueError("Invalid `objfn_builder` argument: %s" % str(objfn_builder))
 

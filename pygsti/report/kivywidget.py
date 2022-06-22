@@ -36,11 +36,15 @@ try:
     from kivy.uix.button import Button
     from kivy.uix.label import Label
     from kivy.uix.image import Image
+    from kivy.clock import Clock
+    from kivy.core.window import Window
 
-    from kivy.graphics import Color, Rectangle
+    from kivy.graphics import Color, Rectangle, Line
     from kivy.graphics.svg import Svg
     from kivy.graphics.transformation import Matrix
     from kivy.graphics.context_instructions import Translate
+
+    from kivy.properties import NumericProperty, ListProperty
 except ImportError:
     GridLayout = object
 
@@ -52,6 +56,11 @@ everything else is used in creating formatters in formatters.py
 
 
 class TableWidget(GridLayout):
+
+    background_color = ListProperty([0.9, 0.9, 0.9, 1])
+    line_color = ListProperty([0.2, 0.2, 0.2, 1])
+    line_thickness = NumericProperty(2.0)
+
     def __init__(self, formatted_headings, formatted_rows, spec, **kwargs):
         super(TableWidget, self).__init__(**kwargs)
         self.rows = len(formatted_rows) + 1  # +1 for column headers
@@ -106,27 +115,95 @@ class TableWidget(GridLayout):
                 cell_widget.content.size_hint_y = cell_widget.content.height / rowheight
                 self.add_widget(cell_widget)
 
+        with self.canvas.before:
+            self._bgcolor = Color(*self.background_color)
+            self.bind(background_color=lambda instr, value: setattr(self._bgcolor, "rgba", value))
+            self._bgrect = Rectangle(pos=self.pos, size=self.size)
+
+            self._lncolor = Color(*self.line_color)
+            self.bind(line_color=lambda instr, value: setattr(self._lncolor, "rgba", value))
+
+            self._lines = Line(points=[], width=self.line_thickness, joint='round')
+            self.bind(line_thickness=lambda instr, value: setattr(self._lines, "width", value))
+
+        self.bind(pos=self._redraw, size=self._redraw)
+
         self.size = (table_width, table_height)
+
+        self._trigger = Clock.create_trigger(self._redraw)
+        self._trigger()  # trigger _redraw call on *next* clock cycle, when children will have computed positions
         print("DB: TABLE Initial size = ", self.size)
 
-    def _redraw(self):
-        self.canvas.before.clear()
-        with self.canvas.before:
-            Color(0.5, 0.5, 0.5)  # table background
-            Rectangle(pos=self.pos, size=self.size)
+    def _redraw(self, *args):
+        #Update background rectangle
+        self._bgrect.pos = self.pos
+        self._bgrect.size = self.size
 
-    def on_pos(self, *args):
-        self._redraw()
+        #DEBUG REMOVE
+        #for c in self.children:
+        #    print(c.pos, '    ', c.size)
 
-    def on_size(self, *args):
-        self._redraw()
+        #Update lines
+        # Note self.children is in reverse order of additions,
+        # so top row is at end (?)
+        cells_in_added_order = python_list(reversed(self.children))
+        top_row = cells_in_added_order[0:self.cols]
+        first_col = cells_in_added_order[-1::-self.cols]  # reverse so ys are ascending
+
+        xs = [top_row[0].x]; end = top_row[0].x + top_row[0].width
+        for c in top_row[1:]:
+            xs.append((c.x + end) / 2.0)
+            end = c.x + c.width
+        xs.append(end)
+
+        ys = [first_col[0].y]; end = first_col[0].y + first_col[0].height
+        for c in first_col[1:]:
+            ys.append((c.y + end) / 2.0)
+            end = c.y + c.height
+        ys.append(end)
+
+        #patch: always use self's position and size for border lines
+        xs[0] = self.x; xs[-1] = self.x + self.width
+        ys[0] = self.y; ys[-1] = self.y + self.height
+
+        pts = []
+        ybegin, yend = ys[0], ys[-1]
+        for x in xs:
+            pts.extend([x, ybegin, x, yend])  # horizontal line
+            ybegin, yend = yend, ybegin
+
+        # done with horizontal lines; current point is at xs[-1], ybegin
+        xbegin, xend = xs[-1], xs[0]
+        ys_iter = ys if (ybegin == ys[0]) else reversed(ys)
+        for y in ys_iter:
+            pts.extend([xbegin, y, xend, y])  # vertical line
+            xbegin, xend = xend, xbegin
+
+        self._lines.points = pts
 
 
 class CellWidgetContainer(AnchorLayout):
-    def __init__(self, widget, **kwargs):
+    def __init__(self, widget, hover_text=None, **kwargs):
         super().__init__(**kwargs)
         self.content = widget
         self.add_widget(self.content)
+        self.hover_text = hover_text
+        if hover_text is not None:
+            Window.bind(mouse_pos=self.on_mouse_pos)
+        self._sidebar_layout = self._status_label = None
+
+    def set_info_containers(self, sidebar_layout, status_label):
+        self._sidebar_layout = sidebar_layout
+        self._status_label = status_label
+
+    def on_mouse_pos(self, *args):
+        if not self.get_root_window():
+            return  # don't proceed if I'm not displayed <=> If have no parent
+
+        pos = args[1]
+        tpos = self.to_widget(*pos, relative=False)  # because pos is in window coords
+        if self.collide_point(*tpos) and self._status_label:
+            self._status_label.text = self.hover_text
 
     #def on_size(self, *args):
     #    print("Cell container onsize: ", self.size)
@@ -153,9 +230,10 @@ class LatexWidget(Scatter):
             svg = Svg()
             svg.set_tree(etree)
 
-        with self.canvas.before:
-            Color(0.7, 0.7, 0.0)
-            self.bgrect = Rectangle(pos=(0,0), size=self.size)
+        # Uncomment these lines and refs to bgrect below to show yellow LatexWidget background area (for debugging)
+        #with self.canvas.before:
+        #    Color(0.7, 0.7, 0.0)
+        #    self.bgrect = Rectangle(pos=(0,0), size=self.size)
 
         #self.etree = etree
         self.svg_size = (svg.width, svg.height)
@@ -196,12 +274,8 @@ class LatexWidget(Scatter):
             self.svg_offset.y = 0
         #print("  -> Latex scale = ",self.scale)
 
-        self.bgrect.pos = (0, 0)  # self.pos
-        #self.bgrect.size = self.svg_size  # self.size
-        self.bgrect.size = (self.size[0]/self.scale, self.size[1]/self.scale)  # self.size
-        #with self.canvas.before:
-        #    Color(0.7, 0.7, 0.0)
-        #    Rectangle(pos=self.pos, size=self.size)
+        #self.bgrect.pos = (0, 0)  # not self.pos -- these are relative coords to Scatter's context
+        #self.bgrect.size = (self.size[0] / self.scale, self.size[1] / self.scale)  # coords *before* scaling
 
     def simplify_svg_tree(self, svg_tree):
         """" Simplifies - mainly by resolving reference links within - a SVG file so that Kivy can digest it """
@@ -271,15 +345,15 @@ class LatexWidget(Scatter):
                 new_el = _ET.Element(e.tag, e.attrib) if (new_parent is None) \
                     else _ET.SubElement(new_parent, e.tag, e.attrib)
 
-            # DEBUG HACK - create red bounding box for debugging -- REMOVE LATER
-            if e.tag.endswith('svg'):
-                if e.get('viewBox', None):
-                    x, y, w, h = e.get('viewBox').split()
-                    #print("SVG bouding box dimensions: ",w, h)
-                    _ET.SubElement(new_el, 'path',
-                                   {'stroke': 'red', 'fill': 'none',
-                                    'd': "M {x0} {y0} L {x1} {y0} L {x1} {y1} L {x0} {y1} Z".format(
-                                        x0=x, y0=y, x1=str(float(x) + float(w)), y1=str(float(y) + float(h)))})
+            # DEBUG HACK - create RED bounding box for debugging -- REMOVE LATER
+            #if e.tag.endswith('svg'):
+            #    if e.get('viewBox', None):
+            #        x, y, w, h = e.get('viewBox').split()
+            #        #print("SVG bouding box dimensions: ",w, h)
+            #        _ET.SubElement(new_el, 'path',
+            #                       {'stroke': 'red', 'fill': 'none',
+            #                        'd': "M {x0} {y0} L {x1} {y0} L {x1} {y1} L {x0} {y1} Z".format(
+            #                            x0=x, y0=y, x1=str(float(x) + float(w)), y1=str(float(y) + float(h)))})
                 
             if process_children:
                 for child_el in e:
@@ -297,10 +371,42 @@ class WrappedLabel(Label):
     def __init__(self, *args, **kwargs):
         kwargs['size_hint_y'] = None
         super().__init__(*args, **kwargs)
+        self.bind(
+            width=lambda *x: self.setter('text_size')(self, (self.width, None)),
+            texture_size=lambda *x: self.setter('height')(self, self.texture_size[1]))
 
-    def on_size(self, *args):
-        self.text_size = self.width, None
-        self.height = self.texture_size[1]
+
+class AdjustingLabel(Label):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.texture_update()
+        if self.texture_size[1] <= 0:
+            return
+
+        aspect = self.texture_size[0] / self.texture_size[1]
+        self.width = self.texture_size[0]
+        print("Aspect = ",aspect, ' width=', self.width, 'text_size=', self.text_size, 'text=', self.text)
+
+        if aspect > 10:
+            self.size_hint_y = None
+            width = self.texture_size[0]
+            while aspect > 10:
+                width *= 0.75
+                self.text_size = width, None
+                self.texture_update()
+                aspect = self.texture_size[0] / self.texture_size[1]
+                print("Aspect = ",aspect, 'texture_size = ', self.texture_size)
+
+        #self.bind(
+        #    width=lambda *x: self.setter('text_size')(self, (self.width, None)),
+        #    texture_size=lambda *x: self.setter('height')(self, self.texture_size[1]))
+
+    #def on_size(self, *args):
+    #    if self.text_size[0] != self.width:  # avoids recusive on_size calls
+    #        #print("On size: ", self.size, ' texture', self.texture_size)
+    #        self.text_size = self.width, None
+    #        self.height = self.texture_size[1]  # prompts another on_size call...
 
 
 def table(custom_headings, col_headings_formatted, rows, spec):
@@ -350,7 +456,7 @@ def cell(data, label, spec):
     Returns
     -------
     string
-    """
+    """    
     if isinstance(data, Widget):
         print("Other widget (%s) => %s" % (str(type(data)), str(data.size)))
         return CellWidgetContainer(data)  # assume widget size is already set
@@ -366,19 +472,25 @@ def cell(data, label, spec):
             print("Latex widget w/ %d chars." % len(data))
 
         # render latex via LatexWidget
-        widget = CellWidgetContainer(LatexWidget(data)) #, size_hint=(None, None), pos_hint={'center_x': 0.5, 'center_y': 0.5})
+        widget = CellWidgetContainer(LatexWidget(data), label) #, size_hint=(None, None), pos_hint={'center_x': 0.5, 'center_y': 0.5})
         widget.content.size = (w, h)
         print("Latex widget => ", widget.content.size, ':', widget.content.latex_string)
         return widget
     else:
-        PADDING = 10
-        #widget = WrappedLabel(text=str(data))  # use label arg?
-        widget = Label(text=str(data))  # use label arg?
-        widget.texture_update()
+        PADDING = 35
+        txt = str(data)
+        if txt.startswith('**') and txt.endswith('**'):
+            txt = txt[2:-2]; bold = True
+        else: bold = False
+        widget = AdjustingLabel(text=txt, color=(0,0,0,1), bold=bold)  # use label arg?
+        #widget = Label(text=str(data), color=(0,0,0,1))  # use label arg?
+        #widget.texture_update()
         widget.size = (widget.texture_size[0] + PADDING, widget.texture_size[1] + PADDING)
-        print("WrappedLabel widget => ", widget.size, ':', widget.text)
-        return CellWidgetContainer(widget)
+        print("AdjustingLabel widget => ", widget.size, ':', widget.text)
+        return CellWidgetContainer(widget, label)
 
+
+python_list = list  # so we can still access usual list object...
 
 def list(l, specs):
     """

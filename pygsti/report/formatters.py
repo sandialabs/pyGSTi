@@ -149,7 +149,7 @@ pre_convert_latex = _Formatter(stringreplacers=[
     ("1/2", "$\\nicefrac{1}{2}$"),
     ("Diamond", "$\\Diamond$"),
     ("Check", "\\checkmark"),
-    ('|', '\\\\'),
+    ('|', '\n'),
     ('<STAR>', '\\bigstar')])
 
 pre_convert_kivy = _Formatter(stringreplacers=[
@@ -209,7 +209,8 @@ def special_convert_kivy(x, specs):
     if '\\bigstar' in x:
         x = '${}$'.format(x)
     if "\\\\" in x:
-        return '\\begin{tabular}{c}' + x + '\\end{tabular}'
+        #return '\\begin{tabular}{c}' + x + '\\end{tabular}'
+        return x.replace("\\\\", "\n")
     else:
         return x
 
@@ -373,7 +374,7 @@ format_dict['Bold'] = {
     'html': _Formatter(html, formatstring='<b>%s</b>'),
     'latex': _Formatter(latex, formatstring='\\textbf{%s}'),
     'python': _no_format,
-    'kivywidget': _Formatter(kivywidget, formatstring='\\textbf{%s}')}
+    'kivywidget': _Formatter(kivywidget, formatstring='**%s**')}  # TODO: set bold=True in label?
 
 #Special formatting for Hamiltonian and Stochastic model types
 format_dict['GatesetType'] = {
