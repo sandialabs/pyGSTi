@@ -224,63 +224,88 @@ class RootExplorerWidget(BoxLayout):
 
     def add_figure_property_selector(self, typ, panel_widget, storage_dict):
         initial_value = storage_dict.get(typ, None)
-        row = BoxLayout(orientation='horizontal')
+
+        def to_val(x):
+            return x.replace('\n.', '.')
+
+        def to_txt(x):
+            return x.replace('.', '\n.')
+
+        lbl_pc = 0.4
+        val_pc = 0.6
+
         if typ == '**model':
-            row.add_widget(FixedHeightLabel(text='Model Title'))
-            title_input = TextInput(text='', size_hint_y=None, height=40)
+            row = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
+            row.add_widget(FixedHeightLabel(text='Model Title', size_hint_x=lbl_pc))
+            title_input = TextInput(text='', size_hint=(val_pc, None), height=40)
             title_input.bind(text=lambda inst, val: storage_dict.__setitem__('**model_title', val))
             storage_dict['**model_title'] = title_input.text
             row.add_widget(title_input)
             panel_widget.add_widget(row)
 
-            row = BoxLayout(orientation='horizontal')
-            row.add_widget(FixedHeightLabel(text='Model'))
+            anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=lbl_pc)
+            anchor.add_widget(FixedHeightLabel(text='Model'))
             model_names = list(self.model_library.keys())
             if initial_value is None:
                 initial_value = model_names[0] if (len(model_names) > 0) else '(none)'
             elif initial_value not in model_names:
                 initial_value = "REMOVED!"
-            spinner = Spinner(text=initial_value, values=model_names, size_hint=(0.6, 1.0))
-            spinner.bind(text=lambda inst, val: storage_dict.__setitem__(typ, val))
-            storage_dict[typ] = spinner.text
+            vals = [to_txt(mn) for mn in model_names]; max_lines = max([v.count('\n') for v in vals]) + 1
+            spinner = Spinner(text=to_txt(initial_value), values=vals, size_hint=(val_pc, None),
+                              height=max_lines * 50, sync_height=True)
+            spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
+            storage_dict[typ] = to_val(spinner.text)
 
+            row = BoxLayout(orientation='horizontal', size_hint_y=None, height=spinner.height)
+            row.add_widget(anchor)
             row.add_widget(spinner)
             panel_widget.add_widget(row)
 
         elif typ == '**target_model':
             model_names = list(self.model_library.keys())
-            row.add_widget(FixedHeightLabel(text='Target Model'))
+            anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=lbl_pc)
+            anchor.add_widget(FixedHeightLabel(text='Target Model'))
             if initial_value is None:
                 initial_value = model_names[0] if (len(model_names) > 0) else '(none)'
             elif initial_value not in model_names:
                 initial_value = "REMOVED!"
-            spinner = Spinner(text=initial_value, values=model_names, size_hint=(0.6, 1.0))
-            spinner.bind(text=lambda inst, val: storage_dict.__setitem__(typ, val))
-            storage_dict[typ] = spinner.text
+            vals = [to_txt(mn) for mn in model_names]; max_lines = max([v.count('\n') for v in vals]) + 1
+            spinner = Spinner(text=to_txt(initial_value), values=vals, size_hint=(val_pc, None),
+                              height=max_lines * 50, sync_height=True)
+            spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
+            storage_dict[typ] = to_val(spinner.text)
+            row = BoxLayout(orientation='horizontal', size_hint_y=None, height=spinner.height)
+            row.add_widget(anchor)
             row.add_widget(spinner)
             panel_widget.add_widget(row)
 
         elif typ == '**edesign':
             edesign_names = list(self.edesign_library.keys())
-            row.add_widget(FixedHeightLabel(text='Edesign'))
+            anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=lbl_pc)
+            anchor.add_widget(FixedHeightLabel(text='Exp. design'))
             if initial_value is None:
                 initial_value = edesign_names[0] if (len(edesign_names) > 0) else '(none)'
             elif initial_value not in edesign_names:
                 initial_value = "REMOVED!"
-            spinner = Spinner(text=initial_value, values=edesign_names, size_hint=(0.6, 1.0))
-            spinner.bind(text=lambda inst, val: storage_dict.__setitem__(typ, val))
-            storage_dict[typ] = spinner.text
+            vals = [to_txt(mn) for mn in edesign_names]; max_lines = max([v.count('\n') for v in vals]) + 1
+            spinner = Spinner(text=to_txt(initial_value), values=vals, size_hint=(val_pc, None),
+                              height=max_lines * 50, sync_height=True)
+            spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
+            storage_dict[typ] = to_val(spinner.text)
+            row = BoxLayout(orientation='horizontal', size_hint_y=None, height=spinner.height)
+            row.add_widget(anchor)
             row.add_widget(spinner)
             panel_widget.add_widget(row)
-            
+
         elif typ == '**objfn_builder':
             objfn_builder_names = ['logl', 'chi2', 'from estimate']
-            row.add_widget(FixedHeightLabel(text='Objective Fn.'))
             if initial_value is None:
                 initial_value = objfn_builder_names[0]
-            spinner = Spinner(text=initial_value, values=objfn_builder_names, size_hint=(0.6, 1.0))
+            spinner = Spinner(text=initial_value, values=objfn_builder_names, size_hint=(val_pc, None), height=50)
             spinner.bind(text=lambda inst, val: storage_dict.__setitem__(typ, val))
             storage_dict[typ] = spinner.text
+            row = BoxLayout(orientation='horizontal', size_hint_y=None, height=spinner.height)
+            row.add_widget(FixedHeightLabel(text='Objective Fn.', size_hint_x=lbl_pc))
             row.add_widget(spinner)
             panel_widget.add_widget(row)
 
@@ -971,6 +996,8 @@ class DataAreaWidget(RelativeLayout):
                 return super().on_touch_down(touch)
 
             #See if touch should active a figure container
+            touch.push()
+            touch.apply_transform_2d(self.to_local)  # because DataAreaWidget is a RelativeLayout
             for figc in self.children:  # loop over figure containers
                 if figc.collide_point(*touch.pos):
                     print("Figure %s received touch-down event" % figc.title)
@@ -979,7 +1006,8 @@ class DataAreaWidget(RelativeLayout):
             else:
                 print("no collision with any figure container")
                 self.root_widget.set_active_figure_container(None)
-
+            touch.pop()
+            
             # don't count activation as actual 'processing', so continue on and
             # let super decide whether this event is processed
             return super().on_touch_down(touch)
@@ -1126,7 +1154,7 @@ class FigureCapsule(object):
         btn.bind(on_release=self.update_figure)
         panel_widget.add_widget(btn)
 
-    def update_figure(self, **args):
+    def update_figure(self, *args):
         fig_creation_args = self.root_widget.selector_values_to_creation_args(self.selector_vals)
         self.fill_args_from_creation_arg_dict(fig_creation_args)
         self.update_figure_widget(None)
