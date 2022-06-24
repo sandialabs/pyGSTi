@@ -2,115 +2,218 @@
 <StyledSplitter@Splitter>
     strip_size: '7pt'
 
-<RootExplorerWidget>:
-    orientation: 'vertical'
+<FixedHeightButton@Button>
+    size_hint_y: None
+    height: 40
 
+<FixedHeightLabel@Label>
+    size_hint_y: None
+    height: 40
+
+    
+    
+<RootExplorerWidget>:
+    id: root_id
+    orientation: 'vertical'
     StyledSplitter:
         id: top_bar_splitter
         sizable_from: 'bottom'
         size_hint_y: None
-        height: 250
+        height: 100
         
         BorderedBoxLayout:
             id: top_bar
             orientation: 'horizontal'
     
-            BoxLayout:
-                id: top_left_stack
-                orientation: 'vertical'
-                size_hint_x: None
-                width: 400
+            Button:
+                text: 'Library'
+                on_release: root.change_mode('Library')
+            ClickableLabel:
+                text: 'Create'
+                on_release: root.change_mode('Create')
+            Button:
+                text: 'Analysis'
+                on_release: root.change_mode('Analysis')
 
-                Button:
-                    text: 'Processor specification'
-                Button:
-                    text: 'Experiment Design'
-                Button:
-                    text: 'Data set'
-    
-            Label:
-                text: 'Processor spec graphic?'
-        
-
-    # Central vertical area (sidebars surrounding centeral area)
     BoxLayout:
-        id: under_top_bar
+        id: main_strip
         orientation: 'horizontal'
-
-        StyledSplitter:
-            id: left_sidebar_splitter
+    
+        StyledSplitter:  # Results dir navigator
+            id: import_sidebar_splitter
             sizable_from: 'right'
             size_hint_x: None
             width: 500
-            min_size: 100
+            min_size: 0
             max_size: 1000
             
             BoxLayout:
-                id: left_sidebar
+                id: import_sidebar
                 orientation: 'vertical'
     
-                Button:
-                    text: 'Select Root'
-                    size_hint_y: None
-                    height: 40
-    
+                FixedHeightButton:
+                    text: 'Open Directory...'
+                    on_release: root.show_load()
+
+                FixedHeightLabel:
+                    text: "Available e-designs:"
+
                 ResultsDirSelectorWidget:
                     id: results_dir_selector
-                    root_results_dir: root.results_dir
-    
-                ResultsSelectorWidget:
-                    id: results_selector
-                    results_dir_selector_widget: results_dir_selector
-    
-                ResultDetailSelectorWidget:
-                    id: result_detail_selector
-                    results_selector_widget: results_selector
 
+                FixedHeightButton:
+                    text: 'Import selected E-design'
+                    on_release: root.import_edesign(include_children=False)
+
+                FixedHeightButton:
+                    text: 'Import E-design w/children'
+                    on_release: root.import_edesign(include_children=True)
+                    
+                ResultsDirDetailSelectorWidget:
+                    id: results_dir_detail_selector
+                    results_dir_selector_widget: results_dir_selector
+                    model_list_widget: model_stack
+
+                FixedHeightLabel:
+                    text: "Available models:"
+
+                StackLayout:
+                    id: model_stack
+    
+                FixedHeightButton:
+                    text: 'Import selected model(s)'
+                    on_release: root.import_models()
+
+                #FixedHeightButton:
+                #    text: 'Import all models'
+                #    on_release: root.import_all()
+
+
+        StyledSplitter:  # Library of models, edesigns, and datasets (associated w/edesigns)
+            id: library_sidebar_splitter
+            sizable_from: 'right'
+            size_hint_x: None
+            width: 500
+            min_size: 0
+            max_size: 1000
+            
+            BoxLayout:
+                id: library_sidebar
+                orientation: 'vertical'
+
+                FixedHeightLabel:
+                    text: 'Experiment designs'
+                ScrollView:
+                    StackLayout:
+                        id: edesign_library_list
+
+                FixedHeightLabel:
+                    text: 'Models'
+                ScrollView:
+                    StackLayout:
+                        id: model_library_list
+
+        StyledSplitter:  # Library of models, edesigns, and datasets (associated w/edesigns)
+            id: library_info_sidebar_splitter
+            sizable_from: 'right'
+            size_hint_x: None
+            width: 500
+            min_size: 0
+            max_size: 1000
+
+            BoxLayout:
+                id: library_info_sidebar
+                orientation: 'vertical'
+
+                FixedHeightLabel:
+                    text: "Library Item Info:"
+    
+                StackLayout:
+                    id: library_info_area
+                    Label:
+                        text: "Library item info."
+
+        StyledSplitter:  # Add-item sidebar
+            id: add_item_sidebar_splitter
+            sizable_from: 'right'
+            size_hint_x: None
+            width: 100
+            min_size: 0
+            max_size: 1000
+
+            BorderedBoxLayout:
+                id: add_item_sidebar
+                orientation: 'vertical'
+
+                FixedHeightLabel:
+                    text: 'Create figure'
+
+                        
         CenterAreaWidget:
             id: center_area
-            data_area: data_area  # so center area has an easy reference to its data area
             resultsdir_selector_widget : results_dir_selector
-            results_selector_widget: results_selector
-            resultdetail_selector_widget: result_detail_selector
-
+            #results_selector_widget: results_selector
+            #resultdetail_selector_widget: result_detail_selector
+    
             DataAreaWidget:
                 id: data_area
-
+                root_widget: root_id
+    
         StyledSplitter:
-            id: right_sidebar_splitter
+            id: figure_properties_sidebar_splitter
             sizable_from: 'left'
             size_hint_x: None
             width: 500
-            min_size: 100
+            min_size: 0
             max_size: 1000
             
             BorderedBoxLayout:
-                id: right_sidebar
+                id: figure_properties_sidebar
                 orientation: 'vertical'
-    
-                TabbedPanel:
-                    do_default_tab: False
-                    TabbedPanelItem:
-                        id: create_tab
-                        text: 'Create'
-    
-                    TabbedPanelItem:
-                        id: info_tab
-                        text: 'Info'
-                        BoxLayout:
-                            id: info_layout
-                            orientation: 'vertical'
-                            Label:
-                                text: "Info goes here"
 
+        StyledSplitter:
+            id: figure_info_sidebar_splitter
+            sizable_from: 'left'
+            size_hint_x: None
+            width: 500
+            min_size: 0
+            max_size: 1000
+            
+            BorderedBoxLayout:
+                id: figure_info_sidebar
+                orientation: 'vertical'
+
+                FixedHeightLabel:
+                    text: 'Information'
+
+                BoxLayout:
+                    id: info_layout
+                    orientation: 'vertical'
+                    Label:
+                        text: "Info goes here"
+
+ 
+#                TabbedPanel:
+#                    do_default_tab: False
+#                    TabbedPanelItem:
+#                        id: create_tab
+#                        text: 'Create'
+#    
+#                    TabbedPanelItem:
+#                        id: info_tab
+#                        text: 'Info'
+#                        BoxLayout:
+#                            id: info_layout
+#                            orientation: 'vertical'
+#                            Label:
+#                                text: "Info goes here"
+  
     BorderedBoxLayout:
         id: bottom_bar
         orientation: 'horizontal'
         size_hint_y: None
         height: 50
-
+    
         Label:
             id: status_label
             text: 'Ready for action.'
-
-  
