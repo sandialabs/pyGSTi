@@ -30,6 +30,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                candidate_seed=None, force="singletons", algorithm='greedy',
                algorithm_kwargs=None, mem_limit=None, comm=None,
                profiler=None, verbosity=1, num_nongauge_params=None):
+               profiler=None, verbosity=1, num_nongauge_params=None,
+               assume_real=False, float_type=_np.cdouble):
     """
     Generate a germ set for doing GST with a given target model.
 
@@ -160,7 +162,40 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     availableGermsList, _ = clean_germ_list(target_model, ckt_cache, eq_thresh= 1e-6)
     
     printer.log('Length Available Germ List After Deduping: '+ str(len(availableGermsList)), 1)
+    
+    #Add some checks related to the new option to switch up data types:
+    if not assume_real:
+        if not (float_type is _np.cdouble or float_type is _np.csingle):
+            print(float_type.dtype)
+            raise ValueError('Unless working with (known) real-valued quantities only, please select an appropriate complex numpy dtype (either cdouble or csingle).')
+    
+    #How many bytes per float?
+    FLOATSIZE= float_type(0).itemsize
+    
+    if mem_limit is not None:
+        dim = target_model.dim
+        #Np = model_list[0].num_params #wrong:? includes spam...
+        Np = target_model.num_params
+        if randomize==False:
+            num_gs_copies=1
+        memEstimate = FLOATSIZE * num_gs_copies * len(availableGermsList) * Np**2
+        # for _compute_bulk_twirled_ddd
+        memEstimate += FLOATSIZE * num_gs_copies * len(availableGermsList) * dim**2 * Np
+        # for _bulk_twirled_deriv sub-call
+        printer.log("Memory estimate of %.1f GB (%.1f GB limit) for all-Jac mode." %
+                    (memEstimate / 1024.0**3, mem_limit / 1024.0**3), 1)
 
+        if memEstimate > mem_limit:
+            mode = "single-Jac"  # compute a single germ's jacobian at a time
+            # and store the needed J-sum over chosen germs.
+            memEstimate = FLOATSIZE * 3 * len(model_list) * Np**2 + \
+                FLOATSIZE * 3 * len(model_list) * dim**2 * Np
+            #Factor of 3 accounts for currentDDDs, testDDDs, and bestDDDs
+            printer.log("Memory estimate of %.1f GB (%.1f GB limit) for single-Jac mode." %
+                        (memEstimate / 1024.0**3, mem_limit / 1024.0**3), 1)
+
+            if memEstimate > mem_limit:
+                raise MemoryError("Too little memory, even for single-Jac mode!")
 
     if algorithm_kwargs is None:
         # Avoid danger of using empty dict for default value.
@@ -181,7 +216,9 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'comm': comm,
             'mem_limit': mem_limit,
             'profiler': profiler,
-            'num_nongauge_params': num_nongauge_params
+            'num_nongauge_params': num_nongauge_params,
+            'float_type': float_type,
+            'mode' : 'all-Jac'
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -193,7 +230,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                 germList, neighborhood=modelList,
                 score_func=algorithm_kwargs['score_func'],
                 op_penalty=algorithm_kwargs['op_penalty'],
-                num_nongauge_params=num_nongauge_params)
+                num_nongauge_params=num_nongauge_params,
+                float_type=float_type)
             printer.log('Constructed germ set:', 1)
             printer.log(str([germ.str for germ in germList]), 1)
             printer.log(germsetScore, 1)
@@ -213,6 +251,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'return_all': False,
             'score_func': 'all',
             'num_nongauge_params': num_nongauge_params,
+            'float_type': float_type
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -227,7 +266,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                 score_func=algorithm_kwargs['score_func'],
                 op_penalty=algorithm_kwargs['op_penalty'],
                 l1_penalty=algorithm_kwargs['l1_penalty'],
-                num_nongauge_params=num_nongauge_params)
+                num_nongauge_params=num_nongauge_params,
+                float_type=float_type)
             printer.log(str([germ.str for germ in germList[0]]), 1)
             printer.log(germsetScore)
         elif not algorithm_kwargs['return_all'] and germList is not None:
@@ -236,7 +276,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                 score_func=algorithm_kwargs['score_func'],
                 op_penalty=algorithm_kwargs['op_penalty'],
                 l1_penalty=algorithm_kwargs['l1_penalty'],
-                num_nongauge_params=num_nongauge_params)
+                num_nongauge_params=num_nongauge_params,
+                float_type=float_type)
             printer.log(str([germ.str for germ in germList]), 1)
             printer.log(germsetScore, 1)
     elif algorithm == 'slack':
@@ -252,6 +293,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'op_penalty': 0.0,
             'force': force,
             'score_func': 'all',
+            'float_type': float_type
         }
         if ('slack_frac' not in algorithm_kwargs
                 and 'fixed_slack' not in algorithm_kwargs):
@@ -267,7 +309,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                 score_func=algorithm_kwargs['score_func'],
                 op_penalty=algorithm_kwargs['op_penalty'],
                 l1_penalty=algorithm_kwargs['l1_penalty'],
-                num_nongauge_params=num_nongauge_params)
+                num_nongauge_params=num_nongauge_params,
+                float_type=float_type)
             printer.log('Constructed germ set:', 1)
             printer.log(str([germ.str for germ in germList]), 1)
             printer.log(germsetScore, 1)
@@ -281,7 +324,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
 def compute_germ_set_score(germs, target_model=None, neighborhood=None,
                            neighborhood_size=5,
                            randomization_strength=1e-2, score_func='all',
-                           op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None):
+                           op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None,
+                           float_type=_np.cdouble):
     """
     Calculate the score of a germ set with respect to a model.
 
@@ -321,6 +365,9 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
 
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
+        
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
 
     Returns
     -------
@@ -335,7 +382,8 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
                                                partial_germs_list=germs,
                                                op_penalty=op_penalty,
                                                l1_penalty=l1_penalty,
-                                               num_nongauge_params=num_nongauge_params)
+                                               num_nongauge_params=num_nongauge_params,
+                                               float_type=float_type)
               for model in neighborhood]
 
     return max(scores)
@@ -421,7 +469,8 @@ def _setup_model_list(model_list, randomize, randomization_strength,
 def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
                                      partial_deriv_dagger_deriv=None, model=None,
                                      partial_germs_list=None, eps=None, germ_lengths=None,
-                                     op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None):
+                                     op_penalty=0.0, l1_penalty=0.0, num_nongauge_params=None,
+                                     float_type=_np.cdouble):
     """
     Compute the score for a germ set when it is not AC against a model.
 
@@ -499,7 +548,7 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
             raise ValueError("Must provide either partial_deriv_dagger_deriv or "
                              "(model, partial_germs_list)!")
         else:
-            pDDD_kwargs = {'model': model, 'germs_list': partial_germs_list}
+            pDDD_kwargs = {'model': model, 'germs_list': partial_germs_list, 'float_type':float_type}
             if eps is not None:
                 pDDD_kwargs['eps'] = eps
             if germ_lengths is not None:
@@ -556,7 +605,7 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
 
 
 def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
-                              germ_lengths=None, comm=None):
+                              germ_lengths=None, comm=None, float_type=_np.cdouble):
     """
     Calculate the positive squares of the germ Jacobians.
 
@@ -586,6 +635,9 @@ def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
         across multiple processors.
+        
+    float_type : numpy dtype object, optional
+        Numpy data type to use in floating point arrays.
 
     Returns
     -------
@@ -595,7 +647,7 @@ def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
     if germ_lengths is None:
         germ_lengths = _np.array([len(germ) for germ in germs_list])
 
-    twirledDeriv = _bulk_twirled_deriv(model, germs_list, eps, check, comm) / germ_lengths[:, None, None]
+    twirledDeriv = _bulk_twirled_deriv(model, germs_list, eps, check, comm, float_type=float_type) / germ_lengths[:, None, None]
 
     #OLD: slow, I think because conjugate *copies* a large tensor, causing a memory bottleneck
     #twirledDerivDaggerDeriv = _np.einsum('ijk,ijl->ikl',
@@ -605,7 +657,7 @@ def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
     #NEW: faster, one-germ-at-a-time computation requires less memory.
     nGerms, _, vec_model_dim = twirledDeriv.shape
     twirledDerivDaggerDeriv = _np.empty((nGerms, vec_model_dim, vec_model_dim),
-                                        dtype=_np.complex)
+                                        dtype=float_type)
     for i in range(nGerms):
         twirledDerivDaggerDeriv[i, :, :] = _np.dot(
             twirledDeriv[i, :, :].conjugate().T, twirledDeriv[i, :, :])
@@ -613,7 +665,7 @@ def _compute_bulk_twirled_ddd(model, germs_list, eps=1e-6, check=False,
     return twirledDerivDaggerDeriv
 
 
-def _compute_twirled_ddd(model, germ, eps=1e-6):
+def _compute_twirled_ddd(model, germ, eps=1e-6, float_type=_np.cdouble):
     """
     Calculate the positive squares of the germ Jacobian.
 
@@ -638,7 +690,7 @@ def _compute_twirled_ddd(model, germ, eps=1e-6):
     -------
     numpy.ndarray
     """
-    twirledDeriv = _twirled_deriv(model, germ, eps) / len(germ)
+    twirledDeriv = _twirled_deriv(model, germ, eps, float_type) / len(germ)
     #twirledDerivDaggerDeriv = _np.einsum('jk,jl->kl',
     #                                     _np.conjugate(twirledDeriv),
     #                                     twirledDeriv)
@@ -778,7 +830,7 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
     return newmodelList
 
 
-def test_germs_list_completeness(model_list, germs_list, score_func, threshold):
+def test_germs_list_completeness(model_list, germs_list, score_func, threshold, float_type=_np.cdouble):
     """
     Check to see if the germs_list is amplificationally complete (AC).
 
@@ -803,6 +855,9 @@ def test_germs_list_completeness(model_list, germs_list, score_func, threshold):
         An eigenvalue of jacobian^T*jacobian is considered zero and thus a
         parameter un-amplified when its reciprocal is greater than threshold.
         Also used for eigenvector degeneracy testing in twirling operation.
+        
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
 
     Returns
     -------
@@ -813,7 +868,7 @@ def test_germs_list_completeness(model_list, germs_list, score_func, threshold):
     for modelNum, model in enumerate(model_list):
         initial_test = test_germ_set_infl(model, germs_list,
                                           score_func=score_func,
-                                          threshold=threshold)
+                                          threshold=threshold, float_type=float_type)
         if not initial_test:
             return modelNum
 
@@ -868,12 +923,18 @@ def _num_non_spam_gauge_params(model):
 # so SOP is op_dim^2 x op_dim^2 and acts on vectorized *gates*
 # Recall vectorizing identity (when vec(.) concats rows as flatten does):
 #     vec( A * X * B ) = A tensor B^T * vec( X )
-def _super_op_for_perfect_twirl(wrt, eps):
+def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
     """Return super operator for doing a perfect twirl with respect to wrt.
     """
     assert wrt.shape[0] == wrt.shape[1]  # only square matrices allowed
     dim = wrt.shape[0]
-    SuperOp = _np.zeros((dim**2, dim**2), 'complex')
+    
+    #The eigenvalues and eigenvectors of wrt can be complex valued, even for
+    #real-valued transfer matrices. Need to be careful here to start off using able
+    #complex data type. The actual projector onto the germs commutant appears to be strictly real valued though
+    #(that makes sense because otherwise the projected derivative would become complex
+    #So we should be able to cast it back to the specified float_type just before returning it.
+    SuperOp = _np.zeros((dim**2, dim**2), dtype=_np.cdouble)
 
     # Get spectrum and eigenvectors of wrt
     wrtEvals, wrtEvecs = _np.linalg.eig(wrt)
@@ -900,6 +961,19 @@ def _super_op_for_perfect_twirl(wrt, eps):
         SuperOp += _np.kron(A, A.T) / _np.trace(Proj_i)
         # SuperOp += _np.kron(A.T,A) # Mimic Maple version (but I think this is
         # wrong... or it doesn't matter?)
+    
+    #Case the twirling SuperOp back to the specified float type.
+    #If the float_type is a real-values one though we should probably do a quick
+    #sanity check to confirm everything we're casting is actually real!
+    if (float_type is _np.double) or (float_type is _np.single):
+        #might as well use eps as the threshold here too.
+        if _np.any(_np.imag(SuperOp)>eps):
+            raise ValueError("Attempting to cast a twirling superoperator with non-trivial imaginary component to a real-valued data type.")
+        #cast just the real part to specified float type.
+        SuperOp=SuperOp.real.astype(float_type)
+    else:
+        SuperOp=SuperOp.astype(float_type)
+    
     return SuperOp  # a op_dim^2 x op_dim^2 matrix
 
 
@@ -939,7 +1013,7 @@ def _sq_sing_vals_from_deriv(deriv, weights=None):
     return sortedEigenvals
 
 
-def _twirled_deriv(model, circuit, eps=1e-6):
+def _twirled_deriv(model, circuit, eps=1e-6, float_type=_np.cdouble):
     """
     Compute the "Twirled Derivative" of a circuit.
 
@@ -957,6 +1031,11 @@ def _twirled_deriv(model, circuit, eps=1e-6):
     eps : float, optional
         Tolerance used for testing whether two eigenvectors are degenerate
         (i.e. abs(eval1 - eval2) < eps ? )
+        
+    float_type : numpy dtype object, optional
+        Nump data type to use for floating point arrays.
+        
+
 
     Returns
     -------
@@ -969,13 +1048,13 @@ def _twirled_deriv(model, circuit, eps=1e-6):
     dProd = model.sim.dproduct(circuit, flat=True)
 
     # flattened_op_dim x flattened_op_dim
-    twirler = _super_op_for_perfect_twirl(prod, eps)
+    twirler = _super_op_for_perfect_twirl(prod, eps, float_type=float_type)
 
     # flattened_op_dim x vec_model_dim
     return _np.dot(twirler, dProd)
 
 
-def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
+def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float_type=_np.cdouble):
     """
     Compute the "Twirled Derivative" of a set of circuits.
 
@@ -1001,6 +1080,9 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
+        
+    float_type : numpy dtype object, optional
+        Nump data type to use for floating point arrays.
 
     Returns
     -------
@@ -1018,17 +1100,17 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None):
     fd = op_dim**2  # flattened gate dimension
     nCircuits = len(circuits)
 
-    ret = _np.empty((nCircuits, fd, dProds.shape[1]), 'complex')
+    ret = _np.empty((nCircuits, fd, dProds.shape[1]), dtype=float_type)
     for i in range(nCircuits):
         # flattened_op_dim x flattened_op_dim
-        twirler = _super_op_for_perfect_twirl(prods[i], eps)
+        twirler = _super_op_for_perfect_twirl(prods[i], eps, float_type=float_type)
 
         # flattened_op_dim x vec_model_dim
         ret[i] = _np.dot(twirler, dProds[i * fd:(i + 1) * fd])
 
     if check:
         for i, circuit in enumerate(circuits):
-            chk_ret = _twirled_deriv(model, circuit, eps)
+            chk_ret = _twirled_deriv(model, circuit, eps, float_type=float_type)
             if _nla.norm(ret[i] - chk_ret) > 1e-6:
                 _warnings.warn("bulk twirled derivative norm mismatch = "
                                "%g - %g = %g"
@@ -1106,7 +1188,8 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
 
 
 def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
-                       return_spectrum=False, threshold=1e6, check=False):
+                       return_spectrum=False, threshold=1e6, check=False,
+                       float_type=_np.cdouble):
     """
     Test whether a set of germs is able to amplify all non-gauge parameters.
 
@@ -1140,6 +1223,9 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
     check : bool, optional
         Whether to perform internal consistency checks, at the
         expense of making the function slower.
+        
+    float_type: numpy dtype object, optional
+        Optional numpy data type to use for internal numpy array calculations.
 
     Returns
     -------
@@ -1158,7 +1244,8 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
     germLengths = _np.array([len(germ) for germ in germs_to_test], _np.int64)
     twirledDerivDaggerDeriv = _compute_bulk_twirled_ddd(model, germs_to_test,
                                                         1. / threshold, check,
-                                                        germLengths)
+                                                        germLengths, 
+                                                        float_type=float_type)
     # result[i] = _np.dot( twirledDeriv[i].H, twirledDeriv[i] ) i.e. matrix
     # product
     # result[i,k,l] = sum_j twirledDerivH[i,k,j] * twirledDeriv(i,j,l)
@@ -1185,7 +1272,7 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
 def find_germs_depthfirst(model_list, germs_list, randomize=True,
                           randomization_strength=1e-3, num_copies=None, seed=0, op_penalty=0,
                           score_func='all', tol=1e-6, threshold=1e6, check=False,
-                          force="singletons", verbosity=0):
+                          force="singletons", verbosity=0, float_type=_np.cdouble):
     """
     Greedy germ selection algorithm starting with 0 germs.
 
@@ -1282,7 +1369,8 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
     undercompleteModelNum = test_germs_list_completeness(model_list,
                                                          germs_list,
                                                          score_func,
-                                                         threshold)
+                                                         threshold,
+                                                         float_type=float_type)
     if undercompleteModelNum > -1:
         printer.warning("Complete initial germ set FAILS on model "
                         + str(undercompleteModelNum) + ". Aborting search.")
@@ -1293,7 +1381,7 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
     printer.log("Starting germ set optimization. Lower score is better.", 1)
 
     twirledDerivDaggerDerivList = [_compute_bulk_twirled_ddd(model, germs_list, tol,
-                                                             check, germLengths)
+                                                             check, germLengths, float_type=float_type)
                                    for model in model_list]
 
     # Dict of keyword arguments passed to compute_score_non_AC that don't
@@ -1304,6 +1392,7 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
         'num_nongauge_params': numNonGaugeParams,
         'op_penalty': op_penalty,
         'germ_lengths': germLengths,
+        'float_type': float_type
     }
 
     for modelNum, reducedModel in enumerate(reducedModelList):
@@ -1318,7 +1407,7 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
             # As long as there are some unused germs, see if you need to add
             # another one.
             if test_germ_set_infl(reducedModel, goodGerms,
-                                  score_func=score_func, threshold=threshold):
+                                  score_func=score_func, threshold=threshold, float_type=float_type):
                 # The germs are sufficient for the current model
                 break
             candidateGerms = _np.where(weights == 0)[0]
@@ -1340,12 +1429,13 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
 
     return goodGerms
 
-
+#@profile(stream=fp)
 def find_germs_breadthfirst(model_list, germs_list, randomize=True,
                             randomization_strength=1e-3, num_copies=None, seed=0,
                             op_penalty=0, score_func='all', tol=1e-6, threshold=1e6,
                             check=False, force="singletons", pretest=True, mem_limit=None,
-                            comm=None, profiler=None, verbosity=0, num_nongauge_params=None):
+                            comm=None, profiler=None, verbosity=0, num_nongauge_params=None, 
+                            float_type= _np.cdouble, mode="all-Jac"):
     """
     Greedy algorithm starting with 0 germs.
 
@@ -1431,6 +1521,9 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
 
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
+        
+    float_type : numpy dtype object, optional
+        Use an alternative data type for the values of the numpy arrays generated.
 
     Returns
     -------
@@ -1474,12 +1567,44 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
             for opstr in force:
                 weights[germs_list.index(opstr)] = 1
             goodGerms = force[:]
+            
+    #We should do the memory estimates before the pretest:
+    FLOATSIZE= float_type(0).itemsize
+
+    memEstimatealljac = FLOATSIZE * len(model_list) * len(germs_list) * Np**2
+    # for _compute_bulk_twirled_ddd
+    memEstimatealljac += FLOATSIZE * len(model_list) * len(germs_list) * dim**2 * Np
+    # for _bulk_twirled_deriv sub-call
+    printer.log("Memory estimate of %.1f GB for all-Jac mode." %
+                (memEstimatealljac / 1024.0**3), 1)            
+
+    memEstimatesinglejac = FLOATSIZE * 3 * len(model_list) * Np**2 + \
+        FLOATSIZE * 3 * len(model_list) * dim**2 * Np
+    #Factor of 3 accounts for currentDDDs, testDDDs, and bestDDDs
+    printer.log("Memory estimate of %.1f GB for single-Jac mode." %
+                (memEstimatesinglejac / 1024.0**3), 1)            
+
+    if mem_limit is not None:
+        
+        printer.log("Memory limit of %.1f GB specified." %
+            (mem_limit / 1024.0**3), 1)
+    
+        if memEstimatesinglejac > mem_limit:
+                raise MemoryError("Too little memory, even for single-Jac mode!")
+    
+        if mode=="all-Jac" and (memEstimatealljac > mem_limit):
+            #fall back to single-Jac mode
+            
+            printer.log("Not enough memory for all-Jac mode, falling back to single-Jac mode.", 1)
+            
+            mode = "single-Jac"  # compute a single germ's jacobian at a time    
 
     if pretest:
         undercompleteModelNum = test_germs_list_completeness(model_list,
                                                              germs_list,
                                                              score_func,
-                                                             threshold)
+                                                             threshold,
+                                                             float_type=float_type)
         if undercompleteModelNum > -1:
             printer.warning("Complete initial germ set FAILS on model "
                             + str(undercompleteModelNum) + ".")
@@ -1489,45 +1614,24 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
         printer.log("Complete initial germ set succeeds on all input models.", 1)
         printer.log("Now searching for best germ set.", 1)
 
-    printer.log("Starting germ set optimization. Lower score is better.", 1)
-
-    mode = "all-Jac"  # compute a all the possible germ's jacobians at once up
-    # front and store them separately (requires lots of mem)
-
-    if mem_limit is not None:
-        memEstimate = FLOATSIZE * len(model_list) * len(germs_list) * Np**2
-        # for _compute_bulk_twirled_ddd
-        memEstimate += FLOATSIZE * len(model_list) * len(germs_list) * dim**2 * Np
-        # for _bulk_twirled_deriv sub-call
-        printer.log("Memory estimate of %.1f GB (%.1f GB limit) for all-Jac mode." %
-                    (memEstimate / 1024.0**3, mem_limit / 1024.0**3), 1)
-
-        if memEstimate > mem_limit:
-            mode = "single-Jac"  # compute a single germ's jacobian at a time
-            # and store the needed J-sum over chosen germs.
-            memEstimate = FLOATSIZE * 3 * len(model_list) * Np**2 + \
-                FLOATSIZE * 3 * len(model_list) * dim**2 * Np
-            #Factor of 3 accounts for currentDDDs, testDDDs, and bestDDDs
-            printer.log("Memory estimate of %.1f GB (%.1f GB limit) for single-Jac mode." %
-                        (memEstimate / 1024.0**3, mem_limit / 1024.0**3), 1)
-
-            if memEstimate > mem_limit:
-                raise MemoryError("Too little memory, even for single-Jac mode!")
+    printer.log("Starting germ set optimization. Lower score is better.", 1) 
 
     twirledDerivDaggerDerivList = None
 
     if mode == "all-Jac":
         twirledDerivDaggerDerivList = \
             [_compute_bulk_twirled_ddd(model, germs_list, tol,
-                                       check, germLengths, comm)
+                                       check, germLengths, comm, float_type=float_type)
              for model in model_list]
-
+        print('Numpy Array Data Type:', twirledDerivDaggerDerivList[0].dtype)
+        printer.log("Numpy array data type for twirled derivatives is: "+ str(twirledDerivDaggerDerivList[0].dtype)+
+                    " If this isn't what you specified then something went wrong.", 1) 
         currentDDDList = []
         for i, derivDaggerDeriv in enumerate(twirledDerivDaggerDerivList):
             currentDDDList.append(_np.sum(derivDaggerDeriv[_np.where(weights == 1)[0], :, :], axis=0))
 
     elif mode == "single-Jac":
-        currentDDDList = [_np.zeros((Np, Np), 'complex') for mdl in model_list]
+        currentDDDList = [_np.zeros((Np, Np), dtype=float_type) for mdl in model_list]
 
         loc_Indices, _, _ = _mpit.distribute_indices(
             list(range(len(goodGerms))), comm, False)
@@ -1541,12 +1645,12 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
 
                 for k, model in enumerate(model_list):
                     currentDDDList[k] += _compute_twirled_ddd(
-                        model, germs_list[goodGermIdx], tol)
+                        model, germs_list[goodGermIdx], tol, float_type=float_type)
 
         #aggregate each currendDDDList across all procs
         if comm is not None and comm.Get_size() > 1:
             for k, model in enumerate(model_list):
-                result = _np.empty((Np, Np), 'complex')
+                result = _np.empty((Np, Np), dtype=float_type)
                 comm.Allreduce(currentDDDList[k], result, op=MPI.SUM)
                 currentDDDList[k][:, :] = result[:, :]
                 result = None  # free mem
@@ -1562,6 +1666,7 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
         'num_nongauge_params': numNonGaugeParams,
         'op_penalty': op_penalty,
         'germ_lengths': germLengths,
+        'float_type': float_type
     }
 
     initN = 1
@@ -1604,7 +1709,7 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
                         #compute value of deriv-dagger-deriv
                         model = model_list[k]
                         testDDD += _compute_twirled_ddd(
-                            model, germs_list[candidateGermIdx], tol)
+                            model, germs_list[candidateGermIdx], tol, float_type=float_type)
                     # (else already checked above)
 
                     nonAC_kwargs['germ_lengths'] = \
@@ -1663,7 +1768,7 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
                              slack_frac=False, return_all=False, tol=1e-6,
                              check=False, force="singletons",
                              force_score=1e100, threshold=1e6,
-                             verbosity=1):
+                             verbosity=1, float_type=_np.cdouble):
     """
     Find a locally optimal subset of the germs in germs_list.
 
@@ -1801,7 +1906,8 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
 
     undercompleteModelNum = test_germs_list_completeness(model_list,
                                                          germs_list, score_func,
-                                                         threshold)
+                                                         threshold,
+                                                         float_type=float_type)
     if undercompleteModelNum > -1:
         printer.log("Complete initial germ set FAILS on model "
                     + str(undercompleteModelNum) + ".", 1)
@@ -1837,7 +1943,7 @@ def find_germs_integer_slack(model_list, germs_list, randomize=True,
     else:
         forceIndices = None
 
-    twirledDerivDaggerDerivList = [_compute_bulk_twirled_ddd(model, germs_list, tol)
+    twirledDerivDaggerDerivList = [_compute_bulk_twirled_ddd(model, germs_list, tol, float_type=float_type)
                                    for model in model_list]
 
     # Dict of keyword arguments passed to _germ_set_score_slack that don't change from
@@ -2010,7 +2116,7 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
                      score_func='all', tol=1e-6, threshold=1e6,
                      check=False, force="singletons",
                      iterations=5, return_all=False, shuffle=False,
-                     verbosity=0, num_nongauge_params=None):
+                     verbosity=0, num_nongauge_params=None, float_type=_np.cdouble):
     """
     Use GRASP to find a high-performing germ set.
 
@@ -2113,6 +2219,9 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
 
     num_nongauge_params : int, optional
         Force the number of nongauge parameters rather than rely on automated gauge optimization.
+        
+    float_type : Numpy dtype object, optional
+        Numpy data type to use for floating point arrays
 
     Returns
     -------
@@ -2148,7 +2257,8 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
     undercompleteModelNum = test_germs_list_completeness(model_list,
                                                          germs_list,
                                                          score_func,
-                                                         threshold)
+                                                         threshold,
+                                                         float_type=float_type)
     if undercompleteModelNum > -1:
         printer.warning("Complete initial germ set FAILS on model "
                         + str(undercompleteModelNum) + ".")
@@ -2161,7 +2271,7 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
     printer.log("Starting germ set optimization. Lower score is better.", 1)
 
     twirledDerivDaggerDerivList = [_compute_bulk_twirled_ddd(model, germs_list, tol,
-                                                             check, germLengths)
+                                                             check, germLengths, float_type=float_type)
                                    for model in model_list]
 
     # Dict of keyword arguments passed to compute_score_non_AC that don't
@@ -2172,6 +2282,7 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
         'op_penalty': op_penalty,
         'germ_lengths': germLengths,
         'num_nongauge_params': numNonGaugeParams,
+        'float_type' : float_type
     }
 
     final_nonAC_kwargs = nonAC_kwargs.copy()
