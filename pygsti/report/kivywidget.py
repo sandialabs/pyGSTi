@@ -16,6 +16,7 @@ import cmath
 
 import os as _os
 import numpy as _np
+import json as _json
 #import tempfile as _tempfile
 import xml.etree.ElementTree as _ET
 import warnings as _warnings
@@ -94,8 +95,11 @@ class TableWidget(GridLayout):
         column_heights = [(sum([r[j].content.height for r in formatted_rows]) + formatted_headings[j].content.height)
                           for j in range(ncols)]
 
-        table_width = max(max(row_widths), heading_row_width)
+        table_width = sum(column_widths)  #max(max(row_widths), heading_row_width)
         table_height = sum(row_heights) + heading_row_height
+        print("col_widths =", column_widths)
+        print("row_heights =", row_heights)
+        print("heading row height = ", heading_row_height)
         assert(table_height >= max(column_heights))  # can have all columns less than table height b/c of row alighmt
 
         # pass 2: add widgets and set their size hints
@@ -113,6 +117,12 @@ class TableWidget(GridLayout):
                 cell_widget.size_hint_y = rowheight / table_height
                 cell_widget.content.size_hint_x = cell_widget.content.width / colwidth
                 cell_widget.content.size_hint_y = cell_widget.content.height / rowheight
+                #if isinstance(cell_widget.content, LatexWidget):
+                #    print('**** ', cell_widget.content.latex_string)
+                #    print(f'{cell_widget.content.width=} {colwidth=}')
+                #    print(f'{cell_widget.content.height=} {colwidth=}')
+                #    print("Size hint = ", cell_widget.content.size_hint_x, cell_widget.content.size_hint_y)
+                #    print("")
                 self.add_widget(cell_widget)
 
         with self.canvas.before:
@@ -135,6 +145,7 @@ class TableWidget(GridLayout):
         print("DB: TABLE Initial size = ", self.size)
 
     def _redraw(self, *args):
+        print("Table redraw", id(self), 'pos', self.pos)
         #Update background rectangle
         self._bgrect.pos = self.pos
         self._bgrect.size = self.size
@@ -155,12 +166,14 @@ class TableWidget(GridLayout):
             xs.append((c.x + end) / 2.0)
             end = c.x + c.width
         xs.append(end)
+        print("xs = ", xs)
 
         ys = [first_col[0].y]; end = first_col[0].y + first_col[0].height
         for c in first_col[1:]:
             ys.append((c.y + end) / 2.0)
             end = c.y + c.height
         ys.append(end)
+        print("ys = ", ys)
 
         #patch: always use self's position and size for border lines
         xs[0] = self.x; xs[-1] = self.x + self.width
@@ -192,6 +205,11 @@ class CellWidgetContainer(AnchorLayout):
             Window.bind(mouse_pos=self.on_mouse_pos)
         self._sidebar_layout = self._status_label = None
 
+        # Uncomment these lines and refs to bgrect below to show green CellWidgetContainer background area (for debugging)
+        #with self.canvas.before:
+        #    Color(0.0, 0.7, 0.0)
+        #    self.bgrect = Rectangle(pos=(0,0), size=self.size)
+
     def set_info_containers(self, sidebar_layout, status_label):
         self._sidebar_layout = sidebar_layout
         self._status_label = status_label
@@ -205,26 +223,57 @@ class CellWidgetContainer(AnchorLayout):
         if self.collide_point(*tpos) and self._status_label:
             self._status_label.text = self.hover_text
 
-    #def on_size(self, *args):
-    #    print("Cell container onsize: ", self.size)
+    def on_size(self, *args):
+        #print("Cell container onsize: ", self.size)
+        #self.bgrect.pos = self.pos
+        #self.bgrect.size = self.size
+        pass
+
 
 
 class LatexWidget(Scatter):
+    svg_cache = None
+
+    @classmethod
+    def write_cache(cls, filename):
+        to_save = {}
+        if cls.svg_cache is None: return
+        for key, etree in cls.svg_cache.items():
+            to_save[key] = _ET.tostring(etree._root).decode("utf-8")
+        with open(filename, 'w') as f:
+            _json.dump(to_save, f)
+
+    @classmethod
+    def read_cache(cls, filename):
+        cls.svg_cache = {}
+        with open(filename) as f:
+            d = _json.load(f)
+        for key, etree_str in d.items():
+            cls.svg_cache[key] = _ET.ElementTree(_ET.fromstring(etree_str.encode('utf-8')))
+
     def __init__(self, latex_string, **kwargs):
         kwargs.update(dict(do_rotation=False, do_scale=False, do_translation=False))
         super(LatexWidget, self).__init__(**kwargs)
-        if _latextools is None:
-            raise ValueError("You must `pip install latextools` and `pip install drawSvg` to render latex within Kivy widgets.")
-        pdf = _latextools.render_snippet(latex_string, commands=[_latextools.cmd.all_math])
-
         self.latex_string = latex_string
-        svg_string = pdf.as_svg().content
 
-        #This manual SVG simplification/manipulation should be unnecessary once Svg() in Kivy works properly
-        svg_string = svg_string.replace(r'0%', '0')  # used, e.g. in 'rgb(0%,0%,0%)'
-        svg_string = svg_string.replace(r'stroke:none', 'stroke-width:0')  # because 'stroke:none' doesn't work (I think because the alpha channel doesn't)
-        etree = _ET.ElementTree(_ET.fromstring(svg_string))
-        etree = self.simplify_svg_tree(etree)
+        if self.svg_cache is None or latex_string not in self.svg_cache:
+            print("*** LATEX CACHE MISS ***")
+            if _latextools is None:
+                raise ValueError(("You must `pip install latextools` and `pip install drawSvg`"
+                                  " to render latex within Kivy widgets."))
+            pdf = _latextools.render_snippet(latex_string, commands=[_latextools.cmd.all_math])
+            svg_string = pdf.as_svg().content
+
+            #This manual SVG simplification/manipulation should be unnecessary once Svg() in Kivy works properly
+            svg_string = svg_string.replace(r'0%', '0')  # used, e.g. in 'rgb(0%,0%,0%)'
+            svg_string = svg_string.replace(r'stroke:none', 'stroke-width:0')  # because 'stroke:none' doesn't work (I think because the alpha channel doesn't)
+            etree = _ET.ElementTree(_ET.fromstring(svg_string))
+            etree = self.simplify_svg_tree(etree)
+            if self.svg_cache is not None: self.svg_cache[latex_string] = etree
+        else:
+            print("*** LATEX CACHE HIT ***")
+            etree = self.svg_cache[latex_string]
+
         with self.canvas:
             self.svg_offset = Translate(0, 0)
             svg = Svg()
@@ -232,13 +281,14 @@ class LatexWidget(Scatter):
 
         # Uncomment these lines and refs to bgrect below to show yellow LatexWidget background area (for debugging)
         #with self.canvas.before:
-        #    Color(0.7, 0.7, 0.0)
+        #    Color(0.7, 0.7, 0.0)  # dark yellow
         #    self.bgrect = Rectangle(pos=(0,0), size=self.size)
 
         #self.etree = etree
         self.svg_size = (svg.width, svg.height)
         #print("SVG size = ", svg.width, svg.height)
-        self.size = svg.width, svg.height
+        SCALE_FACTOR = 4
+        self.size = SCALE_FACTOR * svg.width, SCALE_FACTOR * svg.height
 
         #REMOVE
         #desired_width = 200.0
@@ -261,7 +311,7 @@ class LatexWidget(Scatter):
 
     def on_size(self, *args):
         #self.canvas.before.clear()
-        #print("Latex onsize ", id(self), self.pos, self.size)
+        #print("Latex onsize ", self.pos, self.size, ' :: ', self.latex_string)
         scalew = self.size[0] / self.svg_size[0]  # so scale * svg_width == desired_width
         scaleh = self.size[1] / self.svg_size[1]  # so scale * svg_width == desired_width
         if scalew <= scaleh:  # scale so width of SVG takes up full width; center in y
@@ -380,6 +430,7 @@ class AdjustingLabel(Label):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+        self.size_map = {}  # maps font size -> texture size  (FUTURE performance enhancement)
         self.texture_update()
         if self.texture_size[1] <= 0:
             return
@@ -397,12 +448,54 @@ class AdjustingLabel(Label):
                 self.texture_update()
                 aspect = self.texture_size[0] / self.texture_size[1]
                 print("Aspect = ",aspect, 'texture_size = ', self.texture_size)
+        else:
+            self.size_hint_y = None
+            self.text_size = self.texture_size[0], None
+
+        self.aspect = aspect
 
         #self.bind(
         #    width=lambda *x: self.setter('text_size')(self, (self.width, None)),
         #    texture_size=lambda *x: self.setter('height')(self, self.texture_size[1]))
 
-    #def on_size(self, *args):
+    def on_size(self, *args):
+        # Change font size until texture size is correct
+        font_size_min = 6
+        font_size_max = 40
+        PADDING = 10
+        TOLPADDING = 20
+        initial_font_size = self.font_size
+
+        if self.text_size[0] is None or self.texture_size[0] is None or self.texture_size[1] is None:
+            return  # exit right away if label hasn't been initialized yet.
+        
+        # Check if we need to adjust self.text_size to match our width
+        if self.width < self.text_size[0] + 2 * PADDING - TOLPADDING:
+            self.text_size = self.width - 2 * PADDING, None  # force texture width to be ok
+            self.texture_update()
+        elif self.width > self.text_size[0] + 2 * PADDING + TOLPADDING:
+            self.text_size = self.width - 2 * PADDING, None  # force texture width to be ok
+            self.texture_update()
+
+        #Adjust font size so texture height is <= our height
+        if self.height < self.texture_size[1] + 2 * PADDING - TOLPADDING:
+            while self.texture_size[1] > self.height - 2 * PADDING and self.font_size > font_size_min:
+                self.font_size -= 2
+                self.texture_update()
+        elif self.height > self.texture_size[1] + 2 * PADDING + TOLPADDING:
+            last_acceptable_font_size = self.font_size
+            while self.texture_size[1] < self.height - 2 * PADDING and self.font_size < font_size_max:
+                last_acceptable_font_size = self.font_size
+                self.font_size += 2
+                self.texture_update()
+            if self.font_size != last_acceptable_font_size:
+                self.font_size = last_acceptable_font_size
+                self.texture_update()
+
+        if initial_font_size != self.font_size:
+            print(f"AdjustingLabel on_size updated font size: {initial_font_size} -> {self.font_size}")
+
+    #OLD REMOVE:
     #    if self.text_size[0] != self.width:  # avoids recusive on_size calls
     #        #print("On size: ", self.size, ' texture', self.texture_size)
     #        self.text_size = self.width, None
@@ -473,7 +566,7 @@ def cell(data, label, spec):
 
         # render latex via LatexWidget
         widget = CellWidgetContainer(LatexWidget(data), label) #, size_hint=(None, None), pos_hint={'center_x': 0.5, 'center_y': 0.5})
-        widget.content.size = (w, h)
+        #widget.content.size = (w, h)
         print("Latex widget => ", widget.content.size, ':', widget.content.latex_string)
         return widget
     else:

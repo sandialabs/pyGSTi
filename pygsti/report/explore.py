@@ -1,4 +1,8 @@
 import os as _os
+import json as _json
+import inspect as _inspect
+import itertools as _itertools
+
 from kivy.app import App
 
 from kivy.uix.widget import Widget
@@ -21,12 +25,13 @@ from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem
 from kivy.uix.accordion import Accordion, AccordionItem
 from kivy.uix.modalview import ModalView
 from kivy.uix.stencilview import StencilView
+from kivy.uix.scrollview import ScrollView
 from kivy.uix.popup import Popup
 from kivy.uix.textinput import TextInput
 from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.clock import Clock
 
-from kivy.properties import ObjectProperty, StringProperty, ListProperty, DictProperty
+from kivy.properties import ObjectProperty, StringProperty, ListProperty, DictProperty, BoundedNumericProperty
 from kivy.graphics import Color, Rectangle, Line
 
 from .kivyresize import ResizableBehavior
@@ -34,17 +39,25 @@ from .kivygraph import Graph, MeshLinePlot, BarPlot, MatrixBoxPlotGraph
 
 import pygsti
 from pygsti.report import Workspace
-from pygsti.report.kivywidget import WrappedLabel
+from pygsti.report.kivywidget import WrappedLabel, TableWidget
 from pygsti.protocols.protocol import CircuitListsDesign as _CircuitListsDesign
+from pygsti.protocols.protocol import ExperimentDesign as _ExperimentDesign
+from pygsti.protocols.protocol import ProtocolData as _ProtocolData
 from pygsti.protocols.estimate import Estimate as _Estimate
 from pygsti.protocols.gst import ModelEstimateResults as _ModelEstimateResults
 from pygsti.protocols.gst import StandardGSTDesign as _StandardGSTDesign
 from pygsti.io import read_results_from_dir as _read_results_from_dir
+from pygsti.io import read_dataset as _read_dataset
 from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.models import Model as _Model
+
 
 
 from kivy.core.window import Window
 Window.size = (1200, 700)
+
+#import tkinter as tk
+#from tkinter import filedialog
 
 
 def set_info_containers(root, sidebar, statusbar):
@@ -53,6 +66,10 @@ def set_info_containers(root, sidebar, statusbar):
             root.set_info_containers(sidebar, statusbar)
         for c in root.children:
             set_info_containers(c, sidebar, statusbar)
+
+
+class FixedHeightLabel(Label):
+    pass
 
 
 class ClickableLabel(Label):
@@ -68,17 +85,49 @@ class ClickableLabel(Label):
         super().on_touch_down(touch)
 
 
+class WrappedClickableLabel(WrappedLabel):
+    __events__ = ('on_release', )
+
+    def on_release(self, *largs):
+        pass
+
+    def on_touch_down(self, touch):
+        if self.collide_point(*touch.pos):
+            self.dispatch('on_release')
+            return True
+        super().on_touch_down(touch)
+
+
 class EdesignLibElement(object):
-    def __init__(self, name, protocol_data, root_file_path, path_from_root):
+
+    def __init__(self, name, protocol_data, root_file_path, path_from_root, item_widget=None):
         self.name = name
         self.protocol_data = protocol_data
         self.root_file_path = root_file_path
         self.path_from_root = path_from_root # a list, e.g. ['CombinedDesign1', 'Q0']
+        self.item_widget = item_widget
+
+    @classmethod
+    def from_json_dict(cls, json_dict, result_dirs_cache=None):
+        if result_dirs_cache is None: result_dirs_cache = {}
+        if json_dict['root_path'] not in result_dirs_cache:
+            result_dirs_cache[json_dict['root_path']] = pygsti.io.read_results_from_dir(json_dict['root_path'])
+        results_dir = result_dirs_cache[json_dict['root_path']]
+        for key in json_dict['path_from_root']:
+            results_dir = results_dir[key]
+        protocol_data = results_dir.data
+        return cls(json_dict['name'], protocol_data, json_dict['root_path'], json_dict['path_from_root'],
+                   item_widget=None)  # create this widget later
+
+    def to_json_dict(self):
+        return {'name': self.name,
+                'root_path': self.root_file_path,
+                'path_from_root': self.path_from_root}
 
 
 class ModelLibElement(object):
     def __init__(self, name, model_name, model, model_container, root_file_path, path_from_root,
-                 protocol_name, additional_details=None):
+                 protocol_name, additional_details=None, item_widget=None):
         self.name = name
         self.model = model
         self.model_name = model_name
@@ -87,17 +136,47 @@ class ModelLibElement(object):
         self.path_from_root = path_from_root # a list, e.g. ['CombinedDesign1', 'Q0']
         self.protocol_name = protocol_name
         self.additional_details = additional_details if (additional_details is not None) else {}
+        self.item_widget = item_widget
+
+    @classmethod
+    def from_json_dict(cls, json_dict, result_dirs_cache=None):
+        if result_dirs_cache is None: result_dirs_cache = {}
+        if json_dict['root_path'] not in result_dirs_cache:
+            result_dirs_cache[json_dict['root_path']] = pygsti.io.read_results_from_dir(json_dict['root_path'])
+        results_dir = result_dirs_cache[json_dict['root_path']]
+        for key in json_dict['path_from_root']:
+            results_dir = results_dir[key]
+        results_obj = results_dir.for_protocol[json_dict['protocol_name']]
+        if 'estimate_name' in json_dict['additional_details']:
+            model_container = results_obj.estimates[json_dict['additional_details']['estimate_name']]
+        else:
+            model_container = results_obj
+        model = model_container.models[json_dict['model_name']]
+
+        return cls(json_dict['name'], json_dict['model_name'], model, model_container,
+                   json_dict['root_path'], json_dict['path_from_root'], json_dict['protocol_name'],
+                   json_dict['additional_details'], item_widget=None)  # create this widget later
+
+    def to_json_dict(self):
+        return {'name': self.name,
+                'model_name': self.model_name,
+                'root_path': self.root_file_path,
+                'path_from_root': self.path_from_root,
+                'protocol_name': self.protocol_name,
+                'additional_details': self.additional_details}
 
 
-class FixedHeightLabel(Label):
-    pass
+class NameDialog(FloatLayout):
+    update = ObjectProperty(None)
+    cancel = ObjectProperty(None)
+    text = StringProperty('<empty>')
 
 
 class RootExplorerWidget(BoxLayout):
 
     active_figure_container = ObjectProperty(None, allownone=True)
 
-    def __init__(self, results_dir_path=None, **kwargs):
+    def __init__(self, app_path, results_dir_path=None, **kwargs):
         super().__init__(**kwargs)
         self._initial_results_dir_path = results_dir_path
         Clock.schedule_once(self.after_created, 0)
@@ -107,6 +186,12 @@ class RootExplorerWidget(BoxLayout):
         self.ws = Workspace(gui_mode='kivy')
         self.default_figure_selector_vals = {}
         self.active_figure_selector_vals = {}
+        self.sidebar_widths = {}
+        self.app_path = app_path
+        self.library_path = None
+        self.analysis_path = None
+        self._popup = None  # active popup
+        self.positioning_options = {}
 
         #Bind to keyboard events
         self._keyboard = Window.request_keyboard(self._keyboard_closed, self, 'text')
@@ -116,38 +201,54 @@ class RootExplorerWidget(BoxLayout):
         print("Changing mode from %s to %s" % (self.mode, new_mode))
 
         def show_sidebar(w):
-            w.width = 500
+            #REMOVE print("Setting sidebar to ", self.sidebar_widths[id(w)] if (id(w) in self.sidebar_widths) else 500)
+            w.width = self.sidebar_widths[id(w)] if (id(w) in self.sidebar_widths) else 500
             w.opacity = 1
 
         def hide_sidebar(w):
+            if w.width > 0:
+                #REMOVE print("Saving sidebar size before hiding: ",w.width)
+                self.sidebar_widths[id(w)] = w.width
             w.width = 0
             w.opacity = 0
 
         if new_mode == 'Library':
             show_sidebar(self.ids.import_sidebar_splitter)
-            show_sidebar(self.ids.library_sidebar_splitter)
+            self.ids.library_area.size_hint_x = 1.0
+            self.ids.library_area.opacity = 1.0
             show_sidebar(self.ids.library_info_sidebar_splitter)
+
             hide_sidebar(self.ids.add_item_sidebar_splitter)
-            # TODO hide(?) central area
+            self.ids.figure_area.size_hint_x = None
+            self.ids.figure_area.width = 0
+            self.ids.figure_area.opacity = 0
             hide_sidebar(self.ids.figure_properties_sidebar_splitter)
             hide_sidebar(self.ids.figure_info_sidebar_splitter)
 
         elif new_mode == 'Create':
             hide_sidebar(self.ids.import_sidebar_splitter)
-            hide_sidebar(self.ids.library_sidebar_splitter)
+            self.ids.library_area.size_hint_x = None
+            self.ids.library_area.width = 0
+            self.ids.library_area.opacity = 0
             hide_sidebar(self.ids.library_info_sidebar_splitter)
+
             show_sidebar(self.ids.add_item_sidebar_splitter)
-            # TODO show central area
+            self.ids.figure_area.size_hint_x = 1.0
+            self.ids.figure_area.opacity = 1.0
             show_sidebar(self.ids.figure_properties_sidebar_splitter)
             hide_sidebar(self.ids.figure_info_sidebar_splitter)
             self.set_active_figure_container(None)  # to prompt population of default arg panel
 
         elif new_mode == 'Analysis':
             hide_sidebar(self.ids.import_sidebar_splitter)
-            hide_sidebar(self.ids.library_sidebar_splitter)
+            self.ids.library_area.size_hint_x = None
+            self.ids.library_area.width = 0
+            self.ids.library_area.opacity = 0
             hide_sidebar(self.ids.library_info_sidebar_splitter)
+
             hide_sidebar(self.ids.add_item_sidebar_splitter)
-            # TODO show central area
+            self.ids.figure_area.size_hint_x = 1.0
+            self.ids.figure_area.opacity = 1.0
             hide_sidebar(self.ids.figure_properties_sidebar_splitter)
             show_sidebar(self.ids.figure_info_sidebar_splitter)
 
@@ -155,12 +256,11 @@ class RootExplorerWidget(BoxLayout):
 
     def after_created(self, delta_time):
         print("Running post-kv-file creation of root widget.")
-        #self.ids.create_tab.add_widget(self.create_add_item_panel(self.ids.center_area))
         self.ids.add_item_sidebar.add_widget(self.create_add_item_panel())
-        set_info_containers(self.ids.center_area, self.ids.info_layout, self.ids.status_label)
+        set_info_containers(self.ids.figure_area, self.ids.info_layout, self.ids.status_label)
         if self._initial_results_dir_path:
             results_dir = pygsti.io.read_results_from_dir(self._initial_results_dir_path)
-            self.ids.results_dir_selector.root_name = _os.path.basename(self._initial_results_dir_path)
+            self.ids.results_dir_selector.root_name = ".../" + _os.path.basename(self._initial_results_dir_path)
             self.ids.results_dir_selector.root_file_path = self._initial_results_dir_path
             self.ids.results_dir_selector.root_results_dir = results_dir  # automatic if we make self.results_dir a property
         self.change_mode('Library')
@@ -179,10 +279,39 @@ class RootExplorerWidget(BoxLayout):
             self.active_figure_container = None
             return True
 
+        if self.active_figure_container is not None and keycode[1] in ('left', 'right', 'up', 'down', '-', '='):
+            if keycode[1] == 'left':
+                self.active_figure_container.x -= 10
+            elif keycode[1] == 'right':
+                self.active_figure_container.x += 10
+            elif keycode[1] == 'up':
+                self.active_figure_container.y += 10
+            elif keycode[1] == 'down':
+                self.active_figure_container.y -= 10
+            elif keycode[1] == '=':
+                self.active_figure_container.x -= 5
+                self.active_figure_container.y -= 5
+                self.active_figure_container.width += 10
+                self.active_figure_container.height += 10
+            elif keycode[1] == '-':
+                self.active_figure_container.x += 5
+                self.active_figure_container.y += 5
+                self.active_figure_container.width -= 10
+                self.active_figure_container.height -= 10
+
+            # Schedule an extra redraw so table lines update correctly
+            Clock.schedule_once(lambda dt: self.active_figure_container.content._redraw()
+                                if isinstance(self.active_figure_container.content, TableWidget) else None)
+            return True
+
         # Return True to accept the key. Otherwise, it will be used by the system.
         return False
 
     def set_active_figure_container(self, active_figure_container):
+        if self._keyboard is None:
+            self._keyboard = Window.request_keyboard(self._keyboard_closed, self, 'text')
+            self._keyboard.bind(on_key_down=self._on_keyboard_down)
+
         if self.active_figure_container is not None:
             self.active_figure_container.deactivate()
 
@@ -195,22 +324,40 @@ class RootExplorerWidget(BoxLayout):
 
     def populate_figure_property_defaults_panel(self, panel_widget):
         panel_widget.clear_widgets()
-        panel_widget.add_widget(Label(text='Defaults', bold=True, size_hint_y=None, height=40))
+        panel_widget.add_widget(FixedHeightLabel(text='Defaults', bold=True, bgcolor=(0, 0.4, 0.6, 1)))
 
-        all_properties = ['*models', '*model_titles', '*model', '*model_title', '*target_model',
+        all_properties = ['*models', '*model_titles', '*model', '*model_title', '*model_dim', '*target_model',
                           '*dataset', '*edesign', '*circuit_list', '*maxlengths', '*circuits_by_maxl',
-                          '*objfn_builder', '*gaugeopt_args', '*estimate_params']
+                          '*objfn_builder', '*gaugeopt_args', '*estimate_params', '*unmodeled_error']
 
         selector_types = self.selector_types_for_properties(all_properties)
         for typ in selector_types:
             self.add_figure_property_selector(typ, panel_widget,
                                               storage_dict=self.default_figure_selector_vals)
 
+        #Add positioning options
+        panel_widget.add_widget(FixedHeightLabel(text=''))
+        panel_widget.add_widget(FixedHeightLabel(text='Positioning', padding=(10, 10), bgcolor=(0, 0.4, 0.6, 1)))
+        row = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
+        row.add_widget(Label(text='Arrange'))
+        spinner = Spinner(text=self.positioning_options.get('arrange', "top down"),
+                          values=['top down', 'all in center'])
+        spinner.bind(text=lambda inst, txt: self.positioning_options.__setitem__('arrange', txt))
+        row.add_widget(spinner)
+        panel_widget.add_widget(row)
+
+        row = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
+        row.add_widget(Label(text='Scale'))
+        inpt = TextInput(text=self.positioning_options.get('scale', "1.0"), multiline=False)
+        inpt.bind(text=lambda inst, txt: self.positioning_options.__setitem__('scale', txt))
+        row.add_widget(inpt)
+        panel_widget.add_widget(row)
+
     def selector_types_for_properties(self, property_names):
         prop_set = set(property_names)
         dependencies = {  # include key if any of values (property template names) are present
-            '**model': set(['*model', '*model_title', '*models', '*model_titles',
-                            '*gaugeopt_args', '*estimate_params']),
+            '**model': set(['*model', '*model_title', '*model_dim', '*models', '*model_titles',
+                            '*gaugeopt_args', '*estimate_params', '*unmodeled_error']),
             '**target_model': set(['*target_model']),
             '**edesign': set(['*dataset', '*edesign', '*circuit_list', '*maxlengths', '*circuits_by_maxl']),
             '**objfn_builder': set(['*objfn_builder'])
@@ -229,7 +376,8 @@ class RootExplorerWidget(BoxLayout):
             return x.replace('\n.', '.')
 
         def to_txt(x):
-            return x.replace('.', '\n.')
+            num_leading_dots = sum(1 for _ in _itertools.takewhile(lambda b: b == '.', x))
+            return x[0:num_leading_dots] + x[num_leading_dots:].replace('.', '\n.')
 
         lbl_pc = 0.4
         val_pc = 0.6
@@ -246,11 +394,12 @@ class RootExplorerWidget(BoxLayout):
             anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=lbl_pc)
             anchor.add_widget(FixedHeightLabel(text='Model'))
             model_names = list(self.model_library.keys())
-            if initial_value is None:
+            if initial_value is None or initial_value == '(none)':
                 initial_value = model_names[0] if (len(model_names) > 0) else '(none)'
-            elif initial_value not in model_names:
+            elif initial_value not in model_names and initial_value != '(none)':
                 initial_value = "REMOVED!"
-            vals = [to_txt(mn) for mn in model_names]; max_lines = max([v.count('\n') for v in vals]) + 1
+            vals = [to_txt(mn) for mn in model_names]
+            max_lines = (max([v.count('\n') for v in vals]) + 1) if len(vals) > 0 else 1
             spinner = Spinner(text=to_txt(initial_value), values=vals, size_hint=(val_pc, None),
                               height=max_lines * 50, sync_height=True)
             spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
@@ -265,11 +414,12 @@ class RootExplorerWidget(BoxLayout):
             model_names = list(self.model_library.keys())
             anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=lbl_pc)
             anchor.add_widget(FixedHeightLabel(text='Target Model'))
-            if initial_value is None:
+            if initial_value is None or initial_value == '(none)':
                 initial_value = model_names[0] if (len(model_names) > 0) else '(none)'
-            elif initial_value not in model_names:
+            elif initial_value not in model_names and initial_value != '(none)':
                 initial_value = "REMOVED!"
-            vals = [to_txt(mn) for mn in model_names]; max_lines = max([v.count('\n') for v in vals]) + 1
+            vals = [to_txt(mn) for mn in model_names]
+            max_lines = (max([v.count('\n') for v in vals]) + 1) if len(vals) > 0 else 1
             spinner = Spinner(text=to_txt(initial_value), values=vals, size_hint=(val_pc, None),
                               height=max_lines * 50, sync_height=True)
             spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
@@ -283,11 +433,12 @@ class RootExplorerWidget(BoxLayout):
             edesign_names = list(self.edesign_library.keys())
             anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=lbl_pc)
             anchor.add_widget(FixedHeightLabel(text='Exp. design'))
-            if initial_value is None:
+            if initial_value is None or initial_value == '(none)':
                 initial_value = edesign_names[0] if (len(edesign_names) > 0) else '(none)'
-            elif initial_value not in edesign_names:
+            elif initial_value not in edesign_names and initial_value != '(none)':
                 initial_value = "REMOVED!"
-            vals = [to_txt(mn) for mn in edesign_names]; max_lines = max([v.count('\n') for v in vals]) + 1
+            vals = [to_txt(mn) for mn in edesign_names]
+            max_lines = (max([v.count('\n') for v in vals]) + 1) if len(vals) > 0 else 1
             spinner = Spinner(text=to_txt(initial_value), values=vals, size_hint=(val_pc, None),
                               height=max_lines * 50, sync_height=True)
             spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
@@ -317,22 +468,31 @@ class RootExplorerWidget(BoxLayout):
         #all_properties = ['*models', '*model_titles', '*model', '*model_title', '*target_model',
         #                  '*dataset', '*edesign', '*circuit_list', '*maxlengths', '*circuits_by_maxl',
         #                  '*objfn_builder', '*gaugeopt_args', '*estimate_params']
-        
+
         for typ, val in figure_selector_vals.items():
+            if val == '(none)':
+                continue  # don't populate any creation args
+
             if typ == '**model_title':
                 if val:
                     creation_args['*model_title'] = val
-            if typ == '**model':
+            elif typ == '**model':
                 creation_args['*model'] = self.model_library[val].model
+                creation_args['*model_dim'] = self.model_library[val].model.dim
                 if '*model_title' not in creation_args:
                     creation_args['*model_title'] = self.model_library[val].model_name
                 if isinstance(self.model_library[val].model_container, _Estimate):
                     estimate = self.model_library[val].model_container
                     creation_args['*estimate_params'] = estimate.parameters
+                    creation_args['*unmodeled_error'] = estimate.parameters.get("unmodeled_error", None)
                     creation_args['*gaugeopt_args'] = estimate.goparameters.get(self.model_library[val].model_name, {})
-            if typ == '**target_model':
+                    if isinstance(self.model_library[val].model_container.parent.data.edesign, _StandardGSTDesign):
+                        max_length_list = self.model_library[val].model_container.parent.data.edesign.maxlengths
+                        creation_args['*models_by_maxl'] = [estimate.models['iteration %d estimate' % i]
+                                                            for i in range(len(max_length_list))]
+            elif typ == '**target_model':
                 creation_args['*target_model'] = self.model_library[val].model
-            if typ == '**edesign':
+            elif typ == '**edesign':
                 protocol_data = self.edesign_library[val].protocol_data
                 creation_args['*edesign'] = protocol_data.edesign
                 creation_args['*dataset'] = protocol_data.dataset
@@ -342,7 +502,7 @@ class RootExplorerWidget(BoxLayout):
                 if isinstance(protocol_data.edesign, _StandardGSTDesign):
                     creation_args['*maxlengths'] = protocol_data.edesign.maxlengths
                     creation_args['*circuits_by_maxl'] = protocol_data.edesign.circuit_lists
-            if typ == '**objfn_builder':
+            elif typ == '**objfn_builder':
                 if val == 'from estimate':
                     if '**model' in figure_selector_vals:
                         k = figure_selector_vals['**model']
@@ -374,6 +534,8 @@ class RootExplorerWidget(BoxLayout):
                               'ErrgenTable', 'NQubitErrgenTable', 'GateDecompTable', 'GatesSingleMetricTable'],
             '-- Reference --': ['CircuitTable', 'DataSetOverviewTable', 'StandardErrgenTable', 'GaugeOptParamsTable',
                                 'MetadataTable', 'SoftwareEnvTable'],
+            '-- Presets --': ['Model Violation Overview', 'Model Violation Detail', 'Gauge Inv. Metrics',
+                              'Metrics', 'Raw Model Data', 'Reference'],
         }
         # 'GateMatrixPlot', 'MatrixPlot', DatasetComparisonHistogramPlot, RandomizedBenchmarkingPlot
         # GaugeRobustModelTable, GaugeRobustMetricTable, GaugeRobustErrgenTable, ProfilerTable
@@ -382,6 +544,7 @@ class RootExplorerWidget(BoxLayout):
         ret = Accordion(orientation='vertical', height=1000)  # height= just to try to supress initial warning
         for category_name, item_list in items_by_category.items():
             acc_item = CustomAccordionItem(title=category_name)
+            #acc_item = AccordionItem(title=category_name, title_template='CustomAccordionTitle')
             acc_item_layout = BoxLayout(orientation='vertical')
             acc_item.add_widget(acc_item_layout)
             for item_name in item_list:
@@ -396,47 +559,248 @@ class RootExplorerWidget(BoxLayout):
         return ret
 
     def dismiss_popup(self):
-        self._popup.dismiss()
+        if self._popup is not None:
+            self._popup.dismiss()
+            self._popup = None
 
-    def show_load(self):
-        content = LoadDialog(load=self.load, cancel=self.dismiss_popup)
-        self._popup = Popup(title="Load file", content=content,
+    def show_load_root_dialog(self):
+        content = LoadRootDialog(load=self._load_root, cancel=self.dismiss_popup, initial_path=self.app_path)
+        self._popup = Popup(title="Choose root pyGSTi analysis directory to import from", content=content,
                             size_hint=(0.9, 0.9))
         self._popup.open()
 
-    def load(self, path, filename):
-        print("TODO: load root: ", path, filename)
+    def _load_root(self, path, filenames, name):
+        filename = filenames[0]
+        print("Loading root pyGSTi directory: ", path, filename)
         self.dismiss_popup()
-        root_path = _os.path.join(path, filename)
+        root_path = filename  # filenames contain path, so no need for: _os.path.join(path, filename)
         self.results_dir = pygsti.io.read_results_from_dir(root_path)
 
-        self.ids.results_dir_selector.root_name = filename  # no way to input this separately from the popup yet
+        self.ids.results_dir_selector.root_name = (".../" + _os.path.basename(filename)) if len(name) == 0 else name
         self.ids.results_dir_selector.root_file_path = root_path
         self.ids.results_dir_selector.root_results_dir = self.results_dir  # automatic if we make self.results_dir a property
 
+    def open_library(self):
+        initial_path = self.library_path if (self.library_path is not None) else self.app_path
+        content = OpenDialog(load=self._open_library, cancel=self.dismiss_popup,
+                             initial_path=initial_path, filters=['*.json'])
+        self._popup = Popup(title="Open library file", content=content, size_hint=(0.9, 0.9))
+        self._popup.open()
+
+    def _open_library(self, path, filenames):
+        filename = filenames[0]
+        print("Opening library: ", filename)
+        self.dismiss_popup()
+
+        with open(filename) as f:
+            d = _json.load(f)
+
+        if d['file_type'].startswith('analysis'):
+            print("Actually, this is an analysis file -- opening it as such:")
+            self._open_analysis(None, [filename])
+            return
+
+        assert(d['file_type'].startswith('library')), "This doesn't look like a library file!"
+
+        #Clear existing library (LATER: also clear analyses?)
+        self.ids.edesign_library_list.clear_widgets()
+        self.ids.model_library_list.clear_widgets()
+        self.edesign_library.clear()
+        self.model_library.clear()
+
+        self.ids.library_info_area.clear_widgets()  # also clear library item info area
+
+        result_dirs_cache = {}
+        for key, item_dict in d['edesign_library'].items():
+            item = EdesignLibElement.from_json_dict(item_dict, result_dirs_cache)
+            btn = ToggleButton(text=item.name, size_hint_y=None, height=40, group='libraryitem')
+            btn.bind(state=self.update_library_item_info)
+            item.item_widget = btn
+            self.edesign_library[item.name] = item
+            self.ids.edesign_library_list.add_widget(btn)
+
+        for key, item_dict in d['model_library'].items():
+            item = ModelLibElement.from_json_dict(item_dict, result_dirs_cache)
+            btn = ToggleButton(text=item.name, size_hint_y=None, height=40, group='libraryitem')
+            btn.bind(state=self.update_library_item_info)
+            item.item_widget = btn
+            self.model_library[item.name] = item
+            self.ids.model_library_list.add_widget(btn)
+
+        self.library_path = filename
+
+    def save_library(self):
+        initial_path = self.library_path if (self.library_path is not None) else self.app_path
+        content = SaveDialog(save=self._save_library, cancel=self.dismiss_popup, initial_path=initial_path)
+        self._popup = Popup(title="Save library file", content=content, size_hint=(0.9, 0.9))
+        self._popup.open()
+
+    def _save_library(self, path, selected_filenames, given_filename):
+        print("DB: Saving library: ", path, selected_filenames, given_filename)
+        if path is None:
+            # allow internal calls to _save_library(None, None, None) to re-save library file
+            if self.library_path is not None:
+                filename = self.library_path
+            else:
+                return  # nothing to do
+        elif len(selected_filenames) == 0:
+            if len(given_filename) == 0:
+                self.dismiss_popup()
+                print("No filename given -- save library operation aborted!")
+                return
+            filename = _os.path.join(path, given_filename)
+        else:
+            filename = selected_filenames[0]
+
+        print("Saving library to ", filename)
+        self.dismiss_popup()
+
+        from pygsti import __version__ as _pygsti_version
+        to_save = {'pygsti version': _pygsti_version, 'creator': 'pyGSTi data explorer',
+                   'file_type': 'library.v1', 'edesign_library': {}, 'model_library': {}}
+        for key, item in self.edesign_library.items():
+            to_save['edesign_library'][key] = item.to_json_dict()
+        for key, item in self.model_library.items():
+            to_save['model_library'][key] = item.to_json_dict()
+
+        with open(filename, 'w') as f:
+            _json.dump(to_save, f, indent=4)
+        self.library_path = filename
+
+    def open_analysis(self):
+        initial_path = self.analysis_path if (self.analysis_path is not None) \
+            else (_os.path.dirname(self.library_path) if (self.library_path is not None) else self.app_path)
+        content = OpenDialog(load=self._open_analysis, cancel=self.dismiss_popup,
+                             initial_path=initial_path, filters=['*.json'])
+        self._popup = Popup(title="Open analysis file", content=content, size_hint=(0.9, 0.9))
+        self._popup.open()
+
+    def _open_analysis(self, path, filenames):
+        from pygsti.io.metadir import _class_for_name
+        filename = filenames[0]
+        print("Opening analysis: ", filename)
+        self.dismiss_popup()
+
+        with open(filename) as f:
+            d = _json.load(f)
+
+        assert(d['file_type'].startswith('analysis')), "This doesn't look like an analysis file!"
+        if d['library_relative_path'] and len(self.edesign_library) == 0 and len(self.model_library) == 0:
+            library_path = _os.path.abspath(_os.path.join(_os.path.dirname(filename), d['library_relative_path']))
+            print("Opening library from relative path: ", library_path)
+            self._open_library(None, [library_path])
+
+        self.ids.data_area.clear_widgets()
+
+        for figure_dict in d['figures']:
+            # creation_fn = self.ws.ColorBoxPlot,
+            print("Building ", figure_dict['caption'])
+            creation_cls = _class_for_name(figure_dict['creation_cls'])
+
+            # Python magic that dynamically creates a factory function just like a Workspace object does.
+            # The result is a function like self.ws.SomeTable(...) that implicitly gets it's 'ws' arg set.
+            argspec = _inspect.getargspec(creation_cls.__init__)
+            argnames = argspec[0]
+            factoryfn_argnames = argnames[2:]  # strip off self & ws args
+            factoryfn_argspec = (factoryfn_argnames,) + argspec[1:]
+            signature = _inspect.formatargspec(
+                formatvalue=lambda val: "", *factoryfn_argspec)
+            signature = signature[1:-1]  # strip off parenthesis from ends of "(signature)"
+            factoryfn_def = (
+                'def factoryfn(%(signature)s):\n'
+                '    return cls(self, %(signature)s)' %
+                {'signature': signature})
+            exec_globals = {'cls': creation_cls, 'self': self.ws}
+            exec(factoryfn_def, exec_globals)
+            factoryfn = exec_globals['factoryfn']
+
+            figure_capsule = FigureCapsule(factoryfn, figure_dict['args_template'], self, figure_dict['caption'],
+                                           self.ids.info_layout, status_label=self.ids.status_label)
+            selector_vals = figure_dict['arg_selector_values']
+            fig_creation_args = self.selector_values_to_creation_args(selector_vals)
+            figure_capsule.fill_args_from_creation_arg_dict(fig_creation_args)
+            figure_capsule.update_figure_widget(self.ids.data_area, scale=1.0)  # adds figure to data_area
+            figure_capsule.fig_container.size = figure_dict['size']
+            figure_capsule.fig_container.pos = figure_dict['position']
+
+        self.analysis_path = filename
+
+    def save_analysis(self):
+        initial_path = self.analysis_path if (self.analysis_path is not None) \
+            else (_os.path.dirname(self.library_path) if (self.library_path is not None) else self.app_path)
+        content = SaveDialog(save=self._save_analysis, cancel=self.dismiss_popup, initial_path=initial_path)
+        self._popup = Popup(title="Save analysis file", content=content, size_hint=(0.9, 0.9))
+        self._popup.open()
+
+    def _save_analysis(self, path, selected_filenames, given_filename):
+        print("DB: Saving analysis: ", path, selected_filenames, given_filename)
+        if path is None:
+            # allow internal calls to _save_analysis(None, None, None) to re-save analysis file
+            if self.analysis_path is not None:
+                filename = self.analysis_path
+            else:
+                return  # nothing to do
+        elif len(selected_filenames) == 0:
+            if len(given_filename) == 0:
+                self.dismiss_popup()
+                print("No filename given -- save analysis operation aborted!")
+                return
+            filename = _os.path.join(path, given_filename)
+        else:
+            filename = selected_filenames[0]
+
+        print("Saving analysis to ", filename)
+        self.dismiss_popup()
+
+        from pygsti import __version__ as _pygsti_version
+        to_save = {'pygsti version': _pygsti_version, 'creator': 'pyGSTi data explorer',
+                   'file_type': 'analysis.v1',
+                   'library_relative_path': _os.path.relpath(self.library_path, _os.path.dirname(filename)),
+                   'figures': []}
+        for fig_container in self.ids.data_area.children:
+            to_save['figures'].append(fig_container.capsule.to_json_dict())
+
+        with open(filename, 'w') as f:
+            _json.dump(to_save, f, indent=4)
+        self.analysis_path = filename
+
     def import_edesign(self, include_children=False):
         root_name = self.ids.results_dir_selector.root_name
-        results_dir_node = self.ids.results_dir_selector.selected_results_dir_node
         root_file_path = self.ids.results_dir_selector.root_file_path
+        results_dir_node = self.ids.results_dir_selector.selected_results_dir_node
         path_from_root = results_dir_node.path
-        pth_for_name = [root_name] + results_dir_node.path if root_name else results_dir_node.path
-        name = '.'.join(pth_for_name)  # edesign name
-
         results_dir = results_dir_node.data
-        data = results_dir.data  # a ProtocolData object
-        if include_children:
-            print("Importing with children isn't implemented yet!!!")
-            pass  # TODO: walk down tree adding children too
+        self._import_edesign(root_name, root_file_path, path_from_root, results_dir,
+                             import_children=include_children)
+
+    def _import_edesign(self, root_name, root_file_path, path_from_root, results_dir,
+                        import_children=False, import_all_models=False):
+
+        pth_for_name = [root_name] + path_from_root if root_name else path_from_root
+        name = '.'.join(pth_for_name)  # edesign name
 
         btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
         btn.bind(state=self.update_library_item_info)
-        if name in self.edesign_library:
-            print("Edesign %s is already imported." % name); return
-        self.edesign_library[name] = EdesignLibElement(name, data, root_file_path, path_from_root)
-        self.ids.edesign_library_list.add_widget(btn)
-        print("Imported edesign: ", name)
+        if name not in self.edesign_library:
 
-    def import_models(self):
+            data = results_dir.data  # a ProtocolData object
+            self.edesign_library[name] = EdesignLibElement(name, data, root_file_path, path_from_root, btn)
+            self.ids.edesign_library_list.add_widget(btn)
+            print("Imported edesign: ", name)
+
+            if import_all_models:
+                self._import_models(root_name, root_file_path, path_from_root, results_dir, 'all', 'all', 'all')
+        else:
+            print("An e-design with name '%s' is already imported, and will not be clobbered." % name); return
+
+        if import_children:
+            for ky in results_dir.keys():
+                child_path_from_root = path_from_root + [ky]
+                child_results_dir = results_dir[ky]
+                self._import_edesign(root_name, root_file_path, child_path_from_root,
+                                     child_results_dir, import_children, import_all_models)
+
+    def import_models(self, include_all=False):
         root_name = self.ids.results_dir_selector.root_name
         results_dir_node = self.ids.results_dir_selector.selected_results_dir_node
         root_file_path = self.ids.results_dir_selector.root_file_path
@@ -444,70 +808,188 @@ class RootExplorerWidget(BoxLayout):
         protocol_name = self.ids.results_dir_detail_selector.protocol_name
         additional_detail = self.ids.results_dir_detail_selector.additional_detail
         selected_model_names = self.ids.results_dir_detail_selector.selected_model_names
-        pth_for_name = [root_name] + results_dir_node.path if root_name else results_dir_node.path
 
         results_dir = results_dir_node.data
-        results = results_dir.for_protocol[protocol_name]
 
-        if 'estimate_name' in additional_detail:
-            estimate = results.estimates[additional_detail['estimate_name']]
-            model_container = estimate.models
+        if include_all:
+            self._import_models(root_name, root_file_path, path_from_root, results_dir,
+                                'all', 'all', 'all')
         else:
-            model_container = results.models
+            self._import_models(root_name, root_file_path, path_from_root, results_dir,
+                                [protocol_name], [additional_detail], selected_model_names)
 
-        for model_name in selected_model_names:
-            name = '.'.join(pth_for_name + [protocol_name] + list(additional_detail.values()) + [model_name])
-            model = model_container[model_name]
-            if name in self.model_library:
-                print("Model %s is already imported." % name); continue
-            self.model_library[name] = ModelLibElement(name, model_name, model, model_container,
-                                                       root_file_path, path_from_root,
-                                                       protocol_name, additional_detail)
+    def _import_models(self, root_name, root_file_path, path_from_root, results_dir, protocol_names,
+                       additional_details, model_names):
 
-            btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
-            btn.bind(state=self.update_library_item_info)
-            self.ids.model_library_list.add_widget(btn)
-                #Label(text=name, size_hint_y=None, height=40))
-            print("Importing model: ", model_name)
+        if protocol_names == 'all':
+            protocol_names = list(results_dir.for_protocol.keys())
+
+        for protocol_name in protocol_names:
+            results = results_dir.for_protocol[protocol_name]
+
+            if additional_details == 'all':
+                if isinstance(results, _ModelEstimateResults):
+                    additional_details = [{'estimate_name': est_name} for est_name in results.estimates.keys()]
+                else:
+                    additional_details = [{}]
+
+            for additional_detail in additional_details:
+                if 'estimate_name' in additional_detail:
+                    estimate = results.estimates[additional_detail['estimate_name']]
+                    model_container = estimate
+                else:
+                    model_container = results
+
+                pth_for_name = [root_name] + path_from_root if root_name else path_from_root
+
+                if model_names == 'all':
+                    model_names = list(model_container.models.keys())
+
+                for model_name in model_names:
+                    name = '.'.join(pth_for_name + [protocol_name] + list(additional_detail.values()) + [model_name])
+                    model = model_container.models[model_name]
+                    if name in self.model_library:
+                        print("A model named '%s' is already imported and will not be clobbered." % name)
+                        continue
+
+                    btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
+                    btn.bind(state=self.update_library_item_info)
+
+                    self.model_library[name] = ModelLibElement(name, model_name, model, model_container,
+                                                               root_file_path, path_from_root,
+                                                               protocol_name, additional_detail, btn)
+                    self.ids.model_library_list.add_widget(btn)
+                        #Label(text=name, size_hint_y=None, height=40))
+                    print("Importing model: ", model_name)
 
     def import_all(self):
-        print("Importing all models")
+        root_name = self.ids.results_dir_selector.root_name
+        root_file_path = self.ids.results_dir_selector.root_file_path
+        root_results_dir = self.ids.results_dir_selector.root_results_dir
+        self._import_edesign(root_name, root_file_path, path_from_root=[], results_dir=root_results_dir,
+                             import_children=True, import_all_models=True)
+
+    def import_model_from_file(self):
+        initial_path = self.library_path if (self.library_path is not None) else self.app_path
+        content = OpenDialog(load=self._import_model_from_file, cancel=self.dismiss_popup,
+                             initial_path=initial_path, filters=['*.json'])
+        self._popup = Popup(title="Open model file", content=content, size_hint=(0.9, 0.9))
+        self._popup.open()
+
+    def _import_model_from_file(self, path, filenames):
+        filename = filenames[0]
+        print("Importing model file: ", filename)
+        self.dismiss_popup()
+
+        model = _Model.read(filename)
+        name = _os.path.basename(filename)
+        model_name = protocol_name = 'N/A'
+        model_container = None
+        additional_detail = {}
+        root_file_path = filename
+        path_from_root = []
+
+        if name in self.model_library:
+            print("A model named '%s' is already imported and will not be clobbered." % name)
+            return
+
+        btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
+        btn.bind(state=self.update_library_item_info)
+        self.model_library[name] = ModelLibElement(name, model_name, model, model_container,
+                                                   root_file_path, path_from_root,
+                                                   protocol_name, additional_detail, btn)
+        self.ids.model_library_list.add_widget(btn)
+
+    def import_dataset_from_file(self):
+        initial_path = self.library_path if (self.library_path is not None) else self.app_path
+        content = OpenDialog(load=self._import_dataset_from_file, cancel=self.dismiss_popup,
+                             initial_path=initial_path, filters=['*.txt'])
+        self._popup = Popup(title="Open data set file", content=content, size_hint=(0.9, 0.9))
+        self._popup.open()
+
+    def _import_dataset_from_file(self, path, filenames):
+        filename = filenames[0]
+        print("Importing dataset file: ", filename)
+        self.dismiss_popup()
+
+        ds = _read_dataset(filename)
+        name = _os.path.basename(filename)
+        root_file_path = filename
+        path_from_root = []
+
+        if name in self.edesign_library:
+            print("An edesign named '%s' is already imported and will not be clobbered." % name)
+            return
+
+        edesign = _ExperimentDesign(list(ds.keys()))  # just create a simple experiment design around ds
+        data = _ProtocolData(edesign, ds)
+
+        btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
+        btn.bind(state=self.update_library_item_info)
+        self.edesign_library[name] = EdesignLibElement(name, data, root_file_path, path_from_root, btn)
+        self.ids.edesign_library_list.add_widget(btn)
 
     def update_library_item_info(self, togglebtn, val):
         info_area = self.ids.library_info_area
         info_area.clear_widgets()
 
-        def add_info_row(widget, k, v):
+        def add_info_row(widget, k, v, clickable=False):
             row = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
             key_lbl = Label(text=str(k), font_size=24, size_hint_y=None, height=40)
             key_anchor = AnchorLayout(anchor_x='center', anchor_y='center'); key_anchor.add_widget(key_lbl)
             row.add_widget(key_anchor)
-            value_lbl = WrappedLabel(text=str(v), font_size=24)
+            if clickable:
+                value_lbl = WrappedClickableLabel(text=str(v), font_size=24)
+            else:
+                value_lbl = WrappedLabel(text=str(v), font_size=24)
             value_lbl.bind(height=lambda _, h: setattr(row, 'height', h))  # so row height adjusts with label
             row.add_widget(value_lbl)
             widget.add_widget(row)
+            return value_lbl
+
+        def show_name_popup(title, library_dict, key):
+            item = library_dict[key]
+
+            def update_name(popup, new_name):
+                library_dict[key].name = new_name
+                library_dict[key].item_widget.text = new_name
+                library_dict[new_name] = library_dict[key]
+                del library_dict[key]
+                self._popup.dismiss()
+                self.update_library_item_info(library_dict[new_name].item_widget, 'down')
+
+            popup_content = NameDialog(text=item.name,
+                                       update=update_name,
+                                       cancel=lambda: self._popup.dismiss())
+            self._popup = Popup(title=title, content=popup_content,
+                                size_hint=(0.6, None), height=300)
+            self._popup.open()
 
         if val == 'down':
             key = togglebtn.text
             if key in self.edesign_library:
                 item = self.edesign_library[key]
-                add_info_row(info_area, 'name:', item.name)
+                name_val = add_info_row(info_area, 'name:', item.name, clickable=True)
                 add_info_row(info_area, 'root path:', item.root_file_path)
                 add_info_row(info_area, 'path from root:', str(item.path_from_root))
+                name_val.bind(on_release=lambda *x: show_name_popup('Update name', self.edesign_library, key))
+
             elif key in self.model_library:
                 item = self.model_library[key]
-                add_info_row(info_area, 'name:', item.name)
+                name_val = add_info_row(info_area, 'name:', item.name, clickable=True)
                 add_info_row(info_area, 'root path:', item.root_file_path)
                 add_info_row(info_area, 'path from root:', str(item.path_from_root))
                 add_info_row(info_area, 'protocol:', str(item.protocol_name))
                 for k, v in item.additional_details.items():
                     add_info_row(info_area, k, str(v))
+                name_val.bind(on_release=lambda *x: show_name_popup('Update name', self.model_library, key))
+
             #print("Down from ", togglebtn.text)
         else:
             #print(val, " from ", togglebtn.text)
             pass
 
-    def add_item(self, item_text):
+    def add_item(self, item_text, positioning_option_overrides=None):
         print("Adding item ", item_text)
 
         cri = None
@@ -521,11 +1003,161 @@ class RootExplorerWidget(BoxLayout):
             #wstable = ws.SpamTable(models, titles, 'boxes', cri, False)  # titles?
             figure_capsule = FigureCapsule(self.ws.SpamTable, ['*models', '*model_titles', 'boxes', cri, False],
                                            **extra_capsule_args)
+        elif item_text == 'SpamParametersTable':
+            #wstable = ws.SpamParametersTable(models, titles, cri)
+            figure_capsule = FigureCapsule(self.ws.SpamParametersTable, ['*models', '*model_titles', cri],
+                                           **extra_capsule_args)
+        elif item_text == 'GatesTable':
+            #wstable = ws.GatesTable(models, titles, 'boxes', cri)
+            figure_capsule = FigureCapsule(self.ws.GatesTable, ['*models', '*model_titles', 'boxes', cri],
+                                           **extra_capsule_args)
+        elif item_text == 'ChoiTable':
+            #wstable = ws.ChoiTable(models, titles, cri)
+            figure_capsule = FigureCapsule(self.ws.ChoiTable, ['*models', '*model_titles', cri],
+                                           **extra_capsule_args)
+        elif item_text == 'ModelVsTargetTable':
+            clifford_compilation = None
+            #wstable = ws.ModelVsTargetTable(model, target_model, clifford_compilation, cri)
+            figure_capsule = FigureCapsule(self.ws.ModelVsTargetTable, ['*model', '*target_model',
+                                                                        clifford_compilation, cri],
+                                           **extra_capsule_args)
+        elif item_text == 'GatesVsTargetTable':
+            #wstable = ws.GatesVsTargetTable(model, target_model, cri)  # wildcard?
+            figure_capsule = FigureCapsule(self.ws.GatesVsTargetTable, ['*model', '*target_model', cri],
+                                           **extra_capsule_args)
+        elif item_text == 'SpamVsTargetTable':
+            #wstable = ws.SpamVsTargetTable(model, target_model, cri)
+            figure_capsule = FigureCapsule(self.ws.SpamVsTargetTable, ['*model', '*target_model', cri],
+                                           **extra_capsule_args)
+        elif item_text == 'ErrgenTable':
+            #wstable = ws.ErrgenTable(model, target_model, cri)  # (more options)
+            figure_capsule = FigureCapsule(self.ws.ErrgenTable, ['*model', '*target_model', cri],
+                                           **extra_capsule_args)
+        elif item_text == 'NQubitErrgenTable':
+            #wstable = ws.NQubitErrgenTable(model, cri)
+            figure_capsule = FigureCapsule(self.ws.NQubitErrgenTable, ['*model', cri],
+                                           **extra_capsule_args)
+        elif item_text == 'GateDecompTable':
+            #wstable = ws.GateDecompTable(model, target_model, cri)
+            figure_capsule = FigureCapsule(self.ws.GateDecompTable, ['*model', '*target_model', cri],
+                                           **extra_capsule_args)
+        elif item_text == 'GateEigenvalueTable':
+            #wstable = ws.GateEigenvalueTable(model, target_model, cri,
+            #                                 display=('evals', 'rel', 'log-evals', 'log-rel'))
+            figure_capsule = FigureCapsule(self.ws.GateEigenvalueTable, ['*model', '*target_model', cri,
+                                                                         ('evals', 'rel', 'log-evals', 'log-rel')],
+                                           **extra_capsule_args)
+        elif item_text == 'DataSetOverviewTable':
+            #wstable = ws.DataSetOverviewTable(dataset, max_length_list)
+            figure_capsule = FigureCapsule(self.ws.DataSetOverviewTable, ['*dataset', '*maxlengths'],
+                                           **extra_capsule_args)
+        elif item_text == 'SoftwareEnvTable':
+            #wstable = ws.SoftwareEnvTable()
+            figure_capsule = FigureCapsule(self.ws.SoftwareEnvTable, [], **extra_capsule_args)
+        elif item_text == 'CircuitTable':
+            # wstable = ws.CircuitTable(...)  # wait until we can select circuit list; e.g. germs, fiducials
+            print("Wait until better selection methods to create circuit tables...")
+            figure_capsule = None
+        elif item_text == 'GatesSingleMetricTable':
+            #metric = 'inf'  # entanglement infidelity
+            #wstable = GatesSingleMetricTable(metric, ...)
+            print("Wait until better selection methods to create single-item gate metric tables...")
+            figure_capsule = None
+        elif item_text == 'StandardErrgenTable':
+            #wstable = ws.StandardErrgenTable(model.dim, 'hamiltonian', 'pp')  # not super useful; what about 'stochastic'?
+            figure_capsule = FigureCapsule(self.ws.StandardErrgenTable, ['*model_dim', 'H', 'pp'],
+                                           **extra_capsule_args)
+        elif item_text == 'GaugeOptParamsTable':
+            #wstable = ws.GaugeOptParamsTable(gaugeopt_args)
+            figure_capsule = FigureCapsule(self.ws.GaugeOptParamsTable, ['*gaugeopt_args'],
+                                           **extra_capsule_args)
+        elif item_text == 'MetadataTable':
+            #wstable = ws.MetadataTable(model, estimate_params)
+            figure_capsule = FigureCapsule(self.ws.MetadataTable, ['*model', '*estimate_params'],
+                                           **extra_capsule_args)
+        elif item_text == 'WildcardBudgetTable':
+            #wstable = ws.WildcardBudgetTable(estimate_params.get("unmodeled_error", None))
+            figure_capsule = FigureCapsule(self.ws.WildcardBudgetTable, ['*unmodeled_error'],
+                                           **extra_capsule_args)
+        elif item_text == 'FitComparisonTable':
+            #wstable = ws.FitComparisonTable(max_length_list, circuits_by_L, models_by_L, dataset)
+            figure_capsule = FigureCapsule(self.ws.FitComparisonTable, ['*maxlengths', '*circuits_by_maxl',
+                                                                        '*models_by_maxl', '*dataset'],
+                                           **extra_capsule_args)
+        elif item_text == 'FitComparisonBarPlot':
+            #wsplot = ws.FitComparisonBarPlot(max_length_list, circuits_by_L, models_by_L, dataset)
+            figure_capsule = FigureCapsule(self.ws.FitComparisonBarPlot, ['*maxlengths', '*circuits_by_maxl',
+                                                                          '*models_by_maxl', '*dataset'],
+                                           **extra_capsule_args)
+        elif item_text == 'FitComparisonBarPlotB':
+            #wsplot = ws.FitComparisonBarPlot(est_lbls_mt, [circuit_list] * len(est_mdls_mt),
+            #                                 est_mdls_mt, [dataset] * len(est_mdls_mt), objfn_builder)
+            def multiplx(titles, circuit_list, models, dataset, objfn_builder):
+                return self.ws.FitComparisonBarPlot(titles, [circuit_list] * len(titles),
+                                                    models, [dataset] * len(titles), objfn_builder)
+            figure_capsule = FigureCapsule(multiplx, ['*model_titles', '*circuit_list', '*models', '*dataset',
+                                                      '*objfn_builder'], **extra_capsule_args)
+        elif item_text == 'FitComparisonBoxPlot':
+            # used for multiple data sets -- enable this once we get better selection methods
+            print("Wait until better selection methods to create fit comparison box plot...")
+            figure_capsule = None
+        elif item_text in ('ColorBoxPlot', 'ColorScatterPlot', 'ColorHistogramPlot'):
 
-        figure_capsule.fill_args_from_creation_arg_dict(default_figure_creation_args)
-        figure_capsule.update_figure_widget(self.ids.data_area)
-        #TODO - add rest
+            if item_text == 'ColorBoxPlot': plot_type = "boxes"
+            elif item_text == "ColorScatterPlot": plot_type = "scatter"
+            else: plot_type = "histogram"
 
+            linlog_percentile = 5
+            #bgcolor = 'white'
+            #wsplot = ws.ColorBoxPlot(objfn_builder, circuit_list, dataset, model,
+            #    linlg_pcntle=linlog_percentile / 100, comm=None, bgcolor=bgcolor, typ=plot_type)
+            figure_capsule = FigureCapsule(self.ws.ColorBoxPlot,
+                                           ['*objfn_builder', '*circuit_list', '*dataset', '*model',
+                                            False, False, True, False, 'compact', linlog_percentile / 100,
+                                            None, None, None, None, None, plot_type],
+                                           **extra_capsule_args)
+
+        elif item_text in ['Model Violation Overview', 'Model Violation Detail', 'Gauge Inv. Metrics',
+                           'Metrics', 'Raw Model Data', 'Reference']:
+            return self.add_preset(item_text)
+        else:
+            figure_capsule = None
+
+        if figure_capsule is not None:
+            options = self.positioning_options.copy()
+            if positioning_option_overrides:
+                options.update(positioning_option_overrides)
+            
+            scale = float(options.get('scale', '1.0'))
+            existing_figs = list(self.ids.data_area.children)
+            figure_capsule.fill_args_from_creation_arg_dict(default_figure_creation_args)
+            fig_size = figure_capsule.update_figure_widget(self.ids.data_area, scale)
+
+            arrange_mode = options.get('arrange', 'top down')
+            if arrange_mode == 'top down':
+                x = 0  # in this mode, x always == 0
+                min_y = min([c.y for c in existing_figs]) if len(existing_figs) > 0 \
+                    else self.ids.data_area.height
+                #y = max(min_y - fig_size[1], 0)  # don't let y be < 0
+                y = min_y - fig_size[1] - 100
+                figure_capsule.fig_container.pos = (x, y)
+
+            elif arrange_mode == 'left right':
+                min_y = min([c.y for c in existing_figs]) if len(existing_figs) > 0 \
+                    else self.ids.data_area.height
+                y = min_y  # place new figure level with lowest current figure
+                max_x = max([(c.x + c.width) for c in existing_figs]) if len(existing_figs) > 0 else 0
+                x = max_x + 100
+                figure_capsule.fig_container.pos = (x, y)
+
+            elif arrange_mode == 'all in center':
+                x = (self.ids.data_area.size[0] - fig_size[0]) / 2
+                y = (self.ids.data_area.size[1] - fig_size[1]) / 2
+                figure_capsule.fig_container.pos = (x, y)
+            else:
+                raise ValueError("Invalid arrange mode: %s" % str(arrange_mode))
+        else:
+            print("Cannot create " + item_text + " yet.")
 
     def old_add_item(self, item_text):
         print("OLD Adding item ", item_text)
@@ -669,6 +1301,37 @@ class RootExplorerWidget(BoxLayout):
         else:
             print("Cannot create " + item_text + " yet.")
 
+    def add_preset(self, preset_name):
+        if preset_name == 'Model Violation Overview':
+            self.add_item('FitComparisonBarPlot', {'arrange': 'top down'})
+            self.add_item('ColorHistogramPlot', {'arrange': 'left right'})
+
+        elif preset_name == 'Model Violation Detail':
+            self.add_item('FitComparisonTable', {'arrange': 'top down'})
+            self.add_item('ColorBoxPlot', {'arrange': 'top down'})
+
+        elif preset_name == 'Gauge Inv. Metrics':
+            self.add_item('GateEigenvalueTable', {'arrange': 'top down'})
+            self.add_item('ModelVsTargetTable', {'arrange': 'top down'})
+            self.add_item('SpamParametersTable', {'arrange': 'left right'})
+
+        elif preset_name == 'Metrics':
+            self.add_item('GatesVsTargetTable', {'arrange': 'top down'})
+            self.add_item('SpamVsTargetTable', {'arrange': 'top down'})
+            self.add_item('ErrgenTable', {'arrange': 'top down'})
+
+        elif preset_name == 'Raw Model Data':
+            self.add_item('SpamTable', {'arrange': 'top down'})
+            self.add_item('GatesTable', {'arrange': 'left right'})
+            self.add_item('ChoiTable', {'arrange': 'top down'})
+
+        elif preset_name == 'Reference':
+            self.add_item('DataSetOverviewTable', {'arrange': 'top down'})
+            self.add_item('MetadataTable', {'arrange': 'left right'})
+            self.add_item('SoftwareEnvTable', {'arrange': 'top down'})
+        else:
+            raise ValueError("Invalid preset name: %s" % str(preset_name))
+
 
 class TreeViewLabelWithData(TreeViewLabel):
     def __init__(self, path, data, **kwargs):
@@ -678,22 +1341,21 @@ class TreeViewLabelWithData(TreeViewLabel):
 
 
 class BorderedBoxLayout(BoxLayout):
+    thickness = BoundedNumericProperty(3, min=0)
+    color = ListProperty([0.3, 0.3, 0.3, 1])
+
     def __init__(self, **kwargs):
-        if 'border_width' in kwargs:
-            self.border_thickness = kwargs['border_thickness']
-            del kwargs['border_thickness']
-        else:
-            self.border_thickness = 4
         super().__init__(**kwargs)
 
         with self.canvas.after:
-            Color(0.5, 0.5, 0.5)
-            self.border_rect = Line(points=[], width=self.border_thickness)
+            self._color = Color(*self.color)
+            self.border_rect = Line(points=[], width=self.thickness)
         self._update_border()
+        self.bind(color=lambda instr, value: setattr(self._color, "rgba", value))
         self.bind(size=self._update_border, pos=self._update_border)
 
     def _update_border(self, *args):
-        t = self.border_thickness
+        t = self.thickness
         x1, y1 = self.x + t, self.y + t
         x2, y2 = self.x + self.width - t, self.y + self.height - t
         self.border_rect.points = [x1, y1, x2, y1, x2, y2, x1, y2, x1, y1]
@@ -713,7 +1375,7 @@ class ResultsDirSelectorWidget(BorderedBoxLayout):
         self.bind(root_name=self._trigger_update, root_results_dir=self._trigger_update)
 
     def update_contents(self, *args):
-        tv = TreeView(root_options=dict(text=('From .../' + self.root_name)),
+        tv = TreeView(root_options=dict(text=('From ' + self.root_name)),
                       hide_root=False,
                       indent_level=4)
 
@@ -954,40 +1616,89 @@ class ResultsDirDetailSelectorWidget(BorderedBoxLayout):
 #        self.model_name = new_model_name  # set property so other layouts can trigger off of?
 
 
-class CenterAreaWidget(BoxLayout, StencilView):
+class FigureAreaWidget(ScrollView):  #BoxLayout, StencilView):
     # needs menus of all available tables/plots to add (for currently selected results/model/data/gaugeopt, etc)
-    resultsdir_selector_widget = ObjectProperty(None, allownone=True)
-    results_selector_widget = ObjectProperty(None, allownone=True)
-    resultdetail_selector_widget = ObjectProperty(None, allownone=True)
+    #resultsdir_selector_widget = ObjectProperty(None, allownone=True)
+    #results_selector_widget = ObjectProperty(None, allownone=True)
+    #resultdetail_selector_widget = ObjectProperty(None, allownone=True)
 
     def __init__(self, **kwargs):
-        kwargs['orientation'] = 'vertical'
+        #kwargs['orientation'] = 'vertical'
         super().__init__(**kwargs)
 
-    def on_results_selector_widget(self, inst, val):
-        self.results_selector_widget.bind(selected_results=self.selection_change)
+    def on_size(self, *args):
+        if len(self.children) > 0:
+            data_area = self.children[0]
+            if self.width > data_area.minimal_size[0]:
+                data_area.width = self.width
+            if self.height > data_area.minimal_size[1]:
+                data_area.height = self.height
+            print("Figure area resize => data area size = ", data_area.size)
+        
+    #def on_results_selector_widget(self, inst, val):
+    #    self.results_selector_widget.bind(selected_results=self.selection_change)
+    #
+    #def on_resultdetail_selector_widget(self, inst, val):
+    #    self.resultdetail_selector_widget.bind(estimate_name=self.selection_change, model_name=self.selection_change)
+    #
+    #def selection_change(self, instance, value):
+    #    print("Data area noticed a selected results or model change... do something in the future?")
 
-    def on_resultdetail_selector_widget(self, inst, val):
-        self.resultdetail_selector_widget.bind(estimate_name=self.selection_change, model_name=self.selection_change)
 
-    def selection_change(self, instance, value):
-        print("Data area noticed a selected results or model change... do something in the future?")
-
-
-
-class DataAreaWidget(RelativeLayout):
+class DataAreaWidget(RelativeLayout):  #ScatterLayout):
     root_widget = ObjectProperty(None, allownone=True)
-    
+    minimal_size = ListProperty([0, 0])  # minimum size needed to contain children (figures)
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-        with self.canvas:
-            Color(0.7, 0.7, 0.7, 1)
+        with self.canvas.before:
+            Color(0.6, 0.6, 0.6, 1)  # gray
             self._bgrect = Rectangle(pos=(0,0), size=self.size)  # note: *relative* coords
         self.bind(size=self._draw)
+        self._recomputing_min_size = False
 
     def _draw(self, *args):
         self._bgrect.size = self.size
+
+    def add_widget(self, widget):
+        widget.bind(pos=self.recompute_minimal_size, size=self.recompute_minimal_size)
+        super().add_widget(widget)
+
+    def recompute_minimal_size(self, *args):
+        if len(self.children) == 0:
+            self.minimal_size[:] = (0, 0)
+        else:
+            if self._recomputing_min_size:
+                return  # don't do anything if we're already computing the minimal size
+            # (recursion triggered by setting c.pos below)
+
+            self._recomputing_min_size = True
+            print("First child pos = ", self.children[0].pos, 'size=',self.children[0].size)
+            max_x = max([(c.x + c.width) for c in self.children])
+            max_y = max([(c.y + c.height) for c in self.children])
+            min_x = min([c.x for c in self.children])
+            min_y = min([c.y for c in self.children])
+            print("min x,y = ", min_x, min_y, " max x,y = ", max_x, max_y)
+
+            shift_x = -min_x if min_x < 0 else 0
+            shift_y = -min_y if min_y < 0 else 0
+            if shift_x > 0 or shift_y > 0:
+                for c in self.children:
+                    c.pos = (c.x + shift_x, c.y + shift_y)
+                    Clock.schedule_once(lambda dt: c.content._redraw() if isinstance(c.content, TableWidget) else None)
+                    #Above call fixes issue whereby table _redraw is called before cell positions are updated,
+                    # causing the table lines to be drawn incorrectly.  Another pass (on the next frame) fixes this.
+
+            self.minimal_size[:] = (max_x + shift_x, max_y + shift_y)
+            self._recomputing_min_size = False
+
+        if self.size[0] < self.minimal_size[0]:
+            self.width = self.minimal_size[0]
+
+        if self.size[1] < self.minimal_size[1]:
+            self.height = self.minimal_size[1]
+        print("Data area size = ", self.size)
 
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
@@ -995,6 +1706,8 @@ class DataAreaWidget(RelativeLayout):
             if self.root_widget is None:
                 return super().on_touch_down(touch)
 
+            #print("TOUCH at ", touch.pos)
+            #print("TOUCH -> local ", self.to_local(*touch.pos))
             #See if touch should active a figure container
             touch.push()
             touch.apply_transform_2d(self.to_local)  # because DataAreaWidget is a RelativeLayout
@@ -1007,7 +1720,7 @@ class DataAreaWidget(RelativeLayout):
                 print("no collision with any figure container")
                 self.root_widget.set_active_figure_container(None)
             touch.pop()
-            
+
             # don't count activation as actual 'processing', so continue on and
             # let super decide whether this event is processed
             return super().on_touch_down(touch)
@@ -1113,7 +1826,7 @@ class FigureCapsule(object):
             else:
                 self.args.append(t)
 
-    def update_figure_widget(self, data_area):
+    def update_figure_widget(self, data_area, scale=1.0):
         from pygsti.report.workspace import WorkspaceTable, WorkspacePlot
 
         workspace_obj = self.creation_fn(*self.args)
@@ -1121,6 +1834,7 @@ class FigureCapsule(object):
             tbl = workspace_obj.tables[0]
             out = tbl.render('kivywidget', kivywidget_kwargs={'size_hint': (None, None)})
             figwidget = out['kivywidget']
+            print("DB: TABLE Initial size = ", figwidget.size, ' pos=', figwidget.pos)
 
         elif isinstance(workspace_obj, WorkspacePlot):
             plt = workspace_obj.figs[0]
@@ -1129,11 +1843,17 @@ class FigureCapsule(object):
             kwargs.update({'size_hint': (None, None)})
             figwidget = constructor_fn(**kwargs)
             figwidget.size = natural_size
-            print("DB: PLOT Initial size = ", natural_size)
+            print("DB: PLOT Initial size = ", natural_size, ' pos=', figwidget.pos)
         else:
             raise ValueError("Invalid figure type created: " + str(type(workspace_obj)))
 
         if self.fig_container is None:
+            # Automatically scale size to fit visible window (OPTIONAL SETTING LATER?)
+            #max_scale = min(data_area.width / figwidget.width, data_area.height / figwidget.height)
+            #scale = min(scale, max_scale)  # scale figure down so it fits within data_area
+            #if scale != 1.0:
+            #    figwidget.size = (int(figwidget.size[0] * scale), int(figwidget.size[1] * scale))
+
             fig = FigureContainer(figwidget, self.caption, self, size_hint=(None, None))  # Note: capsule and container should probably be one and the same...
             set_info_containers(fig, self._info_sidebar, self._status_label)
             data_area.add_widget(fig)
@@ -1141,6 +1861,8 @@ class FigureCapsule(object):
         else:
             figwidget.size = self.fig_container.size
             self.fig_container.set_content(figwidget)
+
+        return figwidget.size  # for use in later processing to set figure positiong
 
     def populate_figure_property_panel(self, panel_widget):
         panel_widget.clear_widgets()
@@ -1159,6 +1881,20 @@ class FigureCapsule(object):
         self.fill_args_from_creation_arg_dict(fig_creation_args)
         self.update_figure_widget(None)
 
+    def to_json_dict(self):
+        cls_to_build = self.creation_fn.__globals__['cls']  # some magic to get the underlying class being constructed
+        to_save = {'creation_cls': cls_to_build.__module__ + '.' + cls_to_build.__name__,
+                   'caption': self.caption,
+                   'args_template': self.args_template,
+                   'arg_selector_values': self.selector_vals,
+                   'size': self.fig_container.size,
+                   'position': self.fig_container.pos}
+        return to_save
+
+
+class CustomAccordionTitle(Label):
+    item = ObjectProperty(None, allownone=True)
+
 
 class CustomAccordionItem(AccordionItem):
     #Overrides _update_title so we don't have to use (deprecated) templates to customize them
@@ -1169,37 +1905,37 @@ class CustomAccordionItem(AccordionItem):
             return
         c = self.container_title
         c.clear_widgets()
-        instance = CustomAccordionTitle(self.title, self, bold=True, font_size=24)
+        instance = CustomAccordionTitle(item=self, text=self.title, bold=True, font_size=24)
         c.add_widget(instance)
 
 
-class CustomAccordionTitle(Label):
-    """ Mimics the (deprecated) default Kivy template for an accordion title"""
-    def __init__(self, text, item, **kwargs):
-        from kivy.graphics import PushMatrix, PopMatrix, Translate, Rotate, BorderImage
-        super().__init__(text=text, **kwargs)
-
-        with self.canvas.before:
-            Color(1, 1, 1, 1)
-            self.bi = BorderImage(source=item.background_normal if item.collapse else item.background_selected,
-                                  pos=self.pos, size=self.size)
-            PushMatrix()
-            self.t1 = Translate(xy=(self.center_x, self.center_y))
-            Rotate(angle= 90 if item.orientation == 'horizontal' else 0, axis=(0, 0, 1))
-            self.t2 = Translate(xy=(-self.center_x, -self.center_y))
-
-        with self.canvas.after:
-            PopMatrix
-
-        self.bind(pos=self.update, size=self.update)
-        item.bind(collapse=lambda inst, v: setattr(self.bi, 'source', inst.background_normal
-                                                   if v else inst.background_selected))
-
-    def update(self, *args):
-        self.bi.pos = self.pos
-        self.bi.size = self.size
-        self.t1.xy = (self.center_x, self.center_y)
-        self.t2.xy = (-self.center_x, -self.center_y)
+#class CustomAccordionTitle(Label):
+#    """ Mimics the (deprecated) default Kivy template for an accordion title"""
+#    def __init__(self, text, item, **kwargs):
+#        from kivy.graphics import PushMatrix, PopMatrix, Translate, Rotate, BorderImage
+#        super().__init__(text=text, **kwargs)
+#
+#        with self.canvas.before:
+#            Color(1, 1, 1, 1)
+#            self.bi = BorderImage(source=item.background_normal if item.collapse else item.background_selected,
+#                                  pos=self.pos, size=self.size)
+#            PushMatrix()
+#            self.t1 = Translate(xy=(self.center_x, self.center_y))
+#            Rotate(angle= 90 if item.orientation == 'horizontal' else 0, axis=(0, 0, 1))
+#            self.t2 = Translate(xy=(-self.center_x, -self.center_y))
+#
+#        with self.canvas.after:
+#            PopMatrix
+#
+#        self.bind(pos=self.update, size=self.update)
+#        item.bind(collapse=lambda inst, v: setattr(self.bi, 'source', inst.background_normal
+#                                                   if v else inst.background_selected))
+#
+#    def update(self, *args):
+#        self.bi.pos = self.pos
+#        self.bi.size = self.size
+#        self.t1.xy = (self.center_x, self.center_y)
+#        self.t2.xy = (-self.center_x, -self.center_y)
 
 
 def add_row(widget, k, v):
@@ -1339,42 +2075,49 @@ class DatasetModal(ModalView):
 from kivy.lang import Builder
 
 
-class LoadDialog(FloatLayout):
+class LoadRootDialog(FloatLayout):
     load = ObjectProperty(None)
     cancel = ObjectProperty(None)
+    initial_path = StringProperty('')
 
 
-load_dialog_kv = \
-"""<LoadDialog>:
-    BoxLayout:
-        size: root.size
-        pos: root.pos
-        orientation: "vertical"
-        FileChooserListView:
-            id: filechooser
+class OpenDialog(FloatLayout):
+    load = ObjectProperty(None)
+    cancel = ObjectProperty(None)
+    initial_path = StringProperty('')
+    filters = ListProperty([])
 
-        BoxLayout:
-            size_hint_y: None
-            height: 60
-            Button:
-                text: "Cancel"
-                on_release: root.cancel()
 
-            Button:
-                text: "Load"
-                on_release: root.load(filechooser.path, filechooser.selection)
-"""
-Builder.load_string(load_dialog_kv)
+class SaveDialog(FloatLayout):
+    save = ObjectProperty(None)
+    filename = ObjectProperty(None)
+    cancel = ObjectProperty(None)
+    initial_path = StringProperty('')
 
 
 class DataExplorerApp(App):
-    def __init__(self, initial_results_dir_path):  #, test_widget):
+    def __init__(self, app_path, initial_results_dir_path):  #, test_widget):
+        self.app_path = app_path
         self.initial_results_dir_path = initial_results_dir_path
         #self.test_widget = test_widget
         super().__init__()
 
+        from pygsti.report.kivywidget import LatexWidget
+        cache_file = _os.path.join(app_path, '.pygsti_latex_widget_cache')
+        if _os.path.exists(cache_file):
+            print("Reading latex widget cache from ", cache_file)
+            LatexWidget.read_cache(cache_file)
+        else:
+            LatexWidget.svg_cache = {}  # create an empty cache
+
     def build(self):
-        return RootExplorerWidget(self.initial_results_dir_path)
+        Window.bind(on_request_close=self.on_request_close)
+        return RootExplorerWidget(self.app_path, self.initial_results_dir_path)
+
+    def on_request_close(self, *args):
+        from pygsti.report.kivywidget import LatexWidget
+        print("Writing latex widget cache to speedup latex -> svg conversion in the future.")
+        LatexWidget.write_cache(_os.path.join(self.app_path, '.pygsti_latex_widget_cache'))
 
 
 #if __name__ == '__main__':

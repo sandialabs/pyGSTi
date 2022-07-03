@@ -5,35 +5,81 @@
 <FixedHeightButton@Button>
     size_hint_y: None
     height: 40
+#    bgcolor: (0, 0, 0, 0)
+#    canvas.before:
+#        Color:
+#            rgba: root.bgcolor
+#        Rectangle:
+#            pos: self.pos
+#            size: self.size
+
 
 <FixedHeightLabel>
     size_hint_y: None
     height: 40
+    bgcolor: (0, 0, 0, 0)
+    canvas.before:
+        Color:
+            rgba: root.bgcolor
+        Rectangle:
+            pos: self.pos
+            size: self.size
 
-    
+<NameDialog>
+    BoxLayout:
+        pos: root.pos
+        orientation: "vertical"
+
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_y: None
+            height: 60
+
+            TextInput:
+                id: name_input
+                text: root.text
+
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_y: None
+            height: 60
+            Button:
+                text: "Cancel"
+                on_release: root.cancel()
+
+            Button:
+                text: "Update"
+                on_release: root.update(root, name_input.text)
+
     
 <RootExplorerWidget>:
     id: root_id
     orientation: 'vertical'
-    StyledSplitter:
-        id: top_bar_splitter
-        sizable_from: 'bottom'
+    #StyledSplitter:
+    #    id: top_bar_splitter
+    #    sizable_from: 'bottom'
+    #    size_hint_y: None
+    #    height: 100
+        
+    BorderedBoxLayout:
+        id: top_bar
+        orientation: 'horizontal'
         size_hint_y: None
         height: 100
-        
-        BorderedBoxLayout:
-            id: top_bar
-            orientation: 'horizontal'
-    
-            Button:
-                text: 'Library'
-                on_release: root.change_mode('Library')
-            ClickableLabel:
-                text: 'Create'
-                on_release: root.change_mode('Create')
-            Button:
-                text: 'Analysis'
-                on_release: root.change_mode('Analysis')
+
+        ToggleButton:
+            text: 'Library'
+            on_release: root.change_mode('Library')
+            group: 'mode'
+            state: 'down'
+        ToggleButton:
+            text: 'Create'
+            on_release: root.change_mode('Create')
+            group: 'mode'
+        ToggleButton:
+            text: 'Analysis'
+            on_release: root.change_mode('Analysis')
+            group: 'mode'
 
     BoxLayout:
         id: main_strip
@@ -46,76 +92,177 @@
             width: 500
             min_size: 0
             max_size: 1000
-            
-            BoxLayout:
+
+            Accordion:
                 id: import_sidebar
                 orientation: 'vertical'
+
+                CustomAccordionItem:
+                    title: "Import from directory"
+
+                    BoxLayout:
+                        orientation: 'vertical'
     
-                FixedHeightButton:
-                    text: 'Open Directory...'
-                    on_release: root.show_load()
+                        FixedHeightButton:
+                            text: 'Open Directory...'
+                            on_release: root.show_load_root_dialog()
+                            background_color: (0, 0.3, 0.4, 1)
+                            background_normal: ''
+        
+                        FixedHeightLabel:
+                            text: "Available e-designs:"
 
-                FixedHeightLabel:
-                    text: "Available e-designs:"
+                        AnchorLayout:
+                            anchor_x: 'center'
+                            anchor_y: 'center'
+                            padding: (20, 5)
+                            BoxLayout:
+                                orientation: 'vertical'
+        
+                                ResultsDirSelectorWidget:
+                                    id: results_dir_selector
+                
+                                FixedHeightButton:
+                                    text: 'Import selected E-design'
+                                    on_release: root.import_edesign(include_children=False)
+                                    background_color: (0, 0.3, 0.4, 1)
+                                    background_normal: ''
+                
+                                FixedHeightButton:
+                                    text: 'Import E-design w/children'
+                                    on_release: root.import_edesign(include_children=True)
+                                    background_color: (0, 0.3, 0.4, 1)
+                                    background_normal: ''
 
-                ResultsDirSelectorWidget:
-                    id: results_dir_selector
+            
+                        ResultsDirDetailSelectorWidget:
+                            id: results_dir_detail_selector
+                            results_dir_selector_widget: results_dir_selector
+                            model_list_widget: model_stack
+        
+                        FixedHeightLabel:
+                            text: "Available models:"
 
-                FixedHeightButton:
-                    text: 'Import selected E-design'
-                    on_release: root.import_edesign(include_children=False)
+                        AnchorLayout:
+                            anchor_x: 'center'
+                            anchor_y: 'center'
+                            padding: (20, 5)
+                            BoxLayout:
+                                orientation: 'vertical'
+                                ScrollView:
+                                    do_scroll_x: False
+                                    StackLayout:
+                                        size_hint_y: None
+                                        height: 60 * len(self.children)
+                                        id: model_stack
 
-                FixedHeightButton:
-                    text: 'Import E-design w/children'
-                    on_release: root.import_edesign(include_children=True)
-                    
-                ResultsDirDetailSelectorWidget:
-                    id: results_dir_detail_selector
-                    results_dir_selector_widget: results_dir_selector
-                    model_list_widget: model_stack
+                                FixedHeightButton:
+                                    text: 'Import selected model(s)'
+                                    on_release: root.import_models()
+                                    background_color: (0, 0.3, 0.4, 1)
+                                    background_normal: ''
 
-                FixedHeightLabel:
-                    text: "Available models:"
+                                FixedHeightButton:
+                                    text: 'Import all model(s)'
+                                    on_release: root.import_models(include_all=True)
+                                    background_color: (0, 0.3, 0.4, 1)
+                                    background_normal: ''
 
-                StackLayout:
-                    id: model_stack
+                                FixedHeightButton:
+                                    text: 'Import all e-designs & models'
+                                    on_release: root.import_all()
+                                    background_color: (0.3, 0.3, 0.4, 1)
+                                    background_normal: ''
+
     
-                FixedHeightButton:
-                    text: 'Import selected model(s)'
-                    on_release: root.import_models()
+                CustomAccordionItem:
+                    title: "Import from file"
+
+                    StackLayout:
+
+                        FixedHeightButton:
+                            text: 'Import dataset from file...'
+                            on_release: root.import_dataset_from_file()
+                        
+                        FixedHeightButton:
+                            text: 'Import model from file...'
+                            on_release: root.import_model_from_file()
+
+                CustomAccordionItem:
+                    title: "Save and load library"
+
+                    StackLayout:
+                        FixedHeightButton:
+                            text: 'Open library...'
+                            on_release: root.open_library()
+                        
+                        FixedHeightButton:
+                            text: 'Save library as...'
+                            on_release: root.save_library()
 
                 #FixedHeightButton:
                 #    text: 'Import all models'
                 #    on_release: root.import_all()
 
 
-        StyledSplitter:  # Library of models, edesigns, and datasets (associated w/edesigns)
-            id: library_sidebar_splitter
+        StyledSplitter:  # Add-item sidebar
+            id: add_item_sidebar_splitter
             sizable_from: 'right'
             size_hint_x: None
             width: 500
             min_size: 0
             max_size: 1000
-            
-            BoxLayout:
-                id: library_sidebar
+
+            BorderedBoxLayout:
+                id: add_item_sidebar
                 orientation: 'vertical'
 
                 FixedHeightLabel:
-                    text: 'Experiment designs'
-                ScrollView:
-                    StackLayout:
-                        id: edesign_library_list
+                    text: 'Create figure'
+                    bgcolor: (0, 0.4, 0.6, 1)
+            
+        BoxLayout:  # Library of models, edesigns, and datasets (associated w/edesigns)
+            id: library_area
+            orientation: 'vertical'
 
-                FixedHeightLabel:
-                    text: 'Models'
-                ScrollView:
-                    StackLayout:
-                        id: model_library_list
+            FixedHeightLabel:
+                text: 'Experiment designs'
+                bgcolor: (0, 0.4, 0.6, 1)
+                
+            ScrollView:
+                StackLayout:
+                    id: edesign_library_list
 
+            FixedHeightLabel:
+                text: 'Models'
+                bgcolor: (0, 0.4, 0.6, 1)
+                
+            ScrollView:
+                StackLayout:
+                    id: model_library_list
+
+        FigureAreaWidget:
+            id: figure_area
+            bar_pos_x: 'bottom'
+            bar_pos_y: 'right'
+            bar_width: 15
+            bar_color: (1, 1, 1, 0.9)
+            bar_inactive_color: (1, 1, 1, 0.2)
+            scroll_type: ['bars', 'content']
+            #resultsdir_selector_widget : results_dir_selector
+            #results_selector_widget: results_selector
+            #resultdetail_selector_widget: result_detail_selector
+    
+            DataAreaWidget:
+                id: data_area
+                root_widget: root_id
+                size_hint: (None, None)
+                size: (500, 500)
+
+        #Right - hand sidebars
         StyledSplitter:  # Library of models, edesigns, and datasets (associated w/edesigns)
             id: library_info_sidebar_splitter
-            sizable_from: 'right'
+            sizable_from: 'left'
             size_hint_x: None
             width: 500
             min_size: 0
@@ -126,38 +273,11 @@
                 orientation: 'vertical'
 
                 FixedHeightLabel:
-                    text: "Library Item Info:"
+                    text: "Library Item Info"
+                    bgcolor: (0, 0.4, 0.6, 1)
     
                 StackLayout:
                     id: library_info_area
-                    Label:
-                        text: "Library item info."
-
-        StyledSplitter:  # Add-item sidebar
-            id: add_item_sidebar_splitter
-            sizable_from: 'right'
-            size_hint_x: None
-            width: 100
-            min_size: 0
-            max_size: 1000
-
-            BorderedBoxLayout:
-                id: add_item_sidebar
-                orientation: 'vertical'
-
-                FixedHeightLabel:
-                    text: 'Create figure'
-
-                        
-        CenterAreaWidget:
-            id: center_area
-            resultsdir_selector_widget : results_dir_selector
-            #results_selector_widget: results_selector
-            #resultdetail_selector_widget: result_detail_selector
-    
-            DataAreaWidget:
-                id: data_area
-                root_widget: root_id
     
         StyledSplitter:
             id: figure_properties_sidebar_splitter
@@ -185,6 +305,7 @@
 
                 FixedHeightLabel:
                     text: 'Information'
+                    bgcolor: (0, 0.4, 0.6, 1)
 
                 BoxLayout:
                     id: info_layout
@@ -192,6 +313,16 @@
                     Label:
                         text: "Info goes here"
 
+                BoxLayout:
+                    size_hint_y: None
+                    height: 40
+                    Button:
+                        text: "Open analysis..."
+                        on_release: root.open_analysis()
+
+                    Button:
+                        text: "Save analysis..."
+                        on_release: root.save_analysis()
  
 #                TabbedPanel:
 #                    do_default_tab: False
@@ -217,3 +348,117 @@
         Label:
             id: status_label
             text: 'Ready for action.'
+
+
+<LoadRootDialog>:
+    BoxLayout:
+        size: root.size
+        pos: root.pos
+        orientation: "vertical"
+        FileChooserListView:
+            id: filechooser
+            dirselect: True
+            path: root.initial_path
+
+        BoxLayout:
+            size_hint_y: None
+            height: 60
+            Label:
+                text: 'Name'
+            TextInput:
+                id: root_name
+
+        BoxLayout:
+            size_hint_y: None
+            height: 60
+            Button:
+                text: "Cancel"
+                on_release: root.cancel()
+
+            Button:
+                text: "Load"
+                on_release: root.load(filechooser.path, filechooser.selection, root_name.text)
+
+
+<OpenDialog>:
+    BoxLayout:
+        size: root.size
+        pos: root.pos
+        orientation: "vertical"
+        FileChooserListView:
+            id: filechooser
+            dirselect: False
+            path: root.initial_path
+            filters: root.filters
+
+        BoxLayout:
+            size_hint_y: None
+            height: 60
+            Button:
+                text: "Cancel"
+                on_release: root.cancel()
+
+            Button:
+                text: "Load"
+                on_release: root.load(filechooser.path, filechooser.selection)
+
+
+<SaveDialog>:
+    id: save_dialog
+    filename: filename
+
+    BoxLayout:
+        size: root.size
+        pos: root.pos
+        orientation: "vertical"
+
+        FileChooserListView:
+            id: filechooser
+            dirselect: True
+            path: root.initial_path
+            filters: ['*.json']
+
+        BoxLayout:
+            size_hint_y: None
+            height: 60
+
+            Label:
+                text: "Filename:"
+                size_hint_x: 0.3
+            TextInput:
+                id: filename
+                text: filechooser.selection[0] if len(filechooser.selection) else ''
+                size_hint_x: 0.7
+                multiline: False
+
+        BoxLayout:
+            size_hint_y: None
+            height: 60
+            Button:
+                text: "Cancel"
+                on_release: root.cancel()
+
+            Button:
+                text: "Save"
+                on_release: root.save(filechooser.path, filechooser.selection, filename.text)
+
+
+<CustomAccordionTitle>:
+    canvas.before:
+        Color:
+            rgb: 1, 1, 1
+        BorderImage:
+            source:
+                root.item.background_normal if root.item.collapse else root.item.background_selected
+            pos: self.pos
+            size: self.size
+        PushMatrix
+        Translate:
+            xy: self.center_x, self.center_y
+        Rotate:
+            angle: 90 if root.item.orientation == 'horizontal' else 0
+            axis: 0, 0, 1
+        Translate:
+            xy: -self.center_x, -self.center_y
+    canvas.after:
+        PopMatrix

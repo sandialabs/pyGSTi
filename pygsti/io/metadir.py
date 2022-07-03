@@ -49,7 +49,7 @@ def _class_for_name(module_and_class_name):
 
     Parameters
     ----------
-    module_and_class_name : strictly
+    module_and_class_name : str
         The module and class name, e.g. "mymodule.MyClass"
 
     Returns

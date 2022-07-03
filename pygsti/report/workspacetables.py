@@ -3273,7 +3273,7 @@ class StandardErrgenTable(WorkspaceTable):
             for lbl in elementary_errorgen_basis.labels[1:]:  # skip identity
                 eeg = _tools.change_basis(eegs[_LEEL(elementary_errorgen_type, (lbl,))], "std", mx_basis)
                 m, M = -_np.max(_np.abs(eeg)), _np.max(_np.abs(eeg))
-                fig = _wp.GateMatrixPlot(self.ws, eeg, m, M, mx_basis, d)
+                fig = _wp.GateMatrixPlot(self.ws, eeg, m, M, mx_basis, "dim=%d" % d)
                 rowData = [str(lbl), fig]
                 rowFormatters = [None, 'Figure']
                 table.add_row(rowData, rowFormatters)
