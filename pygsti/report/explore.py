@@ -21,7 +21,7 @@ from kivy.uix.dropdown import DropDown
 from kivy.uix.treeview import TreeView, TreeViewLabel
 from kivy.uix.spinner import Spinner
 from kivy.uix.behaviors import DragBehavior
-from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem
+from kivy.uix.tabbedpanel import TabbedPanel, TabbedPanelItem, TabbedPanelHeader
 from kivy.uix.accordion import Accordion, AccordionItem
 from kivy.uix.modalview import ModalView
 from kivy.uix.stencilview import StencilView
@@ -32,6 +32,7 @@ from kivy.uix.screenmanager import ScreenManager, Screen
 from kivy.clock import Clock
 
 from kivy.properties import ObjectProperty, StringProperty, ListProperty, DictProperty, BoundedNumericProperty
+from kivy.properties import AliasProperty
 from kivy.graphics import Color, Rectangle, Line
 
 from .kivyresize import ResizableBehavior
@@ -66,6 +67,28 @@ def set_info_containers(root, sidebar, statusbar):
             root.set_info_containers(sidebar, statusbar)
         for c in root.children:
             set_info_containers(c, sidebar, statusbar)
+
+
+class CloseableHeader(TabbedPanelHeader):
+    def edit_name_and_order(self, touch):
+        if not touch.is_double_tap:
+            return
+        content = EditTabDialog(ok=self._update_name, cancel=self._dismiss_popup,
+                                reorder=lambda direction: self.content.root_widget.move_tab(self, direction),
+                                tab_name=self.ids.name.text)
+        self._popup = Popup(title="Edit tab", content=content, size_hint=(0.7, 0.5))
+        self._popup.open()
+
+    def _update_name(self, new_name):
+        self.text = new_name
+        #self.ids.name.texture_update()
+        #self.width = self.texture_size[0] + 60
+        self._dismiss_popup()
+
+    def _dismiss_popup(self):
+        if self._popup is not None:
+            self._popup.dismiss()
+            self._popup = None            
 
 
 class FixedHeightLabel(Label):
@@ -175,6 +198,7 @@ class NameDialog(FloatLayout):
 class RootExplorerWidget(BoxLayout):
 
     active_figure_container = ObjectProperty(None, allownone=True)
+    active_data_area = AliasProperty(lambda self: self.ids.figure_areas.current_tab.content.ids.data_area, None)
 
     def __init__(self, app_path, results_dir_path=None, **kwargs):
         super().__init__(**kwargs)
@@ -219,9 +243,9 @@ class RootExplorerWidget(BoxLayout):
             show_sidebar(self.ids.library_info_sidebar_splitter)
 
             hide_sidebar(self.ids.add_item_sidebar_splitter)
-            self.ids.figure_area.size_hint_x = None
-            self.ids.figure_area.width = 0
-            self.ids.figure_area.opacity = 0
+            self.ids.figure_areas.size_hint_x = None
+            self.ids.figure_areas.width = 0
+            self.ids.figure_areas.opacity = 0
             hide_sidebar(self.ids.figure_properties_sidebar_splitter)
             hide_sidebar(self.ids.figure_info_sidebar_splitter)
 
@@ -233,8 +257,8 @@ class RootExplorerWidget(BoxLayout):
             hide_sidebar(self.ids.library_info_sidebar_splitter)
 
             show_sidebar(self.ids.add_item_sidebar_splitter)
-            self.ids.figure_area.size_hint_x = 1.0
-            self.ids.figure_area.opacity = 1.0
+            self.ids.figure_areas.size_hint_x = 1.0
+            self.ids.figure_areas.opacity = 1.0
             show_sidebar(self.ids.figure_properties_sidebar_splitter)
             hide_sidebar(self.ids.figure_info_sidebar_splitter)
             self.set_active_figure_container(None)  # to prompt population of default arg panel
@@ -247,8 +271,8 @@ class RootExplorerWidget(BoxLayout):
             hide_sidebar(self.ids.library_info_sidebar_splitter)
 
             hide_sidebar(self.ids.add_item_sidebar_splitter)
-            self.ids.figure_area.size_hint_x = 1.0
-            self.ids.figure_area.opacity = 1.0
+            self.ids.figure_areas.size_hint_x = 1.0
+            self.ids.figure_areas.opacity = 1.0
             hide_sidebar(self.ids.figure_properties_sidebar_splitter)
             show_sidebar(self.ids.figure_info_sidebar_splitter)
 
@@ -257,7 +281,12 @@ class RootExplorerWidget(BoxLayout):
     def after_created(self, delta_time):
         print("Running post-kv-file creation of root widget.")
         self.ids.add_item_sidebar.add_widget(self.create_add_item_panel())
-        set_info_containers(self.ids.figure_area, self.ids.info_layout, self.ids.status_label)
+        set_info_containers(self.ids.figure_areas, self.ids.info_layout, self.ids.status_label)
+
+        #Setup initial tab for creating more tabs
+        self.add_new_tab_preset_buttons(self.ids.creation_tab_content)
+        self.ids.figure_areas.switch_to(self.ids.figure_areas.tab_list[0])  # make sure 1 and only tab is selected
+
         if self._initial_results_dir_path:
             results_dir = pygsti.io.read_results_from_dir(self._initial_results_dir_path)
             self.ids.results_dir_selector.root_name = ".../" + _os.path.basename(self._initial_results_dir_path)
@@ -275,7 +304,7 @@ class RootExplorerWidget(BoxLayout):
         #print(' - modifiers are %r' % modifiers)
 
         if keycode[1] == 'backspace' and self.active_figure_container is not None:
-            self.ids.data_area.remove_widget(self.active_figure_container)
+            self.active_data_area.remove_widget(self.active_figure_container)
             self.active_figure_container = None
             return True
 
@@ -328,7 +357,7 @@ class RootExplorerWidget(BoxLayout):
 
         all_properties = ['*models', '*model_titles', '*model', '*model_title', '*model_dim', '*target_model',
                           '*dataset', '*edesign', '*circuit_list', '*maxlengths', '*circuits_by_maxl',
-                          '*objfn_builder', '*gaugeopt_args', '*estimate_params', '*unmodeled_error']
+                          '*models_by_maxl', '*objfn_builder', '*gaugeopt_args', '*estimate_params', '*unmodeled_error']
 
         selector_types = self.selector_types_for_properties(all_properties)
         for typ in selector_types:
@@ -357,7 +386,7 @@ class RootExplorerWidget(BoxLayout):
         prop_set = set(property_names)
         dependencies = {  # include key if any of values (property template names) are present
             '**model': set(['*model', '*model_title', '*model_dim', '*models', '*model_titles',
-                            '*gaugeopt_args', '*estimate_params', '*unmodeled_error']),
+                            '*gaugeopt_args', '*estimate_params', '*unmodeled_error', '*models_by_maxl']),
             '**target_model': set(['*target_model']),
             '**edesign': set(['*dataset', '*edesign', '*circuit_list', '*maxlengths', '*circuits_by_maxl']),
             '**objfn_builder': set(['*objfn_builder'])
@@ -383,16 +412,16 @@ class RootExplorerWidget(BoxLayout):
         val_pc = 0.6
 
         if typ == '**model':
-            row = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
-            row.add_widget(FixedHeightLabel(text='Model Title', size_hint_x=lbl_pc))
             title_input = TextInput(text='', size_hint=(val_pc, None), height=40)
-            title_input.bind(text=lambda inst, val: storage_dict.__setitem__('**model_title', val))
             storage_dict['**model_title'] = title_input.text
-            row.add_widget(title_input)
-            panel_widget.add_widget(row)
 
-            anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=lbl_pc)
-            anchor.add_widget(FixedHeightLabel(text='Model'))
+            if panel_widget:
+                row = BoxLayout(orientation='horizontal', size_hint_y=None, height=40)
+                row.add_widget(FixedHeightLabel(text='Model Title', size_hint_x=lbl_pc))
+                title_input.bind(text=lambda inst, val: storage_dict.__setitem__('**model_title', val))
+                row.add_widget(title_input)
+                panel_widget.add_widget(row)
+
             model_names = list(self.model_library.keys())
             if initial_value is None or initial_value == '(none)':
                 initial_value = model_names[0] if (len(model_names) > 0) else '(none)'
@@ -402,18 +431,19 @@ class RootExplorerWidget(BoxLayout):
             max_lines = (max([v.count('\n') for v in vals]) + 1) if len(vals) > 0 else 1
             spinner = Spinner(text=to_txt(initial_value), values=vals, size_hint=(val_pc, None),
                               height=max_lines * 50, sync_height=True)
-            spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
             storage_dict[typ] = to_val(spinner.text)
 
-            row = BoxLayout(orientation='horizontal', size_hint_y=None, height=spinner.height)
-            row.add_widget(anchor)
-            row.add_widget(spinner)
-            panel_widget.add_widget(row)
+            if panel_widget:
+                row = BoxLayout(orientation='horizontal', size_hint_y=None, height=spinner.height)
+                anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=lbl_pc)
+                anchor.add_widget(FixedHeightLabel(text='Model'))
+                row.add_widget(anchor)
+                row.add_widget(spinner)
+                spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
+                panel_widget.add_widget(row)
 
         elif typ == '**target_model':
             model_names = list(self.model_library.keys())
-            anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=lbl_pc)
-            anchor.add_widget(FixedHeightLabel(text='Target Model'))
             if initial_value is None or initial_value == '(none)':
                 initial_value = model_names[0] if (len(model_names) > 0) else '(none)'
             elif initial_value not in model_names and initial_value != '(none)':
@@ -422,17 +452,19 @@ class RootExplorerWidget(BoxLayout):
             max_lines = (max([v.count('\n') for v in vals]) + 1) if len(vals) > 0 else 1
             spinner = Spinner(text=to_txt(initial_value), values=vals, size_hint=(val_pc, None),
                               height=max_lines * 50, sync_height=True)
-            spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
             storage_dict[typ] = to_val(spinner.text)
-            row = BoxLayout(orientation='horizontal', size_hint_y=None, height=spinner.height)
-            row.add_widget(anchor)
-            row.add_widget(spinner)
-            panel_widget.add_widget(row)
+
+            if panel_widget:
+                row = BoxLayout(orientation='horizontal', size_hint_y=None, height=spinner.height)
+                anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=lbl_pc)
+                anchor.add_widget(FixedHeightLabel(text='Target Model'))
+                row.add_widget(anchor)
+                row.add_widget(spinner)
+                spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
+                panel_widget.add_widget(row)
 
         elif typ == '**edesign':
             edesign_names = list(self.edesign_library.keys())
-            anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=lbl_pc)
-            anchor.add_widget(FixedHeightLabel(text='Exp. design'))
             if initial_value is None or initial_value == '(none)':
                 initial_value = edesign_names[0] if (len(edesign_names) > 0) else '(none)'
             elif initial_value not in edesign_names and initial_value != '(none)':
@@ -441,24 +473,30 @@ class RootExplorerWidget(BoxLayout):
             max_lines = (max([v.count('\n') for v in vals]) + 1) if len(vals) > 0 else 1
             spinner = Spinner(text=to_txt(initial_value), values=vals, size_hint=(val_pc, None),
                               height=max_lines * 50, sync_height=True)
-            spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
             storage_dict[typ] = to_val(spinner.text)
-            row = BoxLayout(orientation='horizontal', size_hint_y=None, height=spinner.height)
-            row.add_widget(anchor)
-            row.add_widget(spinner)
-            panel_widget.add_widget(row)
+
+            if panel_widget:
+                row = BoxLayout(orientation='horizontal', size_hint_y=None, height=spinner.height)
+                anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=lbl_pc)
+                anchor.add_widget(FixedHeightLabel(text='Exp. design'))
+                row.add_widget(anchor)
+                row.add_widget(spinner)
+                spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
+                panel_widget.add_widget(row)
 
         elif typ == '**objfn_builder':
             objfn_builder_names = ['logl', 'chi2', 'from estimate']
             if initial_value is None:
                 initial_value = objfn_builder_names[0]
             spinner = Spinner(text=initial_value, values=objfn_builder_names, size_hint=(val_pc, None), height=50)
-            spinner.bind(text=lambda inst, val: storage_dict.__setitem__(typ, val))
             storage_dict[typ] = spinner.text
-            row = BoxLayout(orientation='horizontal', size_hint_y=None, height=spinner.height)
-            row.add_widget(FixedHeightLabel(text='Objective Fn.', size_hint_x=lbl_pc))
-            row.add_widget(spinner)
-            panel_widget.add_widget(row)
+
+            if panel_widget:
+                row = BoxLayout(orientation='horizontal', size_hint_y=None, height=spinner.height)
+                row.add_widget(FixedHeightLabel(text='Objective Fn.', size_hint_x=lbl_pc))
+                row.add_widget(spinner)
+                spinner.bind(text=lambda inst, val: storage_dict.__setitem__(typ, val))
+                panel_widget.add_widget(row)
 
         else:
             raise ValueError("Unknown figure property selector type: %s" % str(typ))
@@ -690,38 +728,44 @@ class RootExplorerWidget(BoxLayout):
             print("Opening library from relative path: ", library_path)
             self._open_library(None, [library_path])
 
-        self.ids.data_area.clear_widgets()
+        existing_tabs = list(self.ids.figure_areas.children)
+        for tab in existing_tabs:
+            if isinstance(tab, CloseableHeader):
+                self.ids.figure_areas.remove_widget(tab)
+        #OLD REMOVE self.active_data_area.clear_widgets()
 
-        for figure_dict in d['figures']:
-            # creation_fn = self.ws.ColorBoxPlot,
-            print("Building ", figure_dict['caption'])
-            creation_cls = _class_for_name(figure_dict['creation_cls'])
-
-            # Python magic that dynamically creates a factory function just like a Workspace object does.
-            # The result is a function like self.ws.SomeTable(...) that implicitly gets it's 'ws' arg set.
-            argspec = _inspect.getargspec(creation_cls.__init__)
-            argnames = argspec[0]
-            factoryfn_argnames = argnames[2:]  # strip off self & ws args
-            factoryfn_argspec = (factoryfn_argnames,) + argspec[1:]
-            signature = _inspect.formatargspec(
-                formatvalue=lambda val: "", *factoryfn_argspec)
-            signature = signature[1:-1]  # strip off parenthesis from ends of "(signature)"
-            factoryfn_def = (
-                'def factoryfn(%(signature)s):\n'
-                '    return cls(self, %(signature)s)' %
-                {'signature': signature})
-            exec_globals = {'cls': creation_cls, 'self': self.ws}
-            exec(factoryfn_def, exec_globals)
-            factoryfn = exec_globals['factoryfn']
-
-            figure_capsule = FigureCapsule(factoryfn, figure_dict['args_template'], self, figure_dict['caption'],
-                                           self.ids.info_layout, status_label=self.ids.status_label)
-            selector_vals = figure_dict['arg_selector_values']
-            fig_creation_args = self.selector_values_to_creation_args(selector_vals)
-            figure_capsule.fill_args_from_creation_arg_dict(fig_creation_args)
-            figure_capsule.update_figure_widget(self.ids.data_area, scale=1.0)  # adds figure to data_area
-            figure_capsule.fig_container.size = figure_dict['size']
-            figure_capsule.fig_container.pos = figure_dict['position']
+        for tab_dict in d['tabs']:
+            self.create_new_tab(tab_dict['name'], None)  # create a blank tab and switch to it
+            for figure_dict in tab_dict['figures']:
+                # creation_fn = self.ws.ColorBoxPlot,
+                print("Building ", figure_dict['caption'])
+                creation_cls = _class_for_name(figure_dict['creation_cls'])
+    
+                # Python magic that dynamically creates a factory function just like a Workspace object does.
+                # The result is a function like self.ws.SomeTable(...) that implicitly gets it's 'ws' arg set.
+                argspec = _inspect.getargspec(creation_cls.__init__)
+                argnames = argspec[0]
+                factoryfn_argnames = argnames[2:]  # strip off self & ws args
+                factoryfn_argspec = (factoryfn_argnames,) + argspec[1:]
+                #signature = _inspect.formatargspec(formatvalue=lambda val: "", *factoryfn_argspec)  # removes defaults
+                signature = _inspect.formatargspec(*factoryfn_argspec)
+                signature = signature[1:-1]  # strip off parenthesis from ends of "(signature)"
+                factoryfn_def = (
+                    'def factoryfn(%(signature)s):\n'
+                    '    return cls(self, %(signature)s)' %
+                    {'signature': signature})
+                exec_globals = {'cls': creation_cls, 'self': self.ws}
+                exec(factoryfn_def, exec_globals)
+                factoryfn = exec_globals['factoryfn']
+    
+                figure_capsule = FigureCapsule(factoryfn, figure_dict['args_template'], self, figure_dict['caption'],
+                                               self.ids.info_layout, status_label=self.ids.status_label)
+                selector_vals = figure_dict['arg_selector_values']
+                fig_creation_args = self.selector_values_to_creation_args(selector_vals)
+                figure_capsule.fill_args_from_creation_arg_dict(fig_creation_args)
+                figure_capsule.update_figure_widget(self.active_data_area, scale=1.0)  # adds figure to data_area
+                figure_capsule.fig_container.size = figure_dict['size']
+                figure_capsule.fig_container.pos = figure_dict['position']
 
         self.analysis_path = filename
 
@@ -756,9 +800,16 @@ class RootExplorerWidget(BoxLayout):
         to_save = {'pygsti version': _pygsti_version, 'creator': 'pyGSTi data explorer',
                    'file_type': 'analysis.v1',
                    'library_relative_path': _os.path.relpath(self.library_path, _os.path.dirname(filename)),
-                   'figures': []}
-        for fig_container in self.ids.data_area.children:
-            to_save['figures'].append(fig_container.capsule.to_json_dict())
+                   'tabs': []}
+
+        for tab in self.ids.figure_areas.tab_list:
+            if not isinstance(tab, CloseableHeader):
+                continue  # skip the "create a new tab" tab
+
+            tab_dict = {'name': tab.text, 'figures': []}
+            for fig_container in tab.content.ids.data_area.children:
+                tab_dict['figures'].append(fig_container.capsule.to_json_dict())
+            to_save['tabs'].append(tab_dict)
 
         with open(filename, 'w') as f:
             _json.dump(to_save, f, indent=4)
@@ -1082,7 +1133,8 @@ class RootExplorerWidget(BoxLayout):
         elif item_text == 'FitComparisonTable':
             #wstable = ws.FitComparisonTable(max_length_list, circuits_by_L, models_by_L, dataset)
             figure_capsule = FigureCapsule(self.ws.FitComparisonTable, ['*maxlengths', '*circuits_by_maxl',
-                                                                        '*models_by_maxl', '*dataset'],
+                                                                        '*models_by_maxl', '*dataset',
+                                                                        '*objfn_builder'],
                                            **extra_capsule_args)
         elif item_text == 'FitComparisonBarPlot':
             #wsplot = ws.FitComparisonBarPlot(max_length_list, circuits_by_L, models_by_L, dataset)
@@ -1118,7 +1170,7 @@ class RootExplorerWidget(BoxLayout):
                                            **extra_capsule_args)
 
         elif item_text in ['Model Violation Overview', 'Model Violation Detail', 'Gauge Inv. Metrics',
-                           'Metrics', 'Raw Model Data', 'Reference']:
+                           'Metrics', 'Raw Model Data', 'Reference']:  # NOTE: this list is duplicated in add_new_tab_preset_buttons!
             return self.add_preset(item_text)
         else:
             figure_capsule = None
@@ -1129,30 +1181,30 @@ class RootExplorerWidget(BoxLayout):
                 options.update(positioning_option_overrides)
             
             scale = float(options.get('scale', '1.0'))
-            existing_figs = list(self.ids.data_area.children)
+            existing_figs = list(self.active_data_area.children)
             figure_capsule.fill_args_from_creation_arg_dict(default_figure_creation_args)
-            fig_size = figure_capsule.update_figure_widget(self.ids.data_area, scale)
+            fig_size = figure_capsule.update_figure_widget(self.active_data_area, scale)
 
             arrange_mode = options.get('arrange', 'top down')
             if arrange_mode == 'top down':
                 x = 0  # in this mode, x always == 0
                 min_y = min([c.y for c in existing_figs]) if len(existing_figs) > 0 \
-                    else self.ids.data_area.height
+                    else self.active_data_area.height
                 #y = max(min_y - fig_size[1], 0)  # don't let y be < 0
                 y = min_y - fig_size[1] - 100
                 figure_capsule.fig_container.pos = (x, y)
 
             elif arrange_mode == 'left right':
                 min_y = min([c.y for c in existing_figs]) if len(existing_figs) > 0 \
-                    else self.ids.data_area.height
+                    else self.active_data_area.height
                 y = min_y  # place new figure level with lowest current figure
                 max_x = max([(c.x + c.width) for c in existing_figs]) if len(existing_figs) > 0 else 0
                 x = max_x + 100
                 figure_capsule.fig_container.pos = (x, y)
 
             elif arrange_mode == 'all in center':
-                x = (self.ids.data_area.size[0] - fig_size[0]) / 2
-                y = (self.ids.data_area.size[1] - fig_size[1]) / 2
+                x = (self.active_data_area.size[0] - fig_size[0]) / 2
+                y = (self.active_data_area.size[1] - fig_size[1]) / 2
                 figure_capsule.fig_container.pos = (x, y)
             else:
                 raise ValueError("Invalid arrange mode: %s" % str(arrange_mode))
@@ -1282,10 +1334,10 @@ class RootExplorerWidget(BoxLayout):
             tbl = wstable.tables[0]
             out = tbl.render('kivywidget', kivywidget_kwargs={'size_hint': (None, None)})
             tblwidget = out['kivywidget']
-            #self.data_area.clear_widgets()
+            #self.active_data_area.clear_widgets()
             fig = FigureContainer(tblwidget, item_text, size_hint=(None, None))
             set_info_containers(fig, self.ids.info_layout, self.ids.status_label)
-            self.ids.data_area.add_widget(fig)
+            self.active_data_area.add_widget(fig)
         elif wsplot is not None:
             plt = wsplot.figs[0]
             constructor_fn, kwargs = plt.kivywidget
@@ -1294,10 +1346,10 @@ class RootExplorerWidget(BoxLayout):
             pltwidget = constructor_fn(**kwargs)
             pltwidget.size = natural_size
             print("DB: PLOT Initial size = ", natural_size)
-            #self.data_area.clear_widgets()
+            #self.active_data_area.clear_widgets()
             fig = FigureContainer(pltwidget, item_text, size_hint=(None, None))
             set_info_containers(fig, self.ids.info_layout, self.ids.status_label)
-            self.ids.data_area.add_widget(fig)
+            self.active_data_area.add_widget(fig)
         else:
             print("Cannot create " + item_text + " yet.")
 
@@ -1331,6 +1383,51 @@ class RootExplorerWidget(BoxLayout):
             self.add_item('SoftwareEnvTable', {'arrange': 'top down'})
         else:
             raise ValueError("Invalid preset name: %s" % str(preset_name))
+
+    def add_new_tab_preset_buttons(self, tab_content):
+
+        def new_tab_from_preset(btn_obj):
+            preset_nm = btn_obj.text
+            self.create_new_tab(self.ids.new_tab_name.text, preset_nm)
+            self.ids.new_tab_name.text = ''  # reset custom tab name
+
+        for preset_name in ['Model Violation Overview', 'Model Violation Detail', 'Gauge Inv. Metrics',
+                            'Metrics', 'Raw Model Data', 'Reference']:
+            btn = Button(text=preset_name, size_hint_y=None, height=40)
+            btn.bind(on_press=new_tab_from_preset)
+            tab_content.add_widget(btn)
+
+    def create_new_tab(self, tab_text, preset_name):
+        if len(tab_text) == 0:
+            tab_text = preset_name if (preset_name is not None) else 'Custom Analysis'
+        tab_header = CloseableHeader(text=tab_text)
+        tab_header.content = FigureAreaWidget(root_widget=self)
+
+        self.ids.figure_areas.add_widget(tab_header, index=1)  # add to right of '+' tab
+        self.ids.figure_areas.switch_to(tab_header)
+        if preset_name is not None:
+            self.add_preset(preset_name)
+
+    def close_tab(self, tab):
+        self.ids.figure_areas.remove_widget(tab)
+        assert(len(self.ids.figure_areas.tab_list) > 0)  # should never be able to remove creation tab
+        self.ids.figure_areas.switch_to(self.ids.figure_areas.tab_list[-1])
+
+    def move_tab(self, tab, direction):
+        #if direction == 'left':
+        current_tab = self.ids.figure_areas.current_tab
+        tabs = list(self.ids.figure_areas.tab_list)
+        index = tabs.index(tab)
+        if direction == 'left' and index < len(tabs) - 1:
+            tabs.pop(index)
+            tabs.insert(index + 1, tab)
+        elif direction == 'right' and index > 1:
+            tabs.pop(index)
+            tabs.insert(index - 1, tab)
+        self.ids.figure_areas.clear_widgets()
+        for i, tab in enumerate(tabs):
+            self.ids.figure_areas.add_widget(tab, index=i)
+        self.ids.figure_areas.switch_to(current_tab)
 
 
 class TreeViewLabelWithData(TreeViewLabel):
@@ -1621,6 +1718,7 @@ class FigureAreaWidget(ScrollView):  #BoxLayout, StencilView):
     #resultsdir_selector_widget = ObjectProperty(None, allownone=True)
     #results_selector_widget = ObjectProperty(None, allownone=True)
     #resultdetail_selector_widget = ObjectProperty(None, allownone=True)
+    root_widget = ObjectProperty(None, allownone=True)
 
     def __init__(self, **kwargs):
         #kwargs['orientation'] = 'vertical'
@@ -1804,7 +1902,7 @@ class FigureArgumentSelector(BoxLayout):
     def create_default_args_selectors():
         pass
 
-        
+
 class FigureCapsule(object):
 
     def __init__(self, creation_fn, args_template, root_widget, caption='', info_sidebar=None, status_label=None):
@@ -1817,6 +1915,12 @@ class FigureCapsule(object):
         self._info_sidebar = info_sidebar
         self._status_label = status_label
         self.root_widget = root_widget
+
+        #Initialize self.selector_vals from arguments and root_widget
+        my_properties = [name for name in self.args_template if (isinstance(name, str) and name.startswith('*'))]
+        selector_types = self.root_widget.selector_types_for_properties(my_properties)
+        for typ in selector_types:
+            self.root_widget.add_figure_property_selector(typ, None, storage_dict=self.selector_vals)
 
     def fill_args_from_creation_arg_dict(self, arg_dict):
         self.args = []
@@ -2093,6 +2197,13 @@ class SaveDialog(FloatLayout):
     filename = ObjectProperty(None)
     cancel = ObjectProperty(None)
     initial_path = StringProperty('')
+
+
+class EditTabDialog(FloatLayout):
+    ok = ObjectProperty(None)
+    cancel = ObjectProperty(None)
+    reorder = ObjectProperty(None)
+    tab_name = StringProperty('')
 
 
 class DataExplorerApp(App):

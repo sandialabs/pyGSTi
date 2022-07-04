@@ -241,23 +241,36 @@
                 StackLayout:
                     id: model_library_list
 
-        FigureAreaWidget:
-            id: figure_area
-            bar_pos_x: 'bottom'
-            bar_pos_y: 'right'
-            bar_width: 15
-            bar_color: (1, 1, 1, 0.9)
-            bar_inactive_color: (1, 1, 1, 0.2)
-            scroll_type: ['bars', 'content']
-            #resultsdir_selector_widget : results_dir_selector
-            #results_selector_widget: results_selector
-            #resultdetail_selector_widget: result_detail_selector
-    
-            DataAreaWidget:
-                id: data_area
-                root_widget: root_id
-                size_hint: (None, None)
-                size: (500, 500)
+        TabbedPanel:
+            id: figure_areas
+            do_default_tab: False
+            tab_width: None
+
+            TabbedPanelItem:
+                text: "+"
+                size_hint_x: None
+                width: self.texture_size[0] + 30
+                AnchorLayout:
+                    anchor_x: 'center'
+                    anchor_y: 'center'
+                    padding: (200, 200)                
+                    StackLayout:
+                        id: creation_tab_content
+                        FixedHeightLabel:
+                            text: "Create a new tab:"
+                        BoxLayout:
+                            orientation: 'horizontal'
+                            size_hint_y: None
+                            height: 50
+                            Label:
+                                text: "Custom tab name (optional):"
+                            TextInput:
+                                id: new_tab_name
+                                text: ""
+                        FixedHeightButton:
+                            text: "Blank Tab"
+                            on_release: root.create_new_tab(new_tab_name.text, None)
+                        
 
         #Right - hand sidebars
         StyledSplitter:  # Library of models, edesigns, and datasets (associated w/edesigns)
@@ -350,6 +363,58 @@
             text: 'Ready for action.'
 
 
+<FigureAreaWidget>:
+    bar_pos_x: 'bottom'
+    bar_pos_y: 'right'
+    bar_width: 15
+    bar_color: (1, 1, 1, 0.9)
+    bar_inactive_color: (1, 1, 1, 0.2)
+    scroll_type: ['bars', 'content']
+    #resultsdir_selector_widget : results_dir_selector
+    #results_selector_widget: results_selector
+    #resultdetail_selector_widget: result_detail_selector
+
+    DataAreaWidget:
+        id: data_area
+        root_widget: root.root_widget  # root_id
+        size_hint: (None, None)
+        size: (500, 500)
+
+<CloseableHeader>
+    color: 0,0,0,0
+    #disabled_color: self.color
+    # variable tab_width
+    size_hint_x: None
+    width: self.texture_size[0] + 60
+    BoxLayout:
+        pos: root.pos
+        size_hint: None, None
+        size: root.size
+        padding: 3
+        Label:
+            id: name
+            text: root.text
+            on_touch_down: root.edit_name_and_order(args[1]) if self.collide_point(*args[1].pos) else None
+                
+        Button:
+            padding: (0,0)
+            color: (1,0,0,1)
+            text: 'x'
+            size_hint_x: None
+            width: 40
+            on_press:
+                root.content.root_widget.close_tab(root)
+            #font_size: 14
+            #orientation: 'vertical'
+            #Image:
+            #    source: 'tools/theming/defaulttheme/close.png'
+            #    on_touch_down:
+            #        if self.collide_point(*args[1].pos) :\
+            #            root.panel.remove_widget(root); \
+
+
+            
+
 <LoadRootDialog>:
     BoxLayout:
         size: root.size
@@ -441,6 +506,44 @@
             Button:
                 text: "Save"
                 on_release: root.save(filechooser.path, filechooser.selection, filename.text)
+
+
+<EditTabDialog>:
+    id: edit_tab_dialog
+
+    BoxLayout:
+        size: root.size
+        pos: root.pos
+        orientation: "vertical"
+
+        BoxLayout:
+            size_hint_y: None
+            height: 60
+
+            Label:
+                text: "Tab name:"
+                size_hint_x: 0.3
+            TextInput:
+                id: tab_name_input
+                text: root.tab_name
+                size_hint_x: 0.7
+                multiline: False
+
+        BoxLayout:
+            size_hint_y: None
+            height: 60
+            Button:
+                text: "Move left"
+                on_release: root.reorder('left')
+            Button:
+                text: "Ok"
+                on_release: root.ok(tab_name_input.text)
+            Button:
+                text: "Cancel"
+                on_release: root.cancel()                
+            Button:
+                text: "Move right"
+                on_release: root.reorder('right')
 
 
 <CustomAccordionTitle>:
