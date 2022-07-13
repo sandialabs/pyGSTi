@@ -52,8 +52,6 @@ from pygsti.io import read_dataset as _read_dataset
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.models import Model as _Model
 
-
-
 from kivy.core.window import Window
 Window.size = (1200, 700)
 
@@ -123,11 +121,11 @@ class WrappedClickableLabel(WrappedLabel):
 
 class EdesignLibElement(object):
 
-    def __init__(self, name, protocol_data, root_file_path, path_from_root, item_widget=None):
+    def __init__(self, name, edesign, root_file_path, path_from_root, item_widget=None):
         self.name = name
-        self.protocol_data = protocol_data
+        self.edesign = edesign
         self.root_file_path = root_file_path
-        self.path_from_root = path_from_root # a list, e.g. ['CombinedDesign1', 'Q0']
+        self.path_from_root = path_from_root  # a list, e.g. ['CombinedDesign1', 'Q0']
         self.item_widget = item_widget
 
     @classmethod
@@ -139,7 +137,34 @@ class EdesignLibElement(object):
         for key in json_dict['path_from_root']:
             results_dir = results_dir[key]
         protocol_data = results_dir.data
-        return cls(json_dict['name'], protocol_data, json_dict['root_path'], json_dict['path_from_root'],
+        return cls(json_dict['name'], protocol_data.edesign, json_dict['root_path'], json_dict['path_from_root'],
+                   item_widget=None)  # create this widget later
+
+    def to_json_dict(self):
+        return {'name': self.name,
+                'root_path': self.root_file_path,
+                'path_from_root': self.path_from_root}
+
+
+class DatasetLibElement(object):
+
+    def __init__(self, name, dataset, root_file_path, path_from_root, item_widget=None):
+        self.name = name
+        self.dataset = dataset
+        self.root_file_path = root_file_path
+        self.path_from_root = path_from_root  # a list, e.g. ['CombinedDesign1', 'Q0']
+        self.item_widget = item_widget
+
+    @classmethod
+    def from_json_dict(cls, json_dict, result_dirs_cache=None):
+        if result_dirs_cache is None: result_dirs_cache = {}
+        if json_dict['root_path'] not in result_dirs_cache:
+            result_dirs_cache[json_dict['root_path']] = pygsti.io.read_results_from_dir(json_dict['root_path'])
+        results_dir = result_dirs_cache[json_dict['root_path']]
+        for key in json_dict['path_from_root']:
+            results_dir = results_dir[key]
+        protocol_data = results_dir.data
+        return cls(json_dict['name'], protocol_data.dataset, json_dict['root_path'], json_dict['path_from_root'],
                    item_widget=None)  # create this widget later
 
     def to_json_dict(self):
@@ -156,7 +181,7 @@ class ModelLibElement(object):
         self.model_name = model_name
         self.model_container = model_container
         self.root_file_path = root_file_path
-        self.path_from_root = path_from_root # a list, e.g. ['CombinedDesign1', 'Q0']
+        self.path_from_root = path_from_root  # a list, e.g. ['CombinedDesign1', 'Q0']
         self.protocol_name = protocol_name
         self.additional_details = additional_details if (additional_details is not None) else {}
         self.item_widget = item_widget
@@ -206,6 +231,7 @@ class RootExplorerWidget(BoxLayout):
         Clock.schedule_once(self.after_created, 0)
         self.mode = None
         self.edesign_library = {}
+        self.dataset_library = {}
         self.model_library = {}
         self.ws = Workspace(gui_mode='kivy')
         self.default_figure_selector_vals = {}
@@ -388,7 +414,8 @@ class RootExplorerWidget(BoxLayout):
             '**model': set(['*model', '*model_title', '*model_dim', '*models', '*model_titles',
                             '*gaugeopt_args', '*estimate_params', '*unmodeled_error', '*models_by_maxl']),
             '**target_model': set(['*target_model']),
-            '**edesign': set(['*dataset', '*edesign', '*circuit_list', '*maxlengths', '*circuits_by_maxl']),
+            '**edesign': set(['*edesign', '*circuit_list', '*maxlengths', '*circuits_by_maxl']),
+            '**dataset': set(['*dataset']),
             '**objfn_builder': set(['*objfn_builder'])
         }
 
@@ -484,6 +511,27 @@ class RootExplorerWidget(BoxLayout):
                 spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
                 panel_widget.add_widget(row)
 
+        elif typ == '**dataset':
+            ds_names = list(self.dataset_library.keys())
+            if initial_value is None or initial_value == '(none)':
+                initial_value = ds_names[0] if (len(ds_names) > 0) else '(none)'
+            elif initial_value not in ds_names and initial_value != '(none)':
+                initial_value = "REMOVED!"
+            vals = [to_txt(mn) for mn in ds_names]
+            max_lines = (max([v.count('\n') for v in vals]) + 1) if len(vals) > 0 else 1
+            spinner = Spinner(text=to_txt(initial_value), values=vals, size_hint=(val_pc, None),
+                              height=max_lines * 50, sync_height=True)
+            storage_dict[typ] = to_val(spinner.text)
+
+            if panel_widget:
+                row = BoxLayout(orientation='horizontal', size_hint_y=None, height=spinner.height)
+                anchor = AnchorLayout(anchor_x='left', anchor_y='center', size_hint_x=lbl_pc)
+                anchor.add_widget(FixedHeightLabel(text='Data set'))
+                row.add_widget(anchor)
+                row.add_widget(spinner)
+                spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
+                panel_widget.add_widget(row)
+                
         elif typ == '**objfn_builder':
             objfn_builder_names = ['logl', 'chi2', 'from estimate']
             if initial_value is None:
@@ -531,15 +579,17 @@ class RootExplorerWidget(BoxLayout):
             elif typ == '**target_model':
                 creation_args['*target_model'] = self.model_library[val].model
             elif typ == '**edesign':
-                protocol_data = self.edesign_library[val].protocol_data
-                creation_args['*edesign'] = protocol_data.edesign
-                creation_args['*dataset'] = protocol_data.dataset
-                creation_args['*circuit_list'] = protocol_data.edesign.all_circuits_needing_data                
-                creation_args['*circuit_lists'] = protocol_data.edesign.circuit_lists \
-                    if isinstance(protocol_data.edesign, _CircuitListsDesign) else None
-                if isinstance(protocol_data.edesign, _StandardGSTDesign):
-                    creation_args['*maxlengths'] = protocol_data.edesign.maxlengths
-                    creation_args['*circuits_by_maxl'] = protocol_data.edesign.circuit_lists
+                edesign = self.edesign_library[val].edesign
+                creation_args['*edesign'] = edesign
+                creation_args['*circuit_list'] = edesign.all_circuits_needing_data                
+                creation_args['*circuit_lists'] = edesign.circuit_lists \
+                    if isinstance(edesign, _CircuitListsDesign) else None
+                if isinstance(edesign, _StandardGSTDesign):
+                    creation_args['*maxlengths'] = edesign.maxlengths
+                    creation_args['*circuits_by_maxl'] = edesign.circuit_lists
+            elif typ == '**dataset':
+                dataset = self.dataset_library[val].dataset
+                creation_args['*dataset'] = dataset
             elif typ == '**objfn_builder':
                 if val == 'from estimate':
                     if '**model' in figure_selector_vals:
@@ -642,8 +692,10 @@ class RootExplorerWidget(BoxLayout):
 
         #Clear existing library (LATER: also clear analyses?)
         self.ids.edesign_library_list.clear_widgets()
+        self.ids.dataset_library_list.clear_widgets()
         self.ids.model_library_list.clear_widgets()
         self.edesign_library.clear()
+        self.dataset_library.clear()
         self.model_library.clear()
 
         self.ids.library_info_area.clear_widgets()  # also clear library item info area
@@ -656,6 +708,14 @@ class RootExplorerWidget(BoxLayout):
             item.item_widget = btn
             self.edesign_library[item.name] = item
             self.ids.edesign_library_list.add_widget(btn)
+
+        for key, item_dict in d['dataset_library'].items():
+            item = DatasetLibElement.from_json_dict(item_dict, result_dirs_cache)
+            btn = ToggleButton(text=item.name, size_hint_y=None, height=40, group='libraryitem')
+            btn.bind(state=self.update_library_item_info)
+            item.item_widget = btn
+            self.dataset_library[item.name] = item
+            self.ids.dataset_library_list.add_widget(btn)
 
         for key, item_dict in d['model_library'].items():
             item = ModelLibElement.from_json_dict(item_dict, result_dirs_cache)
@@ -694,10 +754,16 @@ class RootExplorerWidget(BoxLayout):
         self.dismiss_popup()
 
         from pygsti import __version__ as _pygsti_version
-        to_save = {'pygsti version': _pygsti_version, 'creator': 'pyGSTi data explorer',
-                   'file_type': 'library.v1', 'edesign_library': {}, 'model_library': {}}
+        to_save = {'pygsti version': _pygsti_version,
+                   'creator': 'pyGSTi data explorer',
+                   'file_type': 'library.v1',
+                   'edesign_library': {},
+                   'dataset_library': {},
+                   'model_library': {}}
         for key, item in self.edesign_library.items():
             to_save['edesign_library'][key] = item.to_json_dict()
+        for key, item in self.dataset_library.items():
+            to_save['dataset_library'][key] = item.to_json_dict()
         for key, item in self.model_library.items():
             to_save['model_library'][key] = item.to_json_dict()
 
@@ -723,7 +789,8 @@ class RootExplorerWidget(BoxLayout):
             d = _json.load(f)
 
         assert(d['file_type'].startswith('analysis')), "This doesn't look like an analysis file!"
-        if d['library_relative_path'] and len(self.edesign_library) == 0 and len(self.model_library) == 0:
+        if (d['library_relative_path'] and len(self.edesign_library) == 0
+           and len(self.dataset_library) == 0 and len(self.model_library) == 0):
             library_path = _os.path.abspath(_os.path.join(_os.path.dirname(filename), d['library_relative_path']))
             print("Opening library from relative path: ", library_path)
             self._open_library(None, [library_path])
@@ -740,7 +807,7 @@ class RootExplorerWidget(BoxLayout):
                 # creation_fn = self.ws.ColorBoxPlot,
                 print("Building ", figure_dict['caption'])
                 creation_cls = _class_for_name(figure_dict['creation_cls'])
-    
+
                 # Python magic that dynamically creates a factory function just like a Workspace object does.
                 # The result is a function like self.ws.SomeTable(...) that implicitly gets it's 'ws' arg set.
                 argspec = _inspect.getargspec(creation_cls.__init__)
@@ -757,7 +824,7 @@ class RootExplorerWidget(BoxLayout):
                 exec_globals = {'cls': creation_cls, 'self': self.ws}
                 exec(factoryfn_def, exec_globals)
                 factoryfn = exec_globals['factoryfn']
-    
+                
                 figure_capsule = FigureCapsule(factoryfn, figure_dict['args_template'], self, figure_dict['caption'],
                                                self.ids.info_layout, status_label=self.ids.status_label)
                 selector_vals = figure_dict['arg_selector_values']
@@ -816,6 +883,7 @@ class RootExplorerWidget(BoxLayout):
         self.analysis_path = filename
 
     def import_edesign(self, include_children=False):
+        """ Note: this should really be "import_protocol_data" since it also imports a dataset if one is present """
         root_name = self.ids.results_dir_selector.root_name
         root_file_path = self.ids.results_dir_selector.root_file_path
         results_dir_node = self.ids.results_dir_selector.selected_results_dir_node
@@ -835,9 +903,16 @@ class RootExplorerWidget(BoxLayout):
         if name not in self.edesign_library:
 
             data = results_dir.data  # a ProtocolData object
-            self.edesign_library[name] = EdesignLibElement(name, data, root_file_path, path_from_root, btn)
+            self.edesign_library[name] = EdesignLibElement(name, data.edesign, root_file_path, path_from_root, btn)
             self.ids.edesign_library_list.add_widget(btn)
             print("Imported edesign: ", name)
+
+            if data.dataset is not None:
+                btn2 = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
+                btn2.bind(state=self.update_library_item_info)
+                self.dataset_library[name] = DatasetLibElement(name, data.dataset, root_file_path, path_from_root, btn2)
+                self.ids.dataset_library_list.add_widget(btn2)
+                print("Imported dataset: ", name)
 
             if import_all_models:
                 self._import_models(root_name, root_file_path, path_from_root, results_dir, 'all', 'all', 'all')
@@ -910,7 +985,7 @@ class RootExplorerWidget(BoxLayout):
                                                                root_file_path, path_from_root,
                                                                protocol_name, additional_detail, btn)
                     self.ids.model_library_list.add_widget(btn)
-                        #Label(text=name, size_hint_y=None, height=40))
+                    #Label(text=name, size_hint_y=None, height=40))
                     print("Importing model: ", model_name)
 
     def import_all(self):
@@ -972,13 +1047,13 @@ class RootExplorerWidget(BoxLayout):
             print("An edesign named '%s' is already imported and will not be clobbered." % name)
             return
 
-        edesign = _ExperimentDesign(list(ds.keys()))  # just create a simple experiment design around ds
-        data = _ProtocolData(edesign, ds)
+        #edesign = _ExperimentDesign(list(ds.keys()))  # just create a simple experiment design around ds
+        #data = _ProtocolData(edesign, ds)
 
         btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
         btn.bind(state=self.update_library_item_info)
-        self.edesign_library[name] = EdesignLibElement(name, data, root_file_path, path_from_root, btn)
-        self.ids.edesign_library_list.add_widget(btn)
+        self.dataset_library[name] = DatasetLibElement(name, ds, root_file_path, path_from_root, btn)
+        self.ids.dataset_library_list.add_widget(btn)
 
     def update_library_item_info(self, togglebtn, val):
         info_area = self.ids.library_info_area
@@ -1018,15 +1093,25 @@ class RootExplorerWidget(BoxLayout):
 
         if val == 'down':
             key = togglebtn.text
-            if key in self.edesign_library:
+            if togglebtn in self.ids.edesign_library_list.children and key in self.edesign_library:
                 item = self.edesign_library[key]
+                add_info_row(info_area, 'item type:', 'experiment design')
                 name_val = add_info_row(info_area, 'name:', item.name, clickable=True)
                 add_info_row(info_area, 'root path:', item.root_file_path)
                 add_info_row(info_area, 'path from root:', str(item.path_from_root))
                 name_val.bind(on_release=lambda *x: show_name_popup('Update name', self.edesign_library, key))
 
-            elif key in self.model_library:
+            elif togglebtn in self.ids.dataset_library_list.children and key in self.dataset_library:
+                item = self.dataset_library[key]
+                add_info_row(info_area, 'item type:', 'data set')
+                name_val = add_info_row(info_area, 'name:', item.name, clickable=True)
+                add_info_row(info_area, 'root path:', item.root_file_path)
+                add_info_row(info_area, 'path from root:', str(item.path_from_root))
+                name_val.bind(on_release=lambda *x: show_name_popup('Update name', self.dataset_library, key))
+                
+            elif togglebtn in self.ids.model_library_list.children and key in self.model_library:
                 item = self.model_library[key]
+                add_info_row(info_area, 'item type:', 'model')
                 name_val = add_info_row(info_area, 'name:', item.name, clickable=True)
                 add_info_row(info_area, 'root path:', item.root_file_path)
                 add_info_row(info_area, 'path from root:', str(item.path_from_root))
