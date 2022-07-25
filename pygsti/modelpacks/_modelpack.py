@@ -24,6 +24,7 @@ from pygsti.models.modelconstruction import create_explicit_model_from_expressio
 from pygsti.circuits.gstcircuits import create_lsgst_circuit_lists as _make_lsgst_lists
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.polynomial import bulk_load_compact_polynomials as _bulk_load_compact_polys
+from pygsti.baseobjs.statespace import QubitSpace as _QubitSpace
 from pygsti.protocols import gst as _gst
 from pygsti.tools import optools as _ot
 from pygsti.tools import basistools as _bt
@@ -62,6 +63,14 @@ class ModelPack(_ABC):
         A helper function for derived classes which create explicit models.
         Updates gate names and expressions with a given set of state-space labels.
         """
+        if isinstance(sslbls, _QubitSpace):
+            qubit_labels = sslbls.qubit_labels  # put all sslbls in single tensor product block
+            sslbl_map = {i: sslbl for i, sslbl in enumerate(qubit_labels)}
+            updated_gatenames = [_Label(gn).map_state_space_labels(sslbl_map) for gn in gate_names]
+            updated_gateexps = [gexp.format(*qubit_labels) for gexp in gate_expressions]
+            return _build_explicit_model(sslbls, updated_gatenames, updated_gateexps, **kwargs)
+
+        # sslbls just give as list of qubit labels
         full_sslbls = [sslbls]  # put all sslbls in single tensor product block
         sslbl_map = {i: sslbl for i, sslbl in enumerate(sslbls)}
         updated_gatenames = [_Label(gn).map_state_space_labels(sslbl_map) for gn in gate_names]
@@ -96,14 +105,22 @@ class ModelPack(_ABC):
         -------
         Model
         """
-        qubit_labels = self._sslbls if (qubit_labels is None) else tuple(qubit_labels)
+        qubit_space = None
+        if qubit_labels is None:
+            qubit_labels = self._sslbls
+        elif isinstance(qubit_labels, _QubitSpace):
+            qubit_space = qubit_labels
+            qubit_labels = qubit_space.qubit_labels
+        else:
+            qubit_labels = tuple(qubit_labels)
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
 
         cache_key = (gate_type, prep_type, povm_type, instrument_type, simulator, evotype, qubit_labels)
         if cache_key not in self._gscache:
             # cache miss
-            mdl = self._target_model(qubit_labels, gate_type=gate_type, prep_type=prep_type, povm_type=povm_type,
+            mdl = self._target_model(qubit_labels if qubit_space is None else qubit_space,
+                                     gate_type=gate_type, prep_type=prep_type, povm_type=povm_type,
                                      instrument_type=instrument_type, evotype=evotype)
 
             # Set the simulator (if auto, setter initializes to matrix or map)
@@ -129,7 +146,17 @@ class ModelPack(_ABC):
         QubitProcessorSpec
         """
         static_target_model = self.target_model('static', qubit_labels=qubit_labels)  # assumed to be an ExplicitOpModel
-        return static_target_model.create_processor_spec(self._sslbls)
+
+        if qubit_labels is None:
+            qubit_labels = self._sslbls
+        elif isinstance(qubit_labels, _QubitSpace):
+            qubit_labels = qubit_labels.qubit_labels
+        else:
+            qubit_labels = tuple(qubit_labels)
+        assert(len(qubit_labels) == len(self._sslbls)), \
+            "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
+        
+        return static_target_model.create_processor_spec(qubit_labels)
 
     def _get_cachefile_names(self, param_type, simulator):
         """ Get the standard cache file names for a modelpack """
@@ -201,13 +228,19 @@ class GSTModelPack(ModelPack):
         self._gscache = {}
 
     def _indexed_circuits(self, prototype, index):
-        if index is None: index = self._sslbls
+        if index is None:
+            index = self._sslbls
+        elif isinstance(index, _QubitSpace):
+            index = index.qubit_labels
         assert(len(index) == len(self._sslbls)), "Wrong number of labels in: %s" % str(index)
         if prototype is not None:
             return _circuit_list(_transform_circuittup_list(prototype, index), index)
 
     def _indexed_circuitdict(self, prototype, index):
-        if index is None: index = self._sslbls
+        if index is None:
+            index = self._sslbls
+        elif isinstance(index, _QubitSpace):
+            index = index.qubit_labels
         assert(len(index) == len(self._sslbls)), "Wrong number of labels in: %s" % str(index)
         if prototype is not None:
             return {_Circuit(_transform_circuit_tup(k, index), line_labels=index): val for k, val in prototype.items()}
@@ -363,7 +396,14 @@ class GSTModelPack(ModelPack):
                          'op_label_aliases', 'dscheck', 'action_if_missing', 'verbosity', 'add_default_protocol'):
                 raise ValueError("Invalid argument '%s' to StandardGSTDesign constructor" % k)
 
-        if qubit_labels is None: qubit_labels = self._sslbls
+        qubit_space = None
+        if qubit_labels is None:
+            qubit_labels = self._sslbls
+        elif isinstance(qubit_labels, _QubitSpace):
+            qubit_space = qubit_labels
+            qubit_labels = qubit_space.qubit_labels
+        else:
+            qubit_labels = tuple(qubit_labels)
         assert(len(qubit_labels) == len(self._sslbls)), \
             "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
 
@@ -381,7 +421,7 @@ class GSTModelPack(ModelPack):
             max_lengths_list = list(_gen_max_length(max_max_length))
 
         return _gst.StandardGSTDesign(
-            self.processor_spec(qubit_labels),
+            self.processor_spec(qubit_labels if qubit_space is None else qubit_space),
             self.prep_fiducials(qubit_labels),
             self.meas_fiducials(qubit_labels),
             self.germs(qubit_labels, lite),
@@ -429,26 +469,8 @@ class GSTModelPack(ModelPack):
         -------
          : class:`pygsti.objects.CircuitList`
         """
-        if fpr:
-            fidpairs = self.pergerm_fidpair_dict_lite(qubit_labels) if lite else \
-                self.pergerm_fidpair_dict(qubit_labels)
-            if fidpairs is None:
-                raise ValueError("No FPR information for lite=%s" % lite)
-        else:
-            fidpairs = None
-
-        qubit_labels = self._sslbls if (qubit_labels is None) else tuple(qubit_labels)
-        assert(len(qubit_labels) == len(self._sslbls)), \
-            "Expected %d qubit labels and got: %s!" % (len(self._sslbls), str(qubit_labels))
-
-        lists = _make_lsgst_lists(self._target_model(qubit_labels, evotype='default'),  # Note: only need gate names
-                                  self.prep_fiducials(qubit_labels),
-                                  self.meas_fiducials(qubit_labels),
-                                  self.germs(qubit_labels, lite),
-                                  list(_gen_max_length(max_max_length)),
-                                  fidpairs,
-                                  **kwargs)
-        return lists[-1]  # just return final list (for longest sequences)
+        gst_design = self.create_gst_experiment_design(max_max_length, qubit_labels, fpr, lite, **kwargs)
+        return gst_design.circuit_lists[-1]  # just return final list (for longest sequences)
 
 
 class RBModelPack(ModelPack):
