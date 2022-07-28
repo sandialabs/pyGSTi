@@ -68,15 +68,18 @@
         height: 100
 
         ToggleButton:
+            id: library_mode_button
             text: 'Library'
             on_release: root.change_mode('Library')
             group: 'mode'
             state: 'down'
         ToggleButton:
+            id: create_mode_button
             text: 'Create'
             on_release: root.change_mode('Create')
             group: 'mode'
         ToggleButton:
+            id: analysis_mode_button
             text: 'Analysis'
             on_release: root.change_mode('Analysis')
             group: 'mode'
@@ -195,7 +198,15 @@
                         FixedHeightButton:
                             text: 'Open library...'
                             on_release: root.open_library()
-                        
+
+                        FixedHeightButton:
+                            text: "Open analysis..."
+                            on_release: root.open_analysis()
+
+                        FixedHeightButton:
+                            text: 'Save library'
+                            on_release: root.resave_library()
+
                         FixedHeightButton:
                             text: 'Save library as...'
                             on_release: root.save_library()
@@ -296,9 +307,13 @@
                 FixedHeightLabel:
                     text: "Library Item Info"
                     bgcolor: (0, 0.4, 0.6, 1)
-    
-                StackLayout:
-                    id: library_info_area
+
+                AnchorLayout:
+                    anchor_x: 'center'
+                    anchor_y: 'center'
+                    padding: (20, 10)
+                    StackLayout:
+                        id: library_info_area
     
         StyledSplitter:
             id: figure_properties_sidebar_splitter
@@ -329,20 +344,50 @@
                     bgcolor: (0, 0.4, 0.6, 1)
 
                 BoxLayout:
-                    id: info_layout
                     orientation: 'vertical'
-                    Label:
-                        text: "Info goes here"
+
+                    StackLayout:
+                        id: upper_info_area
+                        #orientation: 'vertical'
+
+                    BoxLayout:
+                        id: lower_info_area
+                        orientation: 'vertical'
+                        Label:
+                            text: "Context-specific info goes here"
+
+                    BoxLayout:
+                        orientation: 'vertical'
+                        FixedHeightLabel:
+                            text: "Comments:"
+                        AnchorLayout:
+                            anchor_x: 'center'
+                            anchor_y: 'center'
+                            padding: (20, 20)
+                            TextInput:
+                                id: comment_input
+                                text: ""
+                                multiline: True
+                            
+                        #FixedHeightButton:
+                        #    text: "Update"
+                        #    on_release: root.save_comment_text(comment_input.text)
+
 
                 BoxLayout:
+                    orientation: 'vertical'
                     size_hint_y: None
-                    height: 40
-                    Button:
-                        text: "Open analysis..."
-                        on_release: root.open_analysis()
+                    #height: 40
+                    #Button:
+                    #    text: "Open analysis..."
+                    #    on_release: root.open_analysis()
 
-                    Button:
-                        text: "Save analysis..."
+                    FixedHeightButton:
+                        text: "Save analysis"
+                        on_release: root.resave_analysis()
+                    
+                    FixedHeightButton:
+                        text: "Save analysis as..."
                         on_release: root.save_analysis()
  
 #                TabbedPanel:

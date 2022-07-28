@@ -81,8 +81,9 @@ class ReportKivyFigure(object):
 
     Parameters
     ----------
-    kivywidget : kivy.uix.widget.Widget
-        The Kivy widget to encapsulate (alternative to plotly)
+    kivywidget_factory : KivyWidgetFactory
+        A class capable of creating a :class:`kivy.uix.widget.Widget` instance when
+        needed, which is in principlethe Kivy widget to encapsulate (alternative to plotly).
 
     colormap : ColorMap, optional
         A pygsti color map object used for this figure.
@@ -96,27 +97,8 @@ class ReportKivyFigure(object):
         Additional meta-data relevant to this figure
     """
 
-    def __init__(self, kivywidget, colormap=None, python_value=None, **kwargs):
-        '''
-        Create a table object
-
-        Parameters
-        ----------
-        kivywidget : kivy.uix.widget.Widget
-            The Kivy widget to encapsulate (alternative to plotly)
-
-        colormap : ColorMap, optional
-            A pygsti color map object used for this figure.
-
-        python_value : object, optional
-            A python object to be used as the Python-version of
-            this figure (usually the data being plotted in some
-            convenient format).
-
-        kwargs : dict
-            Additional meta-data relevant to this figure
-        '''
-        self.kivywidget = kivywidget
+    def __init__(self, kivywidget_factory, colormap=None, python_value=None, **kwargs):
+        self.kivywidget_factory = kivywidget_factory
         self.colormap = colormap
         self.pythonvalue = python_value
         self.metadata = dict(kwargs).copy()

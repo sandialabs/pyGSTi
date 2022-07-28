@@ -74,7 +74,7 @@ from kivy import metrics
 from kivy.core.text import Label as CoreLabel
 from kivy.core.window import Window
 
-from pygsti.report.kivywidget import WrappedLabel
+from pygsti.report.kivyfrontend import WrappedLabel
 
 from math import log10, floor, ceil
 from decimal import Decimal
@@ -2229,7 +2229,7 @@ class NestedMatrixBoxPlotGraph(Graph):
     '''
 
     def __init__(self, plt_data_list_of_lists, box_labels=False, colormap=None,
-                 hover_label_fn=None, **kwargs):
+                 hover_label_lookup=None, **kwargs):
         self.plt_data_list_of_lists = plt_data_list_of_lists  # better sparse format?
         Window.bind(mouse_pos=self.on_mouse_pos)
 
@@ -2239,7 +2239,11 @@ class NestedMatrixBoxPlotGraph(Graph):
         self.data = _np.zeros(data_size, 'd')
         self.xs = _np.zeros(data_size, int)
         self.ys = _np.zeros(data_size, int)
-        self.hover_labels = _np.empty(data_size, dtype=object) if hover_label_fn else None
+        if hover_label_lookup:
+            self.hover_labels = _np.empty(data_size, dtype=object)
+            hover_label_lookup = {tuple(k): v for k, v in hover_label_lookup}  # convert (k,v) list -> dict
+        else:
+            self.hover_labels = None
 
         # Same as plotly code; maybe upgrade to allow sub-matrices of different shapes?
         elRows, elCols = plt_data_list_of_lists[0][0].shape  # nE,nr
@@ -2261,8 +2265,8 @@ class NestedMatrixBoxPlotGraph(Graph):
                         self.ys[k] = i * (elRows + gap) + ii
                         #self.ys[k] = ymax - (i * (elRows + gap) + ii)  # FLIPY (WRONG)
                         self.data[k] = plt_data[ii, jj]
-                        if hover_label_fn:
-                            lbl = hover_label_fn(self.data[k], i, j, ii, jj)
+                        if hover_label_lookup:
+                            lbl = ("check: %f<br>" % self.data[k]) + hover_label_lookup[(i, j, ii, jj)]
                             lbl = lbl.replace('<br>', '\n').replace('<sup>', '^').replace('</sup>', '')
                             self.hover_labels[k] = lbl
                         k += 1

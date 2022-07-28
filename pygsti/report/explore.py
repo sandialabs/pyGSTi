@@ -40,7 +40,8 @@ from .kivygraph import Graph, MeshLinePlot, BarPlot, MatrixBoxPlotGraph
 
 import pygsti
 from pygsti.report import Workspace
-from pygsti.report.kivywidget import WrappedLabel, TableWidget
+from pygsti.report.kivyfrontend import WrappedLabel, TableWidget, LatexWidget
+from pygsti.report.kivywidget import KivyWidgetFactory
 from pygsti.protocols.protocol import CircuitListsDesign as _CircuitListsDesign
 from pygsti.protocols.protocol import ExperimentDesign as _ExperimentDesign
 from pygsti.protocols.protocol import ProtocolData as _ProtocolData
@@ -65,6 +66,256 @@ def set_info_containers(root, sidebar, statusbar):
             root.set_info_containers(sidebar, statusbar)
         for c in root.children:
             set_info_containers(c, sidebar, statusbar)
+
+
+class MockKernel(object):
+    def __init__(self):
+        self.globals_dict = {'__builtins__': __builtins__, 'print': print}
+        self.reply = None
+
+    def execute(self, code, user_expressions=None):
+        exec(code, self.globals_dict)
+        print("--> globals after exec = ", self.globals_dict.get('__ret__', None), self.globals_dict.get('__mock_kernel_val__', None))
+        self.reply = {'content': {'status': 'ok',
+                                  'user_expressions': {}
+                                  }
+                      }
+        if user_expressions is not None:
+            for key, expr in user_expressions.items():
+                exec('__mock_kernel_val__ = %s' % expr, self.globals_dict)
+                val = self.globals_dict['__mock_kernel_val__']
+                self.reply['content']['user_expressions'][key] = {'status': 'ok',
+                                                                  'data': {'text/plain': str(val)}}
+
+    def get_shell_msg(self, timeout):
+        return self.reply
+
+
+class DataExplorerKernelInterface(object):
+    def __init__(self, existing_kernel, debug=False):
+        if existing_kernel is not None and debug is False:
+            import jupyter_core
+            from jupyter_client import BlockingKernelClient
+            pth = _os.path.join(jupyter_core.paths.jupyter_runtime_dir(), existing_kernel)
+            with open(pth, 'r') as f:
+                connection = _json.load(f)
+            self.kc = BlockingKernelClient()
+            self.kc.load_connection_info(connection)
+            self.kc.start_channels()
+
+            pth = _os.path.join(_os.path.dirname(__file__), 'explorerkernelcode.py')
+            with open(pth, 'r') as f:
+                initial_kernel_code = f.read()
+            self.kc.execute(initial_kernel_code)
+            reply = self.kc.get_shell_msg(timeout=10)
+            print("Received reply 1:\n", reply)
+        elif debug is True:
+            self.kc = MockKernel()
+            pth = _os.path.join(_os.path.dirname(__file__), 'explorerkernelcode.py')
+            with open(pth, 'r') as f:
+                initial_kernel_code = f.read()
+            self.kc.execute(initial_kernel_code)
+
+        else:
+            raise NotImplementedError("Need to specify an existing kernel, since we haven't implemented starting one up on our own yet!")
+
+    def __del__(self):
+        self.kc.stop_channels()
+
+    def reply_indicates_success(self, reply):
+        return bool(reply['content']['status'] == 'ok')
+
+    def extract_user_expression_str(self, reply, user_expression, default_value=None):
+        if reply['content']['status'] == 'ok':
+            if reply['content']['user_expressions'][user_expression]['status'] == 'ok':
+                return reply['content']['user_expressions'][user_expression]['data']['text/plain'].strip("'").replace('\\\\', '\\')
+        elif reply['content']['status'] == 'error':
+            #Print traceback
+            import re
+            ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+            print("KERNEL ERROR!!!")
+            for frame_str in reply['content']['traceback']:
+                print(ansi_escape.sub('',frame_str))
+        return default_value
+
+    def import_edesign(self, root_name, root_file_path, path_from_root,
+                       import_children=False, import_all_models=False):
+        #import bpdb; bpdb.set_trace()
+        root_file_path = _os.path.abspath(root_file_path)
+        self.kc.execute(f"__ret__ = lib.import_edesign('{root_name}', '{root_file_path}', '{_json.dumps(path_from_root)}', '{import_children}', '{import_all_models}')",
+                        user_expressions={'return_value': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        print("Received reply 2:\n", reply)
+        ret_str = self.extract_user_expression_str(reply, 'return_value')
+        print("Return Text = ", ret_str)
+
+        #pth_for_name = [root_name] + path_from_root if root_name else path_from_root
+        #name = '.'.join(pth_for_name)  # edesign name
+        #
+        ##btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
+        ##btn.bind(state=self.update_library_item_info)
+        #if name not in self.edesign_library:
+        #
+        #    data = results_dir.data  # a ProtocolData object
+        #    self.edesign_library[name] = EdesignLibElement(name, data.edesign, root_file_path, path_from_root, btn)
+        #    #self.ids.edesign_library_list.add_widget(btn)
+        #    print("Imported edesign: ", name)
+        #
+        #    if data.dataset is not None:
+        #        #btn2 = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
+        #        #btn2.bind(state=self.update_library_item_info)
+        #        self.dataset_library[name] = DatasetLibElement(name, data.dataset, root_file_path, path_from_root, btn2)
+        #        #self.ids.dataset_library_list.add_widget(btn2)
+        #        print("Imported dataset: ", name)
+        #
+        #    if import_all_models:
+        #        raise ValueError("TODO UPGRADE!")
+        #        self._import_models(root_name, root_file_path, path_from_root, results_dir, 'all', 'all', 'all')
+        #else:
+        #    print("An e-design with name '%s' is already imported, and will not be clobbered." % name); return
+        #
+        #if import_children:
+        #    for ky in results_dir.keys():
+        #        child_path_from_root = path_from_root + [ky]
+        #        child_results_dir = results_dir[ky]
+        #        self.import_edesign(root_name, root_file_path, child_path_from_root,
+        #                            child_results_dir, import_children, import_all_models)
+
+    def import_models(self, root_name, root_file_path, path_from_root, protocol_names,
+                      additional_details, model_names):
+        root_file_path = _os.path.abspath(root_file_path)
+        self.kc.execute((f"__ret__ = lib.import_models('{root_name}','{root_file_path}','{_json.dumps(path_from_root)}',"
+                         f"'{_json.dumps(protocol_names)}','{_json.dumps(additional_details)}','{_json.dumps(model_names)}')"),
+                        user_expressions={'return_value': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        print("Received reply 3:\n", reply)
+        ret_str = self.extract_user_expression_str(reply, 'return_value')
+        print("Return Text = ", ret_str)
+
+    def import_models_from_files(self, filenames):
+        self.kc.execute(f"__ret__ = lib.import_models_from_files('{_json.dumps(filenames)}')",
+                        user_expressions={'return_value': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        print("Received reply 3:\n", reply)
+        ret_str = self.extract_user_expression_str(reply, 'return_value')
+        print("Return Text = ", ret_str)
+
+    def import_datasets_from_files(self, filenames):
+        self.kc.execute(f"__ret__ = lib.import_datasets_from_files('{_json.dumps(filenames)}')",
+                        user_expressions={'return_value': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        print("Received reply 3:\n", reply)
+        ret_str = self.extract_user_expression_str(reply, 'return_value')
+        print("Return Text = ", ret_str)
+
+    def library_item_names(self, category=None):
+        if category == 'edesign':
+            self.kc.execute(f"__ret__ = json.dumps(list(lib.edesign_library.keys()))",
+                            user_expressions={'return_value': '__ret__'})
+        elif category == 'dataset':
+            self.kc.execute(f"__ret__ = json.dumps(list(lib.dataset_library.keys()))",
+                            user_expressions={'return_value': '__ret__'})
+        elif category == 'model':
+            self.kc.execute(f"__ret__ = json.dumps(list(lib.model_library.keys()))",
+                            user_expressions={'return_value': '__ret__'})
+        else:
+            raise ValueError("Invalid library category: %s" % category)
+
+        reply = self.kc.get_shell_msg(timeout=10)
+        print("Received names: ", self.extract_user_expression_str(reply, 'return_value'))
+        return _json.loads(self.extract_user_expression_str(reply, 'return_value'))
+
+    def library_item_info(self, category, name):
+        if category == 'edesign':
+            self.kc.execute(f"__ret__ = json.dumps(lib.edesign_library['{name}'].info)",
+                            user_expressions={'return_value': '__ret__'})
+        elif category == 'dataset':
+            self.kc.execute(f"__ret__ = json.dumps(lib.dataset_library['{name}'].info)",
+                            user_expressions={'return_value': '__ret__'})
+        elif category == 'model':
+            self.kc.execute(f"__ret__ = json.dumps(lib.model_library['{name}'].info)",                        
+                            user_expressions={'return_value': '__ret__'})
+        else:
+            raise ValueError("Invalid library category: %s" % category)
+        reply = self.kc.get_shell_msg(timeout=10)
+        return _json.loads(self.extract_user_expression_str(reply, 'return_value'))
+
+    def update_library_item_name(self, category, existing_name, new_name):
+        self.kc.execute(f"__ret__ = lib.update_item_name('{category}', '{existing_name}', '{new_name}')",
+                        user_expressions={'return_value': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        return bool(self.extract_user_expression_str(reply, 'return_value') == 'True')
+
+    def remove_library_item(self, category, name):
+        self.kc.execute(f"__ret__ = lib.remove_item('{category}', '{name}')",
+                        user_expressions={'return_value': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        return bool(self.extract_user_expression_str(reply, 'return_value') == 'True')
+
+    def read_library(self, json_filename):
+        self.kc.execute(f"__ret__ = lib.load_from_file('{json_filename}')",
+                        user_expressions={'return_value': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        return bool(self.extract_user_expression_str(reply, 'return_value') == 'True')
+
+    def save_library(self, json_filename):
+        self.kc.execute(f"__ret__ = lib.save_to_file('{json_filename}')",
+                        user_expressions={'return_value': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        return bool(self.extract_user_expression_str(reply, 'return_value') == 'True')
+
+    def read_analysis(self, json_filename):
+        self.kc.execute(f"__ret__ = json.dumps(analysis.load_from_file('{json_filename}'))",
+                        user_expressions={'return_value': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        front_end_info = _json.loads(self.extract_user_expression_str(reply, 'return_value'))
+        return front_end_info
+
+    def save_analysis(self, json_filename, frontend_figure_info):
+        self.kc.execute(f"__ret__ = analysis.save_to_file('{json_filename}','{_json.dumps(frontend_figure_info)}')",
+                        user_expressions={'return_value': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        return bool(self.extract_user_expression_str(reply, 'return_value') == 'True')
+
+    def add_figure(self, tab_name, figure_type, name):
+        self.kc.execute(f"__ret__ = analysis.add_figure('{tab_name}', '{figure_type}', '{name}')",
+                        user_expressions={'return_value': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        figure_id_str = self.extract_user_expression_str(reply, 'return_value')
+        figure_id = int(figure_id_str) if (figure_id_str != 'None') else None
+        return figure_id
+
+    def create_figure_widget(self, figure_id, selector_vals, scale=1.0):
+        self.kc.execute(f"analysis.update_figure({figure_id}, '{_json.dumps(selector_vals)}')")
+        reply = self.kc.get_shell_msg(timeout=10)
+        assert(self.reply_indicates_success(reply)), "Failed to update back-end figure!"
+
+        self.kc.execute(f"__ret__ = analysis.capsules[{figure_id}].create_figure_widget_json()",
+                        user_expressions={'figure_json': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        widget_factory_json = _json.loads(self.extract_user_expression_str(reply, 'figure_json'))
+
+        # Build a kivy widget from received figure-widget-factory JSON
+        widget_factory = KivyWidgetFactory.from_nice_serialization(widget_factory_json)
+        widget = widget_factory.create_widget()
+        print("DB: CREATED figure Initial size = ", widget.size, ' pos=', widget.pos)
+        return widget
+
+    def figure_property_names(self, figure_id):
+        self.kc.execute(f"__ret__ = json.dumps(analysis.capsules[{figure_id}].property_names)",
+                        user_expressions={'return_value': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        return _json.loads(self.extract_user_expression_str(reply, 'return_value'))
+
+    def remove_figure(self, figure_id):
+        self.kc.execute(f"__ret__ = analysis.remove_figure({figure_id})",
+                        user_expressions={'return_value': '__ret__'})
+        reply = self.kc.get_shell_msg(timeout=10)
+        return bool(self.extract_user_expression_str(reply, 'return_value') == 'True')
+
+    #def get_analysis_item_selector_vals(self, item_id):
+    #    pass
+
 
 
 class CloseableHeader(TabbedPanelHeader):
@@ -119,121 +370,30 @@ class WrappedClickableLabel(WrappedLabel):
         super().on_touch_down(touch)
 
 
-class EdesignLibElement(object):
-
-    def __init__(self, name, edesign, root_file_path, path_from_root, item_widget=None):
-        self.name = name
-        self.edesign = edesign
-        self.root_file_path = root_file_path
-        self.path_from_root = path_from_root  # a list, e.g. ['CombinedDesign1', 'Q0']
-        self.item_widget = item_widget
-
-    @classmethod
-    def from_json_dict(cls, json_dict, result_dirs_cache=None):
-        if result_dirs_cache is None: result_dirs_cache = {}
-        if json_dict['root_path'] not in result_dirs_cache:
-            result_dirs_cache[json_dict['root_path']] = pygsti.io.read_results_from_dir(json_dict['root_path'])
-        results_dir = result_dirs_cache[json_dict['root_path']]
-        for key in json_dict['path_from_root']:
-            results_dir = results_dir[key]
-        protocol_data = results_dir.data
-        return cls(json_dict['name'], protocol_data.edesign, json_dict['root_path'], json_dict['path_from_root'],
-                   item_widget=None)  # create this widget later
-
-    def to_json_dict(self):
-        return {'name': self.name,
-                'root_path': self.root_file_path,
-                'path_from_root': self.path_from_root}
-
-
-class DatasetLibElement(object):
-
-    def __init__(self, name, dataset, root_file_path, path_from_root, item_widget=None):
-        self.name = name
-        self.dataset = dataset
-        self.root_file_path = root_file_path
-        self.path_from_root = path_from_root  # a list, e.g. ['CombinedDesign1', 'Q0']
-        self.item_widget = item_widget
-
-    @classmethod
-    def from_json_dict(cls, json_dict, result_dirs_cache=None):
-        if result_dirs_cache is None: result_dirs_cache = {}
-        if json_dict['root_path'] not in result_dirs_cache:
-            result_dirs_cache[json_dict['root_path']] = pygsti.io.read_results_from_dir(json_dict['root_path'])
-        results_dir = result_dirs_cache[json_dict['root_path']]
-        for key in json_dict['path_from_root']:
-            results_dir = results_dir[key]
-        protocol_data = results_dir.data
-        return cls(json_dict['name'], protocol_data.dataset, json_dict['root_path'], json_dict['path_from_root'],
-                   item_widget=None)  # create this widget later
-
-    def to_json_dict(self):
-        return {'name': self.name,
-                'root_path': self.root_file_path,
-                'path_from_root': self.path_from_root}
-
-
-class ModelLibElement(object):
-    def __init__(self, name, model_name, model, model_container, root_file_path, path_from_root,
-                 protocol_name, additional_details=None, item_widget=None):
-        self.name = name
-        self.model = model
-        self.model_name = model_name
-        self.model_container = model_container
-        self.root_file_path = root_file_path
-        self.path_from_root = path_from_root  # a list, e.g. ['CombinedDesign1', 'Q0']
-        self.protocol_name = protocol_name
-        self.additional_details = additional_details if (additional_details is not None) else {}
-        self.item_widget = item_widget
-
-    @classmethod
-    def from_json_dict(cls, json_dict, result_dirs_cache=None):
-        if result_dirs_cache is None: result_dirs_cache = {}
-        if json_dict['root_path'] not in result_dirs_cache:
-            result_dirs_cache[json_dict['root_path']] = pygsti.io.read_results_from_dir(json_dict['root_path'])
-        results_dir = result_dirs_cache[json_dict['root_path']]
-        for key in json_dict['path_from_root']:
-            results_dir = results_dir[key]
-        results_obj = results_dir.for_protocol[json_dict['protocol_name']]
-        if 'estimate_name' in json_dict['additional_details']:
-            model_container = results_obj.estimates[json_dict['additional_details']['estimate_name']]
-        else:
-            model_container = results_obj
-        model = model_container.models[json_dict['model_name']]
-
-        return cls(json_dict['name'], json_dict['model_name'], model, model_container,
-                   json_dict['root_path'], json_dict['path_from_root'], json_dict['protocol_name'],
-                   json_dict['additional_details'], item_widget=None)  # create this widget later
-
-    def to_json_dict(self):
-        return {'name': self.name,
-                'model_name': self.model_name,
-                'root_path': self.root_file_path,
-                'path_from_root': self.path_from_root,
-                'protocol_name': self.protocol_name,
-                'additional_details': self.additional_details}
-
-
 class NameDialog(FloatLayout):
     update = ObjectProperty(None)
     cancel = ObjectProperty(None)
     text = StringProperty('<empty>')
 
-
+    
 class RootExplorerWidget(BoxLayout):
 
     active_figure_container = ObjectProperty(None, allownone=True)
-    active_data_area = AliasProperty(lambda self: self.ids.figure_areas.current_tab.content.ids.data_area, None)
+    active_data_area = AliasProperty(lambda self: (self.ids.figure_areas.current_tab.content.ids.data_area
+                                                   if ('data_area' in self.ids.figure_areas.current_tab.content.ids)
+                                                   else None), None)
 
-    def __init__(self, app_path, results_dir_path=None, **kwargs):
+    def __init__(self, app_path, initial_kernel_json_name=None, **kwargs):
         super().__init__(**kwargs)
-        self._initial_results_dir_path = results_dir_path
+        self._initial_kernel_json_name = initial_kernel_json_name
+        self._initial_results_dir_path = 'results_root1'
         Clock.schedule_once(self.after_created, 0)
         self.mode = None
-        self.edesign_library = {}
-        self.dataset_library = {}
-        self.model_library = {}
-        self.ws = Workspace(gui_mode='kivy')
+        self.kernel = DataExplorerKernelInterface(existing_kernel=initial_kernel_json_name)
+        #self.edesign_library = {}
+        #self.dataset_library = {}
+        #self.model_library = {}
+        #self.ws = Workspace(gui_mode='kivy')
         self.default_figure_selector_vals = {}
         self.active_figure_selector_vals = {}
         self.sidebar_widths = {}
@@ -307,17 +467,19 @@ class RootExplorerWidget(BoxLayout):
     def after_created(self, delta_time):
         print("Running post-kv-file creation of root widget.")
         self.ids.add_item_sidebar.add_widget(self.create_add_item_panel())
-        set_info_containers(self.ids.figure_areas, self.ids.info_layout, self.ids.status_label)
+        set_info_containers(self.ids.figure_areas, self.ids.lower_info_area, self.ids.status_label)
 
         #Setup initial tab for creating more tabs
         self.add_new_tab_preset_buttons(self.ids.creation_tab_content)
         self.ids.figure_areas.switch_to(self.ids.figure_areas.tab_list[0])  # make sure 1 and only tab is selected
+        self.ids.comment_input.bind(text=self.save_comment_text)
 
-        if self._initial_results_dir_path:
-            results_dir = pygsti.io.read_results_from_dir(self._initial_results_dir_path)
-            self.ids.results_dir_selector.root_name = ".../" + _os.path.basename(self._initial_results_dir_path)
-            self.ids.results_dir_selector.root_file_path = self._initial_results_dir_path
-            self.ids.results_dir_selector.root_results_dir = results_dir  # automatic if we make self.results_dir a property
+        #REMOVE -- DEBUG
+        #if self._initial_results_dir_path:
+        #    results_dir = pygsti.io.read_results_from_dir(self._initial_results_dir_path)
+        #    self.ids.results_dir_selector.root_name = ".../" + _os.path.basename(self._initial_results_dir_path)
+        #    self.ids.results_dir_selector.root_file_path = self._initial_results_dir_path
+        #    self.ids.results_dir_selector.root_results_dir = results_dir  # automatic if we make self.results_dir a property
         self.change_mode('Library')
 
     def _keyboard_closed(self):
@@ -330,8 +492,11 @@ class RootExplorerWidget(BoxLayout):
         #print(' - modifiers are %r' % modifiers)
 
         if keycode[1] == 'backspace' and self.active_figure_container is not None:
+            if not self.kernel.remove_figure(self.active_figure_container.figure_id):
+                print("Warning: figure %d was removed from GUI but not found in back-end kernel!"
+                      % self.active_figure_container.figure_id)
             self.active_data_area.remove_widget(self.active_figure_container)
-            self.active_figure_container = None
+            self.set_active_figure_container(None)
             return True
 
         if self.active_figure_container is not None and keycode[1] in ('left', 'right', 'up', 'down', '-', '='):
@@ -372,10 +537,24 @@ class RootExplorerWidget(BoxLayout):
 
         if active_figure_container is not None:
             active_figure_container.activate()
-            active_figure_container.capsule.populate_figure_property_panel(self.ids.figure_properties_sidebar)
+            active_figure_container.populate_info_panel(self.ids.upper_info_area)
+            active_figure_container.populate_figure_property_panel(self.ids.figure_properties_sidebar)
+            self.ids.comment_input.text = active_figure_container.comment
         else:
             self.populate_figure_property_defaults_panel(self.ids.figure_properties_sidebar)
+            self.ids.upper_info_area.clear_widgets()
+            self.ids.lower_info_area.clear_widgets()
+            # (clear comment_input below)
+            
         self.active_figure_container = active_figure_container
+        
+        if active_figure_container is None:
+            self.ids.comment_input.text = ''  # *after* setting self.active_figure_container (see save_comment_text)
+
+    def save_comment_text(self, inst, val):
+        print("SAVING COMMENT: ", inst, val)
+        if self.active_figure_container is not None:
+            self.active_figure_container.comment = val
 
     def populate_figure_property_defaults_panel(self, panel_widget):
         panel_widget.clear_widgets()
@@ -449,7 +628,7 @@ class RootExplorerWidget(BoxLayout):
                 row.add_widget(title_input)
                 panel_widget.add_widget(row)
 
-            model_names = list(self.model_library.keys())
+            model_names = self.kernel.library_item_names(category='model')
             if initial_value is None or initial_value == '(none)':
                 initial_value = model_names[0] if (len(model_names) > 0) else '(none)'
             elif initial_value not in model_names and initial_value != '(none)':
@@ -470,7 +649,7 @@ class RootExplorerWidget(BoxLayout):
                 panel_widget.add_widget(row)
 
         elif typ == '**target_model':
-            model_names = list(self.model_library.keys())
+            model_names = self.kernel.library_item_names(category='model')
             if initial_value is None or initial_value == '(none)':
                 initial_value = model_names[0] if (len(model_names) > 0) else '(none)'
             elif initial_value not in model_names and initial_value != '(none)':
@@ -491,7 +670,7 @@ class RootExplorerWidget(BoxLayout):
                 panel_widget.add_widget(row)
 
         elif typ == '**edesign':
-            edesign_names = list(self.edesign_library.keys())
+            edesign_names = self.kernel.library_item_names(category='edesign')
             if initial_value is None or initial_value == '(none)':
                 initial_value = edesign_names[0] if (len(edesign_names) > 0) else '(none)'
             elif initial_value not in edesign_names and initial_value != '(none)':
@@ -512,7 +691,7 @@ class RootExplorerWidget(BoxLayout):
                 panel_widget.add_widget(row)
 
         elif typ == '**dataset':
-            ds_names = list(self.dataset_library.keys())
+            ds_names = self.kernel.library_item_names(category='dataset')
             if initial_value is None or initial_value == '(none)':
                 initial_value = ds_names[0] if (len(ds_names) > 0) else '(none)'
             elif initial_value not in ds_names and initial_value != '(none)':
@@ -531,7 +710,7 @@ class RootExplorerWidget(BoxLayout):
                 row.add_widget(spinner)
                 spinner.bind(text=lambda inst, txt: storage_dict.__setitem__(typ, to_val(txt)))
                 panel_widget.add_widget(row)
-                
+
         elif typ == '**objfn_builder':
             objfn_builder_names = ['logl', 'chi2', 'from estimate']
             if initial_value is None:
@@ -549,67 +728,67 @@ class RootExplorerWidget(BoxLayout):
         else:
             raise ValueError("Unknown figure property selector type: %s" % str(typ))
 
-    def selector_values_to_creation_args(self, figure_selector_vals):
-        creation_args = {}
-        #all_properties = ['*models', '*model_titles', '*model', '*model_title', '*target_model',
-        #                  '*dataset', '*edesign', '*circuit_list', '*maxlengths', '*circuits_by_maxl',
-        #                  '*objfn_builder', '*gaugeopt_args', '*estimate_params']
-
-        for typ, val in figure_selector_vals.items():
-            if val == '(none)':
-                continue  # don't populate any creation args
-
-            if typ == '**model_title':
-                if val:
-                    creation_args['*model_title'] = val
-            elif typ == '**model':
-                creation_args['*model'] = self.model_library[val].model
-                creation_args['*model_dim'] = self.model_library[val].model.dim
-                if '*model_title' not in creation_args:
-                    creation_args['*model_title'] = self.model_library[val].model_name
-                if isinstance(self.model_library[val].model_container, _Estimate):
-                    estimate = self.model_library[val].model_container
-                    creation_args['*estimate_params'] = estimate.parameters
-                    creation_args['*unmodeled_error'] = estimate.parameters.get("unmodeled_error", None)
-                    creation_args['*gaugeopt_args'] = estimate.goparameters.get(self.model_library[val].model_name, {})
-                    if isinstance(self.model_library[val].model_container.parent.data.edesign, _StandardGSTDesign):
-                        max_length_list = self.model_library[val].model_container.parent.data.edesign.maxlengths
-                        creation_args['*models_by_maxl'] = [estimate.models['iteration %d estimate' % i]
-                                                            for i in range(len(max_length_list))]
-            elif typ == '**target_model':
-                creation_args['*target_model'] = self.model_library[val].model
-            elif typ == '**edesign':
-                edesign = self.edesign_library[val].edesign
-                creation_args['*edesign'] = edesign
-                creation_args['*circuit_list'] = edesign.all_circuits_needing_data                
-                creation_args['*circuit_lists'] = edesign.circuit_lists \
-                    if isinstance(edesign, _CircuitListsDesign) else None
-                if isinstance(edesign, _StandardGSTDesign):
-                    creation_args['*maxlengths'] = edesign.maxlengths
-                    creation_args['*circuits_by_maxl'] = edesign.circuit_lists
-            elif typ == '**dataset':
-                dataset = self.dataset_library[val].dataset
-                creation_args['*dataset'] = dataset
-            elif typ == '**objfn_builder':
-                if val == 'from estimate':
-                    if '**model' in figure_selector_vals:
-                        k = figure_selector_vals['**model']
-                        mdl_container = self.model_library[k].model_container
-                        if isinstance(mdl_container, _Estimate):
-                            creation_args['*objfn_builder'] = mdl_container.parameters.get(
-                                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
-                    if '*objfn_builder' not in creation_args:
-                        print("Warning: could not retrieve objective function from estimate -- using logL instead")
-                        creation_args['*objfn_builder'] = _objfns.ObjectiveFunctionBuilder.create_from('logl')
-                else:
-                    creation_args['*objfn_builder'] = _objfns.ObjectiveFunctionBuilder.create_from(val)            
-
-        if '*model' in creation_args and '*models' not in creation_args:
-            creation_args['*models'] = [creation_args['*model']]
-        if '*model_title' in creation_args and '*model_titles' not in creation_args:
-            creation_args['*model_titles'] = [creation_args['*model_title']]
-
-        return creation_args
+    #def selector_values_to_creation_args(self, figure_selector_vals):  ## REVAMP - creation args should just be *names* of kernel variables
+    #    creation_args = {}
+    #    #all_properties = ['*models', '*model_titles', '*model', '*model_title', '*target_model',
+    #    #                  '*dataset', '*edesign', '*circuit_list', '*maxlengths', '*circuits_by_maxl',
+    #    #                  '*objfn_builder', '*gaugeopt_args', '*estimate_params']
+    #
+    #    for typ, val in figure_selector_vals.items():
+    #        if val == '(none)':
+    #            continue  # don't populate any creation args
+    #
+    #        if typ == '**model_title':
+    #            if val:
+    #                creation_args['*model_title'] = "'" + val + "'"
+    #        elif typ == '**model':
+    #            creation_args['*model'] = f"lib.edesign_library['{val}'].model"
+    #            creation_args['*model_dim'] = f"lib.edesign_library['{val}'].model.dim"
+    #            if '*model_title' not in creation_args:
+    #                creation_args['*model_title'] = f"lib.model_library['{val}'].model_name"
+    #            if isinstance(self.model_library[val].model_container, _Estimate):
+    #                estimate = self.model_library[val].model_container
+    #                creation_args['*estimate_params'] = estimate.parameters
+    #                creation_args['*unmodeled_error'] = estimate.parameters.get("unmodeled_error", None)
+    #                creation_args['*gaugeopt_args'] = estimate.goparameters.get(self.model_library[val].model_name, {})
+    #                if isinstance(self.model_library[val].model_container.parent.data.edesign, _StandardGSTDesign):
+    #                    max_length_list = self.model_library[val].model_container.parent.data.edesign.maxlengths
+    #                    creation_args['*models_by_maxl'] = [estimate.models['iteration %d estimate' % i]
+    #                                                        for i in range(len(max_length_list))]
+    #        elif typ == '**target_model':
+    #            creation_args['*target_model'] = self.model_library[val].model
+    #        elif typ == '**edesign':
+    #            edesign = self.edesign_library[val].edesign
+    #            creation_args['*edesign'] = edesign
+    #            creation_args['*circuit_list'] = edesign.all_circuits_needing_data                
+    #            creation_args['*circuit_lists'] = edesign.circuit_lists \
+    #                if isinstance(edesign, _CircuitListsDesign) else None
+    #            if isinstance(edesign, _StandardGSTDesign):
+    #                creation_args['*maxlengths'] = edesign.maxlengths
+    #                creation_args['*circuits_by_maxl'] = edesign.circuit_lists
+    #        elif typ == '**dataset':
+    #            dataset = self.dataset_library[val].dataset
+    #            creation_args['*dataset'] = dataset
+    #        elif typ == '**objfn_builder':
+    #            if val == 'from estimate':
+    #                if '**model' in figure_selector_vals:
+    #                    k = figure_selector_vals['**model']
+    #                    mdl_container = self.model_library[k].model_container
+    #                    if isinstance(mdl_container, _Estimate):
+    #                        creation_args['*objfn_builder'] = mdl_container.parameters.get(
+    #                            'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+    #                if '*objfn_builder' not in creation_args:
+    #                    print("Warning: could not retrieve objective function from estimate -- using logL instead")
+    #                    creation_args['*objfn_builder'] = _objfns.ObjectiveFunctionBuilder.create_from('logl')
+    #            else:
+    #                creation_args['*objfn_builder'] = _objfns.ObjectiveFunctionBuilder.create_from(val)            
+    #
+    #    if '*model' in creation_args and '*models' not in creation_args:
+    #        creation_args['*models'] = [creation_args['*model']]
+    #    if '*model_title' in creation_args and '*model_titles' not in creation_args:
+    #        creation_args['*model_titles'] = [creation_args['*model_title']]
+    #
+    #    return creation_args
 
     def create_add_item_panel(self):
 
@@ -677,61 +856,34 @@ class RootExplorerWidget(BoxLayout):
 
     def _open_library(self, path, filenames):
         filename = filenames[0]
-        print("Opening library: ", filename)
         self.dismiss_popup()
-
-        with open(filename) as f:
-            d = _json.load(f)
-
-        if d['file_type'].startswith('analysis'):
-            print("Actually, this is an analysis file -- opening it as such:")
-            self._open_analysis(None, [filename])
-            return
-
-        assert(d['file_type'].startswith('library')), "This doesn't look like a library file!"
 
         #Clear existing library (LATER: also clear analyses?)
         self.ids.edesign_library_list.clear_widgets()
         self.ids.dataset_library_list.clear_widgets()
         self.ids.model_library_list.clear_widgets()
-        self.edesign_library.clear()
-        self.dataset_library.clear()
-        self.model_library.clear()
 
         self.ids.library_info_area.clear_widgets()  # also clear library item info area
 
-        result_dirs_cache = {}
-        for key, item_dict in d['edesign_library'].items():
-            item = EdesignLibElement.from_json_dict(item_dict, result_dirs_cache)
-            btn = ToggleButton(text=item.name, size_hint_y=None, height=40, group='libraryitem')
-            btn.bind(state=self.update_library_item_info)
-            item.item_widget = btn
-            self.edesign_library[item.name] = item
-            self.ids.edesign_library_list.add_widget(btn)
-
-        for key, item_dict in d['dataset_library'].items():
-            item = DatasetLibElement.from_json_dict(item_dict, result_dirs_cache)
-            btn = ToggleButton(text=item.name, size_hint_y=None, height=40, group='libraryitem')
-            btn.bind(state=self.update_library_item_info)
-            item.item_widget = btn
-            self.dataset_library[item.name] = item
-            self.ids.dataset_library_list.add_widget(btn)
-
-        for key, item_dict in d['model_library'].items():
-            item = ModelLibElement.from_json_dict(item_dict, result_dirs_cache)
-            btn = ToggleButton(text=item.name, size_hint_y=None, height=40, group='libraryitem')
-            btn.bind(state=self.update_library_item_info)
-            item.item_widget = btn
-            self.model_library[item.name] = item
-            self.ids.model_library_list.add_widget(btn)
-
-        self.library_path = filename
+        if self.kernel.read_library(filename):
+            self._refresh_library_lists()
+            print("Loaded library from ", filename)
+            self.library_path = filename  # hold copy in front end too
+        else:
+            print("!!!Error loading library from ", filename)
 
     def save_library(self):
         initial_path = self.library_path if (self.library_path is not None) else self.app_path
         content = SaveDialog(save=self._save_library, cancel=self.dismiss_popup, initial_path=initial_path)
         self._popup = Popup(title="Save library file", content=content, size_hint=(0.9, 0.9))
         self._popup.open()
+
+    def resave_library(self):
+        # only shows dialog when there's no existing analysis_path
+        if self.library_path is not None:
+            return self._save_library(None, None, None)
+        else:
+            return self.save_library()
 
     def _save_library(self, path, selected_filenames, given_filename):
         print("DB: Saving library: ", path, selected_filenames, given_filename)
@@ -750,26 +902,13 @@ class RootExplorerWidget(BoxLayout):
         else:
             filename = selected_filenames[0]
 
-        print("Saving library to ", filename)
         self.dismiss_popup()
 
-        from pygsti import __version__ as _pygsti_version
-        to_save = {'pygsti version': _pygsti_version,
-                   'creator': 'pyGSTi data explorer',
-                   'file_type': 'library.v1',
-                   'edesign_library': {},
-                   'dataset_library': {},
-                   'model_library': {}}
-        for key, item in self.edesign_library.items():
-            to_save['edesign_library'][key] = item.to_json_dict()
-        for key, item in self.dataset_library.items():
-            to_save['dataset_library'][key] = item.to_json_dict()
-        for key, item in self.model_library.items():
-            to_save['model_library'][key] = item.to_json_dict()
-
-        with open(filename, 'w') as f:
-            _json.dump(to_save, f, indent=4)
-        self.library_path = filename
+        if self.kernel.save_library(filename):
+            print("Saved library to ", filename)
+            self.library_path = filename
+        else:
+            print("!!!Error saving library to ", filename)
 
     def open_analysis(self):
         initial_path = self.analysis_path if (self.analysis_path is not None) \
@@ -785,56 +924,39 @@ class RootExplorerWidget(BoxLayout):
         print("Opening analysis: ", filename)
         self.dismiss_popup()
 
-        with open(filename) as f:
-            d = _json.load(f)
+        tab_figure_info = self.kernel.read_analysis(filename)
 
-        assert(d['file_type'].startswith('analysis')), "This doesn't look like an analysis file!"
-        if (d['library_relative_path'] and len(self.edesign_library) == 0
-           and len(self.dataset_library) == 0 and len(self.model_library) == 0):
-            library_path = _os.path.abspath(_os.path.join(_os.path.dirname(filename), d['library_relative_path']))
-            print("Opening library from relative path: ", library_path)
-            self._open_library(None, [library_path])
-
+        #Close existing tabs
         existing_tabs = list(self.ids.figure_areas.children)
         for tab in existing_tabs:
             if isinstance(tab, CloseableHeader):
                 self.ids.figure_areas.remove_widget(tab)
-        #OLD REMOVE self.active_data_area.clear_widgets()
+                # TODO: also refresh library somewhere?
 
-        for tab_dict in d['tabs']:
-            self.create_new_tab(tab_dict['name'], None)  # create a blank tab and switch to it
-            for figure_dict in tab_dict['figures']:
-                # creation_fn = self.ws.ColorBoxPlot,
-                print("Building ", figure_dict['caption'])
-                creation_cls = _class_for_name(figure_dict['creation_cls'])
+        for tab_name, tab_figures in tab_figure_info['tabs'].items():
+            self.create_new_tab(tab_name, None)  # create a blank tab and switch to it
+            for fig_dict in tab_figures:
+                fig_id = fig_dict['figure_id']
+                fig_position = fig_dict.get('position', None)
+                fig_size = fig_dict.get('size', None)
 
-                # Python magic that dynamically creates a factory function just like a Workspace object does.
-                # The result is a function like self.ws.SomeTable(...) that implicitly gets it's 'ws' arg set.
-                argspec = _inspect.getargspec(creation_cls.__init__)
-                argnames = argspec[0]
-                factoryfn_argnames = argnames[2:]  # strip off self & ws args
-                factoryfn_argspec = (factoryfn_argnames,) + argspec[1:]
-                #signature = _inspect.formatargspec(formatvalue=lambda val: "", *factoryfn_argspec)  # removes defaults
-                signature = _inspect.formatargspec(*factoryfn_argspec)
-                signature = signature[1:-1]  # strip off parenthesis from ends of "(signature)"
-                factoryfn_def = (
-                    'def factoryfn(%(signature)s):\n'
-                    '    return cls(self, %(signature)s)' %
-                    {'signature': signature})
-                exec_globals = {'cls': creation_cls, 'self': self.ws}
-                exec(factoryfn_def, exec_globals)
-                factoryfn = exec_globals['factoryfn']
-                
-                figure_capsule = FigureCapsule(factoryfn, figure_dict['args_template'], self, figure_dict['caption'],
-                                               self.ids.info_layout, status_label=self.ids.status_label)
-                selector_vals = figure_dict['arg_selector_values']
-                fig_creation_args = self.selector_values_to_creation_args(selector_vals)
-                figure_capsule.fill_args_from_creation_arg_dict(fig_creation_args)
-                figure_capsule.update_figure_widget(self.active_data_area, scale=1.0)  # adds figure to data_area
-                figure_capsule.fig_container.size = figure_dict['size']
-                figure_capsule.fig_container.pos = figure_dict['position']
+                figwidget = self.kernel.create_figure_widget(fig_id, fig_dict['selector_values'], scale=1.0)
+                fig_property_names = fig_dict['property_names']  #self.kernel.figure_property_names(fig_id)
+
+                #Place figure widget into a container
+                fig_container = FigureContainer(figwidget, fig_id, fig_property_names, caption=fig_dict['caption'],
+                                                comment=fig_dict.get('comment', ''),
+                                                root_widget=self, size_hint=(None, None))
+                set_info_containers(fig_container, self.ids.lower_info_area, self.ids.status_label)
+                if fig_position is not None: fig_container.pos = fig_position
+                if fig_size is not None: fig_container.size = fig_size
+                self.active_data_area.add_widget(fig_container)
 
         self.analysis_path = filename
+        if tab_figure_info.get('loaded_library_path', None) is not None:
+            self.library_path = tab_figure_info['loaded_library_path']
+            self._refresh_library_lists()
+        self.ids.analysis_mode_button.trigger_action(duration=0)  # always switch to analysis mode
 
     def save_analysis(self):
         initial_path = self.analysis_path if (self.analysis_path is not None) \
@@ -842,6 +964,13 @@ class RootExplorerWidget(BoxLayout):
         content = SaveDialog(save=self._save_analysis, cancel=self.dismiss_popup, initial_path=initial_path)
         self._popup = Popup(title="Save analysis file", content=content, size_hint=(0.9, 0.9))
         self._popup.open()
+
+    def resave_analysis(self):
+        # only shows dialog when there's no existing analysis_path
+        if self.analysis_path is not None:
+            return self._save_analysis(None, None, None)
+        else:
+            return self.save_analysis()
 
     def _save_analysis(self, path, selected_filenames, given_filename):
         print("DB: Saving analysis: ", path, selected_filenames, given_filename)
@@ -863,23 +992,16 @@ class RootExplorerWidget(BoxLayout):
         print("Saving analysis to ", filename)
         self.dismiss_popup()
 
-        from pygsti import __version__ as _pygsti_version
-        to_save = {'pygsti version': _pygsti_version, 'creator': 'pyGSTi data explorer',
-                   'file_type': 'analysis.v1',
-                   'library_relative_path': _os.path.relpath(self.library_path, _os.path.dirname(filename)),
-                   'tabs': []}
-
+        frontend_figure_info = []  # maps figure_id -> dict with 'size' and 'position' as list of (k,v) pairs
         for tab in self.ids.figure_areas.tab_list:
             if not isinstance(tab, CloseableHeader):
                 continue  # skip the "create a new tab" tab
-
-            tab_dict = {'name': tab.text, 'figures': []}
             for fig_container in tab.content.ids.data_area.children:
-                tab_dict['figures'].append(fig_container.capsule.to_json_dict())
-            to_save['tabs'].append(tab_dict)
-
-        with open(filename, 'w') as f:
-            _json.dump(to_save, f, indent=4)
+                frontend_figure_info.append((fig_container.figure_id,
+                                             {'size': fig_container.size,
+                                              'position': fig_container.pos,
+                                              'comment': fig_container.comment}))
+        self.kernel.save_analysis(filename, frontend_figure_info)
         self.analysis_path = filename
 
     def import_edesign(self, include_children=False):
@@ -888,43 +1010,66 @@ class RootExplorerWidget(BoxLayout):
         root_file_path = self.ids.results_dir_selector.root_file_path
         results_dir_node = self.ids.results_dir_selector.selected_results_dir_node
         path_from_root = results_dir_node.path
-        results_dir = results_dir_node.data
-        self._import_edesign(root_name, root_file_path, path_from_root, results_dir,
+        #results_dir = results_dir_node.data
+        self._import_edesign(root_name, root_file_path, path_from_root, # REMOVE results_dir,
                              import_children=include_children)
 
-    def _import_edesign(self, root_name, root_file_path, path_from_root, results_dir,
+    def _import_edesign(self, root_name, root_file_path, path_from_root, # REMOVE results_dir,
                         import_children=False, import_all_models=False):
+        self.kernel.import_edesign(root_name, root_file_path, path_from_root, import_children, import_all_models)
+        self._refresh_library_lists()
 
-        pth_for_name = [root_name] + path_from_root if root_name else path_from_root
-        name = '.'.join(pth_for_name)  # edesign name
+    def _refresh_library_lists(self):
+        self.ids.edesign_library_list.clear_widgets()
+        self.ids.library_info_area.clear_widgets()
 
-        btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
-        btn.bind(state=self.update_library_item_info)
-        if name not in self.edesign_library:
-
-            data = results_dir.data  # a ProtocolData object
-            self.edesign_library[name] = EdesignLibElement(name, data.edesign, root_file_path, path_from_root, btn)
+        for name in self.kernel.library_item_names(category='edesign'):
+            btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
+            btn.bind(state=self.update_library_item_info)
             self.ids.edesign_library_list.add_widget(btn)
-            print("Imported edesign: ", name)
 
-            if data.dataset is not None:
-                btn2 = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
-                btn2.bind(state=self.update_library_item_info)
-                self.dataset_library[name] = DatasetLibElement(name, data.dataset, root_file_path, path_from_root, btn2)
-                self.ids.dataset_library_list.add_widget(btn2)
-                print("Imported dataset: ", name)
+        self.ids.dataset_library_list.clear_widgets()
+        for name in self.kernel.library_item_names(category='dataset'):
+            btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
+            btn.bind(state=self.update_library_item_info)
+            self.ids.dataset_library_list.add_widget(btn)
 
-            if import_all_models:
-                self._import_models(root_name, root_file_path, path_from_root, results_dir, 'all', 'all', 'all')
-        else:
-            print("An e-design with name '%s' is already imported, and will not be clobbered." % name); return
+        self.ids.model_library_list.clear_widgets()
+        for name in self.kernel.library_item_names(category='model'):
+            btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
+            btn.bind(state=self.update_library_item_info)
+            self.ids.model_library_list.add_widget(btn)
 
-        if import_children:
-            for ky in results_dir.keys():
-                child_path_from_root = path_from_root + [ky]
-                child_results_dir = results_dir[ky]
-                self._import_edesign(root_name, root_file_path, child_path_from_root,
-                                     child_results_dir, import_children, import_all_models)
+        #pth_for_name = [root_name] + path_from_root if root_name else path_from_root
+        #name = '.'.join(pth_for_name)  # edesign name
+        #
+        #btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
+        #btn.bind(state=self.update_library_item_info)
+        #if name not in self.kernel.library_item_names(category='edesign'):
+        #
+        #    data = results_dir.data  # a ProtocolData object
+        #    #self.edesign_library[name] = EdesignLibElement(name, data.edesign, root_file_path, path_from_root, btn)
+        #    self.ids.edesign_library_list.add_widget(btn)
+        #    #print("Imported edesign: ", name)
+        #
+        #    if data.dataset is not None:
+        #        btn2 = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
+        #        btn2.bind(state=self.update_library_item_info)
+        #        #self.dataset_library[name] = DatasetLibElement(name, data.dataset, root_file_path, path_from_root, btn2)
+        #        self.ids.dataset_library_list.add_widget(btn2)
+        #        #print("Imported dataset: ", name)
+        #
+        #    if import_all_models:
+        #        self._import_models(root_name, root_file_path, path_from_root, results_dir, 'all', 'all', 'all')
+        #else:
+        #    print("An e-design with name '%s' is already imported, and will not be clobbered." % name); return
+        #
+        #if import_children:
+        #    for ky in results_dir.keys():
+        #        child_path_from_root = path_from_root + [ky]
+        #        child_results_dir = results_dir[ky]
+        #        self._import_edesign(root_name, root_file_path, child_path_from_root,
+        #                             child_results_dir, import_children, import_all_models)
 
     def import_models(self, include_all=False):
         root_name = self.ids.results_dir_selector.root_name
@@ -935,64 +1080,26 @@ class RootExplorerWidget(BoxLayout):
         additional_detail = self.ids.results_dir_detail_selector.additional_detail
         selected_model_names = self.ids.results_dir_detail_selector.selected_model_names
 
-        results_dir = results_dir_node.data
+        #results_dir = results_dir_node.data  #REMOVE
 
         if include_all:
-            self._import_models(root_name, root_file_path, path_from_root, results_dir,
+            self._import_models(root_name, root_file_path, path_from_root, # REMOVE results_dir,
                                 'all', 'all', 'all')
         else:
-            self._import_models(root_name, root_file_path, path_from_root, results_dir,
+            self._import_models(root_name, root_file_path, path_from_root, # REMOVE results_dir,
                                 [protocol_name], [additional_detail], selected_model_names)
 
-    def _import_models(self, root_name, root_file_path, path_from_root, results_dir, protocol_names,
+    def _import_models(self, root_name, root_file_path, path_from_root, protocol_names,
                        additional_details, model_names):
-
-        if protocol_names == 'all':
-            protocol_names = list(results_dir.for_protocol.keys())
-
-        for protocol_name in protocol_names:
-            results = results_dir.for_protocol[protocol_name]
-
-            if additional_details == 'all':
-                if isinstance(results, _ModelEstimateResults):
-                    additional_details = [{'estimate_name': est_name} for est_name in results.estimates.keys()]
-                else:
-                    additional_details = [{}]
-
-            for additional_detail in additional_details:
-                if 'estimate_name' in additional_detail:
-                    estimate = results.estimates[additional_detail['estimate_name']]
-                    model_container = estimate
-                else:
-                    model_container = results
-
-                pth_for_name = [root_name] + path_from_root if root_name else path_from_root
-
-                if model_names == 'all':
-                    model_names = list(model_container.models.keys())
-
-                for model_name in model_names:
-                    name = '.'.join(pth_for_name + [protocol_name] + list(additional_detail.values()) + [model_name])
-                    model = model_container.models[model_name]
-                    if name in self.model_library:
-                        print("A model named '%s' is already imported and will not be clobbered." % name)
-                        continue
-
-                    btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
-                    btn.bind(state=self.update_library_item_info)
-
-                    self.model_library[name] = ModelLibElement(name, model_name, model, model_container,
-                                                               root_file_path, path_from_root,
-                                                               protocol_name, additional_detail, btn)
-                    self.ids.model_library_list.add_widget(btn)
-                    #Label(text=name, size_hint_y=None, height=40))
-                    print("Importing model: ", model_name)
+        self.kernel.import_models(root_name, root_file_path, path_from_root, protocol_names,
+                                  additional_details, model_names)
+        self._refresh_library_lists()
 
     def import_all(self):
         root_name = self.ids.results_dir_selector.root_name
         root_file_path = self.ids.results_dir_selector.root_file_path
-        root_results_dir = self.ids.results_dir_selector.root_results_dir
-        self._import_edesign(root_name, root_file_path, path_from_root=[], results_dir=root_results_dir,
+        #root_results_dir = self.ids.results_dir_selector.root_results_dir
+        self._import_edesign(root_name, root_file_path, path_from_root=[], # REMOVE results_dir=root_results_dir,
                              import_children=True, import_all_models=True)
 
     def import_model_from_file(self):
@@ -1003,28 +1110,10 @@ class RootExplorerWidget(BoxLayout):
         self._popup.open()
 
     def _import_model_from_file(self, path, filenames):
-        filename = filenames[0]
-        print("Importing model file: ", filename)
+        print("Importing model file: ", filenames[0])
         self.dismiss_popup()
-
-        model = _Model.read(filename)
-        name = _os.path.basename(filename)
-        model_name = protocol_name = 'N/A'
-        model_container = None
-        additional_detail = {}
-        root_file_path = filename
-        path_from_root = []
-
-        if name in self.model_library:
-            print("A model named '%s' is already imported and will not be clobbered." % name)
-            return
-
-        btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
-        btn.bind(state=self.update_library_item_info)
-        self.model_library[name] = ModelLibElement(name, model_name, model, model_container,
-                                                   root_file_path, path_from_root,
-                                                   protocol_name, additional_detail, btn)
-        self.ids.model_library_list.add_widget(btn)
+        self.kernel.import_models_from_files(filenames)
+        self._refresh_library_lists()
 
     def import_dataset_from_file(self):
         initial_path = self.library_path if (self.library_path is not None) else self.app_path
@@ -1034,26 +1123,10 @@ class RootExplorerWidget(BoxLayout):
         self._popup.open()
 
     def _import_dataset_from_file(self, path, filenames):
-        filename = filenames[0]
-        print("Importing dataset file: ", filename)
+        print("Importing dataset file: ", filenames[0])
         self.dismiss_popup()
-
-        ds = _read_dataset(filename)
-        name = _os.path.basename(filename)
-        root_file_path = filename
-        path_from_root = []
-
-        if name in self.edesign_library:
-            print("An edesign named '%s' is already imported and will not be clobbered." % name)
-            return
-
-        #edesign = _ExperimentDesign(list(ds.keys()))  # just create a simple experiment design around ds
-        #data = _ProtocolData(edesign, ds)
-
-        btn = ToggleButton(text=name, size_hint_y=None, height=40, group='libraryitem')
-        btn.bind(state=self.update_library_item_info)
-        self.dataset_library[name] = DatasetLibElement(name, ds, root_file_path, path_from_root, btn)
-        self.ids.dataset_library_list.add_widget(btn)
+        self.kernel.import_datasets_from_files(filenames)
+        self._refresh_library_lists()
 
     def update_library_item_info(self, togglebtn, val):
         info_area = self.ids.library_info_area
@@ -1073,18 +1146,14 @@ class RootExplorerWidget(BoxLayout):
             widget.add_widget(row)
             return value_lbl
 
-        def show_name_popup(title, library_dict, key):
-            item = library_dict[key]
-
+        def show_name_popup(title, category, existing_name, item_widget):
             def update_name(popup, new_name):
-                library_dict[key].name = new_name
-                library_dict[key].item_widget.text = new_name
-                library_dict[new_name] = library_dict[key]
-                del library_dict[key]
+                self.kernel.update_library_item_name(category, existing_name, new_name)
+                item_widget.text = new_name
                 self._popup.dismiss()
-                self.update_library_item_info(library_dict[new_name].item_widget, 'down')
+                self.update_library_item_info(item_widget, 'down')
 
-            popup_content = NameDialog(text=item.name,
+            popup_content = NameDialog(text=existing_name,
                                        update=update_name,
                                        cancel=lambda: self._popup.dismiss())
             self._popup = Popup(title=title, content=popup_content,
@@ -1093,350 +1162,433 @@ class RootExplorerWidget(BoxLayout):
 
         if val == 'down':
             key = togglebtn.text
-            if togglebtn in self.ids.edesign_library_list.children and key in self.edesign_library:
-                item = self.edesign_library[key]
+            delete_btn = Button(text='Delete Item', size_hint_y=None, height=40, font_size=22, color=(1, 0, 0, 1))
+
+            if togglebtn in self.ids.edesign_library_list.children:
+                item_info = self.kernel.library_item_info('edesign', key)
                 add_info_row(info_area, 'item type:', 'experiment design')
-                name_val = add_info_row(info_area, 'name:', item.name, clickable=True)
-                add_info_row(info_area, 'root path:', item.root_file_path)
-                add_info_row(info_area, 'path from root:', str(item.path_from_root))
-                name_val.bind(on_release=lambda *x: show_name_popup('Update name', self.edesign_library, key))
+                name_val = add_info_row(info_area, 'name:', item_info['name'], clickable=True)
+                add_info_row(info_area, 'root path:', item_info['root_path'])
+                add_info_row(info_area, 'path from root:', str(item_info['path_from_root']))
+                name_val.bind(on_release=lambda *x: show_name_popup('Update name', 'edesign', key, togglebtn))
+                delete_btn.bind(on_release=lambda *x: self.remove_library_item('edesign', key, togglebtn))
 
-            elif togglebtn in self.ids.dataset_library_list.children and key in self.dataset_library:
-                item = self.dataset_library[key]
+            elif togglebtn in self.ids.dataset_library_list.children:
+                item_info = self.kernel.library_item_info('dataset', key)
                 add_info_row(info_area, 'item type:', 'data set')
-                name_val = add_info_row(info_area, 'name:', item.name, clickable=True)
-                add_info_row(info_area, 'root path:', item.root_file_path)
-                add_info_row(info_area, 'path from root:', str(item.path_from_root))
-                name_val.bind(on_release=lambda *x: show_name_popup('Update name', self.dataset_library, key))
+                name_val = add_info_row(info_area, 'name:', item_info['name'], clickable=True)
+                add_info_row(info_area, 'root path:', item_info['root_path'])
+                add_info_row(info_area, 'path from root:', str(item_info['path_from_root']))
+                name_val.bind(on_release=lambda *x: show_name_popup('Update name', 'dataset', key, togglebtn))
+                delete_btn.bind(on_release=lambda *x: self.remove_library_item('dataset', key, togglebtn))
                 
-            elif togglebtn in self.ids.model_library_list.children and key in self.model_library:
-                item = self.model_library[key]
+            elif togglebtn in self.ids.model_library_list.children:
+                item_info = self.kernel.library_item_info('model', key)
                 add_info_row(info_area, 'item type:', 'model')
-                name_val = add_info_row(info_area, 'name:', item.name, clickable=True)
-                add_info_row(info_area, 'root path:', item.root_file_path)
-                add_info_row(info_area, 'path from root:', str(item.path_from_root))
-                add_info_row(info_area, 'protocol:', str(item.protocol_name))
-                for k, v in item.additional_details.items():
+                name_val = add_info_row(info_area, 'name:', item_info['name'], clickable=True)
+                add_info_row(info_area, 'root path:', item_info['root_path'])
+                add_info_row(info_area, 'path from root:', str(item_info['path_from_root']))
+                add_info_row(info_area, 'protocol:', str(item_info['protocol_name']))
+                for k, v in item_info['additional_details'].items():
                     add_info_row(info_area, k, str(v))
-                name_val.bind(on_release=lambda *x: show_name_popup('Update name', self.model_library, key))
+                name_val.bind(on_release=lambda *x: show_name_popup('Update name', 'model', key, togglebtn))
+                delete_btn.bind(on_release=lambda *x: self.remove_library_item('model', key, togglebtn))
 
+            info_area.add_widget(delete_btn)
             #print("Down from ", togglebtn.text)
         else:
             #print(val, " from ", togglebtn.text)
             pass
 
+    def remove_library_item(self, category, name, item_widget):
+        self.kernel.remove_library_item(category, name)
+        #self._refresh_library_lists()
+
+        #Could also just do a list refresh instead of this:
+        self.ids.library_info_area.clear_widgets()
+        if category == 'edesign':
+            self.ids.edesign_library_list.remove_widget(item_widget)
+        elif category == 'dataset':
+            self.ids.dataset_library_list.remove_widget(item_widget)
+        elif category == 'model':
+            self.ids.model_library_list.remove_widget(item_widget)
+
     def add_item(self, item_text, positioning_option_overrides=None):
         print("Adding item ", item_text)
 
-        cri = None
-        extra_capsule_args = dict(caption=item_text,
-                                  info_sidebar=self.ids.info_layout,
-                                  status_label=self.ids.status_label,
-                                  root_widget=self)
-
-        default_figure_creation_args = self.selector_values_to_creation_args(self.default_figure_selector_vals)
-        if item_text == 'SpamTable':
-            #wstable = ws.SpamTable(models, titles, 'boxes', cri, False)  # titles?
-            figure_capsule = FigureCapsule(self.ws.SpamTable, ['*models', '*model_titles', 'boxes', cri, False],
-                                           **extra_capsule_args)
-        elif item_text == 'SpamParametersTable':
-            #wstable = ws.SpamParametersTable(models, titles, cri)
-            figure_capsule = FigureCapsule(self.ws.SpamParametersTable, ['*models', '*model_titles', cri],
-                                           **extra_capsule_args)
-        elif item_text == 'GatesTable':
-            #wstable = ws.GatesTable(models, titles, 'boxes', cri)
-            figure_capsule = FigureCapsule(self.ws.GatesTable, ['*models', '*model_titles', 'boxes', cri],
-                                           **extra_capsule_args)
-        elif item_text == 'ChoiTable':
-            #wstable = ws.ChoiTable(models, titles, cri)
-            figure_capsule = FigureCapsule(self.ws.ChoiTable, ['*models', '*model_titles', cri],
-                                           **extra_capsule_args)
-        elif item_text == 'ModelVsTargetTable':
-            clifford_compilation = None
-            #wstable = ws.ModelVsTargetTable(model, target_model, clifford_compilation, cri)
-            figure_capsule = FigureCapsule(self.ws.ModelVsTargetTable, ['*model', '*target_model',
-                                                                        clifford_compilation, cri],
-                                           **extra_capsule_args)
-        elif item_text == 'GatesVsTargetTable':
-            #wstable = ws.GatesVsTargetTable(model, target_model, cri)  # wildcard?
-            figure_capsule = FigureCapsule(self.ws.GatesVsTargetTable, ['*model', '*target_model', cri],
-                                           **extra_capsule_args)
-        elif item_text == 'SpamVsTargetTable':
-            #wstable = ws.SpamVsTargetTable(model, target_model, cri)
-            figure_capsule = FigureCapsule(self.ws.SpamVsTargetTable, ['*model', '*target_model', cri],
-                                           **extra_capsule_args)
-        elif item_text == 'ErrgenTable':
-            #wstable = ws.ErrgenTable(model, target_model, cri)  # (more options)
-            figure_capsule = FigureCapsule(self.ws.ErrgenTable, ['*model', '*target_model', cri],
-                                           **extra_capsule_args)
-        elif item_text == 'NQubitErrgenTable':
-            #wstable = ws.NQubitErrgenTable(model, cri)
-            figure_capsule = FigureCapsule(self.ws.NQubitErrgenTable, ['*model', cri],
-                                           **extra_capsule_args)
-        elif item_text == 'GateDecompTable':
-            #wstable = ws.GateDecompTable(model, target_model, cri)
-            figure_capsule = FigureCapsule(self.ws.GateDecompTable, ['*model', '*target_model', cri],
-                                           **extra_capsule_args)
-        elif item_text == 'GateEigenvalueTable':
-            #wstable = ws.GateEigenvalueTable(model, target_model, cri,
-            #                                 display=('evals', 'rel', 'log-evals', 'log-rel'))
-            figure_capsule = FigureCapsule(self.ws.GateEigenvalueTable, ['*model', '*target_model', cri,
-                                                                         ('evals', 'rel', 'log-evals', 'log-rel')],
-                                           **extra_capsule_args)
-        elif item_text == 'DataSetOverviewTable':
-            #wstable = ws.DataSetOverviewTable(dataset, max_length_list)
-            figure_capsule = FigureCapsule(self.ws.DataSetOverviewTable, ['*dataset', '*maxlengths'],
-                                           **extra_capsule_args)
-        elif item_text == 'SoftwareEnvTable':
-            #wstable = ws.SoftwareEnvTable()
-            figure_capsule = FigureCapsule(self.ws.SoftwareEnvTable, [], **extra_capsule_args)
-        elif item_text == 'CircuitTable':
-            # wstable = ws.CircuitTable(...)  # wait until we can select circuit list; e.g. germs, fiducials
-            print("Wait until better selection methods to create circuit tables...")
-            figure_capsule = None
-        elif item_text == 'GatesSingleMetricTable':
-            #metric = 'inf'  # entanglement infidelity
-            #wstable = GatesSingleMetricTable(metric, ...)
-            print("Wait until better selection methods to create single-item gate metric tables...")
-            figure_capsule = None
-        elif item_text == 'StandardErrgenTable':
-            #wstable = ws.StandardErrgenTable(model.dim, 'hamiltonian', 'pp')  # not super useful; what about 'stochastic'?
-            figure_capsule = FigureCapsule(self.ws.StandardErrgenTable, ['*model_dim', 'H', 'pp'],
-                                           **extra_capsule_args)
-        elif item_text == 'GaugeOptParamsTable':
-            #wstable = ws.GaugeOptParamsTable(gaugeopt_args)
-            figure_capsule = FigureCapsule(self.ws.GaugeOptParamsTable, ['*gaugeopt_args'],
-                                           **extra_capsule_args)
-        elif item_text == 'MetadataTable':
-            #wstable = ws.MetadataTable(model, estimate_params)
-            figure_capsule = FigureCapsule(self.ws.MetadataTable, ['*model', '*estimate_params'],
-                                           **extra_capsule_args)
-        elif item_text == 'WildcardBudgetTable':
-            #wstable = ws.WildcardBudgetTable(estimate_params.get("unmodeled_error", None))
-            figure_capsule = FigureCapsule(self.ws.WildcardBudgetTable, ['*unmodeled_error'],
-                                           **extra_capsule_args)
-        elif item_text == 'FitComparisonTable':
-            #wstable = ws.FitComparisonTable(max_length_list, circuits_by_L, models_by_L, dataset)
-            figure_capsule = FigureCapsule(self.ws.FitComparisonTable, ['*maxlengths', '*circuits_by_maxl',
-                                                                        '*models_by_maxl', '*dataset',
-                                                                        '*objfn_builder'],
-                                           **extra_capsule_args)
-        elif item_text == 'FitComparisonBarPlot':
-            #wsplot = ws.FitComparisonBarPlot(max_length_list, circuits_by_L, models_by_L, dataset)
-            figure_capsule = FigureCapsule(self.ws.FitComparisonBarPlot, ['*maxlengths', '*circuits_by_maxl',
-                                                                          '*models_by_maxl', '*dataset'],
-                                           **extra_capsule_args)
-        elif item_text == 'FitComparisonBarPlotB':
-            #wsplot = ws.FitComparisonBarPlot(est_lbls_mt, [circuit_list] * len(est_mdls_mt),
-            #                                 est_mdls_mt, [dataset] * len(est_mdls_mt), objfn_builder)
-            def multiplx(titles, circuit_list, models, dataset, objfn_builder):
-                return self.ws.FitComparisonBarPlot(titles, [circuit_list] * len(titles),
-                                                    models, [dataset] * len(titles), objfn_builder)
-            figure_capsule = FigureCapsule(multiplx, ['*model_titles', '*circuit_list', '*models', '*dataset',
-                                                      '*objfn_builder'], **extra_capsule_args)
-        elif item_text == 'FitComparisonBoxPlot':
-            # used for multiple data sets -- enable this once we get better selection methods
-            print("Wait until better selection methods to create fit comparison box plot...")
-            figure_capsule = None
-        elif item_text in ('ColorBoxPlot', 'ColorScatterPlot', 'ColorHistogramPlot'):
-
-            if item_text == 'ColorBoxPlot': plot_type = "boxes"
-            elif item_text == "ColorScatterPlot": plot_type = "scatter"
-            else: plot_type = "histogram"
-
-            linlog_percentile = 5
-            #bgcolor = 'white'
-            #wsplot = ws.ColorBoxPlot(objfn_builder, circuit_list, dataset, model,
-            #    linlg_pcntle=linlog_percentile / 100, comm=None, bgcolor=bgcolor, typ=plot_type)
-            figure_capsule = FigureCapsule(self.ws.ColorBoxPlot,
-                                           ['*objfn_builder', '*circuit_list', '*dataset', '*model',
-                                            False, False, True, False, 'compact', linlog_percentile / 100,
-                                            None, None, None, None, None, plot_type],
-                                           **extra_capsule_args)
-
-        elif item_text in ['Model Violation Overview', 'Model Violation Detail', 'Gauge Inv. Metrics',
-                           'Metrics', 'Raw Model Data', 'Reference']:  # NOTE: this list is duplicated in add_new_tab_preset_buttons!
+        if item_text in ['Model Violation Overview', 'Model Violation Detail', 'Gauge Inv. Metrics',
+                         'Metrics', 'Raw Model Data', 'Reference']:  # NOTE: this list is duplicated in add_new_tab_preset_buttons!
             return self.add_preset(item_text)
-        else:
-            figure_capsule = None
 
-        if figure_capsule is not None:
-            options = self.positioning_options.copy()
-            if positioning_option_overrides:
-                options.update(positioning_option_overrides)
-            
-            scale = float(options.get('scale', '1.0'))
-            existing_figs = list(self.active_data_area.children)
-            figure_capsule.fill_args_from_creation_arg_dict(default_figure_creation_args)
-            fig_size = figure_capsule.update_figure_widget(self.active_data_area, scale)
+        #cri = None
+        active_tab_name = self.ids.figure_areas.current_tab.text
 
-            arrange_mode = options.get('arrange', 'top down')
-            if arrange_mode == 'top down':
-                x = 0  # in this mode, x always == 0
-                min_y = min([c.y for c in existing_figs]) if len(existing_figs) > 0 \
-                    else self.active_data_area.height
-                #y = max(min_y - fig_size[1], 0)  # don't let y be < 0
-                y = min_y - fig_size[1] - 100
-                figure_capsule.fig_container.pos = (x, y)
+        options = self.positioning_options.copy()
+        if positioning_option_overrides:
+            options.update(positioning_option_overrides)
+        scale = float(options.get('scale', '1.0'))
 
-            elif arrange_mode == 'left right':
-                min_y = min([c.y for c in existing_figs]) if len(existing_figs) > 0 \
-                    else self.active_data_area.height
-                y = min_y  # place new figure level with lowest current figure
-                max_x = max([(c.x + c.width) for c in existing_figs]) if len(existing_figs) > 0 else 0
-                x = max_x + 100
-                figure_capsule.fig_container.pos = (x, y)
+        if self.active_data_area is None:
+            print("No active data area!  Must create or switch to a data tab before creating figures.")
+            return
 
-            elif arrange_mode == 'all in center':
-                x = (self.active_data_area.size[0] - fig_size[0]) / 2
-                y = (self.active_data_area.size[1] - fig_size[1]) / 2
-                figure_capsule.fig_container.pos = (x, y)
-            else:
-                raise ValueError("Invalid arrange mode: %s" % str(arrange_mode))
-        else:
+        existing_figs = list(self.active_data_area.children)
+        fig_id = self.kernel.add_figure(active_tab_name, figure_type=item_text,
+                                        name=item_text)  # TODO: better in future
+        if fig_id is None:
             print("Cannot create " + item_text + " yet.")
+            return
 
-    def old_add_item(self, item_text):
-        print("OLD Adding item ", item_text)
+        figwidget = self.kernel.create_figure_widget(fig_id, self.default_figure_selector_vals, scale) #, options?)
+        fig_property_names = self.kernel.figure_property_names(fig_id)
 
-        resultsdir = self.resultsdir_selector_widget.selected_results_dir
-        data = resultsdir.data
-        edesign = data.edesign
+        #Place figure widget into a container
+        fig_container = FigureContainer(figwidget, fig_id, fig_property_names, caption=item_text,
+                                        comment="", root_widget=self, size_hint=(None, None))
+        for k in fig_container.selector_vals.keys():
+            fig_container.selector_vals[k] = self.default_figure_selector_vals[k]  # initialize default selector values
 
-        results = self.results_selector_widget.selected_results
+        set_info_containers(fig_container, self.ids.lower_info_area, self.ids.status_label)
+        self.active_data_area.add_widget(fig_container)
 
-        circuit_list = edesign.all_circuits_needing_data
-        dataset = data.dataset
+        fig_size = figwidget.size
+        arrange_mode = options.get('arrange', 'top down')
 
-        if isinstance(edesign, _StandardGSTDesign):
-            max_length_list = edesign.maxlengths
-            circuits_by_L = edesign.circuit_lists
+        if arrange_mode == 'top down':
+            x = 0  # in this mode, x always == 0
+            min_y = min([c.y for c in existing_figs]) if len(existing_figs) > 0 \
+                else self.active_data_area.height
+            #y = max(min_y - fig_size[1], 0)  # don't let y be < 0
+            y = min_y - fig_size[1] - 100
+            fig_container.pos = (x, y)
+
+        elif arrange_mode == 'left right':
+            min_y = min([c.y for c in existing_figs]) if len(existing_figs) > 0 \
+                else self.active_data_area.height
+            y = min_y  # place new figure level with lowest current figure
+            max_x = max([(c.x + c.width) for c in existing_figs]) if len(existing_figs) > 0 else 0
+            x = max_x + 100
+            fig_container.pos = (x, y)
+
+        elif arrange_mode == 'all in center':
+            x = (self.active_data_area.size[0] - fig_size[0]) / 2
+            y = (self.active_data_area.size[1] - fig_size[1]) / 2
+            fig_container.pos = (x, y)
         else:
-            max_length_list = None
-            circuits_by_L = None
+            raise ValueError("Invalid arrange mode: %s" % str(arrange_mode))
 
-        if isinstance(results, _ModelEstimateResults):
-            estimate = results.estimates[self.resultdetail_selector_widget.estimate_name]
-            model = estimate.models[self.resultdetail_selector_widget.model_name]
-            target_model = estimate.models['target'] if 'target' in estimate.models else None
-            models = [model]
-            titles = ['Estimate']
-            objfn_builder = estimate.parameters.get(
-                'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
-            models_by_L = [estimate.models['iteration %d estimate' % i] for i in range(len(max_length_list))] \
-                if (max_length_list is not None) else None
-            est_lbls_mt = [est_name for est_name in results.estimates if est_name != "Target"]
-            est_mdls_mt = [results.estimates[est_name].models.get('final iteration estimate', None)
-                           for est_name in est_lbls_mt]
-            gaugeopt_args = estimate.goparameters.get(self.resultdetail_selector_widget.model_name, {})
-            estimate_params = estimate.parameters
-        else:
-            estimate = model = target_model = None
-            models = titles = []
-            objfn_builder = None
-            models_by_L = None
-            est_lbls_mt = None
-            est_mdls_mt = None
-            gaugeopt_args = {}
-            estimate_params = {}
-        cri = None
 
-        ws = Workspace(gui_mode='kivy')
-        wstable = None
-        wsplot = None
-        if item_text == 'SpamTable':
-            wstable = ws.SpamTable(models, titles, 'boxes', cri, False)  # titles?
-        elif item_text == 'SpamParametersTable':
-            wstable = ws.SpamParametersTable(models, titles, cri)
-        elif item_text == 'GatesTable':
-            wstable = ws.GatesTable(models, titles, 'boxes', cri)
-        elif item_text == 'ChoiTable':
-            wstable = ws.ChoiTable(models, titles, cri)
-        elif item_text == 'ModelVsTargetTable':
-            clifford_compilation = None
-            wstable = ws.ModelVsTargetTable(model, target_model, clifford_compilation, cri)
-        elif item_text == 'GatesVsTargetTable':
-            wstable = ws.GatesVsTargetTable(model, target_model, cri)  # wildcard?
-        elif item_text == 'SpamVsTargetTable':
-            wstable = ws.SpamVsTargetTable(model, target_model, cri)
-        elif item_text == 'ErrgenTable':
-            wstable = ws.ErrgenTable(model, target_model, cri)  # (more options)
-        elif item_text == 'NQubitErrgenTable':
-            wstable = ws.NQubitErrgenTable(model, cri)
-        elif item_text == 'GateDecompTable':
-            wstable = ws.GateDecompTable(model, target_model, cri)
-        elif item_text == 'GateEigenvalueTable':
-            wstable = ws.GateEigenvalueTable(model, target_model, cri,
-                                             display=('evals', 'rel', 'log-evals', 'log-rel'))
-        elif item_text == 'DataSetOverviewTable':
-            wstable = ws.DataSetOverviewTable(dataset, max_length_list)
-        elif item_text == 'SoftwareEnvTable':
-            wstable = ws.SoftwareEnvTable()
-        elif item_text == 'CircuitTable':
-            # wstable = ws.CircuitTable(...)  # wait until we can select circuit list; e.g. germs, fiducials
-            print("Wait until better selection methods to create circuit tables...")
-        elif item_text == 'GatesSingleMetricTable':
-            #metric = 'inf'  # entanglement infidelity
-            #wstable = GatesSingleMetricTable(metric, ...)
-            print("Wait until better selection methods to create single-item gate metric tables...")
-        elif item_text == 'StandardErrgenTable':
-            wstable = ws.StandardErrgenTable(model.dim, 'hamiltonian', 'pp')  # not super useful; what about 'stochastic'?
-        elif item_text == 'GaugeOptParamsTable':
-            wstable = ws.GaugeOptParamsTable(gaugeopt_args)
-        elif item_text == 'MetadataTable':
-            wstable = ws.MetadataTable(model, estimate_params)
-        elif item_text == 'WildcardBudgetTable':
-            wstable = ws.WildcardBudgetTable(estimate_params.get("unmodeled_error", None))
-        elif item_text == 'FitComparisonTable':
-            wstable = ws.FitComparisonTable(max_length_list, circuits_by_L, models_by_L, dataset)
-        elif item_text == 'FitComparisonBarPlot':
-            wsplot = ws.FitComparisonBarPlot(max_length_list, circuits_by_L, models_by_L, dataset)
-        elif item_text == 'FitComparisonBarPlotB':
-            wsplot = ws.FitComparisonBarPlot(est_lbls_mt, [circuit_list] * len(est_mdls_mt),
-                                             est_mdls_mt, [dataset] * len(est_mdls_mt), objfn_builder)
 
-        elif item_text == 'FitComparisonBoxPlot':
-            # used for multiple data sets -- enable this once we get better selection methods
-            print("Wait until better selection methods to create fit comparison box plot...")
-        elif item_text in ('ColorBoxPlot', 'ColorScatterPlot', 'ColorHistogramPlot'):
+#REMOVE
+#        
+#        extra_capsule_args = dict(caption=item_text,
+#                                  info_sidebar=self.ids.info_layout,
+#                                  status_label=self.ids.status_label,
+#                                  root_widget=self)
+#
+#        #default_figure_creation_args = self.selector_values_to_creation_args(self.default_figure_selector_vals)
+#        if item_text == 'SpamTable':
+#            #wstable = ws.SpamTable(models, titles, 'boxes', cri, False)  # titles?
+#            figure_capsule = FigureCapsule(self.ws.SpamTable, ['*models', '*model_titles', 'boxes', cri, False],
+#                                           **extra_capsule_args)
+#        elif item_text == 'SpamParametersTable':
+#            #wstable = ws.SpamParametersTable(models, titles, cri)
+#            figure_capsule = FigureCapsule(self.ws.SpamParametersTable, ['*models', '*model_titles', cri],
+#                                           **extra_capsule_args)
+#        elif item_text == 'GatesTable':
+#            #wstable = ws.GatesTable(models, titles, 'boxes', cri)
+#            figure_capsule = FigureCapsule(self.ws.GatesTable, ['*models', '*model_titles', 'boxes', cri],
+#                                           **extra_capsule_args)
+#        elif item_text == 'ChoiTable':
+#            #wstable = ws.ChoiTable(models, titles, cri)
+#            figure_capsule = FigureCapsule(self.ws.ChoiTable, ['*models', '*model_titles', cri],
+#                                           **extra_capsule_args)
+#        elif item_text == 'ModelVsTargetTable':
+#            clifford_compilation = None
+#            #wstable = ws.ModelVsTargetTable(model, target_model, clifford_compilation, cri)
+#            figure_capsule = FigureCapsule(self.ws.ModelVsTargetTable, ['*model', '*target_model',
+#                                                                        clifford_compilation, cri],
+#                                           **extra_capsule_args)
+#        elif item_text == 'GatesVsTargetTable':
+#            #wstable = ws.GatesVsTargetTable(model, target_model, cri)  # wildcard?
+#            figure_capsule = FigureCapsule(self.ws.GatesVsTargetTable, ['*model', '*target_model', cri],
+#                                           **extra_capsule_args)
+#        elif item_text == 'SpamVsTargetTable':
+#            #wstable = ws.SpamVsTargetTable(model, target_model, cri)
+#            figure_capsule = FigureCapsule(self.ws.SpamVsTargetTable, ['*model', '*target_model', cri],
+#                                           **extra_capsule_args)
+#        elif item_text == 'ErrgenTable':
+#            #wstable = ws.ErrgenTable(model, target_model, cri)  # (more options)
+#            figure_capsule = FigureCapsule(self.ws.ErrgenTable, ['*model', '*target_model', cri],
+#                                           **extra_capsule_args)
+#        elif item_text == 'NQubitErrgenTable':
+#            #wstable = ws.NQubitErrgenTable(model, cri)
+#            figure_capsule = FigureCapsule(self.ws.NQubitErrgenTable, ['*model', cri],
+#                                           **extra_capsule_args)
+#        elif item_text == 'GateDecompTable':
+#            #wstable = ws.GateDecompTable(model, target_model, cri)
+#            figure_capsule = FigureCapsule(self.ws.GateDecompTable, ['*model', '*target_model', cri],
+#                                           **extra_capsule_args)
+#        elif item_text == 'GateEigenvalueTable':
+#            #wstable = ws.GateEigenvalueTable(model, target_model, cri,
+#            #                                 display=('evals', 'rel', 'log-evals', 'log-rel'))
+#            figure_capsule = FigureCapsule(self.ws.GateEigenvalueTable, ['*model', '*target_model', cri,
+#                                                                         ('evals', 'rel', 'log-evals', 'log-rel')],
+#                                           **extra_capsule_args)
+#        elif item_text == 'DataSetOverviewTable':
+#            #wstable = ws.DataSetOverviewTable(dataset, max_length_list)
+#            figure_capsule = FigureCapsule(self.ws.DataSetOverviewTable, ['*dataset', '*maxlengths'],
+#                                           **extra_capsule_args)
+#        elif item_text == 'SoftwareEnvTable':
+#            #wstable = ws.SoftwareEnvTable()
+#            figure_capsule = FigureCapsule(self.ws.SoftwareEnvTable, [], **extra_capsule_args)
+#        elif item_text == 'CircuitTable':
+#            # wstable = ws.CircuitTable(...)  # wait until we can select circuit list; e.g. germs, fiducials
+#            print("Wait until better selection methods to create circuit tables...")
+#            figure_capsule = None
+#        elif item_text == 'GatesSingleMetricTable':
+#            #metric = 'inf'  # entanglement infidelity
+#            #wstable = GatesSingleMetricTable(metric, ...)
+#            print("Wait until better selection methods to create single-item gate metric tables...")
+#            figure_capsule = None
+#        elif item_text == 'StandardErrgenTable':
+#            #wstable = ws.StandardErrgenTable(model.dim, 'hamiltonian', 'pp')  # not super useful; what about 'stochastic'?
+#            figure_capsule = FigureCapsule(self.ws.StandardErrgenTable, ['*model_dim', 'H', 'pp'],
+#                                           **extra_capsule_args)
+#        elif item_text == 'GaugeOptParamsTable':
+#            #wstable = ws.GaugeOptParamsTable(gaugeopt_args)
+#            figure_capsule = FigureCapsule(self.ws.GaugeOptParamsTable, ['*gaugeopt_args'],
+#                                           **extra_capsule_args)
+#        elif item_text == 'MetadataTable':
+#            #wstable = ws.MetadataTable(model, estimate_params)
+#            figure_capsule = FigureCapsule(self.ws.MetadataTable, ['*model', '*estimate_params'],
+#                                           **extra_capsule_args)
+#        elif item_text == 'WildcardBudgetTable':
+#            #wstable = ws.WildcardBudgetTable(estimate_params.get("unmodeled_error", None))
+#            figure_capsule = FigureCapsule(self.ws.WildcardBudgetTable, ['*unmodeled_error'],
+#                                           **extra_capsule_args)
+#        elif item_text == 'FitComparisonTable':
+#            #wstable = ws.FitComparisonTable(max_length_list, circuits_by_L, models_by_L, dataset)
+#            figure_capsule = FigureCapsule(self.ws.FitComparisonTable, ['*maxlengths', '*circuits_by_maxl',
+#                                                                        '*models_by_maxl', '*dataset',
+#                                                                        '*objfn_builder'],
+#                                           **extra_capsule_args)
+#        elif item_text == 'FitComparisonBarPlot':
+#            #wsplot = ws.FitComparisonBarPlot(max_length_list, circuits_by_L, models_by_L, dataset)
+#            figure_capsule = FigureCapsule(self.ws.FitComparisonBarPlot, ['*maxlengths', '*circuits_by_maxl',
+#                                                                          '*models_by_maxl', '*dataset'],
+#                                           **extra_capsule_args)
+#        elif item_text == 'FitComparisonBarPlotB':
+#            #wsplot = ws.FitComparisonBarPlot(est_lbls_mt, [circuit_list] * len(est_mdls_mt),
+#            #                                 est_mdls_mt, [dataset] * len(est_mdls_mt), objfn_builder)
+#            def multiplx(titles, circuit_list, models, dataset, objfn_builder):
+#                return self.ws.FitComparisonBarPlot(titles, [circuit_list] * len(titles),
+#                                                    models, [dataset] * len(titles), objfn_builder)
+#            figure_capsule = FigureCapsule(multiplx, ['*model_titles', '*circuit_list', '*models', '*dataset',
+#                                                      '*objfn_builder'], **extra_capsule_args)
+#        elif item_text == 'FitComparisonBoxPlot':
+#            # used for multiple data sets -- enable this once we get better selection methods
+#            print("Wait until better selection methods to create fit comparison box plot...")
+#            figure_capsule = None
+#        elif item_text in ('ColorBoxPlot', 'ColorScatterPlot', 'ColorHistogramPlot'):
+#
+#            if item_text == 'ColorBoxPlot': plot_type = "boxes"
+#            elif item_text == "ColorScatterPlot": plot_type = "scatter"
+#            else: plot_type = "histogram"
+#
+#            linlog_percentile = 5
+#            #bgcolor = 'white'
+#            #wsplot = ws.ColorBoxPlot(objfn_builder, circuit_list, dataset, model,
+#            #    linlg_pcntle=linlog_percentile / 100, comm=None, bgcolor=bgcolor, typ=plot_type)
+#            figure_capsule = FigureCapsule(self.ws.ColorBoxPlot,
+#                                           ['*objfn_builder', '*circuit_list', '*dataset', '*model',
+#                                            False, False, True, False, 'compact', linlog_percentile / 100,
+#                                            None, None, None, None, None, plot_type],
+#                                           **extra_capsule_args)
+#
+#        elif item_text in ['Model Violation Overview', 'Model Violation Detail', 'Gauge Inv. Metrics',
+#                           'Metrics', 'Raw Model Data', 'Reference']:  # NOTE: this list is duplicated in add_new_tab_preset_buttons!
+#            return self.add_preset(item_text)
+#        else:
+#            figure_capsule = None
+#
+#        if figure_capsule is not None:
+#            options = self.positioning_options.copy()
+#            if positioning_option_overrides:
+#                options.update(positioning_option_overrides)
+#            
+#            scale = float(options.get('scale', '1.0'))
+#            existing_figs = list(self.active_data_area.children)
+#            figure_capsule.fill_args_from_creation_arg_dict(default_figure_creation_args)
+#            fig_size = figure_capsule.update_figure_widget(self.active_data_area, scale)
+#
+#            arrange_mode = options.get('arrange', 'top down')
+#            if arrange_mode == 'top down':
+#                x = 0  # in this mode, x always == 0
+#                min_y = min([c.y for c in existing_figs]) if len(existing_figs) > 0 \
+#                    else self.active_data_area.height
+#                #y = max(min_y - fig_size[1], 0)  # don't let y be < 0
+#                y = min_y - fig_size[1] - 100
+#                figure_capsule.fig_container.pos = (x, y)
+#
+#            elif arrange_mode == 'left right':
+#                min_y = min([c.y for c in existing_figs]) if len(existing_figs) > 0 \
+#                    else self.active_data_area.height
+#                y = min_y  # place new figure level with lowest current figure
+#                max_x = max([(c.x + c.width) for c in existing_figs]) if len(existing_figs) > 0 else 0
+#                x = max_x + 100
+#                figure_capsule.fig_container.pos = (x, y)
+#
+#            elif arrange_mode == 'all in center':
+#                x = (self.active_data_area.size[0] - fig_size[0]) / 2
+#                y = (self.active_data_area.size[1] - fig_size[1]) / 2
+#                figure_capsule.fig_container.pos = (x, y)
+#            else:
+#                raise ValueError("Invalid arrange mode: %s" % str(arrange_mode))
+#        else:
+#            print("Cannot create " + item_text + " yet.")
 
-            if item_text == 'ColorBoxPlot': plot_type = "boxes"
-            elif item_text == "ColorScatterPlot": plot_type = "scatter"
-            else: plot_type = "histogram"
-
-            linlog_percentile = 5
-            bgcolor = 'white'
-            wsplot = ws.ColorBoxPlot(
-                objfn_builder, circuit_list,
-                dataset, model,  # could use non-gauge-opt model here?
-                linlg_pcntle=linlog_percentile / 100, comm=None, bgcolor=bgcolor,
-                typ=plot_type)
-
-        else:
-            wstable = wsplot = None
-
-        if wstable is not None:
-            tbl = wstable.tables[0]
-            out = tbl.render('kivywidget', kivywidget_kwargs={'size_hint': (None, None)})
-            tblwidget = out['kivywidget']
-            #self.active_data_area.clear_widgets()
-            fig = FigureContainer(tblwidget, item_text, size_hint=(None, None))
-            set_info_containers(fig, self.ids.info_layout, self.ids.status_label)
-            self.active_data_area.add_widget(fig)
-        elif wsplot is not None:
-            plt = wsplot.figs[0]
-            constructor_fn, kwargs = plt.kivywidget
-            natural_size = plt.metadata.get('natural_size', (300, 300))
-            kwargs.update({'size_hint': (None, None)})
-            pltwidget = constructor_fn(**kwargs)
-            pltwidget.size = natural_size
-            print("DB: PLOT Initial size = ", natural_size)
-            #self.active_data_area.clear_widgets()
-            fig = FigureContainer(pltwidget, item_text, size_hint=(None, None))
-            set_info_containers(fig, self.ids.info_layout, self.ids.status_label)
-            self.active_data_area.add_widget(fig)
-        else:
-            print("Cannot create " + item_text + " yet.")
+    #def old_add_item(self, item_text):  # REMOVE
+    #    print("OLD Adding item ", item_text)
+    #
+    #    resultsdir = self.resultsdir_selector_widget.selected_results_dir
+    #    data = resultsdir.data
+    #    edesign = data.edesign
+    #
+    #    results = self.results_selector_widget.selected_results
+    #
+    #    circuit_list = edesign.all_circuits_needing_data
+    #    dataset = data.dataset
+    #
+    #    if isinstance(edesign, _StandardGSTDesign):
+    #        max_length_list = edesign.maxlengths
+    #        circuits_by_L = edesign.circuit_lists
+    #    else:
+    #        max_length_list = None
+    #        circuits_by_L = None
+    #
+    #    if isinstance(results, _ModelEstimateResults):
+    #        estimate = results.estimates[self.resultdetail_selector_widget.estimate_name]
+    #        model = estimate.models[self.resultdetail_selector_widget.model_name]
+    #        target_model = estimate.models['target'] if 'target' in estimate.models else None
+    #        models = [model]
+    #        titles = ['Estimate']
+    #        objfn_builder = estimate.parameters.get(
+    #            'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
+    #        models_by_L = [estimate.models['iteration %d estimate' % i] for i in range(len(max_length_list))] \
+    #            if (max_length_list is not None) else None
+    #        est_lbls_mt = [est_name for est_name in results.estimates if est_name != "Target"]
+    #        est_mdls_mt = [results.estimates[est_name].models.get('final iteration estimate', None)
+    #                       for est_name in est_lbls_mt]
+    #        gaugeopt_args = estimate.goparameters.get(self.resultdetail_selector_widget.model_name, {})
+    #        estimate_params = estimate.parameters
+    #    else:
+    #        estimate = model = target_model = None
+    #        models = titles = []
+    #        objfn_builder = None
+    #        models_by_L = None
+    #        est_lbls_mt = None
+    #        est_mdls_mt = None
+    #        gaugeopt_args = {}
+    #        estimate_params = {}
+    #    cri = None
+    #
+    #    ws = Workspace(gui_mode='kivy')
+    #    wstable = None
+    #    wsplot = None
+    #    if item_text == 'SpamTable':
+    #        wstable = ws.SpamTable(models, titles, 'boxes', cri, False)  # titles?
+    #    elif item_text == 'SpamParametersTable':
+    #        wstable = ws.SpamParametersTable(models, titles, cri)
+    #    elif item_text == 'GatesTable':
+    #        wstable = ws.GatesTable(models, titles, 'boxes', cri)
+    #    elif item_text == 'ChoiTable':
+    #        wstable = ws.ChoiTable(models, titles, cri)
+    #    elif item_text == 'ModelVsTargetTable':
+    #        clifford_compilation = None
+    #        wstable = ws.ModelVsTargetTable(model, target_model, clifford_compilation, cri)
+    #    elif item_text == 'GatesVsTargetTable':
+    #        wstable = ws.GatesVsTargetTable(model, target_model, cri)  # wildcard?
+    #    elif item_text == 'SpamVsTargetTable':
+    #        wstable = ws.SpamVsTargetTable(model, target_model, cri)
+    #    elif item_text == 'ErrgenTable':
+    #        wstable = ws.ErrgenTable(model, target_model, cri)  # (more options)
+    #    elif item_text == 'NQubitErrgenTable':
+    #        wstable = ws.NQubitErrgenTable(model, cri)
+    #    elif item_text == 'GateDecompTable':
+    #        wstable = ws.GateDecompTable(model, target_model, cri)
+    #    elif item_text == 'GateEigenvalueTable':
+    #        wstable = ws.GateEigenvalueTable(model, target_model, cri,
+    #                                         display=('evals', 'rel', 'log-evals', 'log-rel'))
+    #    elif item_text == 'DataSetOverviewTable':
+    #        wstable = ws.DataSetOverviewTable(dataset, max_length_list)
+    #    elif item_text == 'SoftwareEnvTable':
+    #        wstable = ws.SoftwareEnvTable()
+    #    elif item_text == 'CircuitTable':
+    #        # wstable = ws.CircuitTable(...)  # wait until we can select circuit list; e.g. germs, fiducials
+    #        print("Wait until better selection methods to create circuit tables...")
+    #    elif item_text == 'GatesSingleMetricTable':
+    #        #metric = 'inf'  # entanglement infidelity
+    #        #wstable = GatesSingleMetricTable(metric, ...)
+    #        print("Wait until better selection methods to create single-item gate metric tables...")
+    #    elif item_text == 'StandardErrgenTable':
+    #        wstable = ws.StandardErrgenTable(model.dim, 'hamiltonian', 'pp')  # not super useful; what about 'stochastic'?
+    #    elif item_text == 'GaugeOptParamsTable':
+    #        wstable = ws.GaugeOptParamsTable(gaugeopt_args)
+    #    elif item_text == 'MetadataTable':
+    #        wstable = ws.MetadataTable(model, estimate_params)
+    #    elif item_text == 'WildcardBudgetTable':
+    #        wstable = ws.WildcardBudgetTable(estimate_params.get("unmodeled_error", None))
+    #    elif item_text == 'FitComparisonTable':
+    #        wstable = ws.FitComparisonTable(max_length_list, circuits_by_L, models_by_L, dataset)
+    #    elif item_text == 'FitComparisonBarPlot':
+    #        wsplot = ws.FitComparisonBarPlot(max_length_list, circuits_by_L, models_by_L, dataset)
+    #    elif item_text == 'FitComparisonBarPlotB':
+    #        wsplot = ws.FitComparisonBarPlot(est_lbls_mt, [circuit_list] * len(est_mdls_mt),
+    #                                         est_mdls_mt, [dataset] * len(est_mdls_mt), objfn_builder)
+    #
+    #    elif item_text == 'FitComparisonBoxPlot':
+    #        # used for multiple data sets -- enable this once we get better selection methods
+    #        print("Wait until better selection methods to create fit comparison box plot...")
+    #    elif item_text in ('ColorBoxPlot', 'ColorScatterPlot', 'ColorHistogramPlot'):
+    #
+    #        if item_text == 'ColorBoxPlot': plot_type = "boxes"
+    #        elif item_text == "ColorScatterPlot": plot_type = "scatter"
+    #        else: plot_type = "histogram"
+    #
+    #        linlog_percentile = 5
+    #        bgcolor = 'white'
+    #        wsplot = ws.ColorBoxPlot(
+    #            objfn_builder, circuit_list,
+    #            dataset, model,  # could use non-gauge-opt model here?
+    #            linlg_pcntle=linlog_percentile / 100, comm=None, bgcolor=bgcolor,
+    #            typ=plot_type)
+    #
+    #    else:
+    #        wstable = wsplot = None
+    #
+    #    if wstable is not None:
+    #        tbl = wstable.tables[0]
+    #        out = tbl.render('kivywidget', kivywidget_kwargs={'size_hint': (None, None)})
+    #        tblwidget = out['kivywidget']
+    #        #self.active_data_area.clear_widgets()
+    #        fig = FigureContainer(tblwidget, item_text, size_hint=(None, None))
+    #        set_info_containers(fig, self.ids.info_layout, self.ids.status_label)
+    #        self.active_data_area.add_widget(fig)
+    #    elif wsplot is not None:
+    #        plt = wsplot.figs[0]
+    #        constructor_fn, kwargs = plt.kivywidget
+    #        natural_size = plt.metadata.get('natural_size', (300, 300))
+    #        kwargs.update({'size_hint': (None, None)})
+    #        pltwidget = constructor_fn(**kwargs)
+    #        pltwidget.size = natural_size
+    #        print("DB: PLOT Initial size = ", natural_size)
+    #        #self.active_data_area.clear_widgets()
+    #        fig = FigureContainer(pltwidget, item_text, size_hint=(None, None))
+    #        set_info_containers(fig, self.ids.info_layout, self.ids.status_label)
+    #        self.active_data_area.add_widget(fig)
+    #    else:
+    #        print("Cannot create " + item_text + " yet.")
 
     def add_preset(self, preset_name):
         if preset_name == 'Model Violation Overview':
@@ -1484,7 +1636,13 @@ class RootExplorerWidget(BoxLayout):
 
     def create_new_tab(self, tab_text, preset_name):
         if len(tab_text) == 0:
-            tab_text = preset_name if (preset_name is not None) else 'Custom Analysis'
+            if preset_name is None:
+                existing_tab_names = set([t.text for t in self.ids.figure_areas.tab_list])
+                tab_text = 'Custom Analysis'; i = 2
+                while tab_text in existing_tab_names:
+                    tab_text = 'Custom Analysis %d' % i; i += 1
+            else:
+                tab_text = preset_name
         tab_header = CloseableHeader(text=tab_text)
         tab_header.content = FigureAreaWidget(root_widget=self)
 
@@ -1626,7 +1784,7 @@ class ResultsDirDetailSelectorWidget(BorderedBoxLayout):
     def on_change_selected_protocol(self, spinner, new_protocol_key):
         self.protocol_name = new_protocol_key
         results_dir = self.results_dir_selector_widget.selected_results_dir_node.data
-        results = results_dir.for_protocol[new_protocol_key]
+        results = results_dir.for_protocol[new_protocol_key] if new_protocol_key != '(none)' else None
         del self.rows[1:]  # keep only the protocol row
         self.additional_detail.clear()
 
@@ -1643,6 +1801,7 @@ class ResultsDirDetailSelectorWidget(BorderedBoxLayout):
         else:
             self.rows.append(Label(text='No details'))
             self.rebuild()
+            self.model_list_widget.clear_widgets()  #HACK
 
     def on_change_selected_estimate(self, spinner, new_estimate_key):
         #Note: this is only called when self.results is a ModelEstimateResults object
@@ -1652,7 +1811,7 @@ class ResultsDirDetailSelectorWidget(BorderedBoxLayout):
         self.additional_detail['estimate_name'] = new_estimate_key
         self.rebuild()
 
-        if new_estimate_key is not None:
+        if new_estimate_key is not None and new_estimate_key != '(none)':
             results_dir = self.results_dir_selector_widget.selected_results_dir_node.data
             estimate = results_dir.for_protocol[self.protocol_name].estimates[new_estimate_key]
             model_names = list(estimate.models.keys())
@@ -1896,7 +2055,7 @@ class DataAreaWidget(RelativeLayout):  #ScatterLayout):
             touch.apply_transform_2d(self.to_local)  # because DataAreaWidget is a RelativeLayout
             for figc in self.children:  # loop over figure containers
                 if figc.collide_point(*touch.pos):
-                    print("Figure %s received touch-down event" % figc.title)
+                    print("Figure %s received touch-down event" % figc.caption)
                     self.root_widget.set_active_figure_container(figc)
                     break
             else:
@@ -1912,7 +2071,7 @@ class DataAreaWidget(RelativeLayout):  #ScatterLayout):
 
 
 class FigureContainer(DragBehavior, ResizableBehavior, BoxLayout):
-    def __init__(self, fig_widget, title, capsule, **kwargs):
+    def __init__(self, fig_widget, fig_id, fig_property_names, caption, comment, root_widget, **kwargs):
         kwargs['orientation'] = 'vertical'
         resize_kwargs = dict(
             resizable_left=False,
@@ -1936,13 +2095,25 @@ class FigureContainer(DragBehavior, ResizableBehavior, BoxLayout):
             pts = [x1, y1, x2, y1, x2, y2, x1, y2, x1, y1]
             self.activebox = Line(points=pts, width=self.active_border_thickness)
 
+        self.figure_id = fig_id
         self.size = initial_size
-        self.title = title
+        self.caption = caption
+        self.comment = comment
+        self.add_widget(Label(text=caption, bold=True, size_hint_y=None, height=50, color=(0,0,0,1), font_size=18))
         self.content = None
-        self.capsule = capsule
-        self.add_widget(Label(text=title, bold=True, size_hint_y=None, height=50, color=(0,0,0,1), font_size=18))
         self.set_content(fig_widget)  # sets self.content
+        self.root_widget = root_widget
+
+        self.property_names = fig_property_names
+
+        #Initialize self.selector_vals from arguments and root_widget
+        self.selector_vals = {}  # replicated on front and back ends
+        selector_types = self.root_widget.selector_types_for_properties(self.property_names)
+        for typ in selector_types:
+            self.root_widget.add_figure_property_selector(typ, None, storage_dict=self.selector_vals)
+
         #self.set_cursor_mode(0)
+        #Merge into figure container: root_widget, info_sidebar, status_label
 
         db = self.drag_border = 2 * (self.resizable_border - self.resizable_border_offset)  # 2 for extra measure
         drag_kwargs = {'drag_rectangle': (self.x + db, self.y + db, self.width - 2 * db, self.height - 2 * db),
@@ -1983,82 +2154,10 @@ class FigureContainer(DragBehavior, ResizableBehavior, BoxLayout):
         db = self.drag_border
         self.drag_rectangle = (self.pos[0] + db, self.pos[1] + db, self.size[0] - 2 * db, self.size[1] - 2 * db)
 
-class FigureArgumentSelector(BoxLayout):
-    def create_default_args_selectors():
-        pass
-
-
-class FigureCapsule(object):
-
-    def __init__(self, creation_fn, args_template, root_widget, caption='', info_sidebar=None, status_label=None):
-        self.creation_fn = creation_fn
-        self.args_template = args_template
-        self.selector_vals = {}
-        self.args = []
-        self.caption = caption
-        self.fig_container = None
-        self._info_sidebar = info_sidebar
-        self._status_label = status_label
-        self.root_widget = root_widget
-
-        #Initialize self.selector_vals from arguments and root_widget
-        my_properties = [name for name in self.args_template if (isinstance(name, str) and name.startswith('*'))]
-        selector_types = self.root_widget.selector_types_for_properties(my_properties)
-        for typ in selector_types:
-            self.root_widget.add_figure_property_selector(typ, None, storage_dict=self.selector_vals)
-
-    def fill_args_from_creation_arg_dict(self, arg_dict):
-        self.args = []
-        for t in self.args_template:
-            if isinstance(t, str) and t.startswith('*'):
-                self.args.append(arg_dict[t])
-            else:
-                self.args.append(t)
-
-    def update_figure_widget(self, data_area, scale=1.0):
-        from pygsti.report.workspace import WorkspaceTable, WorkspacePlot
-
-        workspace_obj = self.creation_fn(*self.args)
-        if isinstance(workspace_obj, WorkspaceTable):
-            tbl = workspace_obj.tables[0]
-            out = tbl.render('kivywidget', kivywidget_kwargs={'size_hint': (None, None)})
-            figwidget = out['kivywidget']
-            print("DB: TABLE Initial size = ", figwidget.size, ' pos=', figwidget.pos)
-
-        elif isinstance(workspace_obj, WorkspacePlot):
-            plt = workspace_obj.figs[0]
-            constructor_fn, kwargs = plt.kivywidget
-            natural_size = plt.metadata.get('natural_size', (300, 300))
-            kwargs.update({'size_hint': (None, None)})
-            figwidget = constructor_fn(**kwargs)
-            figwidget.size = natural_size
-            print("DB: PLOT Initial size = ", natural_size, ' pos=', figwidget.pos)
-        else:
-            raise ValueError("Invalid figure type created: " + str(type(workspace_obj)))
-
-        if self.fig_container is None:
-            # Automatically scale size to fit visible window (OPTIONAL SETTING LATER?)
-            #max_scale = min(data_area.width / figwidget.width, data_area.height / figwidget.height)
-            #scale = min(scale, max_scale)  # scale figure down so it fits within data_area
-            #if scale != 1.0:
-            #    figwidget.size = (int(figwidget.size[0] * scale), int(figwidget.size[1] * scale))
-
-            fig = FigureContainer(figwidget, self.caption, self, size_hint=(None, None))  # Note: capsule and container should probably be one and the same...
-            set_info_containers(fig, self._info_sidebar, self._status_label)
-            data_area.add_widget(fig)
-            self.fig_container = fig
-        else:
-            figwidget.size = self.fig_container.size
-            self.fig_container.set_content(figwidget)
-
-        return figwidget.size  # for use in later processing to set figure positiong
-
     def populate_figure_property_panel(self, panel_widget):
         panel_widget.clear_widgets()
-
         panel_widget.add_widget(Label(text=self.caption, bold=True, size_hint_y=None, height=40))
-        my_properties = [name for name in self.args_template if (isinstance(name, str) and name.startswith('*'))]
-        selector_types = self.root_widget.selector_types_for_properties(my_properties)
+        selector_types = self.root_widget.selector_types_for_properties(self.property_names)
         for typ in selector_types:
             self.root_widget.add_figure_property_selector(typ, panel_widget, storage_dict=self.selector_vals)
         btn = Button(text='Update', size_hint_y=None, height=40)
@@ -2066,19 +2165,121 @@ class FigureCapsule(object):
         panel_widget.add_widget(btn)
 
     def update_figure(self, *args):
-        fig_creation_args = self.root_widget.selector_values_to_creation_args(self.selector_vals)
-        self.fill_args_from_creation_arg_dict(fig_creation_args)
-        self.update_figure_widget(None)
+        scale = float(self.root_widget.positioning_options.get('scale', "1.0"))
+        fig_widget = self.root_widget.kernel.create_figure_widget(self.figure_id, self.selector_vals, scale=scale)
+        fig_widget.size = self.size
+        self.set_content(fig_widget)
 
-    def to_json_dict(self):
-        cls_to_build = self.creation_fn.__globals__['cls']  # some magic to get the underlying class being constructed
-        to_save = {'creation_cls': cls_to_build.__module__ + '.' + cls_to_build.__name__,
-                   'caption': self.caption,
-                   'args_template': self.args_template,
-                   'arg_selector_values': self.selector_vals,
-                   'size': self.fig_container.size,
-                   'position': self.fig_container.pos}
-        return to_save
+    def populate_info_panel(self, panel_widget):
+        panel_widget.clear_widgets()
+        info = [('Figure ID', str(self.figure_id)),
+                ('Title', self.caption),
+                ('Description', "<TODO: add figure description>")]
+        for k, v in info:
+            row = BoxLayout(orientation='horizontal', size_hint_y=None)
+            row.add_widget(FixedHeightLabel(text=k, size_hint_x=0.4))
+            row.add_widget(WrappedLabel(text=v, size_hint_x=0.6))
+            panel_widget.add_widget(row)
+        #panel_widget.add_widget(Label(text=self.caption, bold=True, size_hint_y=None, height=40))
+
+
+class FigureArgumentSelector(BoxLayout):
+    def create_default_args_selectors():
+        pass
+
+
+#Merge into figure container: root_widget, info_sidebar, status_label
+#class FigureCapsule(object):
+#
+#    def __init__(self, creation_fn, args_template, root_widget, caption='', info_sidebar=None, status_label=None):
+#        self.creation_fn = creation_fn
+#        self.args_template = args_template
+#        self.selector_vals = {}
+#        self.args = []
+#        self.caption = caption
+#        self.fig_container = None
+#        self._info_sidebar = info_sidebar
+#        self._status_label = status_label
+#        self.root_widget = root_widget
+#
+#        #Initialize self.selector_vals from arguments and root_widget
+#        my_properties = [name for name in self.args_template if (isinstance(name, str) and name.startswith('*'))]
+#        selector_types = self.root_widget.selector_types_for_properties(my_properties)
+#        for typ in selector_types:
+#            self.root_widget.add_figure_property_selector(typ, None, storage_dict=self.selector_vals)
+#
+#    def fill_args_from_creation_arg_dict(self, arg_dict):
+#        self.args = []
+#        for t in self.args_template:
+#            if isinstance(t, str) and t.startswith('*'):
+#                self.args.append(arg_dict[t])
+#            else:
+#                self.args.append(t)
+#
+#    def update_figure_widget(self, data_area, scale=1.0):
+#        from pygsti.report.workspace import WorkspaceTable, WorkspacePlot
+#
+#        workspace_obj = self.creation_fn(*self.args)
+#        if isinstance(workspace_obj, WorkspaceTable):
+#            tbl = workspace_obj.tables[0]
+#            out = tbl.render('kivywidget', kivywidget_kwargs={'size_hint': (None, None)})
+#            figwidget = out['kivywidget']
+#            print("DB: TABLE Initial size = ", figwidget.size, ' pos=', figwidget.pos)
+#
+#        elif isinstance(workspace_obj, WorkspacePlot):
+#            plt = workspace_obj.figs[0]
+#            constructor_fn, kwargs = plt.kivywidget
+#            natural_size = plt.metadata.get('natural_size', (300, 300))
+#            kwargs.update({'size_hint': (None, None)})
+#            figwidget = constructor_fn(**kwargs)
+#            figwidget.size = natural_size
+#            print("DB: PLOT Initial size = ", natural_size, ' pos=', figwidget.pos)
+#        else:
+#            raise ValueError("Invalid figure type created: " + str(type(workspace_obj)))
+#
+#        if self.fig_container is None:
+#            # Automatically scale size to fit visible window (OPTIONAL SETTING LATER?)
+#            #max_scale = min(data_area.width / figwidget.width, data_area.height / figwidget.height)
+#            #scale = min(scale, max_scale)  # scale figure down so it fits within data_area
+#            #if scale != 1.0:
+#            #    figwidget.size = (int(figwidget.size[0] * scale), int(figwidget.size[1] * scale))
+#
+#            fig = FigureContainer(figwidget, self.caption, self, size_hint=(None, None))  # Note: capsule and container should probably be one and the same...
+#            set_info_containers(fig, self._info_sidebar, self._status_label)
+#            data_area.add_widget(fig)
+#            self.fig_container = fig
+#        else:
+#            figwidget.size = self.fig_container.size
+#            self.fig_container.set_content(figwidget)
+#
+#        return figwidget.size  # for use in later processing to set figure positiong
+#
+#    def populate_figure_property_panel(self, panel_widget):
+#        panel_widget.clear_widgets()
+#
+#        panel_widget.add_widget(Label(text=self.caption, bold=True, size_hint_y=None, height=40))
+#        my_properties = [name for name in self.args_template if (isinstance(name, str) and name.startswith('*'))]
+#        selector_types = self.root_widget.selector_types_for_properties(my_properties)
+#        for typ in selector_types:
+#            self.root_widget.add_figure_property_selector(typ, panel_widget, storage_dict=self.selector_vals)
+#        btn = Button(text='Update', size_hint_y=None, height=40)
+#        btn.bind(on_release=self.update_figure)
+#        panel_widget.add_widget(btn)
+#
+#    def update_figure(self, *args):
+#        fig_creation_args = self.root_widget.selector_values_to_creation_args(self.selector_vals)
+#        self.fill_args_from_creation_arg_dict(fig_creation_args)
+#        self.update_figure_widget(None)
+#
+#    def to_json_dict(self):
+#        cls_to_build = self.creation_fn.__globals__['cls']  # some magic to get the underlying class being constructed
+#        to_save = {'creation_cls': cls_to_build.__module__ + '.' + cls_to_build.__name__,
+#                   'caption': self.caption,
+#                   'args_template': self.args_template,
+#                   'arg_selector_values': self.selector_vals,
+#                   'size': self.fig_container.size,
+#                   'position': self.fig_container.pos}
+#        return to_save
 
 
 class CustomAccordionTitle(Label):
@@ -2292,13 +2493,12 @@ class EditTabDialog(FloatLayout):
 
 
 class DataExplorerApp(App):
-    def __init__(self, app_path, initial_results_dir_path):  #, test_widget):
+    def __init__(self, app_path, initial_kernel_json_name):  #, test_widget):
         self.app_path = app_path
-        self.initial_results_dir_path = initial_results_dir_path
+        self.initial_kernel_json_name = initial_kernel_json_name
         #self.test_widget = test_widget
         super().__init__()
 
-        from pygsti.report.kivywidget import LatexWidget
         cache_file = _os.path.join(app_path, '.pygsti_latex_widget_cache')
         if _os.path.exists(cache_file):
             print("Reading latex widget cache from ", cache_file)
@@ -2308,10 +2508,9 @@ class DataExplorerApp(App):
 
     def build(self):
         Window.bind(on_request_close=self.on_request_close)
-        return RootExplorerWidget(self.app_path, self.initial_results_dir_path)
+        return RootExplorerWidget(self.app_path, self.initial_kernel_json_name)
 
     def on_request_close(self, *args):
-        from pygsti.report.kivywidget import LatexWidget
         print("Writing latex widget cache to speedup latex -> svg conversion in the future.")
         LatexWidget.write_cache(_os.path.join(self.app_path, '.pygsti_latex_widget_cache'))
 

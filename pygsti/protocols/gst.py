@@ -1532,6 +1532,8 @@ class StandardGST(_proto.Protocol):
                 data.edesign.processor_spec, None, evotype='default', simulator='auto',
                 ideal_gate_type='static', ideal_prep_type='auto', ideal_povm_type='auto',
                 embed_gates=False, basis='pp')  # HARDCODED basis!
+        else:
+            target_model = None
 
         ret = ModelEstimateResults(data, self)
         with printer.progress_logging(1):

@@ -2835,7 +2835,7 @@ class FitComparisonTable(WorkspaceTable):
                                        and objfn_builder.cls_to_build == _objfns.Chi2Function):
             colHeadings = {
                 'latex': (x_label, '$\\chi^2$', '$k$', '$\\chi^2-k$', '$\sqrt{2k}$',
-                          '$N_\\sigma$', '$N_s$', '$N_p$', 'Rating'),
+                          '$N_{\\sigma}$', '$N_s$', '$N_p$', 'Rating'),
                 'html': (x_label, '&chi;<sup>2</sup>', 'k', '&chi;<sup>2</sup>-k',
                          '&radic;<span style="text-decoration:overline;">2k</span>',
                          'N<sub>sigma</sub>', 'N<sub>s</sub>', 'N<sub>p</sub>', 'Rating'),
@@ -2847,7 +2847,7 @@ class FitComparisonTable(WorkspaceTable):
                                          and objfn_builder.cls_to_build == _objfns.PoissonPicDeltaLogLFunction):
             colHeadings = {
                 'latex': (x_label, '$2\Delta\\log(\\mathcal{L})$', '$k$', '$2\Delta\\log(\\mathcal{L})-k$',
-                          '$\sqrt{2k}$', '$N_\\sigma$', '$N_s$', '$N_p$', 'Rating'),
+                          '$\sqrt{2k}$', '$N_{\\sigma}$', '$N_s$', '$N_p$', 'Rating'),
                 'html': (x_label, '2&Delta;(log L)', 'k', '2&Delta;(log L)-k',
                          '&radic;<span style="text-decoration:overline;">2k</span>',
                          'N<sub>sigma</sub>', 'N<sub>s</sub>', 'N<sub>p</sub>', 'Rating'),

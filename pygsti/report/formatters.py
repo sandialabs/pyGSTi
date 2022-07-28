@@ -355,12 +355,14 @@ def kivy_figure(fig, specs):
     -------
     str
     """
-    #Create figure inline with 'js' set to only handlers (no further plot init)
-    fig_widget_constructor = fig.value.figs[0].kivywidget  # why not: fig.value.render('kivywidget')?
-    fig_class, kwargs = fig_widget_constructor
-    fig_widget = fig_class(**kwargs)
-    fig_widget.size = fig.value.figs[0].metadata.get('natural_size', (300, 300))
-    return fig_widget
+    return fig.value.figs[0].kivywidget_factory
+
+    #TODO REMOVE
+    #fig_widget_constructor = fig.value.figs[0].kivywidget  # why not: fig.value.render('kivywidget')?
+    #fig_class, kwargs = fig_widget_constructor
+    #fig_widget = fig_class(**kwargs)
+    #fig_widget.size = fig.value.figs[0].metadata.get('natural_size', (300, 300))
+    #return fig_widget
 
 
 format_dict['Figure'] = {

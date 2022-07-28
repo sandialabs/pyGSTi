@@ -24,6 +24,7 @@ from pygsti.report import colormaps as _colormaps
 from pygsti.report import plothelpers as _ph
 from pygsti.report.figure import ReportFigure, ReportKivyFigure
 from pygsti.report.workspace import WorkspacePlot
+from pygsti.report.kivywidget import KivyPlotFactory
 from pygsti import algorithms as _alg
 from pygsti import baseobjs as _baseobjs
 from pygsti.objectivefns import objectivefns as _objfns
@@ -212,8 +213,6 @@ def _color_boxplot_kivy(plt_data, colormap, colorbar=False, box_label_size=0,
     plotly.Figure
     """
 
-    from pygsti.report.kivygraph import MatrixBoxPlotGraph
-
     #BEGIN FROM PLOTLY VERSION
     annotations = []
     if box_label_size:
@@ -245,25 +244,29 @@ def _color_boxplot_kivy(plt_data, colormap, colorbar=False, box_label_size=0,
     #               'showscale': colorbar, 'hoverinfo': 'none',
     #               'zmin': colormap.hmin, 'zmax': colormap.hmax}
 
+    SQUARE_SIZE = 50
+    natural_size = (SQUARE_SIZE * plt_data.shape[1],
+                    SQUARE_SIZE * plt_data.shape[0])
+
     #Hold widget (class, init_kwargs) instead of the widget itself for
     # ease of copying and serialization.
-    widget_constructor = (MatrixBoxPlotGraph,
-                          dict(data_matrix=plt_data,
-                               xlabel='',
-                               ylabel='',
-                               padding=5, #background_color=(1,0,0,1),
-                               x_ticks_major=1.0, y_ticks_major=1.0, x_tick_offset=0.5, y_tick_offset=0.5,
-                               colormap=colormap, prec=prec))
+    widget_factory = KivyPlotFactory(class_to_construct='pygsti.report.kivygraph.MatrixBoxPlotGraph',
+                                     numpy_args=dict(data_matrix=plt_data),
+                                     native_args=dict(xlabel='',
+                                                      ylabel='',
+                                                      padding=5, #background_color=(1,0,0,1),
+                                                      x_ticks_major=1.0, y_ticks_major=1.0,
+                                                      x_tick_offset=0.5, y_tick_offset=0.5,
+                                                      prec=prec),
+                                     serializable_args=dict(colormap=colormap),
+                                     natural_size=natural_size)
                           #x_grid_labels=xlabels, x_grid_label=True,
                           #y_grid_labels=ylabels, y_grid_label=True))
     #x_ticks_angle=45, **graph_theme)
 
     flipped_mx = _np.flipud(plt_data)  # FLIP so [0,0] matrix el is at *top* left
     #REMOVE ylabels = list(reversed(ylabels))  # FLIP y-labels to match
-    SQUARE_SIZE = 50
-    natural_size = (SQUARE_SIZE * plt_data.shape[1],
-                    SQUARE_SIZE * plt_data.shape[0])
-    return ReportKivyFigure(widget_constructor, colormap, flipped_mx, plt_data=flipped_mx, natural_size=natural_size)
+    return ReportKivyFigure(widget_factory, colormap, flipped_mx, plt_data=flipped_mx)
 
 
 def _nested_color_boxplot(plt_data_list_of_lists, colormap,
@@ -401,8 +404,6 @@ def _nested_color_boxplot_kivy(plt_data_list_of_lists, colormap,
         A tuple of `(constructor_fn, kwargs)` for constructing a Kivy widget
     """
 
-    from pygsti.report.kivygraph import NestedMatrixBoxPlotGraph
-    
     #Assemble the single 2D grid to pass to _color_boxplot
     # (assume a complete 2D rectangular list of lists, and that
     #  each element is a numpy array of the same size)
@@ -429,18 +430,15 @@ def _nested_color_boxplot_kivy(plt_data_list_of_lists, colormap,
     #
 
     if hover_label_fn:
-        hoverLabels = []
-        for _ in range(elRows * nRows + (nRows - 1)):
-            hoverLabels.append([""] * (elCols * nCols + (nCols - 1)))
-
+        hover_label_lookup = []  # create a list of (key, value) for creating a dictionary in the front end
         for i in range(nRows):
             for j in range(nCols):
                 for ii in range(elRows):
                     for jj in range(elCols):
-                        hoverLabels[(elRows + 1) * i + ii][(elCols + 1) * j + jj] = \
-                            hover_label_fn(plt_data_list_of_lists[i][j][ii][jj], i, j, ii, jj)
+                        hover_label_lookup.append(
+                            ((i, j, ii, jj), hover_label_fn(plt_data_list_of_lists[i][j][ii][jj], i, j, ii, jj)))
     else:
-        hoverLabels = None
+        hover_label_lookup = None
 
     graph_theme = {
         'label_options': {
@@ -452,14 +450,6 @@ def _nested_color_boxplot_kivy(plt_data_list_of_lists, colormap,
         'font_size': 18
     }
 
-    widget_constructor = (NestedMatrixBoxPlotGraph,
-                          dict(plt_data_list_of_lists=plt_data_list_of_lists,
-                               xlabel='' if (xlabel is None) else xlabel,
-                               ylabel='' if (ylabel is None) else ylabel,
-                               padding=50,  #background_color=(1,0,0,1),
-                               x_grid_labels=xlabels, x_grid_label=True,
-                               y_grid_labels=ylabels, y_grid_label=True,
-                               colormap=colormap, hover_label_fn=hover_label_fn, **graph_theme))
     SQUARE_SIZE = 30
     elRows, elCols = plt_data_list_of_lists[0][0].shape  # nE,nr
     num_rows = len(plt_data_list_of_lists)  # number of rows of plaquettes
@@ -469,8 +459,22 @@ def _nested_color_boxplot_kivy(plt_data_list_of_lists, colormap,
     xlabel_height = (40 if xlabels else 0) + (40 if xlabel else 0)  # very rough TODO better
     natural_size = (SQUARE_SIZE * (elCols * num_cols + (num_cols - 1)) + ylabel_width,
                     SQUARE_SIZE * (elRows * num_rows + (num_rows - 1)) + xlabel_height)
-    return ReportKivyFigure(widget_constructor, colormap, plt_data_list_of_lists,
-                            plt_data=plt_data_list_of_lists, natural_size=natural_size)
+
+    widget_factory = KivyPlotFactory(class_to_construct='pygsti.report.kivygraph.NestedMatrixBoxPlotGraph',
+                                     numpy_args=dict(plt_data_list_of_lists=plt_data_list_of_lists),
+                                     native_args=dict(xlabel='' if (xlabel is None) else xlabel,
+                                                      ylabel='' if (ylabel is None) else ylabel,
+                                                      padding=50,  #background_color=(1,0,0,1),
+                                                      x_grid_labels=xlabels, x_grid_label=True,
+                                                      y_grid_labels=ylabels, y_grid_label=True,
+                                                      hover_label_lookup=hover_label_lookup,
+                                                      **graph_theme),
+                                     serializable_args=dict(colormap=colormap),
+                                     #function_args=dict(hover_label_fn=hover_label_fn),  # replaced with hover_label_lookup
+                                     natural_size=natural_size)
+
+    return ReportKivyFigure(widget_factory, colormap, plt_data_list_of_lists,
+                            plt_data=plt_data_list_of_lists)
 
 
 def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
@@ -977,39 +981,15 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
                             {'x': xs, 'y': ys})
 
     elif gui_mode == 'kivy':
-        from pygsti.report.kivygraph import Graph, PointPlot
-
-        def build_plot(xs, ys, ylabel, **kwargs):
-            graph_theme = {
-                'label_options': {
-                    'color': (0,0,0,1),  # color of tick labels and titles
-                    'bold': False},
-                'background_color': (1, 1, 1, 1),  # canvas background color
-                'tick_color': (0, 0, 0, 0),  # ticks and grid
-                'border_color': (0, 0, 0, 1),  # border drawn around each graph
-                'font_size': 18
-            }
-            kwargs.update(graph_theme)
-
-            xmax = max(xs)
-            yrng = max(ys) - min(ys)
-            colors = [colormap.interpolate_color_tuple(y, rgb_ints=False, add_alpha=1.0) for y in ys]
-            graph = Graph(xlabel='Circuit Depth', ylabel='' if (ylabel is None) else ylabel,
-                          x_ticks_major=10**(_np.floor(_np.log10(xmax)) - 1), x_ticks_minor=2,
-                          y_ticks_major=10**(_np.floor(_np.log10(yrng)) - 1), y_ticks_minor=2,
-                          y_grid_label=True, x_grid_label=True, padding=5,
-                          x_grid=True, y_grid=True, xmin=0, xmax=xmax,
-                          ymin=float(min(ys)), ymax=float(max(ys)),  # float needed b/c Graph doesn't like numpy types
-                          **kwargs)
-            plot = PointPlot(color=[0, 0.5, 0, 1], point_size=5.0, colors=colors)
-            plot.points = list(zip(xs, ys))
-            graph.add_plot(plot)
-            return graph
-
-        widget_constructor = (build_plot, dict(xs=xs, ys=ys, ylabel=ylabel))
-        return ReportKivyFigure(widget_constructor, colormap, {'x': xs, 'y': ys}, natural_size=(500, 500))
+        widget_factory = KivyPlotFactory(constructor_fn='pygsti.report.kivyfrontend._build_kivy_color_scatterplot',
+                                         native_args=dict(xs=xs, ys=ys, ylabel=ylabel),
+                                         serializable_args=dict(colormap=colormap),
+                                         natural_size=(500, 500))
+        return ReportKivyFigure(widget_factory, colormap, {'x': xs, 'y': ys})
     else:
         raise ValueError("Invalid gui_mode: %s" % str(gui_mode))
+
+
 
 
 def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
@@ -1138,54 +1118,20 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
                             colormap, pythonVal)
 
     elif gui_mode == 'kivy':
-        from pygsti.report.kivygraph import Graph, BarPlot, SmoothLinePlot
-
-        colors = [colormap.interpolate_color_tuple(t, rgb_ints=False, add_alpha=1.0) for t in bincenters]
-
-        def build_widget(bin_edges, hist_values, bin_centers, dof, minlog, maxlog, colors, **kwargs):
-            hist_values = [(10**(minlog - 1) if v <= 0 else v) for v in hist_values]
-            xrng = bin_edges[-1] - bin_edges[0]
-            #yrng = 10**maxlog - 10**minlog
-
-            graph_theme = {
-                'label_options': {
-                    'color': (0,0,0,1),  # color of tick labels and titles
-                    'bold': False},
-                'background_color': (1, 1, 1, 1),  # canvas background color
-                'tick_color': (0, 0, 0, 1),  # ticks and grid
-                'border_color': (0, 0, 0, 1),  # border drawn around each graph
-                'font_size': 18
-            }
-            kwargs.update(graph_theme)
-
-            graph = Graph(xlabel=ylabel, ylabel='counts',
-                          x_ticks_major=round(xrng / 10, 0), #10**(_np.floor(_np.log10(xrng)) - 1),
-                          y_ticks_major=0.2, #10**(_np.floor(_np.log10(yrng)) - 1),
-                          x_grid_label=True, y_grid_label=True, padding=5,
-                          x_grid=True, y_grid=True,
-                          xmin=float(bin_edges[0]), xmax=float(bin_edges[-1]),
-                          ylog=True, ymin=float(10**minlog), ymax=float(10**maxlog), **kwargs)
-            bplot = BarPlot(color=(0,0,0.5,1), bar_spacing=1.0, colors=colors)
-            graph.add_plot(bplot)
-            bplot.bind_to_graph(graph)
-            bplot.points = [(x, y) for x, y in zip(bin_edges[:-1], hist_values)]
-
-            lplot = SmoothLinePlot(color=(0.1, 0.1, 0.1, 1))
-            lplot.points = [(x, nvals * bindelta * _chi2.pdf(x, dof)) for x in bin_centers]
-            graph.add_plot(lplot)
-
-            return graph
-
+        colors = [tuple(colormap.interpolate_color_tuple(t, rgb_ints=False, add_alpha=1.0)) for t in bincenters]
         BIN_SIZE = 20
         nbins = len(bin_edges) - 1
         natural_size = (BIN_SIZE * nbins + 50, int(BIN_SIZE * nbins * 2 / 3))  # just set aspect ratio to 3/2
 
-        return ReportKivyFigure((build_widget, {'bin_edges': bin_edges,
-                                                'hist_values': hist_values,
-                                                'bin_centers': bincenters,
-                                                'dof': dof, 'minlog': minlog, 'maxlog': maxlog,
-                                                'colors': colors}),
-                                None, pythonVal, natural_size=natural_size)
+        widget_factory = KivyPlotFactory(constructor_fn='pygsti.report.kivyfrontend._build_kivy_color_histogram',
+                                         numpy_args=dict(bin_edges=bin_edges,
+                                                         hist_values=hist_values,
+                                                         bin_centers=bincenters),
+                                         native_args={'dof': dof, 'minlog': minlog, 'maxlog': maxlog, 'colors': colors,
+                                                      'ylabel': ylabel, 'nvals': nvals, 'bindelta': bindelta},
+                                         natural_size=natural_size)
+
+        return ReportKivyFigure(widget_factory, None, pythonVal)
 
     else:
         raise ValueError("Invalid gui_mode: %s" % str(gui_mode))
@@ -1306,12 +1252,11 @@ def _matrix_color_boxplot_kivy(matrix, xlabels=None, ylabels=None,
                                thick_line_interval=None, colorbar=None, colormap=None,
                                prec=0, scale=1.0, eb_matrix=None, title=None, grid="black"):
 
-    from pygsti.report.kivygraph import MatrixBoxPlotGraph
     if ylabels is not None:
         # Need to flip y-labels around as Graph object expects y_grid_labels in increasing y-value order
         # Note: we could put this logic within MatrixBoxPlotGraph (?)
-        ylabels = list(reversed(ylabels))  
-    
+        ylabels = list(reversed(ylabels))
+
     #Hold widget (class, init_kwargs) instead of the widget itself for
     # ease of copying and serialization.
     graph_theme = {
@@ -1323,19 +1268,6 @@ def _matrix_color_boxplot_kivy(matrix, xlabels=None, ylabels=None,
         'border_color': (0, 0, 0, 1),  # border drawn around each graph
         'font_size': 18
     }
-    widget_constructor = (MatrixBoxPlotGraph,
-                          dict(data_matrix=matrix,
-                               xlabel=xlabel if (xlabel is not None) else '',
-                               ylabel=ylabel if (ylabel is not None) else '',
-                               padding=5,
-                               x_ticks_major=1.0, y_ticks_major=1.0, x_tick_offset=0.5, y_tick_offset=0.5,
-                               x_grid_labels=xlabels, x_grid_label=True,
-                               y_grid_labels=ylabels, y_grid_label=True,
-                               colormap=colormap, prec=prec, **graph_theme))
-    #x_ticks_angle=45, **graph_theme)
-
-    flipped_mx = _np.flipud(matrix)  # FLIP so [0,0] matrix el is at *top* left
-    ylabels = list(reversed(ylabels))  # FLIP y-labels to match
 
     SQUARE_SIZE = 80
     max_ylabel_len = max([len(lbl) for lbl in ylabels]) if (ylabels is not None) else 0
@@ -1343,7 +1275,23 @@ def _matrix_color_boxplot_kivy(matrix, xlabels=None, ylabels=None,
     xlabel_height = (40 if xlabels else 0) + (40 if xlabel else 0)  # very rough TODO better
     natural_size = (SQUARE_SIZE * matrix.shape[1] + ylabel_width,
                     SQUARE_SIZE * matrix.shape[0] + xlabel_height)
-    return ReportKivyFigure(widget_constructor, colormap, flipped_mx, plt_data=flipped_mx, natural_size=natural_size)
+
+    widget_factory = KivyPlotFactory(class_to_construct='pygsti.report.kivygraph.MatrixBoxPlotGraph',
+                                     numpy_args=dict(data_matrix=matrix),
+                                     native_args=dict(xlabel=xlabel if (xlabel is not None) else '',
+                                                      ylabel=ylabel if (ylabel is not None) else '',
+                                                      padding=5,
+                                                      x_ticks_major=1.0, y_ticks_major=1.0, x_tick_offset=0.5, y_tick_offset=0.5,
+                                                      x_grid_labels=xlabels, x_grid_label=True,
+                                                      y_grid_labels=ylabels, y_grid_label=True,
+                                                      prec=prec, **graph_theme),
+                                     serializable_args=dict(colormap=colormap),
+                                     natural_size=natural_size)
+    #x_ticks_angle=45, **graph_theme)
+
+    flipped_mx = _np.flipud(matrix)  # FLIP so [0,0] matrix el is at *top* left
+    ylabels = list(reversed(ylabels))  # FLIP y-labels to match
+    return ReportKivyFigure(widget_factory, colormap, flipped_mx, plt_data=flipped_mx)
 
 
 def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
@@ -1415,7 +1363,6 @@ def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     """
     if xlabels is None: xlabels = [""] * matrix.shape[1]
     if ylabels is None: ylabels = [""] * matrix.shape[0]
-    HOVER_PREC = 7  # precision for hover labels
 
     colorbar = colorbar if (colorbar is not None) else (not box_labels)
 
@@ -1429,6 +1376,7 @@ def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
             """ Standard hover labels """
             val = flipped_mx[i, j]
             if _np.isnan(val): return ""
+            HOVER_PREC = 7  # precision for hover labels -- don't use global var since we may need to marshal this fn
             return "%s" % round(val, HOVER_PREC)  # TODO: something better - or user-specifiable
     else:
         flipped_EBmx = _np.flipud(eb_matrix)  # FLIP so [0,0] matrix el is at *top* left
@@ -1438,6 +1386,7 @@ def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
             val, eb = flipped_mx[i, j], flipped_EBmx[i, j]
             if _np.isnan(val): return ""
             # TODO: something better - or user-specifiable
+            HOVER_PREC = 7  # precision for hover labels -- don't use global var since we may need to marshal this fn
             return "%s <br>+/- %s" % (round(val, HOVER_PREC), round(eb, HOVER_PREC))
 
     hoverLabels = []
@@ -3105,8 +3054,6 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
                                 pythonErrorBar=errbars)
 
         elif self.ws.gui_mode == 'kivy':
-            from pygsti.report.kivygraph import Graph, BarPlot
-
             xs = list(range(evals.size))
             ys = []; colors = []; texts = []
             for i, ev in enumerate(evals.flatten()):
@@ -3118,19 +3065,9 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
                 #else:
                 #    texts.append("%g" % round(ev.real, HOVER_PREC))
 
-            def build_widget(xvals, yvals):
-                graph = Graph(xlabel='index',  #ylabel='Y',
-                              x_ticks_major=1.0, y_ticks_major=1.0,
-                              y_grid_label=True, x_grid_label=True, padding=5,
-                              x_grid=True, y_grid=True, xmin=0, xmax=len(xvals) + 1, ymin=0, ymax=1)
-                plot = BarPlot(color=(0,0,1,1), bar_spacing=.5)
-                graph.add_plot(plot)
-                plot.bind_to_graph(graph)
-                plot.points = [(x, abs(y)) for x, y in zip(xvals, yvals)]
-                return graph
-
-            return ReportKivyFigure((build_widget, {'xvals': xs, 'yvals': ys}),
-                                    None, evals, plt_y=evals, plt_yerr=errbars,
+            widget_factory = KivyPlotFactory(constructor_fn='pygsti.report.kivyfrontend._build_kivy_choi_barplot',
+                                             native_args=dict(xvals=xs, yvals=ys))
+            return ReportKivyFigure(widget_factory, None, evals, plt_y=evals, plt_yerr=errbars,
                                     pythonErrorBar=errbars)
         else:
             raise ValueError("Invalid worksplace gui_mode: %s" % str(self.ws.gui_mode))
@@ -3452,41 +3389,12 @@ class FitComparisonBarPlot(WorkspacePlot):
                                 None, {'x': xs, 'y': ys})
 
         elif self.ws.gui_mode == 'kivy':
-            from pygsti.report.kivygraph import Graph, BarPlot
-
-            def build_widget(xs_to_plot, ys_to_plot, colors, **kwargs):
-
-                xrng = max(xs_to_plot) - min(xs_to_plot)
-                yrng = max(ys_to_plot) - min(ys_to_plot)
-
-                graph_theme = {
-                    'label_options': {
-                        'color': (0,0,0,1),  # color of tick labels and titles
-                        'bold': False},
-                    'background_color': (1, 1, 1, 1),  # canvas background color
-                    'tick_color': (0, 0, 0, 1),  # ticks and grid
-                    'border_color': (0, 0, 0, 1),  # border drawn around each graph
-                    'font_size': 18
-                }
-                kwargs.update(graph_theme)
-
-                graph = Graph(xlabel=x_label if x_label else '', ylabel='N_sigma',
-                              x_ticks_major=round(xrng / 10, 0),
-                              y_ticks_major=0.2,
-                              x_grid_label=True, y_grid_label=True, padding=5,
-                              x_grid=True, y_grid=True,
-                              xmin=float(min(xs_to_plot)), xmax=float(max(xs_to_plot)),
-                              ylog=True, ymin=float(min(ys_to_plot)), ymax=float(max(ys_to_plot)), **kwargs)
-                bplot = BarPlot(color=(0,0,0.5,1), bar_spacing=1.0, colors=colors)
-                graph.add_plot(bplot)
-                bplot.bind_to_graph(graph)
-                bplot.points = [(x, y) for x, y in zip(xs_to_plot, ys_to_plot)]
-
-                return graph
-
             natural_size = (len(xs) * 50, 500)
-            return ReportKivyFigure((build_widget, {'xs_to_plot': xs, 'ys_to_plot': plotted_ys, 'colors': colors}),
-                                    None, {'x': xs, 'y': ys}, natural_size=natural_size)
+            widget_factory = KivyPlotFactory(constructor_fn='pygsti.report.kivyfrontend._build_kivy_fitcompare_barplot',
+                                             native_args={'xs_to_plot': xs, 'ys_to_plot': plotted_ys,
+                                                          'colors': colors, 'xlabel': x_label},
+                                             natural_size=natural_size)
+            return ReportKivyFigure(widget_factory, None, {'x': xs, 'y': ys}, natural_size=natural_size)
 
 
 class FitComparisonBoxPlot(WorkspacePlot):

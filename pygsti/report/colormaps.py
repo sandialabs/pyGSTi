@@ -14,6 +14,7 @@ import numpy as _np
 from scipy.stats import chi2 as _chi2
 
 from pygsti.baseobjs.smartcache import smart_cached
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
 @smart_cached
@@ -95,7 +96,7 @@ def interpolate_plotly_colorscale(plotly_colorscale, normalized_value):
                               int(round(interp_rgb[2])))
 
 
-class Colormap(object):
+class Colormap(_NicelySerializable):
     """
     A color map which encapsulates a plotly colorscale with a normalization.
 
@@ -157,6 +158,19 @@ class Colormap(object):
         self.invalid_color = invalid_color
         self.hmin = hmin
         self.hmax = hmax
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'rgb_colors': self.rgb_colors,
+                      'invalid_color': self.invalid_color,
+                      'hmin': self.hmin,
+                      'hmax': self.hmax})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        rgb_colors = [tuple(rgb) for rgb in state['rgb_colors']]  # make a list of *tuples*
+        return cls(rgb_colors, state['hmin'], state['hmax'], state['invalid_color'])
 
     def _brightness(self, r, g, b):
         # Perceived brightness calculation from http://alienryderflex.com/hsp.html
@@ -419,10 +433,26 @@ class LinlogColormap(Colormap):
             raise ValueError("Unknown color: %s" % color)
 
         invalid_color = (0.8, 0.8, 1.0)  # a light blue?
+        self._color = color  # store for easy serialization
 
         super(LinlogColormap, self).__init__(
             [[0.0, (1., 1., 1.)], [0.499999999, gray],
              [0.5, c], [1.0, mx]], hmin, hmax, invalid_color)
+
+    def _to_nice_serialization(self):
+        state = _NicelySerializable._to_nice_serialization(self)
+        state.update({'vmin': self.vmin,
+                      'vmax': self.vmax,
+                      'num_boxes': int(self.N),  # so not a np.int64 which is non-JSONable!
+                      'percentile': self.percentile,
+                      'dof_per_box': self.dof,
+                      'color': self._color})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(state['vmin'], state['vmax'], state['num_boxes'], state['percentile'],
+                   state['dof_per_box'], state['color'])
 
     @classmethod
     def set_manual_transition_point(cls, vmin, vmax, trans, color="red"):
@@ -572,6 +602,7 @@ class DivergingColormap(Colormap):
         hmin = vmin
         hmax = vmax
         self.midpoint = midpoint
+        self._color = color  # for easy serialization
         assert(midpoint == 0.0), "midpoint doesn't work yet!"
 
         if color == "RdBu":  # blue -> white -> red
@@ -582,6 +613,16 @@ class DivergingColormap(Colormap):
             raise ValueError("Unknown color: %s" % color)
 
         super(DivergingColormap, self).__init__(rgb_colors, hmin, hmax)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'midpoint': self.midpoint,
+                      'color': self._color})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(state['hmin'], state['hmax'], state['midpoint'], state['color'])
 
         #*Normalize* scratch
         #vmin, vmax, midpoint = self.vmin, self.vmax, self.midpoint
@@ -656,8 +697,19 @@ class SequentialColormap(Colormap):
             rgb_colors = [[0, (1., 1., 1.)], [1.0, (1., 0., 0.)]]
         else:
             raise ValueError("Unknown color: %s" % color)
+        self._color = color  # for easy serialization
 
         super(SequentialColormap, self).__init__(rgb_colors, hmin, hmax)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'color': self._color})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(state['hmin'], state['hmax'], state['color'])
+
 
         #*Normalize* scratch
         #is_scalar = False
@@ -715,3 +767,12 @@ class PiecewiseLinearColormap(Colormap):
 
         norm_rgb_colors = [[norm(val), rgb] for val, rgb in rgb_colors]
         super(PiecewiseLinearColormap, self).__init__(norm_rgb_colors, hmin, hmax)
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        #Note: __init__ doesn't add any more data (no self.X assignments) to base class,
+        # so we can serialize by simply serializing the base class.
+        ret = cls.__new__(cls)
+        rgb_colors = [tuple(rgb) for rgb in state['rgb_colors']]  # make a list of *tuples*
+        Colormap.__init__(ret, rgb_colors, state['hmin'], state['hmax'], state['invalid_color'])  # base class __init__
+        return ret
