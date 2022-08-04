@@ -1700,7 +1700,7 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
         #and multiply the compact SVD components through each time we need one.
         twirledDerivDaggerDerivList = \
             [_compute_bulk_twirled_ddd_compact(model, germs_list, tol,
-                                              evd_tol=1e-10, float_type=float_type)
+                                              evd_tol=1e-10, float_type=float_type, printer=printer)
              for model in model_list]
              
              #_compute_bulk_twirled_ddd_compact returns a tuple with three lists
@@ -2574,7 +2574,8 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #new function that computes the J^T J matrices but then returns the result in the form of the 
 #compact EVD in order to save on memory.    
 def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
-                                       comm=None, evd_tol=1e-10,  float_type=_np.cdouble):
+                                       comm=None, evd_tol=1e-10,  float_type=_np.cdouble,
+                                       printer=None):
 
     """
     Calculate the positive squares of the germ Jacobians.
@@ -2626,26 +2627,56 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
        
     sqrteU_list=[]
     e_list=[]
+    
+
+    
+    
+    if printer is not None:
+        printer.log('Generating compact EVD Cache',1)
+        
+        with printer.progress_logging(2):
+    
+            for i, germ in enumerate(germs_list):
             
-    for i, germ in enumerate(germs_list):
+                printer.show_progress(iteration=i, total=len(germs_list), bar_length=25)
+                    
+                twirledDeriv = _twirled_deriv(model, germ, eps, float_type) / len(germ)
+                #twirledDerivDaggerDeriv = _np.tensordot(_np.conjugate(twirledDeriv),
+                #                                        twirledDeriv, (0, 0))
+                                                        
+                #now take twirledDerivDaggerDeriv and construct its compact EVD.
+                #e, U= compact_EVD(twirledDerivDaggerDeriv)
+                e, U= compact_EVD_via_SVD(twirledDeriv)
+                
+                e_list.append(e)
+                
+                #by doing this I am assuming that the matrix is PSD, but since these are all
+                #gramians that should be alright.
+                
+                #I want to use a rank-decomposition, so split the eigenvalues into a pair of diagonal
+                #matrices with the square roots of the eigenvalues on the diagonal and fold those into
+                #the matrix of eigenvectors by left multiplying.
+                sqrteU_list.append( U@_np.diag(_np.sqrt(e)) )       
+    else: 
+        for i, germ in enumerate(germs_list):
+                
+            twirledDeriv = _twirled_deriv(model, germ, eps, float_type) / len(germ)
+            #twirledDerivDaggerDeriv = _np.tensordot(_np.conjugate(twirledDeriv),
+            #                                        twirledDeriv, (0, 0))
+                                                    
+            #now take twirledDerivDaggerDeriv and construct its compact EVD.
+            #e, U= compact_EVD(twirledDerivDaggerDeriv)
+            e, U= compact_EVD_via_SVD(twirledDeriv)
             
-        twirledDeriv = _twirled_deriv(model, germ, eps, float_type) / len(germ)
-        #twirledDerivDaggerDeriv = _np.tensordot(_np.conjugate(twirledDeriv),
-        #                                        twirledDeriv, (0, 0))
-                                                
-        #now take twirledDerivDaggerDeriv and construct its compact EVD.
-        #e, U= compact_EVD(twirledDerivDaggerDeriv)
-        e, U= compact_EVD_via_SVD(twirledDeriv)
-        
-        e_list.append(e)
-        
-        #by doing this I am assuming that the matrix is PSD, but since these are all
-        #gramians that should be alright.
-        
-        #I want to use a rank-decomposition, so split the eigenvalues into a pair of diagonal
-        #matrices with the square roots of the eigenvalues on the diagonal and fold those into
-        #the matrix of eigenvectors by left multiplying.
-        sqrteU_list.append( U@_np.diag(_np.sqrt(e)) )        
+            e_list.append(e)
+            
+            #by doing this I am assuming that the matrix is PSD, but since these are all
+            #gramians that should be alright.
+            
+            #I want to use a rank-decomposition, so split the eigenvalues into a pair of diagonal
+            #matrices with the square roots of the eigenvalues on the diagonal and fold those into
+            #the matrix of eigenvectors by left multiplying.
+            sqrteU_list.append( U@_np.diag(_np.sqrt(e)) )       
         
     return sqrteU_list, e_list
     
@@ -3295,7 +3326,7 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
         #and multiply the compact EVD components through each time we need one.
         twirledDerivDaggerDerivList = \
             [_compute_bulk_twirled_ddd_compact(model, germs_list, tol,
-                                              evd_tol=1e-10, float_type=float_type)
+                                              evd_tol=1e-10, float_type=float_type, printer=printer)
              for model in model_list]
              
              #_compute_bulk_twirled_ddd_compact returns a tuple with two lists
@@ -3349,11 +3380,11 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
         
         if mode=="compactEVD":
             #calculate the update cache for each element of currentDDDList 
+            printer.log('Creating update cache.')
             currentDDDList_update_cache = [construct_update_cache(currentDDD) for currentDDD in currentDDDList]
             #the return value of the update cache is a tuple with the elements
-            #(e, U, projU)
-            
-        with printer.progress_logging(3):
+            #(e, U, projU)    
+        with printer.progress_logging(2):
             for i, candidateGermIdx in enumerate(loc_candidateIndices):
                 printer.show_progress(i, len(loc_candidateIndices),
                                       prefix="Inner iter over candidate germs",
@@ -3472,7 +3503,7 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
         #Update variables for next outer iteration
         weights[iBestCandidateGerm] = 1
         initN = bestGermScore.N
-        print(iBestCandidateGerm)
+        #print(iBestCandidateGerm)
         goodGerms.append(germs_list[iBestCandidateGerm])
 
         for k in range(len(model_list)):
