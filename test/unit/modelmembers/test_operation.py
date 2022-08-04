@@ -300,9 +300,7 @@ class StaticStdOpTester(BaseCase):
             if not name.startswith('G'): continue  # currently the 'h', 'p', 'm' gates aren't "standard" yet because they lack unitaries
             chpop = op.StaticStandardOp(name, 'pp', 'chp', state_space=None)
             op_str = '\n'.join(ops)
-            if len(op_str):
-                op_str += '\n'
-            self.assertEqual(chpop._rep.chp_str(), op_str)
+            self.assertEqual('\n'.join(chpop._rep._chp_ops()), op_str)
         
     def test_raises_on_bad_values(self):
         with self.assertRaises(ValueError):

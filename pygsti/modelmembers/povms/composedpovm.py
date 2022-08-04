@@ -104,7 +104,7 @@ class ComposedPOVM(_POVM):
 
         items = []  # init as empty (lazy creation of members)
         try:
-            rep = evotype.create_composed_povm_rep(self.error_map._rep, self.base_povm._rep)
+            rep = evotype.create_composed_povm_rep(self.error_map._rep, self.base_povm._rep, state_space)
         except AttributeError:
             rep = None
         _POVM.__init__(self, state_space, evotype, rep, items)
