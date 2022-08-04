@@ -3210,6 +3210,9 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
     if num_nongauge_params is not None:
         numGaugeParams = numGaugeParams + numNonGaugeParams - num_nongauge_params
         numNonGaugeParams = num_nongauge_params
+    
+    printer.log('Number of gauge parameters: ' + str(numGaugeParams), 1) 
+    printer.log('Number of non-gauge parameters: ' + str(numNonGaugeParams), 1)
 
     germLengths = _np.array([len(germ) for germ in germs_list], _np.int64)
 
