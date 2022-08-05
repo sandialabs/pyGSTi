@@ -445,6 +445,9 @@ def _get_model_params(model_list):
     ValueError
         If the number of gauge parameters or gates varies among the models.
     """
+    
+    print('Calculating number of gauge and non-gauge parameters')
+    
     # We don't care about SPAM, since it can't be amplified.
     reducedModelList = [_remove_spam_vectors(model)
                         for model in model_list]
