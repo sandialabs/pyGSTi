@@ -35,6 +35,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                candidate_seed=None, force="singletons", algorithm='greedy',
                algorithm_kwargs=None, mem_limit=None, comm=None,
                profiler=None, verbosity=1, num_nongauge_params=None,
+               num_gauge_params=None,
                assume_real=False, float_type=_np.cdouble,
                mode="all-Jac", toss_random_frac=None,
                force_rank_increase=False):
@@ -242,6 +243,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'mem_limit': mem_limit,
             'profiler': profiler,
             'num_nongauge_params': num_nongauge_params,
+            'num_gauge_params': num_gauge_params,
             'float_type': float_type,
             'mode' : mode,
             'force_rank_increase': force_rank_increase
@@ -418,7 +420,7 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
     return max(scores)
 
 
-def _get_model_params(model_list):
+def _get_model_params(model_list, printer=None):
     """
     Get the number of gates and gauge parameters of the models in a list.
 
@@ -446,7 +448,8 @@ def _get_model_params(model_list):
         If the number of gauge parameters or gates varies among the models.
     """
     
-    print('Calculating number of gauge and non-gauge parameters')
+    if printer is not None:
+        printer.log('Calculating number of gauge and non-gauge parameters', 1)
     
     # We don't care about SPAM, since it can't be amplified.
     reducedModelList = [_remove_spam_vectors(model)
@@ -3089,8 +3092,9 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
                             randomization_strength=1e-3, num_copies=None, seed=0,
                             op_penalty=0, score_func='all', tol=1e-6, threshold=1e6,
                             check=False, force="singletons", pretest=True, mem_limit=None,
-                            comm=None, profiler=None, verbosity=0, num_nongauge_params=None, 
-                            float_type= _np.cdouble, mode="all-Jac", force_rank_increase=False):
+                            comm=None, profiler=None, verbosity=0, num_nongauge_params=None,
+                            num_gauge_params= None, float_type= _np.cdouble, 
+                            mode="all-Jac", force_rank_increase=False):
     """
     Greedy algorithm starting with 0 germs.
 
@@ -3207,11 +3211,15 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
         "All models must have the same dimension!"
     #assert(all([(mdl.num_params == Np) for mdl in model_list])), \
     #    "All models must have the same number of parameters!"
-
-    (_, numGaugeParams,
-     numNonGaugeParams, _) = _get_model_params(model_list)
-    if num_nongauge_params is not None:
-        numGaugeParams = numGaugeParams + numNonGaugeParams - num_nongauge_params
+    
+    if (num_nongauge_params is None) or (num_gauge_params is None):
+        (_, numGaugeParams,
+         numNonGaugeParams, _) = _get_model_params(model_list)
+        if num_nongauge_params is not None:
+            numGaugeParams = numGaugeParams + numNonGaugeParams - num_nongauge_params
+            numNonGaugeParams = num_nongauge_params
+    elif (num_nongauge_params is not None) and  (num_gauge_params is not None):
+        numGaugeParams = num_gauge_params
         numNonGaugeParams = num_nongauge_params
     
     printer.log('Number of gauge parameters: ' + str(numGaugeParams), 1) 
@@ -3509,7 +3517,7 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
         #Update variables for next outer iteration
         weights[iBestCandidateGerm] = 1
         initN = bestGermScore.N
-        #print(iBestCandidateGerm)
+        #print('Current Minor Score ', bestGermScore.minor)
         goodGerms.append(germs_list[iBestCandidateGerm])
 
         for k in range(len(model_list)):
@@ -3517,7 +3525,7 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
             bestDDDs[k] = None
 
             printer.log("Added %s to final germs (%s)" %
-                        (germs_list[iBestCandidateGerm].str, str(bestGermScore)), 3)
+                        (germs_list[iBestCandidateGerm].str, str(bestGermScore)), 2)
 
     return goodGerms
     
@@ -3620,6 +3628,7 @@ def compute_composite_germ_set_score_compactevd(current_update_cache, germ_updat
         else:
             reduced_model = _remove_spam_vectors(model)
             num_nongauge_params = reduced_model.num_params - reduced_model.num_gauge_params
+            #print('Number of Nongauge Parameters For ')
 
     # Calculate penalty scores
     if num_germs is not None:
