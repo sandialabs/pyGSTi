@@ -38,7 +38,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                num_gauge_params=None,
                assume_real=False, float_type=_np.cdouble,
                mode="all-Jac", toss_random_frac=None,
-               force_rank_increase=False):
+               force_rank_increase=False, save_cevd_cache_filename= None,
+               load_cevd_cache_filename=None, file_compression=False):
     """
     Generate a germ set for doing GST with a given target model.
 
@@ -246,7 +247,10 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'num_gauge_params': num_gauge_params,
             'float_type': float_type,
             'mode' : mode,
-            'force_rank_increase': force_rank_increase
+            'force_rank_increase': force_rank_increase,
+            'save_cevd_cache_filename': save_cevd_cache_filename,
+            'load_cevd_cache_filename': load_cevd_cache_filename,
+            'file_compression': file_compression
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -3094,7 +3098,9 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
                             check=False, force="singletons", pretest=True, mem_limit=None,
                             comm=None, profiler=None, verbosity=0, num_nongauge_params=None,
                             num_gauge_params= None, float_type= _np.cdouble, 
-                            mode="all-Jac", force_rank_increase=False):
+                            mode="all-Jac", force_rank_increase=False,
+                            save_cevd_cache_filename=None, load_cevd_cache_filename=None,
+                            file_compression=False):
     """
     Greedy algorithm starting with 0 germs.
 
@@ -3338,11 +3344,29 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
         #implement a new caching scheme which takes advantage of the fact that the J^T J matrices are typically
         #rather sparse. Instead of caching the J^T J matrices for each germ we'll cache the compact EVD of these
         #and multiply the compact EVD components through each time we need one.
-        twirledDerivDaggerDerivList = \
-            [_compute_bulk_twirled_ddd_compact(model, germs_list, tol,
-                                              evd_tol=1e-10, float_type=float_type, printer=printer)
+        
+        if load_cevd_cache_filename is not None:
+            printer.log('Loading Compact EVD Cache From Disk',1)
+            with _np.load(load_cevd_cache_filename) as cevd_cache:
+                twirledDerivDaggerDerivList=[list(cevd_cache.values())]
+            
+        else: 
+            twirledDerivDaggerDerivList = \
+                [_compute_bulk_twirled_ddd_compact(model, germs_list, tol,
+                                                  evd_tol=1e-10, float_type=float_type, printer=printer)
              for model in model_list]
              
+            if save_cevd_cache_filename is not None:
+                if len(twirledDerivDaggerDerivList)>1:
+                    raise ValueError('Currently not configured to save compactEVD caches to disk when there is more than one model in the model list. i.e. this is not currently compatible with model randomization to get the non-lite germs.')
+                #otherwise conver the first entry of twirledDerivDaggerDerivList,
+                #which itself a list of a half of the symmetric rank decompositions
+                #and save it to disk using _np.savez or _np.savez_compressed
+                if file_compression:
+                    _np.savez_compressed(save_cevd_cache_filename,*twirledDerivDaggerDerivList[0])
+                else:
+                    _np.savez(save_cevd_cache_filename,*twirledDerivDaggerDerivList[0])
+                
              #_compute_bulk_twirled_ddd_compact returns a tuple with two lists
              #corresponding to the U@diag(sqrt(2)), e  matrices for each germ's J^T J matrix's_list
              #compact evd.
