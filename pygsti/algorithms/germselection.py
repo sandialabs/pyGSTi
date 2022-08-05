@@ -3362,6 +3362,7 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
                 #otherwise conver the first entry of twirledDerivDaggerDerivList,
                 #which itself a list of a half of the symmetric rank decompositions
                 #and save it to disk using _np.savez or _np.savez_compressed
+                printer.log('Saving Compact EVD Cache to Disk', 1)
                 if file_compression:
                     _np.savez_compressed(save_cevd_cache_filename,*twirledDerivDaggerDerivList[0])
                 else:
