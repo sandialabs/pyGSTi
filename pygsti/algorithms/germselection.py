@@ -2632,7 +2632,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
     #TODO: Figure out how to pipe in a comm object to parallelize some of this with MPI.
        
     sqrteU_list=[]
-    e_list=[]
+    #e_list=[]
     
 
     
@@ -2654,7 +2654,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
                 #e, U= compact_EVD(twirledDerivDaggerDeriv)
                 e, U= compact_EVD_via_SVD(twirledDeriv)
                 
-                e_list.append(e)
+                #e_list.append(e)
                 
                 #by doing this I am assuming that the matrix is PSD, but since these are all
                 #gramians that should be alright.
@@ -2674,7 +2674,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
             #e, U= compact_EVD(twirledDerivDaggerDeriv)
             e, U= compact_EVD_via_SVD(twirledDeriv)
             
-            e_list.append(e)
+            #e_list.append(e)
             
             #by doing this I am assuming that the matrix is PSD, but since these are all
             #gramians that should be alright.
@@ -2684,7 +2684,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
             #the matrix of eigenvectors by left multiplying.
             sqrteU_list.append( U@_np.diag(_np.sqrt(e)) )       
         
-    return sqrteU_list, e_list
+    return sqrteU_list#, e_list
     
 #New function for computing the compact eigenvalue decompostion of a matrix.
 #Assumes that we are working with a diagonalizable matrix, no safety checks made.
@@ -3353,9 +3353,9 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
             #reconstruct the needed J^T J matrices
             for j, idx in enumerate(nonzero_weight_indices):
                 if j==0:
-                    temp_DDD = derivDaggerDeriv[0][idx] @ derivDaggerDeriv[0][idx].T
+                    temp_DDD = derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
                 else:
-                    temp_DDD += derivDaggerDeriv[0][idx] @ derivDaggerDeriv[0][idx].T
+                    temp_DDD += derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
                     
                 #print('temp_DDD shape= ',temp_DDD.shape) 
             currentDDDList.append(temp_DDD)
@@ -3467,12 +3467,12 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
                         if score_func=="worst":
                             worstScore = max(worstScore, compute_composite_germ_set_score_compactevd(
                                                 current_update_cache= update_cache,
-                                                germ_update=twirledDerivDaggerDerivList[k][0][candidateGermIdx], 
+                                                germ_update=twirledDerivDaggerDerivList[k][candidateGermIdx], 
                                                 init_n=initN, **nonAC_kwargs))
                         elif score_func=="all":
                             worstScore = max(worstScore, compute_composite_germ_set_score_low_rank_trace(
                                                 current_update_cache= update_cache,
-                                                germ_update=twirledDerivDaggerDerivList[k][0][candidateGermIdx], 
+                                                germ_update=twirledDerivDaggerDerivList[k][candidateGermIdx], 
                                                 init_n=initN, **nonAC_kwargs))
                             
                         
@@ -3495,8 +3495,8 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
                         #if compact EVD mode then we'll avoid reconstructing the J^T J matrix
                         #unless the germ is the current best.
                         bestDDDs= [currentDDD.copy() + \
-                            twirledDerivDaggerDerivList[k][0][candidateGermIdx]@\
-                            twirledDerivDaggerDerivList[k][0][candidateGermIdx].T\
+                            twirledDerivDaggerDerivList[k][candidateGermIdx]@\
+                            twirledDerivDaggerDerivList[k][candidateGermIdx].T\
                             for k, currentDDD in enumerate(currentDDDList)]
                 testDDDs = None
 
