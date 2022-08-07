@@ -2753,7 +2753,12 @@ def compact_EVD_via_SVD(mat, threshold= 1e-10):
     """
     
     #take the SVD of mat.
-    _, s, Vh = _np.linalg.svd(mat)
+    try:
+        _, s, Vh = _np.linalg.svd(mat)
+    except _np.linalg.LinAlgError:
+        print('SVD Calculation Failed to Converge.')
+        print('Falling back to Scipy SVD with lapack driver gesvd, which is slower but *should* be more stable.')
+        _, s, Vh = _sla.svd(mat, lapack_driver='gesvd')
 
     #How many non-zero eigenvalues are there and what are their indices
     nonzero_eigenvalue_indices= _np.nonzero(_np.abs(s)>threshold)
