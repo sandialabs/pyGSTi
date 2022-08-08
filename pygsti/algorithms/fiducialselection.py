@@ -25,7 +25,9 @@ from pygsti.tools import frobeniusdist_squared
 
 def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                    ops_to_omit=None, force_empty=True, max_fid_length=2,
-                   algorithm='grasp', algorithm_kwargs=None, verbosity=1):
+                   algorithm='grasp', algorithm_kwargs=None, verbosity=1,
+                   prep_fids=True, meas_fids=True, candidate_list=None,
+                   return_candidate_list=False):
     """
     Generate prep and measurement fiducials for a given target model.
 
@@ -81,6 +83,15 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     verbosity : int, optional
         How much detail to send to stdout.
 
+    candidate_list : list of circuits, optional
+        A user specified manually selected list of candidate fiducial circuits.
+        Can speed up testing multiple objective function options, for example.
+    
+    return_candidate_list: bool, optional (default False)
+        When True we return the full list of deduped candidate fiducials considered
+        along with the final fiducial lists.
+        
+
     Returns
     -------
     prepFidList : list of Circuits
@@ -89,48 +100,59 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         A list containing the circuits for the measurement fiducials.
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
-    if ops_to_omit is None:
-        ops_to_omit = []
+    
+    #If the user hasn't specified a candidate list manually then generate one:
+    if candidate_list is None:
+        if ops_to_omit is None:
+            ops_to_omit = []
+        
+        fidOps = [gate for gate in target_model.operations if gate not in ops_to_omit]
+        
+        if omit_identity:
+            # we assume identity gate is always the identity mx regardless of basis
+            Identity = _np.identity(target_model.dim, 'd')
 
-    fidOps = [gate for gate in target_model.operations if gate not in ops_to_omit]
+            for gate in fidOps:
+                if frobeniusdist_squared(target_model.operations[gate], Identity) < eq_thresh:
+                    fidOps.remove(gate)
 
-    if omit_identity:
-        # we assume identity gate is always the identity mx regardless of basis
-        Identity = _np.identity(target_model.dim, 'd')
-
-        for gate in fidOps:
-            if frobeniusdist_squared(target_model.operations[gate], Identity) < eq_thresh:
-                fidOps.remove(gate)
-
-    availableFidList = _circuits.list_all_circuits(fidOps, 0, max_fid_length)
-    
-    circuit_cache= create_circuit_cache(target_model,availableFidList)
-    
-    printer.log('Initial Length Available Fiducial List: '+ str(len(availableFidList)), 1)
-    #print('Initial Length Available Fiducial List: ', len(availableFidList))
-    
-    #Now that we have a cache of PTMs as numpy arrays for the initial list of available fiducials
-    #we can clean this list up to remove any effective identities and circuits with duplicate effects.
-    
-    cleaned_availableFidList, cleaned_circuit_cache = clean_fid_list(target_model, circuit_cache, availableFidList,
-                                                                    drop_identities=True, drop_duplicates=True,
-                                                                    eq_thresh=eq_thresh)
-    
-    printer.log('Length Available Fiducial List Dropped Identities and Duplicates: ' + str(len(cleaned_availableFidList)), 1)
-    #print('Length Available Fiducial List Dropped Identities and Duplicates: ', len(cleaned_availableFidList))
-    
-    #TODO: I can speed this up a bit more by looking through the available fiducial list for
-    #circuits that are effective identities. Reducing the search space should be a big time-space
-    #saver.
+        availableFidList = _circuits.list_all_circuits(fidOps, 0, max_fid_length)
+        
+        circuit_cache= create_circuit_cache(target_model,availableFidList)
+        
+        printer.log('Initial Length Available Fiducial List: '+ str(len(availableFidList)), 1)
+        #print('Initial Length Available Fiducial List: ', len(availableFidList))
+        
+        #Now that we have a cache of PTMs as numpy arrays for the initial list of available fiducials
+        #we can clean this list up to remove any effective identities and circuits with duplicate effects.
+        
+        cleaned_availableFidList, cleaned_circuit_cache = clean_fid_list(target_model, circuit_cache, availableFidList,
+                                                                        drop_identities=True, drop_duplicates=True,
+                                                                        eq_thresh=eq_thresh)
+        
+        printer.log('Length Available Fiducial List Dropped Identities and Duplicates: ' + str(len(cleaned_availableFidList)), 1)
+        #print('Length Available Fiducial List Dropped Identities and Duplicates: ', len(cleaned_availableFidList))
+        
+        #TODO: I can speed this up a bit more by looking through the available fiducial list for
+        #circuits that are effective identities. Reducing the search space should be a big time-space
+        #saver.
+    #otherwise if the user has manually specified a list of fiducials then set cleaned_availableFidList to that and
+    #create the circuit cache.
+    else:
+        cleaned_availableFidList = candidate_list
+        cleaned_circuit_cache= create_circuit_cache(target_model,cleaned_availableFidList)
+        
     
     #generate a cache for the allowed preps and effects based on availableFidList
-    prep_cache= create_prep_cache(target_model, cleaned_availableFidList, cleaned_circuit_cache)
+    if prep_fids:
+        prep_cache= create_prep_cache(target_model, cleaned_availableFidList, cleaned_circuit_cache)
     #TODO: I can technically speed things up even more if we're using the same
     #set of available fidcuials for state prep and measurement since we only
     #would need to do generate the transfer matrices for each circuit once.
     #probably not the most impactful change for the short-term though, performance
     #wise.
-    meas_cache= create_meas_cache(target_model, cleaned_availableFidList, cleaned_circuit_cache)
+    if meas_fids:
+        meas_cache= create_meas_cache(target_model, cleaned_availableFidList, cleaned_circuit_cache)
     
 
     if algorithm_kwargs is None:
@@ -189,52 +211,62 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         for key in default_kwargs:
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
-
-        prepFidList = _find_fiducials_grasp(model=target_model,
+                
+        #initialize the prep and measurement fid lists to None
+        #so that None gets returned if we aren't running that part
+        #of the fiducial search.
+        prepFidList=None
+        measFidList=None
+                
+        if prep_fids:
+            prepFidList = _find_fiducials_grasp(model=target_model,
                                             prep_or_meas='prep', 
                                             fid_cache= prep_cache,
                                             **algorithm_kwargs)
 
-        if algorithm_kwargs['return_all'] and prepFidList[0] is not None:
-            prepScore = compute_composite_fiducial_score(
-                target_model, prepFidList[0], 'prep',
-                score_func=algorithm_kwargs['score_func'])
-            printer.log('Preparation fiducials:', 1)
-            printer.log(str([fid.str for fid in prepFidList[0]]), 1)
-            printer.log('Score: {}'.format(prepScore.minor), 1)
-        elif not algorithm_kwargs['return_all'] and prepFidList is not None:
-            prepScore = compute_composite_fiducial_score(
-                target_model, prepFidList, 'prep',
-                score_func=algorithm_kwargs['score_func'])
-            printer.log('Preparation fiducials:', 1)
-            printer.log(str([fid.str for fid in prepFidList]), 1)
-            printer.log('Score: {}'.format(prepScore.minor), 1)
-
-        measFidList = _find_fiducials_grasp(model=target_model,
+            if algorithm_kwargs['return_all'] and prepFidList[0] is not None:
+                prepScore = compute_composite_fiducial_score(
+                    target_model, prepFidList[0], 'prep',
+                    score_func=algorithm_kwargs['score_func'])
+                printer.log('Preparation fiducials:', 1)
+                printer.log(str([fid.str for fid in prepFidList[0]]), 1)
+                printer.log('Score: {}'.format(prepScore.minor), 1)
+            elif not algorithm_kwargs['return_all'] and prepFidList is not None:
+                prepScore = compute_composite_fiducial_score(
+                    target_model, prepFidList, 'prep',
+                    score_func=algorithm_kwargs['score_func'])
+                printer.log('Preparation fiducials:', 1)
+                printer.log(str([fid.str for fid in prepFidList]), 1)
+                printer.log('Score: {}'.format(prepScore.minor), 1)
+        if meas_fids:
+            measFidList = _find_fiducials_grasp(model=target_model,
                                             prep_or_meas='meas',
                                             fid_cache=meas_cache,
                                             **algorithm_kwargs)
 
-        if algorithm_kwargs['return_all'] and measFidList[0] is not None:
-            measScore = compute_composite_fiducial_score(
-                target_model, measFidList[0], 'meas',
-                score_func=algorithm_kwargs['score_func'])
-            printer.log('Measurement fiducials:', 1)
-            printer.log(str([fid.str for fid in measFidList[0]]), 1)
-            printer.log('Score: {}'.format(measScore.minor), 1)
-        elif not algorithm_kwargs['return_all'] and measFidList is not None:
-            measScore = compute_composite_fiducial_score(
-                target_model, measFidList, 'meas',
-                score_func=algorithm_kwargs['score_func'])
-            printer.log('Measurement fiducials:', 1)
-            printer.log(str([fid.str for fid in measFidList]), 1)
-            printer.log('Score: {}'.format(measScore.minor), 1)
+            if algorithm_kwargs['return_all'] and measFidList[0] is not None:
+                measScore = compute_composite_fiducial_score(
+                    target_model, measFidList[0], 'meas',
+                    score_func=algorithm_kwargs['score_func'])
+                printer.log('Measurement fiducials:', 1)
+                printer.log(str([fid.str for fid in measFidList[0]]), 1)
+                printer.log('Score: {}'.format(measScore.minor), 1)
+            elif not algorithm_kwargs['return_all'] and measFidList is not None:
+                measScore = compute_composite_fiducial_score(
+                    target_model, measFidList, 'meas',
+                    score_func=algorithm_kwargs['score_func'])
+                printer.log('Measurement fiducials:', 1)
+                printer.log(str([fid.str for fid in measFidList]), 1)
+                printer.log('Score: {}'.format(measScore.minor), 1)
 
     else:
         raise ValueError("'{}' is not a valid algorithm "
                          "identifier.".format(algorithm))
 
-    return prepFidList, measFidList
+    if return_candidate_list:
+        return prepFidList, measFidList, cleaned_availableFidList
+    else:
+        return prepFidList, measFidList    
 
 
 #def bool_list_to_ind_list(boolList):
