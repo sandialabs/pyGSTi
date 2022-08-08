@@ -622,7 +622,7 @@ def create_meas_mxs(model, meas_fid_list, meas_cache=None):
 
 def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='all',
                                      threshold=1e6, return_all=False, op_penalty=0.0,
-                                     l1_penalty=0.0, fid_cache= None):
+                                     l1_penalty=0.0, gate_penalty=None, fid_cache= None):
     """
     Compute a composite score for a fiducial list.
 
@@ -665,6 +665,10 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
     l1_penalty : float, optional (default is 0.0)
         Coefficient of a penalty linear in the number of fiducials that is
         added to ``score.minor``.
+        
+    gate_penalty : dict, optional
+        A dictionary with keys given by individual gates and values corresponding
+        to the penalty to add for each instance of that gate in the fiducial set.
         
     fid_cache : dict, optional (default is None)
         A dictionary of either effective state preparations or measurement effects
@@ -736,6 +740,22 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
     nonzero_score += l1_penalty * len(fid_list)
 
     nonzero_score += op_penalty * sum([len(fiducial) for fiducial in fid_list])
+    
+    
+    #print('nonzero_score before gate penalties: ', nonzero_score)
+    
+    #add the gate penalties.
+    if gate_penalty is not None:
+        for gate, penalty_value in gate_penalty.items():
+            #loop through each ckt in the fiducial list.
+            for fiducial in fid_list:
+                #alternative approach using the string 
+                #representation of the ckt.
+                num_gate_instances= fiducial.str.count(gate)
+                nonzero_score+= num_gate_instances*penalty_value
+                        
+    #print('nonzero_score after gate penalties: ', nonzero_score)
+        
 
     score = _scoring.CompositeScore(-N_nonzero, nonzero_score, N_nonzero)
 
@@ -1219,7 +1239,7 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
 
 def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
                           iterations=5, score_func='all', op_penalty=0.0,
-                          l1_penalty=0.0, return_all=False,
+                          l1_penalty=0.0, gate_penalty=None, return_all=False,
                           force_empty=True, threshold=1e6, seed=None,
                           verbosity=0, fid_cache= None):
     """
@@ -1268,6 +1288,10 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
     l1_penalty : float, optional (defailt is 0.0)
         Coefficient of a penalty linear in the number of fiducials that is
         added to ``score.minor``.
+        
+    gate_penalty : dict, optional
+        A dictionary with keys given by individual gates and values corresponding
+        to the penalty to add for each instance of that gate in the fiducial set.
 
     return_all : bool, optional (default is False)
         If true, function returns reciprocals of eigenvalues of fiducial score
@@ -1348,6 +1372,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
         'return_all': False,
         'l1_penalty': 0.0,
         'fid_cache': fid_cache,
+        'gate_penalty' : gate_penalty
     }
 
     final_compute_kwargs = compute_kwargs.copy()
