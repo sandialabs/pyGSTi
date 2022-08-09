@@ -3872,7 +3872,7 @@ def fast_kron(a,b):
 #Stabler implementation of the psuedoinverse using the alternative lapack driver for SVD:
 def stable_pinv(mat):
     U, s, Vh = _sla.svd(mat, lapack_driver='gesvd', full_matrices=False)
-    pinv_s= np.zeros((len(s),1))
+    pinv_s= _np.zeros((len(s),1))
     for i, sval in enumerate(s):
         if sval>1e-10: #HARDCODED
             pinv_s[i]= 1/sval
