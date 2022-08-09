@@ -55,8 +55,12 @@ class OpRep(_basereps.OpRep):
     #    return op_str
 
     def to_dense(self, on_space):
+        try:
+            str_ops = str(self._chp_ops())
+        except Exception:
+            str_ops = self.__class__.__name__  # fall back to class name
         raise NotImplementedError("CHP op '%s' cannot convert themselves to dense %s-space matrices (yet)" %
-                                  str(self.chpops), on_space)
+                                  (str_ops, on_space))
 
 
 class OpRepClifford(OpRep):
