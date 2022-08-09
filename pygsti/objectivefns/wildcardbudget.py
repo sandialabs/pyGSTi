@@ -328,7 +328,6 @@ class WildcardBudget(object):
 
         for i, (circ, W, info) in enumerate(zip(circuits, circuit_budgets, probs_freqs_precomp)):
             A, B, C, D, sum_fA, sum_fB, sum_qA, sum_qB, sum_qC, sum_qD, initialTVD, fvec, qvec, min_qvec, iA, iB = info
-
             elInds = layout.indices_for_index(i)
 
             if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
@@ -336,9 +335,9 @@ class WildcardBudget(object):
                 if return_deriv: p_deriv[elInds] = 0.0
                 continue
 
-            if min_qvec < 0 or abs(1.0 - sum(qvec)) > 1e-6:
+            if min_qvec < 0 or abs(1.0 - sum(qvec)) > tol:  # note: this need to be the same tol
 
-                qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min_qvec, circ)
+                qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min_qvec, circ, tol)
 
                 #recompute A-D b/c we've updated qvec
                 A = _np.logical_and(qvec > fvec, fvec > 0); sum_fA = sum(fvec[A]); sum_qA = sum(qvec[A])
@@ -771,8 +770,8 @@ def _chk_sum(alpha, beta, fvec, A, B, C):
     return alpha * sum(fvec[A]) + beta * sum(fvec[B]) + sum(fvec[C])
 
 
-def _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min_qvec, circ=None):
-    if min_qvec >= 0 and abs(1.0 - sum(qvec)) < 1e-6:
+def _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min_qvec, circ=None, tol=1e-6):
+    if min_qvec >= 0 and abs(1.0 - sum(qvec)) < tol:
         return qvec, W  # no change needed
 
     if min_qvec < 0:
@@ -795,7 +794,7 @@ def _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min_qvec, circ=None):
             qvec[subtract_from] -= amount
             W -= amount
 
-    if abs(1.0 - sum(qvec)) > 1e-6:
+    if abs(1.0 - sum(qvec)) > tol:
         qvec = qvec.copy()  # make sure we don't mess with memory we shouldn't
         qvec /= sum(qvec)
 
@@ -814,7 +813,7 @@ def update_circuit_probs(probs, freqs, circuit_budget):
     if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
         return fvec
 
-    qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min(qvec))
+    qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min(qvec), base_tol)
 
     #Note: must ensure that A,B,C,D are *disjoint*
     fvec_equals_qvec = _np.logical_and(fvec - base_tol <= qvec, qvec <= fvec + base_tol)  # fvec == qvec
