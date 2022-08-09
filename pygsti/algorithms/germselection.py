@@ -3057,8 +3057,15 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
     R_update= P.T@proj_update
     
     #Get the psuedoinverse of R_update:
-    pinv_R_update= _np.linalg.pinv(R_update, rcond=1e-10) #hardcoded
-    
+    try:
+        pinv_R_update= _np.linalg.pinv(R_update, rcond=1e-10) #hardcoded
+    except _np.linalg.LinAlgError:
+        #This means the SVD did not converge, try to fall back to a more stable
+        #SVD implementation using the scipy lapack_driver options.
+        print('pinv Calculation Failed to Converge.')
+        print('Falling back to pinv implementation based on Scipy SVD with lapack driver gesvd, which is slower but *should* be more stable.')
+        pinv_R_update = stable_pinv(R_update)
+        
     #I have a bunch of intermediate matrices I need to construct. Some of which are used to build up
     #subsequent ones.
     beta= U.T@update
@@ -3861,3 +3868,15 @@ def fast_kron(a,b):
     #it is indeed a decent amount faster, fwiw.
     return (a[:, None, :, None]*b[None, :, None, :]).reshape(a.shape[0]*b.shape[0],a.shape[1]*b.shape[1])
    
+   
+#Stabler implementation of the psuedoinverse using the alternative lapack driver for SVD:
+def stable_pinv(mat):
+    U, s, Vh = _sla.svd(mat, lapack_driver='gesvd', full_matrices=False)
+    pinv_s= np.zeros((len(s),1))
+    for i, sval in enumerate(s):
+        if sval>1e-10: #HARDCODED
+            pinv_s[i]= 1/sval
+    
+    #new form the psuedoinverse:
+    pinv= Vh.T@(pinv_s*U.T)
+    return pinv
