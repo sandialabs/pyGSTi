@@ -308,7 +308,7 @@ def unitary_to_standard_gatename(unitary):
         key in the dictionary given by :function:`standard_gatename_unitaries`).  `None` otherwise.
     """
     for std_name, U in standard_gatename_unitaries().items():
-        if not callable(U) and U.shape == unitary.shape and _np.allclose(unitary, U):
+        if not callable(U) and not callable(unitary) and U.shape == unitary.shape and _np.allclose(unitary, U):
             return std_name
     return None
 
