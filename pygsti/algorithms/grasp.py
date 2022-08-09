@@ -1,14 +1,14 @@
 """
 Functions to facilitate using GRASP.
 """
-#***************************************************************************************************
+# ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
-#***************************************************************************************************
+# ***************************************************************************************************
 
 import itertools
 import random
@@ -51,8 +51,7 @@ def neighboring_weight_vectors(weights, forced_weights=None, shuffle=False):
     if forced_weights is None:
         forced_weights = _np.zeros(len(weights))
 
-    swap_out_idxs = _np.where(_np.logical_and(weights == 1,
-                                              forced_weights == 0))[0]
+    swap_out_idxs = _np.where(_np.logical_and(weights == 1, forced_weights == 0))[0]
     swap_in_idxs = _np.where(weights == 0)[0]
     neighbors = []
     for swap_out, swap_in in itertools.product(swap_out_idxs, swap_in_idxs):
@@ -67,8 +66,14 @@ def neighboring_weight_vectors(weights, forced_weights=None, shuffle=False):
     return neighbors
 
 
-def _grasp_construct_feasible_solution(elements, score_fn, rcl_fn, feasible_threshold=None,
-                                       feasible_fn=None, initial_elements=None):
+def _grasp_construct_feasible_solution(
+    elements,
+    score_fn,
+    rcl_fn,
+    feasible_threshold=None,
+    feasible_fn=None,
+    initial_elements=None,
+):
     """
     Constructs a subset of `elements` that represents a feasible solution.
 
@@ -128,46 +133,57 @@ def _grasp_construct_feasible_solution(elements, score_fn, rcl_fn, feasible_thre
         weights = _np.zeros(len(elements))
     else:
         if len(initial_elements) != len(elements):
-            raise ValueError('initial_elements must have the same length as '
-                             'elements ({}), not {}!'.format(len(elements),
-                                                             len(initial_elements)))
+            raise ValueError(
+                "initial_elements must have the same length as "
+                "elements ({}), not {}!".format(len(elements), len(initial_elements))
+            )
         weights = _np.array(initial_elements)
 
     soln = [elements[idx] for idx in _np.nonzero(weights)[0]]
 
     if feasible_threshold is not None:
-        feasibleTest = 'threshold'
+        feasibleTest = "threshold"
     elif feasible_fn is not None:
-        feasibleTest = 'function'
+        feasibleTest = "function"
     else:
-        raise ValueError('Must provide either feasible_fn or '
-                         'feasible_threshold!')
+        raise ValueError("Must provide either feasible_fn or " "feasible_threshold!")
 
-    feasible = feasible_fn(soln) if feasibleTest == 'function' else score_fn(soln) <= feasible_threshold
+    feasible = (
+        feasible_fn(soln)
+        if feasibleTest == "function"
+        else score_fn(soln) <= feasible_threshold
+    )
 
     while _np.any(weights == 0) and not feasible:
         candidateIdxs = _np.where(weights == 0)[0]
         candidateSolns = [soln + [elements[idx]] for idx in candidateIdxs]
-        candidateScores = _np.array([score_fn(candidateSoln)
-                                     for candidateSoln in candidateSolns])
+        candidateScores = _np.array(
+            [score_fn(candidateSoln) for candidateSoln in candidateSolns]
+        )
         rclIdxs = rcl_fn(candidateScores)
-        assert(len(rclIdxs) > 0), "Empty reduced candidate list!"
+        assert len(rclIdxs) > 0, "Empty reduced candidate list!"
         chosenIdx = _np.random.choice(rclIdxs)
         soln = candidateSolns[chosenIdx]
         weights[candidateIdxs[chosenIdx]] = 1
-        if feasibleTest == 'threshold':
+        if feasibleTest == "threshold":
             feasible = candidateScores[chosenIdx] <= feasible_threshold
-        elif feasibleTest == 'function':
+        elif feasibleTest == "function":
             feasible = feasible_fn(soln)
 
     if not feasible:
-        raise ValueError('No feasible solution found!')
+        raise ValueError("No feasible solution found!")
 
     return soln
 
 
-def _grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
-                        feasible_threshold=None, feasible_fn=None):
+def _grasp_local_search(
+    initial_solution,
+    score_fn,
+    elements,
+    get_neighbors_fn,
+    feasible_threshold=None,
+    feasible_fn=None,
+):
     """
     Perfom the local-search part of a grasp iteration.
 
@@ -216,12 +232,11 @@ def _grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
         A sub-list of `elements`, representing the locally-improved solution.
     """
     if feasible_threshold is not None:
-        feasibleTest = 'threshold'
+        feasibleTest = "threshold"
     elif feasible_fn is not None:
-        feasibleTest = 'function'
+        feasibleTest = "function"
     else:
-        raise ValueError('Must provide either feasible_fn or '
-                         'feasible_threshold!')
+        raise ValueError("Must provide either feasible_fn or " "feasible_threshold!")
 
     currentSoln = initial_solution
     currentWeights = _np.zeros(len(elements))
@@ -235,14 +250,19 @@ def _grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
         betterSolnFound = False
         weightsNeighbors = get_neighbors_fn(currentWeights)
         elements_obj_array = _np.empty(len(elements), dtype=object)
-        elements_obj_array[:] = elements  # Note: just doing _np.array(elements) => ragged edged 2D array
-        neighborSolns = [[element for element
-                          in elements_obj_array[_np.nonzero(weightsNeighbor)]]
-                         for weightsNeighbor in weightsNeighbors]
-        if feasibleTest == 'function':
-            feasibleNeighborSolns = [(idx, soln) for idx, soln
-                                     in enumerate(neighborSolns)
-                                     if feasible_fn(soln)]
+        elements_obj_array[
+            :
+        ] = elements  # Note: just doing _np.array(elements) => ragged edged 2D array
+        neighborSolns = [
+            [element for element in elements_obj_array[_np.nonzero(weightsNeighbor)]]
+            for weightsNeighbor in weightsNeighbors
+        ]
+        if feasibleTest == "function":
+            feasibleNeighborSolns = [
+                (idx, soln)
+                for idx, soln in enumerate(neighborSolns)
+                if feasible_fn(soln)
+            ]
             for idx, soln in feasibleNeighborSolns:
                 solnScore = score_fn(soln)
                 if solnScore < currentScore:
@@ -252,7 +272,7 @@ def _grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
                     currentWeights = weightsNeighbors[idx]
                     break
 
-        elif feasibleTest == 'threshold':
+        elif feasibleTest == "threshold":
             for idx, soln in enumerate(neighborSolns):
                 solnScore = score_fn(soln)
                 # The current score is by construction below the threshold,
@@ -267,9 +287,18 @@ def _grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
     return currentSoln
 
 
-def run_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
-                        get_neighbors_fn, feasible_threshold=None, feasible_fn=None,
-                        initial_elements=None, seed=None, verbosity=0):
+def run_grasp_iteration(
+    elements,
+    greedy_score_fn,
+    rcl_fn,
+    local_score_fn,
+    get_neighbors_fn,
+    feasible_threshold=None,
+    feasible_fn=None,
+    initial_elements=None,
+    seed=None,
+    verbosity=0,
+):
     """
     Perform one iteration of GRASP (greedy construction and local search).
 
@@ -335,25 +364,49 @@ def run_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
-    initialSoln = _grasp_construct_feasible_solution(elements, greedy_score_fn, rcl_fn,
-                                                     feasible_threshold, feasible_fn,
-                                                     initial_elements)
-    printer.log('Initial construction:', 1)
-    def to_str(x): return x.str if isinstance(x, _circuits.Circuit) else str(x)
+    initialSoln = _grasp_construct_feasible_solution(
+        elements,
+        greedy_score_fn,
+        rcl_fn,
+        feasible_threshold,
+        feasible_fn,
+        initial_elements,
+    )
+    printer.log("Initial construction:", 1)
+
+    def to_str(x):
+        return x.str if isinstance(x, _circuits.Circuit) else str(x)
+
     printer.log(str([to_str(element) for element in initialSoln]), 1)
 
-    localSoln = _grasp_local_search(initialSoln, local_score_fn, elements,
-                                    get_neighbors_fn, feasible_threshold,
-                                    feasible_fn)
-    printer.log('Local optimum:', 1)
+    localSoln = _grasp_local_search(
+        initialSoln,
+        local_score_fn,
+        elements,
+        get_neighbors_fn,
+        feasible_threshold,
+        feasible_fn,
+    )
+    printer.log("Local optimum:", 1)
     printer.log(str([to_str(element) for element in localSoln]), 1)
 
     return initialSoln, localSoln
 
 
-def run_grasp(elements, greedy_score_fn, rcl_fn, local_score_fn, get_neighbors_fn,
-              final_score_fn, iterations, feasible_threshold=None, feasible_fn=None,
-              initial_elements=None, seed=None, verbosity=0):
+def run_grasp(
+    elements,
+    greedy_score_fn,
+    rcl_fn,
+    local_score_fn,
+    get_neighbors_fn,
+    final_score_fn,
+    iterations,
+    feasible_threshold=None,
+    feasible_fn=None,
+    initial_elements=None,
+    seed=None,
+    verbosity=0,
+):
     """
     Perform GRASP to come up with an optimal feasible set of elements.
 
@@ -428,14 +481,19 @@ def run_grasp(elements, greedy_score_fn, rcl_fn, local_score_fn, get_neighbors_f
 
     bestSoln = None
     for iteration in range(iterations):
-        printer.log('Iteration {}'.format(iteration), 1)
-        _, localSoln = run_grasp_iteration(elements, greedy_score_fn,
-                                           rcl_fn, local_score_fn,
-                                           get_neighbors_fn,
-                                           feasible_threshold,
-                                           feasible_fn,
-                                           initial_elements, seed,
-                                           verbosity)
+        printer.log("Iteration {}".format(iteration), 1)
+        _, localSoln = run_grasp_iteration(
+            elements,
+            greedy_score_fn,
+            rcl_fn,
+            local_score_fn,
+            get_neighbors_fn,
+            feasible_threshold,
+            feasible_fn,
+            initial_elements,
+            seed,
+            verbosity,
+        )
         if bestSoln is None:
             bestSoln = localSoln
         elif final_score_fn(localSoln) < final_score_fn(bestSoln):
