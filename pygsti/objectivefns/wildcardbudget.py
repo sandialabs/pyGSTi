@@ -363,7 +363,9 @@ class WildcardBudget(object):
                 testA = min(alphaA - 1.0, 1.0 - betaA)
 
                 #if blist_ptr < len(iB):  # also always true
-                assert(sum_fB > 0)  # sum_fB should always be > 0 - otherwise there's nowhere to take probability from
+                assert(sum_fB > 0), 'sum_fB = %g <= 0! %s qvec=%s fvec=%s' % (sum_fB, str(circ), str(qvec), str(fvec))
+                # sum_fB should always be > 0 - otherwise there's nowhere to take probability from
+
                 jB, betaB = iB[blist_ptr]
                 alphaB = (1.0 - betaB * sum_fB - sum_qC) / sum_fA
                 testB = min(alphaB - 1.0, 1.0 - betaB)
