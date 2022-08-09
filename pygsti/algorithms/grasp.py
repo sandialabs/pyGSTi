@@ -73,6 +73,7 @@ def _grasp_construct_feasible_solution(
     feasible_threshold=None,
     feasible_fn=None,
     initial_elements=None,
+    rng=None,
 ):
     """
     Constructs a subset of `elements` that represents a feasible solution.
@@ -123,12 +124,17 @@ def _grasp_construct_feasible_solution(
         `elements` should be automatically included at the start of this
         construction.
 
+    rng : np.random.Random
+        Optional random number generator to allow for determinism.
+
     Returns
     -------
     list
         A sub-list of `elements`.
     """
 
+    if rng is None:
+        rng = random.Random()
     if initial_elements is None:
         weights = _np.zeros(len(elements))
     else:
@@ -162,7 +168,7 @@ def _grasp_construct_feasible_solution(
         )
         rclIdxs = rcl_fn(candidateScores)
         assert len(rclIdxs) > 0, "Empty reduced candidate list!"
-        chosenIdx = _np.random.choice(rclIdxs)
+        chosenIdx = rng.choice(rclIdxs)
         soln = candidateSolns[chosenIdx]
         weights[candidateIdxs[chosenIdx]] = 1
         if feasibleTest == "threshold":
@@ -296,7 +302,7 @@ def run_grasp_iteration(
     feasible_threshold=None,
     feasible_fn=None,
     initial_elements=None,
-    seed=None,
+    rng=None,
     verbosity=0,
 ):
     """
@@ -349,8 +355,8 @@ def run_grasp_iteration(
         `elements` should be automatically included by the greedy construction
         routine at the start of its construction.
 
-    seed : int
-        Seed for the random number generator.
+    rng : np.random.Random
+        Optional random number generator to allow for determinism.
 
     verbosity : int
         Sets the level of logging messages the printer will display.
@@ -364,13 +370,16 @@ def run_grasp_iteration(
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
+    if rng is None:
+        rng = random.Random()
     initialSoln = _grasp_construct_feasible_solution(
         elements,
         greedy_score_fn,
         rcl_fn,
-        feasible_threshold,
-        feasible_fn,
-        initial_elements,
+        feasible_threshold=feasible_threshold,
+        feasible_fn=feasible_fn,
+        initial_elements=initial_elements,
+        rng=rng,
     )
     printer.log("Initial construction:", 1)
 
@@ -480,6 +489,7 @@ def run_grasp(
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     bestSoln = None
+    rng = random.Random(seed)
     for iteration in range(iterations):
         printer.log("Iteration {}".format(iteration), 1)
         _, localSoln = run_grasp_iteration(
@@ -488,11 +498,11 @@ def run_grasp(
             rcl_fn,
             local_score_fn,
             get_neighbors_fn,
-            feasible_threshold,
-            feasible_fn,
-            initial_elements,
-            seed,
-            verbosity,
+            feasible_threshold=feasible_threshold,
+            feasible_fn=feasible_fn,
+            initial_elements=initial_elements,
+            rng=rng,
+            verbosity=verbosity,
         )
         if bestSoln is None:
             bestSoln = localSoln
