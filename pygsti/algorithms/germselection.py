@@ -981,32 +981,73 @@ def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
     wrtEvecsInv = _np.linalg.inv(wrtEvecs)
     
     
+    #calculate the dimensions of the eigenspaces:
+    subspace_idx_list=[]
+    subspace_eval_list=[]
+    
+    unseen_indices= list(range(len(wrtEvals)))
+    while unseen_indices:
+        current_idx= unseen_indices.pop()
+        current_eval= wrtEvals[current_idx]
+        
+        existing_subspace_found=False
+        
+        for i,sublist in enumerate(subspace_eval_list):
+            for evals in sublist:
+                if abs(current_eval-evals)<=eps:
+                    existing_subspace_found=True
+                    subspace_eval_list[i].append(current_eval)
+                    subspace_idx_list[i].append(current_idx)
+                    break
+                    
+        if not existing_subspace_found:
+            subspace_eval_list.append([current_eval])
+            subspace_idx_list.append([current_idx])
+                    
+    #print(subspace_eval_list)
+    #print(subspace_idx_list)
+    
+    #Now use these to construct the projectors onto each of the subspaces
+    for idx_list in subspace_idx_list:
+        #Instead of actually constructing the projector, this is equivalent
+        #to simply picking out the requisite rows from wrtEvecsInv and
+        #columns from wrtEvecs.
+        idx_array= _np.asarray(idx_list)
+        A = _np.dot(wrtEvecs[:,idx_array], wrtEvecsInv[idx_array, :])
+        SuperOp += fast_kron(A, A.T)
+    
+    #---------Old Implementation-------------------#
 
     # We want to project  X -> M * (Proj_i * (Minv * X * M) * Proj_i) * Minv,
     # where M = wrtEvecs. So A = B = M * Proj_i * Minv and so
     # superop = A tensor B^T == A tensor A^T
     # NOTE: this == (A^T tensor A)^T while *Maple* germ functions seem to just
     # use A^T tensor A -> ^T difference
-    for i in range(dim):
-        # Create projector onto i-th eigenspace (spanned by i-th eigenvector
-        # and other degenerate eigenvectors)
-        Proj_i = _np.diag([(1 if (abs(wrtEvals[i] - wrtEvals[j]) <= eps)
-                            else 0) for j in range(dim)])
-        A = _np.dot(wrtEvecs, _np.dot(Proj_i, wrtEvecsInv))
-        #if _np.linalg.norm(A.imag) > 1e-6:
-        #    print("DB: imag = ",_np.linalg.norm(A.imag))
-        #assert(_np.linalg.norm(A.imag) < 1e-6)
-        #A = _np.real(A)
-        # Need to normalize, because we are overcounting projectors onto
-        # subspaces of dimension d > 1, giving us d * Proj_i tensor Proj_i^T.
-        # We can fix this with a division by tr(Proj_i) = d.
-        #SuperOp += _np.kron(A, A.T) / _np.trace(Proj_i)
-        SuperOp += fast_kron(A, A.T) / _np.trace(Proj_i)
-        # SuperOp += _np.kron(A.T,A) # Mimic Maple version (but I think this is
-        # wrong... or it doesn't matter?)
+#    for i in range(dim):
+#        # Create projector onto i-th eigenspace (spanned by i-th eigenvector
+#        # and other degenerate eigenvectors)
+#        Proj_i = _np.diag([(1 if (abs(wrtEvals[i] - wrtEvals[j]) <= eps)
+#                            else 0) for j in range(dim)])
+#        A = _np.dot(wrtEvecs, _np.dot(Proj_i, wrtEvecsInv))
+#        
+#        #testing:
+#        
+#        #print('Is A symmetric?: ', _np.allclose(A, A.T))
+#        
+#        #if _np.linalg.norm(A.imag) > 1e-6:
+#        #    print("DB: imag = ",_np.linalg.norm(A.imag))
+#        #assert(_np.linalg.norm(A.imag) < 1e-6)
+#        #A = _np.real(A)
+#        # Need to normalize, because we are overcounting projectors onto
+#        # subspaces of dimension d > 1, giving us d * Proj_i tensor Proj_i^T.
+#        # We can fix this with a division by tr(Proj_i) = d.
+#        #SuperOp += _np.kron(A, A.T) / _np.trace(Proj_i)
+#        SuperOp += fast_kron(A, A.T) / _np.trace(Proj_i)
+#        # SuperOp += _np.kron(A.T,A) # Mimic Maple version (but I think this is
+#        # wrong... or it doesn't matter?)
     
-    #Case the twirling SuperOp back to the specified float type.
-    #If the float_type is a real-values one though we should probably do a quick
+    #Cast the twirling SuperOp back to the specified float type.
+    #If the float_type is a real-valued one though we should probably do a quick
     #sanity check to confirm everything we're casting is actually real!
     if (float_type is _np.double) or (float_type is _np.single):
         #might as well use eps as the threshold here too.
