@@ -3120,7 +3120,20 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
     
     B= _np.eye(pinv_R_update.shape[0]) - pinv_R_update @ R_update
     
-    Dinv_chol= _np.linalg.cholesky(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))
+    try:
+        Dinv_chol= _np.linalg.cholesky(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))
+    except _np.linalg.LinAlgError as err:
+        #Cholesky decomposition probably failed.
+        #I'm not sure why it failed though so print some diagnostic info:
+        #Is B symmetric or hermitian?
+        print('B Symmetric?: ', np.allclose(B,B.T))
+        print('B Hermitian?: ', np.allclose(B,B.conj().T))
+        #What are the eigenvalues of the Dinv matrix?
+        print('Dinv eigenvalues: ',_np.linalg.eigvals(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)))
+        
+        #re-raise the error.
+        raise err
+        
     
     pinv_E_beta_B_Dinv_chol= pinv_E_beta@B@Dinv_chol
     
