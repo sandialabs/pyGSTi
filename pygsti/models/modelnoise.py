@@ -754,7 +754,7 @@ class DepolarizationNoise(OpNoise):
     depolarization_rate : float
         The uniform depolarization strength.
 
-    parameterization : {"depolarize", "stochastic", or "lindblad"}
+    parameterization : {"depolarize", "stochastic", "lindblad", "exp(lindblad)", "1+lindblad"}
         Determines whether a :class:`DepolarizeOp`, :class:`StochasticNoiseOp`, or
         :class:`LindbladErrorgen` is used to represent the depolarization noise, respectively.
         When "depolarize" (the default), a DepolarizeOp is created with the strength given
@@ -767,7 +767,7 @@ class DepolarizationNoise(OpNoise):
         self.depolarization_rate = depolarization_rate
         self.parameterization = parameterization
 
-        valid_depol_params = ['depolarize', 'stochastic', 'lindblad', 'linexp lindblad']
+        valid_depol_params = ['depolarize', 'stochastic', 'lindblad', 'exp(lindblad)', '1+lindblad']
         assert (self.parameterization in valid_depol_params), \
             "The depolarization parameterization must be one of %s, not %s" \
             % (valid_depol_params, self.parameterization)
@@ -788,8 +788,9 @@ class DepolarizationNoise(OpNoise):
         -------
         LinearOperator
         """
-        if self.parameterization not in ('lindblad', 'linexp lindblad'):
-            raise ValueError("Can only construct error generators for 'lindblad' parameterization")
+        allowed_values = ('lindblad', 'exp(lindblad)', '1+lindblad')
+        if self.parameterization not in allowed_values:
+            raise ValueError("Depolarizing noise parameterization must be one of %s" % str(allowed_values))
 
         # LindbladErrorgen with "depol" or "diagonal" param
         basis_size = state_space.dim  # e.g. 4 for a single qubit
@@ -862,7 +863,7 @@ class StochasticNoise(OpNoise):
         self.error_probs = error_probs
         self.parameterization = parameterization
 
-        valid_sto_params = ['stochastic', 'lindblad', 'linexp lindblad']
+        valid_sto_params = ['stochastic', 'lindblad', 'exp(lindblad)', '1+lindblad']
         assert (self.parameterization in valid_sto_params), \
             "The stochastic parameterization must be one of %s, not %s" \
             % (valid_sto_params, self.parameterization)
@@ -885,8 +886,9 @@ class StochasticNoise(OpNoise):
         """
         sto_rates = self.error_probs
 
-        if self.parameterization not in ('lindblad', 'linexp lindblad'):
-            raise ValueError("Cannot only construct error generators for 'lindblad' parameterization")
+        allowed_values = ('lindblad', 'exp(lindblad)', '1+lindblad')
+        if self.parameterization not in allowed_values:
+            raise ValueError("Stochastic noise parameterization must be one of %s" % str(allowed_values))
 
         basis_size = state_space.dim  # e.g. 4 for a single qubit
         basis = _BuiltinBasis('pp', basis_size)
