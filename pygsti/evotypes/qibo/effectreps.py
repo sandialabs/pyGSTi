@@ -45,6 +45,9 @@ class EffectRepConjugatedState(EffectRep):
 
         initial_state = state.qibo_state
         effect_state = self.state_rep.qibo_state
+        if effect_state.ndim == 1:  # b/c qibo_state can be either a vector or density mx
+            #Promote this state vector to a density matrix to use it as a POVM effect
+            effect_state = _np.kron(effect_state[:, None], effect_state.conjugate()[None, :])
         assert(effect_state.ndim == 2)  # density matrices
 
         qibo_circuit = state.qibo_circuit
@@ -58,3 +61,18 @@ class EffectRepConjugatedState(EffectRep):
     def basis(self):
         # (all qibo effect reps need to have a .basis property)
         return self.state_rep.basis
+
+
+class EffectRepComposed(EffectRep):
+    def __init__(self, op_rep, effect_rep, op_id, state_space):
+        self.op_rep = op_rep
+        self.effect_rep = effect_rep
+        self.op_id = op_id
+
+        self.state_space = _StateSpace.cast(state_space)
+        assert(self.state_space.is_compatible_with(effect_rep.state_space))
+
+        super(EffectRepComposed, self).__init__(effect_rep.state_space)
+
+    def probability(self, state):
+        return self.effect_rep.probability(self.op_rep.acton(state))

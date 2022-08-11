@@ -37,7 +37,7 @@ class StateRep(_basereps.StateRep):
         self.qibo_circuit = qibo_circuit
         self.qibo_state = qibo_state
         self.state_space = _StateSpace.cast(state_space)
-        assert(self.state_space.num_qubits == self.qibo_circuit.nqubits), \
+        assert(self.qibo_circuit is None or self.state_space.num_qubits == self.qibo_circuit.nqubits), \
             'Number-of-qubits mismatch between state space and circuit for "qubit" evotype'
 
     @property

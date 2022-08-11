@@ -95,4 +95,4 @@ class ComposedPOVMRep(POVMRep):
 
     def probabilities(self, state, rand_state, effect_labels):
         state = self.errmap_rep.acton_random(state, rand_state)
-        return self.base_povm.probabilities(state, rand_state, effect_labels)
+        return self.base_povm_rep.probabilities(state, rand_state, effect_labels)

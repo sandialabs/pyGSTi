@@ -489,7 +489,8 @@ class LindbladErrorgen(_LinearOperator):
                 # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
                 #  and should be replaced with the basis of contained ops (if any) once we establish
                 #  a common .basis or ._basis attribute of representations (which could still be None)
-                rep = evotype.create_dense_superop_rep(None, None, state_space)
+                # Update: fixed now (I think) - this seems like a legit matrix_basis to use... REMOVE comment?
+                rep = evotype.create_dense_superop_rep(None, self.matrix_basis, state_space)
 
         _LinearOperator.__init__(self, rep, evotype)  # sets self.dim
         self._update_rep()  # updates _rep whether it's a dense or sparse matrix

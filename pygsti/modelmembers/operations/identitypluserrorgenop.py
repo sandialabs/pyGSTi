@@ -57,7 +57,8 @@ class IdentityPlusErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
                     rep = evotype.create_identitypluserrorgen_rep(self.errorgen._rep)
                     self._ident = None  # not needed
                 elif rep_type == 'dense':
-                    rep = evotype.create_dense_superop_rep(None, None, state_space)  # init to identity
+                    rep = evotype.create_dense_superop_rep(None, self.errorgen.matrix_basis,
+                                                           state_space)  # None => init to identity
                     self._ident = _np.identity(state_space.dim, 'd')
                 else:
                     assert(False), "Logic error!"
