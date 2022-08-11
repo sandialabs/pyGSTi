@@ -338,7 +338,7 @@ class OpRepRandomUnitary(OpRep):
     def create_qibo_ops_on(self, qubit_indices):
         return [_qibo.gates.UnitaryChannel(self.unitary_rates, [(qubit_indices, Uk.to_dense('Hilbert'))
                                                                 for Uk in self.unitary_reps],
-                                           seed=self.rand_state.randint(0, 2**32 - 1))]  # HARDCODED 2**32!! (max seed)
+                                           seed=self.rand_state.randint(0, 2**30))]  # HARDCODED 2**30!! (max seed)
 
     def __str__(self):
         return "OpRepRandomUnitary:\n" + " rates: " + str(self.unitary_rates)  # maybe show ops too?
