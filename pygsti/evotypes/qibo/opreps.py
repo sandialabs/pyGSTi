@@ -57,7 +57,7 @@ try:
         'Gy': _partial(_qibo.gates.RY, theta=_np.pi / 2, trainable=False),
         'Gz': _partial(_qibo.gates.RZ, theta=_np.pi / 2, trainable=False)
     }
-except ImportError:
+except (ImportError, AttributeError):  # AttributeError if an early version of qibo without some of the above gates
     _qibo = None
 
 

@@ -1,7 +1,8 @@
 
 import unittest
 import numpy as np
-
+from packaging import version
+    
 from pygsti.processors import QubitProcessorSpec
 from pygsti.models import create_crosstalk_free_model
 from pygsti.circuits import Circuit
@@ -14,8 +15,13 @@ from ..util import BaseCase
 
 try:
     import qibo as _qibo
+    if version.parse(_qibo.__version__) < version.parse("0.1.7"):
+        _qibo = None  # version too low - doesn't contain all the builtin gates, e.g. qibo.gates.S
 except ImportError:
     _qibo = None
+
+
+
 
 class QiboEvotypeTester(BaseCase):
 
