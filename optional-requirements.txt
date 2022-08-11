@@ -12,3 +12,4 @@ cvxpy
 nose
 seaborn
 qibo
+packaging

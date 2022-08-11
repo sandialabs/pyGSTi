@@ -67,6 +67,7 @@ extras = {
         'msgpack',
         'nose',
         'nose-timer',
+        'packaging',
         'pandas',
         'psutil',
         'rednose',
