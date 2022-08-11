@@ -3122,29 +3122,42 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
     
     try:
         Dinv_chol= _np.linalg.cholesky(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))
+        cholesky_success=True
     except _np.linalg.LinAlgError as err:
         #Cholesky decomposition probably failed.
         #I'm not sure why it failed though so print some diagnostic info:
         #Is B symmetric or hermitian?
+        cholesky_success=False
+        print('Cholesky Decomposition Probably Failed. Here is some diagnostic info.')
         print('B Symmetric?: ', _np.allclose(B,B.T))
         print('B Hermitian?: ', _np.allclose(B,B.conj().T))
         #What are the eigenvalues of the Dinv matrix?
-        print('Dinv eigenvalues: ',_np.linalg.eigvals(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)))
+        print('Dinv Minimum eigenvalue: ',_np.min(_np.linalg.eigvals(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))))
+  
+  
+    if cholesky_success:
+        pinv_E_beta_B_Dinv_chol= pinv_E_beta@B@Dinv_chol
         
-        #re-raise the error.
-        raise err
+        #Now construct the two matrices we need:  
+        #numpy einsum based approach for the upper left block:
+        upper_left_block_diag = _np.einsum('ij,ji->i', pinv_E_beta_B_Dinv_chol, pinv_E_beta_B_Dinv_chol.T) + _np.reshape(orig_e_inv, (len(orig_e), ))
         
+        
+        #The lower right seems fast enough as it is for now, but we can try an einsum style direct diagonal
+        #calculation if need be.
+        lower_right_block= (gamma@(orig_e_inv*gamma.T))+ pinv_R_update.T@pinv_R_update - gamma@pinv_E_beta_B_Dinv_chol@pinv_E_beta_B_Dinv_chol.T@gamma.T
     
-    pinv_E_beta_B_Dinv_chol= pinv_E_beta@B@Dinv_chol
+    else:
+        #Since the cholesky decomposition failed go ahead and use an alternative calculation pipeline.
+        print('Falling back w/o use of Cholesky.')
+        Dinv= _np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)
+        pinv_E_beta_B= pinv_E_beta@B
+        
+        upper_left_block_diag = _np.einsum('ij,jk,ki->i', pinv_E_beta_B, Dinv, pinv_E_beta_B.T, optimize=True) + _np.reshape(orig_e_inv, (len(orig_e), ))
+        #The lower right seems fast enough as it is for now, but we can try an einsum style direct diagonal
+        #calculation if need be.
+        lower_right_block= (gamma@(orig_e_inv*gamma.T))+ pinv_R_update.T@pinv_R_update - gamma@pinv_E_beta_B@Dinv@pinv_E_beta_B.T@gamma.T
     
-    #Now construct the two matrices we need:  
-    #numpy einsum based approach for the upper left block:
-    upper_left_block_diag = _np.einsum('ij,ji->i', pinv_E_beta_B_Dinv_chol, pinv_E_beta_B_Dinv_chol.T) + _np.reshape(orig_e_inv, (len(orig_e), ))
-    
-    
-    #The lower right seems fast enough as it is for now, but we can try an einsum style direct diagonal
-    #calculation if need be.
-    lower_right_block= (gamma@(orig_e_inv*gamma.T))+ pinv_R_update.T@pinv_R_update - gamma@pinv_E_beta_B_Dinv_chol@pinv_E_beta_B_Dinv_chol.T@gamma.T
     
     #the updated trace should just be the trace of these two matrices:
     updated_trace= _np.sum(upper_left_block_diag) + _np.trace(lower_right_block)
