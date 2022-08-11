@@ -11,4 +11,4 @@ cvxopt
 cvxpy
 nose
 seaborn
-
+qibo

@@ -73,7 +73,8 @@ extras = {
         'zmq',
         'jinja2',
         'seaborn',
-        'ply'
+        'ply',
+        'qibo'
     ]
 }
 
@@ -142,6 +143,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.evotypes.stabilizer',
             'pygsti.evotypes.stabilizer_slow',
             'pygsti.evotypes.chp',
+            'pygsti.evotypes.qibo',
             'pygsti.extras',
             'pygsti.extras.rb',
             'pygsti.extras.rpe',
