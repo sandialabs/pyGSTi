@@ -1056,7 +1056,9 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
         # Prep logic
         if isinstance(ideal_prep_type, (tuple, list)):  # HACK to support multiple vals
             ideal_prep_type = ideal_prep_type[0]
-        if ideal_prep_type == 'computational' or ideal_prep_type.startswith('lindblad '):
+
+        if (ideal_prep_type == 'computational' or ideal_prep_type.startswith('exp(')
+           or ideal_prep_type.startswith('1+(') or ideal_prep_type.startswith('lindblad ')):
 
             if isinstance(prep_spec, str):
                 # Notes on conventions:  When there are multiple qubits, the leftmost in a string (or, intuitively,
@@ -1187,7 +1189,8 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
         # Povm logic
         if isinstance(ideal_povm_type, (tuple, list)):  # HACK to support multiple vals
             ideal_povm_type = ideal_povm_type[0]
-        if ideal_povm_type == 'computational' or ideal_povm_type.startswith('lindblad '):
+        if (ideal_povm_type == 'computational' or ideal_povm_type.startswith('exp(')
+           or ideal_povm_type.startswith('1+(') or ideal_povm_type.startswith('lindblad ')):
 
             if not all([udim == 2 for udim in processor_spec.qudit_udims]):
                 raise NotImplementedError(("POVMs can currently only be constructed on a space of *qubits* when using"

@@ -230,6 +230,7 @@ class DenseState(DenseStateInterface, _State):
         mm_dict = super().to_memoized_dict(mmg_memo)
 
         mm_dict['dense_superket_vector'] = self._encodemx(self.to_dense())
+        mm_dict['basis'] = self._basis.to_nice_serialization() if (self._basis is not None) else None
 
         return mm_dict
 
@@ -237,7 +238,8 @@ class DenseState(DenseStateInterface, _State):
     def _from_memoized_dict(cls, mm_dict, serial_memo):
         vec = cls._decodemx(mm_dict['dense_superket_vector'])
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
-        return cls(vec, mm_dict['evotype'], state_space)
+        basis = _Basis.from_nice_serialization(mm_dict['basis']) if (mm_dict['basis'] is not None) else None
+        return cls(vec, basis, mm_dict['evotype'], state_space)
 
     def _is_similar(self, other, rtol, atol):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has

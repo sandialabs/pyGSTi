@@ -393,6 +393,25 @@ class OpGaugeGroup(GaugeGroup):
         return cls(_statespace.default_space_for_dim(state['state_space_dimension']), state['evotype'])
 
 
+class OpGaugeGroupWithBasis(OpGaugeGroup):
+    def __init__(self, operation, elementcls, name, basis):
+        self._basis = basis
+        super().__init__(operation, elementcls, name)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'state_space_dimension': int(self._operation.state_space.dim),
+                      'basis': self._basis.to_nice_serialization(),
+                      'evotype': str(self._operation.evotype)
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        basis = _Basis.from_nice_serialization(state['basis'])
+        return cls(_statespace.default_space_for_dim(state['state_space_dimension']), basis, state['evotype'])
+
+
 class OpGaugeGroupElement(GaugeGroupElement):
     """
     The element type for `OpGaugeGroup`-derived gauge groups
@@ -513,7 +532,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         return cls(operation_mx)
 
 
-class FullGaugeGroup(OpGaugeGroup):
+class FullGaugeGroup(OpGaugeGroupWithBasis):
     """
     A fully-parameterized gauge group.
 
@@ -538,7 +557,7 @@ class FullGaugeGroup(OpGaugeGroup):
     def __init__(self, state_space, model_basis='pp', evotype='default'):
         state_space = _StateSpace.cast(state_space)
         operation = _op.FullArbitraryOp(_np.identity(state_space.dim, 'd'), model_basis, evotype, state_space)
-        OpGaugeGroup.__init__(self, operation, FullGaugeGroupElement, "Full")
+        OpGaugeGroupWithBasis.__init__(self, operation, FullGaugeGroupElement, "Full", model_basis)
 
 
 class FullGaugeGroupElement(OpGaugeGroupElement):
@@ -560,7 +579,7 @@ class FullGaugeGroupElement(OpGaugeGroupElement):
         OpGaugeGroupElement.__init__(self, operation)
 
 
-class TPGaugeGroup(OpGaugeGroup):
+class TPGaugeGroup(OpGaugeGroupWithBasis):
     """
     A gauge group spanning all trace-preserving (TP) gauge transformations.
 
@@ -586,7 +605,7 @@ class TPGaugeGroup(OpGaugeGroup):
     def __init__(self, state_space, model_basis='pp', evotype='default'):
         state_space = _StateSpace.cast(state_space)
         operation = _op.FullTPOp(_np.identity(state_space.dim, 'd'), model_basis, evotype, state_space)
-        OpGaugeGroup.__init__(self, operation, TPGaugeGroupElement, "TP")
+        OpGaugeGroupWithBasis.__init__(self, operation, TPGaugeGroupElement, "TP", model_basis)
 
 
 class TPGaugeGroupElement(OpGaugeGroupElement):
@@ -729,7 +748,7 @@ class TPDiagGaugeGroupElement(TPGaugeGroupElement):
         TPGaugeGroupElement.__init__(self, operation)
 
 
-class UnitaryGaugeGroup(OpGaugeGroup):
+class UnitaryGaugeGroup(OpGaugeGroupWithBasis):
     """
     A gauge group consisting of unitary gauge-transform matrices.
 
@@ -758,20 +777,7 @@ class UnitaryGaugeGroup(OpGaugeGroup):
         errgen = _op.LindbladErrorgen.from_operation_matrix(
             _np.identity(state_space.dim, 'd'), "H", basis, mx_basis=basis, evotype=evotype)
         operation = _op.ExpErrorgenOp(errgen)
-        OpGaugeGroup.__init__(self, operation, UnitaryGaugeGroupElement, "Unitary")
-
-    def _to_nice_serialization(self):
-        state = super()._to_nice_serialization()
-        state.update({'state_space_dimension': int(self._operation.state_space.dim),
-                      'basis': self._operation.errorgen.coefficient_blocks[0]._basis.to_nice_serialization(),
-                      'evotype': str(self._operation.evotype)
-                      })
-        return state
-
-    @classmethod
-    def _from_nice_serialization(cls, state):
-        basis = _Basis.from_nice_serialization(state['basis'])
-        return cls(_statespace.default_space_for_dim(state['state_space_dimension']), basis, state['evotype'])
+        OpGaugeGroupWithBasis.__init__(self, operation, UnitaryGaugeGroupElement, "Unitary", basis)
 
 
 class UnitaryGaugeGroupElement(OpGaugeGroupElement):

@@ -1267,9 +1267,9 @@ def parse_model(filename):
     #Add default gauge group -- the full group because
     # we add FullyParameterizedGates above.
     if gaugegroup_name == "Full":
-        mdl.default_gauge_group = _gaugegroup.FullGaugeGroup(mdl.state_space, mdl.evotype)
+        mdl.default_gauge_group = _gaugegroup.FullGaugeGroup(mdl.state_space, mdl.basis, mdl.evotype)
     elif gaugegroup_name == "TP":
-        mdl.default_gauge_group = _gaugegroup.TPGaugeGroup(mdl.state_space, mdl.evotype)
+        mdl.default_gauge_group = _gaugegroup.TPGaugeGroup(mdl.state_space, mdl.basis, mdl.evotype)
     elif gaugegroup_name == "Unitary":
         mdl.default_gauge_group = _gaugegroup.UnitaryGaugeGroup(mdl.state_space, mdl.basis, mdl.evotype)
     else:

@@ -1678,6 +1678,11 @@ class LindbladParameterization(_NicelySerializable):
             elif obj.startswith('1+(') and obj.endswith(')'):
                 abbrev = obj[len('1+('):-1]
                 meta = '1+'
+            elif obj.startswith('lindblad '):
+                _warnings.warn(("Use of 'lindblad <type>' is deprecated and will be removed.  "
+                                "You should use 'exp(<type>)' or '1+(<type>)' instead"))
+                abbrev = obj[len('lindblad '):]
+                meta = 'exp'
             else:
                 abbrev = obj
                 meta = None  # 'exp' by default?
