@@ -107,7 +107,7 @@ class _BasePOVM(_POVM):
                 identity_for_complement, non_comp_effects)
             items.append((self.complement_label, complement_effect))
 
-        super(_BasePOVM, self).__init__(state_space, evotype, items)
+        super(_BasePOVM, self).__init__(state_space, evotype, None, items)
         if not called_from_reduce: self.init_gpindices()  # initialize our gpindices based on sub-members
         self._paramlbls = _np.array(paramlbls, dtype=object)
 

@@ -78,11 +78,12 @@ class POVM(_mm.ModelMember, _collections.OrderedDict):
         Initial values.  This should only be used internally in de-serialization.
     """
 
-    def __init__(self, state_space, evotype, items=[]):
+    def __init__(self, state_space, evotype, rep=None, items=[]):
         self._readonly = False  # until init is done
         _collections.OrderedDict.__init__(self, items)
         _mm.ModelMember.__init__(self, state_space, evotype)
         self._readonly = True
+        self._rep = rep
 
     def __setitem__(self, key, value):
         if self._readonly: raise ValueError("Cannot alter POVM elements")
@@ -230,10 +231,13 @@ class POVM(_mm.ModelMember, _collections.OrderedDict):
         assert(state._evotype == self._evotype), "Evolution type mismatch: %s != %s" % (self._evotype, state._evotype)
 
         staterep = state._rep
-        outcome_probs = _collections.OrderedDict()
-        for lbl, E in self.items():
-            outcome_probs[lbl] = E._rep.probability(staterep)
-        return outcome_probs
+        if self._rep is None:
+            outcome_probs = _collections.OrderedDict()
+            for lbl, E in self.items():
+                outcome_probs[lbl] = E._rep.probability(staterep)
+            return outcome_probs
+        else:
+            return self._rep.acton(staterep)
 
     def __str__(self):
         s = "%s with effect vectors:\n" % self.__class__.__name__

@@ -56,7 +56,8 @@ class DepolarizeOp(_StochasticNoiseOp):
 
         num_rates = self.basis.size - 1
         initial_sto_rates = [initial_rate / num_rates] * num_rates
-        _StochasticNoiseOp.__init__(self, state_space, self.basis, evotype, initial_sto_rates, seed_or_state)
+        _StochasticNoiseOp.__init__(self, state_space, basis=self.basis, evotype=evotype,
+                                    initial_rates=initial_sto_rates, seed_or_state=seed_or_state)
 
         # For DepolarizeOp, set params to only first element
         self.params = _np.array([self.params[0]])

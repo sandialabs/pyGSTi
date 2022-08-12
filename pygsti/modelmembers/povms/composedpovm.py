@@ -103,7 +103,11 @@ class ComposedPOVM(_POVM):
         self.base_povm = povm
 
         items = []  # init as empty (lazy creation of members)
-        _POVM.__init__(self, state_space, evotype, items)
+        try:
+            rep = evotype.create_composed_povm_rep(self.error_map._rep, self.base_povm._rep, state_space)
+        except AttributeError:
+            rep = None
+        _POVM.__init__(self, state_space, evotype, rep, items)
         self.init_gpindices()  # initialize gpindices and subm_rpindices from sub-members
 
     def to_memoized_dict(self, mmg_memo):

@@ -14,6 +14,12 @@ import math as _math
 
 import numpy as _np
 
+
+class POVMRep:
+    """ The base class for all POVM representation classes """
+    pass
+
+
 try:
     from .basereps_cython import OpRep, StateRep, EffectRep, TermRep, PolynomialRep
 except ImportError:

@@ -114,8 +114,8 @@ class Evotype(object):
     def create_experrorgen_rep(self, errorgen_rep):
         return self.module.OpRepExpErrorgen(errorgen_rep)
 
-    def create_stochastic_rep(self, basis, rate_poly_dicts, initial_rates, seed_or_state, state_space):
-        return self.module.OpRepStochastic(basis, rate_poly_dicts, initial_rates, seed_or_state, state_space)
+    def create_stochastic_rep(self, stochastic_basis, basis, initial_rates, seed_or_state, state_space):
+        return self.module.OpRepStochastic(stochastic_basis, basis, initial_rates, seed_or_state, state_space)
 
     def create_sum_rep(self, factor_reps, state_space):
         return self.module.OpRepSum(factor_reps, state_space)
@@ -163,6 +163,13 @@ class Evotype(object):
 
     def create_composed_effect_rep(self, errmap_rep, effect_rep, errmap_name, state_space):
         return self.module.EffectRepComposed(errmap_rep, effect_rep, errmap_name, state_space)
+
+    #POVM REPS
+    def create_composed_povm_rep(self, errmap_rep, base_povm_rep, state_space):
+        return self.module.ComposedPOVMRep(errmap_rep, base_povm_rep, state_space)
+
+    def create_computational_povm_rep(self, nqubits, qubit_filter):
+        return self.module.ComputationalPOVMRep(nqubits, qubit_filter)
 
     # TERM REPS
     def create_term_rep(self, coeff, mag, logmag, pre_state, post_state,

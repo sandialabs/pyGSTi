@@ -33,6 +33,8 @@ cdef extern from "opcreps.h" namespace "CReps_statevec":
         OpCRep(INT) except +
         StateCRep* acton(StateCRep*, StateCRep*)
         StateCRep* adjoint_acton(StateCRep*, StateCRep*)
+        StateCRep* acton_random(StateCRep*, StateCRep*, object)
+        StateCRep* adjoint_acton_random(StateCRep*, StateCRep*, object)
         INT _dim
 
     cdef cppclass OpCRep_DenseUnitary(OpCRep):
@@ -46,6 +48,8 @@ cdef extern from "opcreps.h" namespace "CReps_statevec":
         OpCRep_Embedded(OpCRep*, INT*, INT*, INT*, INT*, INT, INT, INT, INT, INT) except +
         StateCRep* acton(StateCRep*, StateCRep*)
         StateCRep* adjoint_acton(StateCRep*, StateCRep*)
+        StateCRep* acton_random(StateCRep*, StateCRep*, object)
+        StateCRep* adjoint_acton_random(StateCRep*, StateCRep*, object)
         INT _nComponents
         INT _embeddedDim
         INT _iActiveBlock
@@ -56,26 +60,27 @@ cdef extern from "opcreps.h" namespace "CReps_statevec":
         void reinit_factor_op_creps(vector[OpCRep*])
         StateCRep* acton(StateCRep*, StateCRep*)
         StateCRep* adjoint_acton(StateCRep*, StateCRep*)
+        StateCRep* acton_random(StateCRep*, StateCRep*, object)
+        StateCRep* adjoint_acton_random(StateCRep*, StateCRep*, object)
 
     cdef cppclass OpCRep_Sum(OpCRep):
         OpCRep_Sum(vector[OpCRep*], INT) except +
         StateCRep* acton(StateCRep*, StateCRep*)
         StateCRep* adjoint_acton(StateCRep*, StateCRep*)
+        StateCRep* acton_random(StateCRep*, StateCRep*, object)
+        StateCRep* adjoint_acton_random(StateCRep*, StateCRep*, object)
 
     cdef cppclass OpCRep_Repeated(OpCRep):
         OpCRep_Repeated(OpCRep*, INT, INT) except +
         StateCRep* acton(StateCRep*, StateCRep*)
         StateCRep* adjoint_acton(StateCRep*, StateCRep*)
+        StateCRep* acton_random(StateCRep*, StateCRep*, object)
+        StateCRep* adjoint_acton_random(StateCRep*, StateCRep*, object)
 
-    cdef cppclass OpCRep_ExpErrorgen(OpCRep):
-        OpCRep_ExpErrorgen(OpCRep* errgen_rep,
-                           double mu, double eta, INT m_star, INT s, INT dim) except +
-        StateCRep* acton(StateCRep*, StateCRep*)
-        StateCRep* adjoint_acton(StateCRep*, StateCRep*)
-        double _mu
-        double _eta
-        INT _m_star
-        INT _s
+    cdef cppclass OpCRep_RandomUnitary(OpCRep):
+        OpCRep_RandomUnitary(object, vector[OpCRep*], object, INT) except +
+        StateCRep* acton_random(StateCRep*, StateCRep*, object)
+        StateCRep* adjoint_acton_random(StateCRep*, StateCRep*, object)
 
 
 cdef class OpRep(_basereps_cython.OpRep):

@@ -84,6 +84,39 @@ class OpRepDenseSuperop(OpRep):
         return OpRepDenseSuperop(self.base.copy(), self.state_space)
 
 
+class OpRepDenseUnitary(OpRep):
+
+    def __init__(self, mx, basis, state_space):
+        state_space = _StateSpace.cast(state_space)
+        if mx is None:
+            mx = _np.identity(state_space.dim, 'd')
+        assert(mx.ndim == 2 and mx.shape[0] == state_space.dim)
+
+        self.basis = basis
+        self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        self.superop_base = _np.require(_ot.unitary_to_superop(mx, self.basis),
+                                        requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        self.state_space = state_space
+
+    def base_has_changed(self):
+        self.superop_base[:, :] = _ot.unitary_to_superop(self.base, self.basis)
+
+    def to_dense(self, on_space):
+        if on_space in ('minimal', 'HilbertSchmidt'):
+            return self.to_dense_superop()
+        else:  # 'Hilbert'
+            return self.base
+
+    def to_dense_superop(self):
+        return self.superop_base
+
+    def __str__(self):
+        return "OpRepDenseUnitary:\n" + str(self.base)
+
+    def copy(self):
+        return OpRepDenseUnitary(self.base.copy(), self.basis, self.state_space)
+
+
 class OpRepSparse(OpRep):
     def __init__(self, a_data, a_indices, a_indptr, state_space):
         dim = len(a_indptr) - 1
@@ -136,28 +169,81 @@ class OpRepStandard(OpRepDenseSuperop):
         super(OpRepStandard, self).__init__(superop, state_space)
 
 
-class OpRepStochastic(OpRepDenseSuperop):
-
-    def __init__(self, basis, rate_poly_dicts, initial_rates, seed_or_state, state_space):
+class OpRepKraus(OpRep):
+    def __init__(self, basis, kraus_reps, seed_or_state, state_space):
         self.basis = basis
-        self.stochastic_superops = []
-        for b in self.basis.elements[1:]:
-            #REMOVE (OLD) std_superop = _lbt.nonham_lindbladian(b, b, sparse=False)
-            std_superop = _lbt.create_elementary_errorgen('S', b, sparse=False)
-            self.stochastic_superops.append(_bt.change_basis(std_superop, 'std', self.basis))
-
+        self.kraus_reps = kraus_reps  # superop reps in this evotype (must be reps of *this* evotype)
         state_space = _StateSpace.cast(state_space)
         assert(self.basis.dim == state_space.dim)
+        self.state_space = state_space
 
-        super(OpRepStochastic, self).__init__(None, state_space)
-        self.update_rates(initial_rates)
+    def acton(self, state):
+        return _StateRepDense(sum([rep.acton(state).data
+                                   for rep in self.kraus_reps]), state.state_space)
+
+    def adjoint_acton(self, state):
+        return _StateRepDense(sum([rep.adjoint_acton(state).data
+                                   for rep in self.kraus_reps]), state.state_space)
+
+    def __str__(self):
+        return "OpRepKraus:\n" + " rates: " + str(self.kraus_rates)  # maybe show ops too?
+
+    def copy(self):
+        return OpRepKraus(self.basis, list(self.kraus_reps), None, self.state_space)
+
+    def to_dense(self, on_space):
+        return sum([rep.to_dense(on_space) for rep in self.kraus_reps])
+
+
+class OpRepRandomUnitary(OpRep):
+    def __init__(self, basis, unitary_rates, unitary_reps, seed_or_state, state_space):
+        self.basis = basis
+        self.unitary_reps = unitary_reps
+        self.unitary_rates = _np.require(unitary_rates.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
+        self.state_space = _StateSpace.cast(state_space)
+        assert(self.basis.dim == self.state_space.dim)
+
+    def acton(self, state):
+        return _StateRepDense(sum([rate * rep.acton(state).data
+                                   for rate, rep in zip(self.unitary_rates, self.unitary_reps)]), state.state_space)
+
+    def adjoint_acton(self, state):
+        return _StateRepDense(sum([rate * rep.adjoint_acton(state).data
+                                   for rate, rep in zip(self.unitary_rates, self.unitary_reps)]), state.state_space)
+
+    def __str__(self):
+        return "OpRepRandomUnitary:\n" + " rates: " + str(self.unitary_rates)  # maybe show ops too?
+
+    def copy(self):
+        return OpRepRandomUnitary(self.basis, self.unitary_rates, list(self.unitary_reps), None, self.state_space)
+
+    def update_unitary_rates(self, rates):
+        self.unitary_rates[:] = rates
+
+    def to_dense(self, on_space):
+        assert(on_space in ('minimal', 'HilbertSchmidt'))  # below code only works in this case
+        return sum([rate * rep.to_dense(on_space) for rate, rep in zip(self.unitary_rates, self.unitary_reps)])
+
+
+class OpRepStochastic(OpRepRandomUnitary):
+
+    def __init__(self, stochastic_basis, basis, initial_rates, seed_or_state, state_space):
+        self.rates = initial_rates
+        self.stochastic_basis = stochastic_basis
+        rates = [1 - sum(initial_rates)] + list(initial_rates)
+        reps = [OpRepDenseUnitary(bel, basis, state_space) for bel in stochastic_basis.elements]
+        assert(len(reps) == len(rates))
+
+        state_space = _StateSpace.cast(state_space)
+        assert(basis.dim == state_space.dim)
+        self.basis = basis
+
+        super(OpRepStochastic, self).__init__(basis, _np.array(rates, 'd'), reps, seed_or_state, state_space)
 
     def update_rates(self, rates):
-        errormap = _np.identity(self.basis.dim)
-        for rate, ss in zip(rates, self.stochastic_superops):
-            errormap += rate * ss
-        self.base[:, :] = errormap
-
+        unitary_rates = [1 - sum(rates)] + list(rates)
+        self.rates[:] = rates
+        self.update_unitary_rates(unitary_rates)
 
 #class OpRepClifford(OpRep):  # TODO?
 #    #def __init__(self, unitarymx, symplecticrep):

@@ -28,7 +28,7 @@ def _update_chp_op(chp_op, old_to_new_qubit_index):
 
 class StateRep(_basereps.StateRep):
     def __init__(self, chp_ops, state_space):
-        self.base_chp_ops = chp_ops
+        self.chp_ops = chp_ops
         self.state_space = _StateSpace.cast(state_space)
 
         assert(self.state_space.num_qubits >= 0), 'State space for "chp" evotype must consist entirely of qubits!'
@@ -40,16 +40,23 @@ class StateRep(_basereps.StateRep):
     def num_qubits(self):
         return self.state_space.num_qubits
 
-    def chp_ops(self, seed_or_state=None):
-        return self.base_chp_ops
+    #REMOVE
+    #def chp_ops(self, seed_or_state=None):
+    #    return self.base_chp_ops
 
-    def chp_str(self, seed_or_state=None):
-        op_str = '\n'.join(self.chp_ops(seed_or_state=seed_or_state))
-        if len(op_str) > 0: op_str += '\n'
-        return op_str
+    #REMOVE
+    #def chp_str(self, seed_or_state=None):
+    #    op_str = '\n'.join(self.chp_ops(seed_or_state=seed_or_state))
+    #    if len(op_str) > 0: op_str += '\n'
+    #    return op_str
 
     def copy(self):
-        return StateRep(self.base_chp_ops, self.state_space)
+        return StateRep(self.chp_ops, self.state_space)
+
+    def actionable_staterep(self):
+        # return a state rep that can be acted on by op reps or mapped to
+        # a probability/amplitude by POVM effect reps.
+        return self  # for most classes, the rep itself is actionable
 
 
 class StateRepComputational(StateRep):
@@ -70,14 +77,20 @@ class StateRepComposed(StateRep):
         self.state_rep = state_rep
         self.op_rep = op_rep
         super(StateRepComposed, self).__init__([], state_space)
-        self.reps_have_changed()
+        #REMOVE self.reps_have_changed()
 
     def reps_have_changed(self):
-        self.base_chp_ops = self.state_rep.chp_ops() + self.op_rep.chp_ops()
-    
-    def chp_ops(self, seed_or_state=None):
-        return self.state_rep.chp_ops(seed_or_state=seed_or_state) \
-            + self.op_rep.chp_ops(seed_or_state=seed_or_state)
+        pass  # not needed -- don't actually hold ops
+        #REMOVE self.base_chp_ops = self.state_rep.chp_ops() + self.op_rep.chp_ops()
+
+    def actionable_staterep(self):
+        state_rep = self.state_rep.actionable_staterep()
+        return self.op_rep.acton(state_rep)
+
+#REMOVE
+#    def chp_ops(self, seed_or_state=None):
+#        return self.state_rep.chp_ops(seed_or_state=seed_or_state) \
+#            + self.op_rep.chp_ops(seed_or_state=seed_or_state)
 
 # TODO: Untested, only support computational and composed for now
 #class StateRepTensorProduct(StateRep):

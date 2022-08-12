@@ -10,6 +10,18 @@ The CHP ("chp") evolution type
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+chpexe = None
+
+
+def chpexe_path():
+    from pathlib import Path as _Path
+    if chpexe is None:
+        raise ValueError(("To use 'chp' evotype, please set `pygsti.evotypes.chp.chpexe`"
+                          "to the path to your chp executable."))
+    return _Path(chpexe)
+
+
+from .povmreps import *
 from .effectreps import *
 from .opreps import *
 from .statereps import *

@@ -263,7 +263,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
             obj = _state.StaticState(value, evotype, state_space)
             obj = _state.convert(obj, self.default_param, basis)
         elif self.flags['cast_to_type'] == "operation":
-            obj = _op.StaticArbitraryOp(value, evotype, state_space)
+            obj = _op.StaticArbitraryOp(value, None, evotype, state_space)
             obj = _op.convert(obj, self.default_param, basis)
         elif self.flags['cast_to_type'] == "povm":
             obj = _povm.UnconstrainedPOVM(
@@ -273,7 +273,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
         elif self.flags['cast_to_type'] == "instrument":
             members = []
             for v in value:
-                m = _op.StaticArbitraryOp(v, evotype, state_space)
+                m = _op.StaticArbitraryOp(v, None, evotype, state_space)
                 members.append(_op.convert(m, self.default_param, basis))
             obj = _inst.Instrument(members, evotype, state_space)
 

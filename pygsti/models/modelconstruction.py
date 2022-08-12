@@ -721,6 +721,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     qudit_labels = processor_spec.qudit_labels
     state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
         else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
+    std_gate_unitaries = _itgs.standard_gatename_unitaries()
     evotype = _Evotype.cast(evotype)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
@@ -762,6 +763,15 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
         gate_is_factory = callable(gate_unitary)
         resolved_avail = processor_spec.resolved_availability(gn)
 
+        #Note: same logic for setting stdname as in _setup_local_gates (consolidate?)
+        if ((gn not in processor_spec.nonstd_gate_unitaries)
+            or (not callable(processor_spec.nonstd_gate_unitaries[gn]) and (gn in std_gate_unitaries)
+                and processor_spec.nonstd_gate_unitaries[gn].shape == std_gate_unitaries[gn].shape
+                and _np.allclose(processor_spec.nonstd_gate_unitaries[gn], std_gate_unitaries[gn]))):
+            stdname = gn  # setting `stdname` != None means we can try to create a StaticStandardOp below
+        else:
+            stdname = _itgs.unitary_to_standard_gatename(gate_unitary)  # possibly None
+
         if callable(resolved_avail) or resolved_avail == '*':
             assert (embed_gates), "Cannot create factories with `embed_gates=False` yet!"
             key = _label.Label(gn) if (gn != gn_to_make_emptytup) else _label.Label(())
@@ -783,7 +793,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     elif isinstance(custom_gates[key], _op.LinearOperator):
                         ret.operations[key] = custom_gates[key]
                     else:  # presumably a numpy array or something like it.
-                        ret.operations[key] = _op.StaticArbitraryOp(custom_gates[key], evotype,
+                        ret.operations[key] = _op.StaticArbitraryOp(custom_gates[key], basis, evotype,
                                                                     state_space)  # static gates by default
                     continue
 
@@ -805,7 +815,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                             ideal_gate = _op.ComposedOp([], evotype, state_space)  # (identity gate on *all* qudits)
                         else:
                             ideal_gate = _op.create_from_unitary_mx(gate_unitary, ideal_gate_type, basis,
-                                                                    None, evotype, state_space)
+                                                                    stdname, evotype, state_space)
                     else:
                         if embed_gates:
                             ideal_gate = local_gates[gn]
@@ -818,7 +828,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                             else:
                                 embedded_unitary = _embed_unitary(state_space, inds, gate_unitary)
                             ideal_gate = _op.create_from_unitary_mx(embedded_unitary, ideal_gate_type, basis,
-                                                                    None, evotype, state_space)
+                                                                    stdname, evotype, state_space)
 
                     #TODO: check for modelnoise on *local* gate, i.e. create_errormap(gn, ...)??
                     #Note: set target_labels=None (NOT target_labels=inds) below so that n-qubit noise can
@@ -1409,7 +1419,7 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
                     and _np.allclose(processor_spec.nonstd_gate_unitaries[name], std_gate_unitaries[name]))):
             stdname = name  # setting `stdname` != None means we can try to create a StaticStandardOp below
         else:
-            stdname = None
+            stdname = _itgs.unitary_to_standard_gatename(U)  # possibly None
 
         if isinstance(U, (int, _np.int64)):  # signals that the gate is an identity on `U` qubits
             ideal_gate_state_space = _statespace.default_space_for_num_qubits(U)

@@ -81,7 +81,8 @@ class MarginalizedPOVM(_POVM):
             else:
                 elements_to_sum[mk] = [k]
         self._elements_to_sum = {k: tuple(v) for k, v in elements_to_sum.items()}  # convert to tuples
-        super(MarginalizedPOVM, self).__init__(self.povm_to_marginalize.state_space, self.povm_to_marginalize.evotype)
+        super(MarginalizedPOVM, self).__init__(self.povm_to_marginalize.state_space, self.povm_to_marginalize.evotype,
+                                               rep=None)  # TODO - make marginalized POVM rep type?
         self.init_gpindices()  # initialize gpindices and subm_rpindices from sub-members
 
     def to_memoized_dict(self, mmg_memo):
