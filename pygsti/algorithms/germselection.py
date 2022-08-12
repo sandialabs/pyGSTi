@@ -250,7 +250,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'force_rank_increase': force_rank_increase,
             'save_cevd_cache_filename': save_cevd_cache_filename,
             'load_cevd_cache_filename': load_cevd_cache_filename,
-            'file_compression': file_compression
+            'file_compression': file_compression,
+            'evd_tol': 1e-10
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -2697,7 +2698,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
                                                         
                 #now take twirledDerivDaggerDeriv and construct its compact EVD.
                 #e, U= compact_EVD(twirledDerivDaggerDeriv)
-                e, U= compact_EVD_via_SVD(twirledDeriv)
+                e, U= compact_EVD_via_SVD(twirledDeriv, evd_tol)
                 
                 #e_list.append(e)
                 
@@ -2717,7 +2718,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
                                                     
             #now take twirledDerivDaggerDeriv and construct its compact EVD.
             #e, U= compact_EVD(twirledDerivDaggerDeriv)
-            e, U= compact_EVD_via_SVD(twirledDeriv)
+            e, U= compact_EVD_via_SVD(twirledDeriv, evd_tol)
             
             #e_list.append(e)
             
@@ -2815,7 +2816,7 @@ def compact_EVD_via_SVD(mat, threshold= 1e-10):
 #Function for generating an "update cache" of pre-computed matrices which will be
 #reused during a sequence of many additive updates to the same base matrix.
 
-def construct_update_cache(mat):
+def construct_update_cache(mat, evd_tol=1e-10):
     """
     Calculates the parts of the eigenvalue update loop algorithm that we can 
     pre-compute and reuse throughout all of the potential updates.
@@ -2825,6 +2826,9 @@ def construct_update_cache(mat):
     mat : ndarray
         The matrix to construct a set of reusable objects for performing the updates.
         mat is assumed to be a symmetric square matrix.
+        
+    evd_tol : float (optional)
+        A threshold value for setting eigenvalues to zero.
         
     Output:
     
@@ -2838,7 +2842,7 @@ def construct_update_cache(mat):
     """
     
     #Start by constructing a compact EVD of the input matrix. 
-    e, U = compact_EVD(mat)
+    e, U = compact_EVD(mat, evd_tol)
     
     #construct the projector
     #I think the conjugation is superfluous when we have real
@@ -3084,7 +3088,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
     q_update, r_update, _ = _sla.qr(proj_update, mode='economic', pivoting=True)
     
     #Construct P by taking the columns of q_update corresponding to non-zero values of r_A on the diagonal.
-    nonzero_indices_update= _np.nonzero(_np.abs(_np.diag(r_update))>1e-10)
+    nonzero_indices_update= _np.nonzero(_np.abs(_np.diag(r_update))>1e-9)
     
     #if the rank doesn't increase then we can't use the Riedel approach.
     #Abort early and return a flag to indicate the rank did not increase.
@@ -3128,11 +3132,30 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         #I'm not sure why it failed though so print some diagnostic info:
         #Is B symmetric or hermitian?
         cholesky_success=False
-        print('Cholesky Decomposition Probably Failed. Here is some diagnostic info.')
-        print('B Symmetric?: ', _np.allclose(B,B.T))
-        print('B Hermitian?: ', _np.allclose(B,B.conj().T))
+        print('Cholesky Decomposition Probably Failed. This may be due to a poorly conditioned original Jacobian. Here is some diagnostic info.')
+        #print('B Symmetric?: ', _np.allclose(B,B.T))
+        #print('B Hermitian?: ', _np.allclose(B,B.conj().T))
         #What are the eigenvalues of the Dinv matrix?
-        print('Dinv Minimum eigenvalue: ',_np.min(_np.linalg.eigvals(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))))
+        print('Dinv Condition Number: ', _np.linalg.cond(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)))
+        #print('D Condition Number: ', _np.linalg.cond(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))
+        #print('Dinv Minimum eigenvalue: ',_np.min(_np.linalg.eigvals(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))))
+        #print('Rank Increase Amount: ', len(nonzero_indices_update[0]))
+        #print('Nonzero Indices Values', _np.abs(_np.diag(r_update)[nonzero_indices_update[0]]))
+        #print('R_update Rank: ',_np.linalg.matrix_rank(R_update) )
+        #print('R_update SVDvals: ', _sla.svdvals(R_update))
+        #print('pinv_R_update@R_update: ', _np.round(pinv_R_update @ R_update, decimals=10))
+        #print('Norm of B: ', _np.linalg.norm(B))
+        #print('B: ', _np.round(B, decimals=10))
+        #print('D Eigenvalues: ', _np.linalg.eigvalsh(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))
+        #print('orig_e_inv: ', orig_e_inv)
+        print('Minimum original eigenvalue: ', _np.min(orig_e))
+        #print('Beta: ', _np.round(beta, decimals=10))
+        #print('Condition Number B@(pinv_E_beta.T@pinv_E_beta)@B: ', _np.linalg.cond(B@(pinv_E_beta.T@pinv_E_beta)@B))
+        #print('Condition Number (pinv_E_beta.T@pinv_E_beta): ', _np.linalg.cond(pinv_E_beta.T@pinv_E_beta))
+        #print('Condition Number orig_e_inv^2: ', _np.linalg.cond(_np.diag(1/orig_e**2)))
+        
+        #raise err
+        
   
   
     if cholesky_success:
@@ -3179,7 +3202,7 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
                             num_gauge_params= None, float_type= _np.cdouble, 
                             mode="all-Jac", force_rank_increase=False,
                             save_cevd_cache_filename=None, load_cevd_cache_filename=None,
-                            file_compression=False):
+                            file_compression=False, evd_tol=1e-10):
     """
     Greedy algorithm starting with 0 germs.
 
@@ -3274,6 +3297,10 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
         of the jacobian at each iteration (this may result in choosing a germ that is sub-optimal
         with respect to the chosen score function). Also results in pruning in subsequent
         optimization iterations. Defaults to False.
+        
+    evd_tol : float, optional
+        A threshold value to use when taking eigenvalue decompositions/SVDs such that
+        values below this are set to zero.
 
     Returns
     -------
@@ -3320,6 +3347,7 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
         if force == "singletons":
             weights[_np.where(germLengths == 1)] = 1
             goodGerms = [germ for i, germ in enumerate(germs_list) if germLengths[i] == 1]
+            printer.log('Adding Singleton Germs By Default: '+ str(goodGerms) ,1)
         else:  # force should be a list of Circuits
             for opstr in force:
                 weights[germs_list.index(opstr)] = 1
@@ -3432,7 +3460,7 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
         else: 
             twirledDerivDaggerDerivList = \
                 [_compute_bulk_twirled_ddd_compact(model, germs_list, tol,
-                                                  evd_tol=1e-10, float_type=float_type, printer=printer)
+                                                  evd_tol=evd_tol, float_type=float_type, printer=printer)
              for model in model_list]
              
             if save_cevd_cache_filename is not None:
@@ -3499,7 +3527,7 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
         if mode=="compactEVD":
             #calculate the update cache for each element of currentDDDList 
             printer.log('Creating update cache.')
-            currentDDDList_update_cache = [construct_update_cache(currentDDD) for currentDDD in currentDDDList]
+            currentDDDList_update_cache = [construct_update_cache(currentDDD, evd_tol=evd_tol) for currentDDD in currentDDDList]
             #the return value of the update cache is a tuple with the elements
             #(e, U, projU)    
         with printer.progress_logging(2):
