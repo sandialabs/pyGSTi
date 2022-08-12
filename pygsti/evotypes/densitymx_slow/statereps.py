@@ -62,6 +62,11 @@ class StateRep(_basereps.StateRep):
 
 
 class StateRepDense(StateRep):
+
+    def __init__(self, data, state_space, basis):
+        #ignore basis for now (self.basis = basis in future?)
+        super(StateRepDense, self).__init__(data, state_space)
+
     @property
     def base(self):
         return self.data
@@ -70,7 +75,7 @@ class StateRepDense(StateRep):
         pass
 
     def __reduce__(self):
-        return (StateRepDense, (self.base, self.state_space), (self.base.flags.writeable,))
+        return (StateRepDense, (self.base, self.state_space, None), (self.base.flags.writeable,))
 
 
 class StateRepDensePure(StateRep):

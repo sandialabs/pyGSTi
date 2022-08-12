@@ -1,5 +1,5 @@
 """
-The CPTPState class and supporting functionality.
+The FullCPTPOp class and supporting functionality.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -12,219 +12,162 @@ The CPTPState class and supporting functionality.
 
 import numpy as _np
 
-from pygsti.modelmembers.states.densestate import DenseState as _DenseState
-from pygsti.modelmembers.states.state import State as _State
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.operations.krausop import KrausOperatorInterface as _KrausOperatorInterface
+
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.tools import jamiolkowski as _jt
+from pygsti.tools import basistools as _bt
 
-IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
+IMAG_TOL = 1e-7
 
 
-class CPTPState(_DenseState):
+class FullCPTPOp(_KrausOperatorInterface, _LinearOperator):
     """
     TODO: update docstring
-    A state vector constrained to correspond ot a positive density matrix.
+    An operator that is constrained to be CPTP.
 
-    This state vector that is parameterized through the Cholesky decomposition of
-    it's standard-basis representation as a density matrix (not a Liouville
-    vector).  The resulting state vector thus represents a positive density
-    matrix, and additional constraints on the parameters also guarantee that the
-    trace == 1.  This state vector is meant for use with CPTP processes, hence
-    the name.
-
-    Parameters
-    ----------
-    vec : array_like or State
-        a 1D numpy array representing the state operation.  The
-        shape of this array sets the dimension of the state.
-
-    basis : {"std", "gm", "pp", "qt"} or Basis
-        The basis `vec` is in.  Needed because this parameterization
-        requires we construct the density matrix corresponding to
-        the Lioville vector `vec`.
-
-    trunctate : bool, optional
-        Whether or not a non-positive, trace=1 `vec` should
-        be truncated to force a successful construction.
-
-    evotype : Evotype or str, optional
-        The evolution type.  The special value `"default"` is equivalent
-        to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
-
-    state_space : StateSpace, optional
-        The state space for this operation.  If `None` a default state space
-        with the appropriate number of qubits is used.
+    This operation is parameterized by (normalized) elements of the Cholesky decomposition
+    of the quantum channel's Choi matrix.
     """
 
-    def __init__(self, vec, basis, truncate=False, evotype="default", state_space=None):
-        vector = _State._to_vector(vec)
-        basis = _Basis.cast(basis, len(vector))
+    @classmethod
+    def from_superop_matrix(cls, superop_mx, basis, evotype, state_space=None, truncate=False):
+        choi_mx = _jt.jamiolkowski_iso(superop_mx, basis, basis)  # normalized (trace == 1) Choi matrix
+        return cls(choi_mx, basis, evotype, state_space, truncate)
 
-        self.basis = basis
-        self.basis_mxs = basis.elements  # shape (len(vec), dmDim, dmDim)
-        self.basis_mxs = _np.rollaxis(self.basis_mxs, 0, 3)  # shape (dmDim, dmDim, len(vec))
-        assert(self.basis_mxs.shape[-1] == len(vector))
-
-        # set self.params and self.dmDim
-        self._set_params_from_vector(vector, truncate)
-
-        #parameter labels (parameter encode the Cholesky Lmx)
-        labels = {}; dmDim = self.dmDim
-        for i in range(dmDim):
-            labels[i * dmDim + i] = "(%d, %d) element of density matrix Cholesky deomp" % (i, i)
-            for j in range(i):
-                labels[i * dmDim + j] = "Re[(%d, %d) element of density matrix Cholesky deomp]" % (i, j)
-                labels[j * dmDim + i] = "Im[(%d, %d) element of density matrix Cholesky deomp]" % (i, j)
-        labels = [lbl for indx, lbl in sorted(list(labels.items()), key=lambda x: x[0])]
+    def __init__(self, choi_mx, basis, evotype, state_space=None, truncate=False):
+        choi_mx = _LinearOperator.convert_to_matrix(choi_mx)
+        state_space = _statespace.default_space_for_dim(choi_mx.shape[0]) if (state_space is None) \
+            else _statespace.StateSpace.cast(state_space)
+        evotype = _Evotype.cast(evotype)
+        self._basis = _Basis.cast(basis, state_space.dim) if (basis is not None) else None  # for Hilbert-Schmidt space
 
         #scratch space
-        self.Lmx = _np.zeros((self.dmDim, self.dmDim), 'complex')
+        self.Lmx = _np.zeros((state_space.dim, state_space.dim), complex)
 
-        state_space = _statespace.default_space_for_dim(len(vector)) if (state_space is None) \
-            else _statespace.StateSpace.cast(state_space)
+        #Currently just use dense rep - maybe something more specific in future?
+        try:
+            udim = state_space.udim
+            kraus_rank = state_space.dim
+            kraus_reps = [evotype.create_dense_unitary_rep(_np.zeros((udim, udim), complex), self._basis, state_space)
+                          for i in range(kraus_rank)]
+            rep = evotype.create_kraus_rep(self._basis, kraus_reps, state_space)
+            self._reptype = 'kraus'
+        except Exception:
+            rep = evotype.create_dense_superop_rep(_np.identity(state_space.dim, 'd'), self._basis, state_space)
+            self._reptype = 'dense'
 
-        evotype = _Evotype.cast(evotype)
-        _DenseState.__init__(self, vector, basis, evotype, state_space)
-        self._paramlbls = _np.array(labels, dtype=object)
+        _LinearOperator.__init__(self, rep, evotype)
+        self._set_params_from_choi_mx(choi_mx, truncate)
+        self._update_rep()
 
-    def to_memoized_dict(self, mmg_memo):
-        """Create a serializable dict with references to other objects in the memo.
-
-        Parameters
-        ----------
-        mmg_memo: dict
-            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
-            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
-            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
-
-        Returns
-        -------
-        mm_dict: dict
-            A dict representation of this ModelMember ready for serialization
-            This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
-            Additional fields may be added by derived classes.
-        """
-        mm_dict = super().to_memoized_dict(mmg_memo)  # contains 'dense_state_vector' via DenseState base class
-        mm_dict['basis'] = self.basis.to_nice_serialization()
-
-        return mm_dict
-
-    @classmethod
-    def _from_memoized_dict(cls, mm_dict, serial_memo):
-        vec = _np.array(mm_dict['dense_state_vector'])
-        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
-        basis = _Basis.from_nice_serialization(mm_dict['basis'])
-        truncate = False  # shouldn't need to since we're loading a valid object
-        return cls(vec, basis, truncate, mm_dict['evotype'], state_space)
-
-    def _set_params_from_vector(self, vector, truncate):
-        density_mx = _np.dot(self.basis_mxs, vector)
-        density_mx = density_mx.squeeze()
-        dmDim = density_mx.shape[0]
-        assert(dmDim == density_mx.shape[1]), "Density matrix must be square!"
-
-        trc = _np.trace(density_mx)
+    def _set_params_from_choi_mx(self, choi_mx, truncate):
+        #given choi_mx (assumed to be in self._basis), compute and set parameters -> self.params[:]
+        trc = _np.trace(choi_mx)
+        assert(choi_mx.shape[0] == self.state_space.dim)
         assert(truncate or _np.isclose(trc, 1.0)), \
-            "`vec` must correspond to a trace-1 density matrix (truncate == False)!"
+            "`choi_mx` must have trace=1 (truncate == False)!"
 
+        dim = self.state_space.dim
         if not _np.isclose(trc, 1.0):  # truncate to trace == 1
-            density_mx -= _np.identity(dmDim, 'd') / dmDim * (trc - 1.0)
+            choi_mx -= _np.identity(dim, 'd') / dim * (trc - 1.0)
 
         #push any slightly negative evals of density_mx positive
         # so that the Cholesky decomp will work.
-        evals, U = _np.linalg.eig(density_mx)
+        evals, U = _np.linalg.eig(choi_mx)
         Ui = _np.linalg.inv(U)
 
         assert(truncate or all([ev >= -1e-12 for ev in evals])), \
-            "`vec` must correspond to a positive density matrix (truncate == False)!"
+            "`choi_mx` must be positive (truncate == False)!"
 
         pos_evals = evals.clip(1e-16, 1e100)
-        density_mx = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
+        choi_mx = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
         try:
-            Lmx = _np.linalg.cholesky(density_mx)
+            Lmx = _np.linalg.cholesky(choi_mx)
         except _np.linalg.LinAlgError:  # Lmx not postitive definite?
             pos_evals = evals.clip(1e-12, 1e100)  # try again with 1e-12
-            density_mx = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
-            Lmx = _np.linalg.cholesky(density_mx)
+            choi_mx = _np.dot(U, _np.dot(_np.diag(pos_evals), Ui))
+            Lmx = _np.linalg.cholesky(choi_mx)
 
         #check TP condition: that diagonal els of Lmx squared add to 1.0
         Lmx_norm = _np.trace(_np.dot(Lmx.T.conjugate(), Lmx))  # sum of magnitude^2 of all els
-        assert(_np.isclose(Lmx_norm, 1.0)), \
-            "Cholesky decomp didn't preserve trace=1!"
+        assert(_np.isclose(Lmx_norm, 1.0)), "Cholesky decomp didn't preserve trace=1!"
 
-        self.dmDim = dmDim
-        self.params = _np.empty(dmDim**2, 'd')
-        for i in range(dmDim):
+        self.params = _np.empty(dim**2, 'd')
+        for i in range(dim):
             assert(_np.linalg.norm(_np.imag(Lmx[i, i])) < IMAG_TOL)
-            self.params[i * dmDim + i] = Lmx[i, i].real  # / paramNorm == 1 as asserted above
+            self.params[i * dim + i] = Lmx[i, i].real  # / paramNorm == 1 as asserted above
             for j in range(i):
-                self.params[i * dmDim + j] = Lmx[i, j].real
-                self.params[j * dmDim + i] = Lmx[i, j].imag
+                self.params[i * dim + j] = Lmx[i, j].real
+                self.params[j * dim + i] = Lmx[i, j].imag
 
-    def _construct_vector(self):
-        dmDim = self.dmDim
+    def _get_choi_mx_from_params(self):
+        dim = self.state_space.dim
 
-        #  params is an array of length dmDim^2 that
+        #  params is an array of length dim^2 that
         #  encodes a lower-triangular matrix "Lmx" via:
-        #  Lmx[i,i] = params[i*dmDim + i] / param-norm  # i = 0...dmDim-2
+        #  Lmx[i,i] = params[i*dim + i] / param-norm  # i = 0...dim-2
         #     *last diagonal el is given by sqrt(1.0 - sum(L[i,j]**2))
-        #  Lmx[i,j] = params[i*dmDim + j] + 1j*params[j*dmDim+i] (i > j)
+        #  Lmx[i,j] = params[i*dim + j] + 1j*params[j*dim+i] (i > j)
 
         param2Sum = _np.vdot(self.params, self.params)  # or "dot" would work, since params are real
         paramNorm = _np.sqrt(param2Sum)  # also the norm of *all* Lmx els
 
-        for i in range(dmDim):
-            self.Lmx[i, i] = self.params[i * dmDim + i] / paramNorm
+        for i in range(dim):
+            self.Lmx[i, i] = self.params[i * dim + i] / paramNorm
             for j in range(i):
-                self.Lmx[i, j] = (self.params[i * dmDim + j] + 1j * self.params[j * dmDim + i]) / paramNorm
+                self.Lmx[i, j] = (self.params[i * dim + j] + 1j * self.params[j * dim + i]) / paramNorm
 
-        Lmx_norm = _np.trace(_np.dot(self.Lmx.T.conjugate(), self.Lmx))  # sum of magnitude^2 of all els
-        assert(_np.isclose(Lmx_norm, 1.0)), "Violated trace=1 condition!"
+        choi_mx = _np.dot(self.Lmx, self.Lmx.T.conjugate())
+        assert(_np.isclose(_np.trace(choi_mx), 1.0)), "Choi matrix trace == 1 condition violated!"
+        return choi_mx
 
-        #The (complex, Hermitian) density matrix is build by
-        # assuming Lmx is its Cholesky decomp, which makes
-        # the density matrix is pos-def.
-        density_mx = _np.dot(self.Lmx, self.Lmx.T.conjugate())
-        assert(_np.isclose(_np.trace(density_mx), 1.0)), "density matrix must be trace == 1"
+    def _update_dense_rep(self):
+        choi_mx = self._get_choi_mx_from_params()
+        self._rep.base[:, :] = _jt.jamiolkowski_iso_inv(choi_mx, self._basis, self._basis)
+        # Note: we assume superop transfer mx and choi mx are in same self._basis
 
-        # write density matrix in given basis: = sum_i alpha_i B_i
-        # ASSUME that basis is orthogonal, i.e. Tr(Bi^dag*Bj) = delta_ij
-        basis_mxs = _np.rollaxis(self.basis_mxs, 2)  # shape (dmDim, dmDim, len(vec))
-        vec = _np.array([_np.trace(_np.dot(M.T.conjugate(), density_mx)) for M in basis_mxs])
+    def _update_kraus_rep(self):
+        choi_mx = self._get_choi_mx_from_params(); d = self.state_space.udim
+        choi_mx = _bt.change_basis(choi_mx, self._basis, _Basis.cast('std', choi_mx.shape[0]))
+        evals, evecs = _np.linalg.eig(choi_mx * d)  # 'un-normalize' choi_mx so that:
+        # op(rho) = sum_IJ choi_IJ BI rho BJ_dag is true (assumed for kraus op construction below)
 
-        #for now, assume Liouville vector should always be real (TODO: add 'real' flag later?)
-        assert(_np.linalg.norm(_np.imag(vec)) < IMAG_TOL)
-        vec = _np.real(vec)
+        assert(all([ev > -1e-7 for ev in evals])), "Failed Kraus decomp - Choi mx must not be positive!"
+        for i, (kraus_rep, ev) in enumerate(zip(self._rep.kraus_reps, evals)):
+            # We know kraus_rep is a unitary op rep, with .base == dense mx that is Kraus op
+            kraus_rep.base[:, :] = evecs[:, i].reshape(d, d) * _np.sqrt(ev)  # Note: ev can be ~0 and this is OK
+            kraus_rep.base_has_changed()
 
-        self._ptr.flags.writeable = True
-        self._ptr[:] = vec[:]  # so shape is (dim,1) - the convention for spam vectors
-        self._ptr.flags.writeable = False
+    def _update_rep(self):
+        if self._reptype == 'kraus':
+            self._update_kraus_rep()
+        else:  # self._reptype == 'dense':
+            self._update_dense_rep()
 
-    def set_dense(self, vec):
+    def to_dense(self, on_space='minimal'):
         """
-        Set the dense-vector value of this state vector.
+        Return the dense array used to represent this operation within its evolution type.
 
-        Attempts to modify this state vector's parameters so that the raw
-        state vector becomes `vec`.  Will raise ValueError if this operation
-        is not possible.
+        Note: for efficiency, this doesn't copy the underlying data, so
+        the caller should copy this data before modifying it.
 
         Parameters
         ----------
-        vec : array_like or State
-            A numpy array representing a state vector, or a State object.
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
 
         Returns
         -------
-        None
+        numpy.ndarray
         """
-        try:
-            self._set_params_from_vector(vec, truncate=False)
-            self.dirty = True
-        except AssertionError as e:
-            raise ValueError("Error initializing the parameters of this "
-                             "CPTPState object: " + str(e))
+        return self._rep.to_dense(on_space)  # both types of possible reps implement 'to_dense'
 
     @property
     def num_params(self):
@@ -236,8 +179,7 @@ class CPTPState(_DenseState):
         int
             the number of independent parameters.
         """
-        assert(self.dmDim**2 == self.dim)  # should at least be true without composite bases...
-        return self.dmDim**2
+        return self.state_space.dim**2
 
     def to_vector(self):
         """
@@ -276,7 +218,7 @@ class CPTPState(_DenseState):
         """
         assert(len(v) == self.num_params)
         self.params[:] = v[:]
-        self._construct_vector()
+        self._update_rep()
         self.dirty = dirty_value
 
     def deriv_wrt_params(self, wrt_filter=None):
@@ -298,6 +240,8 @@ class CPTPState(_DenseState):
         numpy array
             Array of derivatives, shape == (dimension, num_params)
         """
+        raise NotImplementedError("TODO: add deriv_wrt_params computation for FullCPTPOp!")
+
         dmDim = self.dmDim
         nP = len(self.params)
         assert(nP == dmDim**2)  # number of parameters
@@ -386,4 +330,4 @@ class CPTPState(_DenseState):
         numpy array
             Hessian with shape (dimension, num_params1, num_params2)
         """
-        raise NotImplementedError("TODO: add hessian computation for CPTPState")
+        raise NotImplementedError("TODO: add hessian computation for FullCPTPOp")

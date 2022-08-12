@@ -63,7 +63,10 @@ class EmbeddedOp(_LinearOperator):
                 if rep_type == 'embedded':
                     rep = evotype.create_embedded_rep(state_space, self.target_labels, self.embedded_op._rep)
                 elif rep_type == 'dense':
-                    rep = evotype.create_dense_superop_rep(None, state_space)
+                    # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+                    #  and should be replaced with the basis of contained ops (if any) once we establish
+                    #  a common .basis or ._basis attribute of representations (which could still be None)
+                    rep = evotype.create_dense_superop_rep(None, None, state_space)
                 else:
                     assert(False), "Logic error!"
 

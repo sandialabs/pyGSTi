@@ -193,7 +193,8 @@ class MarginalizedPOVM(_POVM):
                     effect_vec = e.to_dense()
                 else:
                     effect_vec += e.to_dense()
-            effect = _StaticPOVMEffect(effect_vec, self._evotype)
+            effect = _StaticPOVMEffect(effect_vec, e._basis, self._evotype)
+            # UNSPECIFIED BASIS -- may need to rename e._basis -> e._rep.basis above if that's the std attribute name?
             assert(effect.allocate_gpindices(0, self.parent) == 0)  # functional! (do not remove)
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect

@@ -19,6 +19,7 @@ import numpy as _np
 from pygsti.modelmembers.povms.computationaleffect import ComputationalBasisPOVMEffect as _ComputationalBasisPOVMEffect
 from pygsti.modelmembers.povms.povm import POVM as _POVM
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.evotypes import Evotype as _Evotype
 
 
 class ComputationalBasisPOVM(_POVM):
@@ -70,6 +71,7 @@ class ComputationalBasisPOVM(_POVM):
         #LATER - do something with qubit_filter here
         # qubits = self.qubit_filter if (self.qubit_filter is not None) else list(range(self.nqubits))
 
+        evotype = _Evotype.cast(evotype)
         items = []  # init as empty (lazy creation of members)
         if state_space is None:
             state_space = _statespace.QubitSpace(nqubits)

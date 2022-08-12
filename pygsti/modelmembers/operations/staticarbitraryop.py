@@ -41,7 +41,7 @@ class StaticArbitraryOp(_DenseOperator, _NoErrorGeneratorInterface):
     """
 
     def __init__(self, m, basis=None, evotype="default", state_space=None):
-        _DenseOperator.__init__(self, m, None, evotype, state_space)
+        _DenseOperator.__init__(self, m, basis, evotype, state_space)
         #(default DenseOperator/LinearOperator methods implement an object with no parameters)
 
     def _is_similar(self, other, rtol, atol):

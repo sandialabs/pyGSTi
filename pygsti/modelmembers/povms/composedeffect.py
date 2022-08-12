@@ -366,7 +366,8 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         #    "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
         if not isinstance(static_effect, _POVMEffect):
-            static_effect = _StaticState(static_effect, evotype)  # assume spamvec is just a vector
+            # UNSPECIFIED BASIS -- should be able to use static_effect._rep.basis once we get std attribute setup
+            static_effect = _StaticState(static_effect, None, evotype)  # assume spamvec is just a vector
 
         assert(static_effect._evotype == evotype), \
             "`static_effect` evotype must match `errormap` ('%s' != '%s')" % (static_effect._evotype, evotype)

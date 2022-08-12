@@ -46,14 +46,14 @@ cdef class OpRep(_basereps_cython.OpRep):
         return self.state_space.dim
 
     def acton(self, StateRep state not None):
-        cdef StateRep out_state = StateRepDense(_np.empty(self.c_rep._dim, dtype='d'), self.state_space)
+        cdef StateRep out_state = StateRepDense(_np.empty(self.c_rep._dim, dtype='d'), self.state_space, None)
         #print("PYX acton called w/dim ", self.c_rep._dim, out_state.c_state._dim)
         # assert(state.c_state._dataptr != out_state.c_state._dataptr) # DEBUG
         self.c_rep.acton(state.c_state, out_state.c_state)
         return out_state
 
     def adjoint_acton(self, StateRep state not None):
-        cdef StateRep out_state = StateRepDense(_np.empty(self.c_rep._dim, dtype='d'), self.state_space)
+        cdef StateRep out_state = StateRepDense(_np.empty(self.c_rep._dim, dtype='d'), self.state_space, None)
         #print("PYX acton called w/dim ", self.c_rep._dim, out_state.c_state._dim)
         # assert(state.c_state._dataptr != out_state.c_state._dataptr) # DEBUG
         self.c_rep.adjoint_acton(state.c_state, out_state.c_state)
@@ -62,11 +62,11 @@ cdef class OpRep(_basereps_cython.OpRep):
     def aslinearoperator(self):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRepDense(_np.ascontiguousarray(v,'d'), self.state_space)
+            in_state = StateRepDense(_np.ascontiguousarray(v,'d'), self.state_space, None)
             return self.acton(in_state).to_dense_superket()
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRepDense(_np.ascontiguousarray(v,'d'), self.state_space)
+            in_state = StateRepDense(_np.ascontiguousarray(v,'d'), self.state_space, None)
             return self.adjoint_acton(in_state).to_dense_superket()
         dim = self.c_rep._dim
         return ScipyLinearOperator((dim,dim), matvec=mv, rmatvec=rmv, dtype='d') # transpose, adjoint, dot, matmat?
@@ -74,13 +74,15 @@ cdef class OpRep(_basereps_cython.OpRep):
 
 cdef class OpRepDenseSuperop(OpRep):
     cdef public _np.ndarray base
+    cdef public object basis
 
-    def __init__(self, mx, state_space):
+    def __init__(self, mx, basis, state_space):
         state_space = _StateSpace.cast(state_space)
         if mx is None:
             mx = _np.identity(state_space.dim, 'd')
         assert(mx.ndim == 2 and mx.shape[0] == state_space.dim)
 
+        self.basis = basis
         self.base = _np.require(mx, requirements=['OWNDATA', 'C_CONTIGUOUS'])
         assert(self.c_rep == NULL)
         self.c_rep = new OpCRep_Dense(<double*>self.base.data,
@@ -101,12 +103,14 @@ cdef class OpRepDenseSuperop(OpRep):
     def __reduce__(self):
         # because serialization of numpy array flags is borked (around Numpy v1.16), we need to copy data
         # (so self.base *owns* it's data) and manually convey the writeable flag.
-        return (OpRepDenseSuperop.__new__, (self.__class__,), (self.state_space, self.base, self.base.flags.writeable))
+        return (OpRepDenseSuperop.__new__, (self.__class__,), (self.state_space, self.base,
+                                                               self.basis, self.base.flags.writeable))
 
     def __setstate__(self, state):
 
-        state_space, data, writable = state
+        state_space, data, basis, writable = state
         self.state_space = state_space
+        self.basis = basis
         self.base = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.base.flags.writeable = writable
 
@@ -126,7 +130,7 @@ cdef class OpRepDenseSuperop(OpRep):
         return s
 
     def copy(self):
-        return OpRepDenseSuperop(self.base.copy(), self.state_space)
+        return OpRepDenseSuperop(self.base.copy(), self.basis, self.state_space)
 
 
 cdef class OpRepDenseUnitary(OpRep):
@@ -227,21 +231,19 @@ cdef class OpRepSparse(OpRep):
 
 cdef class OpRepStandard(OpRepDenseSuperop):
     cdef public object name
-    cdef public object basis
 
     def __init__(self, name, basis, state_space):
         std_unitaries = _itgs.standard_gatename_unitaries()
         self.name = name
         if self.name not in std_unitaries:
             raise ValueError("Name '%s' not in standard unitaries" % self.name)
-        self.basis = basis
 
         U = std_unitaries[self.name]
         superop = _ot.unitary_to_superop(U, basis)
         state_space = _StateSpace.cast(state_space)
         assert(superop.shape[0] == state_space.dim)
 
-        super(OpRepStandard, self).__init__(superop, state_space)
+        super(OpRepStandard, self).__init__(superop, basis, state_space)
 
     def __reduce__(self):
         return (OpRepStandard, (self.name, self.basis, self.state_space))
@@ -254,7 +256,7 @@ cdef class OpRepKraus(OpRep):
     cdef public object basis
     cdef public object kraus_reps
 
-    def __init__(self, basis, kraus_reps, seed_or_state, state_space):        
+    def __init__(self, basis, kraus_reps, state_space):
         cdef INT i
         cdef INT nkraus = len(kraus_reps)
         cdef vector[OpCRep*] kraus_creps = vector[OpCRep_ptr](nkraus)
@@ -267,15 +269,17 @@ cdef class OpRepKraus(OpRep):
         self.c_rep = new OpCRep_Sum(kraus_creps, NULL, self.state_space.dim)
 
     def __str__(self):
-        return "OpRepKraus:\n" + " rates: " + str(self.kraus_rates)  # maybe show ops too?
+        return "OpRepKraus with ops\n" + str(self.kraus_reps)
 
     def __reduce__(self):
-        return (OpRepKraus, (self.basis, self.kraus_reps, None, self.state_space))
+        return (OpRepKraus, (self.basis, self.kraus_reps, self.state_space))
 
     def copy(self):
-        return OpRepKraus([k.copy() for k in self.kraus_reps], self.state_space)
+        return OpRepKraus(self.basis, [k.copy() for k in self.kraus_reps], self.state_space)
 
     def to_dense(self, on_space):
+        assert(on_space in ('minimal', 'HilbertSchmidt')), \
+            'Can only compute OpRepKraus.to_dense on HilbertSchmidt space!'
         return sum([rep.to_dense(on_space) for rep in self.kraus_reps])
 
 
@@ -721,6 +725,24 @@ cdef class OpRepExpErrorgen(OpRep):
         
     def copy(self):
         return _copy.deepcopy(self)  # I think this should work using reduce/setstate framework TODO - test and maybe put in base class?
+
+
+#TODO: can add this after creating OpCRep_IdentityPlusErrorgen if it seems useful
+#cdef class OpRepIdentityPlusErrorgen(OpRep):
+#    cdef public object errorgen_rep
+#
+#    def __init__(self, errorgen_rep):
+#        self.errorgen_rep = errorgen_rep
+#        assert(self.c_rep == NULL)
+#        self.c_rep = new OpCRep_IdentityPlusErrorgen((<OpRep?>errorgen_rep).c_rep)
+#        self.state_space = errorgen_rep.state_space
+#
+#    def __reduce__(self):
+#        return (OpRepIdentityPlusErrorgen, (self.errorgen_rep,))
+#
+#    #Needed?
+#    #def errgenrep_has_changed(self, onenorm_upperbound):
+#    #    pass
 
 
 cdef class OpRepRepeated(OpRep):

@@ -502,7 +502,7 @@ class CloudNoiseLayerRules(_LayerRules):
             return op
 
         Composed = _op.ComposedOp
-        ExpErrorgen = _op.ExpErrorgenOp
+        ExpErrorgen = _op.ExpErrorgenOp  # FUTURE - allow this to be _op.IdentityPlusErrorgenOp?
         Sum = _op.ComposedErrorgen
         add_global_idle = self._add_global_idle_to_all_layers
         add_padded_idle = self._add_padded_idle

@@ -80,7 +80,8 @@ class ComposedPOVM(_POVM):
         state_space = self.error_map.state_space
 
         if mx_basis is None:
-            if isinstance(errormap, _op.ExpErrorgenOp) and isinstance(errormap.errorgen, _op.LindbladErrorgen):
+            if (isinstance(errormap, (_op.ExpErrorgenOp, _op.IdentityPlusErrorgenOp))
+                and isinstance(errormap.errorgen, _op.LindbladErrorgen)):
                 mx_basis = errormap.errorgen.matrix_basis
             else:
                 raise ValueError("Cannot extract a matrix-basis from `errormap` (type %s)"

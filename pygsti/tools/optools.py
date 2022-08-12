@@ -2292,8 +2292,15 @@ def is_valid_lindblad_paramtype(typ):
     -------
     bool
     """
-    return typ in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
-                   "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
+    from pygsti.modelmembers.operations.lindbladerrorgen import LindbladParameterization as _LP
+    try:
+        _LP.cast(typ)
+        return True
+    except ValueError:
+        return False
+
+    #OLD: return typ in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
+    #OLD:                "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
 
 
 def effect_label_to_outcome(povm_and_effect_lbl):
