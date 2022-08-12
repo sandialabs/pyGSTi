@@ -53,6 +53,11 @@ class EigenvalueParamDenseOp(_DenseOperator):
         any off diagonal elements lying on the top row are *not*
         parameterized as implied by the TP constraint.
 
+    basis : Basis or {'pp','gm','std'} or None
+        The basis used to construct the Hilbert-Schmidt space representation
+        of this state as a super-operator.  If None, certain functionality,
+        such as access to Kraus operators, will be unavailable.
+
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
@@ -62,8 +67,8 @@ class EigenvalueParamDenseOp(_DenseOperator):
         with the appropriate number of qubits is used.
     """
 
-    def __init__(self, matrix, include_off_diags_in_degen_2_blocks=False,
-                 tp_constrained_and_unital=False, evotype="default", state_space=None):
+    def __init__(self, matrix, include_off_diags_in_degen_2_blocks=False, tp_constrained_and_unital=False, basis=None,
+                 evotype="default", state_space=None):
 
         def cmplx_compare(ia, ib):
             return _mt.complex_compare(evals[ia], evals[ib])
@@ -282,7 +287,7 @@ class EigenvalueParamDenseOp(_DenseOperator):
 
         #Finish LinearOperator construction
         mx = _np.empty(matrix.shape, "d")
-        _DenseOperator.__init__(self, mx, evotype, state_space)
+        _DenseOperator.__init__(self, mx, basis, evotype, state_space)
         self._ptr.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
 

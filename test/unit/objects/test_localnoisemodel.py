@@ -35,7 +35,7 @@ class LocalNoiseModelInstanceTester(BaseCase):
 
     def test_dep_localnoise(self):
         mdl_local = create_crosstalk_free_model(self.pspec_2Q,
-                                                ideal_gate_type='H+S', ideal_spam_type='lindblad H+S', independent_gates=False,
+                                                ideal_gate_type='H+S', ideal_spam_type='exp(H+S)', independent_gates=False,
                                                 ensure_composed_gates=False)
 
         assert(set(mdl_local.operation_blks['gates'].keys()) == set(["Gx", "Gy", "Gcnot"]))
@@ -92,7 +92,7 @@ class LocalNoiseModelInstanceTester(BaseCase):
                                       qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
 
         mdl_local = create_crosstalk_free_model(pspec_2Q, {'Gidle': noisy_idle},
-                                                ideal_gate_type='H+S', ideal_spam_type="lindblad H+S",
+                                                ideal_gate_type='H+S', ideal_spam_type="exp(H+S)",
                                                 independent_gates=False, ensure_composed_gates=False,
                                                 implicit_idle_mode='add_global')
 

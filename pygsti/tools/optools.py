@@ -779,7 +779,8 @@ def compute_povm_map(model, povmlbl):
     for i in range(nV):
         Sk_embedding_in_std[:, i] = _flat_mut_blks(i, i, blkDims)
 
-    std_to_basis = model.basis.reverse_transform_matrix("std")
+    std_basis = _Basis.cast('std', model.dim)  # make sure std basis is just straight-up d-dimension
+    std_to_basis = model.basis.reverse_transform_matrix(std_basis)
     # OLD: _bt.create_transform_matrix("std", model.basis, blkDims)
     assert(std_to_basis.shape == (model.dim, model.dim))
 
@@ -2307,8 +2308,15 @@ def is_valid_lindblad_paramtype(typ):
     -------
     bool
     """
-    return typ in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
-                   "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
+    from pygsti.modelmembers.operations.lindbladerrorgen import LindbladParameterization as _LP
+    try:
+        _LP.cast(typ)
+        return True
+    except ValueError:
+        return False
+
+    #OLD: return typ in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
+    #OLD:                "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
 
 
 def effect_label_to_outcome(povm_and_effect_lbl):

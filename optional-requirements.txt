@@ -11,4 +11,5 @@ cvxopt
 cvxpy
 nose
 seaborn
-
+qibo
+packaging

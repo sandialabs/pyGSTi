@@ -12,6 +12,7 @@ Functions for selecting a complete set of fiducials for a GST analysis.
 
 import numpy as _np
 import scipy
+import random
 
 from pygsti.algorithms import grasp as _grasp
 from pygsti.algorithms import scoring as _scoring
@@ -926,7 +927,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
         fiducial set is rejected as informationally incomplete.
 
     seed : int, optional
-        The seed value used for each individual iteration.
+        The seed value used for the random number generator.
 
     verbosity : int, optional
         How much detail to send to stdout.
@@ -945,6 +946,8 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
         (a solution is a list of fiducial circuits) for each grasp iteration.
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
+
+    rng = random.Random(seed)
 
     if prep_or_meas not in ['prep', 'meas']:
         raise ValueError("'{}' is an invalid value for prep_or_meas (must be "
@@ -1015,7 +1018,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
                     local_score_fn=score_fn,
                     get_neighbors_fn=_get_neighbors_fn,
                     feasible_threshold=feasibleThreshold,
-                    initial_elements=initialWeights, seed=seed,
+                    initial_elements=initialWeights, rng=rng,
                     verbosity=verbosity)
 
                 initialSolns.append(iterSolns[0])

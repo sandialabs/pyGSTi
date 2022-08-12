@@ -234,6 +234,19 @@ class LindbladErrorgen(_LinearOperator):
                                          mx_basis, truncate, evotype, state_space)
 
     @classmethod
+    def from_error_generator_and_blocks(cls, errgen_or_dim, lindblad_coefficient_blocks,
+                                        lindblad_basis='PP', mx_basis='pp',
+                                        truncate=True, evotype="default", state_space=None):
+        """
+        TODO: docstring - take from now-private version below Note: errogen_or_dim can be an integer => zero errgen
+        """
+        errgenMx = _np.zeros((errgen_or_dim, errgen_or_dim), 'd') \
+            if isinstance(errgen_or_dim, (int, _np.int64)) else errgen_or_dim
+        for blk in lindblad_coefficient_blocks:
+            blk.set_from_errorgen_projections(errgenMx, mx_basis, truncate=truncate)
+        return cls(lindblad_coefficient_blocks, lindblad_basis, mx_basis, evotype, state_space)
+
+    @classmethod
     def _from_error_generator(cls, errgen, parameterization="CPTP", lindblad_basis="PP",
                               mx_basis="pp", truncate=True, evotype="default", state_space=None):
         """
@@ -473,7 +486,11 @@ class LindbladErrorgen(_LinearOperator):
                                                 _np.ascontiguousarray(indptr, _np.int64),
                                                 state_space)
             else:  # self._rep_type = 'dense superop'
-                rep = evotype.create_dense_superop_rep(None, state_space)
+                # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+                #  and should be replaced with the basis of contained ops (if any) once we establish
+                #  a common .basis or ._basis attribute of representations (which could still be None)
+                # Update: fixed now (I think) - this seems like a legit matrix_basis to use... REMOVE comment?
+                rep = evotype.create_dense_superop_rep(None, self.matrix_basis, state_space)
 
         _LinearOperator.__init__(self, rep, evotype)  # sets self.dim
         self._update_rep()  # updates _rep whether it's a dense or sparse matrix
@@ -1655,8 +1672,25 @@ class LindbladParameterization(_NicelySerializable):
             return obj
 
         if isinstance(obj, str):
-            abbrev = obj
+            if obj.startswith('exp(') and obj.endswith(')'):
+                abbrev = obj[len('exp('):-1]
+                meta = 'exp'
+            elif obj.startswith('1+(') and obj.endswith(')'):
+                abbrev = obj[len('1+('):-1]
+                meta = '1+'
+            elif obj.startswith('lindblad '):
+                _warnings.warn(("Use of 'lindblad <type>' is deprecated and will be removed.  "
+                                "You should use 'exp(<type>)' or '1+(<type>)' instead"))
+                abbrev = obj[len('lindblad '):]
+                meta = 'exp'
+            else:
+                abbrev = obj
+                meta = None  # 'exp' by default?
+
             if abbrev == "CPTP":
+                _warnings.warn("Using 'CPTP' as a Lindblad type is deprecated, and you should now use 'CPTPLND'")
+                block_types = ['ham', 'other']; param_modes = ['elements', 'cholesky']
+            elif abbrev == "CPTPLND":
                 block_types = ['ham', 'other']; param_modes = ['elements', 'cholesky']
             elif abbrev == "GLND":
                 block_types = ['ham', 'other']; param_modes = ['elements', 'elements']
@@ -1673,14 +1707,15 @@ class LindbladParameterization(_NicelySerializable):
                         param_modes.append('depol' if p == 'D' else 'reldepol')
                     else:
                         raise ValueError("Unrecognized symbol '%s' in `%s`" % (p, abbrev))
-            return cls(block_types, param_modes, abbrev)
+            return cls(block_types, param_modes, abbrev, meta)
         else:
             raise ValueError("Cannot convert %s to LindbladParameterization!" % str(type(obj)))
 
-    def __init__(self, block_types, param_modes, abbrev=None):
+    def __init__(self, block_types, param_modes, abbrev=None, meta=None):
         self.block_types = tuple(block_types)
         self.param_modes = tuple(param_modes)
         self.abbrev = abbrev
+        self.meta = meta
 
         #REMOVE
         #self.nonham_block_type = nonham_block_type  #nonham_mode
@@ -1700,13 +1735,8 @@ class LindbladParameterization(_NicelySerializable):
         state = super()._to_nice_serialization()
         state.update({'block_types': self.block_types,
                       'block_parameter_modes': self.param_modes,
-                      'abbreviation': self.abbrev})
-
-        state.update({'mode': self.param_mode,
-                      'non_hamiltonian_mode': self.nonham_mode,
-                      'hamiltonian_parameters_allowed': self.ham_params_allowed,
-                      'non_hamiltonian_parameters_allowed': self.nonham_params_allowed,
-                      'abbreviation': self.abbrev})
+                      'abbreviation': self.abbrev,
+                      'meta_data': self.meta})
         return state
 
     @classmethod
@@ -1726,10 +1756,15 @@ class LindbladParameterization(_NicelySerializable):
                 state['block_types'].append(nonham_blktyp)
                 state['block_parameter_modes'].append(nonham_mode)
 
-        return cls(state['block_types'], state['block_parameter_modes'], state['abbreviation'])
+        return cls(state['block_types'], state['block_parameter_modes'], state['abbreviation'],
+                   state.get('meta_data', None))
 
     def __str__(self):
         if self.abbrev is not None:
-            return self.abbrev
+            if self.meta is not None:
+                return self.abbrev + "[%s]" % str(self.meta)
+            else:
+                return self.abbrev
         else:
-            return "CustomLindbladParam(%s,%s)" % ('+'.join(self.block_types), '+'.join(self.param_modes))
+            return "CustomLindbladParam(%s,%s%s)" % ('+'.join(self.block_types), '+'.join(self.param_modes),
+                                                     (",%s" % str(self.meta) if (self.meta is not None) else ""))

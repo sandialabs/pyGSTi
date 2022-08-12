@@ -171,7 +171,8 @@ class CloudNoiseModel(_ImplicitOpModel):
                 assert(gate.num_params == 0), "Only *static* ideal factories are allowed in `gatedict`!"
                 mm_gatedict[key] = gate
             else:  # presumably a numpy array or something like it:
-                mm_gatedict[key] = _op.StaticArbitraryOp(gate, evotype, state_space=None)  # use default state space
+                mm_gatedict[key] = _op.StaticArbitraryOp(gate, basis=None, evotype=evotype,
+                                                         state_space=None)  # use default state space
             assert(mm_gatedict[key]._evotype == evotype), \
                 ("Custom gate object supplied in `gatedict` for key %s has evotype %s (!= expected %s)"
                  % (str(key), str(mm_gatedict[key]._evotype), str(evotype)))
@@ -541,7 +542,7 @@ class CloudNoiseLayerRules(_LayerRules):
             return op
 
         Composed = _op.ComposedOp
-        ExpErrorgen = _op.ExpErrorgenOp
+        ExpErrorgen = _op.ExpErrorgenOp  # FUTURE - allow this to be _op.IdentityPlusErrorgenOp?
         Sum = _op.ComposedErrorgen
         use_global_idle = self._use_global_idle
         add_global_idle = self._add_global_idle_to_all_layers

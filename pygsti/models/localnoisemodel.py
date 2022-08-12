@@ -164,7 +164,8 @@ class LocalNoiseModel(_ImplicitOpModel):
             if isinstance(gate, (_op.LinearOperator, _opfactory.OpFactory)):
                 mm_gatedict[key] = gate
             else:  # presumably a numpy array or something like it.
-                mm_gatedict[key] = _op.StaticArbitraryOp(gate, evotype, state_space)  # static gates by default
+                mm_gatedict[key] = _op.StaticArbitraryOp(gate, basis=None, evotype=evotype,
+                                                         state_space=state_space)  # static gates by default
 
         self.processor_spec = processor_spec
         idle_names = processor_spec.idle_gate_names

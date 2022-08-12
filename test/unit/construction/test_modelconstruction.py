@@ -428,7 +428,8 @@ class ModelConstructionTester(BaseCase):
                                     [0,   1,   0,   0],
                                     [0,   0,   c,  -b],
                                     [0,   0,   b,   c]],'d')
-                return pygsti.modelmembers.operations.StaticArbitraryOp(superop, self.evotype, self.state_space)
+                return pygsti.modelmembers.operations.StaticArbitraryOp(superop, evotype=self.evotype,
+                                                                        state_space=self.state_space)
 
         xrot_fact = XRotationOpFactory()
 

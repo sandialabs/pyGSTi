@@ -20,6 +20,7 @@ from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _
 from pygsti.modelmembers.povms.computationaleffect import ComputationalBasisPOVMEffect as _ComputationalBasisPOVMEffect
 from pygsti.modelmembers.povms.povm import POVM as _POVM
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.evotypes import Evotype as _Evotype
 
 
 class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface):
@@ -71,11 +72,16 @@ class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface):
         #LATER - do something with qubit_filter here
         # qubits = self.qubit_filter if (self.qubit_filter is not None) else list(range(self.nqubits))
 
+        evotype = _Evotype.cast(evotype)
         items = []  # init as empty (lazy creation of members)
         if state_space is None:
             state_space = _statespace.QubitSpace(nqubits)
         assert(state_space.num_qubits == nqubits), "`state_space` must describe %d qubits!" % nqubits
-        super(ComputationalBasisPOVM, self).__init__(state_space, evotype, items)
+        try:
+            rep = evotype.create_computational_povm_rep(self.nqubits, self.qubit_filter)
+        except AttributeError:
+            rep = None
+        super(ComputationalBasisPOVM, self).__init__(state_space, evotype, rep, items)
 
     def __contains__(self, key):
         """ For lazy creation of effect vectors """
@@ -93,10 +99,10 @@ class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface):
         """
         An iterator over the effect (outcome) labels of this POVM.
         """
-        # TODO: CHP short circuit
-        if self._evotype == 'chp':
-            return
-            yield
+        # TODO: CHP short circuit  -- check: where/when is this needed? ------------------------------------------------------------------------
+        #if self._evotype == 'chp':
+        #    return
+        #    yield
 
         iterover = [('0', '1')] * self.nqubits
         for k in _itertools.product(*iterover):

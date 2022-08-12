@@ -2,6 +2,7 @@
 #include <vector>
 #include <unordered_map>
 #include <cmath>
+#include "Python.h"
 
 typedef std::complex<double> dcomplex;
 typedef long long INT;
@@ -17,6 +18,8 @@ namespace CReps_statevec {
     virtual ~OpCRep();
     virtual StateCRep* acton(StateCRep* state, StateCRep* out_state) = 0;
     virtual StateCRep* adjoint_acton(StateCRep* state, StateCRep* out_state) = 0;
+    virtual StateCRep* acton_random(StateCRep* state, StateCRep* out_state, PyObject* rand_state);
+    virtual StateCRep* adjoint_acton_random(StateCRep* state, StateCRep* out_state, PyObject* rand_state);
   };
 
   class OpCRep_DenseUnitary :public OpCRep {
@@ -45,6 +48,8 @@ namespace CReps_statevec {
     virtual ~OpCRep_Embedded();
     virtual StateCRep* acton(StateCRep* state, StateCRep* out_state);
     virtual StateCRep* adjoint_acton(StateCRep* state, StateCRep* out_state);
+    virtual StateCRep* acton_random(StateCRep* state, StateCRep* out_state, PyObject* rand_state);
+    virtual StateCRep* adjoint_acton_random(StateCRep* state, StateCRep* out_state, PyObject* rand_state);
   };
 
   class OpCRep_Composed :public OpCRep{
@@ -55,6 +60,8 @@ namespace CReps_statevec {
     virtual ~OpCRep_Composed();
     virtual StateCRep* acton(StateCRep* state, StateCRep* out_state);
     virtual StateCRep* adjoint_acton(StateCRep* state, StateCRep* out_state);
+    virtual StateCRep* acton_random(StateCRep* state, StateCRep* out_state, PyObject* rand_state);
+    virtual StateCRep* adjoint_acton_random(StateCRep* state, StateCRep* out_state, PyObject* rand_state);
   };
 
   class OpCRep_Sum :public OpCRep{
@@ -64,6 +71,8 @@ namespace CReps_statevec {
     virtual ~OpCRep_Sum();
     virtual StateCRep* acton(StateCRep* state, StateCRep* out_state);
     virtual StateCRep* adjoint_acton(StateCRep* state, StateCRep* out_state);
+    virtual StateCRep* acton_random(StateCRep* state, StateCRep* out_state, PyObject* rand_state);
+    virtual StateCRep* adjoint_acton_random(StateCRep* state, StateCRep* out_state, PyObject* rand_state);
   };
 
   class OpCRep_Repeated :public OpCRep{
@@ -75,6 +84,22 @@ namespace CReps_statevec {
     virtual ~OpCRep_Repeated();
     virtual StateCRep* acton(StateCRep* state, StateCRep* out_state);
     virtual StateCRep* adjoint_acton(StateCRep* state, StateCRep* out_state);
+    virtual StateCRep* acton_random(StateCRep* state, StateCRep* out_state, PyObject* rand_state);
+    virtual StateCRep* adjoint_acton_random(StateCRep* state, StateCRep* out_state, PyObject* rand_state);
   };
 
+  class OpCRep_RandomUnitary :public OpCRep{
+    public:
+    PyObject* _unitary_rates;
+    PyObject* _rand_state;
+    std::vector<OpCRep*> _unitary_reps;
+      
+    OpCRep_RandomUnitary(PyObject* unitary_rates, std::vector<OpCRep*> unitary_reps,
+                         PyObject* rand_state, INT dim);
+    virtual ~OpCRep_RandomUnitary();
+    virtual StateCRep* acton(StateCRep* state, StateCRep* out_state);
+    virtual StateCRep* adjoint_acton(StateCRep* state, StateCRep* out_state);
+    virtual StateCRep* acton_random(StateCRep* state, StateCRep* out_state, PyObject* rand_state);
+    virtual StateCRep* adjoint_acton_random(StateCRep* state, StateCRep* out_state, PyObject* rand_state);
+  };
 }

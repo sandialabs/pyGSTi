@@ -26,6 +26,9 @@ class FullState(_DenseState):
         a 1D numpy array representing the SPAM operation.  The
         shape of this array sets the dimension of the SPAM op.
 
+    basis : Basis or str
+        The basis that `vec` is in.
+
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
@@ -35,8 +38,8 @@ class FullState(_DenseState):
         with the appropriate number of qubits is used.
     """
 
-    def __init__(self, vec, evotype="default", state_space=None):
-        _DenseState.__init__(self, vec, evotype, state_space)
+    def __init__(self, vec, basis=None, evotype="default", state_space=None):
+        _DenseState.__init__(self, vec, basis, evotype, state_space)
         self._paramlbls = _np.array(["VecElement Re(%d)" % i for i in range(self.dim)], dtype=object)
 
     def set_dense(self, vec):

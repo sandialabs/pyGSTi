@@ -190,7 +190,7 @@ class LinearOperator(_modelmember.ModelMember):
         output_rep = self._rep.acton(state._rep)
 
         #Build a State around output_rep
-        return _state.StaticState(output_rep.to_dense(on_space), self._evotype, self.state_space)
+        return _state.StaticState(output_rep.to_dense(on_space), None, self._evotype, self.state_space)
 
     def to_sparse(self, on_space='minimal'):
         """

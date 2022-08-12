@@ -72,11 +72,12 @@ cdef class StateRep(_basereps_cython.StateRep):
 
 
 cdef class StateRepDense(StateRep):
-    def __cinit__(self, _np.ndarray[double, ndim=1] data, state_space):
+    def __cinit__(self, _np.ndarray[double, ndim=1] data, state_space, basis):
+        #Ignore basis for now?
         self._cinit_base(data, state_space)
 
     def __reduce__(self):
-        return (StateRepDense, (self.data, self.state_space), (self.data.flags.writeable,))
+        return (StateRepDense, (self.data, self.state_space, None), (self.data.flags.writeable,))
 
     @property
     def base(self):
@@ -84,9 +85,6 @@ cdef class StateRepDense(StateRep):
 
     def base_has_changed(self):
         pass
-
-    def __reduce__(self):
-        return (StateRepDense, (self.data, self.state_space), (self.data.flags.writeable,))
 
 
 cdef class StateRepPure(StateRep):

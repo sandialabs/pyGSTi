@@ -15,7 +15,7 @@ class XRotationOp(pygsti.modelmembers.operations.DenseOperator):
     def __init__(self, target_angle, initial_params=(0,0)):
         #initialize with no noise
         self.target_angle = target_angle
-        super(XRotationOp,self).__init__(np.identity(4, 'd'), "densitymx") # this is *super*-operator, so "densitymx"
+        super(XRotationOp,self).__init__(np.identity(4, 'd'), 'pp', "densitymx") # this is *super*-operator, so "densitymx"
         self.from_vector(np.array(initial_params,'d'))
 
     @property
