@@ -10,8 +10,8 @@ Functions to facilitate using GRASP.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import itertools
-import random
+import itertools as _itertools
+import random as _random
 
 import numpy as _np
 
@@ -55,14 +55,14 @@ def neighboring_weight_vectors(weights, forced_weights=None, shuffle=False):
                                               forced_weights == 0))[0]
     swap_in_idxs = _np.where(weights == 0)[0]
     neighbors = []
-    for swap_out, swap_in in itertools.product(swap_out_idxs, swap_in_idxs):
+    for swap_out, swap_in in _itertools.product(swap_out_idxs, swap_in_idxs):
         neighbor = weights.copy()
         neighbor[swap_out] = 0
         neighbor[swap_in] = 1
         neighbors.append(neighbor)
 
     if shuffle:
-        random.shuffle(neighbors)
+        _random.shuffle(neighbors)
 
     return neighbors
 
@@ -127,7 +127,7 @@ def _grasp_construct_feasible_solution(elements, score_fn, rcl_fn, feasible_thre
         A sub-list of `elements`.
     """
     if rng is None:
-        rng = random.Random()
+        rng = _random.Random()
 
     if initial_elements is None:
         weights = _np.zeros(len(elements))
@@ -341,7 +341,7 @@ def run_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     if rng is None:
-        rng = random.Random()
+        rng = _random.Random()
 
     initialSoln = _grasp_construct_feasible_solution(elements, 
                                                      greedy_score_fn, 
@@ -439,7 +439,7 @@ def run_grasp(elements, greedy_score_fn, rcl_fn, local_score_fn, get_neighbors_f
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     bestSoln = None
-    rng = random.Random(seed)
+    rng = _random.Random(seed)
     for iteration in range(iterations):
         printer.log('Iteration {}'.format(iteration), 1)
         _, localSoln = run_grasp_iteration(elements, greedy_score_fn,
