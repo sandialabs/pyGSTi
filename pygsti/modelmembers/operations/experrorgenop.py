@@ -26,7 +26,7 @@ from pygsti.tools import matrixtools as _mt
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
-TODENSE_TRUNCATE = 1e-11
+TODENSE_TRUNCATE = 3e-10  # was 1e-11 and this gave some borderline test failures
 
 
 class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):

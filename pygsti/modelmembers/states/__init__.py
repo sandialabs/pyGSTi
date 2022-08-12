@@ -114,7 +114,7 @@ def create_from_dmvec(superket_vector, state_type, basis='pp', evotype='default'
                     purevec = _ot.dmvec_to_state(dmvec)  # raises error if dmvec does not correspond to a pure state
                     static_state = StaticPureState(purevec, basis, evotype, state_space)
                 except ValueError:
-                    static_state = StaticState(superket_vector, evotype, state_space)
+                    static_state = StaticState(superket_vector, basis, evotype, state_space)
 
                 proj_basis = 'PP' if state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis,
