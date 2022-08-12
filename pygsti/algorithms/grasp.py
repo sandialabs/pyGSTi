@@ -68,7 +68,7 @@ def neighboring_weight_vectors(weights, forced_weights=None, shuffle=False):
 
 
 def _grasp_construct_feasible_solution(elements, score_fn, rcl_fn, feasible_threshold=None,
-                                       feasible_fn=None, initial_elements=None):
+                                       feasible_fn=None, initial_elements=None, rng=None):
     """
     Constructs a subset of `elements` that represents a feasible solution.
 
@@ -118,11 +118,16 @@ def _grasp_construct_feasible_solution(elements, score_fn, rcl_fn, feasible_thre
         `elements` should be automatically included at the start of this
         construction.
 
+    rng : random.Random
+        Optional random number generator to allow for determinism.
+
     Returns
     -------
     list
         A sub-list of `elements`.
     """
+    if rng is None:
+        rng = random.Random()
 
     if initial_elements is None:
         weights = _np.zeros(len(elements))
@@ -152,7 +157,7 @@ def _grasp_construct_feasible_solution(elements, score_fn, rcl_fn, feasible_thre
                                      for candidateSoln in candidateSolns])
         rclIdxs = rcl_fn(candidateScores)
         assert(len(rclIdxs) > 0), "Empty reduced candidate list!"
-        chosenIdx = _np.random.choice(rclIdxs)
+        chosenIdx = rng.choice(rclIdxs)
         soln = candidateSolns[chosenIdx]
         weights[candidateIdxs[chosenIdx]] = 1
         if feasibleTest == 'threshold':
@@ -269,7 +274,7 @@ def _grasp_local_search(initial_solution, score_fn, elements, get_neighbors_fn,
 
 def run_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
                         get_neighbors_fn, feasible_threshold=None, feasible_fn=None,
-                        initial_elements=None, seed=None, verbosity=0):
+                        initial_elements=None, rng=None, verbosity=0):
     """
     Perform one iteration of GRASP (greedy construction and local search).
 
@@ -320,8 +325,8 @@ def run_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
         `elements` should be automatically included by the greedy construction
         routine at the start of its construction.
 
-    seed : int
-        Seed for the random number generator.
+    rng : random.Random
+        Optional random number generator to allow for determinism.
 
     verbosity : int
         Sets the level of logging messages the printer will display.
@@ -335,9 +340,16 @@ def run_grasp_iteration(elements, greedy_score_fn, rcl_fn, local_score_fn,
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
-    initialSoln = _grasp_construct_feasible_solution(elements, greedy_score_fn, rcl_fn,
-                                                     feasible_threshold, feasible_fn,
-                                                     initial_elements)
+    if rng is None:
+        rng = random.Random()
+
+    initialSoln = _grasp_construct_feasible_solution(elements, 
+                                                     greedy_score_fn, 
+                                                     rcl_fn,
+                                                     feasible_threshold = feasible_threshold, 
+                                                     feasible_fn = feasible_fn,
+                                                     initial_elements = initial_elements,
+                                                     rng = rng)
     printer.log('Initial construction:', 1)
     def to_str(x): return x.str if isinstance(x, _circuits.Circuit) else str(x)
     printer.log(str([to_str(element) for element in initialSoln]), 1)
@@ -427,15 +439,17 @@ def run_grasp(elements, greedy_score_fn, rcl_fn, local_score_fn, get_neighbors_f
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
     bestSoln = None
+    rng = random.Random(seed)
     for iteration in range(iterations):
         printer.log('Iteration {}'.format(iteration), 1)
         _, localSoln = run_grasp_iteration(elements, greedy_score_fn,
                                            rcl_fn, local_score_fn,
                                            get_neighbors_fn,
-                                           feasible_threshold,
-                                           feasible_fn,
-                                           initial_elements, seed,
-                                           verbosity)
+                                           feasible_threshold=feasible_threshold,
+                                           feasible_fn=feasible_fn,
+                                           initial_elements=initial_elements, 
+                                           rng=rng,
+                                           verbosity=verbosity)
         if bestSoln is None:
             bestSoln = localSoln
         elif final_score_fn(localSoln) < final_score_fn(bestSoln):
