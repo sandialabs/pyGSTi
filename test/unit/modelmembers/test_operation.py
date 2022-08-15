@@ -816,7 +816,7 @@ class EmbeddedDenseOpTester(OpBase, BaseCase):
         mx = np.identity(4, 'd')
         state_space = statespace.StateSpace.cast([('Q0',), ('Q1',)])
         evotype = 'default'
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             op.EmbeddedOp(state_space, ['Q0', 'Q1'], op.FullArbitraryOp(mx, evotype=evotype, state_space=None))
 
 

@@ -1708,13 +1708,29 @@ def create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, norma
     """
     TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
     """
+    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q,
+                                              normalize, sparse, tensorprod_basis, create_dual=False)
+
+
+def create_elementary_errorgen_nqudit_dual(typ, basis_element_labels, basis_1q, normalize=False,
+                                           sparse=False, tensorprod_basis=False):
+    """
+    TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
+    """
+    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q,
+                                              normalize, sparse, tensorprod_basis, create_dual=True)
+
+
+def _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize=False,
+                                       sparse=False, tensorprod_basis=False, create_dual=False):
+    create_fn = _lt.create_elementary_errorgen_dual if create_dual else _lt.create_elementary_errorgen
     if typ in 'HS':
         B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
-        ret = _lt.create_elementary_errorgen(typ, B, sparse=sparse)  # in std basis
+        ret = create_fn(typ, B, sparse=sparse)  # in std basis
     elif typ in 'CA':
         B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
         C = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[1]])
-        ret = _lt.create_elementary_errorgen(typ, B, C, sparse=sparse)  # in std basis
+        ret = create_fn(typ, B, C, sparse=sparse)  # in std basis
     else:
         raise ValueError("Invalid elementary error generator type: %s" % str(typ))
 

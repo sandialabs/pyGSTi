@@ -1221,9 +1221,8 @@ def _compute_reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
     def extract_gate(g):
         """ Get the gate action as a dense gate on core_qubits """
         if isinstance(g, _op.EmbeddedOp):
-            assert(g.state_space.num_tensor_product_blocks == 1)  # 1 tensor product block
-            assert(len(g.state_space.tensor_product_block_labels(0)) == nqubits)  # expected qubit count
-            qubit_labels = g.state_space.tensor_product_block_labels(0)
+            assert(len(g.state_space.sole_tensor_product_block_labels) == nqubits)  # expected qubit count
+            qubit_labels = g.state_space.sole_tensor_product_block_labels
 
             new_qubit_labels = []
             for core_ql in core_qubits:
@@ -1639,57 +1638,61 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
     prepLbl = _Lbl("rho0")
     effectLbls = [_Lbl("Mdefault_%s" % l) for l in model._effect_labels_for_povm('Mdefault')]
 
-    # create a model with max_idle_weight qubits that includes all
-    # the errors of the actual n-qubit model...
-    #Note: geometry doens't matter here, since we just look at the idle gate (so just use 'line'; no CNOTs)
-    # - actually better to pass qubitGraph here so we get the correct qubit labels (node labels of graph)
-    # - actually *don't* pass qubitGraph as this gives the wrong # of qubits when max_idle_weight < num_qubits!
-    printer.log("Creating \"idle error\" model on %d qubits" % max_idle_weight)
-    idle_pspec = _QubitProcessorSpec(max_idle_weight, processor_spec.gate_names, processor_spec.nonstd_gate_unitaries,
-                                     {}, 'line')  # qubitGraph
-    idle_model = _create_cloud_crosstalk_model_from_hops_and_weights(
-        idle_pspec, None,
-        max_idle_weight, 0, maxhops, extra_weight_1_hops,
-        extra_gate_weight, verbosity=printer - 5,
-        simulator=_TermFSim(mode="taylor-order", max_order=1),
-        gate_type=parameterization, spam_type=parameterization, evotype=evotype,
-        implicit_idle_mode="add_global", errcomp_type="gates")
-    idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
-    # these are the params we want to amplify at first...
-    idle_params = idle_model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices
-
-    if max_idle_weight in cache['Idle gatename fidpair lists']:
-        printer.log("Getting cached sequences needed for max-weight=%d errors on the idle gate" % max_idle_weight)
-        idle_maxwt_gatename_fidpair_lists = cache['Idle gatename fidpair lists'][max_idle_weight]
-    else:
-        #First get "idle germ" sequences since the idle is special
-        printer.log("Getting sequences needed for max-weight=%d errors on the idle gate" % max_idle_weight)
-        ampedJ, ampedJ_rank, idle_maxwt_gatename_fidpair_lists = \
-            _find_amped_polynomials_for_syntheticidle(list(range(max_idle_weight)),
-                                                      idle_op_str, idle_model, single_q_fiducials,
-                                                      prepLbl, None, wrt_params=idle_params,
-                                                      algorithm=algorithm, idt_pauli_dicts=idt_pauli_dicts,
-                                                      comm=comm, verbosity=printer - 1)
-        #ampedJ, ampedJ_rank, idle_maxwt_gatename_fidpair_lists = None,0,[] # DEBUG GRAPH ISO
-        cache['Idle gatename fidpair lists'][max_idle_weight] = idle_maxwt_gatename_fidpair_lists
-
-    #Since this is the idle, these max_idle_weight-qubit fidpairs can be "tiled"
-    # to the n-qubits
-    printer.log("%d \"idle template pairs\".  Tiling these to all %d qubits" %
-                (len(idle_maxwt_gatename_fidpair_lists), num_qubits), 2)
-    idle_fidpairs = _tile_idle_fidpairs(all_qubit_labels, idle_maxwt_gatename_fidpair_lists, max_idle_weight)
-    printer.log("%d idle pairs found" % len(idle_fidpairs), 2)
-
-    # Create idle sequences by sandwiching Gi^L between all idle fiducial pairs
     sequences = []
-    selected_germs = [idle_op_str]
-    for L in max_lengths:
-        for fidpair in idle_fidpairs:
-            prepFid, measFid = fidpair
-            sequences.append((prepFid + idle_op_str * L + measFid, L, idle_op_str,
-                              prepFid, measFid))  # was XX
-            # circuit, L, germ, prepFidIndex, measFidIndex??
-    printer.log("%d idle sequences (for all max-lengths: %s)" % (len(sequences), str(max_lengths)))
+    selected_germs = []
+
+    if max_idle_weight > 0:
+        # create a model with max_idle_weight qubits that includes all
+        # the errors of the actual n-qubit model...
+        #Note: geometry doens't matter here, since we just look at the idle gate (so just use 'line'; no CNOTs)
+        # - actually better to pass qubitGraph here so we get the correct qubit labels (node labels of graph)
+        # - actually *don't* pass qubitGraph as this gives the wrong # of qubits when max_idle_weight < num_qubits!
+        printer.log("Creating \"idle error\" model on %d qubits" % max_idle_weight)
+        idle_pspec = _QubitProcessorSpec(max_idle_weight, processor_spec.gate_names,
+                                         processor_spec.nonstd_gate_unitaries,
+                                         {}, 'line')  # qubitGraph
+        idle_model = _create_cloud_crosstalk_model_from_hops_and_weights(
+            idle_pspec, None,
+            max_idle_weight, 0, maxhops, extra_weight_1_hops,
+            extra_gate_weight, verbosity=printer - 5,
+            simulator=_TermFSim(mode="taylor-order", max_order=1),
+            gate_type=parameterization, spam_type=parameterization, evotype=evotype,
+            implicit_idle_mode="add_global", errcomp_type="gates")
+        idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
+        # these are the params we want to amplify at first...
+        idle_params = idle_model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices
+
+        if max_idle_weight in cache['Idle gatename fidpair lists']:
+            printer.log("Getting cached sequences needed for max-weight=%d errors on the idle gate" % max_idle_weight)
+            idle_maxwt_gatename_fidpair_lists = cache['Idle gatename fidpair lists'][max_idle_weight]
+        else:
+            #First get "idle germ" sequences since the idle is special
+            printer.log("Getting sequences needed for max-weight=%d errors on the idle gate" % max_idle_weight)
+            ampedJ, ampedJ_rank, idle_maxwt_gatename_fidpair_lists = \
+                _find_amped_polynomials_for_syntheticidle(list(range(max_idle_weight)),
+                                                          idle_op_str, idle_model, single_q_fiducials,
+                                                          prepLbl, None, wrt_params=idle_params,
+                                                          algorithm=algorithm, idt_pauli_dicts=idt_pauli_dicts,
+                                                          comm=comm, verbosity=printer - 1)
+            #ampedJ, ampedJ_rank, idle_maxwt_gatename_fidpair_lists = None,0,[] # DEBUG GRAPH ISO
+            cache['Idle gatename fidpair lists'][max_idle_weight] = idle_maxwt_gatename_fidpair_lists
+
+            #Since this is the idle, these max_idle_weight-qubit fidpairs can be "tiled"
+            # to the n-qubits
+            printer.log("%d \"idle template pairs\".  Tiling these to all %d qubits" %
+                        (len(idle_maxwt_gatename_fidpair_lists), num_qubits), 2)
+            idle_fidpairs = _tile_idle_fidpairs(all_qubit_labels, idle_maxwt_gatename_fidpair_lists, max_idle_weight)
+            printer.log("%d idle pairs found" % len(idle_fidpairs), 2)
+
+        # Create idle sequences by sandwiching Gi^L between all idle fiducial pairs
+        selected_germs.append(idle_op_str)
+        for L in max_lengths:
+            for fidpair in idle_fidpairs:
+                prepFid, measFid = fidpair
+                sequences.append((prepFid + idle_op_str * L + measFid, L, idle_op_str,
+                                  prepFid, measFid))  # was XX
+                # circuit, L, germ, prepFidIndex, measFidIndex??
+        printer.log("%d idle sequences (for all max-lengths: %s)" % (len(sequences), str(max_lengths)))
 
     if idle_only:  # Exit now when we just wanted idle-tomography sequences
         #OLD: return sequences, selected_germs
@@ -1729,18 +1732,28 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
             if syntheticIdleWt not in cache['Idle gatename fidpair lists']:
                 printer.log("Getting sequences needed for max-weight=%d errors" % syntheticIdleWt)
                 printer.log(" on the idle gate (for %d-Q synthetic idles)" % gateWt)
-                sidle_pspec = _QubitProcessorSpec(syntheticIdleWt, processor_spec.gate_names,
+                gate_names_including_idle = [gn for gn in processor_spec.gate_names
+                                             if processor_spec.gate_num_qudits(gn) <= syntheticIdleWt]
+                if global_idle_lbl is None:
+                    gate_names_including_idle.append('{idle}')  # or any recognized-as-idle gate
+
+                # Below, we create a model with an idle gate that attempts to mimic the types
+                # of errors on the gates (the synthetic idles will be germ^power circuits). To
+                # to this, we choose, conservatively, to set the idle max-weight to be syntheticIdleWt,
+                # though we may be able to do better than this (?).
+                sidle_pspec = _QubitProcessorSpec(syntheticIdleWt, gate_names_including_idle,
                                                   processor_spec.nonstd_gate_unitaries, {}, 'line')
                 sidle_model = _create_cloud_crosstalk_model_from_hops_and_weights(
-                    sidle_pspec, None,
-                    max_idle_weight, 0, maxhops, extra_weight_1_hops,
+                    sidle_pspec, None, syntheticIdleWt,
+                    0, maxhops, extra_weight_1_hops,
                     extra_gate_weight, verbosity=printer - 5,
                     simulator=_TermFSim(mode="taylor-order", max_order=1),
                     gate_type=parameterization, spam_type=parameterization, evotype=evotype,
                     implicit_idle_mode="add_global", errcomp_type="gates")
                 sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
                 # these are the params we want to amplify...
-                idle_params = sidle_model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices
+                idle_params = sidle_model.circuit_layer_operator(sidle_pspec.global_idle_layer_label,
+                                                                 typ='op').gpindices
 
                 _, _, idle_gatename_fidpair_lists = _find_amped_polynomials_for_syntheticidle(
                     list(range(syntheticIdleWt)), idle_op_str, sidle_model,
@@ -1750,7 +1763,8 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
                 cache['Idle gatename fidpair lists'][syntheticIdleWt] = idle_gatename_fidpair_lists
 
     #Look for and add additional germs to amplify the *rest* of the model's parameters
-    Gi_nparams = model.circuit_layer_operator(global_idle_lbl, typ='op').num_params  # assumes nqnoise (Implicit) model
+    Gi_nparams = model.circuit_layer_operator(global_idle_lbl, typ='op').num_params \
+        if (global_idle_lbl is not None) else 0  # assumes nqnoise (Implicit) model
     SPAM_nparams = sum([obj.num_params for obj in _itertools.chain(model.prep_blks['layers'].values(),
                                                                    model.povm_blks['layers'].values())])
     Np_to_amplify = model.num_params - Gi_nparams - SPAM_nparams
@@ -1780,7 +1794,8 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         # amplified for another cloud with core exaclty equal to the gate's target qubits (e.g. [0])
         wrtParams = set()
         # OK b/c model.num_params called above
-        Gi_params = set(_slct.to_array(model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices))
+        Gi_params = set(_slct.to_array(model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices)) \
+            if (global_idle_lbl is not None) else set()
         pure_op_labels = []
         for gl in model.primitive_op_labels:  # take this as the set of "base"/"serial" operations
             if gl.sslbls is None: continue  # gates that act on everything (usually just the identity Gi gate)

@@ -982,12 +982,12 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             prep_noiseop1Q = modelnoise.create_errormap('prep', evotype, singleQ_state_space, target_labels=None)
             if prep_noiseop1Q is not None:
                 err_gates = [prep_noiseop1Q.copy() for i in range(num_qudits)] \
-                    if independent_gates else [prep_noiseop1Q] * num_qudits
+                    if independent_spam else [prep_noiseop1Q] * num_qudits
                 prep_ops.extend([_op.EmbeddedOp(state_space, [qudit_labels[i]], err_gates[i])
                                  for i in range(num_qudits)])
         else:  # use modelnoise to construct n-qudit noise
             prepNoiseMap = modelnoise.create_errormap('prep', evotype, state_space, target_labels=None,
-                                                      qudit_graph=processor_spec.qudit_graph)
+                                                      qudit_graph=processor_spec.qudit_graph, copy=independent_spam)
             if prepNoiseMap is not None: prep_ops.append(prepNoiseMap)
 
     def _add_povm_noise(povm_ops):
@@ -996,12 +996,12 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             povm_noiseop1Q = modelnoise.create_errormap('povm', evotype, singleQ_state_space, target_labels=None)
             if povm_noiseop1Q is not None:
                 err_gates = [povm_noiseop1Q.copy() for i in range(num_qudits)] \
-                    if independent_gates else [povm_noiseop1Q] * num_qudits
+                    if independent_spam else [povm_noiseop1Q] * num_qudits
                 povm_ops.extend([_op.EmbeddedOp(state_space, [qudit_labels[i]], err_gates[i])
                                  for i in range(num_qudits)])
         else:  # use modelnoise to construct n-qudit noise
             povmNoiseMap = modelnoise.create_errormap('povm', evotype, state_space, target_labels=None,
-                                                      qudit_graph=processor_spec.qudit_graph)
+                                                      qudit_graph=processor_spec.qudit_graph, copy=independent_spam)
             if povmNoiseMap is not None: povm_ops.append(povmNoiseMap)
 
     def _add_to_prep_layers(ideal_prep, prep_ops, prep_name):

@@ -65,7 +65,7 @@ class MarginalizedPOVM(_POVM):
         if isinstance(all_sslbls, _StateSpace):
             assert(all_sslbls.num_tensor_product_blocks == 1), \
                 "all_sslbls should only have a single tensor product block!"
-            all_sslbls = all_sslbls.tensor_product_block_labels(0)
+            all_sslbls = all_sslbls.sole_tensor_product_block_labels
 
         #now all_sslbls is a tuple of labels, like sslbls_after_marginalizing
         self.sslbls_to_marginalize = all_sslbls

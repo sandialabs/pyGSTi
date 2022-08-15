@@ -13,6 +13,7 @@ Defines the LocalNoiseModel class and supporting functions
 import collections as _collections
 import itertools as _itertools
 import warnings as _warnings
+import numpy as _np
 
 from pygsti.models.implicitmodel import ImplicitOpModel as _ImplicitOpModel, _init_spam_layers
 from pygsti.models.layerrules import LayerRules as _LayerRules
@@ -28,6 +29,7 @@ from pygsti.modelmembers import states as _state
 from pygsti.modelmembers.operations import opfactory as _opfactory
 from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
+from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
 from pygsti.circuits.circuitparser import parse_label as _parse_label
 from pygsti.tools import basistools as _bt
@@ -127,14 +129,16 @@ class LocalNoiseModel(_ImplicitOpModel):
         If False, then the appropriately parameterized gate objects (often
         dense gates) are used directly.
 
-    implicit_idle_mode : {'none', 'add_global', 'pad_1Q'}
+    implicit_idle_mode : {'none', 'add_global', 'pad_1Q', 'only_global'}
         The way idle operations are added implicitly within the created model. `"none"`
         doesn't add any "extra" idle operations when there is a layer that contains some
         gates but not gates on all the qubits.  `"add_global"` adds the global idle operation,
         i.e., the operation for a global idle layer (zero gates - a completely empty layer),
         to every layer that is simulated, using the global idle as a background idle that always
         occurs regardless of the operation.  `"pad_1Q"` applies the 1-qubit idle gate (if one
-        exists) to all idling qubits within a circuit layer.
+        exists) to all idling qubits within a circuit layer. `"only_global"` uses a global idle
+        operation, if one exists, to simulate the completely empty layer but nothing else, i.e.,
+        this idle operation is *not* added to other layers as in `"add_global"`.
     """
 
     def __init__(self, processor_spec, gatedict, prep_layers=None, povm_layers=None, evotype="default",
@@ -302,7 +306,7 @@ class LocalNoiseModel(_ImplicitOpModel):
                         else: raise e
 
                 if len(singleQ_idle_layer_labels) > 0:
-                    if implicit_idle_mode == 'add_global' and global_idle_layer_label is None:
+                    if implicit_idle_mode in ('add_global', 'only_global') and global_idle_layer_label is None:
                         # then create a global idle based on 1Q idle gates
                         global_idle = _op.ComposedOp([self.operation_blks['layers'][lbl]
                                                       for lbl in singleQ_idle_layer_labels.values()])
@@ -356,17 +360,51 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         return mdl
 
+    def _op_decomposition(self, op_label):
+        """Returns the target and error-generator-containing error map parts of the operation for `op_label` """
+        return self.operation_blks['layers'][op_label], self.operation_blks['layers'][op_label]
+
+    def errorgen_coefficients(self, normalized_elem_gens=True):
+        """TODO: docstring - returns a nested dict containing all the error generator coefficients for all
+           the operations in this model. """
+        if not normalized_elem_gens:
+            def rescale(coeffs):
+                """ HACK: rescales errorgen coefficients for normalized-Pauli-basis elementary error gens
+                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens.  This
+                         is only needed in the Hamiltonian case, as the non-ham "elementary" gen has a
+                         factor of d2 baked into it.
+                """
+                d2 = _np.sqrt(self.dim); d = _np.sqrt(d2)
+                return {lbl: (val / d if lbl.errorgen_type == 'H' else val) for lbl, val in coeffs.items()}
+
+            op_coeffs = {op_label: rescale(self.operation_blks['layers'][op_label].errorgen_coefficients())
+                         for op_label in self.operation_blks['layers']}
+            op_coeffs.update({prep_label: rescale(self.prep_blks['layers'][prep_label].errorgen_coefficients())
+                              for prep_label in self.prep_blks['layers']})
+            op_coeffs.update({povm_label: rescale(self.povm_blks['layers'][povm_label].errorgen_coefficients())
+                              for povm_label in self.povm_blks['layers']})
+        else:
+            op_coeffs = {op_label: self.operation_blks['layers'][op_label].errorgen_coefficients()
+                         for op_label in self.operation_blks['layers']}
+            op_coeffs.update({prep_label: self.prep_blks['layers'][prep_label].errorgen_coefficients()
+                              for prep_label in self.prep_blks['layers']})
+            op_coeffs.update({povm_label: self.povm_blks['layers'][povm_label].errorgen_coefficients()
+                              for povm_label in self.povm_blks['layers']})
+
+        return op_coeffs
+
 
 class _SimpleCompLayerRules(_LayerRules):
 
     def __init__(self, qubit_labels, implicit_idle_mode, singleq_idle_layer_labels, global_idle_layer_label):
         self.implicit_idle_mode = implicit_idle_mode  # how to handle implied idles ("blanks") in circuits
         self.qubit_labels = qubit_labels
+        self._use_global_idle = False
         self._add_global_idle_to_all_layers = False
         self._add_padded_idle = False
         self.use_op_caching = True  # expert functionality - can be turned off if needed
 
-        if implicit_idle_mode not in ('none', 'add_global', 'pad_1Q'):
+        if implicit_idle_mode not in ('none', 'add_global', 'only_global', 'pad_1Q'):
             raise ValueError("Invalid `implicit_idle_mode`: '%s'" % str(implicit_idle_mode))
 
         self.single_qubit_idle_layer_labels = singleq_idle_layer_labels
@@ -391,6 +429,8 @@ class _SimpleCompLayerRules(_LayerRules):
         self._global_idle_layer_label = val
         if self.implicit_idle_mode == "add_global":
             self._add_global_idle_to_all_layers = bool(self._global_idle_layer_label is not None)
+        elif self.implicit_idle_mode == "only_global":
+            self._use_global_idle = bool(self._global_idle_layer_label is not None)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -492,6 +532,7 @@ class _SimpleCompLayerRules(_LayerRules):
         """
         if layerlbl in caches['complete-layers']: return caches['complete-layers'][layerlbl]
         components = layerlbl.components
+        use_global_idle = self._use_global_idle
         add_global_idle = self._add_global_idle_to_all_layers
         add_padded_idle = self._add_padded_idle
         add_idle = add_global_idle or add_padded_idle
@@ -522,7 +563,8 @@ class _SimpleCompLayerRules(_LayerRules):
                                  evotype=model.evotype, state_space=model.state_space)
             model._init_virtual_obj(ret)  # so ret's gpindices get set
         else:  # add_global_idle
-            gblIdle = [model.operation_blks['layers'][self.global_idle_layer_label]] if add_idle else []
+            gblIdle = [model.operation_blks['layers'][self.global_idle_layer_label]] \
+                if (use_global_idle or add_idle) else []
 
             #Note: OK if len(components) == 0, as it's ok to have a composed gate with 0 factors
             ret = _op.ComposedOp(gblIdle + [self._layer_component_operation(model, l, caches['op-layers'])

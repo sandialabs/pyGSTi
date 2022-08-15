@@ -777,6 +777,8 @@ class ComposedOp(_LinearOperator):
             A 1D array of length equal to the number of coefficients in the linear combination
             of standard error generators that is this operation's error generator.
         """
+        #Note: so far, we do not combine errorgen coefficients when, for instance, multiple
+        # factors have errorgen coefficients with the same label.
         return _np.concatenate([op.errorgen_coefficients_array() for op in self.factorops])
 
     def errorgen_coefficients_array_deriv_wrt_params(self):
@@ -791,7 +793,11 @@ class ComposedOp(_LinearOperator):
             number of parameters.
         """
         deriv_mxs = [op.errorgen_coefficients_array_deriv_wrt_params() for op in self.factorops]
-        return _np.concatenate([mx for mx in deriv_mxs if mx.size > 0], axis=0)  # allow (0,0)-shaped mxs to be ignored
+        ret = _np.zeros((sum([mx.shape[0] for mx in deriv_mxs]), self.num_params), 'd'); off = 0
+        for mx, subm_rpinds in zip(deriv_mxs, self._submember_rpindices):
+            ret[off:off + mx.shape[0], subm_rpinds] = mx
+            off += mx.shape[0]
+        return ret
 
     def error_rates(self):
         """
@@ -872,7 +878,7 @@ class ComposedOp(_LinearOperator):
         -------
         None
         """
-        sslbls = self.state_space.tensor_product_block_labels(0)
+        sslbls = self.state_space.sole_tensor_product_block_labels
         values_to_set = {_GlobalElementaryErrorgenLabel.cast(k, sslbls): v for k, v in lindblad_term_dict.items()}
 
         for op in self.factorops:

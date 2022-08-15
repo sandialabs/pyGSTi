@@ -33,7 +33,7 @@ class StateRep(_basereps.StateRep):
 
         assert(self.state_space.num_qubits >= 0), 'State space for "chp" evotype must consist entirely of qubits!'
         assert(self.state_space.num_tensor_product_blocks == 1)  # should be redundant with above assertion
-        self.qubit_labels = self.state_space.tensor_product_block_labels(0)
+        self.qubit_labels = self.state_space.sole_tensor_product_block_labels
         self.qubit_label_to_index = {lbl: i for i, lbl in enumerate(self.qubit_labels)}
 
     @property

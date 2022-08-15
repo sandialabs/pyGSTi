@@ -358,7 +358,7 @@ class LindbladErrorgen(_LinearOperator):
 
         #convert elementary errorgen labels to *local* labels (ok to specify w/global labels)
         identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-        sslbls = state_space.tensor_product_block_labels(0)  # just take first TPB labels as all labels
+        sslbls = state_space.sole_tensor_product_block_labels  # first TPB labels == all labels
         elementary_errorgens = _collections.OrderedDict(
             [(_LocalElementaryErrorgenLabel.cast(lbl, sslbls, identity_label_1Q), val)
              for lbl, val in elementary_errorgens.items()])
@@ -1041,7 +1041,7 @@ class LindbladErrorgen(_LinearOperator):
 
         #convert to *global* elementary errorgen labels
         identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-        sslbls = self.state_space.tensor_product_block_labels(0)  # just take first TPB labels as all labels
+        sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
         elem_errorgens = _collections.OrderedDict(
             [(_GlobalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q), value)
              for local_eeg_lbl, value in elem_errorgens.items()])
@@ -1077,7 +1077,7 @@ class LindbladErrorgen(_LinearOperator):
 
         #convert to *global* elementary errorgen labels
         identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-        sslbls = self.state_space.tensor_product_block_labels(0)  # just take first TPB labels as all labels
+        sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
         return tuple([_GlobalElementaryErrorgenLabel.cast(local_eeg_lbl, sslbls, identity_label_1Q)
                       for local_eeg_lbl in labels])
 
@@ -1212,7 +1212,7 @@ class LindbladErrorgen(_LinearOperator):
         """
         #convert keys to local elementary errorgen labels (the same as those used by the coefficient blocks):
         identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
-        sslbls = self.state_space.tensor_product_block_labels(0)  # just take first TPB labels as all labels
+        sslbls = self.state_space.sole_tensor_product_block_labels  # take first TPB labels as all labels
         elem_errorgens = _collections.OrderedDict(
             [(_LocalElementaryErrorgenLabel.cast(k, sslbls, identity_label_1Q), v)
              for k, v in elementary_errorgens.items()])

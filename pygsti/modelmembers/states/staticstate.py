@@ -12,9 +12,9 @@ The StaticState class and supporting functionality.
 
 import numpy as _np
 from pygsti.modelmembers.states.densestate import DenseState as _DenseState
+from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 
-
-class StaticState(_DenseState):
+class StaticState(_DenseState, _NoErrorGeneratorInterface):
     """
     A state vector that is completely fixed, or "static" (i.e. that posesses no parameters).
 

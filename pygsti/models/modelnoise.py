@@ -295,7 +295,7 @@ class OpModelNoise(ModelNoise):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def create_errormap(self, opkey, evotype, state_space, target_labels=None, qudit_graph=None):
+    def create_errormap(self, opkey, evotype, state_space, target_labels=None, qudit_graph=None, copy=False):
         """
         Create an error map object to implement the noise on a given model operation.
 
@@ -320,13 +320,18 @@ class OpModelNoise(ModelNoise):
             direction information used to create more complex types of errors.  If `None`, then an error
             will be raised if graph information is needed.
 
+        copy : bool, optional
+            Whether the operations arising from the same stencil should be copied before embedding and
+            composing them to apply the stencil.  `True` can be used to make different applications of
+            the stencil independent operations.
+
         Returns
         -------
         LinearOperator
         """
         stencil = self.create_errormap_stencil(opkey, evotype, state_space,
                                                len(target_labels) if (target_labels is not None) else None)
-        return self.apply_errormap_stencil(stencil, evotype, state_space, target_labels, qudit_graph)
+        return self.apply_errormap_stencil(stencil, evotype, state_space, target_labels, qudit_graph, copy)
 
     def reset_access_counters(self):
         """
@@ -1038,7 +1043,7 @@ class LindbladNoise(OpNoise):
         """
         # Build LindbladErrorgen directly to have control over which parameters are set (leads to lower param counts)
         basis_size = state_space.dim  # e.g. 4 for a single qubit
-        basis = _BuiltinBasis('pp', basis_size)
+        basis = _BuiltinBasis('PP', basis_size)
         return _op.LindbladErrorgen.from_elementary_errorgens(
             self.error_coeffs, self.parameterization, basis, mx_basis='pp',
             truncate=False, evotype=evotype, state_space=state_space)
