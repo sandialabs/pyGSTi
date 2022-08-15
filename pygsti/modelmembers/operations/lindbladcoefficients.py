@@ -155,7 +155,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         mxs = [basis[lbl] for lbl in self._bel_labels]
         nMxs = len(mxs)
         if nMxs == 0:
-            return []  # short circuit - no superops to return
+            return ([], []) if include_1norms else []  # short circuit - no superops to return
 
         d = mxs[0].shape[0]
         d2 = d**2
@@ -483,7 +483,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         for eeg_lbl, linear_combo in eeg_indices.items():
             val = _np.sum([coeff * flat_data[index] for coeff, index in linear_combo])
-            elementary_errorgens[eeg_lbl] = _np.asscalar(_np.real_if_close(val))
+            elementary_errorgens[eeg_lbl] = _np.real_if_close(val).item()  # item() -> scalar
             #set_basis_el(lbl, basis[lbl])  # REMOVE
 
         return elementary_errorgens

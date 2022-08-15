@@ -73,7 +73,8 @@ namespace CReps_densitymx {
   class OpCRep_Sum :public OpCRep{
     public:
     std::vector<OpCRep*> _factor_creps;
-    OpCRep_Sum(std::vector<OpCRep*> factor_creps, INT dim);
+    double* _factor_coeffs;
+    OpCRep_Sum(std::vector<OpCRep*> factor_creps, double* factor_coefficients, INT dim);
     virtual ~OpCRep_Sum();
     virtual StateCRep* acton(StateCRep* state, StateCRep* out_state);
     virtual StateCRep* adjoint_acton(StateCRep* state, StateCRep* out_state);

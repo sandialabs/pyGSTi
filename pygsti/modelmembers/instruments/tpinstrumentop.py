@@ -37,28 +37,17 @@ class TPInstrumentOp(_DenseOperator):
         The index indicating which element of the `TPInstrument` the
         constructed object is.  Must be in the range
         `[0,len(param_ops)-1]`.
+
+    basis : Basis or {'pp','gm','std'} or None
+        The basis used to construct the Hilbert-Schmidt space representation
+        of this state as a super-operator.  If None, certain functionality,
+        such as access to Kraus operators, will be unavailable.
     """
 
-    def __init__(self, param_ops, index):
-        """
-        Initialize a TPInstrumentOp object.
-
-        Parameters
-        ----------
-        param_ops : list of LinearOperator objects
-            A list of the underlying operation objects which constitute a simple
-            parameterization of a :class:`TPInstrument`.  Namely, this is
-            the list of [MT,D1,D2,...Dn] operations which parameterize *all* of the
-            `TPInstrument`'s elements.
-
-        index : int
-            The index indicating which element of the `TPInstrument` the
-            constructed object is.  Must be in the range
-            `[0,len(param_ops)-1]`.
-        """
+    def __init__(self, param_ops, index, basis=None):
         self.index = index
         self.num_instrument_elements = len(param_ops)
-        _DenseOperator.__init__(self, _np.identity(param_ops[0].dim, 'd'), param_ops[0].evotype,
+        _DenseOperator.__init__(self, _np.identity(param_ops[0].dim, 'd'), basis, param_ops[0].evotype,
                                 param_ops[0].state_space)  # Note: sets self.gpindices; TP assumed real
 
         #Set our own parent and gpindices based on param_ops

@@ -456,7 +456,7 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
 
     else:  # sparse case
 
-        from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence as _ArpackNoConvergence
+        from scipy.sparse.linalg import ArpackNoConvergence as _ArpackNoConvergence
         running_indep_cols = initial_independent_cols.copy() \
             if (initial_independent_cols is not None) else _sps.csc_matrix((m.shape[0], 0), dtype=m.dtype)
         num_indep_cols = running_indep_cols.shape[0]

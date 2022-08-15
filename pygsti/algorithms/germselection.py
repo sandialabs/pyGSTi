@@ -14,6 +14,7 @@ import warnings as _warnings
 
 import numpy as _np
 import numpy.linalg as _nla
+import random as _random
 
 from pygsti.algorithms import grasp as _grasp
 from pygsti.algorithms import scoring as _scoring
@@ -2192,6 +2193,7 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
                                                           iterations), 1)
         success = False
         failCount = 0
+        rng = _random.Random(seed)
         while not success and failCount < 10:
             try:
                 iterSolns = _grasp.run_grasp_iteration(
@@ -2199,7 +2201,7 @@ def find_germs_grasp(model_list, germs_list, alpha, randomize=True,
                     local_score_fn=scoreFn,
                     get_neighbors_fn=_get_neighbors_fn,
                     feasible_fn=_feasible_fn,
-                    initial_elements=initialWeights, seed=seed,
+                    initial_elements=initialWeights, rng=rng,
                     verbosity=verbosity)
 
                 initialSolns.append(iterSolns[0])

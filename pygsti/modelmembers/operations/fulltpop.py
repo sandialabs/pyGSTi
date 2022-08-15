@@ -32,6 +32,11 @@ class FullTPOp(_DenseOperator):
         a square 2D array-like or LinearOperator object representing the operation action.
         The shape of m sets the dimension of the operation.
 
+    basis : Basis or {'pp','gm','std'} or None
+        The basis used to construct the Hilbert-Schmidt space representation
+        of this state as a super-operator.  If None, certain functionality,
+        such as access to Kraus operators, will be unavailable.
+
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
@@ -46,16 +51,7 @@ class FullTPOp(_DenseOperator):
         Direct access to the underlying process matrix data.
     """
 
-    def __init__(self, m, evotype="default", state_space=None):
-        """
-        Initialize a FullTPOp object.
-
-        Parameters
-        ----------
-        m : array_like or LinearOperator
-            a square 2D numpy array representing the operation action.  The
-            shape of this array sets the dimension of the operation.
-        """
+    def __init__(self, m, basis=None, evotype="default", state_space=None):
         #LinearOperator.__init__(self, LinearOperator.convert_to_matrix(m))
         mx = _LinearOperator.convert_to_matrix(m)
         assert(_np.isrealobj(mx)), "FullTPOp must have *real* values!"
@@ -63,7 +59,7 @@ class FullTPOp(_DenseOperator):
                 and _np.allclose(mx[0, 1:], 0.0)):
             raise ValueError("Cannot create FullTPOp: "
                              "invalid form for 1st row!")
-        _DenseOperator.__init__(self, mx, evotype, state_space)
+        _DenseOperator.__init__(self, mx, basis, evotype, state_space)
         assert(self._rep.base.flags['C_CONTIGUOUS'] and self._rep.base.flags['OWNDATA'])
         assert(isinstance(self._ptr, _ProtectedArray))
         self._paramlbls = _np.array(["MxElement %d,%d" % (i, j) for i in range(1, self.dim) for j in range(self.dim)],

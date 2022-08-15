@@ -309,8 +309,8 @@ namespace CReps_densitymx {
   /****************************************************************************\
   |* OpCRep_Sum                                                           *|
   \****************************************************************************/
-  OpCRep_Sum::OpCRep_Sum(std::vector<OpCRep*> factor_creps, INT dim)
-    :OpCRep(dim),_factor_creps(factor_creps)
+  OpCRep_Sum::OpCRep_Sum(std::vector<OpCRep*> factor_creps, double* factor_coefficients, INT dim)
+    :OpCRep(dim),_factor_creps(factor_creps),_factor_coeffs(factor_coefficients)
   {
   }
   OpCRep_Sum::~OpCRep_Sum() { }
@@ -330,10 +330,18 @@ namespace CReps_densitymx {
     if(nfactors == 0) return out_state;
 
     //Act with factors and accumulate into out_state
-    for(std::size_t i=0; i < nfactors; i++) {
-      _factor_creps[i]->acton(state,&temp_state);
-      for(INT k=0; k<_dim; k++)
-	out_state->_dataptr[k] += temp_state._dataptr[k];
+    if(_factor_coeffs == NULL) {
+      for(std::size_t i=0; i < nfactors; i++) {
+        _factor_creps[i]->acton(state,&temp_state);
+        for(INT k=0; k<_dim; k++)
+          out_state->_dataptr[k] += temp_state._dataptr[k];
+      }
+    } else {
+      for(std::size_t i=0; i < nfactors; i++) {
+        _factor_creps[i]->acton(state,&temp_state);
+        for(INT k=0; k<_dim; k++)
+          out_state->_dataptr[k] += _factor_coeffs[i] * temp_state._dataptr[k];
+      }
     }
     DEBUG(out_state->print("OUTPUT"));
     return out_state;
@@ -355,10 +363,18 @@ namespace CReps_densitymx {
     if(nfactors == 0) return out_state;
 
     //Act with factors and accumulate into out_state
-    for(std::size_t i=0; i < nfactors; i++) {
-      _factor_creps[i]->adjoint_acton(state,&temp_state);
-      for(INT k=0; k<_dim; k++)
-	out_state->_dataptr[k] += temp_state._dataptr[k];
+    if(_factor_coeffs == NULL) {
+      for(std::size_t i=0; i < nfactors; i++) {
+        _factor_creps[i]->adjoint_acton(state,&temp_state);
+        for(INT k=0; k<_dim; k++)
+          out_state->_dataptr[k] += temp_state._dataptr[k];
+      }
+    } else {
+      for(std::size_t i=0; i < nfactors; i++) {
+        _factor_creps[i]->adjoint_acton(state,&temp_state);
+        for(INT k=0; k<_dim; k++)
+          out_state->_dataptr[k] += _factor_coeffs[i] * temp_state._dataptr[k];
+      }
     }
     DEBUG(out_state->print("OUTPUT"));
     return out_state;

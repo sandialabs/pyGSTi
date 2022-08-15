@@ -24,6 +24,9 @@ class StaticState(_DenseState, _NoErrorGeneratorInterface):
         a 1D numpy array representing the state.  The
         shape of this array sets the dimension of the state.
 
+    basis : Basis or str
+        The basis that `vec` is in.
+
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
@@ -33,8 +36,8 @@ class StaticState(_DenseState, _NoErrorGeneratorInterface):
         with the appropriate number of qubits is used.
     """
 
-    def __init__(self, vec, evotype="default", state_space=None):
-        _DenseState.__init__(self, vec, evotype, state_space)
+    def __init__(self, vec, basis=None, evotype="default", state_space=None):
+        _DenseState.__init__(self, vec, basis, evotype, state_space)
 
     def _is_similar(self, other, rtol, atol):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has

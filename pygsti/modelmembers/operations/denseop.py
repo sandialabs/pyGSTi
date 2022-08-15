@@ -17,11 +17,13 @@ import numpy as _np
 import scipy.sparse as _sps
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.operations.krausop import KrausOperatorInterface as _KrausOperatorInterface
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.tools import basistools as _bt
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools import jamiolkowski as _jt
 from pygsti.tools import optools as _ot
 
 
@@ -251,7 +253,7 @@ class DenseOperatorInterface(object):
     def __complex__(self): return complex(self._ptr)
 
 
-class DenseOperator(DenseOperatorInterface, _LinearOperator):
+class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOperator):
     """
     TODO: update docstring
     An operator that behaves like a dense super-operator matrix.
@@ -262,6 +264,11 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
     ----------
     mx : numpy.ndarray
         The operation as a dense process matrix.
+
+    basis : Basis or {'pp','gm','std'} or None
+        The basis used to construct the Hilbert-Schmidt space representation
+        of this state as a super-operator.  If None, certain functionality,
+        such as access to Kraus operators, will be unavailable.
 
     evotype : Evotype or str
         The evolution type.  The special value `"default"` is equivalent
@@ -277,13 +284,38 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
         Direct access to the underlying process matrix data.
     """
 
-    def __init__(self, mx, evotype, state_space=None):
-        """ Initialize a new LinearOperator """
+    @classmethod
+    def from_kraus_operators(cls, kraus_operators, basis='pp', evotype="default", state_space=None):
+        """
+        Create an operation by specifying its Kraus operators.
+
+        Parameters
+        ----------
+        kraus_operators : list
+            A list of numpy arrays, each of which specifyies a Kraus operator.
+
+        basis : str or Basis, optional
+            The basis in which the created operator's superoperator representation is in.
+
+        evotype : Evotype or str, optional
+            The evolution type.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+        state_space : StateSpace, optional
+            The state space for this operation.  If `None` a default state space
+            with the appropriate number of qubits is used.
+        """
+        std_superop = sum([_ot.unitary_to_std_process_mx(kop) for kop in kraus_operators])
+        superop = _bt.change_basis(std_superop, 'std', basis)
+        return cls(superop, basis, evotype, state_space)
+
+    def __init__(self, mx, basis, evotype, state_space=None):
         mx = _LinearOperator.convert_to_matrix(mx)
         state_space = _statespace.default_space_for_dim(mx.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_dense_superop_rep(mx, state_space)
+        self._basis = _Basis.cast(basis, state_space.dim) if (basis is not None) else None  # for Hilbert-Schmidt space
+        rep = evotype.create_dense_superop_rep(mx, self._basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
         DenseOperatorInterface.__init__(self)
 
@@ -337,6 +369,7 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
         mm_dict['dense_matrix'] = self._encodemx(self.to_dense())
+        mm_dict['basis'] = self._basis.to_nice_serialization() if (self._basis is not None) else None
 
         return mm_dict
 
@@ -344,7 +377,8 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
     def _from_memoized_dict(cls, mm_dict, serial_memo):
         m = cls._decodemx(mm_dict['dense_matrix'])
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
-        return cls(m, mm_dict['evotype'], state_space)
+        basis = _Basis.from_nice_serialization(mm_dict['basis']) if (mm_dict['basis'] is not None) else None
+        return cls(m, basis, mm_dict['evotype'], state_space)
 
     def _oneline_contents(self):
         """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
@@ -356,8 +390,68 @@ class DenseOperator(DenseOperatorInterface, _LinearOperator):
             the same local structure, i.e., not considering parameter values or submembers """
         return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape
 
+    @property
+    def kraus_operators(self):
+        """A list of this operation's Kraus operators as numpy arrays."""
+        # Let I index a basis element, rho be a d x d matrix, and (I // d, I mod d) := (i,ii) be the "2D"
+        #  index corresponding to I.
+        # op(rho) = sum_IJ choi_IJ BI rho BJ_dag = sum_IJ (evecs_IK D_KK evecs_inv_KJ) BI rho BJ_dag
+        # Note: evecs can be and are assumed chosen to be orthonormal, so evecs_inv = evecs^dag
+        # if {Bi} is the set of matrix units then ...
+        #  = sum_IJK(i',j') (evecs_IK D_KK evecs_inv_KJ) unitI_ii' rho_i'j' unitJ_j'j
+        #  = sum_IJK(i',j') (evecs_(Ia,Ib)K D_KK evecs_inv_K(Ja,Jb)) unitI_ii' rho_i'j' unitJ_j'j
+        #   using fact that sum(i') unitI_ii' ==> i'=Ib and delta_i,Ia factor
+        #  = sum_IJK (evecs_(Ia,Ib)K D_KK evecs_inv_K(Ja,Jb)) rho_IbJa * delta_i,Ia, delta_j,Jb
+        #  = sum_K D_KK [ sum_(Ib,Ja) evector[K]_(i,Ib) rho_IbJa dual_evector[K]_(Ja,j) ]
+        #   -> let reshaped K-th evector be called O_K and dual O_K^dag
+        #  = sum_K D_KK O_K rho O_K^dag
+        assert(self._basis is not None), "Kraus operator functionality requires specifying a superoperator basis"
+        superop_mx = self.to_dense('HilbertSchmidt'); d = int(_np.round(_np.sqrt(superop_mx.shape[0])))
+        std_basis = _Basis.cast('std', superop_mx.shape[0])
+        choi_mx = _jt.jamiolkowski_iso(superop_mx, self._basis, std_basis) * d  # see NOTE below
+        # NOTE: multiply by `d` (density mx dimension) to un-normalize choi_mx as given by
+        # jamiolkowski_iso.  Here we *want* the trace of choi_mx to be `d`, not 1, so that
+        # op(rho) = sum_IJ choi_IJ BI rho BJ_dag is true.
 
-class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
+        #CHECK 1 (to unit test?) REMOVE
+        #tmp_std = _bt.change_basis(superop_mx, self._basis, 'std')
+        #B = _bt.basis_matrices('std', superop_mx.shape[0])
+        #check_superop = sum([ choi_mx[i,j] * _np.kron(B[i], B[j].T) for i in range(d*d) for j in range(d*d)])
+        #assert(_np.allclose(check_superop, tmp_std))
+
+        evals, evecs = _np.linalg.eig(choi_mx)
+        #assert(_np.allclose(evecs @ _np.diag(evals) @ (evecs.conjugate().T), choi_mx))
+        TOL = 1e-7
+        if any([ev <= -TOL for ev in evals]):
+            raise ValueError("Cannot compute Kraus decomposition of non-positive-definite superoperator!")
+        kraus_ops = [evecs[:, i].reshape(d, d) * _np.sqrt(ev) for i, ev in enumerate(evals) if abs(ev) > TOL]
+
+        #CHECK 2 (to unit test?) REMOVE
+        #std_superop = sum([_ot.unitary_to_std_process_mx(kop) for kop in kraus_ops])
+        #assert(_np.allclose(std_superop, tmp_std))
+
+        return kraus_ops
+
+    def set_kraus_operators(self, kraus_operators):
+        """
+        Set the parameters of this operation by specifying its Kraus operators.
+
+        Parameters
+        ----------
+        kraus_operators : list
+            A list of numpy arrays, each of which specifies a Kraus operator.
+
+        Returns
+        -------
+        None
+        """
+        assert(self._basis is not None), "Kraus operator functionality requires specifying a superoperator basis"
+        std_superop = sum([_ot.unitary_to_std_process_mx(kop) for kop in kraus_operators])
+        superop = _bt.change_basis(std_superop, 'std', self._basis)
+        self.set_dense(superop)  # this may fail if derived class doesn't allow it
+
+
+class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOperator):
     """
     TODO: update docstring
     An operator that behaves like a dense (unitary) operator matrix.
@@ -388,6 +482,31 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
     """
 
     @classmethod
+    def from_kraus_operators(cls, kraus_operators, basis='pp', evotype="default", state_space=None):
+        """
+        Create an operation by specifying its Kraus operators.
+
+        Parameters
+        ----------
+        kraus_operators : list
+            A list of numpy arrays, each of which specifyies a Kraus operator.
+
+        basis : str or Basis, optional
+            The basis in which the created operator's superoperator representation is in.
+
+        evotype : Evotype or str, optional
+            The evolution type.  The special value `"default"` is equivalent
+            to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
+
+        state_space : StateSpace, optional
+            The state space for this operation.  If `None` a default state space
+            with the appropriate number of qubits is used.
+        """
+        assert(len(kraus_operators) == 1), "Length of `kraus_operators` must == 1 for a unitary channel!"
+        unitary_op = kraus_operators[0]
+        return cls(unitary_op, basis, evotype, state_space)
+
+    @classmethod
     def quick_init(cls, unitary_mx, superop_mx, basis, evotype, state_space):
         # mx must be a numpy array for a unitary operator
         # state_space as StateSpace
@@ -399,7 +518,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
             self._reptype = 'unitary'
             self._unitary = None
         except Exception:
-            rep = evotype.create_dense_superop_rep(superop_mx, state_space)
+            rep = evotype.create_dense_superop_rep(superop_mx, basis, state_space)
             self._reptype = 'superop'
             self._unitary = unitary_mx
 
@@ -419,6 +538,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         #Try to create a dense unitary rep.  If this fails, see if a dense superop rep
         # can be created, as this type of rep can also hold arbitrary unitary ops.
         try:
+            mx = mx.astype('complex', casting='safe', copy=False)  # copy only when necessary
             rep = evotype.create_dense_unitary_rep(mx, basis, state_space)
             self._reptype = 'unitary'
             self._unitary = None
@@ -428,7 +548,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
                 superop_mx = mx.real  # used as a convenience case that really shouldn't be used
             else:
                 superop_mx = _ot.unitary_to_superop(mx, basis)
-            rep = evotype.create_dense_superop_rep(superop_mx, state_space)
+            rep = evotype.create_dense_superop_rep(superop_mx, basis, state_space)
             self._reptype = 'superop'
             self._unitary = mx
         self._basis = basis
@@ -512,3 +632,25 @@ class DenseUnitaryOperator(DenseOperatorInterface, _LinearOperator):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
             the same local structure, i.e., not considering parameter values or submembers """
         return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape
+
+    @property
+    def kraus_operators(self):
+        """A list of this operation's Kraus operators as numpy arrays."""
+        return [self.to_dense('Hilbert')]
+
+    def set_kraus_operators(self, kraus_operators):
+        """
+        Set the parameters of this operation by specifying its Kraus operators.
+
+        Parameters
+        ----------
+        kraus_operators : list
+            A list of numpy arrays, each of which specifies a Kraus operator.
+
+        Returns
+        -------
+        None
+        """
+        assert(len(kraus_operators) == 1), "Length of `kraus_operators` must == 1 for a unitary channel!"
+        self.set_dense(kraus_operators[0])
+

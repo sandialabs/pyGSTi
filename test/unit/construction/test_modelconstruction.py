@@ -129,7 +129,8 @@ class ModelConstructionTester(BaseCase):
         mdl = mc.create_crosstalk_free_model(
             pspec,
             ensure_composed_gates=True,
-            independent_gates=False
+            independent_gates=False,
+            independent_spam=False
         )
         assert(set(mdl.operation_blks['gates'].keys()) == set(["Gi", "Gx", "Gy", "Gcnot"]))
         assert(set(mdl.operation_blks['layers'].keys()) == set(
@@ -170,7 +171,7 @@ class ModelConstructionTester(BaseCase):
             lindblad_error_coeffs={
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
             },
-            ensure_composed_gates=False, independent_gates=True,
+            ensure_composed_gates=False, independent_gates=True, independent_spam=True,
             ideal_spam_type="computational")
 
         self.assertEqual(cfmdl.num_params, 17)
@@ -183,8 +184,8 @@ class ModelConstructionTester(BaseCase):
             lindblad_error_coeffs={
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
              },
-            ensure_composed_gates=True, independent_gates=False)
-        
+            ensure_composed_gates=True, independent_gates=False, independent_spam=False)
+
         self.assertEqual(cfmdl2.num_params, 9)
 
         # Same as above but add ('Gx','qb0') to test giving qubit-specific error rates
@@ -195,7 +196,7 @@ class ModelConstructionTester(BaseCase):
             lindblad_error_coeffs={
                 'Gcnot': {('H', 'ZZ'): 0.01, ('S', 'IX'): 0.01},
              },
-            ensure_composed_gates=True, independent_gates=False)
+            ensure_composed_gates=True, independent_gates=False, independent_spam=False)
 
         self.assertEqual(cfmdl3.num_params, 10)
 
@@ -236,7 +237,8 @@ class ModelConstructionTester(BaseCase):
 
         mdl_prep1 = mc.create_crosstalk_free_model(
             pspec, depolarization_strengths={'Gi': 0.1, 'prep': 0.1},
-            depolarization_parameterization='depolarize'
+            depolarization_parameterization='depolarize',
+            independent_spam=False
         )
         rho0 = mdl_prep1.prep_blks['layers']['rho0']
         self.assertTrue(isinstance(rho0, pygsti.modelmembers.states.ComposedState))
@@ -245,6 +247,7 @@ class ModelConstructionTester(BaseCase):
         mdl_prep2 = mc.create_crosstalk_free_model(
             pspec, depolarization_strengths={'Gi': 0.1, 'prep': 0.1},
             depolarization_parameterization='stochastic',
+            independent_spam=False
         )
         rho0 = mdl_prep2.prep_blks['layers']['rho0']
         self.assertTrue(isinstance(rho0, pygsti.modelmembers.states.ComposedState))
@@ -253,6 +256,7 @@ class ModelConstructionTester(BaseCase):
         mdl_povm1 = mc.create_crosstalk_free_model(
             pspec, depolarization_strengths={'Gi': 0.1, 'povm': 0.1},
             depolarization_parameterization='depolarize',
+            independent_spam=False
         )
         Mdefault = mdl_povm1.povm_blks['layers']['Mdefault']
         self.assertTrue(isinstance(Mdefault, pygsti.modelmembers.povms.ComposedPOVM))
@@ -261,6 +265,7 @@ class ModelConstructionTester(BaseCase):
         mdl_povm2 = mc.create_crosstalk_free_model(
             pspec, depolarization_strengths={'Gi': 0.1, 'povm': 0.1},
             depolarization_parameterization='stochastic',
+            independent_spam=False
         )
         Mdefault = mdl_povm2.povm_blks['layers']['Mdefault']
         self.assertTrue(isinstance(Mdefault, pygsti.modelmembers.povms.ComposedPOVM))
@@ -273,7 +278,8 @@ class ModelConstructionTester(BaseCase):
         # Test stochastic
         mdl_sto1 = mc.create_crosstalk_free_model(
             pspec, stochastic_error_probs={'Gi': (0.1, 0.1, 0.1)},
-            ideal_spam_type="tensor product static"
+            ideal_spam_type="tensor product static",
+            independent_spam=False
         )
         Gi_op = mdl_sto1.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
@@ -284,7 +290,8 @@ class ModelConstructionTester(BaseCase):
         # Use LindbladOp with "cptp", "diagonal" param
         mdl_sto3 = mc.create_crosstalk_free_model(
             pspec, stochastic_error_probs={'Gi': (0.1, 0.1, 0.1)},
-            stochastic_parameterization='lindblad'
+            stochastic_parameterization='lindblad',
+            independent_spam=False
         )
         Gi_op = mdl_sto3.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
@@ -292,7 +299,8 @@ class ModelConstructionTester(BaseCase):
 
         mdl_prep1 = mc.create_crosstalk_free_model(
             pspec, stochastic_error_probs={'Gi': (0.1, 0.1, 0.1), 'prep': (0.01,)*3},
-            stochastic_parameterization='stochastic'
+            stochastic_parameterization='stochastic',
+            independent_spam=False
         )
         rho0 = mdl_prep1.prep_blks['layers']['rho0']
         self.assertTrue(isinstance(rho0, pygsti.modelmembers.states.ComposedState))
@@ -301,6 +309,7 @@ class ModelConstructionTester(BaseCase):
         mdl_povm1 = mc.create_crosstalk_free_model(
             pspec, stochastic_error_probs={'Gi': (0.1,)*3, 'povm': (0.01,)*3},
             stochastic_parameterization='stochastic',
+            independent_spam=False
         )
         Mdefault = mdl_povm1.povm_blks['layers']['Mdefault']
         self.assertTrue(isinstance(Mdefault, pygsti.modelmembers.povms.ComposedPOVM))
@@ -313,7 +322,8 @@ class ModelConstructionTester(BaseCase):
         # Test Lindblad
         mdl_lb1 = mc.create_crosstalk_free_model(
             pspec, lindblad_error_coeffs={'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1}},
-            ideal_spam_type="tensor product static"
+            ideal_spam_type="tensor product static",
+            independent_spam=False
         )
         Gi_op = mdl_lb1.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
@@ -323,7 +333,8 @@ class ModelConstructionTester(BaseCase):
         # Test param passthrough
         mdl_lb2 = mc.create_crosstalk_free_model(
             pspec, lindblad_error_coeffs={'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1}},
-            lindblad_parameterization='H+S'
+            lindblad_parameterization='H+S',
+            independent_spam=False
         )
         Gi_op = mdl_lb2.operation_blks['gates']['Gi']
         self.assertTrue(isinstance(Gi_op, op.ComposedOp))
@@ -334,7 +345,7 @@ class ModelConstructionTester(BaseCase):
             pspec, lindblad_error_coeffs={
                 'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1},
                 'prep': {('H', 'Y'): 0.01}},
-            ideal_spam_type='tensor product static'
+            ideal_spam_type='tensor product static',
         )
         rho0 = mdl_prep1.prep_blks['layers']['rho0']
         self.assertTrue(isinstance(rho0, pygsti.modelmembers.states.TensorProductState))
@@ -344,7 +355,7 @@ class ModelConstructionTester(BaseCase):
             pspec, lindblad_error_coeffs={
                 'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1},
                 'povm': {('H', 'Y'): 0.01}},
-            ideal_spam_type='tensor product static'
+            ideal_spam_type='tensor product static',
         )
         Mdefault = mdl_povm1.povm_blks['layers']['Mdefault']
         self.assertTrue(isinstance(Mdefault, pygsti.modelmembers.povms.TensorProductPOVM))
@@ -355,7 +366,8 @@ class ModelConstructionTester(BaseCase):
             pspec, lindblad_error_coeffs={
                 'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1},
                 'prep': {('H', 'Y'): 0.01}},
-            ideal_spam_type="computational"
+            ideal_spam_type="computational",
+            independent_spam=False
         )
         rho0 = mdl_prep2.prep_blks['layers']['rho0']
         self.assertTrue(isinstance(rho0, pygsti.modelmembers.states.ComposedState))
@@ -365,7 +377,8 @@ class ModelConstructionTester(BaseCase):
             pspec, lindblad_error_coeffs={
                 'Gi': {('H', 'X'): 0.1, ('S', 'Y'): 0.1},
                 'povm': {('H', 'Y'): 0.01}},
-            ideal_spam_type="computational"
+            ideal_spam_type="computational",
+            independent_spam=False
         )
         Mdefault = mdl_povm2.povm_blks['layers']['Mdefault']
         self.assertTrue(isinstance(Mdefault, pygsti.modelmembers.povms.ComposedPOVM))
@@ -415,7 +428,8 @@ class ModelConstructionTester(BaseCase):
                                     [0,   1,   0,   0],
                                     [0,   0,   c,  -b],
                                     [0,   0,   b,   c]],'d')
-                return pygsti.modelmembers.operations.StaticArbitraryOp(superop, self.evotype, self.state_space)
+                return pygsti.modelmembers.operations.StaticArbitraryOp(superop, evotype=self.evotype,
+                                                                        state_space=self.state_space)
 
         xrot_fact = XRotationOpFactory()
 

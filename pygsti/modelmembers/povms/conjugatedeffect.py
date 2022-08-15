@@ -147,6 +147,11 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
         self.init_gpindices()  # initialize our gpindices based on sub-members
 
     @property
+    def _basis(self):
+        # UNSPECIFIED BASIS -- rename this as needed when setting up std rep attribute
+        return self.state._basis  # try to access contained state's basis
+
+    @property
     def parameter_labels(self):
         """
         An array of labels (usually strings) describing this model member's parameters.

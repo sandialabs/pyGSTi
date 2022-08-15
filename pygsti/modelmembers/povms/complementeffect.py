@@ -46,8 +46,15 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
     def __init__(self, identity, other_effects):
         evotype = other_effects[0]._evotype
         state_space = other_effects[0].state_space
-        self.identity = _FullState(
-            _State._to_vector(identity), evotype, state_space)  # so easy to transform or depolarize by parent POVM
+
+        # UNSPECIFIED BASIS -- should be able to use _rep.basis without guarding once we get std attribute setup
+        try:  # get a basis for the below identity state if possible, otherwise try to continue without one
+            id_basis = other_effects[0]._rep.basis
+        except AttributeError:
+            id_basis = None
+
+        self.identity = _FullState(_State._to_vector(identity), id_basis, evotype, state_space)
+        # an effect so easy to transform or depolarize by parent POVM (need basis in FUTURE?)
 
         self.other_effects = other_effects
         #Note: we assume that our parent will do the following:

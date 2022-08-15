@@ -36,7 +36,7 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
             return mx  # no embedding needed
         else:
             dummy_op = _EmbeddedOp(state_space, target_labels,
-                                   _StaticArbitraryOp(_np.identity(mx.shape[0], 'd'), 'densitymx_slow'))
+                                   _StaticArbitraryOp(_np.identity(mx.shape[0], 'd'), None, 'densitymx_slow'))
             embeddedOp = _sps.identity(state_space.dim, mx.dtype, format='lil')
 
             #fill in embedded_op contributions (always overwrites the diagonal
@@ -165,7 +165,7 @@ def first_order_gauge_action_matrix_for_prep(prep_superket_vec, target_sslbls, m
             return mx  # no embedding needed
         else:
             dummy_op = _EmbeddedOp(state_space, target_labels,
-                                   _StaticArbitraryOp(_np.identity(mx.shape[0], 'd'), 'densitymx_slow'))
+                                   _StaticArbitraryOp(_np.identity(mx.shape[0], 'd'), None, 'densitymx_slow'))
             embeddedOp = _sps.identity(state_space.dim, mx.dtype, format='lil')
             scale = _np.sqrt(4**len(target_labels) / state_space.dim)  # is this correct??
 
@@ -253,7 +253,7 @@ def first_order_gauge_action_matrix_for_povm(povm_superbra_vecs, target_sslbls, 
             return mx  # no embedding needed
         else:
             dummy_op = _EmbeddedOp(state_space, target_labels,
-                                   _StaticArbitraryOp(_np.identity(mx.shape[0], 'd'), 'densitymx_slow'))
+                                   _StaticArbitraryOp(_np.identity(mx.shape[0], 'd'), None, 'densitymx_slow'))
             embeddedOp = _sps.identity(state_space.dim, mx.dtype, format='lil')
             scale = _np.sqrt(4**len(target_labels) / state_space.dim)  # is this correct??
 
