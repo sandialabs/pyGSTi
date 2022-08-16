@@ -1665,6 +1665,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         if max_idle_weight in cache['Idle gatename fidpair lists']:
             printer.log("Getting cached sequences needed for max-weight=%d errors on the idle gate" % max_idle_weight)
             idle_maxwt_gatename_fidpair_lists = cache['Idle gatename fidpair lists'][max_idle_weight]
+            idle_fidpairs = _tile_idle_fidpairs(all_qubit_labels, idle_maxwt_gatename_fidpair_lists, max_idle_weight)
         else:
             #First get "idle germ" sequences since the idle is special
             printer.log("Getting sequences needed for max-weight=%d errors on the idle gate" % max_idle_weight)
@@ -1736,6 +1737,8 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
                                              if processor_spec.gate_num_qudits(gn) <= syntheticIdleWt]
                 if global_idle_lbl is None:
                     gate_names_including_idle.append('{idle}')  # or any recognized-as-idle gate
+                elif global_idle_lbl not in gate_names_including_idle:
+                    gate_names_including_idle.append(global_idle_lbl)
 
                 # Below, we create a model with an idle gate that attempts to mimic the types
                 # of errors on the gates (the synthetic idles will be germ^power circuits). To

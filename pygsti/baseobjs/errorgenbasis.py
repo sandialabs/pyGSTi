@@ -169,7 +169,8 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
                 right_offsets[-1] += 1  # advance past diagonal element
             right_base_it = _itertools.product(*right_factors)
             start_at = _np.dot(right_offsets, placevals)
-            right_it = _itertools.islice(right_base_it, start_at, None)
+            right_it = _itertools.islice(right_base_it, int(start_at), None)
+            # Above: int(.) needed for python 3.6, to convert from np.int64 -> int
             for right_beltup in right_it:
                 ret.append(_GlobalElementaryErrorgenLabel(type_str, (left_bel, ''.join(right_beltup)), support))
         return ret
