@@ -588,12 +588,15 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
             raise ValueError("Must provide either partial_deriv_dagger_deriv or "
                              "(model, partial_germs_list)!")
         else:
-            pDDD_kwargs = {'model': model, 'germs_list': partial_germs_list, 'float_type':float_type}
+            Np= model.num_params
+            combinedDDD=_np.zeros((Np, Np), dtype=float_type)
+            pDDD_kwargs = {'float_type':float_type}
             if eps is not None:
                 pDDD_kwargs['eps'] = eps
-            if germ_lengths is not None:
-                pDDD_kwargs['germ_lengths'] = germ_lengths
-            partial_deriv_dagger_deriv = _compute_bulk_twirled_ddd(**pDDD_kwargs)
+            #use a more memory efficient calculation when generating
+            #twirled ddd from scratch again.
+            for germ in partial_germs_list:
+                combinedDDD += _compute_twirled_ddd(model, germ, **pDDD_kwargs)
 
     if num_nongauge_params is None:
         if model is None:
@@ -603,7 +606,10 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
             num_nongauge_params = reduced_model.num_params - reduced_model.num_gauge_params
 
     # Calculate penalty scores
-    numGerms = partial_deriv_dagger_deriv.shape[0]
+    if partial_deriv_dagger_deriv is None:
+        numGerms= len(partial_germs_list)
+    else:
+        numGerms = partial_deriv_dagger_deriv.shape[0]
     l1Score = l1_penalty * numGerms
     opScore = 0.0
     if op_penalty != 0.0:
@@ -615,8 +621,9 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
                 germ_lengths = _np.array([len(germ)
                                          for germ in partial_germs_list])
         opScore = op_penalty * _np.sum(germ_lengths)
-
-    combinedDDD = _np.sum(partial_deriv_dagger_deriv, axis=0)
+    
+    if partial_deriv_dagger_deriv is not None:
+        combinedDDD = _np.sum(partial_deriv_dagger_deriv, axis=0)
     sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedDDD)))
     observableEigenvals = sortedEigenvals[-num_nongauge_params:]
     N_AC = 0
