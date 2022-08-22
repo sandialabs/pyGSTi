@@ -466,7 +466,7 @@ def _make_jinja_env(static_path, template_dir=None, render_options=None, link_to
         return jinja2.Markup(contents)
 
     @jinja_filter
-    @jinja2.evalcontextfilter
+    @jinja2.pass_eval_context
     def render(eval_ctx, value):
         html = _render_as_html(value, render_options or {}, link_to)
         return jinja2.Markup(html) if eval_ctx.autoescape else html
