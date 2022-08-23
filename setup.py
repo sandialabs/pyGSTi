@@ -44,7 +44,7 @@ extras = {
     'evolutionary_optimization': ['deap'],
     'report_pickling': ['pandas'],
     'report_pdf_figures': ['matplotlib'],
-    'html_reports': ['jinja2'],
+    'html_reports': ['jinja2', 'MarkupSafe'],
     'notebooks': [
         'ipython',
         'notebook'
