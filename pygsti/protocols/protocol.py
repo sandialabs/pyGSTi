@@ -935,9 +935,12 @@ class CircuitListsDesign(ExperimentDesign):
 
     Parameters
     ----------
-    circuit_lists : list
+    circuit_lists : list or PlaquetteGridCircuitStructure
         A list whose elements are themselves lists of :class:`Circuit`
-        objects, specifying the data that needs to be taken.
+        objects, specifying the data that needs to be taken.  Alternatively,
+        a single :class:`PlaquetteGridCircuitStructure` object containing
+        a sequence of circuits lists, each at a different "x" value (usually
+        the maximum circuit depth).
 
     all_circuits_needing_data : list, optional
         A list of all the circuits needing data.  By default, This is just
@@ -999,9 +1002,12 @@ class CircuitListsDesign(ExperimentDesign):
 
         Parameters
         ----------
-        circuit_lists : list
+        circuit_lists : list or PlaquetteGridCircuitStructure
             A list whose elements are themselves lists of :class:`Circuit`
-            objects, specifying the data that needs to be taken.
+            objects, specifying the data that needs to be taken.  Alternatively,
+            a single :class:`PlaquetteGridCircuitStructure` object containing
+            a sequence of circuits lists, each at a different "x" value (usually
+            the maximum circuit depth).
 
         all_circuits_needing_data : list, optional
             A list of all the circuits needing data.  By default, This is just

@@ -90,6 +90,11 @@ class LinearlyParamArbitraryOp(_DenseOperator):
         be raised if the matrix contains any complex or imaginary
         elements.
 
+    basis : Basis or {'pp','gm','std'} or None
+        The basis used to construct the Hilbert-Schmidt space representation
+        of this state as a super-operator.  If None, certain functionality,
+        such as access to Kraus operators, will be unavailable.
+
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
@@ -99,8 +104,8 @@ class LinearlyParamArbitraryOp(_DenseOperator):
         with the appropriate number of qubits is used.
     """
 
-    def __init__(self, base_matrix, parameter_array, parameter_to_base_indices_map,
-                 left_transform=None, right_transform=None, real=False, evotype="default", state_space=None):
+    def __init__(self, base_matrix, parameter_array, parameter_to_base_indices_map, left_transform=None,
+                 right_transform=None, real=False, basis=None, evotype="default", state_space=None):
 
         base_matrix = _np.array(_LinearOperator.convert_to_matrix(base_matrix), 'complex')
         #complex, even if passed all real base matrix
@@ -125,7 +130,7 @@ class LinearlyParamArbitraryOp(_DenseOperator):
         self.enforceReal = real
 
         #Note: dense op reps *always* own their own data so setting writeable flag is OK
-        _DenseOperator.__init__(self, mx, evotype, state_space)
+        _DenseOperator.__init__(self, mx, basis, evotype, state_space)
         self._ptr.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
 

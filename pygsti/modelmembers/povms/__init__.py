@@ -65,14 +65,19 @@ def create_from_pure_vectors(pure_vectors, povm_type, basis='pp', evotype='defau
                 povm = TPPOVM(effects, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
+                from ..operations import LindbladParameterization as _LindbladParameterization
+                lndtype = _LindbladParameterization.cast(typ)
+
                 base_povm = create_from_pure_vectors(pure_vectors, ('computational', 'static pure'),
                                                      basis, evotype, state_space)
 
                 proj_basis = 'PP' if state_space.is_entirely_qubits else basis
-                errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
+                errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, lndtype, proj_basis, basis,
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
-                povm = ComposedPOVM(_ExpErrorgenOp(errorgen), base_povm, mx_basis=basis)
+                EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
+                povm = ComposedPOVM(EffectiveExpErrorgen(errorgen), base_povm, mx_basis=basis)
             else:
                 raise ValueError("Unknown POVM type '%s'!" % str(typ))
 
@@ -106,14 +111,19 @@ def create_from_dmvecs(superket_vectors, povm_type, basis='pp', evotype='default
                 povm = TPPOVM(effects, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
+                from ..operations import LindbladParameterization as _LindbladParameterization
+                lndtype = _LindbladParameterization.cast(typ)
+
                 base_povm = create_from_dmvecs(superket_vectors, ('computational', 'static'),
                                                basis, evotype, state_space)
 
                 proj_basis = 'PP' if state_space.is_entirely_qubits else basis
-                errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
+                errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, lndtype, proj_basis, basis,
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
-                povm = ComposedPOVM(_ExpErrorgenOp(errorgen), base_povm, mx_basis=basis)
+                EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
+                povm = ComposedPOVM(EffectiveExpErrorgen(errorgen), base_povm, mx_basis=basis)
             elif typ in ('computational', 'static pure', 'full pure'):
                 # RESHAPE NOTE: .flatten() added to line below (to convert pure *col* vec -> 1D) to fix unit tests
                 pure_vectors = {k: _ot.dmvec_to_state(_bt.change_basis(superket, basis, 'std')).flatten()
@@ -157,14 +167,19 @@ def create_effect_from_pure_vector(pure_vector, effect_type, basis='pp', evotype
                 ef = ComputationalBasisPOVMEffect.from_pure_vector(pure_vector.flatten())
             elif _ot.is_valid_lindblad_paramtype(typ):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
+                from ..operations import LindbladParameterization as _LindbladParameterization
+                lndtype = _LindbladParameterization.cast(typ)
+
                 static_effect = create_effect_from_pure_vector(
                     pure_vector, ('computational', 'static pure'), basis, evotype, state_space)
 
                 proj_basis = 'PP' if state_space.is_entirely_qubits else basis
-                errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
+                errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, lndtype, proj_basis, basis,
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
-                ef = ComposedPOVMEffect(static_effect, _ExpErrorgenOp(errorgen))
+                EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
+                ef = ComposedPOVMEffect(static_effect, EffectiveExpErrorgen(errorgen))
             else:
                 raise ValueError("Unknown effect type '%s'!" % str(typ))
 
@@ -188,21 +203,26 @@ def create_effect_from_dmvec(superket_vector, effect_type, basis='pp', evotype='
     for typ in effect_type_preferences:
         try:
             if typ == "static":
-                ef = StaticPOVMEffect(superket_vector, evotype, state_space)
+                ef = StaticPOVMEffect(superket_vector, basis, evotype, state_space)
             elif typ == "full":
-                ef = FullPOVMEffect(superket_vector, evotype, state_space)
+                ef = FullPOVMEffect(superket_vector, basis, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
+                from ..operations import LindbladParameterization as _LindbladParameterization
+                lndtype = _LindbladParameterization.cast(typ)
+
                 try:
                     dmvec = _bt.change_basis(superket_vector, basis, 'std')
                     purevec = _ot.dmvec_to_state(dmvec)  # raises error if dmvec does not correspond to a pure state
                     static_effect = StaticPOVMPureEffect(purevec, basis, evotype, state_space)
                 except ValueError:
-                    static_effect = StaticPOVMEffect(superket_vector, evotype, state_space)
+                    static_effect = StaticPOVMEffect(superket_vector, basis, evotype, state_space)
                 proj_basis = 'PP' if state_space.is_entirely_qubits else basis
-                errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis,
+                errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, lndtype, proj_basis,
                                                                   basis, truncate=True, evotype=evotype)
-                ef = ComposedPOVMEffect(static_effect, _ExpErrorgenOp(errorgen))
+                EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
+                ef = ComposedPOVMEffect(static_effect, EffectiveExpErrorgen(errorgen))
             else:
                 # Anything else we try to convert to a pure vector and convert the pure state vector
                 dmvec = _bt.change_basis(superket_vector, basis, 'std')
@@ -246,6 +266,7 @@ def povm_type_from_op_type(op_type):
         'static': 'static',
         'full': 'full',
         'full TP': 'full TP',
+        'full CPTP': 'computational',  # TEMPORARY HACK until we create a legit option here
         'linear': 'full',
     }
 
@@ -339,6 +360,9 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
 
             elif _ot.is_valid_lindblad_paramtype(to_type):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
+                from ..operations import LindbladParameterization as _LindbladParameterization
+                lndtype = _LindbladParameterization.cast(to_type)
 
                 #Construct a static "base" POVM
                 if isinstance(povm, ComputationalBasisPOVM):  # special easy case
@@ -357,9 +381,10 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
                     base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
 
                 proj_basis = 'PP' if povm.state_space.is_entirely_qubits else basis
-                errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, to_type, proj_basis,
+                errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, lndtype, proj_basis,
                                                                   basis, truncate=True, evotype=povm.evotype)
-                return ComposedPOVM(_ExpErrorgenOp(errorgen), base_povm, mx_basis=basis)
+                EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
+                return ComposedPOVM(EffectiveExpErrorgen(errorgen), base_povm, mx_basis=basis)
 
             elif to_type == "static clifford":
                 #Assume `povm` already represents state-vec ops, since otherwise we'd
@@ -435,14 +460,19 @@ def convert_effect(effect, to_type, basis, ideal_effect=None, flatten_structure=
 
             elif _ot.is_valid_lindblad_paramtype(to_type) and (ideal_effect is not None or effect.num_params == 0):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
+                from ..operations import LindbladParameterization as _LindbladParameterization
+                lndtype = _LindbladParameterization.cast(to_type)
+
                 ef = ideal_effect if (ideal_effect is not None) else effect
                 if ef is not effect and not _np.allclose(ef.to_dense(), effect.to_dense()):
                     raise NotImplementedError("Must supply ideal or a static effect to convert to a Lindblad type!")
 
                 proj_basis = 'PP' if effect.state_space.is_entirely_qubits else basis
-                errorgen = _LindbladErrorgen.from_error_generator(effect.state_space.dim, to_type, proj_basis,
+                errorgen = _LindbladErrorgen.from_error_generator(effect.state_space.dim, lndtype, proj_basis,
                                                                   basis, truncate=True, evotype=effect.evotype)
-                return ComposedPOVMEffect(ef, _ExpErrorgenOp(errorgen))
+                EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
+                return ComposedPOVMEffect(ef, EffectiveExpErrorgen(errorgen))
 
             else:
                 min_space = effect.evotype.minimal_space

@@ -43,6 +43,7 @@ def instrument_type_from_op_type(op_type):
         'static': 'static',
         'full': 'full',
         'full TP': 'full TP',
+        'full CPTP': 'full CPTP',
         'full unitary': 'full unitary',
     }
 

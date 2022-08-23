@@ -31,6 +31,7 @@ from pygsti.modelmembers import states as _state
 from pygsti.modelmembers.operations import opfactory as _opfactory
 from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, ExplicitBasis as _ExplicitBasis
+from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.label import Label as _Lbl, CircuitLabel as _CircuitLabel
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
@@ -127,14 +128,16 @@ class CloudNoiseModel(_ImplicitOpModel):
         *generators*, i.e. a map that acts as the exponentiated sum of error
         generators (ordering is irrelevant in this case).
 
-    implicit_idle_mode : {'none', 'add_global', 'pad_1Q'}
+    implicit_idle_mode : {'none', 'add_global', 'pad_1Q', 'only_global'}
         The way idle operations are added implicitly within the created model. `"none"`
         doesn't add any "extra" idle operations when there is a layer that contains some
         gates but not gates on all the qubits.  `"add_global"` adds the global idle operation,
         i.e., the operation for a global idle layer (zero gates - a completely empty layer),
         to every layer that is simulated, using the global idle as a background idle that always
         occurs regardless of the operation.  `"pad_1Q"` applies the 1-qubit idle gate (if one
-        exists) to all idling qubits within a circuit layer.
+        exists) to all idling qubits within a circuit layer.  `"only_global"` uses a global idle
+        operation, if one exists, to simulate the completely empty layer but nothing else, i.e.,
+        this idle operation is *not* added to other layers as in `"add_global"`.
 
     verbosity : int, optional
         An integer >= 0 dictating how must output to send to stdout.
@@ -168,7 +171,8 @@ class CloudNoiseModel(_ImplicitOpModel):
                 assert(gate.num_params == 0), "Only *static* ideal factories are allowed in `gatedict`!"
                 mm_gatedict[key] = gate
             else:  # presumably a numpy array or something like it:
-                mm_gatedict[key] = _op.StaticArbitraryOp(gate, evotype, state_space=None)  # use default state space
+                mm_gatedict[key] = _op.StaticArbitraryOp(gate, basis=None, evotype=evotype,
+                                                         state_space=None)  # use default state space
             assert(mm_gatedict[key]._evotype == evotype), \
                 ("Custom gate object supplied in `gatedict` for key %s has evotype %s (!= expected %s)"
                  % (str(key), str(mm_gatedict[key]._evotype), str(evotype)))
@@ -180,15 +184,15 @@ class CloudNoiseModel(_ImplicitOpModel):
         idle_names = self.processor_spec.idle_gate_names
         global_idle_name = self.processor_spec.global_idle_gate_name
 
-        # Set noisy_global_idle_name == global_idle_name if the global idle gate isn't the perfect identity
+        # Set noisy_global_idle_layer = pspec.global_idle_layer_label if the global idle gate isn't the perfect identity
         #  and if we're generating cloudnoise members (if we're not then layer rules could encouter a key error
-        #  if we let noisy_global_idle_name be non-None).
+        #  if we let noisy_global_idle_layer be non-None).
         global_idle_gate = mm_gatedict.get(global_idle_name, None)
         if (global_idle_gate is not None) and (build_cloudnoise_fn is not None) \
            and (build_cloudnoise_fn(self.processor_spec.global_idle_layer_label) is not None):
-            noisy_global_idle_name = global_idle_name
+            noisy_global_idle_layer = self.processor_spec.global_idle_layer_label
         else:
-            noisy_global_idle_name = None
+            noisy_global_idle_layer = None
 
         singleq_idle_layer_labels = {}
         for idle_name in idle_names:
@@ -202,7 +206,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         #    "Only global idle operations are allowed in a CloudNoiseModel!"
 
         layer_rules = CloudNoiseLayerRules(errcomp_type, qudit_labels, implicit_idle_mode, singleq_idle_layer_labels,
-                                           noisy_global_idle_name)
+                                           noisy_global_idle_layer)
         super(CloudNoiseModel, self).__init__(state_space, layer_rules, "pp", simulator=simulator, evotype=evotype)
 
         flags = {'auto_embed': False, 'match_parent_statespace': False,
@@ -371,6 +375,39 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         return mdl
 
+    def _op_decomposition(self, op_label):
+        """Returns the target and error-generator-containing error map parts of the operation for `op_label` """
+        return self.operation_blks['layers'][op_label], self.operation_blks['cloudnoise'][op_label]
+
+    def errorgen_coefficients(self, normalized_elem_gens=True):
+        """TODO: docstring - returns a nested dict containing all the error generator coefficients for all
+           the operations in this model. """
+        if not normalized_elem_gens:
+            def rescale(coeffs):
+                """ HACK: rescales errorgen coefficients for normalized-Pauli-basis elementary error gens
+                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens.  This
+                         is only needed in the Hamiltonian case, as the non-ham "elementary" gen has a
+                         factor of d2 baked into it.
+                """
+                d2 = _np.sqrt(self.dim); d = _np.sqrt(d2)
+                return {lbl: (val / d if lbl.errorgen_type == 'H' else val) for lbl, val in coeffs.items()}
+
+            op_coeffs = {op_label: rescale(self.operation_blks['cloudnoise'][op_label].errorgen_coefficients())
+                         for op_label in self.operation_blks['layers']}
+            op_coeffs.update({prep_label: rescale(self.prep_blks['layers'][prep_label].errorgen_coefficients())
+                              for prep_label in self.prep_blks['layers']})
+            op_coeffs.update({povm_label: rescale(self.povm_blks['layers'][povm_label].errorgen_coefficients())
+                              for povm_label in self.povm_blks['layers']})
+        else:
+            op_coeffs = {op_label: self.operation_blks['cloudnoise'][op_label].errorgen_coefficients()
+                         for op_label in self.operation_blks['layers']}
+            op_coeffs.update({prep_label: self.prep_blks['layers'][prep_label].errorgen_coefficients()
+                              for prep_label in self.prep_blks['layers']})
+            op_coeffs.update({povm_label: self.povm_blks['layers'][povm_label].errorgen_coefficients()
+                              for povm_label in self.povm_blks['layers']})
+
+        return op_coeffs
+
 
 class CloudNoiseLayerRules(_LayerRules):
 
@@ -381,12 +418,16 @@ class CloudNoiseLayerRules(_LayerRules):
         self.implied_global_idle_label = implied_global_idle_label
         self.single_qubit_idle_layer_labels = singleq_idle_layer_labels
         self.implicit_idle_mode = implicit_idle_mode  # how to handle implied idles ("blanks") in circuits
+        self._use_global_idle = False
         self._add_global_idle_to_all_layers = False
         self._add_padded_idle = False
 
         if implicit_idle_mode is None or implicit_idle_mode == "none":  # no noise on idles
             pass  # just use defaults above
+        elif implicit_idle_mode == "only_global" and self.implied_global_idle_label is not None:
+            self._use_global_idle = True  # use global idle only in emtpy (implied global idle) layers
         elif implicit_idle_mode == "add_global" and self.implied_global_idle_label is not None:
+            self._use_global_idle = True  # use global idle in emtpy (implied global idle) layers
             self._add_global_idle_to_all_layers = True    # add global idle to all layers
         elif implicit_idle_mode == "pad_1Q" and self.single_qubit_idle_layer_labels is not None:
             self._add_padded_idle = True
@@ -501,8 +542,9 @@ class CloudNoiseLayerRules(_LayerRules):
             return op
 
         Composed = _op.ComposedOp
-        ExpErrorgen = _op.ExpErrorgenOp
+        ExpErrorgen = _op.ExpErrorgenOp  # FUTURE - allow this to be _op.IdentityPlusErrorgenOp?
         Sum = _op.ComposedErrorgen
+        use_global_idle = self._use_global_idle
         add_global_idle = self._add_global_idle_to_all_layers
         add_padded_idle = self._add_padded_idle
 
@@ -511,7 +553,7 @@ class CloudNoiseLayerRules(_LayerRules):
 
         components = layerlbl.components
         if len(components) == 0:
-            if add_global_idle:
+            if use_global_idle:
                 if self.errcomp_type == "gates":
                     return model.operation_blks['cloudnoise'][self.implied_global_idle_label]  # idle!
                 elif self.errcomp_type == "errorgens":

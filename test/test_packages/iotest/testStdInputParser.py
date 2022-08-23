@@ -780,7 +780,7 @@ BASIS: pp
             pygsti.io.parse_model(temp_files + "/sip_test.gateset4")
         with self.assertRaises(AssertionError):
             pygsti.io.parse_model(temp_files + "/sip_test.gateset5")
-        with self.assertRaises(ValueError):
+        with self.assertRaises((ValueError, np.linalg.LinAlgError)):
             pygsti.io.parse_model(temp_files + "/sip_test.gateset6")
         with self.assertRaises(ValueError):
             pygsti.io.parse_model(temp_files + "/sip_test.gateset7")
