@@ -1839,22 +1839,29 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
             continue  # no need to add a new estimate - we just update the base estimate
             
         elif badfit_typ == 'ddist_wildcard':
-            try:
-                budget = _compute_wildcard_budget_ddist_model(base_estimate,objfn_cache, mdc_objfn, parameters, badfit_options, printer - 1)
-                
-                base_estimate.extra_parameters['ddist_wildcard' + "_unmodeled_error"] = budget
-                base_estimate.extra_parameters['ddist_wildcard' + "_unmodeled_active_constraints"] \
-                    = None
- 
-                base_estimate.extra_parameters["unmodeled_error"] = budget
-                base_estimate.extra_parameters["unmodeled_active_constraints"] = None
-            except NotImplementedError as e:
-                printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
-                new_params['unmodeled_error'] = None
-            #except AssertionError as e:
-            #    printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
-            #    new_params['unmodeled_error'] = None
-            continue  # no need to add a new estimate - we just update the base estimate
+            
+            #If this estimate is the target model then skip adding the diamond distance wildcard.
+            if base_estimate_label != 'Target':
+                try:
+                    budget = _compute_wildcard_budget_ddist_model(base_estimate,objfn_cache, mdc_objfn, parameters, badfit_options, printer - 1)
+                    
+                    base_estimate.extra_parameters['ddist_wildcard' + "_unmodeled_error"] = budget
+                    base_estimate.extra_parameters['ddist_wildcard' + "_unmodeled_active_constraints"] \
+                        = None
+     
+                    base_estimate.extra_parameters["unmodeled_error"] = budget
+                    base_estimate.extra_parameters["unmodeled_active_constraints"] = None
+                except NotImplementedError as e:
+                    printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
+                    new_params['unmodeled_error'] = None
+                #except AssertionError as e:
+                #    printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
+                #    new_params['unmodeled_error'] = None
+                continue  # no need to add a new estimate - we just update the base estimate
+            
+            else:
+                printer.log('Diamond distance wildcard model is incompatible with the Target estimate, skipping this.',3)
+                continue
 
         elif badfit_typ == "do nothing":
             continue  # go to next on-bad-fit directive
