@@ -3470,6 +3470,40 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
             pythonVal['noChangeTrace'] = {'x': noChangeTrace['x'], 'y': noChangeTrace['y']}
         return ReportFigure(go.Figure(data=data, layout=layout),
                             None, pythonVal)
+                            
+class WildcardDiamondDistanceBarPlot(WorkspacePlot):
+    """
+    Stacked bar plot showing the per-gate diamond distance and wildcard
+    budgets for the diamond distance wildcard model. 
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    budget : PrimitiveOpsWildcardBudget
+        Diamond distance wildcard budget to be plotted.
+    """
+
+    def __init__(self, ws, budget, scale=1.0):
+        super(WildcardDiamondDistanceBarPlot, self).__init__(ws, self._create, budget, scale)
+
+    def _create(self, budget, scale):
+        
+        wildcard_values= budget.wildcard_vector
+        ddist_values= budget.ddists
+        gate_labels= list(budget.primOpLookup.keys())
+        
+        x_axis=go.layout.XAxis(dtick=1, tickmode='array', tickvals=list(range(len(gate_labels))), ticktext=[str(label) for label in gate_labels])
+        y_axis= go.layout.YAxis(tickformat='.1e')
+        
+        layout= go.Layout(barmode='stack', xaxis=x_axis, yaxis=y_axis,
+                          width=650*scale, height=350*scale)
+        
+        ddist_bar= go.Bar(y=ddist_values, name= 'Diamond Distance', width=.5)
+        wildcard_bar=go.Bar(y=wildcard_values, name='Wildcard', width=.5)
+    
+        return ReportFigure(go.Figure(data=[ddist_bar, wildcard_bar], layout=layout))
 
 
 class RandomizedBenchmarkingPlot(WorkspacePlot):
