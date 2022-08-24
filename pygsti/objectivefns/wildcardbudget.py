@@ -1028,7 +1028,7 @@ class PrimitiveOpsDiamondDistanceWildcardBudget(PrimitiveOpsWildcardBudget):
             wildcardDict['SPAM'] = ('uniform per-circuit SPAM budget', pos(self.wildcard_vector[self.spam_index]))
             
         #Add an entry for the alpha parameter.
-        wildcardDict['alpha']= ('Diamond distance wildcard model alpha parameter', self.alpha)
+        wildcardDict['alpha']= ('Fraction of diamond distance needed as wildcard error', self.alpha)
             
         return wildcardDict
     
