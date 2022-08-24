@@ -44,7 +44,7 @@ extras = {
     'evolutionary_optimization': ['deap'],
     'report_pickling': ['pandas'],
     'report_pdf_figures': ['matplotlib'],
-    'html_reports': ['jinja2'],
+    'html_reports': ['jinja2', 'MarkupSafe'],
     'notebooks': [
         'ipython',
         'notebook'
@@ -67,13 +67,15 @@ extras = {
         'msgpack',
         'nose',
         'nose-timer',
+        'packaging',
         'pandas',
         'psutil',
         'rednose',
         'zmq',
         'jinja2',
         'seaborn',
-        'ply'
+        'ply',
+        'qibo'
     ]
 }
 
@@ -142,6 +144,7 @@ def setup_with_extensions(extensions=None):
             'pygsti.evotypes.stabilizer',
             'pygsti.evotypes.stabilizer_slow',
             'pygsti.evotypes.chp',
+            'pygsti.evotypes.qibo',
             'pygsti.extras',
             'pygsti.extras.rb',
             'pygsti.extras.rpe',

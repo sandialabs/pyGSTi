@@ -85,9 +85,12 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
     processorspec_filename_or_obj : QuditProcessorSpec or str
         The processor API used by this experiment design.
 
-    circuit_lists : list
-        Per-GST-iteration circuit lists, giving the circuits to run at each GST
-        iteration (typically these correspond to different maximum-lengths).
+    circuit_lists : list or PlaquetteGridCircuitStructure
+        A list whose elements are themselves lists of :class:`Circuit`
+        objects, specifying the data that needs to be taken.  Alternatively,
+        a single :class:`PlaquetteGridCircuitStructure` object containing
+        a sequence of circuits lists, each at a different "x" value (usually
+        the maximum circuit depth).
 
     all_circuits_needing_data : list, optional
         A list of all the circuits in `circuit_lists` typically with duplicates removed.

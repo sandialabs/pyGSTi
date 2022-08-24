@@ -69,7 +69,7 @@ class TensorProductPOVM(_POVM):
                 "All the effect labels for a given factor POVM must be the *same* length!"
             self._factor_lbllens.append(l)
 
-        super(TensorProductPOVM, self).__init__(state_space, evotype, items)
+        super(TensorProductPOVM, self).__init__(state_space, evotype, None, items)
         self.init_gpindices()  # initialize gpindices and subm_rpindices from sub-members
 
     #Note: no to_memoized_dict needed, as ModelMember version does all we need.

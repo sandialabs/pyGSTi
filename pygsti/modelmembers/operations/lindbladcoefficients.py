@@ -155,7 +155,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         mxs = [basis[lbl] for lbl in self._bel_labels]
         nMxs = len(mxs)
         if nMxs == 0:
-            return []  # short circuit - no superops to return
+            return ([], []) if include_1norms else []  # short circuit - no superops to return
 
         d = mxs[0].shape[0]
         d2 = d**2
@@ -483,7 +483,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         for eeg_lbl, linear_combo in eeg_indices.items():
             val = _np.sum([coeff * flat_data[index] for coeff, index in linear_combo])
-            elementary_errorgens[eeg_lbl] = _np.asscalar(_np.real_if_close(val))
+            elementary_errorgens[eeg_lbl] = _np.real_if_close(val).item()  # item() -> scalar
             #set_basis_el(lbl, basis[lbl])  # REMOVE
 
         return elementary_errorgens
@@ -912,13 +912,13 @@ class LindbladCoefficientBlock(_NicelySerializable):
             params = v.reshape((num_bels, num_bels))
             cache_mx = self._cache_mx
             dcache_mx = _np.zeros((nP, num_bels, num_bels), 'complex')
+            stride = num_bels
 
             if self._param_mode == "cholesky":
                 #  params is an array of length (num_bels)*(num_bels) that
                 #  encodes a lower-triangular matrix "cache_mx" via:
                 #  cache_mx[i,i] = params[i,i]
                 #  cache_mx[i,j] = params[i,j] + 1j * params[j,i] (i > j)
-                stride = num_bels
                 for i in range(num_bels):
                     cache_mx[i, i] = params[i, i]
                     dcache_mx[i * stride + i, i, i] = 1.0
@@ -945,7 +945,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
             elif self._param_mode == "elements":  # params mx stores block_data (hermitian) directly
                 # parameter_values holds block_data real and imaginary parts directly
-                block_data_deriv = _np.zeros((num_bels, num_bels, nP), 'd')
+                block_data_deriv = _np.zeros((num_bels, num_bels, nP), 'complex')
 
                 for i in range(num_bels):
                     block_data_deriv[i, i, i * stride + i] = 1.0
@@ -974,7 +974,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
         # Note: ordering in eeg_indices matches that of self.elementary_errorgens (as it must for this to be correct)
         for i, (eeg_lbl, linear_combo) in enumerate(eeg_indices.items()):
-            deriv = _np.sum([coeff * blkdata_deriv[index, :] for coeff, index in linear_combo])
+            deriv = _np.sum([coeff * blkdata_deriv[index, :] for coeff, index in linear_combo], axis=0)
             eeg_deriv[i, :] = _np.real_if_close(deriv)
         return eeg_deriv
 

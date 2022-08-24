@@ -93,7 +93,7 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
             normalization_factor = _np.vdot(elem_errgen.toarray().flatten(), primal.toarray().flatten())
         else:
             normalization_factor = _np.vdot(elem_errgen.flatten(), primal.flatten())
-    elem_errgen *= _np.asscalar(_np.real_if_close(1 / normalization_factor))
+    elem_errgen *= _np.real_if_close(1 / normalization_factor).item()  # item() -> scalar
 
     if sparse: elem_errgen = elem_errgen.tocsr()
     return (elem_errgen, normalization_factor) if return_normalization else elem_errgen

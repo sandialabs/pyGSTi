@@ -80,7 +80,8 @@ class ComposedPOVM(_POVM):
         state_space = self.error_map.state_space
 
         if mx_basis is None:
-            if isinstance(errormap, _op.ExpErrorgenOp) and isinstance(errormap.errorgen, _op.LindbladErrorgen):
+            if (isinstance(errormap, (_op.ExpErrorgenOp, _op.IdentityPlusErrorgenOp))
+                and isinstance(errormap.errorgen, _op.LindbladErrorgen)):
                 mx_basis = errormap.errorgen.matrix_basis
             else:
                 raise ValueError("Cannot extract a matrix-basis from `errormap` (type %s)"
@@ -103,7 +104,11 @@ class ComposedPOVM(_POVM):
         self.base_povm = povm
 
         items = []  # init as empty (lazy creation of members)
-        _POVM.__init__(self, state_space, evotype, items)
+        try:
+            rep = evotype.create_composed_povm_rep(self.error_map._rep, self.base_povm._rep, state_space)
+        except AttributeError:
+            rep = None
+        _POVM.__init__(self, state_space, evotype, rep, items)
         self.init_gpindices()  # initialize gpindices and subm_rpindices from sub-members
 
     def to_memoized_dict(self, mmg_memo):

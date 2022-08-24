@@ -12,11 +12,12 @@ The StaticPureState class and supporting functionality.
 
 import numpy as _np
 from pygsti.modelmembers import term as _term
+from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.modelmembers.states.densestate import DensePureState as _DensePureState
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 
-class StaticPureState(_DensePureState):
+class StaticPureState(_DensePureState, _NoErrorGeneratorInterface):
     """
     A pure state vector that is completely fixed, or "static" (i.e. that posesses no parameters).
 
