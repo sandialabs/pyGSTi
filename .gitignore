@@ -113,3 +113,5 @@ scripts/profiling/data
 ############################
 local
 pygsti/_version.py
+timecmd.bat
+*.ipynb
