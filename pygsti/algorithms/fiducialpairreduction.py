@@ -468,7 +468,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                 
                     #now do a seeded run for each of the candidate solutions returned in the initial run:
                     #for these internal runs just return a single solution. 
-                    reducedPairlist, bestFirstEval = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
+                    reducedPairlist, _ = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
                                                                             gsGerm, 1, mem_limit,
                                                                             printer, search_mode, seed, n_random,
                                                                             min_iterations, base_loweig_tol,
@@ -479,9 +479,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                 
                 #debugging:
                 print('Finished resampling from returned solutions to search for smaller sets.')
-                
-
-                
+                    
                 #At the very worst we should find that the updated solutions are the same length as the original candidate we seeded with
                 #(in fact, it would just return the seed in that case). So we should be able to just check for which of the lists of fiducial pairs is shortest.
                 solution_lengths= [len(fid_pair_list) for fid_pair_list in updated_solns]
@@ -493,10 +491,6 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             else:
                 #take the first entry of the candidate solution list if there is more than one.
                 goodPairList= list(candidate_solution_list.values())[0]
-                bestFirstEval=bestFirstEval[0]
-            
-            #print some output about the minimum eigenvalue acheived.
-            print('Minimum Eigenvalue Achieved: ', bestFirstEval)
             
             try:
                 assert(goodPairList is not None)
@@ -1220,27 +1214,13 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                         bestPairs[spectrum[imin]]= pairList
                     else:
                         if type_soln_returned=='best':
-                            #if the smallest eigenvalue is less than the one we found
+                            #if any of the eigenvalue are less than the one we found
                             #then we'll drop the last element of the bestFirstEval list
                             #append the new element to the list and re-sort the values.
-                            if  bestFirstEval[-1] < spectrum[imin]:
+                            if any([eigval<spectrum[imin] for eigval in bestFirstEval]):
                                 #need to remove the entry corresponding to the smallest eigenvalue from the dictionary
                                 #of fiducial pair sets and from the list of eigenvalues.
-                                try:
-                                    bestPairs.pop(bestFirstEval[-1])
-                                except KeyError as err:
-                                    print("trying to drop the element from bestPairs with key: ", bestFirstEval[-1])
-                                    print("current keys in this dictionary: ", bestPairs.keys())
-                                    
-                                    #This seems to be happening when there are multiple entries with virtually
-                                    #identical values for the keys. 
-                                    
-                                    #HACK
-                                    #get the key that is closest to bestFirstEval[-1] and pop that, no idea why 
-                                    #we're getting this tiny change in the floating point value when making it a key.
-                                    closest_index = _np.argmin(_np.fromiter(bestPairs.keys(), dtype=_np.double)-bestFirstEval[-1])
-                                    bestPairs.pop(bestFirstEval[closest_index])
-                                    #raise err
+                                bestPairs.pop(bestFirstEval[-1])
                                 bestFirstEval.pop()
                                 
                                 #add the new eigenvalue to the list and re-sort it.
