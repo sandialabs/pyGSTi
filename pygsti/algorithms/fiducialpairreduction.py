@@ -801,7 +801,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
                                                                 
             
             #This should now return a dictionary with a single entry. pull that entry out.
-            goodPairList= list(goodPairlist.values())[0]
+            goodPairList= list(goodPairList.values())[0]
             
             #debugging
             #print('Current goodPairList: ', goodPairList)
