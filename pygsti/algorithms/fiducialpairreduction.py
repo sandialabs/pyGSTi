@@ -302,7 +302,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
 def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_fiducials,
                                             germs, pre_povm_tuples="first",
                                             search_mode="random", constrain_to_tp=True,
-                                            n_random=100, min_iterations=None, base_loweig_tol= 1e-1, condition_number_tol=10,
+                                            n_random=100, min_iterations=None, base_loweig_tol= 1e-1,
                                             seed=None ,verbosity=0, num_soln_returned=1, type_soln_returned='best', retry_for_smaller=True,
                                             mem_limit=None):
     """
@@ -466,8 +466,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             candidate_solution_list, bestFirstEval = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
                                                                     gsGerm, 1, mem_limit,
                                                                     printer, search_mode, seed, n_random, dof_per_povm,
-                                                                    min_iterations, base_loweig_tol,
-                                                                    condition_number_tol, candidate_set_seed=None,
+                                                                    min_iterations, base_loweig_tol, candidate_set_seed=None,
                                                                     num_soln_returned=num_soln_returned, type_soln_returned=type_soln_returned)
                                                                    
             
@@ -496,8 +495,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                     reducedPairlist, bestFirstEval = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
                                                                             gsGerm, 1, mem_limit,
                                                                             printer, search_mode, seed, n_random, dof_per_povm,
-                                                                            min_iterations, base_loweig_tol,
-                                                                            condition_number_tol, candidate_set_seed=candidate_solution,
+                                                                            min_iterations, base_loweig_tol, candidate_set_seed=candidate_solution,
                                                                             num_soln_returned= 1, type_soln_returned='best')
                     #This should now return a dictionary with a single entry. Append that entry to a running list which we'll process at the end.
                     updated_solns.append(list(reducedPairlist.values())[0])
@@ -539,7 +537,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
                                                   pre_povm_tuples="first",
                                                   search_mode="random", constrain_to_tp=True,
                                                   trunc_scheme="whole germ powers",
-                                                  n_random=100, min_iterations=None, base_loweig_tol= 1e-1, condition_number_tol=10, seed=None,
+                                                  n_random=100, min_iterations=None, base_loweig_tol= 1e-1, seed=None,
                                                   verbosity=0, mem_limit=None, per_germ_candidate_set=None):
     """
     Finds a per-germ set of fiducial pairs that are amplificationally complete.
@@ -622,12 +620,6 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
         A relative tolerance to apply to candidate fiducial pair sets. 
         Gives the multiplicative reduction in the magnitude of the minimum
         eigenvalue relative to the value for the full fiducial set
-        the user is willing to tolerate.
-    
-    condition_number_tol: float, optional
-        A relative tolerance to apply to candidate fiducial pair sets. 
-        Gives the multiplicative increase in the condition number
-        relative to the value for the full fiducial set
         the user is willing to tolerate.
 
     seed : int, optional
@@ -803,8 +795,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             goodPairList, _ = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
                                                                 gsGerm, power, mem_limit,
                                                                 printer, search_mode, seed, n_random,
-                                                                min_iterations, base_loweig_tol,
-                                                                condition_number_tol, candidate_set_seed,
+                                                                min_iterations, base_loweig_tol, candidate_set_seed,
                                                                 num_soln_returned=1, type_soln_returned='best')
                                                                 
                                                                 
@@ -956,7 +947,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
 # Helper function for per_germ and per_germ_power FPR
 def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
                                  gsGerm, power, mem_limit, printer, search_mode, seed, n_random, dof_per_povm, 
-                                 min_iterations=1, lowest_eigenval_tol=1e-1, condition_number_tol=10,
+                                 min_iterations=1, lowest_eigenval_tol=1e-1,
                                  candidate_set_seed=None, num_soln_returned=1, type_soln_returned='best'):
     #Get dP-matrix for full set of fiducials, where
     # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
@@ -1078,9 +1069,9 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
         size_candidate_set= len(candidate_set_seed)
         for nNeededPairs in range(min_pairs_needed, size_candidate_set+1):
             printer.log("Beginning search for a good set of %d pairs (%.1e pair lists to test)" %
-                        (nNeededPairs, _nCr(nPossiblePairs, nNeededPairs)), 1)
-            printer.log("  Low eigenvalue must be >= %g and condition number < %g relative to the values of the full fiducial set" %
-                        (lowest_eigenval_tol, condition_number_tol),1)
+                        (nNeededPairs, _nCr(nPossiblePairs, nNeededPairs)), 2)
+            printer.log("  Low eigenvalue must be >= %g relative to the values of the full fiducial set" %
+                        (lowest_eigenval_tol),2)
         
             #debugging
             print('Searching for a good set with this many pairs: ', nNeededPairs)
@@ -1129,14 +1120,14 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                 imin = len(spectrum) - gsGerm.num_params
                 
                 
-                condition = spectrum[-1] / spectrum[imin] if (spectrum[imin] > 0) else _np.inf
+                #condition = spectrum[-1] / spectrum[imin] if (spectrum[imin] > 0) else _np.inf
                 
-                if (spectrum[imin] >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set]) and condition <= (condition_number_tol*condition_full_fid_set)):
+                if (spectrum[imin] >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set]): #and condition <= (condition_number_tol*condition_full_fid_set)):
                     
                     #if the list for bestFirstEval is empty or else we haven't hit the number of solutions to return
                     #yet then we'll append the value to the list and sort it regardless of the value. Otherwise
                     #we need to evaluate whether to swap out one of the elements of the list or not.
-                    if len(bestFirstEval)<num_soln_returned:
+                    if len(bestFirstEval) < num_soln_returned:
                         bestFirstEval.append(spectrum[imin])
                         #keep the list sorted in descending order
                         bestFirstEval.sort(reverse=True)
@@ -1196,8 +1187,8 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
         for nNeededPairs in range(min_pairs_needed, nPossiblePairs):
             printer.log("Beginning search for a good set of %d pairs (%d pair lists to test)" %
                         (nNeededPairs, _nCr(nPossiblePairs, nNeededPairs)), 2)
-            printer.log("  Low eigenvalue must be >= %g and condition number < %g relative to the values of the full fiducial set" %
-                        (lowest_eigenval_tol, condition_number_tol))
+            printer.log("  Low eigenvalue must be >= %g relative to the values of the full fiducial set" %
+                        (lowest_eigenval_tol),2)
             
             #debugging
             print('Searching for a good set with this many pairs: ', nNeededPairs)
@@ -1250,9 +1241,9 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                 
                 imin = len(spectrum) - gsGerm.num_params
                 
-                condition = spectrum[-1] / spectrum[imin] if (spectrum[imin] > 0) else _np.inf
+                #condition = spectrum[-1] / spectrum[imin] if (spectrum[imin] > 0) else _np.inf
                 
-                if (spectrum[imin] >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set]) and condition <= (condition_number_tol*condition_full_fid_set)):
+                if (spectrum[imin] >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set]):# and condition <= (condition_number_tol*condition_full_fid_set)):
                     
                     #if the list for bestFirstEval is empty or else we haven't hit the number of solutions to return
                     #yet then we'll append the value to the list and sort it regardless of the value. Otherwise
