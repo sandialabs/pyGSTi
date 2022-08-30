@@ -12,9 +12,9 @@ The StaticState class and supporting functionality.
 
 import numpy as _np
 from pygsti.modelmembers.states.densestate import DenseState as _DenseState
+from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 
-
-class StaticState(_DenseState):
+class StaticState(_DenseState, _NoErrorGeneratorInterface):
     """
     A state vector that is completely fixed, or "static" (i.e. that posesses no parameters).
 
@@ -23,6 +23,9 @@ class StaticState(_DenseState):
     vec : array_like or State
         a 1D numpy array representing the state.  The
         shape of this array sets the dimension of the state.
+
+    basis : Basis or str
+        The basis that `vec` is in.
 
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
@@ -33,8 +36,8 @@ class StaticState(_DenseState):
         with the appropriate number of qubits is used.
     """
 
-    def __init__(self, vec, evotype="default", state_space=None):
-        _DenseState.__init__(self, vec, evotype, state_space)
+    def __init__(self, vec, basis=None, evotype="default", state_space=None):
+        _DenseState.__init__(self, vec, basis, evotype, state_space)
 
     def _is_similar(self, other, rtol, atol):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has

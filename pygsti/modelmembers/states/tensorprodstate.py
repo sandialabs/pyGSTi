@@ -268,7 +268,6 @@ class TensorProductState(_State):
         Construct a matrix whose columns are the derivatives of the state vector
         with respect to a single param.  Thus, each column is of length
         dimension and there is one column per state vector parameter.
-        An empty 2D array in the StaticState case (num_params == 0).
 
         Parameters
         ----------

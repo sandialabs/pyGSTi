@@ -6,6 +6,7 @@ from pygsti.drivers import longsequence as ls
 from pygsti.forwardsims import mapforwardsim
 from pygsti.modelmembers import operations as operation
 from pygsti.models.gaugegroup import UnitaryGaugeGroup
+from pygsti.models.modelconstruction import create_explicit_model
 from . import fixtures as pkg
 from ..util import BaseCase, with_temp_path
 
@@ -78,58 +79,46 @@ class StdPracticeGSTTester(LongSequenceBase):
         self.mdl_guess = self.model.depolarize(op_noise=0.01, spam_noise=0.01)
 
     def test_stdpractice_gst_TP(self):
-        result = ls.run_stdpractice_gst(
-            self.ds, self.pspec, self.fiducials, self.fiducials,
-            self.germs, self.maxLens, modes="full TP",
-            models_to_test={"Test": self.mdl_guess}, comm=None,
-            mem_limit=None, verbosity=5
-        )
+        result = ls.run_stdpractice_gst(self.ds, self.pspec, self.fiducials, self.fiducials, self.germs, self.maxLens,
+                                        modes="full TP", models_to_test={"Test": self.mdl_guess}, comm=None,
+                                        mem_limit=None, verbosity=5)
         # TODO assert correctness
 
     def test_stdpractice_gst_CPTP(self):
-        result = ls.run_stdpractice_gst(
-            self.ds, self.pspec, self.fiducials, self.fiducials,
-            self.germs, self.maxLens, modes="CPTP",
-            models_to_test={"Test": self.mdl_guess}, comm=None,
-            mem_limit=None, verbosity=5
-        )
+        result = ls.run_stdpractice_gst(self.ds, self.pspec, self.fiducials, self.fiducials, self.germs, self.maxLens,
+                                        modes="CPTP", models_to_test={"Test": self.mdl_guess}, comm=None,
+                                        mem_limit=None, verbosity=5)
         # TODO assert correctness
 
     def test_stdpractice_gst_Test(self):
-        result = ls.run_stdpractice_gst(
-            self.ds, self.pspec, self.fiducials, self.fiducials,
-            self.germs, self.maxLens, modes="Test",
-            models_to_test={"Test": self.mdl_guess}, comm=None,
-            mem_limit=None, verbosity=5
-        )
+        result = ls.run_stdpractice_gst(self.ds, self.pspec, self.fiducials, self.fiducials, self.germs, self.maxLens,
+                                        modes="Test", models_to_test={"Test": self.mdl_guess}, comm=None,
+                                        mem_limit=None, verbosity=5)
         # TODO assert correctness
 
     def test_stdpractice_gst_Target(self):
-        result = ls.run_stdpractice_gst(
-            self.ds, self.pspec, self.fiducials, self.fiducials,
-            self.germs, self.maxLens, modes="Target",
-            models_to_test={"Test": self.mdl_guess}, comm=None,
-            mem_limit=None, verbosity=5
-        )
+        result = ls.run_stdpractice_gst(self.ds, self.pspec, self.fiducials, self.fiducials, self.germs, self.maxLens,
+                                        modes="Target", models_to_test={"Test": self.mdl_guess}, comm=None,
+                                        mem_limit=None, verbosity=5)
         # TODO assert correctness
 
     @with_temp_path
     @with_temp_path
     @with_temp_path
     @with_temp_path
-    def test_stdpractice_gst_file_args(self, ds_path, pspec_path, fiducial_path, germ_path):
+    def test_stdpractice_gst_file_args(self, ds_path, model_path, fiducial_path, germ_path):
         import pickle
         #io.write_model(self.model, model_path)
         io.write_dataset(ds_path, self.ds, self.lsgstStrings[-1])
         io.write_circuit_list(fiducial_path, self.fiducials)
         io.write_circuit_list(germ_path, self.germs)
-        with open(pspec_path, 'wb') as f:
-            pickle.dump(self.pspec, f)
+        target_model = create_explicit_model(self.pspec, ideal_gate_type='static')
+        io.write_model(target_model, model_path)
+        #with open(model_path, 'wb') as f:
+        #    pickle.dump(target_model, f)
 
-        result = ls.run_stdpractice_gst(
-            ds_path, pspec_path, fiducial_path, fiducial_path, germ_path,
-            self.maxLens, modes="full TP", comm=None, mem_limit=None, verbosity=5
-        )
+        result = ls.run_stdpractice_gst(ds_path, model_path, fiducial_path, fiducial_path, germ_path, self.maxLens,
+                                        modes="full TP", comm=None, mem_limit=None, verbosity=5)
         # TODO assert correctness
 
     def test_stdpractice_gst_gaugeOptTarget(self):
@@ -138,12 +127,10 @@ class StdPracticeGSTTester(LongSequenceBase):
                 'item_weights': {'gates': 1, 'spam': 0.0001}
             }
         }
-        result = ls.run_stdpractice_gst(
-            self.ds, self.pspec, self.fiducials, self.fiducials,
-            self.germs, self.maxLens, modes="full TP", comm=None,
-            mem_limit=None, verbosity=5, gaugeopt_target=self.mdl_guess,
-            gaugeopt_suite=myGaugeOptSuiteDict
-        )
+        target_model = create_explicit_model(self.pspec, ideal_gate_type='static')
+        result = ls.run_stdpractice_gst(self.ds, target_model, self.fiducials, self.fiducials, self.germs, self.maxLens,
+                                        modes="full TP", gaugeopt_suite=myGaugeOptSuiteDict,
+                                        gaugeopt_target=self.mdl_guess, comm=None, mem_limit=None, verbosity=5)
         # TODO assert correctness
 
     def test_stdpractice_gst_gaugeOptTarget_warns_on_target_override(self):
@@ -154,42 +141,35 @@ class StdPracticeGSTTester(LongSequenceBase):
             }
         }
         with self.assertWarns(Warning):
-            result = ls.run_stdpractice_gst(
-                self.ds, self.pspec, self.fiducials, self.fiducials,
-                self.germs, self.maxLens, modes="full TP", comm=None,
-                mem_limit=None, verbosity=5, gaugeopt_target=self.mdl_guess,
-                gaugeopt_suite=myGaugeOptSuiteDict
-            )
+            target_model = create_explicit_model(self.pspec, ideal_gate_type='static')
+            result = ls.run_stdpractice_gst(self.ds, target_model, self.fiducials, self.fiducials, self.germs,
+                                            self.maxLens, modes="full TP", gaugeopt_suite=myGaugeOptSuiteDict,
+                                            gaugeopt_target=self.mdl_guess, comm=None, mem_limit=None, verbosity=5)
             # TODO assert correctness
 
     def test_stdpractice_gst_advanced_options(self):
-        result = ls.run_stdpractice_gst(
-            self.ds, self.pspec, self.fiducials, self.fiducials,
-            self.germs, self.maxLens, modes="full TP", comm=None,
-            mem_limit=None, verbosity=5,
-            advanced_options={'all': {
+        target_model = create_explicit_model(self.pspec, ideal_gate_type='static')
+        result = ls.run_stdpractice_gst(self.ds, target_model, self.fiducials, self.fiducials, self.germs, self.maxLens,
+                                        modes="full TP", comm=None, mem_limit=None, advanced_options={'all': {
                 'objective': 'chi2',
                 'bad_fit_threshold': -100,  # so we create a robust estimate and convey guage opt to it.
                 'on_bad_fit': ["robust"]
-            }}
-        )
+            }}, verbosity=5)
         # TODO assert correctness
 
     def test_stdpractice_gst_pickle_output(self):
         with BytesIO() as pickle_stream:
-            result = ls.run_stdpractice_gst(
-                self.ds, self.pspec, self.fiducials, self.fiducials,
-                self.germs, self.maxLens, modes="Target", output_pkl=pickle_stream
-            )
+            target_model = create_explicit_model(self.pspec, ideal_gate_type='static')
+            result = ls.run_stdpractice_gst(self.ds, target_model, self.fiducials, self.fiducials, self.germs,
+                                            self.maxLens, modes="Target", output_pkl=pickle_stream)
             self.assertTrue(len(pickle_stream.getvalue()) > 0)
             # TODO assert correctness
 
     def test_stdpractice_gst_raises_on_bad_mode(self):
+        target_model = create_explicit_model(self.pspec, ideal_gate_type='static')
         with self.assertRaises(ValueError):
-            result = ls.run_stdpractice_gst(
-                self.ds, self.pspec, self.fiducials, self.fiducials,
-                self.germs, self.maxLens, modes="Foobar"
-            )
+            result = ls.run_stdpractice_gst(self.ds, target_model, self.fiducials, self.fiducials, self.germs,
+                                            self.maxLens, modes="Foobar")
 
 
 class LongSequenceGSTBase(LongSequenceBase):

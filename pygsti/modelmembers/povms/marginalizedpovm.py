@@ -65,7 +65,7 @@ class MarginalizedPOVM(_POVM):
         if isinstance(all_sslbls, _StateSpace):
             assert(all_sslbls.num_tensor_product_blocks == 1), \
                 "all_sslbls should only have a single tensor product block!"
-            all_sslbls = all_sslbls.tensor_product_block_labels(0)
+            all_sslbls = all_sslbls.sole_tensor_product_block_labels
 
         #now all_sslbls is a tuple of labels, like sslbls_after_marginalizing
         self.sslbls_to_marginalize = all_sslbls
@@ -81,7 +81,8 @@ class MarginalizedPOVM(_POVM):
             else:
                 elements_to_sum[mk] = [k]
         self._elements_to_sum = {k: tuple(v) for k, v in elements_to_sum.items()}  # convert to tuples
-        super(MarginalizedPOVM, self).__init__(self.povm_to_marginalize.state_space, self.povm_to_marginalize.evotype)
+        super(MarginalizedPOVM, self).__init__(self.povm_to_marginalize.state_space, self.povm_to_marginalize.evotype,
+                                               rep=None)  # TODO - make marginalized POVM rep type?
         self.init_gpindices()  # initialize gpindices and subm_rpindices from sub-members
 
     def to_memoized_dict(self, mmg_memo):
@@ -192,7 +193,8 @@ class MarginalizedPOVM(_POVM):
                     effect_vec = e.to_dense()
                 else:
                     effect_vec += e.to_dense()
-            effect = _StaticPOVMEffect(effect_vec, self._evotype)
+            effect = _StaticPOVMEffect(effect_vec, e._basis, self._evotype)
+            # UNSPECIFIED BASIS -- may need to rename e._basis -> e._rep.basis above if that's the std attribute name?
             assert(effect.allocate_gpindices(0, self.parent) == 0)  # functional! (do not remove)
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect

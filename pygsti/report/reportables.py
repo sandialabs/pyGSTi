@@ -1765,7 +1765,7 @@ def errorgen_and_projections(errgen, mx_basis):
     errgen : numpy.ndarray
         The error generator.
 
-    mx_basis : Basis or {'pp', 'gm', 'std'}
+    mx_basis : Basis
         the basis that `errgen` is in.
 
     Returns
@@ -1779,11 +1779,15 @@ def errorgen_and_projections(errgen, mx_basis):
     #egnorm = _np.linalg.norm(errgen.flatten())
     ret['error generator'] = errgen
 
-    #HACK: convert 'pp' => 'PP' here, as that's typically used.  However, other
-    # bases just pass through as before and may have different scalings than earlier
-    # pyGSTi versions because the elementary error generators are scaled differently.
-    elem_errgen_basis = _Basis.cast('PP', mx_basis.dim) \
-        if set(mx_basis.name.split('*')) == set(['pp']) else mx_basis  # aka the "projection basis"
+    if set(mx_basis.name.split('*')) == set(['pp']):
+        #HACK: convert 'pp' => 'PP' here, as that's typically used.  However, other
+        # bases just pass through as before and may have different scalings than earlier
+        # pyGSTi versions because the elementary error generators are scaled differently.
+        elem_errgen_basis = _Basis.cast('PP', mx_basis.dim)  # aka the "projection basis"
+    elif mx_basis.first_element_is_identity:
+        elem_errgen_basis = mx_basis  # aka the "projection basis"
+    else:  # when mx_basis doesn't have identity as its first element,
+        elem_errgen_basis = mx_basis.create_simple_equivalent('gm')  # fall back to Gell-Mann basis
 
     Hproj = _tools.project_errorgen(errgen, 'H', elem_errgen_basis, mx_basis)
     Sproj = _tools.project_errorgen(errgen, 'S', elem_errgen_basis, mx_basis)
@@ -1954,14 +1958,14 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
     Id = _np.identity(model_a.dim, 'd')
     opLabels = [gl for gl, gate in model_b.operations.items() if not _np.allclose(gate, Id)]
     nOperations = len(opLabels)
-    lindbladMxBasis = _Basis.cast(mxBasis, model_a.dim)
-    nonI_lbls = lindbladMxBasis.labels[1:]  # skip [0] == Identity
+    elementary_errgen_basis = _Basis.cast('PP' if model_a.state_space.is_entirely_qubits else mxBasis, model_a.dim)
+    nonI_lbls = elementary_errgen_basis.labels[1:]  # skip [0] == Identity
 
     error_superops = []; ptype_counts = {}  # ; ptype_scaleFctrs = {}
     error_labels = []
 
     for ptype in ("H", "S", "C", "A"):
-        dual_eegs = _tools.elementary_errorgens_dual(model_a.dim, ptype, mxBasis)
+        dual_eegs = _tools.elementary_errorgens_dual(model_a.dim, ptype, elementary_errgen_basis)
         if ptype in ("H", "S"):
             lindbladMxs = [dual_eegs[_LEEL(ptype, (bel,))] for bel in nonI_lbls]
             error_labels.extend(["%s(%s)" % (ptype[0], bel) for bel in nonI_lbls])
@@ -1989,7 +1993,7 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
     def _get_projection_vec(errgen):
         proj = []
         for ptype in ("H", "S", "C", "A"):
-            projections = _tools.project_errorgen(errgen, ptype, mxBasis, mxBasis)
+            projections = _tools.project_errorgen(errgen, ptype, elementary_errgen_basis, mxBasis)
             if ptype in ("H", "S"):
                 proj.extend([projections[_LEEL(ptype, (bel,))] for bel in nonI_lbls])
             else:
@@ -2121,7 +2125,8 @@ def general_decomposition(model_a, model_b):
 
         #hamProjs, hamGens = _tools.std_errorgen_projections(
         #    logG, "hamiltonian", mxBasis, mxBasis, return_generators=True)
-        blk = _LindbladCoefficientBlock('ham', mxBasis)
+        proj_basis = _Basis.cast('PP', model_a.dim) if model_a.state_space.is_entirely_qubits else mxBasis
+        blk = _LindbladCoefficientBlock('ham', proj_basis)
         blk.set_from_errorgen_projections(logG, mxBasis)
         hamProjs = blk.block_data
         #hamGens = blk.create_lindblad_term_superoperators(mxBasis)
@@ -2135,7 +2140,7 @@ def general_decomposition(model_a, model_b):
         # to *twice* this coefficient (e.g. a X(pi/2) rotn is exp( i pi/4 X ) ),
         # thus the factor of 2.0 above.
 
-        basis_mxs = mxBasis.elements
+        basis_mxs = proj_basis.elements
         # REMOVE scalings = [(_np.linalg.norm(hamGens[i]) / _np.linalg.norm(_tools.hamiltonian_to_lindbladian(mx))
         # REMOVE              if _np.linalg.norm(hamGens[i]) > 1e-10 else 0.0)
         # REMOVE             for i, mx in enumerate(basis_mxs)]

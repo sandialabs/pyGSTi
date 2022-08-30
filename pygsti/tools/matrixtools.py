@@ -186,7 +186,7 @@ def nullspace(m, tol=1e-7):
     """
     _, s, vh = _np.linalg.svd(m)
     rank = (s > tol).sum()
-    return vh[rank:].T.copy()
+    return vh[rank:].T.conjugate().copy()
 
 
 def nullspace_qr(m, tol=1e-7):
@@ -456,7 +456,8 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
 
     else:  # sparse case
 
-        from scipy.sparse.linalg.eigen.arpack.arpack import ArpackNoConvergence as _ArpackNoConvergence
+        from scipy.sparse.linalg import ArpackNoConvergence as _ArpackNoConvergence
+        from scipy.sparse.linalg import ArpackError as _ArpackError
         running_indep_cols = initial_independent_cols.copy() \
             if (initial_independent_cols is not None) else _sps.csc_matrix((m.shape[0], 0), dtype=m.dtype)
         num_indep_cols = running_indep_cols.shape[0]
@@ -466,7 +467,7 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
 
             try:
                 lowest_sval = _spsl.svds(trial, k=1, which="SM", return_singular_vectors=False)
-            except _ArpackNoConvergence:
+            except (_ArpackNoConvergence, _ArpackError):
                 lowest_sval = 0  # assume lack of convergence means smallest singular value was too small (?)
 
             if lowest_sval > tol:  # trial fogi dirs still linearly independent (full rank)
@@ -1814,7 +1815,7 @@ def expm_multiply_prep(a, tol=EXPM_DEFAULT_TOL):
     Parameters
     ----------
     a : numpy.ndarray
-        the matrix that will belater exponentiated.
+        the matrix that will be later exponentiated.
 
     tol : float, optional
         Tolerance used to within matrix exponentiation routines.

@@ -30,7 +30,8 @@ class StateUtilTester(BaseCase):
 
         state_space = statespace.default_space_for_dim(4)
         evotype = Evotype.cast('default')
-        rep = evotype.create_dense_state_rep(np.zeros(4, 'd'), state_space)
+        superbasis = None
+        rep = evotype.create_dense_state_rep(np.zeros(4, 'd'), superbasis, state_space)
         raw = states.State(rep, evotype)
 
         T = FullGaugeGroupElement(
@@ -181,7 +182,7 @@ class FullStateTester(MutableDenseStateBase, BaseCase):
     @staticmethod
     def build_vec():
         return states.FullState([1.0 / np.sqrt(2), 0, 0, 1.0 / np.sqrt(2)],
-                                'default', state_space=None)
+                                None, 'default', state_space=None)
 
     def test_raises_on_bad_dimension_2(self):
         with self.assertRaises(ValueError):
@@ -203,12 +204,11 @@ class TPStateTester(MutableDenseStateBase, BaseCase):
 
     @staticmethod
     def build_vec():
-        return states.TPState([1.0 / np.sqrt(2), 0, 0, 1.0 / np.sqrt(2)],
-                              'default', state_space=None)
+        return states.TPState([1.0 / np.sqrt(2), 0, 0, 1.0 / np.sqrt(2)], evotype='default', state_space=None)
 
     def test_raises_on_bad_initial_element(self):
         with self.assertRaises(ValueError):
-            states.TPState([1.0, 0, 0, 0])
+            states.TPState([1.0, 0, 0, 0], 'pp')
             # incorrect initial element for TP!
         with self.assertRaises(ValueError):
             self.vec.set_dense([1.0, 0, 0, 0])
@@ -300,8 +300,9 @@ class ComplementPOVMEffectTester(POVMEffectBase, BaseCase):
         v_id = np.zeros((4, 1), 'd')
         v_id[0] = 1.0 / np.sqrt(2)
         evotype = "default"
-        tppovm = TPPOVM([('0', povms.FullPOVMEffect(v, evotype, state_space=None)),
-                         ('1', povms.FullPOVMEffect(v_id - v, evotype, state_space=None))])
+        basis = None
+        tppovm = TPPOVM([('0', povms.FullPOVMEffect(v, basis, evotype, state_space=None)),
+                         ('1', povms.FullPOVMEffect(v_id - v, basis, evotype, state_space=None))])
         return tppovm['1']  # complement POVM
 
     def test_vector_conversion(self):

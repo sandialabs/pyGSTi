@@ -2534,12 +2534,13 @@ class ProjectionsBoxPlot(WorkspacePlot):
 
         d2 = len(projections) + 1  # number of projections == dim of gate  (+1 b/c identity is not included)
         d = _np.sqrt(d2)  # dim of density matrix
-        nQubits = _np.log2(d)
+        nQubits = _np.log2(d)  # note: 4^nQ = d2
 
-        if not _np.isclose(round(nQubits), nQubits):
-            #Non-integral # of qubits, so just show as a single row
+        if not _np.isclose(round(nQubits), nQubits) and projections.size == d2 - 1:
+            #Non-integral # of qubits, and a single projection axis (H or S, not CA), so just show as a single row
             projections = projections.reshape((1, projections.size))
             xlabel = ""; ylabel = ""
+            yd, xd = projections.shape
         elif nQubits == 1:
             if projections.size == 3:
                 projections = projections.reshape((1, 3))
@@ -2552,21 +2553,23 @@ class ProjectionsBoxPlot(WorkspacePlot):
         elif nQubits == 2:
             if projections.size == 15:
                 projections = _np.concatenate(([0.0], projections)).reshape((4, 4))
+                eb_matrix = _np.concatenate(([0.0], eb_matrix)) if (eb_matrix is not None) else None
                 xlabel = "Q2"; ylabel = "Q1"
-                xd, yd = projections.shape
+                yd, xd = projections.shape
             else:  # projections.size == 15*15
                 projections = projections.reshape((15, 15))
                 xlabel = ""; ylabel = ""
                 xd = yd = 16  # include identity in basis dimensions
         else:
-            if projections.size == 4**nQubits - 1:
+            if projections.size == d2 - 1:  # == 4**nQubits - 1
                 projections = _np.concatenate(([0.0], projections)).reshape((4, projections.size // 4))
+                eb_matrix = _np.concatenate(([0.0], eb_matrix)) if (eb_matrix is not None) else None
                 xlabel = "Q*"; ylabel = "Q1"
-                xd, yd = projections.shape
-            else:  # projections.size == (4**nQ)**2
-                projections = projections.reshape((4**nQubits - 1, 4**nQubits - 1))
+                yd, xd = projections.shape
+            else:  # projections.size == (d2-1)**2 == (4**nQ-1)**2  (CA-size square, works for non-integral nQubits too)
+                projections = projections.reshape((d2 - 1, d2 - 1))
                 xlabel = ""; ylabel = ""
-                xd = yd = 4**nQubits
+                xd = yd = d2  # 4**nQubits
 
         if eb_matrix is not None:
             eb_matrix = eb_matrix.reshape(projections.shape)

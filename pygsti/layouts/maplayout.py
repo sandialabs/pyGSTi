@@ -68,14 +68,17 @@ class _MapCOPALayoutAtom(_DistributableAtom):
         all_rholabels = set()
         all_oplabels = set()
         all_elabels = set()
+        all_povmlabels = set()
         for expanded_circuit_infos in expanded_circuit_info_by_unique.values():
             for sep_povm_c in expanded_circuit_infos:
                 all_rholabels.add(sep_povm_c.circuit_without_povm[0])
                 all_oplabels.update(sep_povm_c.circuit_without_povm[1:])
                 all_elabels.update(sep_povm_c.full_effect_labels)
+                all_povmlabels.add(sep_povm_c.povm_label)
 
         self.rho_labels = sorted(all_rholabels)
         self.op_labels = sorted(all_oplabels)
+        self.povm_labels = sorted(all_povmlabels)
         self.full_effect_labels = all_elabels
         self.elabel_lookup = {elbl: i for i, elbl in enumerate(self.full_effect_labels)}
 
@@ -86,6 +89,7 @@ class _MapCOPALayoutAtom(_DistributableAtom):
         self.elbl_indices_by_expcircuit = {}
         self.elindices_by_expcircuit = {}
         self.outcomes_by_expcircuit = {}
+        self.povm_and_elbls_by_expcircuit = {}
 
         elindex_outcome_tuples = _collections.OrderedDict([
             (unique_i, list()) for unique_i in range(len(unique_complete_circuits))])
@@ -97,6 +101,7 @@ class _MapCOPALayoutAtom(_DistributableAtom):
                 i = table_offset + table_relindex  # index of expanded circuit (table item)
                 elindices = list(range(local_offset, local_offset + len(outcomes)))
                 self.elbl_indices_by_expcircuit[i] = [self.elabel_lookup[lbl] for lbl in sep_povm_c.full_effect_labels]
+                self.povm_and_elbls_by_expcircuit[i] = (sep_povm_c.povm_label,) + tuple(sep_povm_c.effect_labels)
                 self.elindices_by_expcircuit[i] = elindices  # *local* indices (0 is 1st element computed by this atom)
                 self.outcomes_by_expcircuit[i] = outcomes
                 self.unique_indices_by_expcircuit[i] = unique_i

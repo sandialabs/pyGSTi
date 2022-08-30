@@ -440,8 +440,11 @@ def write_model(model, filename, title=None):
             output.write("END Instrument\n\n")
 
         if model.state_space is not None:
-            output.write("STATESPACE: " + str(model.state_space) + "\n")
-            # StateSpaceLabels.__str__ formats the output properly
+            state_space_str = '+'.join(['*'.join(['%s(%d)' % (lbl, dim) for lbl, dim in zip(blk_lbls, blk_dims)])
+                                        for blk_lbls, blk_dims in zip(
+                                            model.state_space.tensor_product_blocks_labels,
+                                            model.state_space.tensor_product_blocks_dimensions)])
+            output.write("STATESPACE: " + state_space_str + "\n")
 
         basisdim = model.basis.dim
 

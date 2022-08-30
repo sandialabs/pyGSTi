@@ -147,6 +147,10 @@ class ComputationalBasisPOVMEffect(_POVMEffect):
             else _statespace.StateSpace.cast(state_space)
         basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
 
+        # UNSPECIFIED BASIS -- rename this as needed when setting up std rep attribute
+        # or maybe remove and use self._rep.basis if that's the std attribute
+        self._basis = basis
+
         evotype = _Evotype.cast(evotype)
         self._evotype = evotype  # set this before call to _State.__init__ so self.to_dense() can work...
         rep = evotype.create_computational_effect_rep(zvals, basis, state_space)

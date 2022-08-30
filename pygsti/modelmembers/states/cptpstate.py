@@ -70,12 +70,13 @@ class CPTPState(_DenseState):
         self._set_params_from_vector(vector, truncate)
 
         #parameter labels (parameter encode the Cholesky Lmx)
-        labels = []
-        for i, ilbl in enumerate(basis.labels[1:]):
-            for j, jlbl in enumerate(basis.labels[1:]):
-                if i == j: labels.append("%s diagonal element of density matrix Cholesky decomp" % ilbl)
-                elif j < i: labels.append("Re[(%s,%s) element of density matrix Cholesky decomp]" % (ilbl, jlbl))
-                else: labels.append("Im[(%s,%s) element of density matrix Cholesky decomp]" % (ilbl, jlbl))
+        labels = {}; dmDim = self.dmDim
+        for i in range(dmDim):
+            labels[i * dmDim + i] = "(%d, %d) element of density matrix Cholesky deomp" % (i, i)
+            for j in range(i):
+                labels[i * dmDim + j] = "Re[(%d, %d) element of density matrix Cholesky deomp]" % (i, j)
+                labels[j * dmDim + i] = "Im[(%d, %d) element of density matrix Cholesky deomp]" % (i, j)
+        labels = [lbl for indx, lbl in sorted(list(labels.items()), key=lambda x: x[0])]
 
         #scratch space
         self.Lmx = _np.zeros((self.dmDim, self.dmDim), 'complex')
@@ -84,7 +85,7 @@ class CPTPState(_DenseState):
             else _statespace.StateSpace.cast(state_space)
 
         evotype = _Evotype.cast(evotype)
-        _DenseState.__init__(self, vector, evotype, state_space)
+        _DenseState.__init__(self, vector, basis, evotype, state_space)
         self._paramlbls = _np.array(labels, dtype=object)
 
     def to_memoized_dict(self, mmg_memo):

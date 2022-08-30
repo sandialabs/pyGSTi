@@ -21,9 +21,11 @@ from .eigpdenseop import EigenvalueParamDenseOp
 from .embeddederrorgen import EmbeddedErrorgen
 from .embeddedop import EmbeddedOp
 from .experrorgenop import ExpErrorgenOp
+from .identitypluserrorgenop import IdentityPlusErrorgenOp
 from .fullarbitraryop import FullArbitraryOp
 from .fulltpop import FullTPOp
 from .fullunitaryop import FullUnitaryOp
+from .fullcptpop import FullCPTPOp
 from .lindbladerrorgen import LindbladErrorgen, LindbladParameterization
 from .linearop import LinearOperator
 from .linearop import finite_difference_deriv_wrt_params, finite_difference_hessian_wrt_params
@@ -44,6 +46,7 @@ from pygsti.tools import optools as _ot
 def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
     """ TODO: docstring - note that op_type can be a list/tuple of types in order of precedence """
     op_type_preferences = verbose_type_from_op_type(op_type)
+    error_msgs = {}
 
     U = unitary_mx
     if state_space is None:
@@ -59,7 +62,7 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                 op = StaticUnitaryOp(U, basis, evotype, state_space)
             elif typ == "full unitary":
                 op = FullUnitaryOp(U, basis, evotype, state_space)
-            elif typ in ('static', 'full', 'full TP', 'linear'):
+            elif typ in ('static', 'full', 'full TP', 'linear', 'full CPTP'):
                 superop_mx = _ot.unitary_to_superop(U, basis)
                 op = create_from_superop_mx(superop_mx, op_type, basis, stdname, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):  # maybe "lindblad XXX" where XXX is a valid lindblad type?
@@ -70,13 +73,15 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                         U, ('static standard', 'static clifford', 'static unitary'),
                         basis, stdname, evotype, state_space)
 
+                lndtype = LindbladParameterization.cast(typ)
                 proj_basis = 'PP' if state_space.is_entirely_qubits else basis
-                errorgen = LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
+                errorgen = LindbladErrorgen.from_error_generator(state_space.dim, lndtype, proj_basis, basis,
                                                                  truncate=True, evotype=evotype,
                                                                  state_space=state_space)
 
-                op = ExpErrorgenOp(errorgen) if (unitary_postfactor is None) \
-                    else ComposedOp([unitary_postfactor, ExpErrorgenOp(errorgen)])
+                EffectiveExpErrorgen = IdentityPlusErrorgenOp if lndtype.meta == '1+' else ExpErrorgenOp
+                op = EffectiveExpErrorgen(errorgen) if (unitary_postfactor is None) \
+                    else ComposedOp([unitary_postfactor, EffectiveExpErrorgen(errorgen)])
 
                 if op.dim <= 16:  # only do this for up to 2Q operations, otherwise to_dense is too expensive
                     expected_superop_mx = _ot.unitary_to_superop(U, basis)
@@ -86,37 +91,49 @@ def create_from_unitary_mx(unitary_mx, op_type, basis='pp', stdname=None, evotyp
                 raise ValueError("Unknown operation type '%s'!" % str(typ))
 
             return op  # if we get to here, then we've successfully created an op to return
-        except (ValueError, AssertionError, AttributeError):
+        except (ValueError, AssertionError, AttributeError) as e:
             #_warnings.warn('Failed to create operator with type %s with error: %s' % (typ, e))
-            pass  # move on to text type
+            error_msgs[typ] = str(e)  # # move on to text type
 
-    raise ValueError("Could not create an operator of type(s) %s from the given unitary op!" % (str(op_type)))
+    raise ValueError("Could not create an operator of type(s) %s from the given unitary op:\n%s"
+                     % (str(op_type), str(error_msgs)))
 
 
 def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotype='default', state_space=None):
     op_type_preferences = (op_type,) if isinstance(op_type, str) else op_type
+    error_msgs = {}
 
     for typ in op_type_preferences:
         try:
             if typ == "static":  # "static arbitrary"?
-                op = StaticArbitraryOp(superop_mx, evotype, state_space)
+                op = StaticArbitraryOp(superop_mx, basis, evotype, state_space)
             elif typ == "full":  # "full arbitrary"?
-                op = FullArbitraryOp(superop_mx, evotype, state_space)
+                op = FullArbitraryOp(superop_mx, basis, evotype, state_space)
             elif typ in ["TP", "full TP"]:
-                op = FullTPOp(superop_mx, evotype, state_space)
+                op = FullTPOp(superop_mx, basis, evotype, state_space)
+            elif typ == "full CPTP":
+                op = FullCPTPOp.from_superop_matrix(superop_mx, basis, evotype, state_space)
             elif typ == "linear":  # "linear arbitrary"?
                 real = _np.isclose(_np.linalg.norm(superop_mx.imag), 0)
-                op = LinearlyParamArbitraryOp(superop_mx, _np.array([]), {}, None, None, real, evotype, state_space)
-            elif _ot.is_valid_lindblad_paramtype(typ):  # maybe "lindblad XXX" where XXX is a valid lindblad type?
+                op = LinearlyParamArbitraryOp(superop_mx, _np.array([]), {}, None, None, real, basis,
+                                              evotype, state_space)
+            elif _ot.is_valid_lindblad_paramtype(typ):  # can be "lindblad XXX" where XXX is a valid lindblad type, etc.
+                lndtype = LindbladParameterization.cast(typ)
                 proj_basis = 'PP' if state_space.is_entirely_qubits else basis
                 if _ot.superop_is_unitary(superop_mx, basis):
                     unitary_postfactor = StaticUnitaryOp(_ot.superop_to_unitary(superop_mx, basis, False),
                                                          basis, evotype, state_space)
-                    errorgen = LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis,
+                    errorgen = LindbladErrorgen.from_error_generator(state_space.dim, lndtype, proj_basis,
                                                                      basis, truncate=True, evotype=evotype,
                                                                      state_space=state_space)
-                    ret = ComposedOp([unitary_postfactor, ExpErrorgenOp(errorgen)])
-                else:
+                    EffectiveExpErrorgen = IdentityPlusErrorgenOp if lndtype.meta == '1+' else ExpErrorgenOp
+                    ret = ComposedOp([unitary_postfactor, EffectiveExpErrorgen(errorgen)])
+                elif lndtype.meta == '1+':
+                    errorgen = LindbladErrorgen.from_error_generator(
+                        superop_mx - _np.identity(superop_mx.shape[0], 'd'),
+                        lndtype, proj_basis, basis, truncate=True, evotype=evotype, state_space=state_space)
+                    ret = IdentityPlusErrorgenOp(errorgen)
+                else:  # lndtype.meta == 'exp' or None
                     errorgen = LindbladErrorgen.from_operation_matrix(superop_mx, typ,
                                                                       proj_basis, mx_basis=basis, truncate=True,
                                                                       evotype=evotype, state_space=state_space)
@@ -133,10 +150,11 @@ def create_from_superop_mx(superop_mx, op_type, basis='pp', stdname=None, evotyp
                 op = create_from_unitary_mx(unitary_mx, typ, basis, stdname, evotype, state_space)
 
             return op  # if we get to here, then we've successfully created an op to return
-        except (ValueError, AssertionError):
-            pass  # move on to next type
+        except (ValueError, AssertionError) as e:
+            error_msgs[typ] = str(e)  # # move on to text type
 
-    raise ValueError("Could not create an operator of type(s) %s from the given superop!" % (str(op_type)))
+    raise ValueError("Could not create an operator of type(s) %s from the given superop:\n%s"
+                     % (str(op_type), str(error_msgs)))
 
 
 def verbose_type_from_op_type(op_type):
@@ -162,6 +180,7 @@ def verbose_type_from_op_type(op_type):
         'static': 'static',
         'full': 'full',
         'full TP': 'full TP',
+        'full CPTP': 'full CPTP',
         'TP': 'full TP',
         'linear': 'linear',
     }
@@ -275,6 +294,7 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
 
     destination_types = {'full': FullArbitraryOp,
                          'full TP': FullTPOp,
+                         'full CPTP': FullCPTPOp,
                          'linear': LinearlyParamArbitraryOp,
                          'static': StaticArbitraryOp,
                          'static unitary': StaticUnitaryOp,
@@ -301,6 +321,10 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
                 # Just an error generator type conversion
                 return ExpErrorgenOp(convert_errorgen(operation.errorgen, to_type, basis, flatten_structure))
 
+            elif isinstance(operation, IdentityPlusErrorgenOp) and is_errorgen_type:
+                # Just an error generator type conversion
+                return IdentityPlusErrorgenOp(convert_errorgen(operation.errorgen, to_type, basis, flatten_structure))
+
             elif (_ot.is_valid_lindblad_paramtype(to_type)
                   and (ideal_operation is not None or operation.num_params == 0)):  # e.g. TP -> Lindblad
                 # Above: consider "isinstance(operation, StaticUnitaryOp)" instead of num_params == 0?
@@ -314,12 +338,22 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
                     error_map_mx = _np.dot(operation.to_dense('HilbertSchmidt'),
                                            _np.linalg.inv(postfactor_op.to_dense('HilbertSchmidt')))
 
-                errorgen = LindbladErrorgen.from_operation_matrix(error_map_mx, to_type,
-                                                                  proj_basis, mx_basis=basis, truncate=True,
-                                                                  evotype=operation.evotype,
-                                                                  state_space=operation.state_space)
-                ret = ComposedOp([postfactor_op.copy(), ExpErrorgenOp(errorgen)]) \
-                    if (postfactor_op is not None) else ExpErrorgenOp(errorgen)
+                lndtype = LindbladParameterization.cast(to_type)
+                if lndtype.meta == '1+':
+                    errorgen = LindbladErrorgen.from_error_generator(
+                        error_map_mx - _np.identity(error_map_mx.shape[0], 'd'),
+                        lndtype, proj_basis, basis, truncate=True,
+                        evotype=operation.evotype, state_space=operation.state_space)
+                    ret = ComposedOp([postfactor_op.copy(), IdentityPlusErrorgenOp(errorgen)]) \
+                        if (postfactor_op is not None) else IdentityPlusErrorgenOp(errorgen)
+
+                else:
+                    errorgen = LindbladErrorgen.from_operation_matrix(error_map_mx, lndtype,
+                                                                      proj_basis, mx_basis=basis, truncate=True,
+                                                                      evotype=operation.evotype,
+                                                                      state_space=operation.state_space)
+                    ret = ComposedOp([postfactor_op.copy(), ExpErrorgenOp(errorgen)]) \
+                        if (postfactor_op is not None) else ExpErrorgenOp(errorgen)
 
                 if ret.dim <= 16:  # only do this for up to 2Q operations, otherwise to_dense is too expensive
                     assert(_np.linalg.norm(operation.to_dense('HilbertSchmidt') - ret.to_dense('HilbertSchmidt'))

@@ -1,21 +1,16 @@
-# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+# This workflow performs all the deployment steps to PyPi, and is intended to be run manually
+# since the automatic deployment fails to trigger so often.
 
-name: Deploy new version on pypi.org
+name: Manually deploy new version on pypi.org
 
 on:
-  push:
-    branches: [ "master" ]
-
-  # Allow running manually from Actions tab
+  # Allow running manually from Actions tab -- this is the *only* way this action is intended to be run
   workflow_dispatch:
-
 
 jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
 
     strategy:
       matrix:
@@ -44,7 +39,6 @@ jobs:
   build_sdist:
     name: Build source distribution
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
     
     steps:
       - uses: actions/checkout@v2
@@ -66,10 +60,6 @@ jobs:
   upload_pypi:
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
-    # upload to PyPI on every tag starting with 'v'
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
-    # alternatively, to publish when a GitHub Release is created, use the following rule:
-    # if: github.event_name == 'release' && github.event.action == 'published'
     steps:
       - uses: actions/download-artifact@v2
         with:

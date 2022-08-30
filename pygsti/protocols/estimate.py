@@ -832,6 +832,8 @@ class Estimate(object):
         cpy._gaugeopt_suite = _copy.deepcopy(self._gaugeopt_suite)
         cpy.models = self.models.copy()
         cpy.confidence_region_factories = _copy.deepcopy(self.confidence_region_factories)
+        for crf in cpy.confidence_region_factories.values():
+            crf.set_parent(cpy)  # because deepcopy above blanks out parent link
         cpy.meta = _copy.deepcopy(self.meta)
         return cpy
 

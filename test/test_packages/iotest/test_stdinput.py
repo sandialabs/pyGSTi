@@ -583,7 +583,7 @@ UnitaryMxExp
 BASIS: pp 4
 """)
     def test_read_model_raises_on_bad_unitarymxexp(self, tmp_path):
-        with self.assertRaises(ValueError):
+        with self.assertRaises((ValueError, np.linalg.LinAlgError)):
             stdin.parse_model(tmp_path)
 
     @with_temp_file("""#My Model file with bad format spec

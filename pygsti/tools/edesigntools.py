@@ -12,6 +12,7 @@ Tools for working with ExperimentDesigns
 
 import numpy as _np
 
+
 def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_1Q=None,
                                         gate_time_2Q=None, measure_reset_time=0.0,
                                         interbatch_latency=0.0, total_shots_per_circuit=1000,
@@ -42,14 +43,14 @@ def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_
     gate_time_1Q: float
         Gate time in user-specified units for all operations acting on one qubit. Either `gate_time_dict`
         or both `gate_time_1Q` and `gate_time_2Q` must be specified.
-    
+
     gate_time_2Q: float
         Gate time in user-specified units for all operations acting on more than one qubit.
         Either `gate_time_dict` or both `gate_time_1Q` and `gate_time_2Q` must be specified.
-    
+
     measure_reset_time: float
         Measurement and/or reset time in user-specified units. This is applied once for every circuit.
-    
+
     interbatch_latency: float
         Time between batches in user-specified units.
 
@@ -61,7 +62,7 @@ def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_
         Number of shots to do for each circuit within a batch. Together with `total_shots_per_circuit`,
         this will determine the total number of rounds needed. If None, this is set to the total shots,
         meaning that only one round is done.
-    
+
     circuits_per_batch: int
         Number of circuits to include in each batch. Together with the number of circuits in `edesign`,
         this will determine the number of batches in each round. If None, this is set to the total number
@@ -70,54 +71,55 @@ def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_
     Returns
     -------
     float
-        The estimated time to run the experiment design. 
+        The estimated time to run the experiment design.
     """
     assert gate_time_dict is not None or \
         (gate_time_1Q is not None and gate_time_2Q is not None), \
         "Must either specify a gate_time_dict with entries for every gate name or label, " + \
         "or specify gate_time_1Q and gate_time_2Q for one-qubit and two-qubit gate times, respectively"
-        
+
     def layer_time(layer):
         gate_times = []
         for comp in layer.components:
             if gate_time_dict is not None:
                 # Use specific gate times for each gate
-                comp_time = gate_time_dict.get(comp, None) # Start with most specific key first
+                comp_time = gate_time_dict.get(comp, None)  # Start with most specific key first
                 if comp_time is None:
-                    comp_time = gate_time_dict.get(comp.name, None) # Try gate name only next
+                    comp_time = gate_time_dict.get(comp.name, None)  # Try gate name only next
 
                 assert comp_time is not None, f"Could not look up gate time for {comp}"
             else:
                 # Use generic one/two qubit gate times
                 comp_qubits = len(comp.sslbls)
                 comp_time = gate_time_2Q if comp_qubits > 1 else gate_time_1Q
-            
+
             gate_times.append(comp_time)
-        
+
         if len(gate_times) == 0:
             return 0
-        
+
         return max(gate_times)
-    
+
     total_circ_time = 0.0
     for circ in edesign.all_circuits_needing_data:
         circ_time = measure_reset_time + sum([layer_time(l) for l in circ])
         total_circ_time += circ_time * total_shots_per_circuit
-    
+
     # Default assume all in one batch
-    if circuits_per_batch is None: 
+    if circuits_per_batch is None:
         circuits_per_batch = len(edesign.all_circuits_needing_data)
-    
+
     # Default assume all in one round
     if shots_per_circuit_per_batch is None:
-            shots_per_circuit_per_batch = total_shots_per_circuit
-        
+        shots_per_circuit_per_batch = total_shots_per_circuit
+
     num_rounds = _np.ceil(total_shots_per_circuit / shots_per_circuit_per_batch)
     num_batches = _np.ceil(len(edesign.all_circuits_needing_data) / circuits_per_batch)
-    
-    total_upload_time = interbatch_latency*num_batches*num_rounds
-    
+
+    total_upload_time = interbatch_latency * num_batches * num_rounds
+
     return total_circ_time + total_upload_time
+
 
 def calculate_fisher_information_per_circuit(regularized_model, circuits):
     """Helper function to calculate all Fisher information terms for each circuit.
@@ -132,10 +134,10 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits):
         The model used to calculate the terms of the Fisher information matrix.
         This model must already be "regularized" such that there are no small probabilities,
         usually by adding a small amount of SPAM error.
-    
+
     circuits: list
         List of circuits to compute Fisher information for.
-    
+
     Returns
     -------
     fisher_info_terms: dict
@@ -148,18 +150,18 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits):
     ps = regularized_model.sim.bulk_probs(circuits)
     js = regularized_model.sim.bulk_dprobs(circuits)
     hs = regularized_model.sim.bulk_hprobs(circuits)
-    
+
     fisher_info_terms = {}
     for circuit in circuits:
         if circuit not in fisher_info_terms:
             fisher_info_terms[circuit] = _np.zeros([num_params, num_params])
-        
+
         p = ps[circuit]
         j = js[circuit]
         h = hs[circuit]
         for outcome in outcomes:
-            fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome])/p[outcome] - h[outcome]
-    
+            fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome]) / p[outcome] - h[outcome]
+
     return fisher_info_terms
 
 
@@ -182,13 +184,13 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
     num_shots: int or dict
         If int, specifies how many shots each circuit gets. If dict, keys must be circuits
         and values are per-circuit counts.
-    
+
     term_cache: dict or None
         If provided, should have circuits as keys and per-circuit Fisher information matrices
         as values, i.e. the output of calculate_fisher_information_per_circuit(). This cache
         will be updated with any additional circuits that need to be calculated in the given
         circuit list.
-    
+
     regularize_spam: bool
         If True, depolarizing SPAM noise is added to prevent 0 probabilities for numerical
         stability. Note that this may fail if the model does not have a dense SPAM
@@ -210,7 +212,7 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
             "If a dict, num_shots must have an entry for every circuit in the list"
     else:
         num_shots = {c: num_shots for c in circuits}
-    
+
     # Calculate all needed terms
     if term_cache is None:
         term_cache = {}
@@ -223,7 +225,7 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
     fisher_information = _np.zeros((num_params, num_params))
     for circ in circuits:
         fisher_information += term_cache[circ] * num_shots[circ]
-    
+
     return fisher_information
 
 
@@ -244,18 +246,18 @@ def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, ter
     num_shots: int or dict
         If int, specifies how many shots each circuit gets. If dict, keys must be circuits
         and values are per-circuit counts.
-    
+
     term_cache: dict or None
         If provided, should have circuits as keys and per-circuit Fisher information matrices
         as values, i.e. the output of calculate_fisher_information_per_circuit(). This cache
         will be updated with any additional circuits that need to be calculated in the given
         circuit list.
-    
+
     regularize_spam: bool
         If True, depolarizing SPAM noise is added to prevent 0 probabilities for numerical
         stability. Note that this may fail if the model does not have a dense SPAM
         paramerization. In that case, pass an already "regularized" model and set this to False.
-    
+
     cumulative: bool
         Whether to include Fisher information matrices for lower L (True) or not.
 
@@ -274,7 +276,7 @@ def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, ter
             "If a dict, num_shots must have an entry for every circuit in the list"
     else:
         num_shots = {c: num_shots for c in circuits}
-    
+
     # Calculate all needed terms
     if term_cache is None:
         term_cache = {}
@@ -285,7 +287,7 @@ def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, ter
 
     # We want to make sure we don't double count circuits, so keep track of what we've seen
     seen_circs = set()
-    
+
     fisher_information_by_L = {}
     prev_L = None
     
@@ -311,10 +313,10 @@ def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, ter
         unique_circs = list(set(plaq_circs) - seen_circs)
         fim_term = calculate_fisher_information_matrix(regularized_model, unique_circs, num_shots,
                                                        term_cache=term_cache, regularize_spam=False)
-        
+
         # Update seen circuits
         seen_circs = seen_circs.union(unique_circs)
-        
+
         # Update Fisher information (multiple plaquettes can contribute to one L,
         # and we also handle cumulative logic here)
         if L not in fisher_information_by_L:
@@ -324,8 +326,8 @@ def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, ter
                 fisher_information_by_L[L] += fisher_information_by_L[prev_L]
         else:
             fisher_information_by_L[L] += fim_term
-        
+
         # Update L for next round
         prev_L = L
-        
+
     return fisher_information_by_L

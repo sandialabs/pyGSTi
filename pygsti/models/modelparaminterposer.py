@@ -11,9 +11,9 @@ Defines the ModelParamsInterposer class and supporting functionality.
 #***************************************************************************************************
 
 import numpy as _np
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
-
-class ModelParamsInterposer(object):
+class ModelParamsInterposer(_NicelySerializable):
     """
     A function class that sits in between an :class:`OpModel`'s parameter vector and those of its operations.
     """
@@ -33,6 +33,20 @@ class ModelParamsInterposer(object):
     def deriv_op_params_wrt_model_params(self):
         assert(self.num_params == self.num_op_params)
         return _np.identity(self.num_params, 'd')
+
+    def ops_params_dependent_on_model_params(self, model_param_indices):
+        return _np.array(sorted(model_param_indices), _np.int64)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'num_model_params': self.num_params,
+                      'num_op_params': self.num_op_params
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        return cls(state['num_model_params'], state['num_op_params'])
 
 
 class LinearInterposer(ModelParamsInterposer):
@@ -67,3 +81,20 @@ class LinearInterposer(ModelParamsInterposer):
 
     def deriv_op_params_wrt_model_params(self):
         return self.transform_matrix
+
+    def ops_params_dependent_on_model_params(self, model_param_indices):
+        """ TODO: docstring: returns the indices of op parameters that are influenced by the given model params"""
+        op_param_indices = set()
+        for j in model_param_indices:
+            op_param_indices.update([i for i, el in enumerate(self.transform_matrix[:, j]) if el != 0.0])
+        return _np.array(sorted(op_param_indices), _np.int64)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'transform_matrix': self._encodemx(self.transform_matrix)})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        return cls(cls._decodemx(state['transform_matrix']))
+

@@ -2579,7 +2579,7 @@ class Circuit(object):
                 "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
 
             def _get_compilation(gate):
-                return compilation.specific_compilations.get(gate, None)
+                return compilation.retrieve_compilation_of(gate)
 
         else:  # Otherwise, we assume it's a dict.
             assert(allowed_filter is None), \
@@ -2589,22 +2589,29 @@ class Circuit(object):
                 return compilation.get(gate, None)
 
         for ilayer in range(self.num_layers - 1, -1, -1):
-            icomps_to_remove = []
-            for icomp, l in enumerate(self._layer_components(ilayer)):  # loop over labels in this layer
-                replacement_circuit = _get_compilation(l)
-                if replacement_circuit is not None:
-                    # Replace the gate with a circuit: remove the gate and add insert
-                    # the replacement circuit as the following layers.
-                    icomps_to_remove.append(icomp)
-                    self.insert_labels_into_layers_inplace(replacement_circuit, ilayer + 1)
-                else:
-                    # We never consider not having a compilation for the identity to be a failure.
-                    if not allow_unchanged_gates:
-                        raise ValueError(
-                            "`compilation` does not contain, or cannot generate a compilation for {}!".format(l))
+            if len(self._layer_components(ilayer)):
+                icomps_to_remove = []
+                for icomp, l in enumerate(self._layer_components(ilayer)):  # loop over labels in this layer
+                    replacement_circuit = _get_compilation(l)
+                    if replacement_circuit is not None:
+                        # Replace the gate with a circuit: remove the gate and add insert
+                        # the replacement circuit as the following layers.
+                        icomps_to_remove.append(icomp)
+                        self.insert_labels_into_layers_inplace(replacement_circuit, ilayer + 1)
+                    else:
+                        # We never consider not having a compilation for the identity to be a failure.
+                        if not allow_unchanged_gates:
+                            raise ValueError(
+                                "`compilation` does not contain, or cannot generate a compilation for {}!".format(l))
 
-            for icomp in reversed(icomps_to_remove):
-                self._remove_layer_component(ilayer, icomp)
+                for icomp in reversed(icomps_to_remove):
+                    self._remove_layer_component(ilayer, icomp)
+            else:
+                # Also allow replacement of empty layers
+                replacement_circuit = _get_compilation(_Label(()))
+                if replacement_circuit is not None:
+                    # This is not a layer insertion, we want to overwrite the empty layer
+                    self.replace_layer_with_circuit_inplace(replacement_circuit, ilayer)
 
         # If specified, perform the depth compression.
         # It is better to do this *after* the identity name has been changed.
@@ -3946,9 +3953,6 @@ class Circuit(object):
 
         depth = self.num_layers
 
-        def trivial_arg_map(gatearg):
-            return ''
-
         # Go through the layers, and add the openqasm for each layer in turn.
         for l in range(depth):
 
@@ -3964,13 +3968,13 @@ class Circuit(object):
 
                 # Find the openqasm for the gate.
                 if gate.name.__str__() != 'Iz':
-                    openqasmlist_for_gate = gatename_conversion[gate.name]  # + gatearg_str
+                    openqasmlist_for_gate = gatename_conversion.get(gate.name, None)
 
-                    if isinstance(openqasmlist_for_gate, str):
-                        gatearg_str = gateargs_map.get(gate.name, trivial_arg_map)(gate.args)
-                        openqasmlist_for_gate = [openqasmlist_for_gate + gatearg_str, ]
-                    else:
-                        assert(gate.name not in gateargs_map.keys())
+                    if openqasmlist_for_gate is None:
+                        # Try to look up the operation in mapping dict instead
+                        openqasmfn_for_gate = gateargs_map.get(gate.name, None)
+                        assert openqasmfn_for_gate is not None, "Could not look up {} as qasm list or func" % gate.name
+                        openqasmlist_for_gate = openqasmfn_for_gate(gate.args)
 
                     openqasm_for_gate = ''
                     for subopenqasm_for_gate in openqasmlist_for_gate:

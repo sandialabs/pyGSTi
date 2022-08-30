@@ -156,9 +156,9 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
     [c.str for c in prep_strs]
     [c.str for c in effect_strs]
 
-    from pygsti.processors.processorspec import QubitProcessorSpec as _QubitProcessorSpec
+    from pygsti.processors.processorspec import QubitProcessorSpec as _QuditProcessorSpec
     from pygsti.models.model import OpModel as _OpModel
-    if isinstance(op_label_src, _QubitProcessorSpec):
+    if isinstance(op_label_src, _QuditProcessorSpec):
         opLabels = op_label_src.primitive_op_labels
     elif isinstance(op_label_src, _OpModel):
         opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
@@ -480,9 +480,9 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                        + " max-length list at 1 now."
                        + "")
 
-    from pygsti.processors.processorspec import QubitProcessorSpec as _QubitProcessorSpec
+    from pygsti.processors.processorspec import QuditProcessorSpec as _QuditProcessorSpec
     from pygsti.models.model import OpModel as _OpModel
-    if isinstance(op_label_src, _QubitProcessorSpec):
+    if isinstance(op_label_src, _QuditProcessorSpec):
         opLabels = op_label_src.primitive_op_labels
     elif isinstance(op_label_src, _OpModel):
         opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
@@ -820,9 +820,9 @@ def create_elgst_lists(op_label_src, germ_list, max_length_list,
         Note that a "0" maximum-length corresponds to the gate
         label strings.
     """
-    from pygsti.processors.processorspec import QubitProcessorSpec as _QubitProcessorSpec
+    from pygsti.processors.processorspec import QubitProcessorSpec as _QuditProcessorSpec
     from pygsti.models.model import OpModel as _OpModel
-    if isinstance(op_label_src, _QubitProcessorSpec):
+    if isinstance(op_label_src, _QuditProcessorSpec):
         opLabels = op_label_src.primitive_op_labels
     elif isinstance(op_label_src, _OpModel):
         opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels

@@ -192,12 +192,19 @@ def std_least_squares_fit(lengths, asps, n, seed=None, asymptote=None, ftype='fu
     else: A = 1 / 2**n
     # First perform a fit with a fixed asymptotic value
     FAF_results = custom_least_squares_fit(lengths, asps, n, a=A, seed=seed, rtype=rtype)
+    if ftype == 'FA':
+        return FAF_results
+
+    if not all([x in FAF_results['estimates'] for x in ('a', 'b', 'p')]):
+        raise ValueError(("Initial fixed-asymptotic RB fit failed and is needed to seed requested %s fit type."
+                          " Please check that the RB data is valid.") % ftype)
+
     # Full fit is seeded by the fixed asymptote fit.
     seed_full = [FAF_results['estimates']['a'], FAF_results['estimates']['b'], FAF_results['estimates']['p']]
     FF_results = custom_least_squares_fit(lengths, asps, n, seed=seed_full, rtype=rtype)
+
     # Returns the requested fit type.
     if ftype == 'full': return FF_results
-    elif ftype == 'FA': return FAF_results
     elif ftype == 'full+FA': return FF_results, FAF_results
     else: raise ValueError("The `ftype` value is invalid!")
 

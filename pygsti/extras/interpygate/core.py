@@ -386,7 +386,7 @@ class InterpolatedDenseOp(_DenseOperator):
                     len(self._parameterized_indices), len(initial_point))
         self._paramvec = _np.array(initial_point, 'd')
 
-        super().__init__(_np.identity(dim, 'd'), evotype="densitymx", state_space=None)
+        super().__init__(_np.identity(dim, 'd'), None, evotype="densitymx", state_space=None)
 
         # initialize object
         self.from_vector(self._paramvec)

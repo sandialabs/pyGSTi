@@ -1,6 +1,7 @@
 import functools
 from unittest import mock
 
+import sys
 import numpy as np
 import scipy
 from pygsti.baseobjs.basis import Basis
@@ -12,6 +13,8 @@ import pygsti.tools.optools as ot
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock
 from pygsti.modelpacks.legacy import std2Q_XXYYII
 from ..util import BaseCase, needs_cvxpy
+
+SKIP_DIAMONDIST_ON_WIN = True
 
 
 def fake_minimize(fn):
@@ -374,6 +377,7 @@ class GateOpsTester(BaseCase):
 
     @needs_cvxpy
     def test_diamond_distance(self):
+        if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
         self.assertAlmostEqual(ot.diamonddist(self.A, self.A, mx_basis="std"), 0.0)
         self.assertAlmostEqual(ot.diamonddist(self.A, self.B, mx_basis="std"), 0.614258836298)
 

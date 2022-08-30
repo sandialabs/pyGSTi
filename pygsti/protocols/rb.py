@@ -724,7 +724,8 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                 results = _tools.mptools.starmap_with_kwargs(_rc.create_mirror_rb_circuit, circuits_per_depth,
                                                              num_processes, args_list, kwargs_list)
 
-            elif circuit_type in ('cz+zxzxz-clifford', 'clifford+zxzxz-haar', 'cz(theta)+zxzxz-haar'):
+            elif circuit_type in ('cz+zxzxz-clifford', 'clifford+zxzxz-haar', 'clifford+zxzxz-clifford',
+                                  'cz(theta)+zxzxz-haar'):
                 assert(sampler == 'edgegrab'), "Unless circuit_type = 'clifford' the only valid sampler is 'edgegrab'."
                 two_q_gate_density = samplerargs[0]
                 if len(samplerargs) >= 2:
@@ -733,12 +734,17 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                     # Default sampler arguments.
                     two_q_gate_args_lists = {'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}
 
+                one_q_gate_type = circuit_type.split('-')[-1]
+
                 circs = [_rc.sample_random_cz_zxzxz_circuit(pspec, l // 2, qubit_labels=qubit_labels,
                                                             two_q_gate_density=two_q_gate_density,
+                                                            one_q_gate_type=one_q_gate_type,
                                                             two_q_gate_args_lists=two_q_gate_args_lists)
                          for _ in range(circuits_per_depth)]
 
                 mirroring_type = circuit_type.split('-')[0]
+                if mirroring_type == 'cz+zxzxz':
+                    mirroring_type = 'clifford+zxzxz'
                 results = [(a, [b]) for a, b in [_mirroring.create_mirror_circuit(c, pspec, circ_type=mirroring_type)
                                                  for c in circs]]
 

@@ -779,7 +779,8 @@ def compute_povm_map(model, povmlbl):
     for i in range(nV):
         Sk_embedding_in_std[:, i] = _flat_mut_blks(i, i, blkDims)
 
-    std_to_basis = model.basis.reverse_transform_matrix("std")
+    std_basis = _Basis.cast('std', model.dim)  # make sure std basis is just straight-up d-dimension
+    std_to_basis = model.basis.reverse_transform_matrix(std_basis)
     # OLD: _bt.create_transform_matrix("std", model.basis, blkDims)
     assert(std_to_basis.shape == (model.dim, model.dim))
 
@@ -1444,8 +1445,7 @@ def elementary_errorgens(dim, typ, basis):
     basis = _Basis.cast(basis, d2)
     basis_lbls = basis.labels[1:]  # skip identity
     basis_mxs = basis.elements[1:]  # skip identity
-    assert(_np.allclose(basis.elements[0], _np.identity(d) * (_np.linalg.norm(basis.elements[0]) / _np.sqrt(d)))), \
-        "First element of basis must be the identity!"
+    assert(basis.first_element_is_identity), "First element of basis must be the identity!"
     assert(len(basis_mxs) < d2)  # OK if there are fewer basis matrices (e.g. for bases w/multiple blocks)
 
     elem_errgens = {}
@@ -1503,8 +1503,7 @@ def elementary_errorgens_dual(dim, typ, basis):
     basis = _Basis.cast(basis, d2)
     basis_lbls = basis.labels[1:]  # skip identity
     basis_mxs = basis.elements[1:]  # skip identity
-    assert(_np.allclose(basis.elements[0], _np.identity(d) * (_np.linalg.norm(basis.elements[0]) / _np.sqrt(d)))), \
-        "First element of basis must be the identity!"
+    assert(basis.first_element_is_identity), "First element of basis must be the identity!"
     assert(len(basis_mxs) < d2)  # OK if there are fewer basis matrices (e.g. for bases w/multiple blocks)
 
     elem_errgens = {}
@@ -1709,13 +1708,29 @@ def create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, norma
     """
     TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
     """
+    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q,
+                                              normalize, sparse, tensorprod_basis, create_dual=False)
+
+
+def create_elementary_errorgen_nqudit_dual(typ, basis_element_labels, basis_1q, normalize=False,
+                                           sparse=False, tensorprod_basis=False):
+    """
+    TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
+    """
+    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q,
+                                              normalize, sparse, tensorprod_basis, create_dual=True)
+
+
+def _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize=False,
+                                       sparse=False, tensorprod_basis=False, create_dual=False):
+    create_fn = _lt.create_elementary_errorgen_dual if create_dual else _lt.create_elementary_errorgen
     if typ in 'HS':
         B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
-        ret = _lt.create_elementary_errorgen(typ, B, sparse=sparse)  # in std basis
+        ret = create_fn(typ, B, sparse=sparse)  # in std basis
     elif typ in 'CA':
         B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
         C = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[1]])
-        ret = _lt.create_elementary_errorgen(typ, B, C, sparse=sparse)  # in std basis
+        ret = create_fn(typ, B, C, sparse=sparse)  # in std basis
     else:
         raise ValueError("Invalid elementary error generator type: %s" % str(typ))
 
@@ -2293,8 +2308,15 @@ def is_valid_lindblad_paramtype(typ):
     -------
     bool
     """
-    return typ in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
-                   "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
+    from pygsti.modelmembers.operations.lindbladerrorgen import LindbladParameterization as _LP
+    try:
+        _LP.cast(typ)
+        return True
+    except ValueError:
+        return False
+
+    #OLD: return typ in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
+    #OLD:                "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
 
 
 def effect_label_to_outcome(povm_and_effect_lbl):

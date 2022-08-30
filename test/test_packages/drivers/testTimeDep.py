@@ -15,7 +15,7 @@ class MyTimeDependentIdle(pygsti.modelmembers.operations.DenseOperator):
     def __init__(self, initial_depol_rate):
         #initialize with no noise
         self.need_time = True # maybe torep() won't work unless this is False?
-        super(MyTimeDependentIdle,self).__init__(np.identity(4,'d'), "densitymx") # this is *super*-operator, so "densitymx"
+        super(MyTimeDependentIdle,self).__init__(np.identity(4,'d'), 'pp', "densitymx") # this is *super*-operator, so "densitymx"
         self.from_vector([initial_depol_rate])
         self.set_time(0.0)
 

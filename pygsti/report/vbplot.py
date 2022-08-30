@@ -12,41 +12,42 @@ Matplotlib volumetric benchmarking plotting routines.
 
 import numpy as _np
 
-try:
-    import matplotlib.pyplot as _plt
-    from matplotlib.colors import ListedColormap as _ListedColormap
-    from matplotlib import cm as _cm
-    import seaborn as _sns
 
-    _sns.set_style('white')
-    _sns.set_style('ticks')
+def _build_default_colormap():
+    try:
+        import matplotlib.pyplot as _plt
+        from matplotlib.colors import ListedColormap as _ListedColormap
+        from matplotlib import cm as _cm
+        import seaborn as _sns
 
-    # Utility color maps.
-    blues = _sns.color_palette(_sns.color_palette("Blues", 200)).as_hex()
-    blues[0] = '#ffffff'
-    blues = _ListedColormap(blues)
+        _sns.set_style('white')
+        _sns.set_style('ticks')
 
-    reds = _sns.color_palette(_sns.color_palette("Reds", 200)).as_hex()
-    reds[0] = '#ffffff'
-    reds = _ListedColormap(reds)
+        # Utility color maps.
+        blues = _sns.color_palette(_sns.color_palette("Blues", 200)).as_hex()
+        blues[0] = '#ffffff'
+        blues = _ListedColormap(blues)
 
-    greens = _sns.color_palette(_sns.color_palette("Greens", 200)).as_hex()
-    greens[0] = '#ffffff'
-    greens = _ListedColormap(greens)
+        #reds = _sns.color_palette(_sns.color_palette("Reds", 200)).as_hex()
+        #reds[0] = '#ffffff'
+        #reds = _ListedColormap(reds)
+        #
+        #greens = _sns.color_palette(_sns.color_palette("Greens", 200)).as_hex()
+        #greens[0] = '#ffffff'
+        #greens = _ListedColormap(greens)
+        #
+        #binary_blue = _sns.color_palette(_sns.color_palette("Blues", 200)).as_hex()
+        #binary_blue[0] = '#ffffff'
+        #binary_blue = _ListedColormap([binary_blue[0], binary_blue[50]])
 
-    binary_blue = _sns.color_palette(_sns.color_palette("Blues", 200)).as_hex()
-    binary_blue[0] = '#ffffff'
-    binary_blue = _ListedColormap([binary_blue[0], binary_blue[50]])
+        #spectral = _cm.get_cmap('Spectral')
 
-    spectral = _cm.get_cmap('Spectral')
+        # The default color map.
+        my_cmap = blues
 
-    # The default color map.
-    my_cmap = blues
-
-except ImportError:
-    _plt = None
-    _sns = None
-    my_cmap = None
+    except ImportError:
+        my_cmap = None
+    return my_cmap
 
 
 def empty_volumetric_plot(figsize=None, y_values=None, x_values=None, title=None, xlabel='Depth', ylabel='Width'):
@@ -77,7 +78,10 @@ def empty_volumetric_plot(figsize=None, y_values=None, x_values=None, title=None
     ------
     fig, ax : matplolib fig and ax.
     """
-    if _plt is None or _sns is None:
+    try:
+        import matplotlib.pyplot as _plt
+        import seaborn as _sns
+    except ImportError:
         raise ValueError(("While not a core requirement of pyGSTi, Matplotlib and Seaborn are "
                           "required to generate VB plots.  It looks like you "
                           "don't have them installed on your system (it failed to import)."))
@@ -112,7 +116,7 @@ def _get_xy(data, y_values=None, x_values=None):
 
 
 def volumetric_plot(data, y_values=None, x_values=None, title=None, fig=None, ax=None,
-                    cmap=my_cmap, color=None, flagQV=False, qv_threshold=None,
+                    cmap=None, color=None, flagQV=False, qv_threshold=None,
                     figsize=(10, 10), scale=1., centerscale=1., linescale=1.,
                     pass_threshold=0, show_threshold=0):
     """
@@ -129,6 +133,8 @@ def volumetric_plot(data, y_values=None, x_values=None, title=None, fig=None, ax
     if color is not None:
         cmap = None
         point_color = color
+    elif cmap is None:
+        cmap = _build_default_colormap()
 
     for indw, w in enumerate(y_values):
         for indd, d in enumerate(x_values):
@@ -276,7 +282,7 @@ def capability_region_plot(vbdataframe, metric='polarization', threshold=1 / _np
 
 def volumetric_distribution_plot(vbdataframe, metric='polarization', threshold=1 / _np.e, hypothesis_test='standard',
                                  significance=0.05, figsize=(10, 10), scale={'min': 1.95, 'mean': 1, 'max': 0.13},
-                                 title=None, cmap=my_cmap):
+                                 title=None, cmap=None):
     """
     Creates volumetric benchmarking plots that display the maximum, mean and minimum of a given figure-of-merit (by
     default, circuit polarization) as a function of circuit shape. This function can be used to create figures like

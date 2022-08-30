@@ -178,7 +178,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
                   cls._decodemx(state['hessian_matrix']) if (state['hessian_matrix'] is not None) else None,
                   state['nonmarkovian_radius_squared'])
         if 'hessian_projection_parameters' in state:  # for backward compatibility
-            for projection_lbl, params in state['hessian_projection_parameters']:
+            for projection_lbl, params in state['hessian_projection_parameters'].items():
                 ret.hessian_projection_parameters[projection_lbl] = params  # (param dict is entirely JSON-able)
                 ret.inv_hessian_projections[projection_lbl] = cls._decodemx(
                     state['inverse_hessian_projections'][projection_lbl])
@@ -317,7 +317,10 @@ class ConfidenceRegionFactory(_NicelySerializable):
         #Expand operation label aliases used in DataSet lookups
         ds_circuit_list = _tools.apply_aliases_to_circuits(circuit_list, aliases)
 
-        nModelParams = model.num_nongauge_params
+        try:
+            nModelParams = model.num_nongauge_params
+        except AttributeError:
+            nModelParams = model.num_params  # fallback for models that don't implement num_nongauge_params
         nDataParams = dataset.degrees_of_freedom(ds_circuit_list)
         #number of independent parameters in dataset (max. model # of params)
 

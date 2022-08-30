@@ -13,6 +13,7 @@ Defines the OplessModel class
 import numpy as _np
 
 from pygsti.models.model import Model as _Model
+from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.opcalc import float_product as prod
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.circuits.circuit import Circuit as _Circuit
@@ -397,6 +398,9 @@ class ErrorRatesModel(SuccessFailModel):
                 return [g_inds[self._alias_dict.get(lbl, lbl)]]
             elif self._alias_dict.get(lbl.name, lbl.name) in g_inds:  # allow, e.g. "Gx" to work for Gx:0, Gx:1, etc.
                 return [g_inds[self._alias_dict.get(lbl.name, lbl.name)]]
+            elif self._alias_dict.get(_Label(lbl.name, lbl.sslbls), _Label(lbl.name, lbl.sslbls)) in g_inds:
+                # Allow time/arg stripped labels to match
+                return [g_inds[self._alias_dict.get(_Label(lbl.name, lbl.sslbls), _Label(lbl.name, lbl.sslbls))]]
             else:
                 indices = []
                 assert(not lbl.is_simple()), "Cannot find error rate for label: %s" % str(lbl)
