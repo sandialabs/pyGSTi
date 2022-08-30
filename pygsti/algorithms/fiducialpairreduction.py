@@ -1122,7 +1122,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                 
                 #condition = spectrum[-1] / spectrum[imin] if (spectrum[imin] > 0) else _np.inf
                 
-                if (spectrum[imin] >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set]): #and condition <= (condition_number_tol*condition_full_fid_set)):
+                if (spectrum[imin] >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set])): #and condition <= (condition_number_tol*condition_full_fid_set)):
                     
                     #if the list for bestFirstEval is empty or else we haven't hit the number of solutions to return
                     #yet then we'll append the value to the list and sort it regardless of the value. Otherwise
@@ -1243,7 +1243,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                 
                 #condition = spectrum[-1] / spectrum[imin] if (spectrum[imin] > 0) else _np.inf
                 
-                if (spectrum[imin] >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set]):# and condition <= (condition_number_tol*condition_full_fid_set)):
+                if (spectrum[imin] >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set])):# and condition <= (condition_number_tol*condition_full_fid_set)):
                     
                     #if the list for bestFirstEval is empty or else we haven't hit the number of solutions to return
                     #yet then we'll append the value to the list and sort it regardless of the value. Otherwise
