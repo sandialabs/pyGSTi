@@ -365,6 +365,18 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
 
     n_random : int, optional
         The number of random-pair-sets to consider for a given set size.
+        
+    min_iterations : int, optional
+        A minimum number of candidate fiducial sets to try for a given
+        set size before allowing the search to exit early in the event
+        an acceptable candidate solution has already been found.
+        
+    base_loweig_tol : float, optional (default 1e-1)
+        A relative threshold value for determining if a fiducial set
+        is an acceptable candidate solution. The tolerance value indicates
+        the decrease in the magnitude of the smallest eigenvalue of
+        the Jacobian we're will to accept relative to that of the full
+        fiducial set.
 
     seed : int, optional
         The seed to use for generating random-pair-sets.
@@ -379,9 +391,10 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
         Which type of criteria to use when selecting which of potentially many candidate fiducial pairs to search through.
         Currently only "best" supported which returns the num_soln_returned best candidates as measured by minimum eigenvalue.
         
-    num_recursions : int, optional
-        The number of times to recursively search for smaller candidate sets. Careful about setting this too high
-        when num_soln_returned is also high as the total number of searches is num_soln_returned^num_recursions.
+    retry_for_smaller : bool, optional
+        If true then a second search is performed seeded by the candidate solution sets found in the first pass.
+        The search routine then randomly subsamples sets of fiducial pairs from these candidate solutions to see if
+        a smaller subset will suffice.
 
     mem_limit : int, optional
         A memory limit in bytes.
@@ -400,7 +413,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
     if pre_povm_tuples == "first":
         firstRho = list(target_model.preps.keys())[0]
         firstPOVM = list(target_model.povms.keys())[0]
-        pre_povm_tuples = [(firstRho, firstPOVM)]\
+        pre_povm_tuples = [(firstRho, firstPOVM)]
     
     #brief intercession to calculate the number of degrees of freedom for the povm.
     num_effects= len(list(target_model.povms[pre_povm_tuples[0][1]].keys()))
