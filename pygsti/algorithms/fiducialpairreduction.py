@@ -511,13 +511,18 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                 
                 #set the value of goodPairList to be this value.
                 goodPairList= updated_solns[min_length_idx]
+                    
+                #print some output about the minimum eigenvalue acheived.
+                printer.log('Minimum Eigenvalue Achieved: %f' %(bestFirstEval[0]), 3)
+
+                
             else:
                 #take the first entry of the candidate solution list if there is more than one.
                 goodPairList= list(candidate_solution_list.values())[0]
                 bestFirstEval=bestFirstEval[0]
             
-            #print some output about the minimum eigenvalue acheived.
-            printer.log('Minimum Eigenvalue Achieved: %f' %(min(bestFirstEval)), 3)
+                #print some output about the minimum eigenvalue acheived.
+                printer.log('Minimum Eigenvalue Achieved: %f' %(bestFirstEval), 3)
             
             try:
                 assert(goodPairList is not None)
@@ -645,19 +650,19 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
     """
     
     #debugging
-    print('--------------User Input Parameters-------------')
-    print('Target Model: ', target_model)
-    print('Prep Fiducials: ', prep_fiducials)
-    print('Measurement Fiducials: ', meas_fiducials)
-    print('Germs: ', germs)
-    print('Max Lengths: ', max_lengths)
-    print('pre_povm_tuples: ', pre_povm_tuples)
-    print('Search Mode: ', search_mode)
-    print('Truncation Scheme: ', trunc_scheme)
-    print('Number of Random Iterations?: ', n_random)
-    print('RNG Seed: ', seed)
-    print('Verbosity: ', verbosity)
-    print('Memory Limit: ', mem_limit)
+    #print('--------------User Input Parameters-------------')
+    #print('Target Model: ', target_model)
+    #print('Prep Fiducials: ', prep_fiducials)
+    #print('Measurement Fiducials: ', meas_fiducials)
+    #print('Germs: ', germs)
+    #print('Max Lengths: ', max_lengths)
+    #print('pre_povm_tuples: ', pre_povm_tuples)
+    #print('Search Mode: ', search_mode)
+    #print('Truncation Scheme: ', trunc_scheme)
+    #print('Number of Random Iterations?: ', n_random)
+    #print('RNG Seed: ', seed)
+    #print('Verbosity: ', verbosity)
+    #print('Memory Limit: ', mem_limit)
     
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
