@@ -1024,6 +1024,10 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     #use the spectrum to calculate the rank instead.
     rank= _np.count_nonzero(spectrum_full_fid_set>RANK_TOL)
     
+    if rank < gsGerm.num_params:  # full fiducial set should work!
+        #print(rank)
+        raise ValueError("Incomplete fiducial-pair set!")
+    
     spectrum_full_fid_set= list(sorted(_np.abs(_np.linalg.eigvals(_np.dot(dPall, dPall.T)))))
     
     imin_full_fid_set = len(spectrum_full_fid_set) - gsGerm.num_params
@@ -1041,11 +1045,6 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
             
     #debugging
     #print('J J^T Spectrum: ', spectrum)
-    
-    
-    if rank < gsGerm.num_params:  # full fiducial set should work!
-        #print(rank)
-        raise ValueError("Incomplete fiducial-pair set!")
 
     #Below will take a *subset* of the rows in dPall
     # depending on which (of all possible) fiducial pairs
