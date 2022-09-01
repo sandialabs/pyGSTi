@@ -20,15 +20,15 @@ class FiducialPairReductionStdData(object):
         Circuit(('Gi',)): [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (2, 0), (2, 1), (2, 2)], 
         Circuit(('Gx',)): [(0, 0), (0, 1), (2, 2)], 
         Circuit(('Gy',)): [(0, 0), (0, 2), (1, 1)], 
-        Circuit(('Gx','Gy')): [(0, 0), (0, 1), (0, 2), (0, 3), (1, 3)], 
-        Circuit(('Gx','Gx','Gy')): [(0, 0), (0, 1), (0, 2), (1, 0), (1, 4)], 
+        Circuit(('Gx','Gy')): [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)], 
+        Circuit(('Gx','Gx','Gy')): [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1)], 
         Circuit(('Gx','Gy','Gy')): [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)], 
-        Circuit(('Gx','Gy','Gi')): [(0, 0), (0, 1), (0, 2), (0, 3), (1, 2)], 
-        Circuit(('Gx','Gi','Gy')): [(0, 0), (0, 1), (0, 2), (0, 3), (1, 2)], 
+        Circuit(('Gx','Gy','Gi')): [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)], 
+        Circuit(('Gx','Gi','Gy')): [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)], 
         Circuit(('Gx','Gi','Gi')): [(0, 0), (0, 1), (2, 2)], 
         Circuit(('Gy','Gi','Gi')): [(0, 0), (0, 2), (1, 1)], 
         Circuit(('Gx','Gy','Gy','Gi')): [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)], 
-        Circuit(('Gx','Gx','Gy','Gx','Gy','Gy')): [(0, 0), (0, 1), (0, 2), (0, 3), (1, 3)]
+        Circuit(('Gx','Gx','Gy','Gx','Gy','Gy')): [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)]
         }
         
         
@@ -112,7 +112,7 @@ class FindSufficientFiducialPairsPerGermBase(object):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs_per_germ(
             self.model, self.preps, self.effects, self.germs,
             search_mode='sequential', retry_for_smaller=False, 
-            min_iterations=1
+            min_iterations=1, verbosity=0
         )
         print("Found per-germ pairs:\n", fiducial_pairs)
         self.assertTrue(fiducial_pairs == self.fiducial_pairs_per_germ)
