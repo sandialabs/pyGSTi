@@ -111,7 +111,8 @@ class FindSufficientFiducialPairsPerGermBase(object):
     def test_find_sufficient_fiducial_pairs_per_germ_sequential(self):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs_per_germ(
             self.model, self.preps, self.effects, self.germs,
-            search_mode='sequential'
+            search_mode='sequential', retry_for_smaller=False, 
+            min_iterations=1
         )
         print("Found per-germ pairs:\n", fiducial_pairs)
         self.assertTrue(fiducial_pairs == self.fiducial_pairs_per_germ)
