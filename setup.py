@@ -75,7 +75,7 @@ extras = {
         'jinja2',
         'seaborn',
         'ply',
-        'qibo'
+        'qibo<=0.1.7'
     ]
 }
 
