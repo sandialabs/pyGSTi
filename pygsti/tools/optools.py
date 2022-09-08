@@ -708,7 +708,10 @@ def unitarity(a, mx_basis="gm"):
         B = _bt.change_basis(a, mx_basis, "gm")  # everything should be able to be put in the "gm" basis
 
     unital = B[1:d**2, 1:d**2]
-    u = _np.trace(_np.dot(_np.conj(_np.transpose(unital)), unital)) / (d**2 - 1)
+    #old version
+    #u = _np.trace(_np.dot(_np.conj(_np.transpose(unital)), unital)) / (d**2 - 1)
+    #new version
+    u= _np.einsum('ij,ji->', unital.conjugate().T, unital ) / (d**2 - 1)
     return u
 
 
