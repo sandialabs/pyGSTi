@@ -363,6 +363,17 @@ class GateOpsTester(BaseCase):
             [   0,    0, 0.25,     0],
             [0.2j,    0,    0,   0.1]
         ], 'complex')
+        
+        self.A_TP= np.array([
+            [1,  0,           0,           0],
+            [0, -0.74972882,  0.06641116, -0.65840432],
+            [0, -0.07921032, -0.99680422, -0.01034724],
+            [0, -0.65698738,  0.04439479,  0.7525933 ]])
+        self.B_unitary=array([
+            [1,  0,           0,           0        ],
+            [0, -0.29719065,  0.63991085, -0.70865494],
+            [0,  0.79014219, -0.2518555 , -0.55878809],
+            [0, -0.5360532 , -0.72600476, -0.43077146]])
 
     def test_frobenius_distance(self):
         self.assertAlmostEqual(ot.frobeniusdist(self.A, self.A), 0.0)
@@ -388,7 +399,10 @@ class GateOpsTester(BaseCase):
 
     def test_entanglement_fidelity(self):
         fidelity = ot.entanglement_fidelity(self.A, self.B)
+        fidelity_TP_unitary= ot.entanglement_fidelity(self.A_TP, self.B_unitary, is_tp=True, is_unitary=True)
         self.assertAlmostEqual(fidelity, 0.42686642003)
+        self.assertAlmostEqual(fidelity_TP_unitary, 0.4804724656092404)
+        
 
     def test_fidelity_upper_bound(self):
         upperBound = ot.fidelity_upper_bound(self.A)
