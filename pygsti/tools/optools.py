@@ -427,7 +427,7 @@ def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J
     return tracedist(JA, JB)
 
 
-def entanglement_fidelity(a, b, mx_basis='pp'):
+def entanglement_fidelity(a, b, mx_basis='pp', is_tp_flag=None, is_unitary_flag=None):
     """
     Returns the "entanglement" process fidelity between gate  matrices.
 
@@ -450,20 +450,51 @@ def entanglement_fidelity(a, b, mx_basis='pp'):
         The basis of the matrices.  Allowed values are Matrix-unit (std),
         Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
         (or a custom basis object).
+        
+    is_tp_flag : bool, optional (default None)
+        Manual flag for specifying that both matrices are TP. Skips
+        the check for this which is faster, but only should be used
+        when user is certain this is true apriori.
+    is_unitary_flag : bool, optional (default None)
+        Manual flag for specifying that the second matrix, b, is
+        unitary. This skips the check for this which is faster, but only
+        should be used when the user is certain this is true apriori.
 
     Returns
     -------
     float
     """
     d2 = a.shape[0]
-    def is_tp(x): return _np.isclose(x[0, 0], 1.0) and all(
-        [_np.isclose(x[0, i], 0) for i in range(d2)])
+    
+    
 
-    def is_unitary(x): return _np.allclose(_np.identity(d2, 'd'), _np.dot(x, x.conjugate().T))
+    
 
-    if is_tp(a) and is_tp(b) and is_unitary(b):  # then assume TP-like gates & use simpler formula
-        TrLambda = _np.trace(_np.dot(a, b.conjugate().T))  # same as using _np.linalg.inv(b)
-        d2 = a.shape[0]
+    #if the tp flag isn't set we'll calculate whether it is true here
+    if is_tp_flag is None:
+        def is_tp(x): return _np.isclose(x[0, 0], 1.0) and all(
+        [_np.isclose(x[0, i], 0) for i in range(1,d2)])
+        
+        is_tp_flag= (is_tp(a) and is_tp(b))
+   
+    #if the unitary flag isn't set we'll calculate whether it is true here 
+    if is_unitary_flag is None:
+        def is_unitary(x): return _np.allclose(_np.identity(d2, 'd'), _np.dot(x, x.conjugate().T))
+        
+        is_unitary_flag= is_unitary(b)
+    
+        
+    if is_tp_flag and is_unitary_flag:  # then assume TP-like gates & use simpler formula
+        #old version, slower than einsum
+        #TrLambda = _np.trace(_np.dot(a, b.conjugate().T))  # same as using _np.linalg.inv(b)
+        
+        #Use einsum black magic to only calculate the diagonal elements
+        #if the basis is either pp or qm we know the elements are real-valued, so we
+        #don't need to take the conjugate
+        if mx_basis=='pp' or mx_basis=='qm':
+            TrLambda = _np.einsum('ij,ji->',a, b.conjugate().T)
+        else:
+            TrLambda = _np.einsum('ij,ji->',a, b.T)
         return TrLambda / d2
 
     JA = _jam.jamiolkowski_iso(a, mx_basis, mx_basis)
