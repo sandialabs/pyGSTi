@@ -369,11 +369,23 @@ class GateOpsTester(BaseCase):
             [0, -0.74972882,  0.06641116, -0.65840432],
             [0, -0.07921032, -0.99680422, -0.01034724],
             [0, -0.65698738,  0.04439479,  0.7525933 ]])
-        self.B_unitary=array([
+        self.B_unitary= np.array([
             [1,  0,           0,           0        ],
             [0, -0.29719065,  0.63991085, -0.70865494],
             [0,  0.79014219, -0.2518555 , -0.55878809],
             [0, -0.5360532 , -0.72600476, -0.43077146]])
+            
+        self.A_TP_std= np.array([
+            [ 0.87629665+0.j, -0.32849369+0.0221974j, -0.32849369-0.0221974j,  0.12370335+0.j],
+            [-0.32920216+0.00517362j, -0.87326652+0.07281074j, 0.1235377 +0.00639958j,  0.32920216-0.00517362j],
+            [-0.32920216-0.00517362j,  0.1235377 -0.00639958j, -0.87326652-0.07281074j,  0.32920216+0.00517362j],
+            [ 0.12370335+0.j,  0.32849369-0.0221974j,0.32849369+0.0221974j ,  0.87629665+0.j]])
+        
+        self.B_unitary_std= np.array([
+            [ 0.28461427+0.j, -0.2680266 -0.36300238j, -0.2680266 + 0.36300238j,  0.71538573+0.j],
+            [-0.35432747+0.27939404j, -0.27452307-0.07511567j, -0.02266757-0.71502652j,  0.35432747-0.27939404j],
+            [-0.35432747-0.27939404j, -0.02266757+0.71502652j, -0.27452307+0.07511567j,  0.35432747+0.27939404j],
+            [ 0.71538573+0.j,  0.2680266 +0.36300238j, 0.2680266 -0.36300238j,  0.28461427+0.j]])
 
     def test_frobenius_distance(self):
         self.assertAlmostEqual(ot.frobeniusdist(self.A, self.A), 0.0)
@@ -400,9 +412,15 @@ class GateOpsTester(BaseCase):
     def test_entanglement_fidelity(self):
         fidelity = ot.entanglement_fidelity(self.A, self.B)
         fidelity_TP_unitary= ot.entanglement_fidelity(self.A_TP, self.B_unitary, is_tp=True, is_unitary=True)
+        fidelity_TP_unitary_no_flag= ot.entanglement_fidelity(self.A_TP, self.B_unitary)
+        fidelity_TP_unitary_jam= ot.entanglement_fidelity(self.A_TP, self.B_unitary, is_tp=False, is_unitary=False)
+        fidelity_TP_unitary_std= ot.entanglement_fidelity(self.A_TP_std, self.B_unitary_std, mx_basis='std')
+        
         self.assertAlmostEqual(fidelity, 0.42686642003)
         self.assertAlmostEqual(fidelity_TP_unitary, 0.4804724656092404)
-        
+        self.assertAlmostEqual(fidelity_TP_unitary_no_flag, 0.4804724656092404)
+        self.assertAlmostEqual(fidelity_TP_unitary, fidelity_TP_unitary_jam)
+        self.assertAlmostEqual(fidelity_TP_unitary_std, 0.4804724656092404)
 
     def test_fidelity_upper_bound(self):
         upperBound = ot.fidelity_upper_bound(self.A)
