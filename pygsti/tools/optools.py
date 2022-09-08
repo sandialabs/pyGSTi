@@ -427,7 +427,7 @@ def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J
     return tracedist(JA, JB)
 
 
-def entanglement_fidelity(a, b, mx_basis='pp', is_tp_flag=None, is_unitary_flag=None):
+def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Returns the "entanglement" process fidelity between gate  matrices.
 
@@ -437,7 +437,13 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp_flag=None, is_unitary_flag=
 
     where J(.) is the Jamiolkowski isomorphism map that maps a operation matrix
     to it's corresponding Choi Matrix.
-
+    
+    When the both of the input matrices a and b are TP, and
+    the target matrix b is unitary then we can use a more efficient
+    formula:
+    
+      `F= Tr(a @ b.conjugate().T)/d^2
+        
     Parameters
     ----------
     a : numpy array
@@ -451,14 +457,18 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp_flag=None, is_unitary_flag=
         Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
         (or a custom basis object).
         
-    is_tp_flag : bool, optional (default None)
-        Manual flag for specifying that both matrices are TP. Skips
-        the check for this which is faster, but only should be used
-        when user is certain this is true apriori.
-    is_unitary_flag : bool, optional (default None)
-        Manual flag for specifying that the second matrix, b, is
-        unitary. This skips the check for this which is faster, but only
-        should be used when the user is certain this is true apriori.
+    is_tp : bool, optional (default None)
+        Flag indicating both matrices are TP. If None (the default), 
+        an explicit check is performed. If True/False, the check is 
+        skipped and the provided value is used (faster, but should only 
+        be used when the user is certain this is true apriori).
+
+    is_unitary : bool, optional (default None)
+        Flag indicating that the second matrix, b, is
+        unitary. If None (the default) an explicit check is performed.
+        If True/False, the check is skipped and the provided value is used
+        (faster, but should only be used when the user is certain 
+        this is true apriori).
 
     Returns
     -------
@@ -466,25 +476,18 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp_flag=None, is_unitary_flag=
     """
     d2 = a.shape[0]
     
-    
-
-    
-
     #if the tp flag isn't set we'll calculate whether it is true here
-    if is_tp_flag is None:
-        def is_tp(x): return _np.isclose(x[0, 0], 1.0) and all(
+    if is_tp is None:
+        def is_tp_fn(x): return _np.isclose(x[0, 0], 1.0) and all(
         [_np.isclose(x[0, i], 0) for i in range(1,d2)])
         
-        is_tp_flag= (is_tp(a) and is_tp(b))
+        is_tp= (is_tp_fn(a) and is_tp_fn(b))
    
     #if the unitary flag isn't set we'll calculate whether it is true here 
-    if is_unitary_flag is None:
-        def is_unitary(x): return _np.allclose(_np.identity(d2, 'd'), _np.dot(x, x.conjugate().T))
-        
-        is_unitary_flag= is_unitary(b)
+    if is_unitary is None:
+        is_unitary= _np.allclose(_np.identity(d2, 'd'), _np.dot(b, b.conjugate().T))
     
-        
-    if is_tp_flag and is_unitary_flag:  # then assume TP-like gates & use simpler formula
+    if is_tp and is_unitary:  # then assume TP-like gates & use simpler formula
         #old version, slower than einsum
         #TrLambda = _np.trace(_np.dot(a, b.conjugate().T))  # same as using _np.linalg.inv(b)
         
