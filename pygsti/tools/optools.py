@@ -489,12 +489,12 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp_flag=None, is_unitary_flag=
         #TrLambda = _np.trace(_np.dot(a, b.conjugate().T))  # same as using _np.linalg.inv(b)
         
         #Use einsum black magic to only calculate the diagonal elements
-        #if the basis is either pp or qm we know the elements are real-valued, so we
+        #if the basis is either pp or gm we know the elements are real-valued, so we
         #don't need to take the conjugate
-        if mx_basis=='pp' or mx_basis=='qm':
-            TrLambda = _np.einsum('ij,ji->',a, b.conjugate().T)
-        else:
+        if mx_basis=='pp' or mx_basis=='gm':
             TrLambda = _np.einsum('ij,ji->',a, b.T)
+        else:
+            TrLambda = _np.einsum('ij,ji->',a, b.conjugate().T)
         return TrLambda / d2
 
     JA = _jam.jamiolkowski_iso(a, mx_basis, mx_basis)
