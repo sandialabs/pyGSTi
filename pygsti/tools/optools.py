@@ -505,7 +505,7 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     return fidelity(JA, JB)
 
 
-def average_gate_fidelity(a, b, mx_basis='pp'):
+def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Computes the average gate fidelity (AGF) between two gates.
 
@@ -529,6 +529,19 @@ def average_gate_fidelity(a, b, mx_basis='pp'):
 
     mx_basis : {"std","gm","pp"} or Basis object, optional
         The basis of the matrices.
+        
+    is_tp : bool, optional (default None)
+        Flag indicating both matrices are TP. If None (the default), 
+        an explicit check is performed. If True/False, the check is 
+        skipped and the provided value is used (faster, but should only 
+        be used when the user is certain this is true apriori).
+
+    is_unitary : bool, optional (default None)
+        Flag indicating that the second matrix, b, is
+        unitary. If None (the default) an explicit check is performed.
+        If True/False, the check is skipped and the provided value is used
+        (faster, but should only be used when the user is certain 
+        this is true apriori).
 
     Returns
     -------
@@ -536,12 +549,12 @@ def average_gate_fidelity(a, b, mx_basis='pp'):
         The AGI of a to b.
     """
     d = int(round(_np.sqrt(a.shape[0])))
-    PF = entanglement_fidelity(a, b, mx_basis=mx_basis)
+    PF = entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
     AGF = (d * PF + 1) / (1 + d)
     return float(AGF)
 
 
-def average_gate_infidelity(a, b, mx_basis="gm"):
+def average_gate_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Computes the average gate infidelity (`AGI`) between two gates.
 
@@ -565,15 +578,28 @@ def average_gate_infidelity(a, b, mx_basis="gm"):
 
     mx_basis : {"std","gm","pp"} or Basis object, optional
         The basis of the matrices.
+        
+    is_tp : bool, optional (default None)
+        Flag indicating both matrices are TP. If None (the default), 
+        an explicit check is performed. If True/False, the check is 
+        skipped and the provided value is used (faster, but should only 
+        be used when the user is certain this is true apriori).
 
+    is_unitary : bool, optional (default None)
+        Flag indicating that the second matrix, b, is
+        unitary. If None (the default) an explicit check is performed.
+        If True/False, the check is skipped and the provided value is used
+        (faster, but should only be used when the user is certain 
+        this is true apriori).
+       
     Returns
     -------
     float
     """
-    return 1 - average_gate_fidelity(a, b, mx_basis)
+    return 1 - average_gate_fidelity(a, b, mx_basis, is_tp, is_unitary)
 
 
-def entanglement_infidelity(a, b, mx_basis='pp'):
+def entanglement_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Returns the entanglement infidelity (EI) between gate matrices.
 
@@ -596,17 +622,30 @@ def entanglement_infidelity(a, b, mx_basis='pp'):
         The basis of the matrices.  Allowed values are Matrix-unit (std),
         Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
         (or a custom basis object).
+        
+    is_tp : bool, optional (default None)
+        Flag indicating both matrices are TP. If None (the default), 
+        an explicit check is performed. If True/False, the check is 
+        skipped and the provided value is used (faster, but should only 
+        be used when the user is certain this is true apriori).
+
+    is_unitary : bool, optional (default None)
+        Flag indicating that the second matrix, b, is
+        unitary. If None (the default) an explicit check is performed.
+        If True/False, the check is skipped and the provided value is used
+        (faster, but should only be used when the user is certain 
+        this is true apriori).
 
     Returns
     -------
     EI : float
         The EI of a to b.
     """
-    return 1 - float(entanglement_fidelity(a, b, mx_basis))
+    return 1 - float(entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary))
 
 
 def gateset_infidelity(model, target_model, itype='EI',
-                       weights=None, mx_basis=None):
+                       weights=None, mx_basis=None, is_tp=None, is_unitary=None):
     """
     Computes the average-over-gates of the infidelity between gates in `model` and the gates in `target_model`.
 
@@ -642,6 +681,19 @@ def gateset_infidelity(model, target_model, itype='EI',
     mx_basis : {"std","gm","pp"} or Basis object, optional
         The basis of the models. If None, the basis is obtained from
         the model.
+        
+    is_tp : bool, optional (default None)
+        Flag indicating both matrices are TP. If None (the default), 
+        an explicit check is performed. If True/False, the check is 
+        skipped and the provided value is used (faster, but should only 
+        be used when the user is certain this is true apriori).
+
+    is_unitary : bool, optional (default None)
+        Flag indicating that the second matrix, b, is
+        unitary. If None (the default) an explicit check is performed.
+        If True/False, the check is skipped and the provided value is used
+        (faster, but should only be used when the user is certain 
+        this is true apriori).
 
     Returns
     -------
@@ -657,9 +709,9 @@ def gateset_infidelity(model, target_model, itype='EI',
     I_list = []
     for gate in list(target_model.operations.keys()):
         if itype == 'AGI':
-            I = average_gate_infidelity(model.operations[gate], target_model.operations[gate], mx_basis=mx_basis)
+            I = average_gate_infidelity(model.operations[gate], target_model.operations[gate], mx_basis, is_tp)
         if itype == 'EI':
-            I = entanglement_infidelity(model.operations[gate], target_model.operations[gate], mx_basis=mx_basis)
+            I = entanglement_infidelity(model.operations[gate], target_model.operations[gate], mx_basis, is_tp)
         if weights is None:
             w = 1
         else:
