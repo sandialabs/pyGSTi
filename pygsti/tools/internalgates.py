@@ -278,6 +278,9 @@ def standard_gatename_unitaries():
                                          0., 0., 1., 0.], [0., 0., 0., -1.]], complex)
     std_unitaries['Gcnot'] = _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [
                                        0., 0., 0., 1.], [0., 0., 1., 0.]], complex)
+    std_unitaries['Gzz'] = _np.array([[1 - 1j, 0, 0, 0], [0, 1 + 1j, 0, 0],
+                                      [0, 0, 1 + 1j, 0], [0, 0, 0, 1 - 1j]], complex)
+    std_unitaries['Gxx'] = _np.array([[1, 0, 0, -1j], [0, 1, -1j, 0], [0, -1j, 1, 0], [-1j, 0, 0, 1]], complex)
     std_unitaries['Gswap'] = _np.array([[1., 0., 0., 0.], [0., 0., 1., 0.], [
                                        0., 1., 0., 0.], [0., 0., 0., 1.]], complex)
 
