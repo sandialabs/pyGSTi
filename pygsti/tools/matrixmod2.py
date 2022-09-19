@@ -233,7 +233,7 @@ def diagonal_as_matrix(m):
 # Vol. 76, No. 2 (Feb., 1969), pp. 152-164
 
 
-def albert_factor(d, failcount=0):
+def albert_factor(d, failcount=0, rand_state=None):
     """
     Returns a matrix M such that d = M M.T for symmetric d, where d and M are matrices over [0,1] mod 2.
 
@@ -253,15 +253,19 @@ def albert_factor(d, failcount=0):
     failcount : int, optional
         UNUSED.
 
+    rand_state : np.random.RandomState, optional
+        Random number generator to allow for determinism.
+
     Returns
     -------
     numpy.ndarray
     """
     d = _np.array(d, dtype='int')
+    if rand_state is None: rand_state = _np.random.RandomState()
 
     proper = False
     while not proper:
-        N = onesify(d)
+        N = onesify(d, rand_state=rand_state)
         aa = multidot_mod2([N, d, N.T])
         P = proper_permutation(aa)
         A = multidot_mod2([P, aa, P.T])
@@ -287,7 +291,7 @@ def albert_factor(d, failcount=0):
     return L
 
 
-def random_bitstring(n, p, failcount=0):
+def random_bitstring(n, p, failcount=0, rand_state=None):
     """
     Constructs a random bitstring of length n with parity p
 
@@ -302,18 +306,22 @@ def random_bitstring(n, p, failcount=0):
     failcount : int, optional
         Internal use only.
 
+    rand_state : np.random.RandomState, optional
+        Random number generator to allow for determinism.
+
     Returns
     -------
     numpy.ndarray
     """
-    bitstring = _np.random.randint(0, 2, size=n)
+    if rand_state is None: rand_state = _np.random.RandomState()
+    bitstring = rand_state.randint(0, 2, size=n)
     if _np.mod(sum(bitstring), 2) == p:
         return bitstring
     elif failcount < 100:
-        return _np.array(random_bitstring(n, p, failcount + 1), dtype='int')
+        return _np.array(random_bitstring(n, p, failcount + 1, rand_state), dtype='int')
 
 
-def random_invertable_matrix(n, failcount=0):
+def random_invertable_matrix(n, failcount=0, rand_state=None):
     """
     Finds a random invertable matrix M over GL(n,2)
 
@@ -325,19 +333,23 @@ def random_invertable_matrix(n, failcount=0):
     failcount : int, optional
         Internal use only.
 
+    rand_state : np.random.RandomState, optional
+        Random number generator to allow for determinism.
+
     Returns
     -------
     numpy.ndarray
     """
-    M = _np.array([random_bitstring(n, _np.random.randint(0, 2)) for x in range(n)])
+    if rand_state is None: rand_state = _np.random.RandomState()
+    M = _np.array([random_bitstring(n, rand_state.randint(0, 2), rand_state=rand_state) for x in range(n)])
     if det_mod2(M) == 0:
         if failcount < 100:
-            return random_invertable_matrix(n, failcount + 1)
+            return random_invertable_matrix(n, failcount + 1, rand_state)
     else:
         return M
 
 
-def random_symmetric_invertable_matrix(n):
+def random_symmetric_invertable_matrix(n, failcount=0, rand_state=None):
     """
     Creates a random, symmetric, invertible matrix from GL(n,2)
 
@@ -346,15 +358,21 @@ def random_symmetric_invertable_matrix(n):
     n : int
         Matrix dimension.
 
+    failcount : int, optional
+        Internal use only.
+
+    rand_state : np.random.RandomState, optional
+        Random number generator to allow for determinism.
+
     Returns
     -------
     numpy.ndarray
     """
-    M = random_invertable_matrix(n)
+    M = random_invertable_matrix(n, failcount, rand_state)
     return dot_mod2(M, M.T)
 
 
-def onesify(a, failcount=0, maxfailcount=100):
+def onesify(a, failcount=0, maxfailcount=100, rand_state=None):
     """
     Returns M such that `M a M.T` has ones along the main diagonal
 
@@ -369,11 +387,15 @@ def onesify(a, failcount=0, maxfailcount=100):
     maxfailcount : int, optional
         Maximum number of tries before giving up.
 
+    rand_state : np.random.RandomState, optional
+        Random number generator to allow for determinism.
+
     Returns
     -------
     numpy.ndarray
     """
     assert(failcount < maxfailcount), "The function has failed too many times! Perhaps the input is invalid."
+    if rand_state is None: rand_state = _np.random.RandomState()
 
     # This is probably the slowest function since it just tries things
     t = len(a)
@@ -382,7 +404,7 @@ def onesify(a, failcount=0, maxfailcount=100):
 
     M = []
     while (len(M) < t) and (count < 40):
-        bitstr = random_bitstring(t, _np.random.randint(0, 2))
+        bitstr = random_bitstring(t, rand_state.randint(0, 2), rand_state=rand_state)
         if dot_mod2(bitstr, test_string) == 1:
             if not _np.any([_np.array_equal(bitstr, m) for m in M]):
                 M += [bitstr]
@@ -390,14 +412,14 @@ def onesify(a, failcount=0, maxfailcount=100):
                 count += 1
 
     if len(M) < t:
-        return onesify(a, failcount + 1)
+        return onesify(a, failcount + 1, rand_state=rand_state)
 
     M = _np.array(M, dtype='int')
 
     if _np.array_equal(dot_mod2(M, inv_mod2(M)), _np.identity(t, _np.int64)):
         return _np.array(M)
     else:
-        return onesify(a, failcount + 1, maxfailcount=maxfailcount)
+        return onesify(a, failcount + 1, maxfailcount=maxfailcount, rand_state=rand_state)
 
 
 def permute_top(a, i):
