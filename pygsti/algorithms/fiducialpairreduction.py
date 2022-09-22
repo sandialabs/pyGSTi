@@ -1019,7 +1019,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     RANK_TOL = 1e-7 #HARDCODED
     #rank = _np.linalg.matrix_rank(_np.dot(dPall, dPall.T), RANK_TOL)
     
-    spectrum_full_fid_set= _np.abs(_np.linalg.eigvals(_np.dot(dPall, dPall.T)))
+    spectrum_full_fid_set= _np.abs(_np.linalg.eigvalsh(_np.dot(dPall, dPall.T)))
     
     #use the spectrum to calculate the rank instead.
     rank= _np.count_nonzero(spectrum_full_fid_set>RANK_TOL)
@@ -1028,7 +1028,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
         #print(rank)
         raise ValueError("Incomplete fiducial-pair set!")
     
-    spectrum_full_fid_set= list(sorted(_np.abs(_np.linalg.eigvals(_np.dot(dPall, dPall.T)))))
+    spectrum_full_fid_set= list(sorted(_np.abs(_np.linalg.eigvalsh(_np.dot(dPall, dPall.T)))))
     
     imin_full_fid_set = len(spectrum_full_fid_set) - gsGerm.num_params
     condition_full_fid_set = spectrum_full_fid_set[-1] / spectrum_full_fid_set[imin_full_fid_set] if (spectrum_full_fid_set[imin_full_fid_set] > 0) else _np.inf
@@ -1108,7 +1108,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                 #print('pairIndicesToTest: ',pairIndicesToTest)
                 elementIndicesToTest = _np.concatenate([elIndicesForPair[i] for i in pairIndicesToTest])
                 dP = _np.take(dPall, elementIndicesToTest, axis=0)  # subset_of_num_elements x num_params
-                spectrum = list(sorted(_np.abs(_np.linalg.eigvals(_np.dot(dP, dP.T)))))
+                spectrum = list(sorted(_np.abs(_np.linalg.eigvalsh(_np.dot(dP, dP.T)))))
                 
                 
                 imin = len(spectrum) - gsGerm.num_params
@@ -1231,7 +1231,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                 #print('pairIndicesToTest: ',pairIndicesToTest)
                 elementIndicesToTest = _np.concatenate([elIndicesForPair[i] for i in pairIndicesToTest])
                 dP = _np.take(dPall, elementIndicesToTest, axis=0)  # subset_of_num_elements x num_params
-                spectrum = list(sorted(_np.abs(_np.linalg.eigvals(_np.dot(dP, dP.T)))))
+                spectrum = list(sorted(_np.abs(_np.linalg.eigvalsh(_np.dot(dP, dP.T)))))
                 
                 imin = len(spectrum) - gsGerm.num_params
                 
