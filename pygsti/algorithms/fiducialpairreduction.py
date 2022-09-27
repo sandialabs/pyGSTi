@@ -949,7 +949,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
 
 # Helper function for per_germ and per_germ_power FPR
 def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
-                                 gsGerm, power, mem_limit, printer, search_mode, seed, n_random, dof_per_povm, 
+                                 gsGerm, power, mem_limit, printer, search_mode, seed, n_random, dof_per_povm,
                                  min_iterations=1, lowest_eigenval_tol=1e-1,
                                  candidate_set_seed=None, num_soln_returned=1, type_soln_returned='best'):
     #Get dP-matrix for full set of fiducials, where
@@ -961,7 +961,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     
     #debugging
     #print('pre-povm-tuples: ', pre_povm_tuples)
-    
+
     # nRhoStrs, nEStrs = len(prep_fiducials), len(meas_fiducials)
     nEStrs = len(meas_fiducials)
     nPossiblePairs = len(prep_fiducials) * len(meas_fiducials)
@@ -971,14 +971,12 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     #debugging
     printer.log('Number of possible pairs: %d'%(nPossiblePairs), 4)
 
-
     #Determine which fiducial-pair indices to iterate over
     goodPairList = None; bestFirstEval = []; bestPairs = {}
     #loops over a number of pairs between min_pairs_needed and up to and not including the number of possible pairs
     
     min_pairs_needed= ceil((gsGerm.num_params/(nPossiblePairs*dof_per_povm))*nPossiblePairs)
-    printer.log('Minimum Number of Pairs Needed for this Germ: %d'%(min_pairs_needed), 2)
-    
+    printer.log('Minimum Number of Pairs Needed for this Germ: %d'%(min_pairs_needed), 2)    
 
     lst = _gsc.create_circuits(
         "pp[0]+f0+germ*power+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
@@ -1032,6 +1030,9 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     
     imin_full_fid_set = len(spectrum_full_fid_set) - gsGerm.num_params
     condition_full_fid_set = spectrum_full_fid_set[-1] / spectrum_full_fid_set[imin_full_fid_set] if (spectrum_full_fid_set[imin_full_fid_set] > 0) else _np.inf
+    
+    end=time.time()
+    print('Elapsed Time ', end-start )
     
     
     #debugging
