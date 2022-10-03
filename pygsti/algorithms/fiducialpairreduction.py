@@ -16,6 +16,7 @@ import random as _random
 
 import numpy as _np
 import scipy.special as _spspecial
+import scipy.linalg as _sla
 
 from math import ceil
 import time
@@ -29,6 +30,11 @@ from pygsti.tools import apply_aliases_to_circuits as _apply_aliases_to_circuits
 from pygsti.tools import remove_duplicates as _remove_duplicates
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+
+from pygsti.algorithms.germselection import construct_update_cache, minamide_style_inverse_trace, compact_EVD, compact_EVD_via_SVD
+from pygsti.algorithms import scoring as _scoring
+
+from pygsti.tools.matrixtools import print_mx
 
 import warnings
 
@@ -298,7 +304,6 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
                       for iEStr in range(nEStrs)]
     return listOfAllPairs
 
-#@_deprecated_fn('find_sufficient_fiducial_pairs_per_germ_power')
 def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_fiducials,
                                             germs, pre_povm_tuples="first",
                                             search_mode="random", constrain_to_tp=True,
@@ -533,7 +538,179 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             pairListDict[germ] = goodPairList  # add to final list of per-germ pairs
 
     return pairListDict
+    
+def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials, meas_fiducials,
+                                                germs, pre_povm_tuples="first", constrain_to_tp=True,
+                                                inv_trace_tol= 10, initial_seed_mode='random',
+                                                evd_tol=1e-10, sensitivity_threshold=1e-10, seed=None ,verbosity=0, check_complete_fid_set=True,
+                                                mem_limit=None):
+    """
+    Finds a per-germ set of fiducial pairs that are amplificationally complete.
 
+    A "standard" set of GST circuits consists of all circuits of the form:
+
+    statePrep + prepFiducial + germPower + measureFiducial + measurement
+
+    This set is typically over-complete, and it is possible to restrict the
+    (prepFiducial, measureFiducial) pairs to a subset of all the possible
+    pairs given the separate `prep_fiducials` and `meas_fiducials` lists.  This function
+    attempts to find sets of fiducial pairs, one set per germ, that still
+    amplify all of the model's parameters (i.e. is "amplificationally
+    complete").  For each germ, a fiducial pair set is found that amplifies
+    all of the "parameters" (really linear combinations of them) that the
+    particular germ amplifies.
+
+    To test whether a set of fiducial pairs satisfies this condition, the
+    sum of projectors `P_i = dot(J_i,J_i^T)`, where `J_i` is a matrix of the
+    derivatives of each of the selected (prepFiducial+germ+effectFiducial)
+    sequence probabilities with respect to the i-th germ eigenvalue (or
+    more generally, amplified parameter), is computed.  If the fiducial-pair
+    set is sufficient, the rank of the resulting sum (an operator) will be
+    equal to the total (maximal) number of parameters the germ can amplify.
+
+    Parameters
+    ----------
+    target_model : Model
+        The target model used to determine amplificational completeness.
+
+    prep_fiducials : list of Circuits
+        Fiducial circuits used to construct an informationally complete
+        effective preparation.
+
+    meas_fiducials : list of Circuits
+        Fiducial circuits used to construct an informationally complete
+        effective measurement.
+
+    germs : list of Circuits
+        The germ circuits that are repeated to amplify errors.
+
+    pre_povm_tuples : list or "first", optional
+        A list of `(prepLabel, povmLabel)` tuples to consider when
+        checking for completeness.  Usually this should be left as the special
+        (and default) value "first", which considers the first prep and POVM
+        contained in `target_model`.
+
+    search_mode : {"sequential","random"}, optional
+        If "sequential", then all potential fiducial pair sets of a given length
+        are considered in sequence (per germ) before moving to sets of a larger
+        size.  This can take a long time when there are many possible fiducial
+        pairs.  If "random", then only `n_random` randomly chosen fiducial pair
+        sets are considered for each set size before the set is enlarged.
+
+    constrain_to_tp : bool, optional
+        Whether or not to consider non-TP parameters the the germs amplify.  If
+        the fiducal pairs will be used in a GST estimation where the model is
+        constrained to being trace-preserving (TP), this should be set to True.
+
+    n_random : int, optional
+        The number of random-pair-sets to consider for a given set size.
+        
+    min_iterations : int, optional
+        A minimum number of candidate fiducial sets to try for a given
+        set size before allowing the search to exit early in the event
+        an acceptable candidate solution has already been found.
+        
+    base_loweig_tol : float, optional (default 1e-1)
+        A relative threshold value for determining if a fiducial set
+        is an acceptable candidate solution. The tolerance value indicates
+        the decrease in the magnitude of the smallest eigenvalue of
+        the Jacobian we're will to accept relative to that of the full
+        fiducial set.
+
+    seed : int, optional
+        The seed to use for generating random-pair-sets.
+
+    verbosity : int, optional
+        How much detail to print to stdout.
+       
+    num_soln_returned : int, optional
+        The number of candidate solutions to return for each run of the fiducial pair search.
+        
+    type_soln_returned : str, optional
+        Which type of criteria to use when selecting which of potentially many candidate fiducial pairs to search through.
+        Currently only "best" supported which returns the num_soln_returned best candidates as measured by minimum eigenvalue.
+        
+    retry_for_smaller : bool, optional
+        If true then a second search is performed seeded by the candidate solution sets found in the first pass.
+        The search routine then randomly subsamples sets of fiducial pairs from these candidate solutions to see if
+        a smaller subset will suffice.
+
+    mem_limit : int, optional
+        A memory limit in bytes.
+
+    Returns
+    -------
+    dict
+        A dictionary whose keys are the germ circuits and whose values are
+        lists of (iRhoFid,iMeasFid) tuples of integers, each specifying the
+        list of fiducial pairs for a particular germ (indices are into
+        `prep_fiducials` and `meas_fiducials`).
+    """
+
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
+
+    if pre_povm_tuples == "first":
+        firstRho = list(target_model.preps.keys())[0]
+        firstPOVM = list(target_model.povms.keys())[0]
+        pre_povm_tuples = [(firstRho, firstPOVM)]
+    
+    #brief intercession to calculate the number of degrees of freedom for the povm.
+    num_effects= len(list(target_model.povms[pre_povm_tuples[0][1]].keys()))
+    dof_per_povm= num_effects-1
+    
+    #debugging
+    #print('Number of DoF for POVM: ', dof_per_povm)
+       
+    pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
+                       for prepLbl, povmLbl in pre_povm_tuples]
+    
+
+    pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
+    
+    printer.log("------  Per Germ (L=1) Fiducial Pair Reduction --------")
+    with printer.progress_logging(1):
+        for i, germ in enumerate(germs):
+        
+            #debugging
+            #print('Current Germ: ', germ)
+
+            #Create a new model containing static target gates and a
+            # special "germ" gate that is parameterized only by it's
+            # eigenvalues (and relevant off-diagonal elements)
+            gsGerm = target_model.copy()
+            gsGerm.set_all_parameterizations("static")
+            germMx = gsGerm.sim.product(germ)
+            gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
+                germMx, True, constrain_to_tp)
+
+            printer.show_progress(i, len(germs),
+                                  suffix='-- %s germ (%d params)' %
+                                  (repr(germ), gsGerm.num_params))
+            #Debugging
+            #print(gsGerm.operations["Ggerm"].evals)
+            #print(gsGerm.operations["Ggerm"].params)
+
+            #Determine which fiducial-pair indices to iterate over
+            #initial run
+            candidate_solution_list, best_score = _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, pre_povm_tuples,
+                                                                    gsGerm, 1, mem_limit,
+                                                                    printer, seed, dof_per_povm,
+                                                                    inv_trace_tol, initial_seed_mode=initial_seed_mode,
+                                                                    check_complete_fid_set=check_complete_fid_set, evd_tol=evd_tol,
+                                                                    sensitivity_threshold=sensitivity_threshold)
+            
+            #print some output about the minimum eigenvalue acheived.
+            printer.log('Score Achieved: ' + str(best_score), 2)
+            
+            try:
+                assert(candidate_solution_list is not None)
+            except AssertionError as err:
+                print('Failed to find an acceptable fiducial set for germ power pair: ', germ)
+                print(err)
+
+            pairListDict[germ] = candidate_solution_list  # add to final list of per-germ pairs
+
+    return pairListDict
 
 def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, meas_fiducials,
                                                   germs, max_lengths,
@@ -1311,3 +1488,334 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
         print('Failed to find a sufficient fiducial set.')
     printer.log('Exiting _get_per_germ_power_fidpairs', 4)
     return goodPairList, bestFirstEval
+    
+
+#New greedy-style FPR algorithm:
+# Helper function for per_germ and per_germ_power FPR
+# This version uses a greedy style algorithm and an
+# alternative objective function which leverages the performance enhancements
+# utilized for the germ selection algorithm using low-rank updates.
+def _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, pre_povm_tuples,
+                                 gsGerm, power, mem_limit, printer, seed, dof_per_povm,
+                                 inv_trace_tol=10, initial_seed_mode= 'random',
+                                 check_complete_fid_set= True, evd_tol=1e-10, sensitivity_threshold= 1e-10):
+    #Get dP-matrix for full set of fiducials, where
+    # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
+    #   j is similar, and derivs are wrt the "eigenvalues" of the germ
+    #  (i.e. the parameters of the gsGerm model).
+    
+    printer.log('Entered helper function _get_per_germ_power_fidpairs_greedy', 3)
+    
+    #debugging
+    #print('pre-povm-tuples: ', pre_povm_tuples)
+    
+    # nRhoStrs, nEStrs = len(prep_fiducials), len(meas_fiducials)
+    nEStrs = len(meas_fiducials)
+    nPossiblePairs = len(prep_fiducials) * len(meas_fiducials)
+    
+    allPairIndices = list(range(nPossiblePairs))
+    
+    #debugging
+    printer.log('Number of possible pairs: %d'%(nPossiblePairs), 4)
+
+    #Determine which fiducial-pair indices to iterate over
+    goodPairList = None; bestFirstEval = []; bestPairs = {}
+    #loops over a number of pairs between min_pairs_needed and up to and not including the number of possible pairs
+    
+    min_pairs_needed= ceil((gsGerm.num_params/(nPossiblePairs*dof_per_povm))*nPossiblePairs)
+    printer.log('Minimum Number of Pairs Needed for this Germ: %d'%(min_pairs_needed), 2)
+    
+
+    lst = _gsc.create_circuits(
+        "pp[0]+f0+germ*power+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
+        germ=_circuits.Circuit('Ggerm'), pp=pre_povm_tuples, power=power,
+        order=('f0', 'f1', 'pp'))
+    #debugging
+    #print('List of circuits: ', lst)
+
+    resource_alloc = _baseobjs.ResourceAllocation(comm=None, mem_limit=mem_limit)
+    layout = gsGerm.sim.create_layout(lst, None, resource_alloc, array_types=('ep',), verbosity=0)
+
+    #debugging:
+    #print('Num Prep Fids: ', len(prep_fiducials))
+    #print('Num Measurement Fids: ', len(meas_fiducials))
+
+    elIndicesForPair = [[] for i in range(len(prep_fiducials) * len(meas_fiducials))]
+    nPrepPOVM = len(pre_povm_tuples)
+    for k in range(len(prep_fiducials) * len(meas_fiducials)):
+        for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):
+            # "original" indices into lst for k-th fiducial pair
+            elIndicesForPair[k].extend(_slct.to_array(layout.indices_for_index(o)))
+    
+    printer.log('Constructing Jacobian for Full Fiducial Set' , 3)
+    
+    local_dPall = layout.allocate_local_array('ep', 'd')
+    gsGerm.sim.bulk_fill_dprobs(local_dPall, layout, None)  # num_els x num_params
+    dPall = local_dPall.copy()  # local == global (no layout.gather required) b/c we used comm=None above
+    layout.free_local_array(local_dPall)  # not needed - local_dPall isn't shared (comm=None)
+    
+    printer.log('Calculating Inverse Trace of Full Fiducial Set', 3)
+    
+    # Construct sum of projectors onto the directions (1D spaces)
+    # corresponding to varying each parameter (~eigenvalue) of the
+    # germ.  If the set of fiducials is sufficient, then the rank of
+    # the resulting operator will equal the number of parameters,
+    # indicating that the P matrix is (independently) sensitive to
+    # each of the germ parameters (~eigenvalues), which is *all* we
+    # want sensitivity to.
+    RANK_TOL = 1e-7 #HARDCODED
+    #rank = _np.linalg.matrix_rank(_np.dot(dPall, dPall.T), RANK_TOL)
+    
+    if check_complete_fid_set:
+        spectrum_full_fid_set= _np.abs(_np.linalg.eigvalsh(_np.dot(dPall, dPall.T)))
+        
+        #use the spectrum to calculate the rank instead.
+        rank= _np.count_nonzero(spectrum_full_fid_set>RANK_TOL)
+    
+        if rank < gsGerm.num_params:  # full fiducial set should work!
+            #print(rank)
+            raise ValueError("Incomplete fiducial-pair set!")
+    
+        spectrum_full_fid_set= list(sorted(_np.abs(_np.linalg.eigvalsh(_np.dot(dPall, dPall.T)))))
+        
+        imin_full_fid_set = len(spectrum_full_fid_set) - gsGerm.num_params
+        condition_full_fid_set = spectrum_full_fid_set[-1] / spectrum_full_fid_set[imin_full_fid_set] if (spectrum_full_fid_set[imin_full_fid_set] > 0) else _np.inf
+        
+        
+        #debugging
+        printer.log('J J^T Rank Full Fiducial Set: %d' % rank, 2)
+        printer.log('Num Parameters (should equal above rank): %d' % (gsGerm.num_params), 2)
+        printer.log('Full Fiducial Set Min Eigenvalue: %f' % (spectrum_full_fid_set[imin_full_fid_set]), 2)
+        printer.log('Full Fiducial Set Max Eigenvalue: %f' % (spectrum_full_fid_set[-1]), 2)
+        printer.log('Full Fiducial Set Condition Number: %f' % (condition_full_fid_set), 2)
+    
+    inv_trace_complete= _np.trace(_np.linalg.pinv(dPall.T@dPall))
+    
+    printer.log('Full Fiducial Set Inverse Trace: %f' % (inv_trace_complete), 2)
+    
+    #It can happen that there are fiducial pairs which are entirely insensitive to any
+    #of the kite parameters, which show up as sets of empty rows in the jacobian.
+    #We should identify which fiducial pairs those are and remove them from the 
+    #search space.
+    printer.log('Removing useless fidcuial pairs with trivial sensitivity to the germ kite parameters. Sensitivity threshold is %.3f'%(sensitivity_threshold), 3)
+    printer.log('Number of fiducial pairs before filtering trivial ones: %d' %(len(allPairIndices)), 3)
+    cleaned_pair_indices_list= filter_useless_fid_pairs(allPairIndices, elIndicesForPair, dPall)
+    printer.log('Number of fiducial pairs after filtering trivial ones: %d' %(len(cleaned_pair_indices_list)), 3)
+    #Change the value of nPossiblePairs to reflect the filtered list
+    nPossiblePairs= len(cleaned_pair_indices_list)
+    
+    #Below will take a *subset* of the rows in dPall
+    # depending on which (of all possible) fiducial pairs
+    # are being considered.
+    
+    rng= _np.random.default_rng(seed=seed)
+    
+    #Need to choose how to initially seed a set of candidate fiducials.
+    #I can think of two ways atm, one is to seed it with a random set of
+    #fiducial pairs of size min_pairs_needed, the other is to run
+    #the greedy search all the way from zero.
+    
+    #If random, pick a random set of fiducial pairs to start the search with:
+    if initial_seed_mode=='random':
+        initial_fiducial_set= list(_random_combination(cleaned_pair_indices_list, min_pairs_needed))
+        initial_pair_count= min_pairs_needed
+    #if starting from zero then we'll change min_pairs_needed to zero and set the initial_fiducial_set
+    #to None (may not be needed, will remove the placeholder value later if that is the case). May also
+    #need some special logic to handle the very first step of the search.
+    elif initial_seed_mode=='greedy':
+        initial_fiducial_set=None
+        initial_pair_count=0
+    
+    printer.log('Initial fiducial set: ' + str(initial_fiducial_set), 3)
+    
+    current_best_fiducial_list= initial_fiducial_set
+    
+    printer.log('Building Compact EVD Cache For Fiducial Updates', 3)
+    #build a compact evd cache for the pairs we are iterating over too.
+    fiducial_update_EVD_cache= construct_compact_evd_cache(cleaned_pair_indices_list, dPall,
+                                                            elIndicesForPair, 
+                                                            eigenvalue_tolerance=evd_tol)
+                                                            
+    #print('fiducial_update_EVD_cache: ', fiducial_update_EVD_cache)                                                        
+    
+    #debugging:
+    #print('Initial Seed Fiducial Set: ', current_best_fiducial_list)
+    
+    for nNeededPairs in range(initial_pair_count, nPossiblePairs):
+        if nNeededPairs < min_pairs_needed:
+            printer.log("Searching for the best initial set of %d pairs. Need %d pairs for the initial set." %
+                    (nNeededPairs+1, min_pairs_needed), 2)
+        else:
+            printer.log("Beginning search for a good set of %d pairs" %
+                        (nNeededPairs), 2)
+            printer.log("    Inverse trace must be <= %g times more than the value for the full fiducial set" %
+                        (inv_trace_tol),2)
+            
+        #The pairs we want to iterate over in the upcoming greedy search are those
+        #in the set difference of allPairIndices-current_best_fiducial_list
+        if current_best_fiducial_list is None:
+            pairIndicesToIterateOver = cleaned_pair_indices_list
+            current_best_jacobian= None
+        else:
+            pairIndicesToIterateOver = list(set(cleaned_pair_indices_list)-set(current_best_fiducial_list))
+            current_best_jacobian= _np.take(dPall, _np.concatenate([elIndicesForPair[i] for i in current_best_fiducial_list]), axis=0)
+            #take the gramian of this jacobian.
+            current_best_jacobian= current_best_jacobian.T@current_best_jacobian
+            current_best_inv_trace = _np.trace(_np.linalg.pinv(current_best_jacobian))
+         
+        #Construct the update cache for the current_best_fiducial_list's jacobian.
+        if current_best_jacobian is not None:
+            update_cache= construct_update_cache(current_best_jacobian, evd_tol=evd_tol)
+            current_best_rank= len(update_cache[0])
+            #debugging
+            #print('Shape current_best_jacobian: ', current_best_jacobian.shape)
+            #print('Update Cache: ', update_cache)
+            #make a CompositeScore object for the current best fiducial set.
+            current_best_score= _scoring.CompositeScore(-current_best_rank, current_best_inv_trace, current_best_rank)
+            
+            
+        else:
+            update_cache= None  
+            current_best_score= None
+                                                                
+        #print('Fiducial Update EVD Cache: ', fiducial_update_EVD_cache)
+            
+        #debugging
+        printer.log('Initial Score: ' + str(current_best_score), 3)
+        
+        
+        for pairIndexToTest in pairIndicesToIterateOver:
+            
+            
+            printer.log('Tested Index: %d' %(pairIndexToTest), 4)
+            
+            # Same computation of rank as above, but with only a
+            # subset of the total fiducial pairs.
+            elementIndicesToTest = elIndicesForPair[pairIndexToTest]
+            update_to_test = _np.take(dPall, elementIndicesToTest, axis=0)  # subset_of_num_elements x num_params
+            
+            #debugging:
+            #print('Update being tested: ', update_to_test)
+            #print('Shape of update tested: ', update_to_test.shape)
+            
+            #We need some logic to handle the case where we are starting from scratch
+            #and don't have an initial current_best_jacobian.
+            if (initial_pair_count==0) and (nNeededPairs==0) and (current_best_jacobian is None):
+                updated_pinv, updated_rank= _sla.pinv(update_to_test.T@update_to_test, return_rank=True)
+                updated_inv_trace= _np.trace(updated_pinv)
+                current_best_score =  _scoring.CompositeScore(-updated_rank, updated_inv_trace, updated_rank)
+                idx_current_best_update = pairIndexToTest
+            elif (initial_pair_count==0) and (nNeededPairs==0) and (current_best_jacobian is not None):
+                updated_pinv, updated_rank= _sla.pinv(update_to_test.T@update_to_test, return_rank=True)
+                updated_inv_trace= _np.trace(updated_pinv)
+                updated_score =  _scoring.CompositeScore(-updated_rank, updated_inv_trace, updated_rank)
+                if updated_score < current_best_score:
+                    current_best_inv_trace= inv_trace_to_test
+                    idx_current_best_update = pairIndexToTest
+            #otherwise we already have an initial Jacobian and should use the standard update logic.
+            else:
+                #print('Update from EVD cache: ', fiducial_update_EVD_cache[pairIndexToTest])
+                updated_inv_trace, updated_rank, _ = minamide_style_inverse_trace(fiducial_update_EVD_cache[pairIndexToTest], 
+                                                                 update_cache[0], update_cache[1], 
+                                                                 update_cache[2], False)                                       
+                #debugging
+                #test_index_list = current_best_fiducial_list.copy()
+                #test_index_list.append(pairIndexToTest)
+                #direct_element_test = _np.concatenate([elIndicesForPair[i] for i in test_index_list])
+                #direct_jacobian_test = _np.take(dPall, direct_element_test, axis=0)  # subset_of_num_elements x num_params# subset_of_num_elements x num_params
+            
+                #updated_inv_trace_direct= _np.trace(_np.linalg.pinv(direct_jacobian_test.T@direct_jacobian_test))
+                
+                #print('updated inv trace: ', updated_inv_trace)
+                #print('updated inv trace direct: ', updated_inv_trace_direct)
+                
+                #updated_spectrum= _np.linalg.eigvalsh(direct_jacobian_test.T@direct_jacobian_test)
+                #print('Updated spectrum: ', updated_spectrum[updated_spectrum>1e-10] )
+                #print('Original spectrum: ', update_cache[0])
+                
+                #Compare the matrices from doing the additive update to the append based update
+                #and confirm they give the same thing.
+                #print('Norm between direct Jacobian and additive update Jacobian: ', _np.linalg.norm((direct_jacobian_test.T@direct_jacobian_test) - (current_best_jacobian + update_to_test.T@update_to_test)))
+                
+                #print('Norm between update_to_test.T@update_to_test and fiducial_update_EVD_cache[pairIndexToTest]@fiducial_update_EVD_cache[pairIndexToTest].T: ',
+                #      _np.linalg.norm(update_to_test.T@update_to_test-fiducial_update_EVD_cache[pairIndexToTest]@fiducial_update_EVD_cache[pairIndexToTest].T))
+                
+                #print('Rank Minamide: ', updated_rank) 
+                #print('Rank Directly Updated Jacobian: ', _np.linalg.matrix_rank(direct_jacobian_test.T@direct_jacobian_test))
+                
+                #print('Rank of tested update: ', _np.linalg.matrix_rank(update_to_test))
+                
+                #Construct a composite score object where the major score is
+                #the rank of the updated jacobian and the minor score is
+                #the inverse trace.
+                
+                updated_score= _scoring.CompositeScore(-updated_rank, updated_inv_trace, updated_rank)
+                
+                printer.log('Updated Score: '+ str(updated_score), 3)
+                
+                if updated_score < current_best_score:
+                    current_best_score=updated_score
+                    idx_current_best_update= pairIndexToTest
+        
+        #Add the best index found to the list for current_best_fiducial_list (or initialize it if this list isn't set yet).
+        if current_best_fiducial_list is None:
+            current_best_fiducial_list= [idx_current_best_update]
+        else:
+            current_best_fiducial_list.append(idx_current_best_update)
+            
+        printer.log('Index of best update fiducial : %d'%(idx_current_best_update), 3)
+        
+        #check whether we have found an acceptable reduced set of fiducials.
+        if (nNeededPairs>=min_pairs_needed) and (current_best_score.minor < inv_trace_tol*inv_trace_complete):
+            break
+
+    #Get list of pairs as tuples for printing & returning
+    goodPairList = []
+    for i in current_best_fiducial_list:
+        prepfid_index = i // nEStrs; iEStr = i - prepfid_index * nEStrs
+        goodPairList.append((prepfid_index, iEStr))        
+                    
+    #debugging
+    if goodPairList is None:
+        print('Failed to find a sufficient fiducial set.')
+    printer.log('Exiting _get_per_germ_power_fidpairs_greedy', 4)
+    return goodPairList, current_best_score
+
+    
+#helper function for building a compact evd cache:
+def construct_compact_evd_cache(fiducial_indices, complete_jacobian, element_map, eigenvalue_tolerance=1e-10):
+    sqrteU_dict = {}
+    
+    #print('Complete Jacobian Shape: ', complete_jacobian.shape)
+    #print('Complete Jacobian: ')
+    #print_mx(complete_jacobian)
+    
+    for fid_index in fiducial_indices:
+        fid_element_indices = element_map[fid_index]
+        fid_jacobian_components = _np.take(complete_jacobian, fid_element_indices, axis=0)
+        #print('fid_jacobian_components: ') 
+        #print_mx(fid_jacobian_components)
+        e, U = compact_EVD(fid_jacobian_components.T@fid_jacobian_components, eigenvalue_tolerance)
+        #print('eigenvalues: ', e)
+        #print('U: ', U)
+        sqrteU_dict[fid_index]= U@_np.diag(_np.sqrt(e))  
+    return sqrteU_dict    
+    
+    
+#helper function for removing fiducial pairs which are entirely insensitive to the kite
+#parameters from the search space:
+def filter_useless_fid_pairs(fiducial_indices, element_map, complete_jacobian, sensitivity_threshold= 1e-10):
+    
+    #loop through the list of fiducial pair indices and extract the components of the jacobian for
+    #that fiducial pair. The take the norm of that matrix and check if it is sufficiently larger 
+    #than the sensitivity threshold to determine if it is zero (numpy used Frobenius by default).
+    useful_fiducial_indices=[]
+    for fid_index in fiducial_indices:
+        fid_element_indices = element_map[fid_index]
+        fid_jacobian_components = _np.take(complete_jacobian, fid_element_indices, axis=0)
+        if _np.linalg.norm(fid_jacobian_components)>sensitivity_threshold:
+            useful_fiducial_indices.append(fid_index)
+        else:
+            continue
+    #return the list of fiducial pair indices with non-trivial frobenius norm.
+    return useful_fiducial_indices
