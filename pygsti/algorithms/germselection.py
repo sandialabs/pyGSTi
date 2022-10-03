@@ -3048,7 +3048,7 @@ def symmetric_low_rank_spectrum_update(update, orig_e, U, proj_U, force_rank_inc
 #    
 #    return trace, updated_rank, True
     
-def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=True):
+def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=False):
     """
     This function performs a low-rank update to the components of
     the psuedo inverse of a matrix relevant to the calculation of that
@@ -3103,98 +3103,171 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
     #Abort early and return a flag to indicate the rank did not increase.
     if len(nonzero_indices_update[0])==0 and force_rank_increase:
         return None, None, False
-    
-    updated_rank= len(orig_e)+ len(nonzero_indices_update[0])
-    P= q_update[: , nonzero_indices_update[0]]
-    
-    #Now form the matrix R_update which is given by P.T @ proj_update.
-    R_update= P.T@proj_update
-    
-    #Get the psuedoinverse of R_update:
-    try:
-        pinv_R_update= _np.linalg.pinv(R_update, rcond=1e-10) #hardcoded
-    except _np.linalg.LinAlgError:
-        #This means the SVD did not converge, try to fall back to a more stable
-        #SVD implementation using the scipy lapack_driver options.
-        print('pinv Calculation Failed to Converge.')
-        print('Falling back to pinv implementation based on Scipy SVD with lapack driver gesvd, which is slower but *should* be more stable.')
-        pinv_R_update = stable_pinv(R_update)
+    #We also need to add logic for the case where the projection onto the orthogonal
+    #complement is empty, which reduces the psuedoinverse update such that we can
+    #actually use the standard woodbury formula result.
+    elif (len(nonzero_indices_update[0])==0) and (not force_rank_increase):
+        #I have a bunch of intermediate matrices I need to construct. Some of which are used to build up
+        #subsequent ones.
+        beta= U.T@update
+        #column vector of the original eigenvalues.
+        orig_e_inv= _np.reshape(1/orig_e, (len(orig_e),1))
+        orig_e_inv_sqrt = _np.sqrt(orig_e_inv)
+        pinv_E_beta= orig_e_inv*beta
+        pinv_sqrt_E_beta = orig_e_inv_sqrt*beta
         
-    #I have a bunch of intermediate matrices I need to construct. Some of which are used to build up
-    #subsequent ones.
-    beta= U.T@update
-    
-    gamma = pinv_R_update.T @ beta.T
-    
-    #column vector of the original eigenvalues.
-    orig_e_inv= _np.reshape(1/orig_e, (len(orig_e),1))
-    
-    pinv_E_beta= orig_e_inv*beta
-    
-    B= _np.eye(pinv_R_update.shape[0]) - pinv_R_update @ R_update
-    
-    try:
-        Dinv_chol= _np.linalg.cholesky(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))
-        cholesky_success=True
-    except _np.linalg.LinAlgError as err:
-        #Cholesky decomposition probably failed.
-        #I'm not sure why it failed though so print some diagnostic info:
-        #Is B symmetric or hermitian?
-        cholesky_success=False
-        print('Cholesky Decomposition Probably Failed. This may be due to a poorly conditioned original Jacobian. Here is some diagnostic info.')
-        #print('B Symmetric?: ', _np.allclose(B,B.T))
-        #print('B Hermitian?: ', _np.allclose(B,B.conj().T))
-        #What are the eigenvalues of the Dinv matrix?
-        print('Dinv Condition Number: ', _np.linalg.cond(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)))
-        #print('D Condition Number: ', _np.linalg.cond(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))
-        #print('Dinv Minimum eigenvalue: ',_np.min(_np.linalg.eigvals(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))))
-        #print('Rank Increase Amount: ', len(nonzero_indices_update[0]))
-        #print('Nonzero Indices Values', _np.abs(_np.diag(r_update)[nonzero_indices_update[0]]))
-        #print('R_update Rank: ',_np.linalg.matrix_rank(R_update) )
-        #print('R_update SVDvals: ', _sla.svdvals(R_update))
-        #print('pinv_R_update@R_update: ', _np.round(pinv_R_update @ R_update, decimals=10))
-        #print('Norm of B: ', _np.linalg.norm(B))
-        #print('B: ', _np.round(B, decimals=10))
-        #print('D Eigenvalues: ', _np.linalg.eigvalsh(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))
-        #print('orig_e_inv: ', orig_e_inv)
-        print('Minimum original eigenvalue: ', _np.min(orig_e))
-        #print('Beta: ', _np.round(beta, decimals=10))
-        #print('Condition Number B@(pinv_E_beta.T@pinv_E_beta)@B: ', _np.linalg.cond(B@(pinv_E_beta.T@pinv_E_beta)@B))
-        #print('Condition Number (pinv_E_beta.T@pinv_E_beta): ', _np.linalg.cond(pinv_E_beta.T@pinv_E_beta))
-        #print('Condition Number orig_e_inv^2: ', _np.linalg.cond(_np.diag(1/orig_e**2)))
+        #Now apply the woodbury formula.
+        #Identity matrix in the central matrix we're inverting should have dimension
+        #equal to the number of columns in beta (or equivalently the update matrix)
+        central_mat= _np.linalg.inv(_np.eye(beta.shape[1]) + pinv_sqrt_E_beta.T@pinv_sqrt_E_beta)
         
-        #raise err
+        #diagnostic information
+        if central_mat.shape == (0,0):
+            print('central_mat shape: ', central_mat.shape)
+            print('central_mat: ', central_mat)
+            print('update: ', update)
+            print('U.T: ', U.T)
+            print('beta: ', beta)
+            print('pinv_sqrt_E_beta: ', pinv_sqrt_E_beta)
+        #print('central_mat: ', central_mat)
+        #now calculate the diagonal elements of pinv_E_beta@central_mat@pinv_E_beta.T
         
-  
-  
-    if cholesky_success:
-        pinv_E_beta_B_Dinv_chol= pinv_E_beta@B@Dinv_chol
+        #Take the cholesky decomposition of the central matrix:
+        try:
+            central_mat_chol= _np.linalg.cholesky(central_mat)
+            cholesky_success=True
+        except _np.linalg.LinAlgError as err:
+            #Cholesky decomposition probably failed.
+            #I'm not sure why it failed though so print some diagnostic info:
+            cholesky_success=False
+            print('Cholesky Decomposition Probably Failed. This may be due to a poorly conditioned original Jacobian. Here is some diagnostic info.')
+            print('Minimum original eigenvalue: ', _np.min(orig_e))
+            #raise err  
+        if cholesky_success:
+            pinv_E_beta_central_chol= pinv_E_beta@central_mat_chol
+            inv_update_term_diag= _np.einsum('ij,ji->i', pinv_E_beta_central_chol, pinv_E_beta_central_chol.T)
+        else:
+            inv_update_term_diag= _np.einsum('ij,jk,ki->i', pinv_E_beta, central_mat, pinv_E_beta.T, optimize=True)
         
-        #Now construct the two matrices we need:  
-        #numpy einsum based approach for the upper left block:
-        upper_left_block_diag = _np.einsum('ij,ji->i', pinv_E_beta_B_Dinv_chol, pinv_E_beta_B_Dinv_chol.T) + _np.reshape(orig_e_inv, (len(orig_e), ))
+        #print('inv_update_term_diag: ', inv_update_term_diag)
+        #print('orig_e_inv- inv_update_term_diag: ', orig_e_inv- inv_update_term_diag)
+        #print('orig_e_inv- inv_update_term_diag: ', _np.reshape(orig_e_inv, (len(orig_e), )) - inv_update_term_diag)
         
-        
-        #The lower right seems fast enough as it is for now, but we can try an einsum style direct diagonal
-        #calculation if need be.
-        lower_right_block= (gamma@(orig_e_inv*gamma.T))+ pinv_R_update.T@pinv_R_update - gamma@pinv_E_beta_B_Dinv_chol@pinv_E_beta_B_Dinv_chol.T@gamma.T
+        updated_trace= _np.sum(_np.reshape(orig_e_inv, (len(orig_e), ))- inv_update_term_diag)
+        updated_rank= len(orig_e)
+        rank_increased=False
     
+    #otherwise apply the full minamide result to update the psuedoinverse.
     else:
-        #Since the cholesky decomposition failed go ahead and use an alternative calculation pipeline.
-        print('Falling back w/o use of Cholesky.')
-        Dinv= _np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)
-        pinv_E_beta_B= pinv_E_beta@B
+        updated_rank= len(orig_e)+ len(nonzero_indices_update[0])
+        P= q_update[: , nonzero_indices_update[0]]
         
-        upper_left_block_diag = _np.einsum('ij,jk,ki->i', pinv_E_beta_B, Dinv, pinv_E_beta_B.T, optimize=True) + _np.reshape(orig_e_inv, (len(orig_e), ))
-        #The lower right seems fast enough as it is for now, but we can try an einsum style direct diagonal
-        #calculation if need be.
-        lower_right_block= (gamma@(orig_e_inv*gamma.T))+ pinv_R_update.T@pinv_R_update - gamma@pinv_E_beta_B@Dinv@pinv_E_beta_B.T@gamma.T
-    
-    
-    #the updated trace should just be the trace of these two matrices:
-    updated_trace= _np.sum(upper_left_block_diag) + _np.trace(lower_right_block)
-    
-    return updated_trace, updated_rank, True
+        #Now form the matrix R_update which is given by P.T @ proj_update.
+        R_update= P.T@proj_update
+        
+        #print('R_update: ', R_update)
+        
+        #Get the psuedoinverse of R_update:
+        try:
+            pinv_R_update= _np.linalg.pinv(R_update, rcond=1e-10) #hardcoded
+        except _np.linalg.LinAlgError:
+            #This means the SVD did not converge, try to fall back to a more stable
+            #SVD implementation using the scipy lapack_driver options.
+            print('pinv Calculation Failed to Converge.')
+            print('Falling back to pinv implementation based on Scipy SVD with lapack driver gesvd, which is slower but *should* be more stable.')
+            pinv_R_update = stable_pinv(R_update)
+            
+            
+            
+            
+        #print('pinv_R_update: ', pinv_R_update)
+        #I have a bunch of intermediate matrices I need to construct. Some of which are used to build up
+        #subsequent ones.
+        beta= U.T@update
+        
+        #print('U.T shape: ', U.T.shape)
+        #print('U.T@update: ', beta)
+        #print('U.T@update shape: ', beta.shape)
+        
+        
+        gamma = pinv_R_update.T @ beta.T
+        
+        #column vector of the original eigenvalues.
+        orig_e_inv= _np.reshape(1/orig_e, (len(orig_e),1))
+        
+        pinv_E_beta= orig_e_inv*beta
+        
+        B= _np.eye(pinv_R_update.shape[0]) - pinv_R_update @ R_update
+        
+        #print('B: ', B)
+        
+        try:
+            Dinv_chol= _np.linalg.cholesky(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))
+            cholesky_success=True
+        except _np.linalg.LinAlgError as err:
+            #Cholesky decomposition probably failed.
+            #I'm not sure why it failed though so print some diagnostic info:
+            #Is B symmetric or hermitian?
+            cholesky_success=False
+            print('Cholesky Decomposition Probably Failed. This may be due to a poorly conditioned original Jacobian. Here is some diagnostic info.')
+            #print('B Symmetric?: ', _np.allclose(B,B.T))
+            #print('B Hermitian?: ', _np.allclose(B,B.conj().T))
+            #What are the eigenvalues of the Dinv matrix?
+            print('Dinv Condition Number: ', _np.linalg.cond(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)))
+            #print('D Condition Number: ', _np.linalg.cond(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))
+            #print('Dinv Minimum eigenvalue: ',_np.min(_np.linalg.eigvals(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))))
+            #print('Rank Increase Amount: ', len(nonzero_indices_update[0]))
+            #print('Nonzero Indices Values', _np.abs(_np.diag(r_update)[nonzero_indices_update[0]]))
+            #print('R_update Rank: ',_np.linalg.matrix_rank(R_update) )
+            #print('R_update SVDvals: ', _sla.svdvals(R_update))
+            #print('pinv_R_update@R_update: ', _np.round(pinv_R_update @ R_update, decimals=10))
+            #print('Norm of B: ', _np.linalg.norm(B))
+            #print('B: ', _np.round(B, decimals=10))
+            #print('D Eigenvalues: ', _np.linalg.eigvalsh(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))
+            #print('orig_e_inv: ', orig_e_inv)
+            print('Minimum original eigenvalue: ', _np.min(orig_e))
+            #print('Beta: ', _np.round(beta, decimals=10))
+            #print('Condition Number B@(pinv_E_beta.T@pinv_E_beta)@B: ', _np.linalg.cond(B@(pinv_E_beta.T@pinv_E_beta)@B))
+            #print('Condition Number (pinv_E_beta.T@pinv_E_beta): ', _np.linalg.cond(pinv_E_beta.T@pinv_E_beta))
+            #print('Condition Number orig_e_inv^2: ', _np.linalg.cond(_np.diag(1/orig_e**2)))
+            
+            #raise err
+            
+      
+      
+        if cholesky_success:
+            pinv_E_beta_B_Dinv_chol= pinv_E_beta@B@Dinv_chol
+            
+            #Now construct the two matrices we need:  
+            #numpy einsum based approach for the upper left block:
+            upper_left_block_diag = _np.einsum('ij,ji->i', pinv_E_beta_B_Dinv_chol, pinv_E_beta_B_Dinv_chol.T) + _np.reshape(orig_e_inv, (len(orig_e), ))
+            
+            
+            #The lower right seems fast enough as it is for now, but we can try an einsum style direct diagonal
+            #calculation if need be.
+            lower_right_block= (gamma@(orig_e_inv*gamma.T))+ pinv_R_update.T@pinv_R_update - gamma@pinv_E_beta_B_Dinv_chol@pinv_E_beta_B_Dinv_chol.T@gamma.T
+        
+        else:
+            #Since the cholesky decomposition failed go ahead and use an alternative calculation pipeline.
+            print('Falling back w/o use of Cholesky.')
+            Dinv= _np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)
+            pinv_E_beta_B= pinv_E_beta@B
+            
+            upper_left_block_diag = _np.einsum('ij,jk,ki->i', pinv_E_beta_B, Dinv, pinv_E_beta_B.T, optimize=True) + _np.reshape(orig_e_inv, (len(orig_e), ))
+            #The lower right seems fast enough as it is for now, but we can try an einsum style direct diagonal
+            #calculation if need be.
+            lower_right_block= (gamma@(orig_e_inv*gamma.T))+ pinv_R_update.T@pinv_R_update - gamma@pinv_E_beta_B@Dinv@pinv_E_beta_B.T@gamma.T
+        
+        
+        #print('upper_left_block_diag: ', upper_left_block_diag)
+        #print('lower_right_block: ', lower_right_block)
+        
+        #the updated trace should just be the trace of these two matrices:
+        updated_trace= _np.sum(upper_left_block_diag) + _np.trace(lower_right_block)
+        
+        rank_increased=True
+        
+    return updated_trace, updated_rank, rank_increased
 
     
 #-------Modified Germ Selection Algorithm-------------------%
