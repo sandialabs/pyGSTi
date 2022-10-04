@@ -367,7 +367,8 @@ class ComposedState(_State):  # , _ErrorMapContainer
         #    "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
         if not isinstance(static_state, _State):
-            static_state = _StaticState(static_state, evotype)  # assume spamvec is just a vector
+            # UNSPECIFIED BASIS - change None to static_state.basis once we have a std attribute
+            static_state = _StaticState(static_state, None, evotype)  # assume spamvec is just a vector
 
         assert(static_state._evotype == evotype), \
             "`static_state` evotype must match `errormap` ('%s' != '%s')" % (static_state._evotype, evotype)

@@ -260,20 +260,20 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
         from ..modelmembers import instruments as _inst
         from ..modelmembers import povms as _povm
         if self.flags['cast_to_type'] == "state":
-            obj = _state.StaticState(value, evotype, state_space)
+            obj = _state.StaticState(value, basis, evotype, state_space)
             obj = _state.convert(obj, self.default_param, basis)
         elif self.flags['cast_to_type'] == "operation":
-            obj = _op.StaticArbitraryOp(value, evotype, state_space)
+            obj = _op.StaticArbitraryOp(value, None, evotype, state_space)
             obj = _op.convert(obj, self.default_param, basis)
         elif self.flags['cast_to_type'] == "povm":
             obj = _povm.UnconstrainedPOVM(
-                [_povm.StaticPOVMEffect(v, evotype, state_space) for v in value],
+                [_povm.StaticPOVMEffect(v, basis, evotype, state_space) for v in value],
                 evotype, state_space)
             obj = _povm.convert(obj, self.default_param, basis)
         elif self.flags['cast_to_type'] == "instrument":
             members = []
             for v in value:
-                m = _op.StaticArbitraryOp(v, evotype, state_space)
+                m = _op.StaticArbitraryOp(v, None, evotype, state_space)
                 members.append(_op.convert(m, self.default_param, basis))
             obj = _inst.Instrument(members, evotype, state_space)
 

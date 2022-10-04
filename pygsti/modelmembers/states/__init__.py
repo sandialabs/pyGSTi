@@ -54,11 +54,15 @@ def create_from_pure_vector(pure_vector, state_type, basis='pp', evotype='defaul
                 st = StaticPureState(pure_vector, basis, evotype, state_space)
             elif typ == 'full pure':
                 st = FullPureState(pure_vector, basis, evotype, state_space)
-            elif typ in ('static', 'full', 'full TP', 'TrueCPTP'):
+            elif typ in ('static', 'full', 'full TP', 'full CPTP'):
                 superket = _bt.change_basis(_ot.state_to_dmvec(pure_vector), 'std', basis)
                 st = create_from_dmvec(superket, typ, basis, evotype, state_space)
             elif _ot.is_valid_lindblad_paramtype(typ):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
+                from ..operations import LindbladParameterization as _LindbladParameterization
+                lndtype = _LindbladParameterization.cast(typ)
+
                 static_state = create_from_pure_vector(pure_vector, ('computational', 'static pure'),
                                                        basis, evotype, state_space)
 
@@ -66,7 +70,8 @@ def create_from_pure_vector(pure_vector, state_type, basis='pp', evotype='defaul
                 errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis, basis,
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
-                st = ComposedState(static_state, _ExpErrorgenOp(errorgen))
+                EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
+                st = ComposedState(static_state, EffectiveExpErrorgen(errorgen))
             else:
                 raise ValueError("Unknown state type '%s'!" % str(typ))
 
@@ -89,28 +94,33 @@ def create_from_dmvec(superket_vector, state_type, basis='pp', evotype='default'
     for typ in state_type_preferences:
         try:
             if typ == "static":
-                st = StaticState(superket_vector, evotype, state_space)
+                st = StaticState(superket_vector, basis, evotype, state_space)
             elif typ == "full":
-                st = FullState(superket_vector, evotype, state_space)
+                st = FullState(superket_vector, basis, evotype, state_space)
             elif typ == "full TP":
                 st = TPState(superket_vector, basis, evotype, state_space)
-            elif typ == "TrueCPTP":  # a non-lindbladian CPTP state that hasn't worked well...
+            elif typ == "full CPTP":  # a non-lindbladian CPTP state that hasn't worked well...
                 truncate = False
                 st = CPTPState(superket_vector, basis, truncate, evotype, state_space)
 
             elif _ot.is_valid_lindblad_paramtype(typ):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
+                from ..operations import LindbladParameterization as _LindbladParameterization
+                lndtype = _LindbladParameterization.cast(typ)
+
                 try:
                     dmvec = _bt.change_basis(superket_vector, basis, 'std')
                     purevec = _ot.dmvec_to_state(dmvec)  # raises error if dmvec does not correspond to a pure state
                     static_state = StaticPureState(purevec, basis, evotype, state_space)
                 except ValueError:
-                    static_state = StaticState(superket_vector, evotype, state_space)
+                    static_state = StaticState(superket_vector, basis, evotype, state_space)
 
                 proj_basis = 'PP' if state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state_space.dim, typ, proj_basis,
                                                                   basis, truncate=True, evotype=evotype)
-                return ComposedState(static_state, _ExpErrorgenOp(errorgen))
+                EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
+                return ComposedState(static_state, EffectiveExpErrorgen(errorgen))
 
             else:
                 # Anything else we try to convert to a pure vector and convert the pure state vector
@@ -148,6 +158,7 @@ def state_type_from_op_type(op_type):
         'static': 'static',
         'full': 'full',
         'full TP': 'full TP',
+        'full CPTP': 'full CPTP',
         'linear': 'full',
     }
 
@@ -220,7 +231,7 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
 
     destination_types = {'full': FullState,
                          'full TP': TPState,
-                         'TrueCPTP': CPTPState,
+                         'full CPTP': CPTPState,
                          'static': StaticState,
                          'static unitary': StaticPureState,
                          'static clifford': ComputationalBasisState}
@@ -238,6 +249,10 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
 
             elif _ot.is_valid_lindblad_paramtype(to_type) and (ideal_state is not None or state.num_params == 0):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
+                from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp
+                from ..operations import LindbladParameterization as _LindbladParameterization
+                lndtype = _LindbladParameterization.cast(to_type)
+
                 st = ideal_state if (ideal_state is not None) else state
                 proj_basis = 'PP' if state.state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(state.state_space.dim, to_type, proj_basis,
@@ -258,7 +273,8 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                         raise ValueError("Failed to find an errorgen such that exp(errorgen)|ideal> = |state>")
                     errorgen.from_vector(soln.x)
 
-                return ComposedState(st, _ExpErrorgenOp(errorgen))
+                EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
+                return ComposedState(st, EffectiveExpErrorgen(errorgen))
             else:
                 min_space = state.evotype.minimal_space
                 vec = state.to_dense(min_space)

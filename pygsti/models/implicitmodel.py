@@ -13,6 +13,7 @@ Defines the ImplicitOpModel class and supporting functionality.
 import collections as _collections
 import itertools as _itertools
 import uuid as _uuid
+import numpy as _np
 
 from pygsti.models import model as _mdl
 from pygsti.modelmembers import operations as _op

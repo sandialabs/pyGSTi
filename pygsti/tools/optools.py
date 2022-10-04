@@ -427,7 +427,7 @@ def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J
     return tracedist(JA, JB)
 
 
-def entanglement_fidelity(a, b, mx_basis='pp'):
+def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Returns the "entanglement" process fidelity between gate  matrices.
 
@@ -437,7 +437,13 @@ def entanglement_fidelity(a, b, mx_basis='pp'):
 
     where J(.) is the Jamiolkowski isomorphism map that maps a operation matrix
     to it's corresponding Choi Matrix.
-
+    
+    When the both of the input matrices a and b are TP, and
+    the target matrix b is unitary then we can use a more efficient
+    formula:
+    
+      `F= Tr(a @ b.conjugate().T)/d^2
+        
     Parameters
     ----------
     a : numpy array
@@ -450,20 +456,48 @@ def entanglement_fidelity(a, b, mx_basis='pp'):
         The basis of the matrices.  Allowed values are Matrix-unit (std),
         Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
         (or a custom basis object).
+        
+    is_tp : bool, optional (default None)
+        Flag indicating both matrices are TP. If None (the default), 
+        an explicit check is performed. If True/False, the check is 
+        skipped and the provided value is used (faster, but should only 
+        be used when the user is certain this is true apriori).
+
+    is_unitary : bool, optional (default None)
+        Flag indicating that the second matrix, b, is
+        unitary. If None (the default) an explicit check is performed.
+        If True/False, the check is skipped and the provided value is used
+        (faster, but should only be used when the user is certain 
+        this is true apriori).
 
     Returns
     -------
     float
     """
     d2 = a.shape[0]
-    def is_tp(x): return _np.isclose(x[0, 0], 1.0) and all(
-        [_np.isclose(x[0, i], 0) for i in range(d2)])
-
-    def is_unitary(x): return _np.allclose(_np.identity(d2, 'd'), _np.dot(x, x.conjugate().T))
-
-    if is_tp(a) and is_tp(b) and is_unitary(b):  # then assume TP-like gates & use simpler formula
-        TrLambda = _np.trace(_np.dot(a, b.conjugate().T))  # same as using _np.linalg.inv(b)
-        d2 = a.shape[0]
+    
+    #if the tp flag isn't set we'll calculate whether it is true here
+    if is_tp is None:
+        def is_tp_fn(x): return _np.isclose(x[0, 0], 1.0) and all(
+        [_np.isclose(x[0, i], 0) for i in range(1,d2)])
+        
+        is_tp= (is_tp_fn(a) and is_tp_fn(b))
+   
+    #if the unitary flag isn't set we'll calculate whether it is true here 
+    if is_unitary is None:
+        is_unitary= _np.allclose(_np.identity(d2, 'd'), _np.dot(b, b.conjugate().T))
+    
+    if is_tp and is_unitary:  # then assume TP-like gates & use simpler formula
+        #old version, slower than einsum
+        #TrLambda = _np.trace(_np.dot(a, b.conjugate().T))  # same as using _np.linalg.inv(b)
+        
+        #Use einsum black magic to only calculate the diagonal elements
+        #if the basis is either pp or gm we know the elements are real-valued, so we
+        #don't need to take the conjugate
+        if mx_basis=='pp' or mx_basis=='gm':
+            TrLambda = _np.einsum('ij,ji->',a, b.T)
+        else:
+            TrLambda = _np.einsum('ij,ji->',a, b.conjugate().T)
         return TrLambda / d2
 
     JA = _jam.jamiolkowski_iso(a, mx_basis, mx_basis)
@@ -471,7 +505,7 @@ def entanglement_fidelity(a, b, mx_basis='pp'):
     return fidelity(JA, JB)
 
 
-def average_gate_fidelity(a, b, mx_basis='pp'):
+def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Computes the average gate fidelity (AGF) between two gates.
 
@@ -495,6 +529,19 @@ def average_gate_fidelity(a, b, mx_basis='pp'):
 
     mx_basis : {"std","gm","pp"} or Basis object, optional
         The basis of the matrices.
+        
+    is_tp : bool, optional (default None)
+        Flag indicating both matrices are TP. If None (the default), 
+        an explicit check is performed. If True/False, the check is 
+        skipped and the provided value is used (faster, but should only 
+        be used when the user is certain this is true apriori).
+
+    is_unitary : bool, optional (default None)
+        Flag indicating that the second matrix, b, is
+        unitary. If None (the default) an explicit check is performed.
+        If True/False, the check is skipped and the provided value is used
+        (faster, but should only be used when the user is certain 
+        this is true apriori).
 
     Returns
     -------
@@ -502,12 +549,12 @@ def average_gate_fidelity(a, b, mx_basis='pp'):
         The AGI of a to b.
     """
     d = int(round(_np.sqrt(a.shape[0])))
-    PF = entanglement_fidelity(a, b, mx_basis=mx_basis)
+    PF = entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
     AGF = (d * PF + 1) / (1 + d)
     return float(AGF)
 
 
-def average_gate_infidelity(a, b, mx_basis="gm"):
+def average_gate_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Computes the average gate infidelity (`AGI`) between two gates.
 
@@ -531,15 +578,28 @@ def average_gate_infidelity(a, b, mx_basis="gm"):
 
     mx_basis : {"std","gm","pp"} or Basis object, optional
         The basis of the matrices.
+        
+    is_tp : bool, optional (default None)
+        Flag indicating both matrices are TP. If None (the default), 
+        an explicit check is performed. If True/False, the check is 
+        skipped and the provided value is used (faster, but should only 
+        be used when the user is certain this is true apriori).
 
+    is_unitary : bool, optional (default None)
+        Flag indicating that the second matrix, b, is
+        unitary. If None (the default) an explicit check is performed.
+        If True/False, the check is skipped and the provided value is used
+        (faster, but should only be used when the user is certain 
+        this is true apriori).
+       
     Returns
     -------
     float
     """
-    return 1 - average_gate_fidelity(a, b, mx_basis)
+    return 1 - average_gate_fidelity(a, b, mx_basis, is_tp, is_unitary)
 
 
-def entanglement_infidelity(a, b, mx_basis='pp'):
+def entanglement_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Returns the entanglement infidelity (EI) between gate matrices.
 
@@ -562,17 +622,30 @@ def entanglement_infidelity(a, b, mx_basis='pp'):
         The basis of the matrices.  Allowed values are Matrix-unit (std),
         Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt)
         (or a custom basis object).
+        
+    is_tp : bool, optional (default None)
+        Flag indicating both matrices are TP. If None (the default), 
+        an explicit check is performed. If True/False, the check is 
+        skipped and the provided value is used (faster, but should only 
+        be used when the user is certain this is true apriori).
+
+    is_unitary : bool, optional (default None)
+        Flag indicating that the second matrix, b, is
+        unitary. If None (the default) an explicit check is performed.
+        If True/False, the check is skipped and the provided value is used
+        (faster, but should only be used when the user is certain 
+        this is true apriori).
 
     Returns
     -------
     EI : float
         The EI of a to b.
     """
-    return 1 - float(entanglement_fidelity(a, b, mx_basis))
+    return 1 - float(entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary))
 
 
 def gateset_infidelity(model, target_model, itype='EI',
-                       weights=None, mx_basis=None):
+                       weights=None, mx_basis=None, is_tp=None, is_unitary=None):
     """
     Computes the average-over-gates of the infidelity between gates in `model` and the gates in `target_model`.
 
@@ -608,6 +681,19 @@ def gateset_infidelity(model, target_model, itype='EI',
     mx_basis : {"std","gm","pp"} or Basis object, optional
         The basis of the models. If None, the basis is obtained from
         the model.
+        
+    is_tp : bool, optional (default None)
+        Flag indicating both matrices are TP. If None (the default), 
+        an explicit check is performed. If True/False, the check is 
+        skipped and the provided value is used (faster, but should only 
+        be used when the user is certain this is true apriori).
+
+    is_unitary : bool, optional (default None)
+        Flag indicating that the second matrix, b, is
+        unitary. If None (the default) an explicit check is performed.
+        If True/False, the check is skipped and the provided value is used
+        (faster, but should only be used when the user is certain 
+        this is true apriori).
 
     Returns
     -------
@@ -623,9 +709,9 @@ def gateset_infidelity(model, target_model, itype='EI',
     I_list = []
     for gate in list(target_model.operations.keys()):
         if itype == 'AGI':
-            I = average_gate_infidelity(model.operations[gate], target_model.operations[gate], mx_basis=mx_basis)
+            I = average_gate_infidelity(model.operations[gate], target_model.operations[gate], mx_basis, is_tp)
         if itype == 'EI':
-            I = entanglement_infidelity(model.operations[gate], target_model.operations[gate], mx_basis=mx_basis)
+            I = entanglement_infidelity(model.operations[gate], target_model.operations[gate], mx_basis, is_tp)
         if weights is None:
             w = 1
         else:
@@ -677,7 +763,10 @@ def unitarity(a, mx_basis="gm"):
         B = _bt.change_basis(a, mx_basis, "gm")  # everything should be able to be put in the "gm" basis
 
     unital = B[1:d**2, 1:d**2]
-    u = _np.trace(_np.dot(_np.conj(_np.transpose(unital)), unital)) / (d**2 - 1)
+    #old version
+    #u = _np.trace(_np.dot(_np.conj(_np.transpose(unital)), unital)) / (d**2 - 1)
+    #new version
+    u= _np.einsum('ij,ji->', unital.conjugate().T, unital ) / (d**2 - 1)
     return u
 
 
@@ -1708,13 +1797,29 @@ def create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, norma
     """
     TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
     """
+    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q,
+                                              normalize, sparse, tensorprod_basis, create_dual=False)
+
+
+def create_elementary_errorgen_nqudit_dual(typ, basis_element_labels, basis_1q, normalize=False,
+                                           sparse=False, tensorprod_basis=False):
+    """
+    TODO: docstring  - labels can be, e.g. ('H', 'XX') and basis should be a 1-qubit basis w/single-char labels
+    """
+    return _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q,
+                                              normalize, sparse, tensorprod_basis, create_dual=True)
+
+
+def _create_elementary_errorgen_nqudit(typ, basis_element_labels, basis_1q, normalize=False,
+                                       sparse=False, tensorprod_basis=False, create_dual=False):
+    create_fn = _lt.create_elementary_errorgen_dual if create_dual else _lt.create_elementary_errorgen
     if typ in 'HS':
         B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
-        ret = _lt.create_elementary_errorgen(typ, B, sparse=sparse)  # in std basis
+        ret = create_fn(typ, B, sparse=sparse)  # in std basis
     elif typ in 'CA':
         B = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[0]])
         C = _functools.reduce(_np.kron, [basis_1q[bel] for bel in basis_element_labels[1]])
-        ret = _lt.create_elementary_errorgen(typ, B, C, sparse=sparse)  # in std basis
+        ret = create_fn(typ, B, C, sparse=sparse)  # in std basis
     else:
         raise ValueError("Invalid elementary error generator type: %s" % str(typ))
 
@@ -2292,8 +2397,15 @@ def is_valid_lindblad_paramtype(typ):
     -------
     bool
     """
-    return typ in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
-                   "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
+    from pygsti.modelmembers.operations.lindbladerrorgen import LindbladParameterization as _LP
+    try:
+        _LP.cast(typ)
+        return True
+    except ValueError:
+        return False
+
+    #OLD: return typ in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
+    #OLD:                "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
 
 
 def effect_label_to_outcome(povm_and_effect_lbl):

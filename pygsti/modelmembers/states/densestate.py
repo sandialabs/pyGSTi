@@ -164,12 +164,13 @@ class DenseState(DenseStateInterface, _State):
         i.e, a (dim,1)-shaped array.
     """
 
-    def __init__(self, vec, evotype, state_space):
+    def __init__(self, vec, basis, evotype, state_space):
         vec = _State._to_vector(vec)
         state_space = _statespace.default_space_for_dim(vec.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
         evotype = _Evotype.cast(evotype)
-        rep = evotype.create_dense_state_rep(vec, state_space)
+        self._basis = _Basis.cast(basis, state_space.dim)
+        rep = evotype.create_dense_state_rep(vec, self._basis, state_space)
 
         _State.__init__(self, rep, evotype)
         DenseStateInterface.__init__(self)
@@ -229,6 +230,7 @@ class DenseState(DenseStateInterface, _State):
         mm_dict = super().to_memoized_dict(mmg_memo)
 
         mm_dict['dense_superket_vector'] = self._encodemx(self.to_dense())
+        mm_dict['basis'] = self._basis.to_nice_serialization() if (self._basis is not None) else None
 
         return mm_dict
 
@@ -236,7 +238,8 @@ class DenseState(DenseStateInterface, _State):
     def _from_memoized_dict(cls, mm_dict, serial_memo):
         vec = cls._decodemx(mm_dict['dense_superket_vector'])
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
-        return cls(vec, mm_dict['evotype'], state_space)
+        basis = _Basis.from_nice_serialization(mm_dict['basis']) if (mm_dict['basis'] is not None) else None
+        return cls(vec, basis, mm_dict['evotype'], state_space)
 
     def _is_similar(self, other, rtol, atol):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
@@ -269,7 +272,7 @@ class DensePureState(DenseStateInterface, _State):
                 superket_vec = purevec.real  # used as a convenience case that really shouldn't be used
             else:
                 superket_vec = _bt.change_basis(_ot.state_to_dmvec(purevec), 'std', basis)
-            rep = evotype.create_dense_state_rep(superket_vec, state_space)
+            rep = evotype.create_dense_state_rep(superket_vec, basis, state_space)
             self._reptype = 'superket'
             self._purevec = purevec; self._basis = basis
 

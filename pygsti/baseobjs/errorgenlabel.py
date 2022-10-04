@@ -119,7 +119,11 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
         else:
             raise ValueError("Cannot convert %s to a global elementary errorgen label!" % str(obj))
 
-    def __init__(self, errorgen_type, basis_element_labels, sslbls):
+    def __init__(self, errorgen_type, basis_element_labels, sslbls, sort=True):
+        if sort:
+            sorted_indices, sslbls = zip(*sorted(enumerate(sslbls), key=lambda x: x[1]))
+            basis_element_labels = [''.join([bel[i] for i in sorted_indices]) for bel in basis_element_labels]
+
         self.errorgen_type = str(errorgen_type)
         self.basis_element_labels = tuple(basis_element_labels)
         self.sslbls = tuple(sslbls)
@@ -183,3 +187,38 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
                 lbl[i] = char
             ret.append(''.join(lbl))
         return tuple(ret)
+
+    def map_state_space_labels(self, mapper):
+        """
+        Creates a new GlobalElementaryErrorgenLabel whose `sslbls` attribute is updated according to a mapping function.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing `self.sslbls` values
+            and whose value are the new labels, or a function which takes a
+            single existing state space label argument and returns a new state
+            space label to replace it with.
+
+        Returns
+        -------
+        GlobalElementaryErrorgenLabel
+        """
+        def mapper_func(sslbl): return mapper[sslbl] \
+            if isinstance(mapper, dict) else mapper(sslbl)
+        mapped_sslbls = tuple(map(mapper_func, self.sslbls))
+        return GlobalElementaryErrorgenLabel(self.errorgen_type, self.basis_element_labels, mapped_sslbls)
+
+    def sort_sslbls(self):
+        """
+        Creates a new GlobalElementaryErrorgenLabel with sorted (potentially reordered) state space labels.
+
+        This puts the label into a canonical form that can be useful for comparison with other labels.
+
+        Returns
+        -------
+        GlobalElementaryErrorgenLabel
+        """
+        sorted_indices, sorted_sslbls = zip(*sorted(enumerate(self.sslbls), key=lambda x: x[1]))
+        sorted_bels = [''.join([bel[i] for i in sorted_indices]) for bel in self.basis_element_labels]
+        return GlobalElementaryErrorgenLabel(self.errorgen_type, sorted_bels, sorted_sslbls)

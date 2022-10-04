@@ -71,7 +71,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
                 if evotype is None:
                     evotype = _Evotype.cast('default')
                 member_list = [(k, v if isinstance(v, _op.LinearOperator) else
-                                _op.FullArbitraryOp(v, evotype, state_space)) for k, v in member_list]
+                                _op.FullArbitraryOp(v, None, evotype, state_space)) for k, v in member_list]
 
             assert(len(member_list) > 0 or state_space is not None), \
                 "Must specify `state_space` when there are no instrument members!"

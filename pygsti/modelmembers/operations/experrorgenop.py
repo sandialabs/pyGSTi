@@ -26,7 +26,7 @@ from pygsti.tools import matrixtools as _mt
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
-TODENSE_TRUNCATE = 1e-11
+TODENSE_TRUNCATE = 3e-10  # was 1e-11 and this gave some borderline test failures
 
 
 class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
@@ -59,7 +59,10 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
                     # "sparse mode" => don't ever compute matrix-exponential explicitly
                     rep = evotype.create_experrorgen_rep(self.errorgen._rep)
                 elif rep_type == 'dense':
-                    rep = evotype.create_dense_superop_rep(None, state_space)
+                    # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+                    #  and should be replaced with the basis of contained ops (if any) once we establish
+                    #  a common .basis or ._basis attribute of representations (which could still be None)
+                    rep = evotype.create_dense_superop_rep(None, None, state_space)
 
                     # Cache values - for later work with dense rep
                     self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params

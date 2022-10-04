@@ -17,6 +17,7 @@ import numpy as _np
 
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.modelmembers import term as _term
+from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
@@ -28,7 +29,7 @@ except ImportError:
     _fastcalc = None
 
 
-class ComputationalBasisState(_State):
+class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
     """
     A static state vector that is tensor product of 1-qubit Z-eigenstates.
 

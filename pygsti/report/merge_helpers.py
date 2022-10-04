@@ -18,6 +18,8 @@ import subprocess as _subprocess
 import webbrowser as _webbrowser
 from pathlib import Path
 
+from markupsafe import Markup
+
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools import timed_block as _timed_block
 
@@ -464,13 +466,16 @@ def _make_jinja_env(static_path, template_dir=None, render_options=None, link_to
         """Embed an offline file's contents directly in the document, in a script tag."""
         # XXX we gotta find a better way, this is so wild dude
         contents = offline_loader.get_source(env, filename)[0]
-        return markupsafe.Markup(contents)
+
+        return Markup(contents)
+
 
     @jinja_filter
     @jinja2.pass_eval_context
     def render(eval_ctx, value):
         html = _render_as_html(value, render_options or {}, link_to)
-        return markupsafe.Markup(html) if eval_ctx.autoescape else html
+
+        return Markup(html) if eval_ctx.autoescape else html
 
     return env
 

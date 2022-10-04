@@ -77,9 +77,9 @@ def make_rpe_model(alpha_true, epsilon_true, y_rot, spam_depol, gate_depol=None,
             effect_labels=["E0", "Ec"], effect_expressions=["0", "complement"],
             spamdefs={'0': ('rho0', 'E0'), '1': ('rho0', 'Ec')})
 
-        outputModel.operations['Gx'] = _op.FullArbitraryOp(
-            _np.dot(_np.dot(_np.linalg.inv(modelAux1.operations['Gy']),
-                            outputModel.operations['Gx']), modelAux1.operations['Gy']))
+        outputModel.operations['Gx'] = _op.FullArbitraryOp(_np.dot(_np.dot(_np.linalg.inv(modelAux1.operations['Gy']),
+                                                                           outputModel.operations['Gx']),
+                                                                   modelAux1.operations['Gy']))
 
     outputModel = outputModel.depolarize(op_noise=gate_depol,
                                          spam_noise=spam_depol)
