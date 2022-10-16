@@ -1604,12 +1604,6 @@ def _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, pre_povm
     #Change the value of nPossiblePairs to reflect the filtered list
     nPossiblePairs= len(cleaned_pair_indices_list)
     
-    #Below will take a *subset* of the rows in dPall
-    # depending on which (of all possible) fiducial pairs
-    # are being considered.
-    
-    rng= _np.random.default_rng(seed=seed)
-    
     #Need to choose how to initially seed a set of candidate fiducials.
     #I can think of two ways atm, one is to seed it with a random set of
     #fiducial pairs of size min_pairs_needed, the other is to run
@@ -1617,6 +1611,8 @@ def _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, pre_povm
     
     #If random, pick a random set of fiducial pairs to start the search with:
     if initial_seed_mode=='random':
+        #set the seed for the prng:
+        _random.seed(seed)
         initial_fiducial_set= list(_random_combination(cleaned_pair_indices_list, min_pairs_needed))
         initial_pair_count= min_pairs_needed
     #if starting from zero then we'll change min_pairs_needed to zero and set the initial_fiducial_set
