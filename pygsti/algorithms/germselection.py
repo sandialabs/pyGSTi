@@ -165,9 +165,10 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             availableGermsList.extend(_circuits.list_all_circuits_without_powers_and_cycles(
                 gates, max_length=germLength))
         else:
-            seed = None if candidate_seed is None else candidate_seed + germLength
+            if (candidate_seed is None) and (seed is not None):
+                candidate_seed=seed
             availableGermsList.extend(_circuits.list_random_circuits_onelen(
-                gates, germLength, count, seed=seed))
+                gates, germLength, count, seed=candidate_seed))
 
     printer.log('Initial Length Available Germ List: '+ str(len(availableGermsList)), 1)
 
