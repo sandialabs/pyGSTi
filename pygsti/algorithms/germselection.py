@@ -196,6 +196,11 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         if not (float_type is _np.cdouble or float_type is _np.csingle):
             print(float_type.dtype)
             raise ValueError('Unless working with (known) real-valued quantities only, please select an appropriate complex numpy dtype (either cdouble or csingle).')
+    else:
+        if not (float_type is _np.double or float_type is _np.single):
+            print(float_type.dtype)
+            raise ValueError('When assuming real-valued quantities, please select a real-values numpy dtype (either double or single).')
+        
     
     #How many bytes per float?
     FLOATSIZE= float_type(0).itemsize
