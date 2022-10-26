@@ -2695,9 +2695,6 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
     sqrteU_list=[]
     #e_list=[]
     
-
-    
-    
     if printer is not None:
         printer.log('Generating compact EVD Cache',1)
         
@@ -2710,10 +2707,20 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
                 twirledDeriv = _twirled_deriv(model, germ, eps, float_type) / len(germ)
                 #twirledDerivDaggerDeriv = _np.tensordot(_np.conjugate(twirledDeriv),
                 #                                        twirledDeriv, (0, 0))
+                twirledDerivDerivDagger = twirledDeriv@(twirledDeriv.conj().T) 
                                                         
-                #now take twirledDerivDaggerDeriv and construct its compact EVD.
-                #e, U= compact_EVD(twirledDerivDaggerDeriv)
-                e, U= compact_EVD_via_SVD(twirledDeriv, evd_tol)
+                #now take twirledDerivDerivDagger and construct its compact EVD.
+                e, U= compact_EVD(twirledDerivDerivDagger, evd_tol)
+                
+                #now connect this to the compact EVD of twirledDerivDaggerDeriv
+                #using the definition of the left and right singular
+                #vectors of a matrix.
+                #Multiply U by twirledDeriv.conj().T and rescale the columns
+                #by the corresponding singular value, i.e. the sqrt of the
+                #eigenvalue. Use some broadcasting for fast rescaling.
+                U_remapped= ((twirledDeriv.conj().T)@U)/_np.sqrt(e.reshape((1,len(e))))
+                
+                #e, U= compact_EVD_via_SVD(twirledDeriv, evd_tol)
                 
                 #e_list.append(e)
                 
@@ -2723,17 +2730,27 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
                 #I want to use a rank-decomposition, so split the eigenvalues into a pair of diagonal
                 #matrices with the square roots of the eigenvalues on the diagonal and fold those into
                 #the matrix of eigenvectors by left multiplying.
-                sqrteU_list.append( U@_np.diag(_np.sqrt(e)) )       
+                
+                sqrteU_list.append( U_remapped@_np.diag(_np.sqrt(e)) )       
     else: 
         for i, germ in enumerate(germs_list):
                 
             twirledDeriv = _twirled_deriv(model, germ, eps, float_type) / len(germ)
             #twirledDerivDaggerDeriv = _np.tensordot(_np.conjugate(twirledDeriv),
             #                                        twirledDeriv, (0, 0))
+            twirledDerivDerivDagger = twirledDeriv@(twirledDeriv.conj().T) 
                                                     
-            #now take twirledDerivDaggerDeriv and construct its compact EVD.
-            #e, U= compact_EVD(twirledDerivDaggerDeriv)
-            e, U= compact_EVD_via_SVD(twirledDeriv, evd_tol)
+            #now take twirledDerivDerivDagger and construct its compact EVD.
+            e, U= compact_EVD(twirledDerivDerivDagger, evd_tol)
+            
+            #now connect this to the compact EVD of twirledDerivDaggerDeriv
+            #using the definition of the left and right singular
+            #vectors of a matrix.
+            #Multiply U by twirledDeriv.conj().T and rescale the columns
+            #by the corresponding singular value, i.e. the sqrt of the
+            #eigenvalue. Use some broadcasting for fast rescaling.
+            U_remapped= ((twirledDeriv.conj().T)@U)/_np.sqrt(e.reshape((1,len(e))))
+            #e, U= compact_EVD_via_SVD(twirledDeriv, evd_tol)
             
             #e_list.append(e)
             
@@ -2743,7 +2760,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
             #I want to use a rank-decomposition, so split the eigenvalues into a pair of diagonal
             #matrices with the square roots of the eigenvalues on the diagonal and fold those into
             #the matrix of eigenvectors by left multiplying.
-            sqrteU_list.append( U@_np.diag(_np.sqrt(e)) )       
+            sqrteU_list.append( U_remapped@_np.diag(_np.sqrt(e)) )       
         
     return sqrteU_list#, e_list
     
@@ -3537,7 +3554,7 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
                 
     elif mode== "compactEVD":
         #implement a new caching scheme which takes advantage of the fact that the J^T J matrices are typically
-        #rather sparse. Instead of caching the J^T J matrices for each germ we'll cache the compact EVD of these
+        #rather low-rank. Instead of caching the J^T J matrices for each germ we'll cache the compact EVD of these
         #and multiply the compact EVD components through each time we need one.
         
         if load_cevd_cache_filename is not None:
