@@ -41,13 +41,39 @@ class GoodnessSection(_Section):
 class GoodnessColorBoxPlotSection(_Section):
     _HTML_TEMPLATE = 'tabs/Goodness_colorboxplot.html'
 
+#    @_Section.figure_factory(1)
+#    def final_model_fit_colorbox_plot(workspace, switchboard=None, linlog_percentile=5, brevity=0, comm=None,
+#                                      bgcolor='white', **kwargs):
+#        qty = workspace.ColorBoxPlot(
+#            switchboard.objfn_builder_modvi, switchboard.circuits_current,
+#            switchboard.modvi_ds, switchboard.mdl_current_modvi,
+#            linlg_pcntle=linlog_percentile / 100, comm=comm, bgcolor=bgcolor
+#        )
+#        if brevity < 1:
+#            qty.set_render_options(click_to_display=False, valign='bottom')
+#        return qty
+#
+#    @_Section.figure_factory(1)
+#    def final_model_tvd_colorbox_plot(workspace, switchboard=None, brevity=0, comm=None, bgcolor='white', **kwargs):
+#        qty = workspace.ColorBoxPlot(
+#            'tvd', switchboard.circuits_current, switchboard.modvi_ds, switchboard.mdl_current_modvi,
+#            comm=comm, bgcolor=bgcolor
+#        )
+#        if brevity < 1:
+#            qty.set_render_options(click_to_display=False, valign='bottom')
+#        return qty
+#
+#    @_Section.figure_factory()
+#    def maxlength_switchboard1(workspace, switchboard=None, switchbd_maxlengths=None, **kwargs):
+#        maxLView = [False, False, False, len(switchbd_maxlengths) > 1]
+#        return switchboard.view(maxLView, 'v6')
+        
     @_Section.figure_factory(1)
     def final_model_fit_colorbox_plot(workspace, switchboard=None, linlog_percentile=5, brevity=0, comm=None,
                                       bgcolor='white', **kwargs):
-        qty = workspace.ColorBoxPlot(
-            switchboard.objfn_builder_modvi, switchboard.circuits_current,
-            switchboard.modvi_ds, switchboard.mdl_current_modvi,
-            linlg_pcntle=linlog_percentile / 100, comm=comm, bgcolor=bgcolor
+        qty = workspace.ColorBoxPlot(switchboard.objfn_builder_modvi, switchboard.circuits_final, switchboard.modvi_ds, switchboard.mdl_final_modvi,
+            linlg_pcntle=linlog_percentile / 100, comm=comm, bgcolor=bgcolor,
+            mdc_store= switchboard.final_mdc_store
         )
         if brevity < 1:
             qty.set_render_options(click_to_display=False, valign='bottom')
@@ -56,17 +82,11 @@ class GoodnessColorBoxPlotSection(_Section):
     @_Section.figure_factory(1)
     def final_model_tvd_colorbox_plot(workspace, switchboard=None, brevity=0, comm=None, bgcolor='white', **kwargs):
         qty = workspace.ColorBoxPlot(
-            'tvd', switchboard.circuits_current, switchboard.modvi_ds, switchboard.mdl_current_modvi,
-            comm=comm, bgcolor=bgcolor
+            'tvd', switchboard.circuits_final, switchboard.modvi_ds, switchboard.mdl_final_modvi, comm=comm, bgcolor=bgcolor, mdc_store= switchboard.final_mdc_store
         )
         if brevity < 1:
             qty.set_render_options(click_to_display=False, valign='bottom')
         return qty
-
-    @_Section.figure_factory()
-    def maxlength_switchboard1(workspace, switchboard=None, switchbd_maxlengths=None, **kwargs):
-        maxLView = [False, False, False, len(switchbd_maxlengths) > 1]
-        return switchboard.view(maxLView, 'v6')
 
 
 class GoodnessScalingSection(_Section):
