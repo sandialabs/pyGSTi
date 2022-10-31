@@ -1605,11 +1605,14 @@ class ColorBoxPlot(WorkspacePlot):
         fig = None
         addl_hover_info_fns = _collections.OrderedDict()
 
-        if mdc_store is not None:  # then it overrides
-            assert(circuits is None and dataset is None and model is None)
-            circuits = mdc_store.circuits
-            dataset = mdc_store.dataset
-            model = mdc_store.model
+        #if mdc_store is not None:  # then it overrides
+        #    assert(circuits is None and dataset is None and model is None)
+        #    circuits = mdc_store.circuits
+        #    dataset = mdc_store.dataset
+        #    model = mdc_store.model
+        #    print(circuits)
+        #print(model)
+        #print(dataset)
 
         #DEBUG: for checking
         #def _addl_mx_fn_chk(plaq,x,y):
