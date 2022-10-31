@@ -257,7 +257,10 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     tStart = _time.time()
-
+    #replace model with a new copy of itself so as to not propagate the conversion back to the 
+    #instance of the model object we are gauge optimizing (I think this is the least intrusive
+    #way to prevent this side-effect).
+    model = model.copy()
     if convert_model_to is not None:
         conversion_args = convert_model_to if isinstance(convert_model_to, (list, tuple)) else (convert_model_to,)
         for args in conversion_args:
