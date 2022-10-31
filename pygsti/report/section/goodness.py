@@ -19,9 +19,8 @@ class GoodnessSection(_Section):
                                           **kwargs):
         return workspace.ColorBoxPlot(
             switchboard.objfn_builder_modvi, switchboard.circuits_final,
-            switchboard.modvi_ds, switchboard.mdl_current_modvi,
-            linlg_pcntle=linlog_percentile / 100,
-            typ="scatter", comm=comm, bgcolor=bgcolor
+            switchboard.modvi_ds, switchboard.mdl_current_modvi, linlg_pcntle=linlog_percentile / 100,
+            typ="scatter", comm=comm, bgcolor=bgcolor, mdc_store= switchboard.final_mdc_store
         )
 
     @_Section.figure_factory(4)
