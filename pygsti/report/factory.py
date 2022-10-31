@@ -261,8 +261,10 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     switchBd.add("mdl_all_modvi", (0, 1))
     switchBd.add("circuits_all", (0,))  # a list of circuit lists, one per L-val (iteration)
     switchBd.add("mdl_final_grid", (2,))
-
     switchBd.add("idtresults", (0,))
+    
+    switchBd.add('final_mdc_store', (0, 1))
+    switchBd.add('mdl_final_modvi', (0, 1))
 
     if confidence_level is not None:
         switchBd.add("cri", (0, 1, 2))
@@ -323,6 +325,9 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             switchBd.objfn_builder_modvi[d, i] = est_modvi.parameters.get(
                 'final_objfn_builder', _objfns.ObjectiveFunctionBuilder.create_from('logl'))
             switchBd.params[d, i] = est.parameters
+            
+            #add the final mdc store
+            switchBd.final_mdc_store[d,i]= est.parameters.get('final_mdc_store', None)
 
             switchBd.clifford_compilation[d, i] = est.parameters.get("clifford compilation", 'auto')
             if switchBd.clifford_compilation[d, i] == 'auto':
@@ -364,6 +369,10 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
 
             switchBd.mdl_target[d, i] = est.models['target']
             switchBd.mdl_gaugeinv[d, i] = est.models[GIRepLbl]
+            
+            switchBd.mdl_final_modvi[d, i]= est.models['final iteration estimate']
+            #print(est.models['final iteration estimate'])
+            
             try:
                 switchBd.mdl_gaugeinv_ep[d, i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
                                                                                      est.models['target'])
