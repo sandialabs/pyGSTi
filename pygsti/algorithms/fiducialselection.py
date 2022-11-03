@@ -14,6 +14,7 @@ import numpy as _np
 import scipy
 import random
 import itertools
+from warnings import warn
 from math import floor
 from pygsti.algorithms import grasp as _grasp
 from pygsti.algorithms import scoring as _scoring
@@ -30,7 +31,8 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                    algorithm='grasp', algorithm_kwargs=None, verbosity=1,
                    prep_fids=True, meas_fids=True, candidate_list=None,
                    return_candidate_list=False, final_test= False, 
-                   assume_clifford=False, candidate_seed=None):
+                   assume_clifford=False, candidate_seed=None, 
+                   max_fid_length=None):
     """
     Generate prep and measurement fiducials for a given target model.
 
@@ -115,6 +117,12 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         which allows us to use a faster deduping routine exploiting the properties
         of clifford circuits.
         
+    max_fid_length : int, optional (deprecated)
+        The maximum number of gates to include in a fiducial. The default is
+        not guaranteed to work for arbitrary models (particularly for quantum
+        systems larger than a single qubit). This keyword is now deprecated.
+        The behavior of the keyword is now equivalent to passing in an int
+        for the candidate_fid_counts argument.
 
     Returns
     -------
@@ -141,6 +149,12 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                     fidOps.remove(gate)
         
         availableFidList = []
+        if max_fid_length is not None:
+            if candidate_fid_counts is not None:
+                warn('Specifying max_fid_length without setting candidate_fid_counts results the settings specified in candidate_fid_counts being overridden.\
+                candidate_fid_counts is set by defaults, so this might be expected, but if this is not the desired behavior then please verify your arguments.')
+            #now overrive the value of candidate_fid_counts
+            candidate_fid_counts= max_fid_length
         if isinstance(candidate_fid_counts, int): 
             candidate_fid_counts = {candidate_fid_counts: 'all upto'}
         
