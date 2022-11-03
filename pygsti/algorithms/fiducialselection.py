@@ -154,7 +154,6 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                 availableFidList.extend(_circuits.list_random_circuits_onelen(
                     fidOps, fidLength, count, seed=candidate_seed))
         
-         = 
         printer.log('Initial Length Available Fiducial List: '+ str(len(availableFidList)), 1)
         
         
