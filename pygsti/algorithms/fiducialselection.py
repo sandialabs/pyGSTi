@@ -26,10 +26,11 @@ from pygsti.algorithms.germselection import construct_update_cache, minamide_sty
 
 
 def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
-                   ops_to_omit=None, force_empty=True, max_fid_length=2,
+                   ops_to_omit=None, force_empty=True, candidate_fid_counts=2,
                    algorithm='grasp', algorithm_kwargs=None, verbosity=1,
                    prep_fids=True, meas_fids=True, candidate_list=None,
-                   return_candidate_list=False, final_test= False, assume_clifford=False):
+                   return_candidate_list=False, final_test= False, 
+                   assume_clifford=False, candidate_seed=None):
     """
     Generate prep and measurement fiducials for a given target model.
 
@@ -60,12 +61,18 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         Whether or not to force all fiducial sets to contain the empty gate
         string as a fiducial.
 
-    max_fid_length : int, optional
-        The maximum number of gates to include in a fiducial. The default is
-        not guaranteed to work for arbitrary models (particularly for quantum
-        systems larger than a single qubit).
+    candidate_fid_counts : int or dic, optional
+        A dictionary of *fid_length* : *count* key-value pairs, specifying
+        the fiducial "candidate list" - a list of potential fiducials to draw from.
+        *count* is either an integer specifying the number of random fiducials
+        considered at the given *fid_length* or the special values `"all upto"`
+        that considers all of the of all the fiducials of length up to
+        the corresponding *fid_length*. If the keyword 'all' is used for the
+        count value then all circuits at that particular length are added. 
+        If and integer, all germs of up to length
+        that length are used, the equivalent of `{specified_int: 'all upto'}`.
 
-    algorithm : {'slack', 'grasp'}, optional
+    algorithm : {'slack', 'grasp', 'greedy'}, optional
         Specifies the algorithm to use to generate the fiducials. Current
         options are:
 
@@ -74,6 +81,10 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         'grasp'
             Use GRASP to generate random greedy fiducial sets and then locally
             optimize them. See :func:`_find_fiducials_grasp` for more
+            details.
+        'greedy'
+            Use a greedy algorithm accelerated using low-rank update techniques.
+            See :func:`_find_fiducials_greedy` for more
             details.
 
     algorithm_kwargs : dict
@@ -128,8 +139,22 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
             for gate in fidOps:
                 if frobeniusdist_squared(target_model.operations[gate], Identity) < eq_thresh:
                     fidOps.remove(gate)
-
-        availableFidList = _circuits.list_all_circuits(fidOps, 0, max_fid_length)
+        
+        availableFidList = []
+        if isinstance(candidate_fid_counts, int): 
+            candidate_fid_counts = {candidate_fid_counts: 'all upto'}
+        
+        for fidLength, count in candidate_fid_counts.items():
+            if count == "all upto":
+                availableFidList.extend(_circuits.list_all_circuits(fidOps, 0, fidLength))
+            #if "all" then include all circuits at that particular length.
+            elif count =="all":
+                availableFidList.extend(_circuits.list_all_circuits_one_len(fidOps, fidLength))
+            else:
+                availableFidList.extend(_circuits.list_random_circuits_onelen(
+                    fidOps, fidLength, count, seed=candidate_seed))
+        
+         = 
         printer.log('Initial Length Available Fiducial List: '+ str(len(availableFidList)), 1)
         
         
