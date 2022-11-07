@@ -525,7 +525,7 @@ def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attribu
         vals = obj.__dict__
         auxtypes = obj.__dict__[auxfile_types_member]
 
-    write_meta_based_dir(dirname, vals, auxtypes, init_meta=meta)
+    return write_meta_based_dir(dirname, vals, auxtypes, init_meta=meta)
 
 
 def _read_json_or_pkl_files_to_dict(dirname):
@@ -541,20 +541,6 @@ def _read_json_or_pkl_files_to_dict(dirname):
     -------
     dict
     """
-
-    def _from_jsonable(x):
-        if x is None or isinstance(x, (float, int, str)):
-            return x
-        elif isinstance(x, dict):
-            if 'module' in x and 'class' in x:
-                return _NicelySerializable.from_nice_serialization(x)
-            else:  # assume a normal dictionary
-                return {k: _from_jsonable(v) for k, v in x.items()}
-        elif isinstance(x, list):
-            return [_from_jsonable(v) for v in x]
-        else:
-            raise ValueError("Cannot decode object of type '%s' within JSON'd values!" % str(type(x)))
-
     dirname = _pathlib.Path(dirname)
     if not dirname.is_dir():
         return {}
@@ -598,16 +584,6 @@ def write_dict_to_json_or_pkl_files(d, dirname):
     dirname = _pathlib.Path(dirname)
     dirname.mkdir(exist_ok=True)
 
-    def _to_jsonable(val):
-        if isinstance(val, _NicelySerializable):
-            return val.to_nice_serialization()
-        elif type(val) == list:  # don't use isinstance here
-            return [_to_jsonable(v) for v in val]
-        elif type(val) == dict:  # don't use isinstance here
-            return {k: _to_jsonable(v) for k, v in val.items()}
-        else:
-            return val
-
     for key, val in d.items():
         try:
             jsonable = _to_jsonable(val)
@@ -620,6 +596,31 @@ def write_dict_to_json_or_pkl_files(d, dirname):
             #try to remove partial json file??
             with open(str(dirname / (key + '.pkl')), 'wb') as f:
                 _pickle.dump(val, f)
+
+
+def _to_jsonable(val):
+    if isinstance(val, _NicelySerializable):
+        return val.to_nice_serialization()
+    elif type(val) == list:  # don't use isinstance here
+        return [_to_jsonable(v) for v in val]
+    elif type(val) == dict:  # don't use isinstance here
+        return {k: _to_jsonable(v) for k, v in val.items()}
+    else:
+        return val
+
+
+def _from_jsonable(x):
+    if x is None or isinstance(x, (float, int, str)):
+        return x
+    elif isinstance(x, dict):
+        if 'module' in x and 'class' in x:
+            return _NicelySerializable.from_nice_serialization(x)
+        else:  # assume a normal dictionary
+            return {k: _from_jsonable(v) for k, v in x.items()}
+    elif isinstance(x, list):
+        return [_from_jsonable(v) for v in x]
+    else:
+        raise ValueError("Cannot decode object of type '%s' within JSON'd values!" % str(type(x)))
 
 
 def _check_jsonable(x):

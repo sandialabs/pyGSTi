@@ -154,7 +154,7 @@ def write_dataset(filename, dataset, circuits=None,
     if fixed_column_mode is True:
         headerString += '## Columns = ' + ", ".join(["%s count" % _outcome_to_str(ol)
                                                      for ol in outcomeLabels]) + '\n'
-        assert(not (with_times is True)), "Cannot set `witTimes=True` when `fixed_column_mode=True`"
+        assert(not (with_times is True)), "Cannot set `withTimes=True` when `fixed_column_mode=True`"
     else:
         headerString += '## Outcomes = ' + ", ".join([_outcome_to_str(ol) for ol in outcomeLabels]) + '\n'
 

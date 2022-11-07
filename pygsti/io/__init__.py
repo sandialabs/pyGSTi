@@ -18,3 +18,4 @@ from .readers import *
 from .metadir import *
 from .stdinput import *
 from .writers import *
+from .mongodb import *
