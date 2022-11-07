@@ -527,11 +527,28 @@ class GSTBadFitOptions(_NicelySerializable):
         GST fit is considered satisfactory (and no "bad-fit" processing is needed).
 
     actions : tuple, optional
-        Actions to take when a GST fit is unsatisfactory.
+        Actions to take when a GST fit is unsatisfactory. Allowed actions include:
+        - 'wildcard': Find an admissable wildcard model...
+        - 'ddist_wildcard': Fits a single parameter wildcard model in which
+          the amount of wildcard error added to an operation is proportional
+          to the diamond distance between that operation and the target.
+        - 'Robust+': ...
+        - 'robust+': ...
+        - 'robust': ...
+        - 'do nothing': ...
 
     wildcard_budget_includes_spam : bool, optional
         Include a SPAM budget within the wildcard budget used to process
         the `"wildcard"` action.
+    
+    wildcard_L1_weights :
+    
+    wildcard_primitive_op_labels:
+    
+    wildcard_methods: tuple, optional (default ('neldermead',))
+    
+    wildcard_inadmissable_action: str, optional (default 'print')
+    
     """
 
     @classmethod
