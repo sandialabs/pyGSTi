@@ -687,7 +687,7 @@ class QuditProcessorSpec(ProcessorSpec):
         mapped_qudit_labels = tuple(map(mapper_func, self.qudit_labels))
 
         qudit_udims_lookup = {ql: udim for ql, udim in zip(self.qudit_labels, self.qudit_udims)}
-        mapped_qudit_udims = [qudit_udims_lookup[ql] for ql in mapped_qudit_labels]
+        mapped_qudit_udims = [qudit_udims_lookup[ql] for ql in self.qudit_labels]
 
         availability = {}
         for gn in self.gate_names:
