@@ -1188,7 +1188,7 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
     sout, LHS2_Psome_layer = _make_submatrix_invertable_using_phases_and_idsubmatrix(sout, 'row', 'LR', qubit_labels)
     assert(_symp.check_symplectic(sout))
     # Stage 4: CNOT circuit from the LHS to map the UR and LR submatrices of s to the same invertible matrix M
-    sout, LHS3_CNOTs = find_albert_factorization_transform_using_cnots(sout, 'row', 'LR', qubit_labels)
+    sout, LHS3_CNOTs = find_albert_factorization_transform_using_cnots(sout, 'row', 'LR', qubit_labels, rand_state)
     assert(_symp.check_symplectic(sout))
     # Stage 5: A CNOT circuit from the RHS to map the URH and LRH submatrices of s from M to I.
     sout, RHS1B_CNOTs, success = _submatrix_gaussian_elimination_using_cnots(sout, 'column', 'UR', qubit_labels)
@@ -1206,7 +1206,7 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
     sout, LHS6_Psome_layer = _make_submatrix_invertable_using_phases_and_idsubmatrix(sout, 'row', 'LL', qubit_labels)
     assert(_symp.check_symplectic(sout))
     # Stage 9: CNOT circuit from the RHS to map the UR and LR submatrices of s to the same invertible matrix M
-    sout, RHS1C_CNOTs = find_albert_factorization_transform_using_cnots(sout, 'column', 'LL', qubit_labels)
+    sout, RHS1C_CNOTs = find_albert_factorization_transform_using_cnots(sout, 'column', 'LL', qubit_labels, rand_state)
     assert(_symp.check_symplectic(sout))
     # Stage 10: Phase gates on all qubits acting from the RHS to map the LL submatrix of s to 0.
     sout, RHS2_Pall_layer = _apply_phase_to_all_qubits(sout, 'column', qubit_labels)
@@ -2321,6 +2321,7 @@ def compile_stabilizer_measurement(s, p, pspec, absolute_compilation, paulieq_co
             # self-inverse up to Paulis in CNOT, H, and P).
             tc, tcc = compile_conditional_symplectic(
                 s, pspec, qubit_labels=qubit_labels, calg=algorithm, cargs=aargs, check=False, rand_state=rand_state)
+
             tc = tc.copy(editable=True)
             tc.reverse_inplace()
             # Do the depth-compression *after* the circuit is reversed (after this, reversing circuit doesn't implement
@@ -2761,7 +2762,7 @@ def _make_submatrix_invertable_using_phases_and_idsubmatrix(s, optype, position,
     return sout, instructions
 
 
-def find_albert_factorization_transform_using_cnots(s, optype, position, qubit_labels):
+def find_albert_factorization_transform_using_cnots(s, optype, position, qubit_labels, rand_state=None):
     """
     Performs an Albert factorization transform on `s`.
 
@@ -2805,6 +2806,9 @@ def find_albert_factorization_transform_using_cnots(s, optype, position, qubit_l
         it is ambigious as to what the 'name' of a qubit associated with each indices is, so it
         is not possible to return a suitable list of CNOTs.
 
+    rand_state : np.random.RandomState, optional
+        Random number generator to allow for determinism.
+
     Returns
     -------
     np.array
@@ -2823,7 +2827,7 @@ def find_albert_factorization_transform_using_cnots(s, optype, position, qubit_l
     D = s[rs:rs + n, cs:cs + n].copy()
     assert(_np.array_equal(D, D.T)), "The matrix D to find an albert factorization of is not invertable!"
     # Return an invertable matrix M such that D = M M.T
-    M = _mtx.albert_factor(D)
+    M = _mtx.albert_factor(D, rand_state=rand_state)
 
     # Temp reset the submatrix quadrant at 'position' to M.T or M: so the GE maps that quadrant to I.
     # If it's a row-action (from the LHS) we're mapping D = M M.T -> M.T
@@ -3026,7 +3030,7 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
 
     if n > 1:
         # Stage 4: CNOT circuit from the LHS to map the UR and LR submatrices of s to the same invertible matrix M
-        sout, CNOTs = find_albert_factorization_transform_using_cnots(sout, 'row', 'LR', qubit_labels)
+        sout, CNOTs = find_albert_factorization_transform_using_cnots(sout, 'row', 'LR', qubit_labels, rand_state)
         # We reverse the list, because its a list doing the GE on s, and we want to do the inverse of that on I.
         CNOTs.reverse()
 

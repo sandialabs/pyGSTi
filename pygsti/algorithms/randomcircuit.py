@@ -1557,7 +1557,6 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
             assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
         idealout.append(int(measurement_out[1]))
     idealout = tuple(idealout)
-    full_circuit.done_editing()
 
     if not partitioned: outcircuit = full_circuit
     else:
