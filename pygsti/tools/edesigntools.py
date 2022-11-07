@@ -239,7 +239,9 @@ def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, ter
         The model used to calculate the terms of the Fisher information matrix.
 
     circuits: list
-        List of circuits in the experiment design.
+        List of circuits in the experiment design. Should be passed in using a PlaquetteGridCircuitStructure
+        object or a comparable circuit structure, most likely by using all_circuits_needing_data with an
+        experiment design object.
 
     num_shots: int or dict
         If int, specifies how many shots each circuit gets. If dict, keys must be circuits
@@ -288,6 +290,23 @@ def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, ter
 
     fisher_information_by_L = {}
     prev_L = None
+    
+    #Check whether we need to add in addtional circuits from _additonal_circuit by checking if it is empty.
+    if circuits._additional_circuits:
+        
+        unique_circs = list(set(circuits._additional_circuits) - seen_circs)
+        fim_term = calculate_fisher_information_matrix(regularized_model, unique_circs, num_shots,
+                                                       term_cache=term_cache, regularize_spam=False)
+
+        # Update seen circuits
+        seen_circs = seen_circs.union(unique_circs)
+
+        # Initialize the L=1 term of the dictionary     
+        fisher_information_by_L[1] = fim_term
+
+        # Update L for next round
+        prev_L = 1
+    
     for (L, germ), plaq in circuits.iter_plaquettes():
         # Build FIM for any new circuits included in this plaquette
         plaq_circs = list(plaq.circuits)
