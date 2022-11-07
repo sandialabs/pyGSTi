@@ -156,9 +156,6 @@ class NicelySerializable(object):
         path : str or Path
             The name of the file that is written.
 
-        format : {'json', 'repr'}
-            The format to write.
-
         format_kwargs : dict, optional
             Additional arguments specific to the format being used.
             For example, the JSON format accepts `indent` as an argument

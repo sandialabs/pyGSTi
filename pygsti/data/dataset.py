@@ -955,7 +955,7 @@ class DataSet(object):
             the outcome labels should be those for a standard set of this many qubits.
 
         outcome_label_indices : ordered dictionary
-            An OrderedDict with keys equal to spam labels (strings) and value equal to
+            An OrderedDict with keys equal to outcome labels and values equal to
             integer indices associating a spam label with given index.  Only
             specify this argument OR outcome_labels, not both.
 
