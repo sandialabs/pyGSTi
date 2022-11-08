@@ -1468,7 +1468,7 @@ class StandardGST(_proto.Protocol):
         self.models_to_test = models_to_test
         self.target_model = target_model
         self.gaugeopt_suite = GSTGaugeOptSuite.cast(gaugeopt_suite)
-        self.objfn_builders = objfn_builders
+        self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders) if (objfn_builders is not None) else None
         self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
