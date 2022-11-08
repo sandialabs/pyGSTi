@@ -102,10 +102,6 @@ class QuditProcessorSpec(ProcessorSpec):
     qubit_labels : list or tuple, optional
         The labels (integers or strings) of the qubits.  If `None`, then the integers starting with zero are used.
 
-    nonstd_gate_symplecticreps : dict, optional
-        A dictionary similar to `nonstd_gate_unitaries` that supplies, instead of a unitary matrix, the symplectic
-        representation of a Clifford operations, given as a 2-tuple of numpy arrays.
-
     aux_info : dict, optional
         Any additional information that should be attached to this processor spec.
 
@@ -245,8 +241,6 @@ class QuditProcessorSpec(ProcessorSpec):
                       'instrument_names': list(self.instrument_names),
                       'nonstd_instruments': nonstd_instruments,
                       'geometry': self.qudit_graph.to_nice_serialization(),
-                      'symplectic_reps': {k: (self._encodemx(s), self._encodemx(p))
-                                          for k, (s, p) in self._symplectic_reps.items()},
                       'aux_info': self.aux_info
                       })
         return state
@@ -320,7 +314,7 @@ class QuditProcessorSpec(ProcessorSpec):
         geometry = _qgraph.QubitGraph.from_nice_serialization(state['geometry'])
 
         return cls(state['qudit_labels'], state['qudit_udims'], state['gate_names'], nonstd_gate_unitaries,
-                   availability, geometry, state['qudit_labels'], state['prep_names'], state['povm_names'],
+                   availability, geometry, state['prep_names'], state['povm_names'],
                    state['instrument_names'], nonstd_preps, nonstd_povms, nonstd_instruments, state['aux_info'])
 
     @property
@@ -702,8 +696,13 @@ class QuditProcessorSpec(ProcessorSpec):
 
         qudit_graph = self.qudit_graph.map_qubit_labels(mapper)
 
-        return QuditProcessorSpec(mapped_qudit_labels, mapped_qudit_udims, self.gate_names, self.gate_unitaries,
-                                  availability, qudit_graph)
+        if isinstance(self, QubitProcessorSpec):  # map to a QubitProcessorSpec even if we call map_qudit_labels
+            assert(all([udim == 2 for udim in mapped_qudit_udims]))
+            return QubitProcessorSpec(self.num_qubits, self.gate_names, self.gate_unitaries, availability,
+                                      qudit_graph, mapped_qudit_labels)
+        else:
+            return QuditProcessorSpec(mapped_qudit_labels, mapped_qudit_udims, self.gate_names, self.gate_unitaries,
+                                      availability, qudit_graph)
 
     @property
     def idle_gate_names(self):
