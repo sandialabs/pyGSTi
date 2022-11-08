@@ -148,6 +148,42 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     toss_random_frac : float, optional
         If specified this is a number between 0 and 1 that indicates the random fraction of candidate
         germs to drop randomly following the deduping procedure.
+        
+    mode : str, optional (default 'allJac')
+        A flag to indicate the caching scheme used for storing the Jacobians for the candidate
+        germs. Default value of 'allJac' caches all of the Jacobians and requires the most memory.
+        'singleJac' doesn't cache anything and instead generates these Jacobians on the fly. The
+        final option, 'compactEVD', is currently only configured to work with the greedy search 
+        algorithm. When selected the compact eigenvalue decomposition/compact SVD of each of
+        the Jacobians is constructed and is cached. This uses an intermediate amount of memory 
+        between singleJac and allJac. When compactEVD mode is selected perform the greedy
+        search iterations using an alternative method based on low-rank updates to the 
+        psuedoinverse. This alternative approach means that this mode also only works with the
+        score function option set to 'all'.
+    
+    force_rank_increase : bool, optional (default False) 
+        Optional flag that can be used in conjunction with the greedy search algorithm
+        in compactEVD mode. When set we require that each subsequant addition to the germ
+        set must increase the rank of the experiment design's composite Jacobian. Can potentially
+        speed up the search when set to True.
+        
+    save_cevd_cache_filename : str, optional (default None)
+        When set and using the greedy search algorithm in 'compactEVD' mode this writes
+        the compact EVD cache to disk using the specified filename.
+               
+    load_cevd_cache_filename : str, optional (default None)
+        A filename/path to load an existing compact EVD cache from. Useful for warmstarting
+        a germ set search with various cost function parameters, or for restarting a search
+        that failed/crashed/ran out of memory. Note that there are no safety checks to confirm 
+        that the compact EVD cache indeed corresponds to that for of currently specified
+        candidate circuit list, so care must be take to confirm that the candidate
+        germ lists are consistent across runs.
+        
+    file_compression : bool, optional (default False)
+        When True and a filename is given for the save_cevd_cache_filename the corresponding
+        numpy arrays are stored in a compressed format using numpy's savez_compressed.
+        Can significantly decrease the storage requirements on disk at the expense of
+        some additional computational cost writing and loading the files.
 
     Returns
     -------
