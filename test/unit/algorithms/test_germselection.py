@@ -333,7 +333,7 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
                 **self.options
             )
     
-    def test_greedy_low_rank_update(self)
+    def test_greedy_low_rank_update(self):
         # TODO assert correctness
         germs = germsel.find_germs(std.target_model(), seed=2017, 
                                    candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
