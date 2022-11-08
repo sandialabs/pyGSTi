@@ -1032,9 +1032,6 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     imin_full_fid_set = len(spectrum_full_fid_set) - gsGerm.num_params
     condition_full_fid_set = spectrum_full_fid_set[-1] / spectrum_full_fid_set[imin_full_fid_set] if (spectrum_full_fid_set[imin_full_fid_set] > 0) else _np.inf
     
-    end=time.time()
-    print('Elapsed Time ', end-start )
-    
     
     #debugging
     printer.log('J J^T Rank Full Fiducial Set: %d' % rank, 2)
