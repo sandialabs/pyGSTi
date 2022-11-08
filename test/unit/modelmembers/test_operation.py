@@ -253,7 +253,7 @@ class DenseOpTester(ImmutableDenseOpBase, BaseCase):
 
     @staticmethod
     def build_gate():
-        return op.DenseOperator(np.zeros((4, 4)), 'default', state_space=None)
+        return op.DenseOperator(np.zeros((4, 4)), None, 'default', state_space=None)
 
     def test_convert_to_matrix_raises_on_bad_dim(self):
         with self.assertRaises(ValueError):
@@ -300,9 +300,7 @@ class StaticStdOpTester(BaseCase):
             if not name.startswith('G'): continue  # currently the 'h', 'p', 'm' gates aren't "standard" yet because they lack unitaries
             chpop = op.StaticStandardOp(name, 'pp', 'chp', state_space=None)
             op_str = '\n'.join(ops)
-            if len(op_str):
-                op_str += '\n'
-            self.assertEqual(chpop._rep.chp_str(), op_str)
+            self.assertEqual('\n'.join(chpop._rep._chp_ops()), op_str)
         
     def test_raises_on_bad_values(self):
         with self.assertRaises(ValueError):
@@ -386,8 +384,8 @@ class LinearlyParamOpTester(MutableDenseOpBase, BaseCase):
         baseMx = np.zeros((2, 2))
         parameterToBaseIndicesMap = {0: [(0, 0)], 1: [(1, 1)]}  # parameterize only the diag els
         with self.assertRaises(AssertionError):
-            op.LinearlyParamArbitraryOp(baseMx, np.array([1.0 + 1j, 1.0]),
-                                        parameterToBaseIndicesMap, real=True)  # must be real
+            op.LinearlyParamArbitraryOp(baseMx, np.array([1.0 + 1j, 1.0]), parameterToBaseIndicesMap,
+                                        real=True)  # must be real
 
     #REMOVED - we don't support .compose methods anymore
     #def test_composition(self):
@@ -416,8 +414,8 @@ class LinearlyParamOpTester(MutableDenseOpBase, BaseCase):
         parameterToBaseIndicesMap = {0: [(0, 0)], 1: [(1, 1)]}  # parameterize only the diagonal els
         gate_linear_B = op.LinearlyParamArbitraryOp(baseMx, paramArray, parameterToBaseIndicesMap, real=True)
         with self.assertRaises(AssertionError):
-            op.LinearlyParamArbitraryOp(baseMx, np.array([1.0 + 1j, 1.0]),
-                                        parameterToBaseIndicesMap, real=True)  # must be real
+            op.LinearlyParamArbitraryOp(baseMx, np.array([1.0 + 1j, 1.0]), parameterToBaseIndicesMap,
+                                        real=True)  # must be real
 
         numParams = gate_linear_B.num_params
         v = gate_linear_B.to_vector()
@@ -519,6 +517,7 @@ class RealEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
     @staticmethod
     def build_gate():
         mx = np.identity(4, 'd')
+        
         return op.EigenvalueParamDenseOp(
             mx, include_off_diags_in_degen_blocks=False,
             tp_constrained_and_unital=False
@@ -533,6 +532,7 @@ class RealEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
         g2 = op.EigenvalueParamDenseOp(
             mx, include_off_diags_in_degen_blocks=True, tp_constrained_and_unital=False
         )
+
         self.assertEqual(
             g2.params,
             [[(1.0, (0, 0))], [(1.0, (1, 1))],
@@ -551,6 +551,7 @@ class ComplexEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
                        [0, 1, 0, 0],
                        [0, 0, 0, 1],
                        [0, 0, -1, 0]], 'd')
+
         return op.EigenvalueParamDenseOp(
             mx, include_off_diags_in_degen_blocks=False,
             tp_constrained_and_unital=False
@@ -562,9 +563,11 @@ class ComplexEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
                        [0, 0, 1 + 1, -0.1],
                        [0, 0, 0.1, 1 + 1]], 'complex')
         # complex pairs of evecs => make sure combined parameters work
+
         g3 = op.EigenvalueParamDenseOp(
             mx, include_off_diags_in_degen_blocks=True, tp_constrained_and_unital=False
         )
+
         self.assertEqual(
             g3.params,
             [[(1.0, (0, 0)), (1.0, (1, 1))],  # single param that is Re part of 0,0 and 1,1 els
@@ -579,9 +582,11 @@ class ComplexEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
                        [0, 0, 1, -0.1],
                        [0, 0, 0.1, 1]], 'complex')
         # 2 degenerate complex pairs of evecs => should add off-diag els
+
         g4 = op.EigenvalueParamDenseOp(
             mx, include_off_diags_in_degen_blocks=True, tp_constrained_and_unital=False
         )
+
         self.assertArraysAlmostEqual(g4.evals, [1. + 0.1j, 1. + 0.1j, 1. - 0.1j, 1. - 0.1j])  # Note: evals are sorted!
         self.assertEqual(
             g4.params,
@@ -796,11 +801,11 @@ class ComposedOpTester(OpBase, BaseCase):
         evotype = 'default'
         state_space = None  # constructs a default based on size of mx
         gate = op.ComposedOp([
-            op.StaticArbitraryOp(mx, evotype, state_space),
-            op.FullArbitraryOp(mx, evotype, state_space),
-            op.FullArbitraryOp(mx2, evotype, state_space),
-            op.StaticArbitraryOp(mx, evotype, state_space),
-            op.FullArbitraryOp(mx2, evotype, state_space)
+            op.StaticArbitraryOp(mx, evotype=evotype, state_space=state_space),
+            op.FullArbitraryOp(mx, evotype=evotype, state_space=state_space),
+            op.FullArbitraryOp(mx2, evotype=evotype, state_space=state_space),
+            op.StaticArbitraryOp(mx, evotype=evotype, state_space=state_space),
+            op.FullArbitraryOp(mx2, evotype=evotype, state_space=state_space)
         ])
 
         # TODO does this need to be done?
@@ -818,7 +823,7 @@ class EmbeddedDenseOpTester(OpBase, BaseCase):
         evotype = 'default'
         state_space = statespace.StateSpace.cast([('Q0',)])
         mx = np.identity(state_space.dim, 'd')
-        return op.EmbeddedOp(state_space, ['Q0'], op.FullArbitraryOp(mx, evotype, state_space=None))
+        return op.EmbeddedOp(state_space, ['Q0'], op.FullArbitraryOp(mx, evotype=evotype, state_space=None))
 
     #This is really a state-space unit test
     #def test_constructor_raises_on_bad_state_space_label(self):
@@ -830,8 +835,8 @@ class EmbeddedDenseOpTester(OpBase, BaseCase):
         mx = np.identity(4, 'd')
         state_space = statespace.StateSpace.cast([('Q0',), ('Q1',)])
         evotype = 'default'
-        with self.assertRaises(ValueError):
-            op.EmbeddedOp(state_space, ['Q0', 'Q1'], op.FullArbitraryOp(mx, evotype, state_space=None))
+        with self.assertRaises(AssertionError):
+            op.EmbeddedOp(state_space, ['Q0', 'Q1'], op.FullArbitraryOp(mx, evotype=evotype, state_space=None))
 
 
 class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):
@@ -849,7 +854,8 @@ class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):
                               [0, 0, 0, 0],
                               [-0.5, 0, 0, 0.5]])
         evotype = 'default'
-        inst = TPInstrument({'plus': op.FullArbitraryOp(Gmz_plus, evotype), 'minus': op.FullArbitraryOp(Gmz_minus, evotype)})
+        inst = TPInstrument({'plus': op.FullArbitraryOp(Gmz_plus, evotype=evotype), 'minus': op.FullArbitraryOp(
+            Gmz_minus, evotype=evotype)})
         return inst['plus']
 
     def test_vector_conversion(self):

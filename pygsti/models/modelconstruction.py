@@ -540,9 +540,9 @@ def _create_explicit_model_from_expressions(state_space, basis,
         ret.operations[opLabel] = create_operation(opExpr, state_space, basis, gate_type, evotype)
 
     if gate_type == "full":
-        ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, evotype)
+        ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, basis, evotype)
     elif gate_type == "full TP":
-        ret.default_gauge_group = _gg.TPGaugeGroup(ret.state_space, evotype)
+        ret.default_gauge_group = _gg.TPGaugeGroup(ret.state_space, basis, evotype)
     elif gate_type == 'CPTP':
         ret.default_gauge_group = _gg.UnitaryGaugeGroup(ret.state_space, basis, evotype)
     else:
@@ -721,6 +721,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     qudit_labels = processor_spec.qudit_labels
     state_space = _statespace.QubitSpace(qudit_labels) if all([udim == 2 for udim in processor_spec.qudit_udims]) \
         else _statespace.QuditSpace(qudit_labels, processor_spec.qudit_udims)
+    std_gate_unitaries = _itgs.standard_gatename_unitaries()
     evotype = _Evotype.cast(evotype)
     modelnoise = _OpModelNoise.cast(modelnoise)
     modelnoise.reset_access_counters()
@@ -762,6 +763,15 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
         gate_is_factory = callable(gate_unitary)
         resolved_avail = processor_spec.resolved_availability(gn)
 
+        #Note: same logic for setting stdname as in _setup_local_gates (consolidate?)
+        if ((gn not in processor_spec.nonstd_gate_unitaries)
+            or (not callable(processor_spec.nonstd_gate_unitaries[gn]) and (gn in std_gate_unitaries)
+                and processor_spec.nonstd_gate_unitaries[gn].shape == std_gate_unitaries[gn].shape
+                and _np.allclose(processor_spec.nonstd_gate_unitaries[gn], std_gate_unitaries[gn]))):
+            stdname = gn  # setting `stdname` != None means we can try to create a StaticStandardOp below
+        else:
+            stdname = _itgs.unitary_to_standard_gatename(gate_unitary)  # possibly None
+
         if callable(resolved_avail) or resolved_avail == '*':
             assert (embed_gates), "Cannot create factories with `embed_gates=False` yet!"
             key = _label.Label(gn) if (gn != gn_to_make_emptytup) else _label.Label(())
@@ -783,7 +793,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     elif isinstance(custom_gates[key], _op.LinearOperator):
                         ret.operations[key] = custom_gates[key]
                     else:  # presumably a numpy array or something like it.
-                        ret.operations[key] = _op.StaticArbitraryOp(custom_gates[key], evotype,
+                        ret.operations[key] = _op.StaticArbitraryOp(custom_gates[key], basis, evotype,
                                                                     state_space)  # static gates by default
                     continue
 
@@ -805,7 +815,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                             ideal_gate = _op.ComposedOp([], evotype, state_space)  # (identity gate on *all* qudits)
                         else:
                             ideal_gate = _op.create_from_unitary_mx(gate_unitary, ideal_gate_type, basis,
-                                                                    None, evotype, state_space)
+                                                                    stdname, evotype, state_space)
                     else:
                         if embed_gates:
                             ideal_gate = local_gates[gn]
@@ -818,7 +828,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                             else:
                                 embedded_unitary = _embed_unitary(state_space, inds, gate_unitary)
                             ideal_gate = _op.create_from_unitary_mx(embedded_unitary, ideal_gate_type, basis,
-                                                                    None, evotype, state_space)
+                                                                    stdname, evotype, state_space)
 
                     #TODO: check for modelnoise on *local* gate, i.e. create_errormap(gn, ...)??
                     #Note: set target_labels=None (NOT target_labels=inds) below so that n-qubit noise can
@@ -935,10 +945,10 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     modelnoise.warn_about_zero_counters()
 
     if ideal_gate_type == "full" and ideal_prep_type == "full" and ideal_povm_type == "full":
-        ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, evotype)
+        ret.default_gauge_group = _gg.FullGaugeGroup(ret.state_space, basis, evotype)
     elif (ideal_gate_type in ("full TP", "TP") and ideal_prep_type in ("full TP", "TP")
           and ideal_povm_type in ("full TP", "TP")):
-        ret.default_gauge_group = _gg.TPGaugeGroup(ret.state_space, evotype)
+        ret.default_gauge_group = _gg.TPGaugeGroup(ret.state_space, basis, evotype)
     elif ideal_gate_type == "CPTP" and ideal_prep_type == "CPTP" and ideal_povm_type == "CPTP":
         ret.default_gauge_group = _gg.UnitaryGaugeGroup(ret.state_space, basis, evotype)
     else:
@@ -972,12 +982,12 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             prep_noiseop1Q = modelnoise.create_errormap('prep', evotype, singleQ_state_space, target_labels=None)
             if prep_noiseop1Q is not None:
                 err_gates = [prep_noiseop1Q.copy() for i in range(num_qudits)] \
-                    if independent_gates else [prep_noiseop1Q] * num_qudits
+                    if independent_spam else [prep_noiseop1Q] * num_qudits
                 prep_ops.extend([_op.EmbeddedOp(state_space, [qudit_labels[i]], err_gates[i])
                                  for i in range(num_qudits)])
         else:  # use modelnoise to construct n-qudit noise
             prepNoiseMap = modelnoise.create_errormap('prep', evotype, state_space, target_labels=None,
-                                                      qudit_graph=processor_spec.qudit_graph)
+                                                      qudit_graph=processor_spec.qudit_graph, copy=independent_spam)
             if prepNoiseMap is not None: prep_ops.append(prepNoiseMap)
 
     def _add_povm_noise(povm_ops):
@@ -986,12 +996,12 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             povm_noiseop1Q = modelnoise.create_errormap('povm', evotype, singleQ_state_space, target_labels=None)
             if povm_noiseop1Q is not None:
                 err_gates = [povm_noiseop1Q.copy() for i in range(num_qudits)] \
-                    if independent_gates else [povm_noiseop1Q] * num_qudits
+                    if independent_spam else [povm_noiseop1Q] * num_qudits
                 povm_ops.extend([_op.EmbeddedOp(state_space, [qudit_labels[i]], err_gates[i])
                                  for i in range(num_qudits)])
         else:  # use modelnoise to construct n-qudit noise
             povmNoiseMap = modelnoise.create_errormap('povm', evotype, state_space, target_labels=None,
-                                                      qudit_graph=processor_spec.qudit_graph)
+                                                      qudit_graph=processor_spec.qudit_graph, copy=independent_spam)
             if povmNoiseMap is not None: povm_ops.append(povmNoiseMap)
 
     def _add_to_prep_layers(ideal_prep, prep_ops, prep_name):
@@ -1014,19 +1024,20 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
 
     def _create_nq_noise(lndtype):
         proj_basis = 'PP' if state_space.is_entirely_qubits else basis
+        ExpErrorgen = _op.IdentityPlusErrorgenOp if lndtype.meta == '1+' else _op.ExpErrorgenOp
         if local_noise:
             # create a 1-qudit exp(errorgen) that is applied to each qudit independently
             errgen_1Q = _op.LindbladErrorgen.from_error_generator(singleQ_state_space.dim, lndtype, proj_basis, 'pp',
                                                                   truncate=True, evotype=evotype, state_space=None)
             err_gateNQ = _op.ComposedOp([_op.EmbeddedOp(state_space, [qudit_labels[i]],
-                                                        _op.ExpErrorgenOp(errgen_1Q.copy()))
+                                                        ExpErrorgen(errgen_1Q.copy()))
                                          for i in range(num_qudits)], evotype, state_space)
         else:
             # create an n-qudit exp(errorgen)
             errgen_NQ = _op.LindbladErrorgen.from_error_generator(state_space.dim, lndtype, proj_basis, basis,
                                                                   truncate=True, evotype=evotype,
                                                                   state_space=state_space)
-            err_gateNQ = _op.ExpErrorgenOp(errgen_NQ)
+            err_gateNQ = _op.ExpErrorgen(errgen_NQ)
         return err_gateNQ
 
     def _decomp_index_to_digits(i, bases):
@@ -1045,7 +1056,9 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
         # Prep logic
         if isinstance(ideal_prep_type, (tuple, list)):  # HACK to support multiple vals
             ideal_prep_type = ideal_prep_type[0]
-        if ideal_prep_type == 'computational' or ideal_prep_type.startswith('lindblad '):
+
+        if (ideal_prep_type == 'computational' or ideal_prep_type.startswith('exp(')
+           or ideal_prep_type.startswith('1+(') or ideal_prep_type.startswith('lindblad ')):
 
             if isinstance(prep_spec, str):
                 # Notes on conventions:  When there are multiple qubits, the leftmost in a string (or, intuitively,
@@ -1084,11 +1097,9 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                 raise ValueError("Invalid state preparation spec: %s" % str(prep_spec))
 
             prep_ops_to_compose = []
-            if ideal_prep_type.startswith('lindblad '):  # then add a composed exp(errorgen) to computational SPAM
-                lndtype = ideal_prep_type[len('lindblad '):]
-
+            if _ot.is_valid_lindblad_paramtype(ideal_prep_type):
+                lndtype = _op.LindbladParameterization.cast(ideal_prep_type)
                 err_gateNQ = _create_nq_noise(lndtype)
-
                 prep_ops_to_compose.append(err_gateNQ)
 
             # Add noise
@@ -1178,7 +1189,8 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
         # Povm logic
         if isinstance(ideal_povm_type, (tuple, list)):  # HACK to support multiple vals
             ideal_povm_type = ideal_povm_type[0]
-        if ideal_povm_type == 'computational' or ideal_povm_type.startswith('lindblad '):
+        if (ideal_povm_type == 'computational' or ideal_povm_type.startswith('exp(')
+           or ideal_povm_type.startswith('1+(') or ideal_povm_type.startswith('lindblad ')):
 
             if not all([udim == 2 for udim in processor_spec.qudit_udims]):
                 raise NotImplementedError(("POVMs can currently only be constructed on a space of *qubits* when using"
@@ -1197,11 +1209,9 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                 raise ValueError("Invalid POVM spec: %s" % str(povm_spec))
 
             povm_ops_to_compose = []
-            if ideal_povm_type.startswith('lindblad '):  # then add a composed exp(errorgen) to computational SPAM
-                lndtype = ideal_povm_type[len('lindblad '):]
-
+            if _ot.is_valid_lindblad_paramtype(ideal_povm_type):
+                lndtype = _op.LindbladParameterization.cast(ideal_povm_type)
                 err_gateNQ = _create_nq_noise(lndtype)
-
                 povm_ops_to_compose.append(err_gateNQ.copy())  # .copy() => POVM errors independent
 
             # Add noise
@@ -1408,6 +1418,8 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
                     and processor_spec.nonstd_gate_unitaries[name].shape == std_gate_unitaries[name].shape
                     and _np.allclose(processor_spec.nonstd_gate_unitaries[name], std_gate_unitaries[name]))):
             stdname = name  # setting `stdname` != None means we can try to create a StaticStandardOp below
+        elif name in processor_spec.gate_unitaries:
+            stdname = _itgs.unitary_to_standard_gatename(U)  # possibly None
         else:
             stdname = None
 

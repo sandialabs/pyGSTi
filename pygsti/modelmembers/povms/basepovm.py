@@ -79,7 +79,11 @@ class _BasePOVM(_POVM):
                 effect = v if (not preserve_sum) else v.copy()  # .copy() just to de-allocate parameters
             else:
                 assert(evotype is not None), "Must specify `evotype` when effect vectors are not POVMEffect objects!"
-                effect = _FullPOVMEffect(v, evotype, state_space)
+                # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+                #  and should be replaced with the basis of other effects once we establish
+                #  a common .basis or ._basis attribute of representations (which could still be None)
+                # or maybe need to add 'basis' __init__ argument?
+                effect = _FullPOVMEffect(v, None, evotype, state_space)
 
             if evotype is None: evotype = effect.evotype
             else: assert(evotype == effect.evotype), \
@@ -107,7 +111,7 @@ class _BasePOVM(_POVM):
                 identity_for_complement, non_comp_effects)
             items.append((self.complement_label, complement_effect))
 
-        super(_BasePOVM, self).__init__(state_space, evotype, items)
+        super(_BasePOVM, self).__init__(state_space, evotype, None, items)
         if not called_from_reduce: self.init_gpindices()  # initialize our gpindices based on sub-members
         self._paramlbls = _np.array(paramlbls, dtype=object)
 

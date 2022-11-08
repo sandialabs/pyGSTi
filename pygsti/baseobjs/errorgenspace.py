@@ -31,7 +31,7 @@ class ErrorgenSpace(object):
         # map sslbls => (vectors, basis) where basis.sslbls == sslbls
         # or basis => vectors if bases can hash well(?)
 
-    def intersection(self, other_space, free_on_unspecified_space=False):
+    def intersection(self, other_space, free_on_unspecified_space=False, use_nice_nullspace=False):
         """
         TODO: docstring
         """
@@ -56,7 +56,7 @@ class ErrorgenSpace(object):
             i += Wl
             VIWI[common_basis.label_indices(diff_other.labels), i:i + Wli] = _np.identity(Wli, dtype)
 
-            ns = _mt.nullspace(VIWI)
+            ns = _mt.nice_nullspace(VIWI) if use_nice_nullspace else _mt.nullspace(VIWI)
             intersection_vecs = _np.dot(VIWI[:, 0:(Vl + Vli)], ns[0:(Vl + Vli), :])  # on common_basis
 
         else:

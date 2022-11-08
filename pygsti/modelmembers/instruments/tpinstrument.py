@@ -98,18 +98,18 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
 
             # Create gate objects that are used to parameterize this instrument
             MT_mx = sum([v for k, v in matrix_list])  # sum-of-instrument-members matrix
-            MT = _op.FullTPOp(MT_mx, evotype, state_space)
+            MT = _op.FullTPOp(MT_mx, None, evotype, state_space)
             self.param_ops.append(MT)
 
             dim = MT.dim
             for k, v in matrix_list[:-1]:
-                Di = _op.FullArbitraryOp(v - MT_mx, evotype, state_space)
+                Di = _op.FullArbitraryOp(v - MT_mx, None, evotype, state_space)
                 assert(Di.dim == dim)
                 self.param_ops.append(Di)
 
             #Create a TPInstrumentOp for each operation matrix
             # Note: TPInstrumentOp sets it's own parent and gpindices
-            items = [(k, _TPInstrumentOp(self.param_ops, i))
+            items = [(k, _TPInstrumentOp(self.param_ops, i, None))
                      for i, (k, v) in enumerate(matrix_list)]
 
             #DEBUG

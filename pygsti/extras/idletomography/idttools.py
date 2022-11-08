@@ -436,7 +436,7 @@ def predicted_intrinsic_rates(nqubits, maxweight, model,
 
         def toGEL(loc_lbl):
             return _GlobalElementaryErrorgenLabel.cast(
-                loc_lbl, sslbls=experrgen_op.state_space.tensor_product_block_labels(0))
+                loc_lbl, sslbls=experrgen_op.state_space.sole_tensor_product_block_labels)
             # Note: we need to use experrgen_op labels because embedded op state space doesn't
             # have target label...
 

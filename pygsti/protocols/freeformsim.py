@@ -115,7 +115,7 @@ class ModelFreeformSimulator(FreeformDataSimulator):
             ret = [mx]
             rho = model.circuit_layer_operator(prep, 'prep')
             final_state = _state.StaticState(_np.dot(mx, rho.to_dense(on_space='HilbertSchmidt')),
-                                             model.evotype, model.state_space)
+                                             model.basis, model.evotype, model.state_space)
             if include_final_state:
                 ret.append(final_state)
             if include_probabilities:

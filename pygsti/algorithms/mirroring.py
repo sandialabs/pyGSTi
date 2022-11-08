@@ -295,8 +295,8 @@ def create_mirror_circuit(circ, pspec, circ_type='clifford+zxzxz'):
                                         correction_angles[q2] += -1 * theta
                     else:
                         quasi_inv_layer.append(_lbl.Label(compute_gate_inverse(g)))
-                    #add to circuit
-                    mc.append([quasi_inv_layer])
+                #add to circuit
+                mc.append([quasi_inv_layer])
 
             #increment position in circuit
             d_ind += 1
