@@ -338,4 +338,4 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
         germs = germsel.find_germs(std.target_model(), seed=2017, 
                                    candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                    randomize=False, algorithm='greedy', mode='compactEVD',
-                                   assume_real=True, float_type=_np.double,  verbosity=1)
+                                   assume_real=True, float_type=np.double,  verbosity=1)
