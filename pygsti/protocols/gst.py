@@ -1983,35 +1983,35 @@ def _compute_wildcard_budget_ddist_model(estimate, objfn_cache, mdc_objfn, param
     #In Stefan's original code these were all passed in as a dictionary, instead pass these in as arguments.
     
     alpha = _bisect_alpha(0.1, 1e-3, mdc_objfn, two_dlogl_threshold,
-                          redbox_threshold, ddists, critical_percircuit_budgets)
+                          redbox_threshold, ddists, critical_percircuit_budgets, printer)
    
     return _ddist_wildcard_model(alpha, ddists)
     
 def _bisect_alpha(guess, tol, mdc_objfn, two_dlogl_threshold, redbox_threshold, 
-                  ddists, critical_percircuit_budgets):
+                  ddists, critical_percircuit_budgets, printer):
     
     left = None
     right = None
     
     while left is None or right is None:
-        print(f'Searching for interval [{left}, {right}] with guess {guess}')
+        printer.log(f'Searching for interval [{left}, {right}] with guess {guess}', 2)
         # Test for feasibility
         guessval = _test_feasible_alphas([guess], mdc_objfn, two_dlogl_threshold, 
                                         redbox_threshold, ddists, critical_percircuit_budgets)
         if guessval[0]:
-            print('Guess value is feasible, ', end='')
+            printer.log('Guess value is feasible, ', 2)
             left = guess
             guess = left/2
         else:
-            print('Guess value is infeasible, ', end='')
+            printer.log('Guess value is infeasible, ', 2)
             right = guess
             guess = 2*right
-    print('Interval found!')
+    printer.log('Interval found!',2)
     
     # We now have an interval containing the crossover point
     # Perform bisection
     while abs(left - right) > tol:
-        print(f'Performing bisection on interval [{left}, {right}]')
+        printer.log(f'Performing bisection on interval [{left}, {right}]',2)
         test = left - (left - right)/2.0
         
         testval = _test_feasible_alphas([test], mdc_objfn, two_dlogl_threshold, 
@@ -2019,14 +2019,13 @@ def _bisect_alpha(guess, tol, mdc_objfn, two_dlogl_threshold, redbox_threshold,
         
         if testval[0]:
             # Feasible, so shift left down
-            print(f'Test value is feasible, ', end='')
+            printer.log(f'Test value is feasible, ', 2)
             left = test
         else:
-            print(f'Test value is infeasible, ', end='')
+            printer.log(f'Test value is infeasible, ', 2)
             right = test
-        
-    print('Interval within tolerance!')
-    print()
+            
+    printer.log('Interval within tolerance!',2)
         
     return left # Return the feasible one
     
