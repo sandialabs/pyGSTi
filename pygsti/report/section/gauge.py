@@ -110,9 +110,9 @@ class GaugeInvariantsGatesSection(_Section):
             _cri(1, switchboard, confidence_level, ci_brevity)
         )
 
-    @_Section.figure_factory(4)
-    def gram_bar_plot(workspace, switchboard=None, **kwargs):
-        return workspace.GramMatrixBarPlot(switchboard.ds, switchboard.mdl_target, 10, switchboard.fiducials_tup)
+    #@_Section.figure_factory(4)
+    #def gram_bar_plot(workspace, switchboard=None, **kwargs):
+    #    return workspace.GramMatrixBarPlot(switchboard.ds, switchboard.mdl_target, 10, switchboard.fiducials_tup)
 
 
 class GaugeInvariantsGermsSection(_Section):
