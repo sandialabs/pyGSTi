@@ -538,7 +538,11 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
         lsgst_structs.append(
             _PlaquetteGridCircuitStructure({}, [], germs, "L", "germ", unindexed, op_label_aliases,
                                            circuit_weights_dict=None, additional_circuits_location='start', name=None))
-
+    
+    #add a flag used when include_lgst is false that indicates that we have
+    #seen the empty germ so that we can skip it in subsequent iterations.
+    seen_empty=False
+    
     for i, maxLen in enumerate(max_lengths):
 
         if nest:  # add to running_* variables and pinch off a copy later on
@@ -565,9 +569,23 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                 unindexed.extend(filter_ds(lgst_list, dscheck, missing_lgst))  # overlap w/plaquettes ok (removed later)
             #Typical case of germs repeated to maxLen using r_fn
             for ii, germ in enumerate(germs):
-                if germ == empty_germ: continue  # handled specially above
+                if germ == empty_germ and include_lgst: continue  # handled specially above
+                #if the germ is the empty germ and isn't handled above then handle it here.
+                elif germ == empty_germ and not include_lgst and not seen_empty:
+                    # Switch on fidpair dicts with germ or (germ, L) keys
+                    key = germ
+                    if fidpair_germ_power_keys:
+                        key = (germ, maxLen)
+                    fiducialPairsThisIter = fidPairDict.get(key, allPossiblePairs) \
+                        if fidPairDict is not None else allPossiblePairs
+                    add_to_plaquettes(pkey, plaquettes, empty_germ, maxLen, empty_germ, 1,
+                                  fiducialPairsThisIter, dscheck, missing_list)
+                    seen_empty=True
+                    continue
+                elif germ == empty_germ and not include_lgst and seen_empty:
+                    continue
+                
                 if maxLen > germ_length_limits.get(germ, 1e100): continue
-
                 germ_power = truncFn(germ, maxLen)
                 power = len(germ_power) // len(germ)  # this *could* be the germ power
                 if germ_power != germ * power:
