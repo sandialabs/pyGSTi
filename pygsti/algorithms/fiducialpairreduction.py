@@ -1207,10 +1207,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     
     imin_full_fid_set = len(spectrum_full_fid_set) - gsGerm.num_params
     condition_full_fid_set = spectrum_full_fid_set[-1] / spectrum_full_fid_set[imin_full_fid_set] if (spectrum_full_fid_set[imin_full_fid_set] > 0) else _np.inf
-    
-    end=time.time()
-    print('Elapsed Time ', end-start )
-    
+        
     
     #debugging
     printer.log('J J^T Rank Full Fiducial Set: %d' % rank, 2)
@@ -1300,29 +1297,29 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                     #yet then we'll append the value to the list and sort it regardless of the value. Otherwise
                     #we need to evaluate whether to swap out one of the elements of the list or not.
                     if len(bestFirstEval) < num_soln_returned:
-                        bestFirstEval.append(spectrum[imin])
+                        bestFirstEval.append(_np.round(spectrum[imin],decimals=10))
                         #keep the list sorted in descending order
                         bestFirstEval.sort(reverse=True)
                         #also add a corresponding entry to a dictionary for the best fiducial pairs we've seen thus far
                         #with the key given by the corresponding eigenvalue.
-                        bestPairs[spectrum[imin]]= pairList
+                        bestPairs[_np.round(spectrum[imin],decimals=10)]= pairList
                     else:
                         if type_soln_returned=='best':
                             #if any of the eigenvalue are less than the one we found
                             #then we'll drop the last element of the bestFirstEval list
                             #append the new element to the list and re-sort the values.
-                            if any([eigval<spectrum[imin] for eigval in bestFirstEval]):
+                            if any([eigval<_np.round(spectrum[imin],decimals=10) for eigval in bestFirstEval]):
                                 #need to remove the entry corresponding to the smallest eigenvalue from the dictionary
                                 #of fiducial pair sets and from the list of eigenvalues.
                                 bestPairs.pop(bestFirstEval[-1])
                                 bestFirstEval.pop()
                                 
                                 #add the new eigenvalue to the list and re-sort it.
-                                bestFirstEval.append(spectrum[imin])
+                                bestFirstEval.append(_np.round(spectrum[imin],decimals=10))
                                 bestFirstEval.sort(reverse=True)
                                 #also add a corresponding entry to a dictionary for the best fiducial pairs we've seen thus far
                                 #with the key given by the corresponding eigenvalue.
-                                bestPairs[spectrum[imin]]= pairList
+                                bestPairs[_np.round(spectrum[imin],decimals=10)]= pairList
                                 
                         #for any other value in type_soln_returned raise a NotImplementedError.
                         #may implement other things later on.
@@ -1391,8 +1388,6 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
             #debugging
             #print('Testing phase')
             
-            
-            
             for i, pairIndicesToTest in enumerate(pairIndicesToIterateOver, start=1):
                 #debugging
                 #print('Current pair indices being tested: ', pairIndicesToTest)
@@ -1415,24 +1410,24 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                 
                 #condition = spectrum[-1] / spectrum[imin] if (spectrum[imin] > 0) else _np.inf
                 
-                if (spectrum[imin] >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set])):# and condition <= (condition_number_tol*condition_full_fid_set)):
+                if (_np.round(spectrum[imin],decimals=10) >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set])):# and condition <= (condition_number_tol*condition_full_fid_set)):
                     
                     #if the list for bestFirstEval is empty or else we haven't hit the number of solutions to return
                     #yet then we'll append the value to the list and sort it regardless of the value. Otherwise
                     #we need to evaluate whether to swap out one of the elements of the list or not.
                     if len(bestFirstEval)<num_soln_returned:
-                        bestFirstEval.append(spectrum[imin])
+                        bestFirstEval.append(_np.round(spectrum[imin],decimals=10))
                         #keep the list sorted in descending order
                         bestFirstEval.sort(reverse=True)
                         #also add a corresponding entry to a dictionary for the best fiducial pairs we've seen thus far
                         #with the key given by the corresponding eigenvalue.
-                        bestPairs[spectrum[imin]]= pairList
+                        bestPairs[_np.round(spectrum[imin],decimals=10)]= pairList
                     else:
                         if type_soln_returned=='best':
                             #if the smallest eigenvalue is less than the one we found
                             #then we'll drop the last element of the bestFirstEval list
                             #append the new element to the list and re-sort the values.
-                            if  bestFirstEval[-1] < spectrum[imin]:
+                            if  bestFirstEval[-1] < _np.round(spectrum[imin],decimals=10):
                                 #need to remove the entry corresponding to the smallest eigenvalue from the dictionary
                                 #of fiducial pair sets and from the list of eigenvalues.
                                 try:
@@ -1453,11 +1448,11 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                                 bestFirstEval.pop()
                                 
                                 #add the new eigenvalue to the list and re-sort it.
-                                bestFirstEval.append(spectrum[imin])
+                                bestFirstEval.append(_np.round(spectrum[imin],decimals=10))
                                 bestFirstEval.sort(reverse=True)
                                 #also add a corresponding entry to a dictionary for the best fiducial pairs we've seen thus far
                                 #with the key given by the corresponding eigenvalue.
-                                bestPairs[spectrum[imin]]= pairList
+                                bestPairs[_np.round(spectrum[imin],decimals=10)]= pairList
                                 
                         #for any other value in type_soln_returned raise a NotImplementedError.
                         #may implement other things later on.
@@ -1668,8 +1663,6 @@ def _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, pre_povm
             #print('Update Cache: ', update_cache)
             #make a CompositeScore object for the current best fiducial set.
             current_best_score= _scoring.CompositeScore(-current_best_rank, current_best_inv_trace, current_best_rank)
-            
-            
         else:
             update_cache= None  
             current_best_score= None
