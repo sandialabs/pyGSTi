@@ -1819,13 +1819,13 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
             try:
                 budget_dict = _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options, printer - 1)
                 for chain_name, (unmodeled, active_constraint_list) in budget_dict.items():
-                    base_estimate.extra_parameters[chain_name + "_unmodeled_error"] = unmodeled
+                    base_estimate.extra_parameters[chain_name + "_unmodeled_error"] = unmodeled.to_nice_serialization()
                     base_estimate.extra_parameters[chain_name + "_unmodeled_active_constraints"] \
                         = active_constraint_list
                 if len(budget_dict) > 0:  # also store first chain info w/empty chain name (convenience)
                     first_chain = next(iter(budget_dict))
                     unmodeled, active_constraint_list = budget_dict[first_chain]
-                    base_estimate.extra_parameters["unmodeled_error"] = unmodeled
+                    base_estimate.extra_parameters["unmodeled_error"] = unmodeled.to_nice_serialization()
                     base_estimate.extra_parameters["unmodeled_active_constraints"] = active_constraint_list
             except NotImplementedError as e:
                 printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
@@ -2169,10 +2169,11 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
 
                 circ_ind_max = _np.argmax(percircuit_constraint)
                 if glob_constraint > 0:
-                    active_constraints['global'] = glob_constraint,
+                    active_constraints['global'] = float(glob_constraint),
                 if percircuit_constraint[circ_ind_max] > 0:
-                    active_constraints['percircuit'] = (circ_ind_max, global_circuits_to_use[circ_ind_max],
-                                                        percircuit_constraint[circ_ind_max])
+                    active_constraints['percircuit'] = (int(circ_ind_max), global_circuits_to_use[circ_ind_max].str,
+                                                        float(percircuit_constraint[circ_ind_max]))
+                #Note: make sure active_constraints is JSON serializable (this is why we put the circuit *str* in)
             else:
                 if budget_was_optimized:
                     printer.log((" - Element %.3g is %.3g. This is below %.3g, so trialing snapping to zero"
@@ -2202,8 +2203,8 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
                 if 'global' in active_constraints:
                     printer.log("   global constraint:" + str(active_constraints['global']))
                 if 'percircuit' in active_constraints:
-                    _, circuit, constraint_amt = active_constraints['percircuit']
-                    printer.log("   per-circuit constraint:" + circuit.str + " = " + str(constraint_amt))
+                    _, circuit_str, constraint_amt = active_constraints['percircuit']
+                    printer.log("   per-circuit constraint:" + circuit_str + " = " + str(constraint_amt))
             else:
                 printer.log("(no active constraints for " + "--".join(primOp_labels[i]) + ")")
         printer.log("")

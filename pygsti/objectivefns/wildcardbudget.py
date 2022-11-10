@@ -13,12 +13,13 @@ Functions related to computation of the log-likelihood.
 import numpy as _np
 
 from pygsti import tools as _tools
+from pygsti.baseobjs import NicelySerializable as _NicelySerializable
 
 #pos = lambda x: x**2
 pos = abs
 
 
-class WildcardBudget(object):
+class WildcardBudget(_NicelySerializable):
     """
     A fixed wildcard budget.
 
@@ -339,6 +340,12 @@ class WildcardBudget(object):
 
                 qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min_qvec, circ, tol)
 
+                initialTVD = 0.5 * sum(_np.abs(qvec - fvec))  # update current TVD
+                if initialTVD <= W + tol:  # TVD is "in-budget" for this circuit due to adjustment; leave as is
+                    probs_out[elInds] = qvec
+                    if return_deriv: p_deriv[elInds] = 0.0
+                    continue
+
                 #recompute A-D b/c we've updated qvec
                 A = _np.logical_and(qvec > fvec, fvec > 0); sum_fA = sum(fvec[A]); sum_qA = sum(qvec[A])
                 B = _np.logical_and(qvec < fvec, fvec > 0); sum_fB = sum(fvec[B]); sum_qB = sum(qvec[B])
@@ -539,11 +546,29 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         nParams = len(set(self.primOpLookup.values()))
         if isinstance(start_budget, dict):
             Wvec = _np.zeros(nParams, 'd')
-            for op, val in start_budget.items:
+            for op, val in start_budget.items():
                 Wvec[self.primOpLookup[op]] = val
         else:
             Wvec = _np.array([start_budget] * nParams)
         super(PrimitiveOpsWildcardBudget, self).__init__(Wvec)
+
+    def _to_nice_serialization(self):
+        op_labels_by_index = {i: lbl for lbl, i in self.primOpLookup.items()}
+        state = super()._to_nice_serialization()
+        state.update({'primitive_op_labels': [str(op_labels_by_index[i]) for i in range(len(self.wildcard_vector))],
+                      'idle_name': self._idlename,
+                      'budget_values': list(self.wildcard_vector),
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        from pygsti.circuits.circuitparser import parse_label as _parse_label
+        assert(len(state['primitive_op_labels']) == len(state['budget_values']))
+        primitive_op_labels = [(_parse_label(lbl_str) if (lbl_str != 'SPAM') else 'SPAM')
+                               for lbl_str in state['primitive_op_labels']]
+        budget = {lbl: val for lbl, val in zip(primitive_op_labels, state['budget_values'])}
+        return cls(primitive_op_labels, budget, state['idle_name'])
 
     def circuit_budget(self, circuit):
         """
@@ -814,6 +839,10 @@ def update_circuit_probs(probs, freqs, circuit_budget):
         return fvec
 
     qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min(qvec), base_tol)
+
+    initialTVD = 0.5 * sum(_np.abs(qvec - fvec))  # update current TVD
+    if initialTVD <= W + tol:  # TVD is "in-budget" for this circuit due to adjustment; leave as is
+        return qvec
 
     #Note: must ensure that A,B,C,D are *disjoint*
     fvec_equals_qvec = _np.logical_and(fvec - base_tol <= qvec, qvec <= fvec + base_tol)  # fvec == qvec
