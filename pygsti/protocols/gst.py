@@ -532,23 +532,57 @@ class GSTBadFitOptions(_NicelySerializable):
         - 'ddist_wildcard': Fits a single parameter wildcard model in which
           the amount of wildcard error added to an operation is proportional
           to the diamond distance between that operation and the target.
-        - 'Robust+': ...
-        - 'robust+': ...
-        - 'robust': ...
-        - 'do nothing': ...
+        - 'robust': scale data according out "robust statistics v1" algorithm,
+           where we drastically scale down (reduce) the data due to especially
+           poorly fitting circuits.  Namely, if a circuit's log-likelihood ratio
+           exceeds the 95% confidence region about its expected value (the # of
+           degrees of freedom in the circuits outcomes), then the data is scaled
+           by the `expected_value / actual_value`, so that the new value exactly
+           matches what would be expected.  Ideally there are only a few of these
+           "outlier" circuits, which correspond errors in the measurement apparatus.
+        - 'Robust': same as 'robust', but re-optimize the final objective function
+           (usually the log-likelihood) after performing the scaling to get the
+           final estimate.
+        - 'robust+': scale data according out "robust statistics v2" algorithm,
+           which performs the v1 algorithm (see 'robust' above) and then further
+           rescales all the circuit data to achieve the desired chi2 distribution
+           of per-circuit goodness-of-fit values *without reordering* these values.
+        - 'Robust+': same as 'robust+', but re-optimize the final objective function
+           (usually the log-likelihood) after performing the scaling to get the
+           final estimate.
+        - 'do nothing': do not perform any additional actions.  Used to help avoid
+           the need for special cases when working with multiple types of bad-fit actions.
 
     wildcard_budget_includes_spam : bool, optional
         Include a SPAM budget within the wildcard budget used to process
         the `"wildcard"` action.
-    
-    wildcard_L1_weights :
-    
-    wildcard_primitive_op_labels:
-    
-    wildcard_methods: tuple, optional (default ('neldermead',))
-    
-    wildcard_inadmissable_action: str, optional (default 'print')
-    
+
+    wildcard_L1_weights :  np.array, optional
+        An array of weights affecting the L1 penalty term used to select a feasible
+        wildcard error vector `w_i` that minimizes `sum_i weight_i* |w_i|` (a weighted
+        L1 norm).  Elements of this array must correspond to those of the wildcard budget
+        being optimized, typically the primitive operations of the estimated model - but
+        to get the order right you should specify `wildcard_primitive_op_labels` to be sure.
+        If `None`, then all weights are assumed to be 1.
+
+    wildcard_primitive_op_labels: list, optional
+        The primitive operation labels used to construct the :class:`PrimitiveOpsWildcardBudget`
+        that is optimized.  If `None`, equal to `model.primitive_op_labels + model.primitive_instrument_labels`
+        where `model` is the estimated model, with `'SPAM'` at the end if `wildcard_budget_includes_spam`
+        is True.  When specified, should contain a subset of the default values.
+
+    wildcard_methods: tuple, optional
+        A list of the methods to use to optimize the wildcard error vector.  Default is `("neldermead",)`.
+        Options include `"neldermead"`, `"barrier"`, `"cvxopt"`, `"cvxopt_smoothed"`, `"cvxopt_small"`,
+        and `"cvxpy_noagg"`.  So many methods exist because different convex solvers behave differently
+        (unfortunately).  Leave as the default as a safe option, but `"barrier"` is pretty reliable and much
+        faster than `"neldermead"`, and is a good option so long as it runs.
+
+    wildcard_inadmissable_action: {"print", "raise"}, optional
+        What to do when an inadmissable wildcard error vector is found.  The default just prints this
+        information and continues, while `"raise"` raises a `ValueError`.  Often you just want this information
+        printed so that when the wildcard analysis fails in this way it doesn't cause the rest of an analysis
+        to abort.
     """
 
     @classmethod
@@ -1854,18 +1888,19 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
             #    printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
             #    new_params['unmodeled_error'] = None
             continue  # no need to add a new estimate - we just update the base estimate
-            
+
         elif badfit_typ == 'ddist_wildcard':
-            
+
             #If this estimate is the target model then skip adding the diamond distance wildcard.
             if base_estimate_label != 'Target':
                 try:
-                    budget = _compute_wildcard_budget_ddist_model(base_estimate,objfn_cache, mdc_objfn, parameters, badfit_options, printer - 1)
-                    
+                    budget = _compute_wildcard_budget_ddist_model(base_estimate,objfn_cache, mdc_objfn, parameters,
+                                                                  badfit_options, printer - 1)
+
                     base_estimate.extra_parameters['ddist_wildcard' + "_unmodeled_error"] = budget
                     base_estimate.extra_parameters['ddist_wildcard' + "_unmodeled_active_constraints"] \
                         = None
-     
+
                     base_estimate.extra_parameters["unmodeled_error"] = budget
                     base_estimate.extra_parameters["unmodeled_active_constraints"] = None
                 except NotImplementedError as e:
@@ -1875,7 +1910,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                 #    printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
                 #    new_params['unmodeled_error'] = None
                 continue  # no need to add a new estimate - we just update the base estimate
-            
+
             else:
                 printer.log('Diamond distance wildcard model is incompatible with the Target estimate, skipping this.',3)
                 continue

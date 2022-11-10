@@ -915,12 +915,13 @@ def update_circuit_probs(probs, freqs, circuit_budget):
 
     return updated_qvec
 
+
 class PrimitiveOpsDiamondDistanceWildcardBudget(PrimitiveOpsWildcardBudget):
     """
     A wildcard budget containing one parameter per "primitive operation"
     based on a single parameter model wherein each of the wildcard parameters
     is set proportionally to the value of a gate's gauge optimized diamond distance.
-    
+
     This class extends PrimitiveOpsWildcardBudget to also internally store
     the value of the alpha parameter (how much the diamond distance needed to
     be scaled to restore consistency and to store the values of the diamond
@@ -952,61 +953,31 @@ class PrimitiveOpsDiamondDistanceWildcardBudget(PrimitiveOpsWildcardBudget):
     start_budget : float or dict, optional
         An initial value to set all the parameters to (if a float), or a
         dictionary mapping primitive operation labels to initial values.
-    
+
     ddists : dict, optional
         A dictionary of diamond distance values, should be in the same format as
         start_budget.
-        
+
     alpha : float, optional
         The value of the alpha parameter that gives the diamond distance scaling
         for this wildcard model.
-        
+
     idle_name : str, optional
             The gate name to be used for the 1-qubit idle gate.  If not `None`, then
             circuit budgets are computed by considering layers of the circuit as being
             "padded" with `1-qubit` idles gates on any empty lines.
     """
-    
+
     def __init__(self, primitive_op_labels, start_budget=0.0, ddists=None, alpha=0, idle_name=None):
-        """
-        Create a new PrimitiveOpsWildcardBudget.
-
-        Parameters
-        ----------
-        primitive_op_labels : iterable or dict
-            A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
-            which give all the possible primitive ops (components of circuit
-            layers) that will appear in circuits.  Each one of these operations
-            will be assigned it's own independent element in the wilcard-vector.
-            A dictionary can be given whose keys are Labels and whose values are
-            0-based parameter indices.  In the non-dictionary case, each label gets
-            it's own parameter.  Dictionaries allow multiple labels to be associated
-            with the *same* wildcard budget parameter,
-            e.g. `{Label('Gx',(0,)): 0, Label('Gy',(0,)): 0}`.
-            If `'SPAM'` is included as a primitive op, this value correspond to a
-            uniform "SPAM budget" added to each circuit.
-
-        start_budget : float or dict, optional
-            An initial value to set all the parameters to (if a float), or a
-            dictionary mapping primitive operation labels to initial values.
-
-        idle_name : str, optional
-            The gate name to be used for the 1-qubit idle gate.  If not `None`, then
-            circuit budgets are computed by considering layers of the circuit as being
-            "padded" with `1-qubit` idles gates on any empty lines.
-
-        """
-
         if ddists is not None:
             if isinstance(ddists, dict):
-                self.ddists= list(ddists.values())
+                self.ddists = list(ddists.values())
             else:
-                self.ddists= ddists
-        self.alpha= alpha
-        
+                self.ddists = ddists
+        self.alpha = alpha
+
         super().__init__(primitive_op_labels, start_budget, idle_name)
-    
-    
+
     @property
     def description(self):
         """
@@ -1026,10 +997,8 @@ class PrimitiveOpsDiamondDistanceWildcardBudget(PrimitiveOpsWildcardBudget):
             wildcardDict[lbl] = ('budget per each instance %s' % str(lbl), pos(self.wildcard_vector[index]))
         if self.spam_index is not None:
             wildcardDict['SPAM'] = ('uniform per-circuit SPAM budget', pos(self.wildcard_vector[self.spam_index]))
-            
+
         #Add an entry for the alpha parameter.
-        wildcardDict['alpha']= ('Fraction of diamond distance needed as wildcard error', self.alpha)
-            
+        wildcardDict['alpha'] = ('Fraction of diamond distance needed as wildcard error', self.alpha)
+
         return wildcardDict
-    
-    
