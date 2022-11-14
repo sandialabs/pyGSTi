@@ -1483,7 +1483,7 @@ def _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, pre_povm
                 updated_inv_trace= _np.trace(updated_pinv)
                 updated_score =  _scoring.CompositeScore(-updated_rank, updated_inv_trace, updated_rank)
                 if updated_score < current_best_score:
-                    current_best_inv_trace= inv_trace_to_test
+                    current_best_score= updated_score
                     idx_current_best_update = pairIndexToTest
             #otherwise we already have an initial Jacobian and should use the standard update logic.
             else:
