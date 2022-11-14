@@ -281,7 +281,7 @@ class Estimate(object):
                                          session=session, overwrite_existing=overwrite_existing)
 
     @classmethod
-    def remove_from_mongodb(cls, mongodb_collection, doc_id, custom_collection_names=None, session=None):
+    def remove_from_mongodb(cls, mongodb_collection, doc_id, session=None):
         """
         Remove an Estimate from a MongoDB database.
 

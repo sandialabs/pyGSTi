@@ -26,6 +26,23 @@ from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySeri
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
+#Names used for subcollections
+subcollection_names = {
+    'circuits': 'circuits',
+    'objects': 'objects',
+    'arrays': 'numpy_arrays',
+    'datarows': 'datarows',
+}
+
+#Top-level collection name for storing stand-alone objects
+# (those with their own write_to_mongodb methods that but are *not* treenodes, e.g., Estimates)
+STANDALONE_COLLECTION_NAME = 'pygsti_standalone_objects'
+
+
+def cnm(subcollection_key):
+    return subcollection_names[subcollection_key]
+
+
 def read_auxtree_from_mongodb(root_mongo_collection, doc_id, auxfile_types_member='auxfile_types',
                               ignore_meta=('_id', 'type',), separate_auxfiletypes=False,
                               quick_load=False):
@@ -174,7 +191,7 @@ def _load_subcollection_member(root_mongo_collection, parent_id, member_name, ty
         if cur_typ == 'reset':  # 'reset' doesn't write and loads in as None
             val = None  # no file exists for this member
         elif cur_typ == 'text-circuit-list':
-            coll = root_mongo_collection['pygsti_circuits']
+            coll = root_mongo_collection[cnm('circuits')]
             circuit_strs = []
             for i, cdoc in enumerate(coll.find({'parent': parent_id,
                                                 'member_name': member_name}).sort('index', ASCENDING)):
@@ -184,37 +201,37 @@ def _load_subcollection_member(root_mongo_collection, parent_id, member_name, ty
             val = _load.convert_strings_to_circuits(circuit_strs)
 
         elif cur_typ == 'dir-serialized-object':
-            coll = root_mongo_collection['pygsti_objects']
+            coll = root_mongo_collection[cnm('objects')]
             link_doc = coll.find_one({'parent': parent_id, 'member_name': member_name})
             if link_doc is not None:
                 assert(link_doc['auxfile_type'] == cur_typ)
                 standalone_id = link_doc['standalone_object_id']
     
-                coll = root_mongo_collection['pygsti_standalone_objects']
+                coll = root_mongo_collection.database[STANDALONE_COLLECTION_NAME]
                 obj_doc = coll.find_one({'_id': standalone_id}, ['type'])
                 val = _class_for_name(obj_doc['type']).from_mongodb(coll, standalone_id, quick_load=quick_load)
 
         elif cur_typ == 'partialdir-serialized-object':
-            coll = root_mongo_collection['pygsti_objects']
+            coll = root_mongo_collection[cnm('objects')]
             link_doc = coll.find_one({'parent': parent_id, 'member_name': member_name})
 
             if link_doc is not None:
                 assert(link_doc['auxfile_type'] == cur_typ)
                 standalone_id = link_doc['standalone_object_id']
 
-                coll = root_mongo_collection['pygsti_standalone_objects']
+                coll = root_mongo_collection.database[STANDALONE_COLLECTION_NAME]
                 obj_doc = coll.find_one({'_id': standalone_id}, ['type'])
                 val = _class_for_name(obj_doc['type'])._from_mongodb_partial(coll, standalone_id, quick_load=quick_load)
 
         elif cur_typ == 'serialized-object':
-            coll = root_mongo_collection['pygsti_objects']
+            coll = root_mongo_collection[cnm('objects')]
             obj_doc = coll.find_one({'parent': parent_id, 'member_name': member_name})
             if obj_doc is not None:
                 assert(obj_doc['auxfile_type'] == cur_typ)
                 val = _NicelySerializable.from_nice_serialization(obj_doc['object'])
 
         elif cur_typ == 'circuit-str-json':
-            coll = root_mongo_collection['pygsti_circuits']
+            coll = root_mongo_collection[cnm('circuits')]
             circuit_strs = []
             for i, cdoc in enumerate(coll.find({'parent': parent_id,
                                                 'member_name': member_name}).sort('index', ASCENDING)):
@@ -224,21 +241,21 @@ def _load_subcollection_member(root_mongo_collection, parent_id, member_name, ty
             val = _load.convert_strings_to_circuits(circuit_strs)
 
         elif typ == 'numpy-array':
-            coll = root_mongo_collection['pygsti_numpy_arrays']
+            coll = root_mongo_collection[cnm('arrays')]
             array_doc = coll.find_one({'parent': parent_id, 'member_name': member_name})
             if array_doc is not None:
                 assert(array_doc['auxfile_type'] == cur_typ)
                 val = _pickle.loads(array_doc['numpy_array'])
 
         elif typ == 'json':
-            coll = root_mongo_collection['pygsti_objects']
+            coll = root_mongo_collection[cnm('objects')]
             obj_doc = coll.find_one({'parent': parent_id, 'member_name': member_name})
             if obj_doc is not None:
                 assert(obj_doc['auxfile_type'] == typ)
                 val = obj_doc['object']
 
         elif typ == 'pickle':
-            coll = root_mongo_collection['pygsti_objects']
+            coll = root_mongo_collection[cnm('objects')]
             obj_doc = coll.find_one({'parent': parent_id, 'member_name': member_name})
             if obj_doc is not None:
                 assert(obj_doc['auxfile_type'] == typ)
@@ -251,9 +268,16 @@ def _load_subcollection_member(root_mongo_collection, parent_id, member_name, ty
 
 
 class WriteOpsBySubcollection(dict):
-    def __init__(self, allowed_subcollection_names=('pygsti_objects', 'pygsti_numpy_arrays', 'pygsti_circuits')):  # 'pygsti_datasets', 'pygsti_datarows'
-        self.allowed_subcollection_names = allowed_subcollection_names
-        self.standalone_writes = []  # separate "special" list for stand-alone object (i.e. objects with a .write_to_mongo method) writes 'pygsti_standalone_objects'
+    def __init__(self, allowed_subcollection_names=None):
+        if allowed_subcollection_names is not None:
+            self.allowed_subcollection_names = allowed_subcollection_names
+        else:
+            self.allowed_subcollection_names = (cnm('circuits'), cnm('objects'), cnm('arrays'))
+
+        # separate "special" list for stand-alone object (i.e. objects
+        #  with a .write_to_mongo method) writes 'pygsti_standalone_objects'
+        self.standalone_writes = []
+
         super().__init__({k: [] for k in self.allowed_subcollection_names})
 
     def add_ops_by_subcollection(self, other_ops):
@@ -383,10 +407,10 @@ def write_auxtree_to_mongodb(root_mongo_collection, doc_id, valuedict, auxfile_t
     try:
         for standalone_id, obj, bPartial in write_ops.standalone_writes:
             if not bPartial:
-                obj.write_to_mongodb(root_mongo_collection['pygsti_standalone_objects'], standalone_id,
+                obj.write_to_mongodb(root_mongo_collection.database[STANDALONE_COLLECTION_NAME], standalone_id,
                                      session=session, overwrite_existing=overwrite_existing)
             else:
-                obj._write_partial_to_mongodb(root_mongo_collection['pygsti_standalone_objects'], standalone_id,
+                obj._write_partial_to_mongodb(root_mongo_collection.database[STANDALONE_COLLECTION_NAME], standalone_id,
                                               session=session, overwrite_existing=overwrite_existing)
 
         for subcollection_name, ops in write_ops.items():
@@ -399,8 +423,14 @@ def write_auxtree_to_mongodb(root_mongo_collection, doc_id, valuedict, auxfile_t
             root_mongo_collection.insert_one(to_insert, session=session)
 
     except Exception as e:
-        #TODO - try to roll back this action by removing records (cleaning up zombies)?
-        raise
+        if session is None:
+            #Unless this may be a transaction, Try to undo any DB writes we can by deleting the document
+            # we just failed to write
+            try:
+                remove_auxtree_from_mongodb(root_mongo_collection, doc_id, 'auxfile_types', session)
+            except:
+                pass  # ok if this fails
+        raise e
 
 
 def _write_subcollection_member(root_mongo_collection, parent_id, member_name, typ, val,
@@ -460,21 +490,21 @@ def _write_subcollection_member(root_mongo_collection, parent_id, member_name, t
 
         elif cur_typ == 'text-circuit-list':
             for i, circuit in enumerate(val):
-                write_ops.add_one_op('pygsti_circuits', member_id,
+                write_ops.add_one_op(cnm('circuits'), member_id,
                                      {'auxfile_type': cur_typ, 'index': i, 'circuit_str': circuit.str},
                                      overwrite_existing)
 
         elif cur_typ == 'dir-serialized-object':
             standalone_id = ObjectId()
             write_ops.standalone_writes.append((standalone_id, val, False))  # list of (id, object_to_write, bPartial)
-            write_ops.add_one_op('pygsti_objects', member_id,
+            write_ops.add_one_op(cnm('objects'), member_id,
                                  {'auxfile_type': cur_typ, 'standalone_object_id': standalone_id},
                                  overwrite_existing)
 
         elif cur_typ == 'partialdir-serialized-object':
             standalone_id = ObjectId()
             write_ops.standalone_writes.append((standalone_id, val, True))  # list of (id, object_to_write, bPartial)
-            write_ops.add_one_op('pygsti_objects', member_id,
+            write_ops.add_one_op(cnm('objects'), member_id,
                                  {'auxfile_type': cur_typ, 'standalone_object_id': standalone_id},
                                  overwrite_existing)
 
@@ -482,28 +512,28 @@ def _write_subcollection_member(root_mongo_collection, parent_id, member_name, t
             assert(isinstance(val, _NicelySerializable)), \
                 "Non-nicely-serializable '%s' object given for a 'serialized-object' auxfile type!" % (str(type(val)))
             jsonable = val.to_nice_serialization()
-            write_ops.add_one_op('pygsti_objects', member_id, {'auxfile_type': cur_typ, 'object': jsonable},
+            write_ops.add_one_op(cnm('objects'), member_id, {'auxfile_type': cur_typ, 'object': jsonable},
                                  overwrite_existing)
 
         elif cur_typ == 'circuit-str-json':
             for i, circuit in enumerate(val):
-                write_ops.add_one_op('pygsti_circuits', member_id,
+                write_ops.add_one_op(cnm('circuits'), member_id,
                                      {'auxfile_type': cur_typ, 'index': i, 'circuit_str': circuit.str},
                                      overwrite_existing)
 
         elif cur_typ == 'numpy-array':
-            write_ops.add_one_op('pygsti_numpy_arrays', member_id,
+            write_ops.add_one_op(cnm('arrays'), member_id,
                                  {'auxfile_type': cur_typ,
                                   'numpy_array': _Binary(_pickle.dumps(val, protocol=2), subtype=128)},
                                  overwrite_existing)
 
         elif typ == 'json':
             _check_jsonable(val)
-            write_ops.add_one_op('pygsti_objects', member_id,
+            write_ops.add_one_op(cnm('objects'), member_id,
                                  {'auxfile_type': cur_typ, 'object': val}, overwrite_existing)
 
         elif typ == 'pickle':
-            write_ops.add_one_op('pygsti_objects', member_id,
+            write_ops.add_one_op(cnm('objects'), member_id,
                                  {'auxfile_type': cur_typ,
                                   'object': _Binary(_pickle.dumps(val, protocol=2), subtype=128)},
                                  overwrite_existing)
@@ -541,31 +571,75 @@ def remove_auxtree_from_mongodb(root_mongo_collection, doc_id, auxfile_types_mem
 
     Returns
     -------
-    delete_count : int
-        The number of root records deleted (0 or 1)
+    pymongo.results.DeleteResult
+        The result of deleting (or attempting to delete) the root record
     """
-    doc = root_mongo_collection.find_one({'_id': doc_id}, [auxfile_types_member], session=session)
+    #Note: grab entire document here since we may need values of some members to deleting linked records
+    doc = root_mongo_collection.find_one({'_id': doc_id}, session=session)  # [auxfile_types_member]
     if doc is None:
         return
 
-    #Remove any auxfile members that could have their own (different) ids
+    #Remove any auxfile members that could have linked standalone records that we can't just clear in bulk
+    all_standalone_ids = []
     for key, typ in doc[auxfile_types_member].items():
-        if typ == 'dir-serialized-object' or typ == 'partialdir-serialized-object':
-            coll = root_mongo_collection['pygsti_objects']
-            link_doc = coll.find_one({'parent': doc_id, 'member_name': key})
-            if link_doc is not None:
-                assert(link_doc['auxfile_type'] == typ)
-                standalone_id = link_doc['standalone_object_id']
+        if 'dir-serialized-object' in typ:  # allow for "partialdir" and for, e.g., "dict:dir-serialized-object"
+            all_standalone_ids.extend(_get_standalone_ids_of_member(root_mongo_collection, doc_id, key, typ,
+                                                                    doc.get(key, None)))
 
-                coll = root_mongo_collection['pygsti_standalone_objects']
-                obj_doc = coll.find_one({'_id': standalone_id}, ['type'])
-                _class_for_name(obj_doc['type']).remove_from_mongodb(coll, standalone_id)  # custom_collection_names?
+    #Remove standalone ids
+    coll = root_mongo_collection.database[STANDALONE_COLLECTION_NAME]
+    for standalone_id in all_standalone_ids:
+        obj_doc = coll.find_one({'_id': standalone_id}, ['type'])
+        _class_for_name(obj_doc['type']).remove_from_mongodb(coll, standalone_id, session=session)
+
+    # Begin removing DB documents here -- before this point we're just figuring out what to remove
 
     #Remove other auxfile documents and the original
-    for aux_subcollection_name in ('pygsti_objects', 'pygsti_circuits', 'pygsti_numpy_arrays'):
+    for aux_subcollection_name in (cnm('objects'), cnm('circuits'), cnm('arrays')):
         root_mongo_collection[aux_subcollection_name].delete_many({'parent': doc_id}, session=session)
 
     return root_mongo_collection.delete_one({'_id': doc_id}, session=session)  # returns deleted count (0 or 1)
+
+
+def _get_standalone_ids_of_member(root_mongo_collection, parent_id, member_name, typ, val):
+    subtypes = typ.split(':')
+    cur_typ = subtypes[0]
+    next_typ = ':'.join(subtypes[1:])
+
+    standalone_ids = []
+    if cur_typ == 'list':
+        if val is not None:
+            for i, el in enumerate(val):
+                membernm_so_far = member_name + str(i)
+                ids = _get_standalone_ids_of_member(root_mongo_collection, parent_id, membernm_so_far,
+                                                    next_typ, el)
+                standalone_ids.extend(ids)
+
+    elif cur_typ == 'dict':
+        if val is not None:
+            for k, v in val.items():
+                membernm_so_far = member_name + "_" + k
+                ids = _get_standalone_ids_of_member(root_mongo_collection, parent_id, membernm_so_far,
+                                                    next_typ, v)
+                standalone_ids.extend(ids)
+
+    elif cur_typ == 'fancykeydict':
+        if val is not None:
+            for i, (k, v) in enumerate(val.items()):
+                membernm_so_far = member_name + "_kvpair" + str(i)
+                ids = _get_standalone_ids_of_member(root_mongo_collection, parent_id, membernm_so_far,
+                                                    next_typ, v)
+                standalone_ids.extend(ids)
+    else:
+        if typ == 'dir-serialized-object' or typ == 'partialdir-serialized-object':
+            coll = root_mongo_collection[cnm('objects')]
+            link_doc = coll.find_one({'parent': parent_id, 'member_name': member_name})
+            if link_doc is not None:
+                assert(link_doc['auxfile_type'] == typ)
+                standalone_id = link_doc['standalone_object_id']
+                standalone_ids.append(standalone_id)
+
+    return standalone_ids
 
 
 def read_dict_from_mongodb(mongodb_collection, identifying_metadata):
@@ -676,7 +750,7 @@ def remove_dict_from_mongodb(mongodb_collection, identifying_metadata, session=N
 
 def write_dataset_to_mongodb(dataset, mongodb_collection, identifying_metadata,
                              circuits=None, outcome_label_order=None, with_times="auto",
-                             datarow_subcollection_name='pygsti_datarows', session=None):
+                             datarow_subcollection_name=None, session=None):
     """
     Write a data set to a MongoDB database.
 
@@ -713,7 +787,8 @@ def write_dataset_to_mongodb(dataset, mongodb_collection, identifying_metadata,
 
     datarow_subcollection_name : str, optional
         The name of the MongoDB subcollection that holds the written
-        data set's row data as one record per row.
+        data set's row data as one record per row.  If `None`, defaults
+        to `pygsti.io.mongodb.subcollection_names['datarows']`.
 
     session : pymongo.client_session.ClientSession, optional
         MongoDB session object to use when interacting with the MongoDB
@@ -729,6 +804,9 @@ def write_dataset_to_mongodb(dataset, mongodb_collection, identifying_metadata,
             raise ValueError("Argument circuits must be a list of Circuit objects!")
     else:
         circuits = list(dataset.keys())
+
+    if datarow_subcollection_name is None:
+        datarow_subcollection_name = cnm('datarows')
 
     if outcome_label_order is not None:  # convert to tuples if needed
         outcome_label_order = [(ol,) if isinstance(ol, str) else ol
@@ -792,7 +870,7 @@ def write_dataset_to_mongodb(dataset, mongodb_collection, identifying_metadata,
 
 
 def remove_dataset_from_mongodb(mongodb_collection, identifying_metadata,
-                                datarow_subcollection_name='pygsti_datarows', session=None):
+                                datarow_subcollection_name=None, session=None):
     """
     Remove (delete) a data set from a MongoDB database.
 
@@ -807,7 +885,8 @@ def remove_dataset_from_mongodb(mongodb_collection, identifying_metadata,
 
     datarow_subcollection_name : str, optional
         The name of the MongoDB subcollection that holds the
-        data set's row data.
+        data set's row data.  If `None`, defaults to
+        `pygsti.io.mongodb.subcollection_names['datarows']`.
 
     session : pymongo.client_session.ClientSession, optional
         MongoDB session object to use when interacting with the MongoDB
@@ -818,6 +897,8 @@ def remove_dataset_from_mongodb(mongodb_collection, identifying_metadata,
     -------
     None
     """
+    if datarow_subcollection_name is None:
+        datarow_subcollection_name = cnm('datarows')
     dataset_doc = mongodb_collection.find_one_and_delete(identifying_metadata, session=session)
     mongodb_collection[datarow_subcollection_name].delete_many({'parent': dataset_doc['_id']}, session=session)
 

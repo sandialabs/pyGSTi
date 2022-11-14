@@ -187,7 +187,7 @@ class Protocol(object):
                                          session=session, overwrite_existing=overwrite_existing)
 
     @classmethod
-    def remove_from_mongodb(cls, mongodb_collection, doc_id, custom_collection_names=None, session=None):
+    def remove_from_mongodb(cls, mongodb_collection, doc_id, session=None):
         """
         Remove a Protocol from a MongoDB database.
 
@@ -198,7 +198,7 @@ class Protocol(object):
         """
         delcnt = _io.remove_auxtree_from_mongodb(mongodb_collection, doc_id, 'auxfile_types',
                                                  session=session)
-        return bool(delcnt == 1)
+        return bool(delcnt is not None and delcnt.deleted_count == 1)
 
     def setup_nameddict(self, final_dict):
         """
@@ -1782,8 +1782,8 @@ class ProtocolData(_TreeNode):
     passes : dict
         A dictionary of the data on a per-pass basis (works even it there's just one pass).
     """
-    COLL_DATASET = "pygsti_datasets"
-    COLL_CACHE = "pygsti_caches"
+    DATASET_COLLECTION_NAME = "datasets"  # or pygsti_datasets?
+    CACHE_COLLECTION_NAME = "caches"  # or pygsti_caches?
 
     @classmethod
     def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
@@ -1897,21 +1897,22 @@ class ProtocolData(_TreeNode):
             dataset = None  # don't load any dataset - just the cache (usually b/c loading is slow)
         else:
             #Load dataset or multidataset from database
-            ds_names = [ds_doc['name'] for ds_doc in mongodb[collection_names['data']][cls.COLL_DATASET].find(
-                {'protocoldata_parent': doc_id}, ['name'])]
+            ds_names = [ds_doc['name'] for ds_doc in
+                        mongodb[collection_names['data']][cls.DATASET_COLLECTION_NAME].find(
+                            {'protocoldata_parent': doc_id}, ['name'])]
             if ds_names == [None]:
-                dataset = _io.read_dataset_from_mongodb(mongodb[collection_names['data']][cls.COLL_DATASET],
+                dataset = _io.read_dataset_from_mongodb(mongodb[collection_names['data']][cls.DATASET_COLLECTION_NAME],
                                                         {'name': None,
                                                          'protocoldata_parent': doc_id})
             else:
                 dataset = {}
                 for dsname in ds_names:
                     dataset[dsname] = _io.read_dataset_from_mongodb(
-                        mongodb[collection_names['data'][cls.COLL_DATASET]],
+                        mongodb[collection_names['data'][cls.DATASET_COLLECTION_NAME]],
                         {'name': dsname,
                          'protocoldata_parent': doc_id})
 
-        cache = _io.read_dict_from_mongodb(mongodb[collection_names['data']][cls.COLL_CACHE],
+        cache = _io.read_dict_from_mongodb(mongodb[collection_names['data']][cls.CACHE_COLLECTION_NAME],
                                            {'member': 'cache',
                                             'protocoldata_parent': doc_id})
 
@@ -2169,23 +2170,25 @@ class ProtocolData(_TreeNode):
 
         if self.dataset is not None:  # otherwise don't write any dataset
             if parent and (self.dataset is parent.dataset):  # then no need to write any data
-                assert(mongodb[collection_names['data']][self.COLL_DATASET].count_documents(
+                assert(mongodb[collection_names['data']][self.DATASET_COLLECTION_NAME].count_documents(
                     {'protocoldata_parent': doc_id}, session=session) == 0)
             else:
                 if isinstance(self.dataset, (_data.MultiDataSet, dict)):
                     for dsname, ds in self.dataset.items():
-                        _io.write_dataset_to_mongodb(ds, mongodb[collection_names['data']][self.COLL_DATASET],
+                        _io.write_dataset_to_mongodb(ds,
+                                                     mongodb[collection_names['data']][self.DATASET_COLLECTION_NAME],
                                                      {'name': dsname,
                                                       'protocoldata_parent': doc_id},
                                                      session=session)
                 else:
-                    _io.write_dataset_to_mongodb(self.dataset, mongodb[collection_names['data']][self.COLL_DATASET],
+                    _io.write_dataset_to_mongodb(self.dataset,
+                                                 mongodb[collection_names['data']][self.DATASET_COLLECTION_NAME],
                                                  {'name': None,
                                                   'protocoldata_parent': doc_id},
                                                  session=session)
 
         if self.cache:
-            _io.write_dict_to_mongodb(self.cache, mongodb[collection_names['data']][self.COLL_CACHE],
+            _io.write_dict_to_mongodb(self.cache, mongodb[collection_names['data']][self.CACHE_COLLECTION_NAME],
                                       {'member': 'cache',
                                        'protocoldata_parent': doc_id},
                                       session=session)
@@ -2207,14 +2210,14 @@ class ProtocolData(_TreeNode):
         collection_names = _io.mongodb_collection_names(custom_collection_names)
         cls._remove_children_from_mongodb(mongodb, 'data', doc_id, custom_collection_names, session)
 
-        _io.remove_dict_from_mongodb(mongodb[collection_names['data']][cls.COLL_CACHE],
+        _io.remove_dict_from_mongodb(mongodb[collection_names['data']][cls.CACHE_COLLECTION_NAME],
                                      {'member': 'cache',
                                       'protocoldata_parent': doc_id},
                                      session=session)
 
-        for ds_doc in mongodb[collection_names['data']][cls.COLL_DATASET].find(
+        for ds_doc in mongodb[collection_names['data']][cls.DATASET_COLLECTION_NAME].find(
                 {'protocoldata_parent': doc_id}, ['name']):
-            _io.remove_dataset_from_mongodb(mongodb[collection_names['data']][cls.COLL_DATASET],
+            _io.remove_dataset_from_mongodb(mongodb[collection_names['data']][cls.DATASET_COLLECTION_NAME],
                                             {'name': ds_doc['name'],
                                              'protocoldata_parent': doc_id},
                                             session=session)
