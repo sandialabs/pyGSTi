@@ -1061,13 +1061,13 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
             elIndicesForPair[k].extend(_slct.to_array(layout.indices_for_index(o)))
     
     printer.log('Constructing Jacobian for Full Fiducial Set' , 3)
-    
     local_dPall = layout.allocate_local_array('ep', 'd')
     gsGerm.sim.bulk_fill_dprobs(local_dPall, layout, None)  # num_els x num_params
     dPall = local_dPall.copy()  # local == global (no layout.gather required) b/c we used comm=None above
     layout.free_local_array(local_dPall)  # not needed - local_dPall isn't shared (comm=None)
     
     printer.log('Calculating Spectrum of Full Fiducial Set', 3)
+    
     # Construct sum of projectors onto the directions (1D spaces)
     # corresponding to varying each parameter (~eigenvalue) of the
     # germ.  If the set of fiducials is sufficient, then the rank of
@@ -1085,7 +1085,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     
     if rank < gsGerm.num_params:  # full fiducial set should work!
         raise ValueError("Incomplete fiducial-pair set!")
-    
+
     spectrum_full_fid_set= list(sorted(_np.abs(_np.linalg.eigvalsh(_np.dot(dPall, dPall.T)))))
     
     imin_full_fid_set = len(spectrum_full_fid_set) - gsGerm.num_params

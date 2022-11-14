@@ -1,4 +1,5 @@
 import pygsti
+import numpy as _np
 from pygsti.modelpacks.legacy import std1Q_XYI as std
 from ..algorithms.algorithmsTestCase import AlgorithmTestCase
 
@@ -44,8 +45,6 @@ class GermSelectionTestCase(AlgorithmTestCase):
                                            threshold=threshold, verbosity=1, iterations=1,
                                            l1_penalty=1.0)
 
-
-
     def test_germsel_greedy(self):
         threshold             = 1e6
         randomizationStrength = 1e-3
@@ -69,6 +68,14 @@ class GermSelectionTestCase(AlgorithmTestCase):
                                            randomize=False, seed=2014, score_func='all',
                                            threshold=threshold, verbosity=1, op_penalty=1.0,
                                            mem_limit=1024000)
+                                           
+
+    def test_germsel_low_rank(self):
+        #test greedy search algorithm using low-rank updates
+
+        soln = pygsti.algorithms.germselection.find_germs(std.target_model(), candidate_germ_counts={4:'all upto'},
+                                           randomize=False, algorithm='greedy', mode='compactEVD',
+                                           assume_real=True, float_type=_np.double,  verbosity=0)
 
 
     def test_germsel_driver(self):
@@ -79,7 +86,14 @@ class GermSelectionTestCase(AlgorithmTestCase):
                                       candidate_seed=2017, force="singletons", algorithm='greedy',
                                       algorithm_kwargs=options, mem_limit=None, comm=None,
                                       profiler=None, verbosity=1)
-
+                                      
+        #Greedy Low-Rank Updates
+        germs = pygsti.algorithms.germselection.find_germs(std.target_model(), seed=2017, 
+                                   candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
+                                   randomize=False, algorithm='greedy', mode='compactEVD',
+                                   assume_real=True, float_type=_np.double,  verbosity=1)
+        
+        
         #GRASP
         options = dict(l1_penalty=1e-2,
                        op_penalty=0.1,
