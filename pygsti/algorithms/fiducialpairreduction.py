@@ -961,7 +961,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     
     #debugging
     #print('pre-povm-tuples: ', pre_povm_tuples)
-    
+
     # nRhoStrs, nEStrs = len(prep_fiducials), len(meas_fiducials)
     nEStrs = len(meas_fiducials)
     nPossiblePairs = len(prep_fiducials) * len(meas_fiducials)
@@ -971,14 +971,12 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     #debugging
     printer.log('Number of possible pairs: %d'%(nPossiblePairs), 4)
 
-
     #Determine which fiducial-pair indices to iterate over
     goodPairList = None; bestFirstEval = []; bestPairs = {}
     #loops over a number of pairs between min_pairs_needed and up to and not including the number of possible pairs
     
     min_pairs_needed= ceil((gsGerm.num_params/(nPossiblePairs*dof_per_povm))*nPossiblePairs)
     printer.log('Minimum Number of Pairs Needed for this Germ: %d'%(min_pairs_needed), 2)
-    
 
     lst = _gsc.create_circuits(
         "pp[0]+f0+germ*power+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
@@ -1002,13 +1000,14 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
             elIndicesForPair[k].extend(_slct.to_array(layout.indices_for_index(o)))
     
     printer.log('Constructing Jacobian for Full Fiducial Set' , 3)
-    
+
     local_dPall = layout.allocate_local_array('ep', 'd')
     gsGerm.sim.bulk_fill_dprobs(local_dPall, layout, None)  # num_els x num_params
     dPall = local_dPall.copy()  # local == global (no layout.gather required) b/c we used comm=None above
     layout.free_local_array(local_dPall)  # not needed - local_dPall isn't shared (comm=None)
     
     printer.log('Calculating Spectrum of Full Fiducial Set', 3)
+
     # Construct sum of projectors onto the directions (1D spaces)
     # corresponding to varying each parameter (~eigenvalue) of the
     # germ.  If the set of fiducials is sufficient, then the rank of
@@ -1027,7 +1026,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     if rank < gsGerm.num_params:  # full fiducial set should work!
         #print(rank)
         raise ValueError("Incomplete fiducial-pair set!")
-    
+
     spectrum_full_fid_set= list(sorted(_np.abs(_np.linalg.eigvals(_np.dot(dPall, dPall.T)))))
     
     imin_full_fid_set = len(spectrum_full_fid_set) - gsGerm.num_params
@@ -1069,7 +1068,6 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
         
             #debugging
             printer.log('Searching for a good set with this many pairs: %d' % (nNeededPairs), 4)
-            
             
             #We'll ignore the search mode argument and just focus on sampling random subsets of the candidate seed set.
             nTotalPairCombos = _nCr(size_candidate_set, nNeededPairs)
