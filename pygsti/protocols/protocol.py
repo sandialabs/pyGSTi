@@ -90,8 +90,8 @@ class Protocol(object):
         Protocol
         """
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_from_mongodb(mongodb_collection, doc_id,
-                                                  'auxfile_types', quick_load=quick_load))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb(mongodb_collection, doc_id,
+                                                          'auxfile_types', quick_load=quick_load))
         ret._init_unserialized_attributes()
         return ret
 
@@ -155,7 +155,7 @@ class Protocol(object):
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
-    def write_to_mongodb(self, mongodb_collection, doc_id=None, session=None):
+    def write_to_mongodb(self, mongodb_collection, doc_id=None, session=None, overwrite_existing=False):
         """
         Write this Protocol to a MongoDB database.
 
@@ -173,12 +173,18 @@ class Protocol(object):
             database. This can be used to implement transactions
             among other things.
 
+        overwrite_existing : bool, optional
+            Whether existing documents should be overwritten.  The default of `False` causes
+            a ValueError to be raised if a document with the given `doc_id` already exists.
+            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
+            to a path can be done regardless of whether it already exists.
+
         Returns
         -------
         None
         """
-        _io.write_obj_to_mongodb(self, mongodb_collection, doc_id, 'auxfile_types',
-                                 session=session)
+        _io.write_obj_to_mongodb_auxtree(self, mongodb_collection, doc_id, 'auxfile_types',
+                                         session=session, overwrite_existing=overwrite_existing)
 
     @classmethod
     def remove_from_mongodb(cls, mongodb_collection, doc_id, custom_collection_names=None, session=None):
@@ -190,8 +196,8 @@ class Protocol(object):
         bool
             `True` if the specified experiment design was removed, `False` if it didn't exist.
         """
-        delcnt = _io.remove_from_mongodb(mongodb_collection, doc_id, 'auxfile_types',
-                                         session=session)
+        delcnt = _io.remove_auxtree_from_mongodb(mongodb_collection, doc_id, 'auxfile_types',
+                                                 session=session)
         return bool(delcnt == 1)
 
     def setup_nameddict(self, final_dict):
@@ -684,8 +690,8 @@ class ExperimentDesign(_TreeNode):
         """
         collection_names = _io.mongodb_collection_names(custom_collection_names)
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_from_mongodb(mongodb[collection_names['edesigns']], doc_id,
-                                                  'auxfile_types', quick_load=quick_load))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb(mongodb[collection_names['edesigns']], doc_id,
+                                                          'auxfile_types', quick_load=quick_load))
         ret._init_children_from_mongodb(mongodb, 'edesigns', doc_id, custom_collection_names, quick_load=quick_load)
         ret._loaded_from = (mongodb, doc_id, custom_collection_names.copy()
                             if (custom_collection_names is not None) else None)
@@ -966,7 +972,8 @@ class ExperimentDesign(_TreeNode):
         self._write_children(dirname)
         self._loaded_from = str(_pathlib.Path(dirname).absolute())  # for future writes
 
-    def write_to_mongodb(self, mongodb=None, doc_id=None, parent=None, custom_collection_names=None, session=None):
+    def write_to_mongodb(self, mongodb=None, doc_id=None, parent=None, custom_collection_names=None,
+                         session=None, overwrite_existing=False):
         """
         Write this experiment design to a MongoDB database.
 
@@ -997,6 +1004,13 @@ class ExperimentDesign(_TreeNode):
             database. This can be used to implement transactions
             among other things.
 
+        overwrite_existing : bool, optional
+            Whether existing documents should be overwritten.  The default of `False` causes
+            a ValueError to be raised if a document with the given `doc_id` already exists.
+            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
+            to a path can be done regardless of whether it already exists.
+
+
         Returns
         -------
         None
@@ -1015,8 +1029,8 @@ class ExperimentDesign(_TreeNode):
             custom_collection_names = loaded_from[2]  # override if inferring document id
 
         collection_names = _io.mongodb_collection_names(custom_collection_names)
-        _io.write_obj_to_mongodb(self, mongodb[collection_names['edesigns']], doc_id, 'auxfile_types',
-                                 session=session)
+        _io.write_obj_to_mongodb_auxtree(self, mongodb[collection_names['edesigns']], doc_id, 'auxfile_types',
+                                         session=session, overwrite_existing=overwrite_existing)
         self._write_children_to_mongodb(mongodb, doc_id, update_children_in_edesign=True,
                                         custom_collection_names=custom_collection_names, session=session)
 
@@ -1032,9 +1046,9 @@ class ExperimentDesign(_TreeNode):
         """
         collection_names = _io.mongodb_collection_names(custom_collection_names)
         cls._remove_children_from_mongodb(mongodb, 'edesigns', doc_id, custom_collection_names, session)
-        delcnt = _io.remove_from_mongodb(mongodb[collection_names['edesigns']], doc_id, 'auxfile_types',
-                                         session=session)
-        return bool(delcnt == 1)
+        delcnt = _io.remove_auxtree_from_mongodb(mongodb[collection_names['edesigns']], doc_id, 'auxfile_types',
+                                                 session=session)
+        return bool(delcnt is not None and delcnt.deleted_count == 1)
 
     def setup_nameddict(self, final_dict):
         """
@@ -2086,7 +2100,8 @@ class ProtocolData(_TreeNode):
 
         self._write_children(dirname, write_subdir_json=False)  # writes sub-datas
 
-    def write_to_mongodb(self, mongodb, doc_id, parent=None, custom_collection_names=None, session=None):
+    def write_to_mongodb(self, mongodb, doc_id, parent=None, custom_collection_names=None,
+                         session=None, overwrite_existing=False):
         """
         Write this protocol data to a MongoDB database.
 
@@ -2117,6 +2132,13 @@ class ProtocolData(_TreeNode):
             database. This can be used to implement transactions
             among other things.
 
+        overwrite_existing : bool, optional
+            Whether existing documents should be overwritten.  The default of `False` causes
+            a ValueError to be raised if a document with the given `doc_id` already exists.
+            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
+            to a path can be done regardless of whether it already exists.
+
+
         Returns
         -------
         None
@@ -2137,10 +2159,10 @@ class ProtocolData(_TreeNode):
         collection_names = _io.mongodb_collection_names(custom_collection_names)
 
         #Write our class information to mongodb, even though we don't currently use this when loading (FUTURE work)
-        _io.write_obj_to_mongodb(self, mongodb[collection_names['data']], doc_id,
-                                 auxfile_types_member=None,
-                                 omit_attributes=['edesign', 'dataset', '_passdatas', 'cache'],
-                                 session=session)
+        _io.write_obj_to_mongodb_auxtree(self, mongodb[collection_names['data']], doc_id,
+                                         auxfile_types_member=None,
+                                         omit_attributes=['edesign', 'dataset', '_passdatas', 'cache'],
+                                         session=session, overwrite_existing=overwrite_existing)
 
         if parent is None:  # otherwise assume parent has already written edesign
             self.edesign.write_to_mongodb(mongodb, doc_id, None, custom_collection_names, session)
@@ -2201,9 +2223,9 @@ class ProtocolData(_TreeNode):
         _io.remove_edesign_from_mongodb(mongodb, doc_id, custom_collection_names, session)
 
         # Remove ProtocolData document itself
-        delcnt = _io.remove_from_mongodb(mongodb[collection_names['data']], doc_id, 'auxfile_types',
-                                         session=session)
-        return bool(delcnt == 1)
+        delcnt = _io.remove_auxtree_from_mongodb(mongodb[collection_names['data']], doc_id, 'auxfile_types',
+                                                 session=session)
+        return bool(delcnt is not None and delcnt.deleted_count == 1)
 
     def setup_nameddict(self, final_dict):
         """
@@ -2383,8 +2405,8 @@ class ProtocolResults(object):
         """
         ignore = ('type',) if load_protocol else ('type', 'protocol')
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_from_mongodb(mongodb_collection, result_id,
-                                                  'auxfile_types', ignore, quick_load=quick_load))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb(mongodb_collection, result_id,
+                                                          'auxfile_types', ignore, quick_load=quick_load))
         return ret
 
     def __init__(self, data, protocol_instance):
@@ -2517,15 +2539,16 @@ class ProtocolResults(object):
                                        session=session)
 
     def _write_partial_to_mongodb(self, mongodb_collection, result_id, write_protocol=False,
-                                  additional_meta=None, session=None):
+                                  additional_meta=None, session=None, overwrite_existing=False):
         """
         Internal method used to write the results-specific data to a MongoDB.
         This method does not write the object's `data` member, which must be
         serialized separately.
         """
-        _io.write_obj_to_mongodb(self, mongodb_collection, result_id,
-                                 'auxfile_types', omit_attributes=() if write_protocol else ('protocol',),
-                                 additional_meta=additional_meta, session=session)
+        _io.write_obj_to_mongodb_auxtree(self, mongodb_collection, result_id,
+                                         'auxfile_types', omit_attributes=() if write_protocol else ('protocol',),
+                                         additional_meta=additional_meta, session=session,
+                                         overwrite_existing=overwrite_existing)
 
     @classmethod
     def remove_from_mongodb(cls, mongodb, doc_id, name, custom_collection_names=None, session=None):
@@ -2539,9 +2562,9 @@ class ProtocolResults(object):
         """
         collection_names = _io.mongodb_collection_names(custom_collection_names)
         result_id = doc_id + '/' + name  # derive_child_id_from_parent_id(doc_id, name)
-        delcnt = _io.remove_from_mongodb(mongodb[collection_names['results']], result_id, 'auxfile_types',
-                                         session=session)
-        return bool(delcnt == 1)
+        delcnt = _io.remove_auxtree_from_mongodb(mongodb[collection_names['results']], result_id, 'auxfile_types',
+                                                 session=session)
+        return bool(delcnt is not None and delcnt.deleted_count == 1)
 
     def to_nameddict(self):
         """
@@ -3034,10 +3057,10 @@ class ProtocolResultsDir(_TreeNode):
             self.data.write_to_mongodb(mongodb, doc_id, None, custom_collection_names, session)
 
         ##Write our class information to mongodb, even though we don't currently use this when loading
-        #_io.write_obj_to_mongodb(self, mongodb[collection_names['resultdirs']], doc_id,
+        #_io.write_obj_to_mongodb_auxtree(self, mongodb[collection_names['resultdirs']], doc_id,
         #                         auxfile_types_member=None,
         #                         omit_attributes=[...],
-        #                         session=session)
+        #                         session=session, overwrite_existing=overwrite_existing)
 
         #write the results
         for name, results in self.for_protocol.items():
@@ -3072,8 +3095,8 @@ class ProtocolResultsDir(_TreeNode):
         _io.remove_data_from_mongodb(mongodb, doc_id, custom_collection_names, session)
 
         #FUTURE: if we use resultdirs:
-        #delcnt = _io.remove_from_mongodb(mongodb[collection_names['resultdirs']], doc_id, 'auxfile_types',
-        #                                 session=session)
+        #delcnt = _io.remove_auxtree_from_mongodb(mongodb[collection_names['resultdirs']], doc_id, 'auxfile_types',
+        #                                         session=session)
         return bool(delcnt >= 1)
 
     def _result_namedicts_on_this_node(self):

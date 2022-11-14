@@ -104,8 +104,8 @@ class Estimate(object):
         Protocol
         """
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_from_mongodb(mongodb_collection, doc_id,
-                                                  'auxfile_types', quick_load=quick_load))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb(mongodb_collection, doc_id,
+                                                          'auxfile_types', quick_load=quick_load))
         for crf in ret.confidence_region_factories.values():
             crf.set_parent(ret)  # re-link confidence_region_factories
         return ret
@@ -249,7 +249,7 @@ class Estimate(object):
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
-    def write_to_mongodb(self, mongodb_collection, doc_id=None, session=None):
+    def write_to_mongodb(self, mongodb_collection, doc_id=None, session=None, overwrite_existing=False):
         """
         Write this Estimate to a MongoDB database.
 
@@ -267,12 +267,18 @@ class Estimate(object):
             database. This can be used to implement transactions
             among other things.
 
+        overwrite_existing : bool, optional
+            Whether existing documents should be overwritten.  The default of `False` causes
+            a ValueError to be raised if a document with the given `doc_id` already exists.
+            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
+            to a path can be done regardless of whether it already exists.
+
         Returns
         -------
         None
         """
-        _io.write_obj_to_mongodb(self, mongodb_collection, doc_id, 'auxfile_types',
-                                 session=session)
+        _io.write_obj_to_mongodb_auxtree(self, mongodb_collection, doc_id, 'auxfile_types',
+                                         session=session, overwrite_existing=overwrite_existing)
 
     @classmethod
     def remove_from_mongodb(cls, mongodb_collection, doc_id, custom_collection_names=None, session=None):
@@ -284,8 +290,8 @@ class Estimate(object):
         bool
             `True` if the specified experiment design was removed, `False` if it didn't exist.
         """
-        delcnt = _io.remove_from_mongodb(mongodb_collection, doc_id, 'auxfile_types',
-                                         session=session)
+        delcnt = _io.remove_auxtree_from_mongodb(mongodb_collection, doc_id, 'auxfile_types',
+                                                 session=session)
         return bool(delcnt == 1)
 
     def retrieve_start_model(self, goparams):

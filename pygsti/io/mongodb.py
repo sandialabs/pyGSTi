@@ -26,9 +26,9 @@ from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySeri
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
-def load_from_mongodb(root_mongo_collection, doc_id, auxfile_types_member='auxfile_types',
-                      ignore_meta=('_id', 'type',), separate_auxfiletypes=False,
-                      quick_load=False):
+def read_auxtree_from_mongodb(root_mongo_collection, doc_id, auxfile_types_member='auxfile_types',
+                              ignore_meta=('_id', 'type',), separate_auxfiletypes=False,
+                              quick_load=False):
     """
     Load the contents of a MongoDB document into a dict.
 
@@ -201,7 +201,7 @@ def _load_subcollection_member(root_mongo_collection, parent_id, member_name, ty
             if link_doc is not None:
                 assert(link_doc['auxfile_type'] == cur_typ)
                 standalone_id = link_doc['standalone_object_id']
-    
+
                 coll = root_mongo_collection['pygsti_standalone_objects']
                 obj_doc = coll.find_one({'_id': standalone_id}, ['type'])
                 val = _class_for_name(obj_doc['type'])._from_mongodb_partial(coll, standalone_id, quick_load=quick_load)
@@ -250,8 +250,29 @@ def _load_subcollection_member(root_mongo_collection, parent_id, member_name, ty
     return True, val  # loading successful - 2nd element is value loaded
 
 
-def write_obj_to_mongodb(obj, root_mongo_collection, doc_id, auxfile_types_member, omit_attributes=(),
-                         additional_meta=None, session=None):
+class WriteOpsBySubcollection(dict):
+    def __init__(self, allowed_subcollection_names=('pygsti_objects', 'pygsti_numpy_arrays', 'pygsti_circuits')):  # 'pygsti_datasets', 'pygsti_datarows'
+        self.allowed_subcollection_names = allowed_subcollection_names
+        self.standalone_writes = []  # separate "special" list for stand-alone object (i.e. objects with a .write_to_mongo method) writes 'pygsti_standalone_objects'
+        super().__init__({k: [] for k in self.allowed_subcollection_names})
+
+    def add_ops_by_subcollection(self, other_ops):
+        assert(isinstance(other_ops, WriteOpsBySubcollection))
+        for k, v in other_ops.items():
+            self[k].extend(v)
+        self.standalone_writes.extend(other_ops.standalone_writes)
+
+    def add_one_op(self, subcollection_name, full_id, rest_of_info, overwrite_existing):
+        from pymongo import InsertOne, ReplaceOne
+        assert(subcollection_name in self.allowed_subcollection_names)
+        info = full_id.copy()
+        info.update(rest_of_info)
+        self[subcollection_name].append(ReplaceOne(full_id, info, upsert=True)
+                                        if overwrite_existing else InsertOne(info))
+
+
+def write_obj_to_mongodb_auxtree(obj, root_mongo_collection, doc_id, auxfile_types_member, omit_attributes=(),
+                                 additional_meta=None, session=None, overwrite_existing=False):
     meta = {'type': _full_class_name(obj)}
     if additional_meta is not None: meta.update(additional_meta)
 
@@ -265,10 +286,12 @@ def write_obj_to_mongodb(obj, root_mongo_collection, doc_id, auxfile_types_membe
         vals = obj.__dict__
         auxtypes = obj.__dict__[auxfile_types_member] if (auxfile_types_member is not None) else {}
 
-    write_to_mongodb(root_mongo_collection, doc_id, vals, auxtypes, init_meta=meta, session=session)
+    return write_auxtree_to_mongodb(root_mongo_collection, doc_id, vals, auxtypes, init_meta=meta,
+                                    session=session, overwrite_existing=overwrite_existing)
 
 
-def write_to_mongodb(root_mongo_collection, doc_id, valuedict, auxfile_types=None, init_meta=None, session=None):
+def write_auxtree_to_mongodb(root_mongo_collection, doc_id, valuedict, auxfile_types=None, init_meta=None,
+                             session=None, overwrite_existing=False):
     """
     Write a dictionary of quantities to a MongoDB database, potentially as multiple documents.
 
@@ -286,7 +309,8 @@ def write_to_mongodb(root_mongo_collection, doc_id, valuedict, auxfile_types=Non
 
     doc_id : object
         The identifier, usually a `bson.objectid.ObjectId` or string, of the
-        root document to store in the database.
+        root document to store in the database.  If `None` a new id will be
+        created.
 
     valuedict : dict
         The dictionary of values to serialize to disk.
@@ -310,62 +334,92 @@ def write_to_mongodb(root_mongo_collection, doc_id, valuedict, auxfile_types=Non
         database. This can be used to implement transactions
         among other things.
 
+    overwrite_existing : bool, optional
+        Whether existing documents should be overwritten.  The default of `False` causes
+        a ValueError to be raised if a document with the given `doc_id` already exists.
+        Setting this to `True` mimics the behaviour of a typical filesystem, where writing
+        to a path can be done regardless of whether it already exists.
+
     Returns
     -------
     None
     """
     from bson.objectid import ObjectId
+    from pymongo import InsertOne, ReplaceOne
     to_insert = {}
 
     if auxfile_types is None:  # Note: this case may never be used
         auxfile_types = valuedict['auxfile_types']
 
+    if doc_id is None:
+        doc_id = ObjectId()  # Note: may run into trouble if _id must be str
+
     if init_meta: to_insert.update(init_meta)
     to_insert['auxfile_types'] = auxfile_types
-    to_insert['_id'] = doc_id if (doc_id is not None) else ObjectId()  # Note: may run into trouble if _id must be str
+    to_insert['_id'] = doc_id
+
+    #Initial check
+    if not overwrite_existing and root_mongo_collection.count_documents({'_id': doc_id}, session=session) > 0:
+        raise ValueError("Document with id=%s exists and `overwrite_existing=False`" % str(doc_id))
 
     for key, val in valuedict.items():
         if key in auxfile_types: continue  # member is serialized to a separate (sub-)collection
         if isinstance(val, _VerbosityPrinter): val = val.verbosity  # HACK!!
         to_insert[key] = val
 
+    write_ops = WriteOpsBySubcollection()
     for auxnm, typ in auxfile_types.items():
         val = valuedict[auxnm]
         try:
-            auxmeta = _write_subcollection_member(root_mongo_collection, doc_id, auxnm, typ, val, session)
+            auxmeta, ops = _write_subcollection_member(root_mongo_collection, doc_id, auxnm, typ, val,
+                                                       session, overwrite_existing)
         except Exception as e:
-            _warnings.warn("FAILED to write aux file member %s w/format %s:" % (auxnm, typ))
-            raise e
+            raise ValueError("FAILED to prepare to write aux doc member %s w/format %s:" % (auxnm, typ)) from e
 
+        write_ops.add_ops_by_subcollection(ops)
         if auxmeta is not None:
             to_insert[auxnm] = auxmeta  # metadata about auxfile(s) for this auxnm
 
-    root_mongo_collection.insert_one(to_insert, session=session)
+    try:
+        for standalone_id, obj, bPartial in write_ops.standalone_writes:
+            if not bPartial:
+                obj.write_to_mongodb(root_mongo_collection['pygsti_standalone_objects'], standalone_id,
+                                     session=session, overwrite_existing=overwrite_existing)
+            else:
+                obj._write_partial_to_mongodb(root_mongo_collection['pygsti_standalone_objects'], standalone_id,
+                                              session=session, overwrite_existing=overwrite_existing)
 
-# db  - root database; somewhat similar to an analysis root on disk
-# db.edesigns  - ionqanalysis.ExperimentDesign documents
-# db.edesigns.pygsti_edesigns  - pygsti experiment designs  -- could combine w/above
-# db.edesigns.pygsti_edesigns.circuits  - collection w/one document per circuit (but each needs an id to parent design)
-# db.datarecords
-# db.datarecords.pygsti_datasets  # combine with above?
-# db.datarecords.pygsti_datasets.datarows
-# If heirarchical, put sub-edesigns in same collection but with 'parent' link non-None
+        for subcollection_name, ops in write_ops.items():
+            if len(ops) > 0:  # bulk_write fails if ops is an empty list
+                root_mongo_collection[subcollection_name].bulk_write(ops, session=session)
+
+        if overwrite_existing:
+            root_mongo_collection.replace_one({'_id': doc_id}, to_insert, upsert=True, session=session)
+        else:
+            root_mongo_collection.insert_one(to_insert, session=session)
+
+    except Exception as e:
+        #TODO - try to roll back this action by removing records (cleaning up zombies)?
+        raise
 
 
-def _write_subcollection_member(root_mongo_collection, parent_id, member_name, typ, val, session=None):
+def _write_subcollection_member(root_mongo_collection, parent_id, member_name, typ, val,
+                                session=None, overwrite_existing=False):
     from bson.binary import Binary as _Binary
     from bson.objectid import ObjectId
     subtypes = typ.split(':')
     cur_typ = subtypes[0]
     next_typ = ':'.join(subtypes[1:])
 
+    write_ops = WriteOpsBySubcollection()
     if cur_typ == 'list':
         if val is not None:
             metadata = []
             for i, el in enumerate(val):
                 membernm_so_far = member_name + str(i)
-                meta = _write_subcollection_member(root_mongo_collection, parent_id, membernm_so_far,
-                                                   next_typ, el, session)
+                meta, ops = _write_subcollection_member(root_mongo_collection, parent_id, membernm_so_far,
+                                                        next_typ, el, session, overwrite_existing)
+                write_ops.add_ops_by_subcollection(ops)
                 metadata.append(meta)
         else:
             metadata = None
@@ -375,8 +429,9 @@ def _write_subcollection_member(root_mongo_collection, parent_id, member_name, t
             metadata = {}
             for k, v in val.items():
                 membernm_so_far = member_name + "_" + k
-                meta = _write_subcollection_member(root_mongo_collection, parent_id, membernm_so_far,
-                                                   next_typ, v, session)
+                meta, ops = _write_subcollection_member(root_mongo_collection, parent_id, membernm_so_far,
+                                                        next_typ, v, session, overwrite_existing)
+                write_ops.add_ops_by_subcollection(ops)
                 metadata[k] = meta
         else:
             metadata = None
@@ -386,8 +441,9 @@ def _write_subcollection_member(root_mongo_collection, parent_id, member_name, t
             metadata = []
             for i, (k, v) in enumerate(val.items()):
                 membernm_so_far = member_name + "_kvpair" + str(i)
-                meta = _write_subcollection_member(root_mongo_collection, parent_id, membernm_so_far,
-                                                   next_typ, v, session)
+                meta, ops = _write_subcollection_member(root_mongo_collection, parent_id, membernm_so_far,
+                                                        next_typ, v, session, overwrite_existing)
+                write_ops.add_ops_by_subcollection(ops)
                 metadata.append((k, meta))
         else:
             metadata = None
@@ -395,74 +451,70 @@ def _write_subcollection_member(root_mongo_collection, parent_id, member_name, t
     else:
         #Simple types that just write the given file
         metadata = None
-        #pth = root_dir / (filenm + ext)
+        member_id = {'parent': parent_id, 'member_name': member_name}
 
         if val is None:   # None values don't get written
             pass
         elif cur_typ in ('none', 'reset'):  # explicitly don't get written
             pass
-        elif cur_typ == 'text-circuit-list':
-            coll = root_mongo_collection['pygsti_circuits']
-            for i, circuit in enumerate(val):
-                coll.insert_one({'parent': parent_id, 'member_name': member_name, 'auxfile_type': cur_typ,
-                                 'index': i, 'circuit_str': circuit.str}, session=session)
-        elif cur_typ == 'dir-serialized-object':
-            coll = root_mongo_collection['pygsti_standalone_objects']
-            standalone_id = ObjectId()
-            val.write_to_mongodb(coll, standalone_id, session=session)
 
-            coll = root_mongo_collection['pygsti_objects']
-            coll.insert_one({'parent': parent_id, 'member_name': member_name, 'auxfile_type': cur_typ,
-                             'standalone_object_id': standalone_id}, session=session)
+        elif cur_typ == 'text-circuit-list':
+            for i, circuit in enumerate(val):
+                write_ops.add_one_op('pygsti_circuits', member_id,
+                                     {'auxfile_type': cur_typ, 'index': i, 'circuit_str': circuit.str},
+                                     overwrite_existing)
+
+        elif cur_typ == 'dir-serialized-object':
+            standalone_id = ObjectId()
+            write_ops.standalone_writes.append((standalone_id, val, False))  # list of (id, object_to_write, bPartial)
+            write_ops.add_one_op('pygsti_objects', member_id,
+                                 {'auxfile_type': cur_typ, 'standalone_object_id': standalone_id},
+                                 overwrite_existing)
 
         elif cur_typ == 'partialdir-serialized-object':
-            coll = root_mongo_collection['pygsti_standalone_objects']
-            child_id = ObjectId()
-            val._write_partial_to_mongodb(coll, child_id, session=session)
-
-            coll = root_mongo_collection['pygsti_objects']
-            coll.insert_one({'parent': parent_id, 'member_name': member_name, 'auxfile_type': cur_typ,
-                             'standalone_object_id': child_id}, session=session)
+            standalone_id = ObjectId()
+            write_ops.standalone_writes.append((standalone_id, val, True))  # list of (id, object_to_write, bPartial)
+            write_ops.add_one_op('pygsti_objects', member_id,
+                                 {'auxfile_type': cur_typ, 'standalone_object_id': standalone_id},
+                                 overwrite_existing)
 
         elif cur_typ == 'serialized-object':
             assert(isinstance(val, _NicelySerializable)), \
                 "Non-nicely-serializable '%s' object given for a 'serialized-object' auxfile type!" % (str(type(val)))
             jsonable = val.to_nice_serialization()
-            coll = root_mongo_collection['pygsti_objects']
-            coll.insert_one({'parent': parent_id, 'member_name': member_name, 'auxfile_type': cur_typ,
-                             'object': jsonable}, session=session)
+            write_ops.add_one_op('pygsti_objects', member_id, {'auxfile_type': cur_typ, 'object': jsonable},
+                                 overwrite_existing)
 
         elif cur_typ == 'circuit-str-json':
-            coll = root_mongo_collection['pygsti_circuits']
             for i, circuit in enumerate(val):
-                coll.insert_one({'parent': parent_id, 'member_name': member_name, 'auxfile_type': cur_typ,
-                                 'index': i, 'circuit_str': circuit.str}, session=session)
+                write_ops.add_one_op('pygsti_circuits', member_id,
+                                     {'auxfile_type': cur_typ, 'index': i, 'circuit_str': circuit.str},
+                                     overwrite_existing)
 
         elif cur_typ == 'numpy-array':
-            coll = root_mongo_collection['pygsti_numpy_arrays']
-            coll.insert_one({'parent': parent_id, 'member_name': member_name, 'auxfile_type': cur_typ,
-                             'numpy_array': _Binary(_pickle.dumps(val, protocol=2), subtype=128)},
-                            session=session)
+            write_ops.add_one_op('pygsti_numpy_arrays', member_id,
+                                 {'auxfile_type': cur_typ,
+                                  'numpy_array': _Binary(_pickle.dumps(val, protocol=2), subtype=128)},
+                                 overwrite_existing)
 
         elif typ == 'json':
             _check_jsonable(val)
-            coll = root_mongo_collection['pygsti_objects']
-            coll.insert_one({'parent': parent_id, 'member_name': member_name, 'auxfile_type': typ, 'object': val},
-                            session=session)
+            write_ops.add_one_op('pygsti_objects', member_id,
+                                 {'auxfile_type': cur_typ, 'object': val}, overwrite_existing)
 
         elif typ == 'pickle':
-            coll = root_mongo_collection['pygsti_objects']
-            coll.insert_one({'parent': parent_id, 'member_name': member_name, 'auxfile_type': typ,
-                             'object': _Binary(_pickle.dumps(val, protocol=2), subtype=128)},
-                            session=session)
+            write_ops.add_one_op('pygsti_objects', member_id,
+                                 {'auxfile_type': cur_typ,
+                                  'object': _Binary(_pickle.dumps(val, protocol=2), subtype=128)},
+                                 overwrite_existing)
 
         else:
             raise ValueError("Invalid aux-file type: %s" % typ)
 
-    return metadata
+    return metadata, write_ops
 
 
-def remove_from_mongodb(root_mongo_collection, doc_id, auxfile_types_member='auxfile_types', session=None):
+def remove_auxtree_from_mongodb(root_mongo_collection, doc_id, auxfile_types_member='auxfile_types', session=None):
     """
     Remove a stored dictionary from a MongoDB database.
 
@@ -498,10 +550,16 @@ def remove_from_mongodb(root_mongo_collection, doc_id, auxfile_types_member='aux
 
     #Remove any auxfile members that could have their own (different) ids
     for key, typ in doc[auxfile_types_member].items():
-        if typ in ('dir-serialized-object', 'partialdir-serialized-object'):
-            # then this doc may have a different id that also needs to be deleted
-            aux_doc = root_mongo_collection[key].find_one({'parent': doc_id}, [], session=session)
-            remove_from_mongodb(root_mongo_collection[key], aux_doc['_id'], auxfile_types_member, session)
+        if typ == 'dir-serialized-object' or typ == 'partialdir-serialized-object':
+            coll = root_mongo_collection['pygsti_objects']
+            link_doc = coll.find_one({'parent': doc_id, 'member_name': key})
+            if link_doc is not None:
+                assert(link_doc['auxfile_type'] == typ)
+                standalone_id = link_doc['standalone_object_id']
+
+                coll = root_mongo_collection['pygsti_standalone_objects']
+                obj_doc = coll.find_one({'_id': standalone_id}, ['type'])
+                _class_for_name(obj_doc['type']).remove_from_mongodb(coll, standalone_id)  # custom_collection_names?
 
     #Remove other auxfile documents and the original
     for aux_subcollection_name in ('pygsti_objects', 'pygsti_circuits', 'pygsti_numpy_arrays'):
