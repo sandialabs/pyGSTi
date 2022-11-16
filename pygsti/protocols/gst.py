@@ -318,7 +318,9 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
         #filter the circuit lists in `ret` using those in `self` (in case self includes only a subset of
         # the circuits dictated by the germs, fiducials, and  fidpairs).
-        return ret.truncate_to_design(self)
+        ret = ret.truncate_to_design(self)
+        ret.nested = self.nested  # must set nested flag again because truncate_to_design resets to False to be safe
+        return ret
 
 
 class GSTInitialModel(_NicelySerializable):
