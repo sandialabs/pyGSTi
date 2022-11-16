@@ -23,6 +23,7 @@ from pygsti.io import readers as _load
 #from pygsti.io import writers as _write
 from pygsti.io.metadir import _check_jsonable, _full_class_name, _to_jsonable, _from_jsonable, _class_for_name
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 
@@ -168,7 +169,7 @@ def _load_subcollection_member(root_mongo_collection, parent_id, member_name, ty
             val = {}
             for i, (k, meta) in enumerate(keymeta_pairs):
                 membernm_so_far = member_name + "_kvpair" + str(i)
-                bLoaded, el = _load_subcollection_member(root_mongo_collection, membernm_so_far,
+                bLoaded, el = _load_subcollection_member(root_mongo_collection, parent_id, membernm_so_far,
                                                          next_typ, meta, quick_load)
                 if bLoaded:
                     if isinstance(k, list): k = tuple(k)  # convert list-type keys -> tuples
@@ -228,7 +229,11 @@ def _load_subcollection_member(root_mongo_collection, parent_id, member_name, ty
             obj_doc = coll.find_one({'parent': parent_id, 'member_name': member_name})
             if obj_doc is not None:
                 assert(obj_doc['auxfile_type'] == cur_typ)
-                val = _NicelySerializable.from_nice_serialization(obj_doc['object'])
+                if obj_doc['serialization_type'] == 'mongodb':
+                    val = _MongoSerializable.from_mongodb_serialization(obj_doc['object'],
+                                                                        root_mongo_collection.database)
+                else:
+                    val = _NicelySerializable.from_nice_serialization(obj_doc['object'])
 
         elif cur_typ == 'circuit-str-json':
             coll = root_mongo_collection[cnm('circuits')]
@@ -296,11 +301,23 @@ class WriteOpsBySubcollection(dict):
 
 
 def write_obj_to_mongodb_auxtree(obj, root_mongo_collection, doc_id, auxfile_types_member, omit_attributes=(),
-                                 additional_meta=None, session=None, overwrite_existing=False):
+                                 include_attributes=None, additional_meta=None, session=None, overwrite_existing=False):
+    # Note: include_attributes = None means include everything not omitted
+    # Note2: include_attributes takes precedence over omit_attributes
     meta = {'type': _full_class_name(obj)}
     if additional_meta is not None: meta.update(additional_meta)
 
-    if len(omit_attributes) > 0:
+    if include_attributes is not None:  # include_attributes takes precedence over omit_attributes
+        vals = {}
+        auxtypes = {}
+        potential_auxtypes = obj.__dict__[auxfile_types_member].copy() if (auxfile_types_member is not None) else {}
+        for attr_name in include_attributes:
+            if attr_name in obj.__dict__:
+                vals[attr_name] = obj.__dict__[attr_name]
+                if attr_name in potential_auxtypes:
+                    auxtypes[attr_name] = potential_auxtypes[attr_name]
+
+    elif len(omit_attributes) > 0:
         vals = obj.__dict__.copy()
         auxtypes = obj.__dict__[auxfile_types_member].copy() if (auxfile_types_member is not None) else {}
         for o in omit_attributes:
@@ -394,6 +411,7 @@ def write_auxtree_to_mongodb(root_mongo_collection, doc_id, valuedict, auxfile_t
     write_ops = WriteOpsBySubcollection()
     for auxnm, typ in auxfile_types.items():
         val = valuedict[auxnm]
+
         try:
             auxmeta, ops = _write_subcollection_member(root_mongo_collection, doc_id, auxnm, typ, val,
                                                        session, overwrite_existing)
@@ -511,8 +529,14 @@ def _write_subcollection_member(root_mongo_collection, parent_id, member_name, t
         elif cur_typ == 'serialized-object':
             assert(isinstance(val, _NicelySerializable)), \
                 "Non-nicely-serializable '%s' object given for a 'serialized-object' auxfile type!" % (str(type(val)))
-            jsonable = val.to_nice_serialization()
-            write_ops.add_one_op(cnm('objects'), member_id, {'auxfile_type': cur_typ, 'object': jsonable},
+            if isinstance(val, _MongoSerializable):
+                jsonable = val.to_mongodb_serialization(root_mongo_collection.database)
+                sertype = "mongodb"
+            else:
+                jsonable = val.to_nice_serialization()
+                sertype = "nice"
+            write_ops.add_one_op(cnm('objects'), member_id, {'auxfile_type': cur_typ, 'object': jsonable,
+                                                             'serialization_type': sertype},
                                  overwrite_existing)
 
         elif cur_typ == 'circuit-str-json':

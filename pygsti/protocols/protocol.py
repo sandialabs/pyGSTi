@@ -2159,10 +2159,10 @@ class ProtocolData(_TreeNode):
 
         collection_names = _io.mongodb_collection_names(custom_collection_names)
 
-        #Write our class information to mongodb, even though we don't currently use this when loading (FUTURE work)
+        #Write our class information (*not* any member data, so include_attributes == ()) to mongodb,
+        # even though we don't currently use this when loading (FUTURE work)
         _io.write_obj_to_mongodb_auxtree(self, mongodb[collection_names['data']], doc_id,
-                                         auxfile_types_member=None,
-                                         omit_attributes=['edesign', 'dataset', '_passdatas', 'cache'],
+                                         auxfile_types_member=None, include_attributes=(),
                                          session=session, overwrite_existing=overwrite_existing)
 
         if parent is None:  # otherwise assume parent has already written edesign
