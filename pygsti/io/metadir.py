@@ -525,7 +525,7 @@ def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attribu
         vals = obj.__dict__
         auxtypes = obj.__dict__[auxfile_types_member]
 
-    return write_meta_based_dir(dirname, vals, auxtypes, init_meta=meta)
+    write_meta_based_dir(dirname, vals, auxtypes, init_meta=meta)
 
 
 def _read_json_or_pkl_files_to_dict(dirname):
