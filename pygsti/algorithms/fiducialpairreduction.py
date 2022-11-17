@@ -1510,7 +1510,8 @@ def _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, pre_povm
         printer.log('Index of best update fiducial : %d'%(idx_current_best_update), 3)
         
         #check whether we have found an acceptable reduced set of fiducials.
-        if (nNeededPairs>=min_pairs_needed) and (current_best_score.minor < inv_trace_tol*inv_trace_complete):
+        if (nNeededPairs>=min_pairs_needed) and (current_best_score.minor < inv_trace_tol*inv_trace_complete)\
+            and (current_best_score.major <= -gsGerm.num_params):
             break
 
     #Get list of pairs as tuples for printing & returning
