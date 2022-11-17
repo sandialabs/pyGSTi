@@ -1136,6 +1136,8 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
             else:
                 pairIndicesToIterateOver = _itertools.combinations(linearized_candidate_seed_set, nNeededPairs)
                 
+            max_rank_seen= 0    
+                
             for i, pairIndicesToTest in enumerate(pairIndicesToIterateOver, start=1):
                 
                 #Get list of pairs as tuples for printing & returning
@@ -1148,8 +1150,13 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                 # subset of the total fiducial pairs.
                 elementIndicesToTest = _np.concatenate([elIndicesForPair[i] for i in pairIndicesToTest])
                 dP = _np.take(dPall, elementIndicesToTest, axis=0)  # subset_of_num_elements x num_params
-                spectrum = list(sorted(_np.abs(_np.linalg.eigvalsh(_np.dot(dP, dP.T)))))
+                spectrum = _np.abs(_np.linalg.eigvalsh(_np.dot(dP, dP.T)))
+                current_rank= _np.count_nonzero(spectrum>1e-10) #HARDCODED
+                spectrum= list(sorted(spectrum))
+                
                 imin = len(spectrum) - gsGerm.num_params
+                if current_rank > max_rank_seen:
+                    max_rank_seen=current_rank
                 
                 if (spectrum[imin] >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set])):
                     #if the list for bestFirstEval is empty or else we haven't hit the number of solutions to return
@@ -1190,6 +1197,8 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                     found_from_seed_set=True
                     break  # we've looked long enough and have found an acceptable solution
 
+            printer.log('Maximum Rank Seen This Iteration: ' + str(max_rank_seen), 3)
+            
             if any([eigval >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set]) for eigval in bestFirstEval]):
                 printer.log('Found at least one good set of pairs from within the seed set with length %d:' % (nNeededPairs), 3)
                 found_from_seed_set=True
@@ -1223,6 +1232,8 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                 else:
                     pairIndicesToIterateOver = _itertools.combinations(allPairIndices, nNeededPairs) 
             
+            max_rank_seen= 0
+            
             for i, pairIndicesToTest in enumerate(pairIndicesToIterateOver, start=1):                
                 #Get list of pairs as tuples for printing & returning
                 pairList = []
@@ -1234,9 +1245,15 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                 # subset of the total fiducial pairs.
                 elementIndicesToTest = _np.concatenate([elIndicesForPair[i] for i in pairIndicesToTest])
                 dP = _np.take(dPall, elementIndicesToTest, axis=0)  # subset_of_num_elements x num_params
-                spectrum = list(sorted(_np.abs(_np.linalg.eigvalsh(_np.dot(dP, dP.T)))))
+                #print('Rank of candidate set: ', _np.linalg.matrix_rank(dP))
+                
+                spectrum = _np.abs(_np.linalg.eigvalsh(_np.dot(dP, dP.T)))
+                current_rank= _np.count_nonzero(spectrum>1e-10)
+                spectrum= list(sorted(spectrum))
                 
                 imin = len(spectrum) - gsGerm.num_params
+                if current_rank > max_rank_seen:
+                    max_rank_seen=current_rank
                 
                 if (spectrum[imin] >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set])):# and condition <= (condition_number_tol*condition_full_fid_set)):
                     
@@ -1290,7 +1307,9 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                 if i >= min_iterations and len(bestFirstEval)>=num_soln_returned:
                     printer.log('we have looked long enough and have found the requested number of acceptable solutions.', 3)
                     break  # we've looked long enough and have found an acceptable solution
-
+            
+            printer.log('Maximum Rank Seen This Iteration: ' + str(max_rank_seen), 3)
+            
             if any([eigval >= (lowest_eigenval_tol*spectrum_full_fid_set[imin_full_fid_set]) for eigval in bestFirstEval]):
                 goodPairList = bestPairs
                 break
