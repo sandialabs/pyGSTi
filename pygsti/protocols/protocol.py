@@ -68,6 +68,33 @@ class Protocol(object):
         ret._init_unserialized_attributes()
         return ret
 
+    @classmethod
+    def from_mongodb(cls, mongodb_collection, doc_id, quick_load=False):
+        """
+        Initialize a new Protocol object from a Mongo database.
+
+        Parameters
+        ----------
+        mongodb_collection : pymongo.collection.Collection
+            The MongoDB collection to load data from.
+
+        doc_id : str
+            The user-defined identifier of the protocol object to load.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
+        Returns
+        -------
+        Protocol
+        """
+        ret = cls.__new__(cls)
+        ret.__dict__.update(_io.read_auxtree_from_mongodb(mongodb_collection, doc_id,
+                                                          'auxfile_types', quick_load=quick_load))
+        ret._init_unserialized_attributes()
+        return ret
+
     def __init__(self, name=None):
         """
         Create a new Protocol object.
@@ -127,6 +154,51 @@ class Protocol(object):
         None
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+    def write_to_mongodb(self, mongodb_collection, doc_id=None, session=None, overwrite_existing=False):
+        """
+        Write this Protocol to a MongoDB database.
+
+        Parameters
+        ----------
+        mongodb_collection : pymongo.collection.Collection
+            The MongoDB collection to write to.
+
+        doc_id : str, optional
+            The user-defined identifier of the Protocol to write.  Can be
+            left as `None` to generate a random identifier.
+
+        session : pymongo.client_session.ClientSession, optional
+            MongoDB session object to use when interacting with the MongoDB
+            database. This can be used to implement transactions
+            among other things.
+
+        overwrite_existing : bool, optional
+            Whether existing documents should be overwritten.  The default of `False` causes
+            a ValueError to be raised if a document with the given `doc_id` already exists.
+            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
+            to a path can be done regardless of whether it already exists.
+
+        Returns
+        -------
+        None
+        """
+        _io.write_obj_to_mongodb_auxtree(self, mongodb_collection, doc_id, 'auxfile_types',
+                                         session=session, overwrite_existing=overwrite_existing)
+
+    @classmethod
+    def remove_from_mongodb(cls, mongodb_collection, doc_id, session=None):
+        """
+        Remove a Protocol from a MongoDB database.
+
+        Returns
+        -------
+        bool
+            `True` if the specified experiment design was removed, `False` if it didn't exist.
+        """
+        delcnt = _io.remove_auxtree_from_mongodb(mongodb_collection, doc_id, 'auxfile_types',
+                                                 session=session)
+        return bool(delcnt is not None and delcnt.deleted_count == 1)
 
     def setup_nameddict(self, final_dict):
         """
@@ -580,6 +652,56 @@ class ExperimentDesign(_TreeNode):
         return ret
 
     @classmethod
+    def from_mongodb(cls, mongodb, doc_id, parent=None, name=None, quick_load=False, custom_collection_names=None):
+        """
+        Initialize a new ExperimentDesign object from a Mongo database.
+
+        Parameters
+        ----------
+        mongodb : pymongo.database.Database
+            The MongoDB instance to load data from.
+
+        doc_id : str
+            The user-defined identifier of the experiment design to load.
+
+        parent : ExperimentDesign, optional
+            The parent design object, if there is one.  Primarily used
+            internally - if in doubt, leave this as `None`.
+
+        name : str, optional
+            The sub-name of the design object being loaded, i.e. the
+            key of this data object beneath `parent`.  Only used when
+            `parent` is not None.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of the potentially long
+            circuit lists.  This can be useful when loading takes a long time
+            and all the information of interest lies elsewhere, e.g. in an
+            encompassing results object.
+
+        custom_collection_names : dict, optional
+            Overrides for the default MongoDB collection names used for storing different
+            types of pyGSTi objects.  In this case, only the `"edesigns"` key of this dictionary
+            is relevant.  Default values are given by :method:`pygsti.io.mongodb_collection_names`.
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        collection_names = _io.mongodb_collection_names(custom_collection_names)
+        ret = cls.__new__(cls)
+        ret.__dict__.update(_io.read_auxtree_from_mongodb(mongodb[collection_names['edesigns']], doc_id,
+                                                          'auxfile_types', quick_load=quick_load))
+        ret._init_children_from_mongodb(mongodb, 'edesigns', doc_id, custom_collection_names, quick_load=quick_load)
+        ret._loaded_from = (mongodb, doc_id, custom_collection_names.copy()
+                            if (custom_collection_names is not None) else None)
+
+        #Fixes to JSON codec's conversion of tuples => lists
+        ret.qubit_labels = tuple(ret.qubit_labels) if isinstance(ret.qubit_labels, list) else ret.qubit_labels
+
+        return ret
+
+    @classmethod
     def from_edesign(cls, edesign):
         """
         Create an ExperimentDesign out of an existing experiment design.
@@ -842,12 +964,91 @@ class ExperimentDesign(_TreeNode):
         None
         """
         if dirname is None:
-            dirname = self._loaded_from
+            dirname = self._loaded_from if isinstance(self._loaded_from, str) else None
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
 
         _io.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
+
         self._write_children(dirname)
         self._loaded_from = str(_pathlib.Path(dirname).absolute())  # for future writes
+
+    def write_to_mongodb(self, mongodb=None, doc_id=None, parent=None, custom_collection_names=None,
+                         session=None, overwrite_existing=False):
+        """
+        Write this experiment design to a MongoDB database.
+
+        Parameters
+        ----------
+        mongodb : pymongo.database.Database, optional
+            The MongoDB instance to write data to.  Can be left as `None` if this
+            experiment design was initialized from a MongoDB, e.g. with
+            :function:`pygsti.io.read_edesign_from_mongodb`, in which case the same
+            database used for the initial read-in is used.
+
+        doc_id : str, optional
+            The user-defined identifier of the experiment design to write.  Can be
+            left as `None` if this experiment design was initialized from a MongoDB,
+            in which case the same document identifier that was used at read-in is used.
+
+        parent : ExperimentDesign, optional
+            The parent experiment design, when a parent is writing this
+            design as a sub-experiment-design.  Otherwise leave as None.
+
+        custom_collection_names : dict, optional
+            Overrides for the default MongoDB collection names used for storing different types of
+            pyGSTi objects.  In this case, only the `"edesigns"` key of this dictionary
+            is relevant.  Default values are given by :method:`pygsti.io.mongodb_collection_names`.
+
+        session : pymongo.client_session.ClientSession, optional
+            MongoDB session object to use when interacting with the MongoDB
+            database. This can be used to implement transactions
+            among other things.
+
+        overwrite_existing : bool, optional
+            Whether existing documents should be overwritten.  The default of `False` causes
+            a ValueError to be raised if a document with the given `doc_id` already exists.
+            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
+            to a path can be done regardless of whether it already exists.
+
+
+        Returns
+        -------
+        None
+        """
+        loaded_from = self._loaded_from if isinstance(self._loaded_from, tuple) else None, None, None
+
+        if mongodb is None:
+            mongodb = loaded_from[0]
+            if mongodb is None: raise ValueError("`mongodb` must be given because there's no default!")
+
+        if doc_id is None:
+            doc_id = loaded_from[1]
+            if doc_id is None: raise ValueError("`doc_id` must be given because there's no default!")
+
+        if custom_collection_names is None and loaded_from[2] is not None and doc_id is None:
+            custom_collection_names = loaded_from[2]  # override if inferring document id
+
+        collection_names = _io.mongodb_collection_names(custom_collection_names)
+        _io.write_obj_to_mongodb_auxtree(self, mongodb[collection_names['edesigns']], doc_id, 'auxfile_types',
+                                         session=session, overwrite_existing=overwrite_existing)
+        self._write_children_to_mongodb(mongodb, doc_id, update_children_in_edesign=True,
+                                        custom_collection_names=custom_collection_names, session=session)
+
+    @classmethod
+    def remove_from_mongodb(cls, mongodb, doc_id, custom_collection_names=None, session=None):
+        """
+        Remove an experiment design from a MongoDB database.
+
+        Returns
+        -------
+        bool
+            `True` if the specified experiment design was removed, `False` if it didn't exist.
+        """
+        collection_names = _io.mongodb_collection_names(custom_collection_names)
+        cls._remove_children_from_mongodb(mongodb, 'edesigns', doc_id, custom_collection_names, session)
+        delcnt = _io.remove_auxtree_from_mongodb(mongodb[collection_names['edesigns']], doc_id, 'auxfile_types',
+                                                 session=session)
+        return bool(delcnt is not None and delcnt.deleted_count == 1)
 
     def setup_nameddict(self, final_dict):
         """
@@ -1581,6 +1782,8 @@ class ProtocolData(_TreeNode):
     passes : dict
         A dictionary of the data on a per-pass basis (works even it there's just one pass).
     """
+    DATASET_COLLECTION_NAME = "datasets"  # or pygsti_datasets?
+    CACHE_COLLECTION_NAME = "caches"  # or pygsti_caches?
 
     @classmethod
     def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
@@ -1599,7 +1802,7 @@ class ProtocolData(_TreeNode):
             Primarily used internally - if in doubt, leave this as `None`.
 
         name : str, optional
-            The sub-name of the design object being loaded, i.e. the
+            The sub-name of the object being loaded, i.e. the
             key of this data object beneath `parent`.  Only used when
             `parent` is not None.
 
@@ -1645,6 +1848,76 @@ class ProtocolData(_TreeNode):
 
         ret = cls(edesign, dataset, cache)
         ret._init_children(dirname, 'data', quick_load=quick_load)  # loads child nodes
+        return ret
+
+    @classmethod
+    def from_mongodb(cls, mongodb, doc_id, parent=None, name=None, quick_load=False, custom_collection_names=None):
+        """
+        Initialize a new ProtocolData object from a Mongo database.
+
+        Parameters
+        ----------
+        mongodb : pymongo.database.Database
+            The MongoDB instance to load data from.
+
+        doc_id : str
+            The user-defined identifier of the protocol data to load.
+
+        parent : ProtocolData, optional
+            The parent data object, if there is one.  This is needed for
+            sub-data objects which reference/inherit their parent's dataset.
+            Primarily used internally - if in doubt, leave this as `None`.
+
+        name : str, optional
+            The sub-name of the object being loaded, i.e. the
+            key of this data object beneath `parent`.  Only used when
+            `parent` is not None.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time, e.g. the actual raw data set(s). This can be useful
+            when loading takes a long time and all the information of interest
+            lies elsewhere, e.g. in an encompassing results object.
+
+        custom_collection_names : dict, optional
+            Overrides for the default MongoDB collection names used for storing different types of
+            pyGSTi objects.  In this case, the `"edesigns"` and `"data"` keys of this dictionary
+            are relevant.  Default values are given by :method:`pygsti.io.mongodb_collection_names`.
+
+        Returns
+        -------
+        ProtocolData
+        """
+        collection_names = _io.mongodb_collection_names(custom_collection_names)
+        edesign = parent.edesign[name] if parent and name else \
+            _io.read_edesign_from_mongodb(mongodb, doc_id, quick_load, comm=None,
+                                          custom_collection_names=custom_collection_names)
+
+        if quick_load:
+            dataset = None  # don't load any dataset - just the cache (usually b/c loading is slow)
+        else:
+            #Load dataset or multidataset from database
+            ds_names = [ds_doc['name'] for ds_doc in
+                        mongodb[collection_names['data']][cls.DATASET_COLLECTION_NAME].find(
+                            {'protocoldata_parent': doc_id}, ['name'])]
+            if ds_names == [None]:
+                dataset = _io.read_dataset_from_mongodb(mongodb[collection_names['data']][cls.DATASET_COLLECTION_NAME],
+                                                        {'name': None,
+                                                         'protocoldata_parent': doc_id})
+            else:
+                dataset = {}
+                for dsname in ds_names:
+                    dataset[dsname] = _io.read_dataset_from_mongodb(
+                        mongodb[collection_names['data'][cls.DATASET_COLLECTION_NAME]],
+                        {'name': dsname,
+                         'protocoldata_parent': doc_id})
+
+        cache = _io.read_dict_from_mongodb(mongodb[collection_names['data']][cls.CACHE_COLLECTION_NAME],
+                                           {'member': 'cache',
+                                            'protocoldata_parent': doc_id})
+
+        ret = cls(edesign, dataset, cache)
+        ret._init_children_from_mongodb(mongodb, 'data', doc_id, custom_collection_names, quick_load=quick_load)
         return ret
 
     def __init__(self, edesign, dataset=None, cache=None):
@@ -1802,7 +2075,7 @@ class ProtocolData(_TreeNode):
         None
         """
         if dirname is None:
-            dirname = self.edesign._loaded_from
+            dirname = self.edesign._loaded_from if isinstance(self.edesign._loaded_from, str) else None
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
         dirname = _pathlib.Path(dirname)
         data_dir = dirname / 'data'
@@ -1827,6 +2100,135 @@ class ProtocolData(_TreeNode):
             _io.write_dict_to_json_or_pkl_files(self.cache, data_dir / 'cache')
 
         self._write_children(dirname, write_subdir_json=False)  # writes sub-datas
+
+    def write_to_mongodb(self, mongodb, doc_id, parent=None, custom_collection_names=None,
+                         session=None, overwrite_existing=False):
+        """
+        Write this protocol data to a MongoDB database.
+
+        Parameters
+        ----------
+        mongodb : pymongo.database.Database, optional
+            The MongoDB instance to write data to.  Can be left as `None` if this
+            protocol data was initialized from a MongoDB, e.g. with
+            :function:`pygsti.io.read_data_from_mongodb`, in which case the same
+            database used for the initial read-in is used.
+
+        doc_id : str, optional
+            The user-defined identifier of the protocol data to write.  Can be
+            left as `None` if this protocol data was initialized from a MongoDB,
+            in which case the same document identifier that was used at read-in is used.
+
+        parent : ProtocolData, optional
+            The parent protocol data, when a parent is writing this
+            data as a sub-protocol-data object.  Otherwise leave as None.
+
+        custom_collection_names : dict, optional
+            Overrides for the default MongoDB collection names used for storing different types of
+            pyGSTi objects.  In this case, the `"edesigns"` and `"data"` keys of this dictionary
+            are relevant.  Default values are given by :method:`pygsti.io.mongodb_collection_names`.
+
+        session : pymongo.client_session.ClientSession, optional
+            MongoDB session object to use when interacting with the MongoDB
+            database. This can be used to implement transactions
+            among other things.
+
+        overwrite_existing : bool, optional
+            Whether existing documents should be overwritten.  The default of `False` causes
+            a ValueError to be raised if a document with the given `doc_id` already exists.
+            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
+            to a path can be done regardless of whether it already exists.
+
+
+        Returns
+        -------
+        None
+        """
+        loaded_from = self.edesign._loaded_from if isinstance(self.edesign._loaded_from, tuple) else None, None, None
+
+        if mongodb is None:
+            mongodb = loaded_from[0]
+            if mongodb is None: raise ValueError("`mongodb` must be given because there's no default!")
+
+        if doc_id is None:
+            doc_id = loaded_from[1]
+            if doc_id is None: raise ValueError("`doc_id` must be given because there's no default!")
+
+        if custom_collection_names is None and loaded_from[2] is not None and doc_id is None:
+            custom_collection_names = loaded_from[2]  # override if inferring document id
+
+        collection_names = _io.mongodb_collection_names(custom_collection_names)
+
+        #Write our class information (*not* any member data, so include_attributes == ()) to mongodb,
+        # even though we don't currently use this when loading (FUTURE work)
+        _io.write_obj_to_mongodb_auxtree(self, mongodb[collection_names['data']], doc_id,
+                                         auxfile_types_member=None, include_attributes=(),
+                                         session=session, overwrite_existing=overwrite_existing)
+
+        if parent is None:  # otherwise assume parent has already written edesign
+            self.edesign.write_to_mongodb(mongodb, doc_id, None, custom_collection_names, session)
+
+        if self.dataset is not None:  # otherwise don't write any dataset
+            if parent and (self.dataset is parent.dataset):  # then no need to write any data
+                assert(mongodb[collection_names['data']][self.DATASET_COLLECTION_NAME].count_documents(
+                    {'protocoldata_parent': doc_id}, session=session) == 0)
+            else:
+                if isinstance(self.dataset, (_data.MultiDataSet, dict)):
+                    for dsname, ds in self.dataset.items():
+                        _io.write_dataset_to_mongodb(ds,
+                                                     mongodb[collection_names['data']][self.DATASET_COLLECTION_NAME],
+                                                     {'name': dsname,
+                                                      'protocoldata_parent': doc_id},
+                                                     session=session)
+                else:
+                    _io.write_dataset_to_mongodb(self.dataset,
+                                                 mongodb[collection_names['data']][self.DATASET_COLLECTION_NAME],
+                                                 {'name': None,
+                                                  'protocoldata_parent': doc_id},
+                                                 session=session)
+
+        if self.cache:
+            _io.write_dict_to_mongodb(self.cache, mongodb[collection_names['data']][self.CACHE_COLLECTION_NAME],
+                                      {'member': 'cache',
+                                       'protocoldata_parent': doc_id},
+                                      session=session)
+
+        self._write_children_to_mongodb(mongodb, doc_id, update_children_in_edesign=False,
+                                        custom_collection_names=custom_collection_names,
+                                        session=session)  # writes sub-datas
+
+    @classmethod
+    def remove_from_mongodb(cls, mongodb, doc_id, custom_collection_names=None, session=None):
+        """
+        Remove a protocol data object from a MongoDB database.
+
+        Returns
+        -------
+        bool
+            `True` if the specified data was removed, `False` if it didn't exist.
+        """
+        collection_names = _io.mongodb_collection_names(custom_collection_names)
+        cls._remove_children_from_mongodb(mongodb, 'data', doc_id, custom_collection_names, session)
+
+        _io.remove_dict_from_mongodb(mongodb[collection_names['data']][cls.CACHE_COLLECTION_NAME],
+                                     {'member': 'cache',
+                                      'protocoldata_parent': doc_id},
+                                     session=session)
+
+        for ds_doc in mongodb[collection_names['data']][cls.DATASET_COLLECTION_NAME].find(
+                {'protocoldata_parent': doc_id}, ['name']):
+            _io.remove_dataset_from_mongodb(mongodb[collection_names['data']][cls.DATASET_COLLECTION_NAME],
+                                            {'name': ds_doc['name'],
+                                             'protocoldata_parent': doc_id},
+                                            session=session)
+
+        # Perhaps parent has already done this, but try to remove edesign anyway
+        _io.remove_edesign_from_mongodb(mongodb, doc_id, custom_collection_names, session)
+
+        # Remove ProtocolData document itself
+        delcnt = _io.remove_auxtree_from_mongodb(mongodb[collection_names['data']], doc_id, 'auxfile_types',
+                                                 session=session)
+        return bool(delcnt is not None and delcnt.deleted_count == 1)
 
     def setup_nameddict(self, final_dict):
         """
@@ -1948,12 +2350,66 @@ class ProtocolResults(object):
     def _from_dir_partial(cls, dirname, quick_load=False, load_protocol=False):
         """
         Internal method for loading only the results-specific data, and not the `data` member.
-        This method may be used independently by derived ProtocolResults objecsts which contain
+        This method may be used independently by derived ProtocolResults objects which contain
         multiple sub-results (e.g. MultiPassResults)
         """
         ignore = ('type',) if load_protocol else ('type', 'protocol')
         ret = cls.__new__(cls)
         ret.__dict__.update(_io.load_meta_based_dir(dirname, 'auxfile_types', ignore, quick_load=quick_load))
+        return ret
+
+    @classmethod
+    def from_mongodb(cls, mongodb, doc_id, name, preloaded_data=None, quick_load=False, custom_collection_names=None):
+        """
+        Initialize a new ProtocolResults object from a Mongo database.
+
+        Parameters
+        ----------
+        mongodb : pymongo.database.Database
+            The MongoDB instance to load data from.
+
+        doc_id : str
+            The user-defined identifier of the results *directory* containing the
+            results object to be loaded.
+
+        name : str
+            The name, within the directory given by `doc_id`, of the particular results
+            object to load (there can be multiple under a given `doc_id`).
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time, e.g. the actual raw data set(s). This can be useful
+            when loading takes a long time and all the information of interest
+            lies elsewhere, e.g. in an encompassing results object.
+
+        custom_collection_names : dict, optional
+            Overrides for the default MongoDB collection names used for storing different types of
+            pyGSTi objects. Default values are given by :method:`pygsti.io.mongodb_collection_names`.
+
+        Returns
+        -------
+        ProtocolResults
+        """
+        collection_names = _io.mongodb_collection_names(custom_collection_names)
+        result_id = doc_id + '/' + name  # derive_child_id_from_parent_id(doc_id, name)
+        ret = cls._from_mongodb_partial(mongodb[collection_names['results']], result_id, quick_load, load_protocol=True)
+        ret.data = preloaded_data if (preloaded_data is not None) else \
+            _io.read_data_from_mongodb(mongodb, doc_id, quick_load=quick_load,
+                                       custom_collection_names=custom_collection_names)
+        assert(ret.name == name), "ProtocolResults name inconsistency!"
+        return ret
+
+    @classmethod
+    def _from_mongodb_partial(cls, mongodb_collection, result_id, quick_load=False, load_protocol=False):
+        """
+        Internal method for loading only the results-specific data, and not the `data` member.
+        This method may be used independently by derived ProtocolResults objects which contain
+        multiple sub-results (e.g. MultiPassResults)
+        """
+        ignore = ('type',) if load_protocol else ('type', 'protocol')
+        ret = cls.__new__(cls)
+        ret.__dict__.update(_io.read_auxtree_from_mongodb(mongodb_collection, result_id,
+                                                          'auxfile_types', ignore, quick_load=quick_load))
         return ret
 
     def __init__(self, data, protocol_instance):
@@ -2000,7 +2456,7 @@ class ProtocolResults(object):
         None
         """
         if dirname is None:
-            dirname = self.data.edesign._loaded_from
+            dirname = self.data.edesign._loaded_from if isinstance(self.data.edesign._loaded_from, str) else None
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
 
         p = _pathlib.Path(dirname)
@@ -2022,6 +2478,96 @@ class ProtocolResults(object):
         """
         _io.write_obj_to_meta_based_dir(self, results_dir, 'auxfile_types',
                                         omit_attributes=() if write_protocol else ('protocol',))
+
+    def write_to_mongodb(self, mongodb=None, doc_id=None, data_already_written=False,
+                         custom_collection_names=None, session=None):
+        """
+        Write these protocol results to a MongoDB database.
+
+        Parameters
+        ----------
+        mongodb : pymongo.database.Database, optional
+            The MongoDB instance to write data to.  Can be left as `None` if this
+            protocol data was initialized from a MongoDB, e.g. with
+            :function:`pygsti.io.read_results_from_mongodb`, in which case the same
+            database used for the initial read-in is used.
+
+        doc_id : str, optional
+            The user-defined identifier of the results *directory*. Can be
+            left as `None` if this protocol results object was initialized from a MongoDB,
+            in which case the same document identifier that was used at read-in is used.
+
+        data_already_written : bool, optional
+            Set this to True if you're sure the `.data` :class:`ProtocolData` object
+            within this results object has already been written to `mongodb`.  Leaving
+            this as the default is a safe option.
+
+        custom_collection_names : dict, optional
+            Overrides for the default MongoDB collection names used for storing different types of
+            pyGSTi objects. Default values are given by :method:`pygsti.io.mongodb_collection_names`.
+
+        session : pymongo.client_session.ClientSession, optional
+            MongoDB session object to use when interacting with the MongoDB
+            database. This can be used to implement transactions
+            among other things.
+
+        Returns
+        -------
+        None
+        """
+        loaded_from = self.data.edesign._loaded_from if isinstance(self.data.edesign._loaded_from, tuple) \
+            else None, None, None
+
+        if mongodb is None:
+            mongodb = loaded_from[0]
+            if mongodb is None: raise ValueError("`mongodb` must be given because there's no default!")
+
+        if doc_id is None:
+            doc_id = loaded_from[1]
+            if doc_id is None: raise ValueError("`doc_id` must be given because there's no default!")
+
+        if custom_collection_names is None and loaded_from[2] is not None and doc_id is None:
+            custom_collection_names = loaded_from[2]  # override if inferring document id
+
+        #write edesign and data
+        if not data_already_written:
+            self.data.write_to_mongodb(mongodb, doc_id, custom_collection_names=custom_collection_names,
+                                       session=session)
+
+        #write qtys to results dir
+        collection_names = _io.mongodb_collection_names(custom_collection_names)
+        result_id = doc_id + '/' + self.name  # derive_child_id_from_parent_id(doc_id, self.name)
+        self._write_partial_to_mongodb(mongodb[collection_names['results']], result_id, write_protocol=True,
+                                       additional_meta={'directory_id': doc_id},
+                                       session=session)
+
+    def _write_partial_to_mongodb(self, mongodb_collection, result_id, write_protocol=False,
+                                  additional_meta=None, session=None, overwrite_existing=False):
+        """
+        Internal method used to write the results-specific data to a MongoDB.
+        This method does not write the object's `data` member, which must be
+        serialized separately.
+        """
+        _io.write_obj_to_mongodb_auxtree(self, mongodb_collection, result_id,
+                                         'auxfile_types', omit_attributes=() if write_protocol else ('protocol',),
+                                         additional_meta=additional_meta, session=session,
+                                         overwrite_existing=overwrite_existing)
+
+    @classmethod
+    def remove_from_mongodb(cls, mongodb, doc_id, name, custom_collection_names=None, session=None):
+        """
+        Remove a :class:`ProtocolResults` object from a MongoDB database.
+
+        Returns
+        -------
+        bool
+            `True` if the specified data was removed, `False` if it didn't exist.
+        """
+        collection_names = _io.mongodb_collection_names(custom_collection_names)
+        result_id = doc_id + '/' + name  # derive_child_id_from_parent_id(doc_id, name)
+        delcnt = _io.remove_auxtree_from_mongodb(mongodb[collection_names['results']], result_id, 'auxfile_types',
+                                                 session=session)
+        return bool(delcnt is not None and delcnt.deleted_count == 1)
 
     def to_nameddict(self):
         """
@@ -2291,6 +2837,67 @@ class ProtocolResultsDir(_TreeNode):
         ret._init_children(dirname, meta_subdir='results', quick_load=quick_load)
         return ret
 
+    @classmethod
+    def from_mongodb(cls, mongodb, doc_id, parent=None, name=None, preloaded_data=None, quick_load=False,
+                     custom_collection_names=None):
+        """
+        Initialize a new :class:`ProtocolResultsDir` object from a Mongo database.
+
+        Parameters
+        ----------
+        mongodb : pymongo.database.Database
+            The MongoDB instance to load data from.
+
+        doc_id : str
+            The user-defined identifier of the protocol results directory to load.
+
+        parent : ProtocolData, optional
+            The parent data object, if there is one.  This is needed for
+            sub-results objects which reference/inherit their parent's dataset.
+            Primarily used internally - if in doubt, leave this as `None`.
+
+        name : str, optional
+            The sub-name of the object being loaded, i.e. the
+            key of this data object beneath `parent`.  Only used when
+            `parent` is not None.
+
+        preloaded_data : ProtocolData, optional
+            In the case that the :class:`ProtocolData` object for `doc_id`
+            is already loaded, it can be passed in here.  Otherwise leave this
+            as None and it will be loaded.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time, e.g. the actual raw data set(s). This can be useful
+            when loading takes a long time and all the information of interest
+            lies elsewhere, e.g. in an encompassing results object.
+
+        custom_collection_names : dict, optional
+            Overrides for the default MongoDB collection names used for storing different types of
+            pyGSTi objects.  Default values are given by :method:`pygsti.io.mongodb_collection_names`.
+
+        Returns
+        -------
+        ProtocolResultsDir
+        """
+        data = parent.data[name] if (parent and name) else \
+            (preloaded_data if preloaded_data is not None else
+             _io.read_data_from_mongodb(mongodb, doc_id, quick_load=quick_load, comm=None,
+                                        custom_collection_names=custom_collection_names))
+
+        collection_names = _io.mongodb_collection_names(custom_collection_names)
+
+        #Load results with directory_id == doc_id
+        results = {}
+        for res_doc in mongodb[collection_names['results']].find({'directory_id': doc_id}, ['name', 'type']):
+            results[res_doc['name']] = _io.metadir._class_for_name(res_doc['type']).from_mongodb(
+                mongodb, doc_id, res_doc['name'], preloaded_data=data, quick_load=quick_load,
+                custom_collection_names=custom_collection_names)
+
+        ret = cls(data, results, {})  # don't initialize children now
+        ret._init_children_from_mongodb(mongodb, None, doc_id, custom_collection_names, quick_load=quick_load)
+        return ret
+
     def __init__(self, data, protocol_results=None, children=None):
         """
         Create a new ProtocolResultsDir object.
@@ -2341,7 +2948,8 @@ class ProtocolResultsDir(_TreeNode):
 
     def _create_childval(self, key):  # (this is how children are created on-demand)
         """ Create the value for `key` on demand. """
-        if self.data.edesign._loaded_from and key in self._dirs:
+        if self.data.edesign._loaded_from and isinstance(self.data.edesign._loaded_from, str) \
+           and key in self._dirs:
             dirname = _pathlib.Path(self.data.edesign._loaded_from)
             subdir = self._dirs[key]
             subobj_dir = dirname / subdir
@@ -2382,7 +2990,7 @@ class ProtocolResultsDir(_TreeNode):
         None
         """
         if dirname is None:
-            dirname = self.data.edesign._loaded_from
+            dirname = self.data.edesign._loaded_from if isinstance(self.data.edesign._loaded_from, str) else None
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
 
         if parent is None: self.data.write(dirname)  # assume parent has already written data
@@ -2398,6 +3006,101 @@ class ProtocolResultsDir(_TreeNode):
             results.write(dirname, data_already_written=True)
 
         self._write_children(dirname, write_subdir_json=False)  # writes sub-nodes
+
+    def write_to_mongodb(self, mongodb, doc_id, parent=None, custom_collection_names=None, session=None):
+        """
+        Write this protocol results directory to a MongoDB database.
+
+        Parameters
+        ----------
+        mongodb : pymongo.database.Database, optional
+            The MongoDB instance to write data to.  Can be left as `None` if this
+            results directory was initialized from a MongoDB, e.g. with
+            :function:`pygsti.io.read_results_from_mongodb`, in which case the same
+            database used for the initial read-in is used.
+
+        doc_id : str, optional
+            The user-defined identifier of the protocol results directory to write.  Can be
+            left as `None` if this results directory was initialized from a MongoDB,
+            in which case the same document identifier that was used at read-in is used.
+
+        parent : ProtocolResultsDir, optional
+            The parent protocol results directory, when a parent is writing this
+            data as a sub-protocol-data object.  Otherwise leave as None.
+
+        custom_collection_names : dict, optional
+            Overrides for the default MongoDB collection names used for storing different types of
+            pyGSTi objects.  In this case, the `"edesigns"` and `"data"` keys of this dictionary
+            are relevant.  Default values are given by :method:`pygsti.io.mongodb_collection_names`.
+
+        session : pymongo.client_session.ClientSession, optional
+            MongoDB session object to use when interacting with the MongoDB
+            database. This can be used to implement transactions
+            among other things.
+
+        Returns
+        -------
+        None
+        """
+        loaded_from = self.data.edesign._loaded_from if isinstance(self.data.edesign._loaded_from, tuple) \
+            else None, None, None
+
+        if mongodb is None:
+            mongodb = loaded_from[0]
+            if mongodb is None: raise ValueError("`mongodb` must be given because there's no default!")
+
+        if doc_id is None:
+            doc_id = loaded_from[1]
+            if doc_id is None: raise ValueError("`doc_id` must be given because there's no default!")
+
+        if custom_collection_names is None and loaded_from[2] is not None and doc_id is None:
+            custom_collection_names = loaded_from[2]  # override if inferring document id
+
+        if parent is None:
+            self.data.write_to_mongodb(mongodb, doc_id, None, custom_collection_names, session)
+
+        ##Write our class information to mongodb, even though we don't currently use this when loading
+        #_io.write_obj_to_mongodb_auxtree(self, mongodb[collection_names['resultdirs']], doc_id,
+        #                         auxfile_types_member=None,
+        #                         omit_attributes=[...],
+        #                         session=session, overwrite_existing=overwrite_existing)
+
+        #write the results
+        for name, results in self.for_protocol.items():
+            assert(results.name == name)
+            results.write_to_mongodb(mongodb, doc_id, data_already_written=True,
+                                     custom_collection_names=custom_collection_names, session=session)
+        self._write_children_to_mongodb(mongodb, doc_id, update_children_in_edesign=False,
+                                        custom_collection_names=custom_collection_names,
+                                        session=session)  # writes sub-resultdirs
+
+    @classmethod
+    def remove_from_mongodb(cls, mongodb, doc_id, custom_collection_names=None, session=None):
+        """
+        Remove a protocol results directory from a MongoDB database.
+
+        Returns
+        -------
+        bool
+            `True` if the specified data was removed, `False` if it didn't exist.
+        """
+        collection_names = _io.mongodb_collection_names(custom_collection_names)
+        cls._remove_children_from_mongodb(mongodb, None, doc_id, custom_collection_names, session)
+
+        delcnt = 0
+        for res_doc in mongodb[collection_names['results']].find(
+                {'directory_id': doc_id}, ['name']):
+            if _io.remove_results_from_mongodb(mongodb, doc_id, res_doc['name'], comm=None,
+                                               custom_collection_names=custom_collection_names, session=session):
+                delcnt += 1
+
+        # Perhaps parent has already done this, but try to remove data anyway
+        _io.remove_data_from_mongodb(mongodb, doc_id, custom_collection_names, session)
+
+        #FUTURE: if we use resultdirs:
+        #delcnt = _io.remove_auxtree_from_mongodb(mongodb[collection_names['resultdirs']], doc_id, 'auxfile_types',
+        #                                         session=session)
+        return bool(delcnt >= 1)
 
     def _result_namedicts_on_this_node(self):
         nds = [v.to_nameddict() for v in self.for_protocol.values()]
