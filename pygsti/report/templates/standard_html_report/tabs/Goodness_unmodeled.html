@@ -21,6 +21,14 @@
 	<figcaption><span class="captiontitle">Per-gate unmodeled error budget.</span> <span class="captiondetail">The model violation plots on this tab are computed using probabilities that aren't those exactly predicted by the chosen model.  Instead, the TVD between the model&#8217;s exact probabilities for a circuit&#8217;s outcomes and those used to compute the model violation may be as large as the circuit&#8217;s <em>unmodeled error budget</em>.  This budget computed by simply adding the amount given in this table for each gate occurrence in the circuit.</span></figcaption>
 </figure>
 
+{% if config['DiamondDistanceWildcard'] %}
+<figure id="unmodeled_error_ddist_bar_plot">
+	<figcaption><span class="captiontitle">Per-gate Diamond Distance and Wildcard Budget</span> <span class="captiondetail">This plot summarizes how well GST was able to fit the data -- or subsets of it -- to a gateset.  The lower half of the bars indicates the gauge-optimized diamond distance between the estimated and target gate set. The upper half of each bar corresponds to the amount of wildcard error that needed to be added to this gate in order to restore consistency with the experimentally measured data. This wildcard is assigned according to a model in which we allocate it among each gate proportionately to that gate's diamond distance. This gives a sense of the ratio of error in each gate between Markovian and non-Markovian sources.</span></figcaption>
+	{{ unmodeled_error_ddist_bar_plot|render }}
+</figure>
+{% endif %}
+
+
 <!-- Toggle showing of post-scaling plots -->
 {% if config['CombineRobust'] %}
 <figure id="final_model_fit_progress_bar_plot_ume">
