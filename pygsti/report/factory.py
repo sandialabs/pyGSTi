@@ -1221,10 +1221,13 @@ def construct_standard_report(results, title="auto",
                 #check if the wildcard budget is an instance
                 #of the diamond distance model, in which case we
                 #will add an extra flag/plot to the report.
-                if (isinstance(est.parameters['unmodeled_error'], PrimitiveOpsSingleScaleWildcardBudget)
-                   and est.parameters['unmodeled_error'].reference_name == 'diamond distance'):
+                wildcard = est.parameters['unmodeled_error']
+                if isinstance(wildcard, dict):  # assume a serialized budget object
+                    wildcard = _wildcardbudget.WildcardBudget.from_nice_serialization(wildcard)
+                if (isinstance(wildcard, PrimitiveOpsSingleScaleWildcardBudget)
+                   and wildcard.reference_name == 'diamond distance'):
                     flags.add('DiamondDistanceWildcard')
-                
+
     if combine_robust:
         flags.add('CombineRobust')
 

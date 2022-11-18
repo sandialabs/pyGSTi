@@ -1897,11 +1897,11 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                     budget = _compute_wildcard_budget_1d_model(base_estimate, objfn_cache, mdc_objfn, parameters,
                                                                badfit_options, printer - 1)
 
-                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = budget
+                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = budget.to_nice_serialization()
                     base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] \
                         = None
 
-                    base_estimate.extra_parameters["unmodeled_error"] = budget
+                    base_estimate.extra_parameters["unmodeled_error"] = budget.to_nice_serialization()
                     base_estimate.extra_parameters["unmodeled_active_constraints"] = None
                 except NotImplementedError as e:
                     printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
