@@ -2219,7 +2219,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
     L1weights = _np.ones(budget.num_params)
     if badfit_options.wildcard_L1_weights:
         for op_label, weight in badfit_options.wildcard_L1_weights.items():
-            L1weights[budget.primOpLookup[op_label]] = weight
+            L1weights[budget.primitive_op_vecindex[op_label]] = weight
         printer.log("Using non-uniform L1 weights: " + str(list(L1weights)))
 
     # Note: must evaluate mdc_objfn *before* passing to wildcard fn init so internal probs are init
@@ -2370,7 +2370,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
         # Note: active_constraints_list is typically stored in parameters['unmodeled_error active constraints']
         # of the relevant Estimate object.
         primOp_labels = _collections.defaultdict(list)
-        for lbl, i in budget.primOpLookup.items(): primOp_labels[i].append(str(lbl))
+        for lbl, i in budget.primitive_op_vecindex.items(): primOp_labels[i].append(str(lbl))
         for i, active_constraints in enumerate(active_constraints_list):
             if active_constraints:
                 printer.log("** ACTIVE constraints for " + "--".join(primOp_labels[i]) + " **")

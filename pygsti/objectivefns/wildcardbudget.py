@@ -616,7 +616,7 @@ class PrimitiveOpsWildcardBudgetBase(WildcardBudget):
                 deriv = _np.zeros(self.num_primitive_ops, 'd')
                 deriv[self.primitive_op_index[lbl]] = 1.0
                 return deriv
-            elif lbl.name in self.primOpLookup:
+            elif lbl.name in self.primitive_op_index:
                 deriv = _np.zeros(self.num_primitive_ops, 'd')
                 deriv[self.primitive_op_index[lbl.name]] = 1.0
                 return deriv
