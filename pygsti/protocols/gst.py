@@ -43,9 +43,6 @@ from pygsti.modelmembers import states as _states, povms as _povms
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
-
-
-
 #For results object:
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -609,8 +606,8 @@ class GSTBadFitOptions(_NicelySerializable):
                  wildcard_budget_includes_spam=True,
                  wildcard_L1_weights=None, wildcard_primitive_op_labels=None,
                  wildcard_initial_budget=None, wildcard_methods=('neldermead',),
-                 wildcard_inadmissable_action='print'):
-        valid_actions = ('wildcard', 'ddist_wildcard', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
+                 wildcard_inadmissable_action='print', wildcard1d_reference='diamond distance'):
+        valid_actions = ('wildcard', 'wildcard1d', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
             raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
         self.threshold = float(threshold)
@@ -621,6 +618,7 @@ class GSTBadFitOptions(_NicelySerializable):
         self.wildcard_initial_budget = wildcard_initial_budget
         self.wildcard_methods = wildcard_methods
         self.wildcard_inadmissable_action = wildcard_inadmissable_action  # can be 'raise' or 'print'
+        self.wildcard1d_reference = wildcard1d_reference
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -631,7 +629,8 @@ class GSTBadFitOptions(_NicelySerializable):
                                    'primitive_op_labels': self.wildcard_primitive_op_labels,
                                    'initial_budget': self.wildcard_initial_budget,  # serializable?
                                    'methods': self.wildcard_methods,
-                                   'indadmissable_action': self.wildcard_inadmissable_action},
+                                   'indadmissable_action': self.wildcard_inadmissable_action,
+                                   '1d_reference': self.wildcard1d_reference},
                       })
         return state
 
@@ -644,7 +643,8 @@ class GSTBadFitOptions(_NicelySerializable):
             wildcard.get('primitive_op_labels', None),
             wildcard.get('initial_budget', None),
             tuple(wildcard.get('methods', ['neldermead'])),
-            wildcard.get('inadmissable_action', 'print'))
+            wildcard.get('inadmissable_action', 'print'),
+            wildcard.get('1d_reference', 'diamond distance'))
 
 
 class GSTObjFnBuilders(_NicelySerializable):
@@ -1889,16 +1889,16 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
             #    new_params['unmodeled_error'] = None
             continue  # no need to add a new estimate - we just update the base estimate
 
-        elif badfit_typ == 'ddist_wildcard':
+        elif badfit_typ == 'wildcard1d':
 
             #If this estimate is the target model then skip adding the diamond distance wildcard.
             if base_estimate_label != 'Target':
                 try:
-                    budget = _compute_wildcard_budget_ddist_model(base_estimate,objfn_cache, mdc_objfn, parameters,
-                                                                  badfit_options, printer - 1)
+                    budget = _compute_wildcard_budget_1d_model(base_estimate, objfn_cache, mdc_objfn, parameters,
+                                                               badfit_options, printer - 1)
 
-                    base_estimate.extra_parameters['ddist_wildcard' + "_unmodeled_error"] = budget
-                    base_estimate.extra_parameters['ddist_wildcard' + "_unmodeled_active_constraints"] \
+                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = budget
+                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] \
                         = None
 
                     base_estimate.extra_parameters["unmodeled_error"] = budget
@@ -1912,7 +1912,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                 continue  # no need to add a new estimate - we just update the base estimate
 
             else:
-                printer.log('Diamond distance wildcard model is incompatible with the Target estimate, skipping this.',3)
+                printer.log('Diamond distance wildcard model is incompatible with the Target estimate, skipping.', 3)
                 continue
 
         elif badfit_typ == "do nothing":
@@ -1949,7 +1949,8 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                 results.estimates[base_estimate_label + '.' + badfit_typ].add_gaugeoptimized(
                     gauge_opt_params.copy(), go_gs_final, gokey, comm, printer - 1)
 
-def _compute_wildcard_budget_ddist_model(estimate, objfn_cache, mdc_objfn, parameters, badfit_options, verbosity):
+
+def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, parameters, badfit_options, verbosity):
     """
     Create a wildcard budget for a model estimate. This version of the function produces a wildcard estimate
     using the model introduced by Tim and Stefan in the RCSGST paper.
@@ -1994,12 +1995,12 @@ def _compute_wildcard_budget_ddist_model(estimate, objfn_cache, mdc_objfn, param
     global_circuits_to_use = mdc_objfn.global_circuits
 
     printer.log("******************* Adding Wildcard Budget **************************")
-    
+
     #cache construction code.
     # Extract model, dataset, objfn, etc.
     # Note: must evaluate mdc_objfn *before* passing to wildcard fn init so internal probs are init
     mdc_objfn.fn(model.to_vector())
-    
+
     ## PYGSTI TRANSPLANT from pygsti.protocols.gst._compute_wildcard_budget
     # Compute the various thresholds
     ds_dof = ds.degrees_of_freedom(global_circuits_to_use)
@@ -2008,122 +2009,41 @@ def _compute_wildcard_budget_ddist_model(estimate, objfn_cache, mdc_objfn, param
     nboxes = len(global_circuits_to_use)
 
     two_dlogl_threshold = _chi2.ppf(1 - percentile, max(ds_dof - nparams, 1))
-    redbox_threshold  = _chi2.ppf(1 - percentile / nboxes, 1)
-    
-    # Not in cache, recompute
-    ddists = _compute_ddists(estimate)
-    
-    critical_percircuit_budgets = _opt.wildcardopt._get_critical_circuit_budgets(mdc_objfn, redbox_threshold)
+    redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
 
-    #In Stefan's original code these were all passed in as a dictionary, instead pass these in as arguments.
-    
-    alpha = _bisect_alpha(0.1, 1e-3, mdc_objfn, two_dlogl_threshold,
-                          redbox_threshold, ddists, critical_percircuit_budgets, printer)
-   
-    return _ddist_wildcard_model(alpha, ddists)
-    
-def _bisect_alpha(guess, tol, mdc_objfn, two_dlogl_threshold, redbox_threshold, 
-                  ddists, critical_percircuit_budgets, printer):
-    
-    left = None
-    right = None
-    
-    while left is None or right is None:
-        printer.log(f'Searching for interval [{left}, {right}] with guess {guess}', 2)
-        # Test for feasibility
-        guessval = _test_feasible_alphas([guess], mdc_objfn, two_dlogl_threshold, 
-                                        redbox_threshold, ddists, critical_percircuit_budgets)
-        if guessval[0]:
-            printer.log('Guess value is feasible, ', 2)
-            left = guess
-            guess = left/2
-        else:
-            printer.log('Guess value is infeasible, ', 2)
-            right = guess
-            guess = 2*right
-    printer.log('Interval found!',2)
-    
-    # We now have an interval containing the crossover point
-    # Perform bisection
-    while abs(left - right) > tol:
-        printer.log(f'Performing bisection on interval [{left}, {right}]',2)
-        test = left - (left - right)/2.0
-        
-        testval = _test_feasible_alphas([test], mdc_objfn, two_dlogl_threshold, 
-                                        redbox_threshold, ddists, critical_percircuit_budgets)
-        
-        if testval[0]:
-            # Feasible, so shift left down
-            printer.log(f'Test value is feasible, ', 2)
-            left = test
-        else:
-            printer.log(f'Test value is infeasible, ', 2)
-            right = test
-            
-    printer.log('Interval within tolerance!',2)
-        
-    return left # Return the feasible one
-    
-def _test_feasible_alphas(alphas, mdc_objfn, two_dlogl_threshold, redbox_threshold, ddists, critical_percircuit_budgets):
-    
-    if not isinstance(alphas, list):
-        alphas = [alphas]
-    
-    # Iterate through alphas and compute wildcard feasibilities
-    feasible = []
-    for alpha in alphas:
-        wcm = _ddist_wildcard_model(alpha, ddists)
-        
-        ## PYGSTI TRANSPLANT from pygsti.optimize.wildcardopt.optimize_wildcard_budget_barrier
-        percircuit_budget_deriv = wcm.precompute_for_same_circuits(mdc_objfn.layout.circuits)
-        
-        global_percircuit_budget_deriv_cols = []
-        for i in range(percircuit_budget_deriv.shape[1]):
-            global_percircuit_budget_deriv_cols.append(
-                mdc_objfn.layout.allgather_local_array('c', percircuit_budget_deriv[:, i]))
-        global_percircuit_budget_deriv = _np.column_stack(global_percircuit_budget_deriv_cols)
+    ref, reference_name = _compute_1d_reference_values_and_name(estimate, badfit_options)
+    primitive_ops = list(ref.keys())
+    wcm = _wild.PrimitiveOpsSingleScaleWildcardBudget(primitive_ops, [ref[k] for k in primitive_ops],
+                                                      reference_name=reference_name)
+    _opt.wildcardopt.optimize_wildcard_bisect_alpha(wcm, mdc_objfn, two_dlogl_threshold, redbox_threshold, printer,
+                                                    guess=0.1, tol=1e-3)  # results in optimized wcm
+    return wcm
 
-        initial_probs = mdc_objfn.probs.copy()
-        current_probs = initial_probs.copy()
-        probs_freqs_precomp = wcm.precompute_for_same_probs_freqs(initial_probs, mdc_objfn.freqs, mdc_objfn.layout)
-    
-        # Feasibility calculation, similar to penalty_vec function
-        x = wcm.to_vector()
-        wcm.update_probs(initial_probs, current_probs, mdc_objfn.freqs, mdc_objfn.layout, percircuit_budget_deriv,
-                            probs_freqs_precomp)
-        f0 = _np.array([_opt.wildcardopt._agg_dlogl(current_probs, mdc_objfn, two_dlogl_threshold)])
-        fi = critical_percircuit_budgets - _np.dot(global_percircuit_budget_deriv, x)
-        
-        feasible.append(_np.all(_np.concatenate((f0, fi)) <= 0)) # All constraints must be negative to be feasible
-    
-    return feasible
-    
-def _compute_ddists(estimate):
+
+def _compute_1d_reference_values_and_name(estimate, badfit_options):
     final_model = estimate.models['final iteration estimate']
     target_model = estimate.models['target']
     gaugeopt_model = _alg.gaugeopt_to_target(final_model, target_model)
-    
-    dd = {}
-    for key, op in gaugeopt_model.operations.items():
-        dd[key] = 0.5*_tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
 
-    spamdd = {}
-    for key, op in gaugeopt_model.preps.items():
-        spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), 'pp'), _tools.vec_to_stdmx(target_model.preps[key].to_dense(), 'pp'))
-    
-    for key in gaugeopt_model.povms.keys():
-        spamdd[key] = 0.5*_tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
+    if badfit_options.wildcard1d_reference == 'diamond distance':
+        dd = {}
+        for key, op in gaugeopt_model.operations.items():
+            dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
 
-    dd['SPAM'] = sum(spamdd.values())
-    
-    return dd
+        spamdd = {}
+        for key, op in gaugeopt_model.preps.items():
+            spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), 'pp'),
+                                           _tools.vec_to_stdmx(target_model.preps[key].to_dense(), 'pp'))
 
-def _ddist_wildcard_model(alpha, dd):
-    keys = list(dd.keys())
-    wcb_values = _np.array([alpha * dd[key] for key in keys])
-    wcb_dict= {key:value for key,value in zip(keys,wcb_values)}
-    wcm = _wild.PrimitiveOpsDiamondDistanceWildcardBudget(keys, start_budget=wcb_dict, ddists=dd, alpha=alpha) 
-    return wcm
+        for key in gaugeopt_model.povms.keys():
+            spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
+
+        dd['SPAM'] = sum(spamdd.values())
+        return dd, 'diamond distance'
+    else:
+        raise ValueError("Invalid wildcard1d_reference value (%s) in bad-fit options!"
+                         % str(badfit_options.wildcard1d_reference))
+
 
 def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
     """

@@ -135,10 +135,10 @@ class GoodnessUnmodeledSection(_Section):
     @_Section.figure_factory(1)
     def unmodeled_error_budget_table(workspace, switchboard=None, **kwargs):
         return workspace.WildcardBudgetTable(switchboard.wildcard_budget)
-        
+
     @_Section.figure_factory(1)
     def unmodeled_error_ddist_bar_plot(workspace, switchboard=None, **kwargs):
-        return workspace.WildcardDiamondDistanceBarPlot(switchboard.wildcard_budget)
+        return workspace.WildcardSingleScaleBarPlot(switchboard.wildcard_budget, reference_name='Diamond Distance')
 
     @_Section.figure_factory(4)
     def final_model_fit_progress_bar_plot_ume(workspace, switchboard=None, max_lengths=None, comm=None, **kwargs):
