@@ -36,6 +36,7 @@ from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _P
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.objectivefns.wildcardbudget import PrimitiveOpsSingleScaleWildcardBudget
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
@@ -1217,6 +1218,13 @@ def construct_standard_report(results, title="auto",
                 flags.add('ShowScaling')
             if est.parameters.get('unmodeled_error', None):
                 flags.add('ShowUnmodeledError')
+                #check if the wildcard budget is an instance
+                #of the diamond distance model, in which case we
+                #will add an extra flag/plot to the report.
+                if (isinstance(est.parameters['unmodeled_error'], PrimitiveOpsSingleScaleWildcardBudget)
+                   and est.parameters['unmodeled_error'].reference_name == 'diamond distance'):
+                    flags.add('DiamondDistanceWildcard')
+                
     if combine_robust:
         flags.add('CombineRobust')
 

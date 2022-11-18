@@ -93,6 +93,40 @@ class TreeNode(object):
                 instance = self.__class__  # no meta.json - default to same class as self
                 self._vals[nm] = instance.from_dir(subobj_dir, parent=self, name=nm, **kwargs)
 
+    def _init_children_from_mongodb(self, mongodb, child_collection_key, parent_id, custom_collection_names, **kwargs):
+        #dirname = _pathlib.Path(dirname)
+        #edesign_dir = dirname / 'edesign'  # because subdirs.json is always & only in 'edesign'
+        #with open(str(edesign_dir / 'subdirs.json'), 'r') as f:
+        #    meta = _json.load(f)
+        collection_names = _io.mongodb_collection_names(custom_collection_names)
+        edesign_doc = mongodb[collection_names['edesigns']].find_one({'_id': parent_id})
+
+        child_id_suffixes = {}
+        for child_id_suffix, nm in edesign_doc.get('children', {}).items():
+            if isinstance(nm, list): nm = tuple(nm)  # because json makes tuples->lists
+            child_id_suffixes[nm] = child_id_suffix
+
+        self._dirs = child_id_suffixes  # held as _dirs because when serialized to disk these are dir names
+        self._vals = {}
+
+        for nm, child_id_suffix in child_id_suffixes.items():
+            child_id = parent_id + '/' + child_id_suffix  # derive_child_id_from_parent_id(parent_id, child_id_suffix
+
+            if child_collection_key is not None:
+                child_doc = mongodb[collection_names[child_collection_key]].find_one({'_id': child_id})
+                if child_doc is None:  # if there's no child document, generate the child value later
+                    continue  # don't load anything - create child value on demand
+            else:
+                child_doc = {}  # child_collection_key == None signals child records are not held in db (eg result dirs)
+
+            if 'type' in child_doc:  # if child document contains information about what type of object it is
+                classobj = _io.metadir._class_for_name(child_doc['type'])
+            else:
+                classobj = self.__class__
+
+            self._vals[nm] = classobj.from_mongodb(mongodb, child_id, parent=self, name=nm,
+                                                   custom_collection_names=custom_collection_names, **kwargs)
+
     def keys(self):
         """
         An iterator over the keys (child names) of this tree node.
@@ -258,3 +292,47 @@ class TreeNode(object):
             outdir = dirname / subdir
             outdir.mkdir(exist_ok=True)
             self._vals[nm].write(outdir, parent=self)
+
+    def _write_children_to_mongodb(self, mongodb, parent_id, update_children_in_edesign=True,
+                                   custom_collection_names=None, session=None):
+        """
+        TODO: docstring
+        """
+        if update_children_in_edesign:
+            #update edesign_collection[parent_id]'s 'children' attribute
+            children = {dirname: subname for subname, dirname in self._dirs.items()}  # key (dirname) is id-suffix
+            # write self._dirs "backwards" b/c json doesn't allow tuple-like keys (sometimes keys are tuples)
+            collection_names = _io.mongodb_collection_names(custom_collection_names)
+            mongodb[collection_names['edesigns']].update_one({'_id': parent_id}, {'$set': {'children': children}},
+                                                             session=session)
+
+        for nm, val in self._vals.items():  # only write *existing* values
+            subdir = self._dirs[nm]
+            child_id = parent_id + '/' + subdir  # derive_child_id_from_parent_id(parent_id, subdir)
+            self._vals[nm].write_to_mongodb(mongodb, child_id, parent=self,
+                                            custom_collection_names=custom_collection_names,
+                                            session=session)
+
+    @classmethod
+    def _remove_children_from_mongodb(cls, mongodb, child_collection_key, parent_id,
+                                      custom_collection_names=None, session=None):
+        collection_names = _io.mongodb_collection_names(custom_collection_names)
+        edesign_doc = mongodb[collection_names['edesigns']].find_one({'_id': parent_id}, ['children'], session=session)
+
+        if edesign_doc is None:
+            return
+
+        for child_id_suffix in edesign_doc.get('children', {}).keys():
+            child_id = parent_id + '/' + child_id_suffix  # derive_child_id_from_parent_id(parent_id, child_id_suffix
+            if child_collection_key is not None:
+                child_doc = mongodb[collection_names[child_collection_key]].find_one({'_id': child_id}, session=session)
+                if child_doc is None:
+                    continue
+            else:
+                child_doc = {}
+
+            if 'type' in child_doc:  # if child document contains information about what type of object it is
+                classobj = _io.metadir._class_for_name(child_doc['type'])
+            else:
+                classobj = cls
+            classobj.remove_from_mongodb(mongodb, child_id, parent_id, custom_collection_names, session=session)

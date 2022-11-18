@@ -68,7 +68,7 @@ class WildcardBudget(_NicelySerializable):
 
     def from_vector(self, w_vec):
         """
-        Set the parameters of this wildcard budge.
+        Set the parameters of this wildcard budget.
 
         Parameters
         ----------
@@ -468,107 +468,111 @@ class WildcardBudget(_NicelySerializable):
 
         return p_deriv if return_deriv else None
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'wildcard_vector': list(self.wildcard_vector)})
+        return state
 
-class PrimitiveOpsWildcardBudget(WildcardBudget):
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        return cls(_np.array(state['wildcard_vector'], 'd'))
+
+
+class PrimitiveOpsWildcardBudgetBase(WildcardBudget):
     """
-    A wildcard budget containing one parameter per "primitive operation".
+    A base class for wildcard budget objects that allocate wildcard error per "primitive operation".
 
-    A parameter's absolute value gives the amount of "slack", or
-    "wildcard budget" that is allocated per that particular primitive
-    operation.
+    The amount of wildcard error for a primitive operation gives the amount of "slack"
+    that is allocated per that particular operation.
 
     Primitive operations are the components of circuit layers, and so
-    the wilcard budget for a circuit is just the sum of the (abs vals of)
-    the parameters corresponding to each primitive operation in the circuit.
+    the wilcard budget for a circuit is just the sum of the wildcard errors
+    corresponding to each primitive operation in the circuit.
 
     Parameters
     ----------
-    primitive_op_labels : iterable or dict
+    primitive_op_labels : iterable
         A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
         which give all the possible primitive ops (components of circuit
-        layers) that will appear in circuits.  Each one of these operations
-        will be assigned it's own independent element in the wilcard-vector.
-        A dictionary can be given whose keys are Labels and whose values are
-        0-based parameter indices.  In the non-dictionary case, each label gets
-        it's own parameter.  Dictionaries allow multiple labels to be associated
-        with the *same* wildcard budget parameter,
-        e.g. `{Label('Gx',(0,)): 0, Label('Gy',(0,)): 0}`.
-        If `'SPAM'` is included as a primitive op, this value correspond to a
-        uniform "SPAM budget" added to each circuit.
+        layers) that will appear in circuits.
 
-    start_budget : float or dict, optional
-        An initial value to set all the parameters to (if a float), or a
-        dictionary mapping primitive operation labels to initial values.
+    wildcard_vector : numpy.ndarray
+        An initial wildcard vector of the parameter values of this budget.
+
+    idle_name : str, optional
+        The gate name to be used for the 1-qubit idle gate.  If not `None`, then
+        circuit budgets are computed by considering layers of the circuit as being
+        "padded" with `1-qubit` idles gates on any empty lines.
     """
 
-    def __init__(self, primitive_op_labels, start_budget=0.0, idle_name=None):
+    def __init__(self, primitive_op_labels, wildcard_vector, idle_name=None):
+        #if isinstance(primitive_op_labels, dict):
+        #    assert(set(primitive_op_labels.values()) == set(range(len(set(primitive_op_labels.values())))))
+        #    self.primOpLookup = primitive_op_labels
+        #else:
+        self.primitive_op_labels = primitive_op_labels
+        self.primitive_op_index = {lbl: i for i, lbl in enumerate(primitive_op_labels)}
+        self._idlename = idle_name
+        self.per_op_wildcard_vector = self._per_op_wildcard_error_from_vector(wildcard_vector)
+
+        super(PrimitiveOpsWildcardBudgetBase, self).__init__(wildcard_vector)
+
+    def _per_op_wildcard_error_from_vector(self, wildcard_vector):
         """
-        Create a new PrimitiveOpsWildcardBudget.
+        Returns an array of per-operation wildcard errors based on `wildcard_vector`,
+        with ordering corresponding to `self.primitive_op_labels`.
+        """
+        raise NotImplementedError("Sub-classes need to implement this!")
+
+    def _per_op_wildcard_error_deriv_from_vector(self, wildcard_vector):
+        """
+        Returns a MxN matrix, where M=(# of primitive ops) and N=(# of parameters),
+        such that its (i,j)-th element is the derivative of the wildcard error
+        for the i-th primitive op with respect to the j-th budget parameter.
+        """
+        raise NotImplementedError("Sub-classes need to implement this!")
+
+    def from_vector(self, w_vec):
+        """
+        Set the parameters of this wildcard budget.
 
         Parameters
         ----------
-        primitive_op_labels : iterable or dict
-            A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
-            which give all the possible primitive ops (components of circuit
-            layers) that will appear in circuits.  Each one of these operations
-            will be assigned it's own independent element in the wilcard-vector.
-            A dictionary can be given whose keys are Labels and whose values are
-            0-based parameter indices.  In the non-dictionary case, each label gets
-            it's own parameter.  Dictionaries allow multiple labels to be associated
-            with the *same* wildcard budget parameter,
-            e.g. `{Label('Gx',(0,)): 0, Label('Gy',(0,)): 0}`.
-            If `'SPAM'` is included as a primitive op, this value correspond to a
-            uniform "SPAM budget" added to each circuit.
+        w_vec : numpy array
+            A vector of parameter values.
 
-        start_budget : float or dict, optional
-            An initial value to set all the parameters to (if a float), or a
-            dictionary mapping primitive operation labels to initial values.
-
-        idle_name : str, optional
-            The gate name to be used for the 1-qubit idle gate.  If not `None`, then
-            circuit budgets are computed by considering layers of the circuit as being
-            "padded" with `1-qubit` idles gates on any empty lines.
-
+        Returns
+        -------
+        None
         """
-        if isinstance(primitive_op_labels, dict):
-            assert(set(primitive_op_labels.values()) == set(range(len(set(primitive_op_labels.values())))))
-            self.primOpLookup = primitive_op_labels
-        else:
-            self.primOpLookup = {lbl: i for i, lbl in enumerate(primitive_op_labels)}
+        super().from_vector(w_vec)
+        self.per_op_wildcard_vector = self._per_op_wildcard_error_from_vector(w_vec)
 
-        if 'SPAM' in self.primOpLookup:
-            self.spam_index = self.primOpLookup['SPAM']
-        else:
-            self.spam_index = None
+    @property
+    def num_primitive_ops(self):
+        return len(self.primitive_op_labels)
 
-        self._idlename = idle_name
-
-        nParams = len(set(self.primOpLookup.values()))
-        if isinstance(start_budget, dict):
-            Wvec = _np.zeros(nParams, 'd')
-            for op, val in start_budget.items():
-                Wvec[self.primOpLookup[op]] = val
-        else:
-            Wvec = _np.array([start_budget] * nParams)
-        super(PrimitiveOpsWildcardBudget, self).__init__(Wvec)
+    @property
+    def wildcard_error_per_op(self):
+        return {lbl: val for lbl, val in zip(self.primitive_op_labels, self.per_op_wildcard_vector)}
 
     def _to_nice_serialization(self):
-        op_labels_by_index = {i: lbl for lbl, i in self.primOpLookup.items()}
         state = super()._to_nice_serialization()
-        state.update({'primitive_op_labels': [str(op_labels_by_index[i]) for i in range(len(self.wildcard_vector))],
+        state.update({'primitive_op_labels': [str(lbl) for lbl in self.primitive_op_labels],
                       'idle_name': self._idlename,
-                      'budget_values': list(self.wildcard_vector),
                       })
         return state
 
     @classmethod
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        primitive_op_labels = cls._parse_primitive_op_labels(state['primitive_op_labels'])
+        return cls(primitive_op_labels, _np.array(state['wildcard_vector'], 'd'), state['idle_name'])
+
+    @classmethod
+    def _parse_primitive_op_labels(cls, label_strs):
         from pygsti.circuits.circuitparser import parse_label as _parse_label
-        assert(len(state['primitive_op_labels']) == len(state['budget_values']))
-        primitive_op_labels = [(_parse_label(lbl_str) if (lbl_str != 'SPAM') else 'SPAM')
-                               for lbl_str in state['primitive_op_labels']]
-        budget = {lbl: val for lbl, val in zip(primitive_op_labels, state['budget_values'])}
-        return cls(primitive_op_labels, budget, state['idle_name'])
+        return [(_parse_label(lbl_str) if (lbl_str != 'SPAM') else 'SPAM')
+                for lbl_str in label_strs]
 
     def circuit_budget(self, circuit):
         """
@@ -583,17 +587,18 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         -------
         float
         """
+        error_per_op = self.wildcard_error_per_op
+
         def budget_for_label(lbl):
-            if lbl in self.primOpLookup:  # Note: includes len(lbl.components) == 0 case of (global) idle
-                return pos(Wvec[self.primOpLookup[lbl]])
-            elif lbl.name in self.primOpLookup:
-                return pos(Wvec[self.primOpLookup[lbl.name]])
+            if lbl in error_per_op:  # Note: includes len(lbl.components) == 0 case of (global) idle
+                return pos(error_per_op[lbl])
+            elif lbl.name in error_per_op:
+                return pos(error_per_op[lbl.name])
             else:
                 assert(not lbl.is_simple()), "Simple label %s must be a primitive op of this WEB!" % str(lbl)
                 return sum([budget_for_label(component) for component in lbl.components])
 
-        Wvec = self.wildcard_vector
-        budget = 0 if (self.spam_index is None) else pos(Wvec[self.spam_index])
+        budget = error_per_op.get('SPAM', 0)
         layers = [circuit.layer_label(i) for i in range(circuit.depth)] if (self._idlename is None) \
             else [circuit.layer_label_with_idles(i, idle_gate_name=self._idlename) for i in range(circuit.depth)]
         for layer in layers:
@@ -641,19 +646,19 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         object
         """
         def budget_deriv_for_label(lbl):
-            if lbl in self.primOpLookup:  # Note: includes len(lbl.components) == 0 case of (global) idle
-                deriv = _np.zeros(len(self.wildcard_vector), 'd')
-                deriv[self.primOpLookup[lbl]] = 1.0
+            if lbl in self.primitive_op_index:  # Note: includes len(lbl.components) == 0 case of (global) idle
+                deriv = _np.zeros(self.num_primitive_ops, 'd')
+                deriv[self.primitive_op_index[lbl]] = 1.0
                 return deriv
-            elif lbl.name in self.primOpLookup:
-                deriv = _np.zeros(len(self.wildcard_vector), 'd')
-                deriv[self.primOpLookup[lbl.name]] = 1.0
+            elif lbl.name in self.primitive_op_index:
+                deriv = _np.zeros(self.num_primitive_ops, 'd')
+                deriv[self.primitive_op_index[lbl.name]] = 1.0
                 return deriv
             else:
                 assert(not lbl.is_simple()), "Simple label %s must be a primitive op of this WEB!" % str(lbl)
                 return sum([budget_deriv_for_label(component) for component in lbl.components])
 
-        circuit_budget_matrix = _np.zeros((len(circuits), len(self.wildcard_vector)), 'd')
+        circuit_budget_matrix = _np.zeros((len(circuits), self.num_primitive_ops), 'd')
         for i, circuit in enumerate(circuits):
 
             layers = [circuit.layer_label(i) for i in range(circuit.depth)] if (self._idlename is None) \
@@ -661,10 +666,11 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
             for layer in layers:
                 circuit_budget_matrix[i, :] += budget_deriv_for_label(layer)
 
-        if self.spam_index is not None:
-            circuit_budget_matrix[:, self.spam_index] = 1.0
+        if 'SPAM' in self.primitive_op_index:
+            circuit_budget_matrix[:, self.primitive_op_index['SPAM']] = 1.0
 
-        return circuit_budget_matrix
+        dprimop_dwvec = self._per_op_wildcard_error_deriv_from_vector(self.wildcard_vector)
+        return _np.dot(circuit_budget_matrix, dprimop_dwvec)
 
     @property
     def description(self):
@@ -680,11 +686,12 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
             Keys are primitive op labels and values are (description_string, value) tuples.
         """
         wildcardDict = {}
-        for lbl, index in self.primOpLookup.items():
+        error_per_op = self.wildcard_error_per_op
+        for lbl, val in error_per_op.items():
             if lbl == "SPAM": continue  # treated separately below
-            wildcardDict[lbl] = ('budget per each instance %s' % str(lbl), pos(self.wildcard_vector[index]))
-        if self.spam_index is not None:
-            wildcardDict['SPAM'] = ('uniform per-circuit SPAM budget', pos(self.wildcard_vector[self.spam_index]))
+            wildcardDict[lbl] = ('budget per each instance %s' % str(lbl), pos(val))
+        if 'SPAM' in error_per_op:
+            wildcardDict['SPAM'] = ('uniform per-circuit SPAM budget', pos(error_per_op['SPAM']))
         return wildcardDict
 
     def budget_for(self, op_label):
@@ -703,11 +710,10 @@ class PrimitiveOpsWildcardBudget(WildcardBudget):
         -------
         float
         """
-        return pos(self.wildcard_vector[self.primOpLookup[op_label]])
+        return pos(self.per_op_wildcard_vector[self.primitive_op_index[op_label]])
 
     def __str__(self):
-        wildcardDict = {lbl: pos(self.wildcard_vector[index]) for lbl, index in self.primOpLookup.items()}
-        return "Wildcard budget: " + str(wildcardDict)
+        return "Wildcard budget: " + str(self.wildcard_error_per_op)
 
 
 #For these helper functions, see Robin's notes
@@ -943,3 +949,231 @@ def update_circuit_probs(probs, freqs, circuit_budget):
     #assert(_np.isclose(W, compTVD)), "TVD mismatch!"
 
     return updated_qvec
+
+
+class PrimitiveOpsWildcardBudget(PrimitiveOpsWildcardBudgetBase):
+    """
+    A wildcard budget containing one parameter per "primitive operation".
+
+    A parameter's absolute value gives the amount of "slack", or
+    "wildcard budget" that is allocated per that particular primitive
+    operation.
+
+    Primitive operations are the components of circuit layers, and so
+    the wilcard budget for a circuit is just the sum of the (abs vals of)
+    the parameters corresponding to each primitive operation in the circuit.
+
+    Parameters
+    ----------
+    primitive_op_labels : iterable or dict
+        A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
+        which give all the possible primitive ops (components of circuit
+        layers) that will appear in circuits.  Each one of these operations
+        will be assigned it's own independent element in the wilcard-vector.
+        A dictionary can be given whose keys are Labels and whose values are
+        0-based parameter indices.  In the non-dictionary case, each label gets
+        it's own parameter.  Dictionaries allow multiple labels to be associated
+        with the *same* wildcard budget parameter,
+        e.g. `{Label('Gx',(0,)): 0, Label('Gy',(0,)): 0}`.
+        If `'SPAM'` is included as a primitive op, this value correspond to a
+        uniform "SPAM budget" added to each circuit.
+
+    start_budget : float or dict, optional
+        An initial value to set all the parameters to (if a float), or a
+        dictionary mapping primitive operation labels to initial values.
+    """
+
+    def __init__(self, primitive_op_labels, start_budget=0.0, idle_name=None):
+        """
+        Create a new PrimitiveOpsWildcardBudget.
+
+        Parameters
+        ----------
+        primitive_op_labels : iterable or dict
+            A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
+            which give all the possible primitive ops (components of circuit
+            layers) that will appear in circuits.  Each one of these operations
+            will be assigned it's own independent element in the wilcard-vector.
+            A dictionary can be given whose keys are Labels and whose values are
+            0-based parameter indices.  In the non-dictionary case, each label gets
+            it's own parameter.  Dictionaries allow multiple labels to be associated
+            with the *same* wildcard budget parameter,
+            e.g. `{Label('Gx',(0,)): 0, Label('Gy',(0,)): 0}`.
+            If `'SPAM'` is included as a primitive op, this value correspond to a
+            uniform "SPAM budget" added to each circuit.
+
+        start_budget : float or dict, optional
+            An initial value to set all the parameters to (if a float), or a
+            dictionary mapping primitive operation labels to initial values.
+
+        idle_name : str, optional
+            The gate name to be used for the 1-qubit idle gate.  If not `None`, then
+            circuit budgets are computed by considering layers of the circuit as being
+            "padded" with `1-qubit` idles gates on any empty lines.
+
+        """
+        if isinstance(primitive_op_labels, dict):
+            num_params = len(set(primitive_op_labels.values()))
+            assert(set(primitive_op_labels.values()) == set(range(num_params)))
+
+            prim_op_lbls = list(primitive_op_labels.keys())
+            self.primitive_op_param_index = primitive_op_labels
+        else:
+            num_params = len(primitive_op_labels)
+            prim_op_lbls = primitive_op_labels
+            self.primitive_op_param_index = {lbl: i for i, lbl in enumerate(primitive_op_labels)}
+
+        self.trivial_param_mapping = all([self.primitive_op_param_index[lbl] == i
+                                          for i, lbl in enumerate(prim_op_lbls)])
+
+        #generate initial wildcard vector
+        if isinstance(start_budget, dict):
+            Wvec = _np.zeros(num_params, 'd')
+            for op, val in start_budget.items():
+                Wvec[self.primitive_op_param_index[op]] = val
+        else:
+            Wvec = _np.array([start_budget] * num_params)
+
+        super().__init__(prim_op_lbls, Wvec, idle_name)
+
+    def _per_op_wildcard_error_from_vector(self, wildcard_vector):
+        """
+        Returns an array of per-operation wildcard errors based on `wildcard_vector`,
+        with ordering corresponding to `self.primitive_op_labels`.
+        """
+        if self.trivial_param_mapping:
+            return wildcard_vector
+        else:
+            return _np.array([self.primitive_op_param_index[lbl] for lbl in self.primitive_op_labels])
+
+    def _per_op_wildcard_error_deriv_from_vector(self, wildcard_vector):
+        """
+        Returns a MxN matrix, where M=(# of primitive ops) and N=(# of parameters),
+        such that its (i,j)-th element is the derivative of the wildcard error
+        for the i-th primitive op with respect to the j-th budget parameter.
+        """
+        if self.trivial_param_mapping:
+            return _np.identity(self.num_params)
+        else:
+            ret = _np.zeros((self.num_primitive_ops, self.num_params), 'd')
+            for i, lbl in enumerate(self.primitive_op_labels):
+                ret[i, self.primitive_op_param_index[lbl]] = 1.0
+            return ret
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        param_index_by_primitive_op = [self.primitive_op_param_index[lbl] for lbl in self.primitive_op_labels]
+        state.update({'param_index_by_primitive_op': param_index_by_primitive_op,
+                      'trivial_param_mapping': self.trivial_param_mapping})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        primitive_op_labels = cls._parse_primitive_op_labels(state['primitive_op_labels'])
+        if state['trivial_param_mapping']:
+            primitive_ops = primitive_op_labels
+        else:
+            primitive_ops = {lbl: i for lbl, i in zip(primitive_op_labels, state['param_index_by_primitive_op'])}
+
+        budget = {lbl: val for lbl, val in zip(primitive_op_labels, state['wildcard_vector'])}
+        return cls(primitive_ops, budget, state['idle_name'])
+
+
+class PrimitiveOpsSingleScaleWildcardBudget(PrimitiveOpsWildcardBudgetBase):
+    """
+    A wildcard budget containing a single scaling parameter.
+
+    This type of wildcard budget has a single parameter, and  sets the wildcard
+    error of each primitive op to be this scale parameter multiplied by a fixed
+    reference value for the primitive op.
+
+    Typically, the reference values are chosen to be a modeled metric of gate quality,
+    such as a gate's gauge-optimized diamond distance to its target gate.  Then,
+    once a feasible wildcard error vector is found, the scaling parameter is
+    the fractional increase of the metric (e.g. the diamond distance) of each
+    primitive op needed to reconcile the model and data.
+
+    Parameters
+    ----------
+    primitive_op_labels : list
+        A list of primitive-operation labels, e.g. `Label('Gx',(0,))`,
+        which give all the possible primitive ops (components of circuit
+        layers) that will appear in circuits.
+
+    reference_values : list, optional
+        A list of the reference values for each primitive op, in the same order as
+        `primitive_op_list`.
+
+    alpha : float, optional
+        The initial value of the single scaling parameter that multiplies the reference
+        values of each op to give the wildcard error that op.
+
+    idle_name : str, optional
+            The gate name to be used for the 1-qubit idle gate.  If not `None`, then
+            circuit budgets are computed by considering layers of the circuit as being
+            "padded" with `1-qubit` idles gates on any empty lines.
+    """
+    def __init__(self, primitive_op_labels, reference_values=None, alpha=0, idle_name=None, reference_name=None):
+        if reference_values is None:
+            reference_values = [1.0] * len(primitive_op_labels)
+        self.reference_values = _np.array(reference_values, 'd')
+        self.reference_name = reference_name
+
+        Wvec = _np.array([alpha], 'd')
+        super().__init__(primitive_op_labels, Wvec, idle_name)
+
+    @property
+    def alpha(self):
+        return self.wildcard_vector[0]
+
+    @alpha.setter
+    def alpha(self, val):
+        self.from_vector(_np.array([val], 'd'))
+
+    def _per_op_wildcard_error_from_vector(self, wildcard_vector):
+        """
+        Returns an array of per-operation wildcard errors based on `wildcard_vector`,
+        with ordering corresponding to `self.primitive_op_labels`.
+        """
+        alpha = wildcard_vector[0]
+        return self.reference_values * alpha
+
+    def _per_op_wildcard_error_deriv_from_vector(self, wildcard_vector):
+        """
+        Returns a MxN matrix, where M=(# of primitive ops) and N=(# of parameters),
+        such that its (i,j)-th element is the derivative of the wildcard error
+        for the i-th primitive op with respect to the j-th budget parameter.
+        """
+        return self.reference_values.reshape((self.num_primitive_ops, 1)).copy()
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'reference_values': list(self.reference_values),
+                      'reference_name': self.reference_name})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        primitive_op_labels = cls._parse_primitive_op_labels(state['primitive_op_labels'])
+        alpha = state['wildcard_vector'][0]
+        return cls(primitive_op_labels, state['reference_values'], alpha, state['idle_name'], state['reference_name'])
+
+    @property
+    def description(self):
+        """
+        A dictionary of quantities describing this budget.
+
+        Return the contents of this budget in a dictionary containing
+        (description, value) pairs for each element name.
+
+        Returns
+        -------
+        dict
+            Keys are primitive op labels and values are (description_string, value) tuples.
+        """
+        wildcardDict = super().description
+
+        #Add an entry for the alpha parameter.
+        wildcardDict['alpha'] = ('Fraction of diamond distance needed as wildcard error', self.alpha)
+
+        return wildcardDict
