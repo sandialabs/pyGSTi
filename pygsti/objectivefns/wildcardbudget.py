@@ -979,19 +979,20 @@ class PrimitiveOpsWildcardBudget(PrimitiveOpsWildcardBudgetBase):
             assert(set(primitive_op_labels.values()) == set(range(num_params)))
 
             prim_op_lbls = list(primitive_op_labels.keys())
-            primOpLookup = primitive_op_labels
-            self.primitive_op_vecindex = primOpLookup
+            self.primitive_op_param_index = primitive_op_labels
         else:
             num_params = len(primitive_op_labels)
             prim_op_lbls = primitive_op_labels
-            primOpLookup = {lbl: i for i, lbl in enumerate(primitive_op_labels)}
-            self.primitive_op_vecindex = None  # not needed -- indicates a 1-1 mapping
+            self.primitive_op_param_index = {lbl: i for i, lbl in enumerate(primitive_op_labels)}
+
+        self.trivial_param_mapping = all([self.primitive_op_param_index[lbl] == i
+                                          for i, lbl in enumerate(prim_op_lbls)])
 
         #generate initial wildcard vector
         if isinstance(start_budget, dict):
             Wvec = _np.zeros(num_params, 'd')
             for op, val in start_budget.items():
-                Wvec[primOpLookup[op]] = val
+                Wvec[self.primitive_op_param_index[op]] = val
         else:
             Wvec = _np.array([start_budget] * num_params)
 
@@ -1002,10 +1003,10 @@ class PrimitiveOpsWildcardBudget(PrimitiveOpsWildcardBudgetBase):
         Returns an array of per-operation wildcard errors based on `wildcard_vector`,
         with ordering corresponding to `self.primitive_op_labels`.
         """
-        if self.primitive_op_vecindex is None:
+        if self.trivial_param_mapping:
             return wildcard_vector
         else:
-            return _np.array([self.primitive_op_vecindex[lbl] for lbl in self.primitive_op_labels])
+            return _np.array([self.primitive_op_param_index[lbl] for lbl in self.primitive_op_labels])
 
     def _per_op_wildcard_error_deriv_from_vector(self, wildcard_vector):
         """
@@ -1013,12 +1014,12 @@ class PrimitiveOpsWildcardBudget(PrimitiveOpsWildcardBudgetBase):
         such that its (i,j)-th element is the derivative of the wildcard error
         for the i-th primitive op with respect to the j-th budget parameter.
         """
-        if self.primitive_op_vecindex is None:
+        if self.trivial_param_mapping:
             return _np.identity(self.num_params)
         else:
             ret = _np.zeros((self.num_primitive_ops, self.num_params), 'd')
             for i, lbl in enumerate(self.primitive_op_labels):
-                ret[i, self.primitive_op_vecindex[lbl]] = 1.0
+                ret[i, self.primitive_op_param_index[lbl]] = 1.0
             return ret
 
 
