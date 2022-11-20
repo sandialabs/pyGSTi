@@ -12,10 +12,9 @@ Functions for selecting a complete set of fiducials for a GST analysis.
 
 import numpy as _np
 import scipy
+import random
 import itertools
 from math import floor
-import random
-
 from pygsti.algorithms import grasp as _grasp
 from pygsti.algorithms import scoring as _scoring
 from pygsti import circuits as _circuits
