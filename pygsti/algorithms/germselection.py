@@ -34,7 +34,6 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                candidate_seed=None, force="singletons", algorithm='greedy',
                algorithm_kwargs=None, mem_limit=None, comm=None,
                profiler=None, verbosity=1, num_nongauge_params=None,
-               num_gauge_params=None,
                assume_real=False, float_type=_np.cdouble,
                mode="all-Jac", toss_random_frac=None,
                force_rank_increase=False, save_cevd_cache_filename= None,
@@ -224,10 +223,12 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     #Add some checks related to the new option to switch up data types:
     if not assume_real:
         if not (float_type is _np.cdouble or float_type is _np.csingle):
-            raise ValueError(f'Unless working with (known) real-valued quantities only, please select an appropriate complex numpy dtype (either cdouble or csingle)')
+            printer.log('Selected numpy type: '+ str(float_type.dtype), 1)
+            raise ValueError('Unless working with (known) real-valued quantities only, please select an appropriate complex numpy dtype (either cdouble or csingle).')
     else:
         if not (float_type is _np.double or float_type is _np.single):
-            raise ValueError('When assuming real-valued quantities, please select a real-values numpy dtype (either double or single). Specified data type was {float_type.dtype}')
+            printer.log('Selected numpy type: '+ str(float_type.dtype), 1)
+            raise ValueError('When assuming real-valued quantities, please select a real-values numpy dtype (either double or single).')
         
     #How many bytes per float?
     FLOATSIZE= float_type(0).itemsize
@@ -277,7 +278,6 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'mem_limit': mem_limit,
             'profiler': profiler,
             'num_nongauge_params': num_nongauge_params,
-            'num_gauge_params': num_gauge_params,
             'float_type': float_type,
             'mode' : mode,
             'force_rank_increase': force_rank_increase,
@@ -289,7 +289,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         for key in default_kwargs:
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
-        germList = find_germs_breadthfirst_rev1(model_list=modelList,
+        germList = find_germs_breadthfirst_greedy(model_list=modelList,
                                            **algorithm_kwargs)
         if germList is not None:
             #TODO: We should already know the value of this from
@@ -633,7 +633,7 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
 
     if num_nongauge_params is None:
         if model is None:
-            raise ValueError("Must provide either num_gauge_params or model!")
+            raise ValueError("Must provide either num_nongauge_params or model!")
         else:
             reduced_model = _remove_spam_vectors(model)
             num_nongauge_params = reduced_model.num_params - reduced_model.num_gauge_params
@@ -1794,10 +1794,10 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
                     temp_DDD = derivDaggerDeriv[0][idx] @ derivDaggerDeriv[2][idx]
                 else:
                     temp_DDD += derivDaggerDeriv[0][idx] @ derivDaggerDeriv[2][idx]
-                    
+
             currentDDDList.append(temp_DDD)
 
-    else:  # should be unreachable since we set 'mode' internally above
+    else:
         raise ValueError("Invalid mode: %s" % mode)  # pragma: no cover
 
     # Dict of keyword arguments passed to compute_score_non_AC that don't
@@ -2646,8 +2646,197 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
         updated_candidate_list= [candidate_list[i] for i in indices_to_keep]
         
     return updated_candidate_list
-        
-    
+  
+##-------------Low-Rank Update Theory--------------##
+#What follows is a brief overview of the theory for the use of low-rank updates with greedy search. 
+#The purpose of this is to explain the linear algebra, and not the germ selection theory.
+#So I'll be sloppy and refer to the existence of various jacobians generically without 
+#explaining how these arise or why they are the jacobians we care about.
+
+#The goal of germ selection and other experimental designates problems is to select a set of germs, 
+#or fiducial pairs or whatever with a jacobian J that satisfies some criterion.
+#We can choose to work in terms of the Jacobian directly, or in terms of one of the gramians of the Jacobian 
+#(J^T@J or J@J^T depending on what is most appropriate).
+
+#For germ selection there are 2-main objective functions that are used. Both are based on a connection
+#between the gramian of a jacobian and covariance. So both objective functions can be viewed as alternative
+#ways to guarantee the covariance in the parameters for an estimate generated from an experiment design
+#isn't relatively small. (See this stackexchange thread for more on that connection https://stats.stackexchange.com/questions/231868/relation-between-covariance-matrix-and-jacobian-in-nonlinear-least-squares)
+#This first objective function aims to maximize the minimum eigenvalue of the jacobian's gramian, or 
+#equivalently minimize the maximum eigenvalue of the inverse. This is called 'worst' in pygsti. The other option,
+#which is the default, is to minimize the sum of the reciprocals of the eigenvalues of the gramian of 
+#the jacobian. This is called 'all' and corresponds roughly, but not exactly, to minimizing the average
+#covariance. Going forward I will refer to this as the psuedoinverse-trace (since that is indeed what it is).
+
+#We haven't fully figured out how to low-rank updatify the 'worst' objective function (there are a few
+#half-baked ideas based on used iterative methods we might try to make fully baked if there is a demand
+#down the line). So the remaining will focus on speeding up the evaluation of the 'all' objective function.
+
+#What does each step in the greedy search algorithm for this problem look like.
+#At the start of each iteration we have some current jacobian for the current set of germs that
+#we've chosen to include in our set that we'll denote J. At each iteration we also have some list 
+#of candidate germs to select from among for the next germ to add to our. Each of these  
+#candidate germs likewise has a jacobian associated with it that we'll denote by A_i.
+#I'll be referring the the A_i matrices (and interchangeably their gramians) as 'updates'.
+
+#We want to know how each of these updates would change the psuedoinverse-trace (and also rank)
+#of the jacobian for the current set of germs were it to be added and then select the germ
+#that improves the psuedoinverse-trace (and rank) the most in a greedy fashion. That is, for each
+#of the updates we want to calculate the psuedoinverse-trace of the matrix J'_i:
+
+#pinvtrace(J'_i)= pinvtrace(J^T@J + A_i^T@A_i)
+
+#Here are the critical observations that allow us to significantly speed things up:
+#   1. For each iteration of the greedy search algorithm the matrix J is fixed.
+#   2. The update matrices are relatively low-rank. For case of germ selection
+#      each of the A_i matrices is d**4 X N_p where d is the dimension of the system's_list
+#      underlying Hilbert space and N_p is the number of parameters of a gate set 
+#      (technically the number of non-SPAM parameters). Subsequantly the maximum rank of
+#      A_i is d**4, but it is typically a good deal less in practice. 
+#      In traditional settings it is always the case that N_p >= d**4 and typically 
+#      N_p >> rank(d**4).
+#   3. We're almost always working from some initial fixed set of germs that we'll
+#      be constructing our solution from, so the set of matrices {A_i} is essentially
+#      fixed (only getting smaller as we add germs to the solution set) and so all of these
+#      matrices can be computed ahead of time and cached in some way.
+
+#Before explaining what is actually done, a quick diversion. The most famous example
+#of using low-rank updates comes from the 'Woodbury matrix identity' 
+#(AKA, matrix inversion lemma or Sherman–Morrison–Woodbury formula).
+#This identity says:
+
+#(A + UCV)^-1 = A^-1 - A^-1 U(C^-1 + V A^1 U)^-1 V A^-1
+
+#A, U, C and V are assumed to be conformable (so all of the matrix multiplications work). 
+#A is (n,n), C is (k,k), U is (n,k) and V is (k,n).
+
+#How is this useful? This formula gives us a way to update the inverse of 
+#some matrix A given some additive update UCV. Suppose we already knew what A^-1 was somehow,
+#then we could replace the inversion of an (n,n) matrix with the inversion of 2 (k,k) matrices
+#and some matrix multiplication and addition. Moreover, suppose that C was a diagonal matrix,
+#then we could do the inversion in linear time which is basically free and effectively only have
+#the cost of inverting (C^-1 + V A^1 U) to worry about. If k<<n and it is the case that we already
+#knew A^-1 then this is a clear and significant win.
+
+#Obviously this result requires that the matrix we are updating have a well defined inverse and
+#so is full-rank (ditto for C). If this were the case then this would solve our problem.
+#At the start of each iteration we pre-compute the inverse of J^T@J once and then use the formula
+#to calculate the updated inverse after adding A_i^T@A_i. Since J^T@J isn't full-rank, however,
+#we need a version of this that works for the psuedoinverse instead (simply replacing the inverses
+#with psuedoinverses in the woodbury formula doesn't work except in a couple special cases that we 
+#won't satisfy). 
+
+#For this we'll combine results from 2 papers. The first is from Matthew Brand titled:
+#Fast Low-Rank Modifications of the Thin Singular Value Decomposition 
+#(https://www.merl.com/publications/docs/TR2006-059.pdf)
+#and the second is from Nariyasu Minamide titled:
+#An Extension of the Matrix Inversion Lemma
+#(https://epubs.siam.org/doi/pdf/10.1137/0606038)
+
+
+#The problem that Brand's paper solves is the following:
+#Let X be some matrix. X has an SVD X=USV^T. Let AB^T be some low-rank additive update.
+#What is the updated SVD of X+AB^T? The main result we use comes from equation 3 which
+#gives a new matrix K which has the same spectrum as X+AB^T:
+
+# K= [[S 0],[0 0]] + [[U^T A],[R_A]] [[V^T B], [R_B]]^T
+
+#Where R_A = P^T(I-UU^T)A. P is an orthogonal basis for the column space of 
+#(I-UU^T)A, the component of A that is orthogonal to U. R_B is defined analogously
+#but swapping U->V and A->B.
+
+#K won't have the same psuedoinverse as the matrix we care about, but since K has the same spectrum 
+#it will also have the same psuedoinverse-trace as the matrix we care about. So, for the next stage
+#we can instead proceed with respect to K. Since K has a nice block structure this will simplify
+#the application of the result from minamide's paper. 
+
+#This actually simplifies a bit, since all of the matrices we'll be working with are gramians
+#they will all be diagonalizable. As such, we can replace the SVD of X above with the eigenvalue
+#decomposition X=UEU^T. Moreover, for the update AB^T we'll be using a rank-decomposition
+#of the updates and so these with be of the form AA^T. As such, the K matrix will simplify to:
+
+# K= [[E 0],[0 0]] + [[U^T A],[R_A]] [[U^T A], [R_A]]^T
+
+#The relevant result from Minamide is from theorem 2.1 which states:
+#let H= S+\Phi\Phi^\dagger where S is an (n,n) hermitian matrix and \Phi is an (n,m) matrix with
+#potentially complex entries. If S is non-negative, letting ^+ denote psuedoinversion we then have:
+
+#H^+ = {I-(\Phi^\dagger T)^+ \Phi^\dagger} S^+ {I-\Phi (T \Phi)^+} +
+#      (\Phi^\dagger T)^+(T \Phi)^+ -
+#      {I-(\Phi^\dagger T)^+ \Phi^\dagger} (S^+ \Phi B D^-1 B \Phi^\dagger S^+)  {I-\Phi (T \Phi)^+}
+
+#Where B= I- (T \Phi)^+(T \Phi), D= I + B \Phi^\dagger S^+ \Phi B.
+#T is a projector onto the orthogonal complement of the column space of S. i.e. T= I- S^+S= I-SS^+.
+
+#The K matrix we defined above satisfies the requirements to use the minamide result where mapping between
+#the two notations we let:
+#S=[[E 0],[0 0]] and \Phi= [[U^T A],[R_A]] (Note that since gramians are PSD S is nonnegative as required).
+
+#The expression above looks pretty monstrous, but the block structure we have from switching to working with K
+#simplifies things considerably. Plugging everything into Minamide's threorem and working
+#through a few pages of tedious linear algebra gives us the following result:
+
+#H^+ = [[H_00, H_01], [H_10 H_11]]
+
+#H_00= E^+U^T A \alpha A^T U E^+ 
+#H_11 = (R_A^T)^+ A^T U E^+ U^T A R_A^+ + (R_A^+)^T R_A^+ - (R_A^T)^+ A^T U E^+ U^T A \alpha A^T U E^+ U^T A R_A^+
+#H_01= E^+ U^T A R_A^+ - E^+ U^T A \alpha A^T E^+ U^T A R_A^+
+#H_10 = H_01^T (~90% sure of this last line, turns out we won't actually care either way since we don't need the off-diagonals)
+
+#\alpha= B D^-1 B^+ = B D^-1 B =  (I-R_A^+ R_A) [(I + (I-R_A^+ R_A)(A^T U E^+ U^T A)(I-R_A^+ R_A))^-1] (I-R_A^+ R_A)
+
+#This is still ugly, but:
+
+#   1. We only care about the trace of H^+, so we don't ever need to calculate the off-diagonal blocks H_01 and H_10.
+#      Just the diagonal blocks H_00 and H_11.
+#   2. Within H_00 and H_11 there is a lot of structure. All of the products are symmetric and so we only need to calculate half
+#      each term. There are a lot of repeated subexpressions so with some caching of intermediate expressions there are a lot fewer
+#      matmuls to do overall.
+#   3. Most of these matrices are small with at least one of the dimensions given by the rank of the update
+#      so even with a bunch of matmuls to do they run pretty quickly.
+
+#There are a few more tricks to keep in mind that are used to accelerate the calculation even more 
+#(and without knowing about makes the implementation details harder to parse).
+
+#   1. The psuedoinverse of a diagonal matrix is simply a diagonal matrix with the non-zero diagonal
+#      entries inverted, so no need for a costly SVD (which is how numpy internally implements pinv)
+#   2. The since it is diagonal the matrix multiplications involving E^+ can be done in quadratic time since all we need to do is 
+#      rescale the rows of the other matrix be the appropriate diagonal element. In numpy this can be done using element-wise multiplication
+#      between a 1D vector with the diagonal elements of E^+ and the target matrix. Numpy automatically uses broadcasting for this so it is
+#      very fast.
+#   3. For the purposes of calculating the trace we don't need all of the elements of H_00 and H_11, just the diagonals.
+#      We can use numpy's einsum to evaluate the final (and largest/most expensive) matrix multiplication in such as
+#      way that only the diagonal elements are calculated/returned, and which can be done in just quadratic time.
+#   4. A bunch of numpy methods can detect when they should expect to have a symmetric output and use a faster code path
+#      in this case that avoids calculating known duplicate entries. So, whenever possible we'll be making sure our subexpressions
+#      are collected in such a way as to leverage the symmetry. This also applies to einsum, which is significantly when it detects
+#      symmetric inputs, so we'll also try to symmetrize the inputs to einsum when possible (when you see Cholesky decompositions appear
+#      out of nowhere that is why).
+
+
+#Future Performance Enhancements:
+#Inventory of possible future perofrmance enhancements.
+#   1. At the start of each iteration we compute a so-called 'update cache'. This is really just the eigenvalues and eigenvectors
+#      for the jacobian of our current candidate set as well as the projector onto the orthogonal complement of U's column space.
+#      This is calculated in the standard way using eigh. We could in principle use the second half of the Matthew Brand result
+#      and use low-rank update methods to update the eigenvalues and eigenvectors using whatever final update we selected at the previous
+#      greedy search iteration. This still requires doing an actual eigenvalue decomposition on the K matrix we construct, though, so
+#      what will happen is that this will be very fast for the earlier iterations where both the jacobian for the current solution set and the
+#      updates are both small, but will give us diminishing returns as the Jacobian for the current solution set approaches being full-rank.
+#      We could always use some heuristic to swap between the two approaches once the rank is past some threshold, though. For 3-qubit+ 
+#      systems profiling suggests that constructing the update cache takes nearly the same amount of time as running through hundreds of
+#      low-rank updates, so this could be a source of pretty large speedups. Vauge numerical stability concerns (and currently being fast enough)
+#      are the main reasons we haven't already done so.
+#   2. Better search space pruning. We can do a better job at identifying useless germs and not including them in future iterations.
+#      We currently have an option called 'force_rank_increase' that is plumbed in. This is currently used to short-circuit the low-rank
+#      update tests early when it detects complete overlap with existing amplified directions in parameter space, but we aren't currently 
+#      using that information to then skip that germ in subsequent iterations. Doing so would speed things up when that option was turned on.
+#   3. A decent chunk of time for the low-rank updates is doing a rank-revealing QR decomposition. We learned recently from Riley Murray that these
+#      are a good deal slower than a standard un-pivoted QR decomposition. There are algorithms for doing this using randomized linear algebra
+#      that are accurate to machine precision and nearly as fast as the standard QR decomposition.
+
+##------------Low-Rank Update Related Functions-----------------##
+
 #new function that computes the J^T J matrices but then returns the result in the form of the 
 #compact EVD in order to save on memory.    
 def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
@@ -2946,7 +3135,6 @@ def symmetric_low_rank_spectrum_update(update, orig_e, U, proj_U, force_rank_inc
     
     #print the rank of the orthogonal complement if it is zero.
     if len(nonzero_indices_update[0])==0:
-        #print('Zero Rank Orthogonal Complement Found')
         return None, False
     
     P= q_update[: , nonzero_indices_update[0]]
@@ -3136,14 +3324,15 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         #if this prints something bad happened
         if central_mat.shape == (0,0):
             print('central_mat shape: ', central_mat.shape)
-            print('central_mat: ', central_mat)
-            print('update: ', update)
-            print('U.T: ', U.T)
-            print('beta: ', beta)
-            print('pinv_sqrt_E_beta: ', pinv_sqrt_E_beta)
+            
         #now calculate the diagonal elements of pinv_E_beta@central_mat@pinv_E_beta.T
         
-        #Take the cholesky decomposition of the central matrix:
+        #Take the cholesky decomposition of the central matrix
+        #The purpose of this cholesky decomposition is entirely to accelerate
+        #the subsequent einsum call. Using einsum to calculate the diagonal elements
+        #of a product of matrices of the form A@A.T is significantly faster than
+        #doing so for a product of matrices of the form A@B@A.T
+        
         try:
             central_mat_chol= _np.linalg.cholesky(central_mat)
             cholesky_success=True
@@ -3184,15 +3373,12 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
             
         #I have a bunch of intermediate matrices I need to construct. Some of which are used to build up
         #subsequent ones.
-        beta= U.T@update 
-        
+        beta= U.T@update
         gamma = pinv_R_update.T @ beta.T
         
         #column vector of the original eigenvalues.
         orig_e_inv= _np.reshape(1/orig_e, (len(orig_e),1))
-        
         pinv_E_beta= orig_e_inv*beta
-        
         B= _np.eye(pinv_R_update.shape[0]) - pinv_R_update @ R_update
         
         try:
@@ -3204,16 +3390,18 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
             #Is B symmetric or hermitian?
             cholesky_success=False
             print('Cholesky Decomposition Probably Failed. This may be due to a poorly conditioned original Jacobian. Here is some diagnostic info.')
+            #What are the eigenvalues of the Dinv matrix?
             print('Dinv Condition Number: ', _np.linalg.cond(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)))
             print('Minimum original eigenvalue: ', _np.min(orig_e))
-                  
+            #raise err
+            
         if cholesky_success:
             pinv_E_beta_B_Dinv_chol= pinv_E_beta@B@Dinv_chol
             
             #Now construct the two matrices we need:  
             #numpy einsum based approach for the upper left block:
             upper_left_block_diag = _np.einsum('ij,ji->i', pinv_E_beta_B_Dinv_chol, pinv_E_beta_B_Dinv_chol.T) + _np.reshape(orig_e_inv, (len(orig_e), ))
-            
+
             #The lower right seems fast enough as it is for now, but we can try an einsum style direct diagonal
             #calculation if need be.
             lower_right_block= (gamma@(orig_e_inv*gamma.T))+ pinv_R_update.T@pinv_R_update - gamma@pinv_E_beta_B_Dinv_chol@pinv_E_beta_B_Dinv_chol.T@gamma.T
@@ -3231,7 +3419,6 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         
         #the updated trace should just be the trace of these two matrices:
         updated_trace= _np.sum(upper_left_block_diag) + _np.trace(lower_right_block)
-        
         rank_increased=True
         
     return updated_trace, updated_rank, rank_increased
@@ -3243,12 +3430,12 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
 #updates to speed the calculation of eigenvalues for additive
 #updates.
     
-def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
+def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                             randomization_strength=1e-3, num_copies=None, seed=0,
                             op_penalty=0, score_func='all', tol=1e-6, threshold=1e6,
                             check=False, force="singletons", pretest=True, mem_limit=None,
                             comm=None, profiler=None, verbosity=0, num_nongauge_params=None,
-                            num_gauge_params= None, float_type= _np.cdouble, 
+                            float_type= _np.cdouble, 
                             mode="all-Jac", force_rank_increase=False,
                             save_cevd_cache_filename=None, load_cevd_cache_filename=None,
                             file_compression=False, evd_tol=1e-10):
@@ -3371,14 +3558,14 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
     #assert(all([(mdl.num_params == Np) for mdl in model_list])), \
     #    "All models must have the same number of parameters!"
     
-    if (num_nongauge_params is None) or (num_gauge_params is None):
+    if (num_nongauge_params is None):
         (_, numGaugeParams,
          numNonGaugeParams, _) = _get_model_params(model_list)
         if num_nongauge_params is not None:
             numGaugeParams = numGaugeParams + numNonGaugeParams - num_nongauge_params
             numNonGaugeParams = num_nongauge_params
-    elif (num_nongauge_params is not None) and  (num_gauge_params is not None):
-        numGaugeParams = num_gauge_params
+    elif (num_nongauge_params is not None):
+        numGaugeParams =  Np - num_nongauge_params
         numNonGaugeParams = num_nongauge_params
     
     printer.log('Number of gauge parameters: ' + str(numGaugeParams), 1) 
@@ -3455,10 +3642,10 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
             [_compute_bulk_twirled_ddd(model, germs_list, tol,
                                        check, germLengths, comm, float_type=float_type)
              for model in model_list]
+
         printer.log(f'Numpy Array Data Type: {twirledDerivDaggerDerivList[0].dtype}', 2)
         printer.log("Numpy array data type for twirled derivatives is: "+ str(twirledDerivDaggerDerivList[0].dtype)+
                     " If this isn't what you specified then something went wrong.",  2) 
-                    
         currentDDDList = []
         for i, derivDaggerDeriv in enumerate(twirledDerivDaggerDerivList):
             currentDDDList.append(_np.sum(derivDaggerDeriv[_np.where(weights == 1)[0], :, :], axis=0))
@@ -3528,7 +3715,7 @@ def find_germs_breadthfirst_rev1(model_list, germs_list, randomize=True,
                     temp_DDD = derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
                 else:
                     temp_DDD += derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
-                    
+
             currentDDDList.append(temp_DDD)
 
     else:  # should be unreachable since we set 'mode' internally above
@@ -3786,7 +3973,7 @@ def compute_composite_germ_set_score_compactevd(current_update_cache, germ_updat
    
     if num_nongauge_params is None:
         if model is None:
-            raise ValueError("Must provide either num_gauge_params or model!")
+            raise ValueError("Must provide either num_nongauge_params or model!")
         else:
             reduced_model = _remove_spam_vectors(model)
             num_nongauge_params = reduced_model.num_params - reduced_model.num_gauge_params

@@ -524,11 +524,62 @@ class GSTBadFitOptions(_NicelySerializable):
         GST fit is considered satisfactory (and no "bad-fit" processing is needed).
 
     actions : tuple, optional
-        Actions to take when a GST fit is unsatisfactory.
+        Actions to take when a GST fit is unsatisfactory. Allowed actions include:
+        - 'wildcard': Find an admissable wildcard model...
+        - 'ddist_wildcard': Fits a single parameter wildcard model in which
+          the amount of wildcard error added to an operation is proportional
+          to the diamond distance between that operation and the target.
+        - 'robust': scale data according out "robust statistics v1" algorithm,
+           where we drastically scale down (reduce) the data due to especially
+           poorly fitting circuits.  Namely, if a circuit's log-likelihood ratio
+           exceeds the 95% confidence region about its expected value (the # of
+           degrees of freedom in the circuits outcomes), then the data is scaled
+           by the `expected_value / actual_value`, so that the new value exactly
+           matches what would be expected.  Ideally there are only a few of these
+           "outlier" circuits, which correspond errors in the measurement apparatus.
+        - 'Robust': same as 'robust', but re-optimize the final objective function
+           (usually the log-likelihood) after performing the scaling to get the
+           final estimate.
+        - 'robust+': scale data according out "robust statistics v2" algorithm,
+           which performs the v1 algorithm (see 'robust' above) and then further
+           rescales all the circuit data to achieve the desired chi2 distribution
+           of per-circuit goodness-of-fit values *without reordering* these values.
+        - 'Robust+': same as 'robust+', but re-optimize the final objective function
+           (usually the log-likelihood) after performing the scaling to get the
+           final estimate.
+        - 'do nothing': do not perform any additional actions.  Used to help avoid
+           the need for special cases when working with multiple types of bad-fit actions.
 
     wildcard_budget_includes_spam : bool, optional
         Include a SPAM budget within the wildcard budget used to process
         the `"wildcard"` action.
+
+    wildcard_L1_weights :  np.array, optional
+        An array of weights affecting the L1 penalty term used to select a feasible
+        wildcard error vector `w_i` that minimizes `sum_i weight_i* |w_i|` (a weighted
+        L1 norm).  Elements of this array must correspond to those of the wildcard budget
+        being optimized, typically the primitive operations of the estimated model - but
+        to get the order right you should specify `wildcard_primitive_op_labels` to be sure.
+        If `None`, then all weights are assumed to be 1.
+
+    wildcard_primitive_op_labels: list, optional
+        The primitive operation labels used to construct the :class:`PrimitiveOpsWildcardBudget`
+        that is optimized.  If `None`, equal to `model.primitive_op_labels + model.primitive_instrument_labels`
+        where `model` is the estimated model, with `'SPAM'` at the end if `wildcard_budget_includes_spam`
+        is True.  When specified, should contain a subset of the default values.
+
+    wildcard_methods: tuple, optional
+        A list of the methods to use to optimize the wildcard error vector.  Default is `("neldermead",)`.
+        Options include `"neldermead"`, `"barrier"`, `"cvxopt"`, `"cvxopt_smoothed"`, `"cvxopt_small"`,
+        and `"cvxpy_noagg"`.  So many methods exist because different convex solvers behave differently
+        (unfortunately).  Leave as the default as a safe option, but `"barrier"` is pretty reliable and much
+        faster than `"neldermead"`, and is a good option so long as it runs.
+
+    wildcard_inadmissable_action: {"print", "raise"}, optional
+        What to do when an inadmissable wildcard error vector is found.  The default just prints this
+        information and continues, while `"raise"` raises a `ValueError`.  Often you just want this information
+        printed so that when the wildcard analysis fails in this way it doesn't cause the rest of an analysis
+        to abort.
     """
 
     @classmethod
@@ -555,8 +606,8 @@ class GSTBadFitOptions(_NicelySerializable):
                  wildcard_budget_includes_spam=True,
                  wildcard_L1_weights=None, wildcard_primitive_op_labels=None,
                  wildcard_initial_budget=None, wildcard_methods=('neldermead',),
-                 wildcard_inadmissable_action='print'):
-        valid_actions = ('wildcard', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
+                 wildcard_inadmissable_action='print', wildcard1d_reference='diamond distance'):
+        valid_actions = ('wildcard', 'wildcard1d', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
             raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
         self.threshold = float(threshold)
@@ -567,6 +618,7 @@ class GSTBadFitOptions(_NicelySerializable):
         self.wildcard_initial_budget = wildcard_initial_budget
         self.wildcard_methods = wildcard_methods
         self.wildcard_inadmissable_action = wildcard_inadmissable_action  # can be 'raise' or 'print'
+        self.wildcard1d_reference = wildcard1d_reference
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -577,7 +629,8 @@ class GSTBadFitOptions(_NicelySerializable):
                                    'primitive_op_labels': self.wildcard_primitive_op_labels,
                                    'initial_budget': self.wildcard_initial_budget,  # serializable?
                                    'methods': self.wildcard_methods,
-                                   'indadmissable_action': self.wildcard_inadmissable_action},
+                                   'indadmissable_action': self.wildcard_inadmissable_action,
+                                   '1d_reference': self.wildcard1d_reference},
                       })
         return state
 
@@ -590,7 +643,8 @@ class GSTBadFitOptions(_NicelySerializable):
             wildcard.get('primitive_op_labels', None),
             wildcard.get('initial_budget', None),
             tuple(wildcard.get('methods', ['neldermead'])),
-            wildcard.get('inadmissable_action', 'print'))
+            wildcard.get('inadmissable_action', 'print'),
+            wildcard.get('1d_reference', 'diamond distance'))
 
 
 class GSTObjFnBuilders(_NicelySerializable):
@@ -1835,6 +1889,32 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
             #    new_params['unmodeled_error'] = None
             continue  # no need to add a new estimate - we just update the base estimate
 
+        elif badfit_typ == 'wildcard1d':
+
+            #If this estimate is the target model then skip adding the diamond distance wildcard.
+            if base_estimate_label != 'Target':
+                try:
+                    budget = _compute_wildcard_budget_1d_model(base_estimate, objfn_cache, mdc_objfn, parameters,
+                                                               badfit_options, printer - 1)
+
+                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = budget
+                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] \
+                        = None
+
+                    base_estimate.extra_parameters["unmodeled_error"] = budget
+                    base_estimate.extra_parameters["unmodeled_active_constraints"] = None
+                except NotImplementedError as e:
+                    printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
+                    new_params['unmodeled_error'] = None
+                #except AssertionError as e:
+                #    printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
+                #    new_params['unmodeled_error'] = None
+                continue  # no need to add a new estimate - we just update the base estimate
+
+            else:
+                printer.log('Diamond distance wildcard model is incompatible with the Target estimate, skipping.', 3)
+                continue
+
         elif badfit_typ == "do nothing":
             continue  # go to next on-bad-fit directive
 
@@ -1868,6 +1948,101 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                 go_gs_final = base_estimate.models[gokey]
                 results.estimates[base_estimate_label + '.' + badfit_typ].add_gaugeoptimized(
                     gauge_opt_params.copy(), go_gs_final, gokey, comm, printer - 1)
+
+
+def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, parameters, badfit_options, verbosity):
+    """
+    Create a wildcard budget for a model estimate. This version of the function produces a wildcard estimate
+    using the model introduced by Tim and Stefan in the RCSGST paper.
+    TODO: docstring (update)
+
+    Parameters
+    ----------
+    model : Model
+        The model to add a wildcard budget to.
+
+    ds : DataSet
+        The data the model predictions are being compared with.
+
+    circuits_to_use : list
+        The circuits whose data are compared.
+
+    parameters : dict
+        Various parameters of the estimate at hand.
+
+    badfit_options : GSTBadFitOptions, optional
+        Options specifying what post-processing actions should be performed when
+        a fit is unsatisfactory.  Contains detailed parameters for wildcard budget
+        creation.
+
+    comm : mpi4py.MPI.Comm, optional
+        An MPI communicator used to run this computation in parallel.
+
+    mem_limit : int, optional
+        A rough per-processor memory limit in bytes.
+
+    verbosity : int, optional
+        Level of detail printed to stdout.
+
+    Returns
+    -------
+    PrimitiveOpsWildcardBudget
+    """
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, mdc_objfn.resource_alloc)
+    badfit_options = GSTBadFitOptions.cast(badfit_options)
+    model = mdc_objfn.model
+    ds = mdc_objfn.dataset
+    global_circuits_to_use = mdc_objfn.global_circuits
+
+    printer.log("******************* Adding Wildcard Budget **************************")
+
+    #cache construction code.
+    # Extract model, dataset, objfn, etc.
+    # Note: must evaluate mdc_objfn *before* passing to wildcard fn init so internal probs are init
+    mdc_objfn.fn(model.to_vector())
+
+    ## PYGSTI TRANSPLANT from pygsti.protocols.gst._compute_wildcard_budget
+    # Compute the various thresholds
+    ds_dof = ds.degrees_of_freedom(global_circuits_to_use)
+    nparams = model.num_modeltest_params  # just use total number of params
+    percentile = 0.025
+    nboxes = len(global_circuits_to_use)
+
+    two_dlogl_threshold = _chi2.ppf(1 - percentile, max(ds_dof - nparams, 1))
+    redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
+
+    ref, reference_name = _compute_1d_reference_values_and_name(estimate, badfit_options)
+    primitive_ops = list(ref.keys())
+    wcm = _wild.PrimitiveOpsSingleScaleWildcardBudget(primitive_ops, [ref[k] for k in primitive_ops],
+                                                      reference_name=reference_name)
+    _opt.wildcardopt.optimize_wildcard_bisect_alpha(wcm, mdc_objfn, two_dlogl_threshold, redbox_threshold, printer,
+                                                    guess=0.1, tol=1e-3)  # results in optimized wcm
+    return wcm
+
+
+def _compute_1d_reference_values_and_name(estimate, badfit_options):
+    final_model = estimate.models['final iteration estimate']
+    target_model = estimate.models['target']
+    gaugeopt_model = _alg.gaugeopt_to_target(final_model, target_model)
+
+    if badfit_options.wildcard1d_reference == 'diamond distance':
+        dd = {}
+        for key, op in gaugeopt_model.operations.items():
+            dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+
+        spamdd = {}
+        for key, op in gaugeopt_model.preps.items():
+            spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), 'pp'),
+                                           _tools.vec_to_stdmx(target_model.preps[key].to_dense(), 'pp'))
+
+        for key in gaugeopt_model.povms.keys():
+            spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
+
+        dd['SPAM'] = sum(spamdd.values())
+        return dd, 'diamond distance'
+    else:
+        raise ValueError("Invalid wildcard1d_reference value (%s) in bad-fit options!"
+                         % str(badfit_options.wildcard1d_reference))
 
 
 def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
@@ -2044,7 +2219,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
     L1weights = _np.ones(budget.num_params)
     if badfit_options.wildcard_L1_weights:
         for op_label, weight in badfit_options.wildcard_L1_weights.items():
-            L1weights[budget.primOpLookup[op_label]] = weight
+            L1weights[budget.primitive_op_param_index[op_label]] = weight
         printer.log("Using non-uniform L1 weights: " + str(list(L1weights)))
 
     # Note: must evaluate mdc_objfn *before* passing to wildcard fn init so internal probs are init
@@ -2195,7 +2370,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
         # Note: active_constraints_list is typically stored in parameters['unmodeled_error active constraints']
         # of the relevant Estimate object.
         primOp_labels = _collections.defaultdict(list)
-        for lbl, i in budget.primOpLookup.items(): primOp_labels[i].append(str(lbl))
+        for lbl, i in budget.primitive_op_param_index.items(): primOp_labels[i].append(str(lbl))
         for i, active_constraints in enumerate(active_constraints_list):
             if active_constraints:
                 printer.log("** ACTIVE constraints for " + "--".join(primOp_labels[i]) + " **")

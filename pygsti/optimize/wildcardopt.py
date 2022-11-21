@@ -423,6 +423,75 @@ def _proxy_agg_dlogl_hessian(x, tvds, fn0s, percircuit_budget_deriv):
     return H
 
 
+def _get_percircuit_budget_deriv(budget, layout):
+    """ Returns local_percircuit_budget_deriv, global_percircuit_budget_deriv """
+    percircuit_budget_deriv = budget.precompute_for_same_circuits(layout.circuits)  # for *local* circuits
+
+    #Note: maybe we could do this gather in 1 call (?), but we play it safe and do it col-by-col
+    global_percircuit_budget_deriv_cols = []
+    for i in range(percircuit_budget_deriv.shape[1]):
+        global_percircuit_budget_deriv_cols.append(
+            layout.allgather_local_array('c', percircuit_budget_deriv[:, i]))
+    return percircuit_budget_deriv, _np.column_stack(global_percircuit_budget_deriv_cols)
+
+
+def optimize_wildcard_bisect_alpha(budget, objfn, two_dlogl_threshold, redbox_threshold, printer,
+                                   guess=0.1, tol=1e-3):
+    printer.log("Beginning wildcard budget optimization using alpha bisection method.")
+
+    layout = objfn.layout
+    critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, redbox_threshold)  # for *global* circuits
+    percircuit_budget_deriv, global_percircuit_budget_deriv = _get_percircuit_budget_deriv(budget, layout)
+
+    initial_probs = objfn.probs.copy()
+    current_probs = initial_probs.copy()
+    probs_freqs_precomp = budget.precompute_for_same_probs_freqs(initial_probs, objfn.freqs, layout)
+
+    def is_feasible(x):
+        budget.from_vector(x)
+        budget.update_probs(initial_probs, current_probs, objfn.freqs, objfn.layout, percircuit_budget_deriv,
+                            probs_freqs_precomp)
+        f0 = _np.array([_agg_dlogl(current_probs, objfn, two_dlogl_threshold)])
+        fi = critical_percircuit_budgets - _np.dot(global_percircuit_budget_deriv, x)
+        return _np.all(_np.concatenate((f0, fi)) <= 0)  # All constraints must be negative to be feasible
+
+    left = None
+    right = None
+
+    while left is None or right is None:
+        printer.log(f'Searching for interval [{left}, {right}] with guess {guess}', 2)
+        # Test for feasibility
+        if is_feasible(_np.array([guess], 'd')):
+            printer.log('Guess value is feasible, ', 2)
+            left = guess
+            guess = left / 2
+        else:
+            printer.log('Guess value is infeasible, ', 2)
+            right = guess
+            guess = 2 * right
+    printer.log('Interval found!', 2)
+
+    # We now have an interval containing the crossover point
+    # Perform bisection
+    while abs(left - right) > tol:
+        printer.log(f'Performing bisection on interval [{left}, {right}]', 2)
+        test = left - (left - right) / 2.0
+
+        if is_feasible(_np.array([test], 'd')):
+            # Feasible, so shift left down
+            printer.log('Test value is feasible, ', 2)
+            left = test
+        else:
+            printer.log('Test value is infeasible, ', 2)
+            right = test
+
+    printer.log('Interval within tolerance!', 2)
+
+    budget.from_vector(_np.array([left], 'd'))  # set budget to the feasible one
+    printer.log(f'Optimized value of alpha = {left}')
+    return
+
+
 def optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, two_dlogl_threshold, redbox_threshold,
                                     printer, abs_tol=1e-5, rel_tol=1e-5, max_iters=50):
     """Uses CVXOPT to optimize the wildcard budget.  Includes both aggregate and per-circuit constraints."""
@@ -439,14 +508,7 @@ def optimize_wildcard_budget_cvxopt(budget, L1weights, objfn, two_dlogl_threshol
 
     initial_probs = objfn.probs.copy()  # *local*
     current_probs = initial_probs.copy()
-    percircuit_budget_deriv = budget.precompute_for_same_circuits(layout.circuits)  # for *local* circuits
-
-    #Note: maybe we could do this gather in 1 call (?), but we play it safe and do it col-by-col
-    global_percircuit_budget_deriv_cols = []
-    for i in range(percircuit_budget_deriv.shape[1]):
-        global_percircuit_budget_deriv_cols.append(
-            layout.allgather_local_array('c', percircuit_budget_deriv[:, i]))
-    global_percircuit_budget_deriv = _np.column_stack(global_percircuit_budget_deriv_cols)
+    percircuit_budget_deriv, global_percircuit_budget_deriv = _get_percircuit_budget_deriv(budget, layout)
 
     critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, redbox_threshold)  # for *global* circuits
     critical_percircuit_budgets.shape = (len(critical_percircuit_budgets), 1)
@@ -524,14 +586,7 @@ def optimize_wildcard_budget_cvxopt_zeroreg(budget, L1weights, objfn, two_dlogl_
 
     initial_probs = objfn.probs.copy()
     current_probs = initial_probs.copy()
-    percircuit_budget_deriv = budget.precompute_for_same_circuits(layout.circuits)
-
-    #Note: maybe we could do this gather in 1 call (?), but we play it safe and do it col-by-col
-    global_percircuit_budget_deriv_cols = []
-    for i in range(percircuit_budget_deriv.shape[1]):
-        global_percircuit_budget_deriv_cols.append(
-            layout.allgather_local_array('c', percircuit_budget_deriv[:, i]))
-    global_percircuit_budget_deriv = _np.column_stack(global_percircuit_budget_deriv_cols)
+    percircuit_budget_deriv, global_percircuit_budget_deriv = _get_percircuit_budget_deriv(budget, layout)
 
     critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, redbox_threshold)
     critical_percircuit_budgets.shape = (len(critical_percircuit_budgets), 1)
@@ -615,15 +670,8 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, two_dlogl_thresho
     # for increasing values of t until 1/t <= epsilon (precision tolerance)
     printer.log("Beginning wildcard budget optimization using a barrier method.")
     layout = objfn.layout
-    percircuit_budget_deriv = budget.precompute_for_same_circuits(layout.circuits)  # for *local* circuits
     critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, redbox_threshold)  # for *global* circuits
-
-    #Note: maybe we could do this gather in 1 call (?), but we play it safe and do it col-by-col
-    global_percircuit_budget_deriv_cols = []
-    for i in range(percircuit_budget_deriv.shape[1]):
-        global_percircuit_budget_deriv_cols.append(
-            layout.allgather_local_array('c', percircuit_budget_deriv[:, i]))
-    global_percircuit_budget_deriv = _np.column_stack(global_percircuit_budget_deriv_cols)
+    percircuit_budget_deriv, global_percircuit_budget_deriv = _get_percircuit_budget_deriv(budget, layout)
 
     x0 = budget.to_vector()
     initial_probs = objfn.probs.copy()
@@ -892,15 +940,7 @@ def optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, objfn, two_dlogl
 
     #initial_probs = objfn.probs.copy()
     #current_probs = initial_probs.copy()
-    percircuit_budget_deriv = budget.precompute_for_same_circuits(layout.circuits)
-
-    #Note: maybe we could do this gather in 1 call (?), but we play it safe and do it col-by-col
-    global_percircuit_budget_deriv_cols = []
-    for i in range(percircuit_budget_deriv.shape[1]):
-        global_percircuit_budget_deriv_cols.append(
-            layout.allgather_local_array('c', percircuit_budget_deriv[:, i]))
-    global_percircuit_budget_deriv = _np.column_stack(global_percircuit_budget_deriv_cols)
-
+    percircuit_budget_deriv, global_percircuit_budget_deriv = _get_percircuit_budget_deriv(budget, layout)
     critical_percircuit_budgets = _get_critical_circuit_budgets(objfn, redbox_threshold)
     critical_percircuit_budgets.shape = (len(critical_percircuit_budgets), 1)
     num_circuits = len(layout.circuits)
