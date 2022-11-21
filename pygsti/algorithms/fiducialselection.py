@@ -1815,10 +1815,9 @@ def _find_fiducials_greedy(model, fids_list, prep_or_meas, op_penalty=0.0,
                 #    fidArrayList = create_prep_mxs(model, [fiducial], fid_cache)
                 #elif prep_or_meas == 'meas':
                 #    fidArrayList = create_meas_mxs(model, [fiducial], fid_cache)
-                #current_score_mx= _np.concatenate(fidArrayList, axis=1)
-                #current_score_gramian = current_score_mx@current_score_mx.conj().T
+                current_score_mx= fiducial_compact_EVD_cache[fiducial]
                 current_score_gramian= fiducial_compact_EVD_cache[fiducial]@fiducial_compact_EVD_cache[fiducial].T
-                current_inv_trace = _np.trace(_np.linalg.pinv(current_score_gramian))
+                current_inv_trace = _np.trace(_np.linalg.pinv(current_score_gramian, hermitian=True))
                 #Don't add penalties for first fiducial when forcing it to be the empty germ.
                 current_rank= _np.linalg.matrix_rank(current_score_mx)
                 penalized_inv_trace= add_penalties_greedy(current_inv_trace, [fiducial], l1_penalty, op_penalty, gate_penalty)
