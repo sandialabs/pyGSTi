@@ -13,12 +13,13 @@ Functions related to computation of the log-likelihood.
 import numpy as _np
 
 from pygsti import tools as _tools
+from pygsti.baseobjs import NicelySerializable as _NicelySerializable
 
 #pos = lambda x: x**2
 pos = abs
 
 
-class WildcardBudget(object):
+class WildcardBudget(_NicelySerializable):
     """
     A fixed wildcard budget.
 
@@ -339,6 +340,12 @@ class WildcardBudget(object):
 
                 qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min_qvec, circ, tol)
 
+                initialTVD = 0.5 * sum(_np.abs(qvec - fvec))  # update current TVD
+                if initialTVD <= W + tol:  # TVD is "in-budget" for this circuit due to adjustment; leave as is
+                    probs_out[elInds] = qvec
+                    if return_deriv: p_deriv[elInds] = 0.0
+                    continue
+
                 #recompute A-D b/c we've updated qvec
                 A = _np.logical_and(qvec > fvec, fvec > 0); sum_fA = sum(fvec[A]); sum_qA = sum(qvec[A])
                 B = _np.logical_and(qvec < fvec, fvec > 0); sum_fB = sum(fvec[B]); sum_qB = sum(qvec[B])
@@ -461,6 +468,15 @@ class WildcardBudget(object):
 
         return p_deriv if return_deriv else None
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'wildcard_vector': list(self.wildcard_vector)})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        return cls(_np.array(state['wildcard_vector'], 'd'))
+
 
 class PrimitiveOpsWildcardBudgetBase(WildcardBudget):
     """
@@ -539,6 +555,24 @@ class PrimitiveOpsWildcardBudgetBase(WildcardBudget):
     @property
     def wildcard_error_per_op(self):
         return {lbl: val for lbl, val in zip(self.primitive_op_labels, self.per_op_wildcard_vector)}
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'primitive_op_labels': [str(lbl) for lbl in self.primitive_op_labels],
+                      'idle_name': self._idlename,
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        primitive_op_labels = cls._parse_primitive_op_labels(state['primitive_op_labels'])
+        return cls(primitive_op_labels, _np.array(state['wildcard_vector'], 'd'), state['idle_name'])
+
+    @classmethod
+    def _parse_primitive_op_labels(cls, label_strs):
+        from pygsti.circuits.circuitparser import parse_label as _parse_label
+        return [(_parse_label(lbl_str) if (lbl_str != 'SPAM') else 'SPAM')
+                for lbl_str in label_strs]
 
     def circuit_budget(self, circuit):
         """
@@ -812,6 +846,10 @@ def update_circuit_probs(probs, freqs, circuit_budget):
 
     qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min(qvec), base_tol)
 
+    initialTVD = 0.5 * sum(_np.abs(qvec - fvec))  # update current TVD
+    if initialTVD <= W + tol:  # TVD is "in-budget" for this circuit due to adjustment; leave as is
+        return qvec
+
     #Note: must ensure that A,B,C,D are *disjoint*
     fvec_equals_qvec = _np.logical_and(fvec - base_tol <= qvec, qvec <= fvec + base_tol)  # fvec == qvec
     A = _np.where(_np.logical_and(qvec > fvec + base_tol, fvec > 0))[0]
@@ -1022,6 +1060,24 @@ class PrimitiveOpsWildcardBudget(PrimitiveOpsWildcardBudgetBase):
                 ret[i, self.primitive_op_param_index[lbl]] = 1.0
             return ret
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        param_index_by_primitive_op = [self.primitive_op_param_index[lbl] for lbl in self.primitive_op_labels]
+        state.update({'param_index_by_primitive_op': param_index_by_primitive_op,
+                      'trivial_param_mapping': self.trivial_param_mapping})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        primitive_op_labels = cls._parse_primitive_op_labels(state['primitive_op_labels'])
+        if state['trivial_param_mapping']:
+            primitive_ops = primitive_op_labels
+        else:
+            primitive_ops = {lbl: i for lbl, i in zip(primitive_op_labels, state['param_index_by_primitive_op'])}
+
+        budget = {lbl: val for lbl, val in zip(primitive_op_labels, state['wildcard_vector'])}
+        return cls(primitive_ops, budget, state['idle_name'])
+
 
 class PrimitiveOpsSingleScaleWildcardBudget(PrimitiveOpsWildcardBudgetBase):
     """
@@ -1089,6 +1145,18 @@ class PrimitiveOpsSingleScaleWildcardBudget(PrimitiveOpsWildcardBudgetBase):
         for the i-th primitive op with respect to the j-th budget parameter.
         """
         return self.reference_values.reshape((self.num_primitive_ops, 1)).copy()
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'reference_values': list(self.reference_values),
+                      'reference_name': self.reference_name})
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        primitive_op_labels = cls._parse_primitive_op_labels(state['primitive_op_labels'])
+        alpha = state['wildcard_vector'][0]
+        return cls(primitive_op_labels, state['reference_values'], alpha, state['idle_name'], state['reference_name'])
 
     @property
     def description(self):
