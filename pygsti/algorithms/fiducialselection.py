@@ -150,6 +150,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         
         availableFidList = []
         if max_fid_length is not None:
+            warn('max_fid_length is now deprecated and will be replaced by the kwarg candidate_fid_counts. See documentation for how to achieve the old behavior with the new kwarg.')
             if candidate_fid_counts is not None:
                 warn('Specifying max_fid_length without setting candidate_fid_counts results the settings specified in candidate_fid_counts being overridden.\
                 candidate_fid_counts is set by defaults, so this might be expected, but if this is not the desired behavior then please verify your arguments.')
@@ -169,29 +170,19 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                     fidOps, fidLength, count, seed=candidate_seed))
         
         printer.log('Initial Length Available Fiducial List: '+ str(len(availableFidList)), 1)
-        
-        
         printer.log('Creating cache of fiducial process matrices.', 3)
         circuit_cache= create_circuit_cache(target_model,availableFidList)
         printer.log('Completed cache of fiducial process matrices.', 3)
-        
-        #print('Initial Length Available Fiducial List: ', len(availableFidList))
         
         #Now that we have a cache of PTMs as numpy arrays for the initial list of available fiducials
         #we can clean this list up to remove any effective identities and circuits with duplicate effects.
         #Use a flag to check if we can assume these are clifford circuits in which case
         #we can use a more efficient deduping routine.
-        if assume_clifford:
-            cleaned_availableFidList, cleaned_circuit_cache = clean_fid_list_clifford(target_model, circuit_cache, availableFidList,
+        cleaned_availableFidList, cleaned_circuit_cache = clean_fid_list(target_model, circuit_cache, availableFidList,
                                                                             drop_identities=True, drop_duplicates=True,
-                                                                            eq_thresh=eq_thresh)
-        else:
-            cleaned_availableFidList, cleaned_circuit_cache = clean_fid_list(target_model, circuit_cache, availableFidList,
-                                                                            drop_identities=True, drop_duplicates=True,
-                                                                            eq_thresh=eq_thresh)
+                                                                            eq_thresh=eq_thresh, assume_clifford=assume_clifford)
         
         printer.log('Length Available Fiducial List Dropped Identities and Duplicates: ' + str(len(cleaned_availableFidList)), 1)
-        #print('Length Available Fiducial List Dropped Identities and Duplicates: ', len(cleaned_availableFidList))
         
         #TODO: I can speed this up a bit more by looking through the available fiducial list for
         #circuits that are effective identities. Reducing the search space should be a big time-space
@@ -213,6 +204,12 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     if meas_fids:
         meas_cache= create_meas_cache(target_model, cleaned_availableFidList, cleaned_circuit_cache)
     
+    #define function for final test result printing
+    def final_result_test(final_fids, verb_printer):
+        if final_fids:
+            verb_printer.log('Final test of the candidate meas fiducial lists passed.', 1)
+        else:
+            verb_printer.log('Final test of the candidate meas fiducial lists failed.', 1)
 
     if algorithm_kwargs is None:
         # Avoid danger of using empty dict for default value.
@@ -250,10 +247,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                 final_test_fiducial_list = test_fiducial_list(target_model, prepFidList, 'prep',
                                                     score_func=algorithm_kwargs['score_func'], return_all=False,
                                                     threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=prep_cache)
-                if final_test_fiducial_list:
-                    printer.log('Final test of the candidate prep fiducial lists passed.', 1)
-                else:
-                    printer.log('Final test of the candidate prep fiducial lists failed.', 1)
+                final_result_test(final_test_fiducial_list, printer)
 
         measFidList = _find_fiducials_integer_slack(model=target_model,
                                                     prep_or_meas='meas',
@@ -271,10 +265,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                 final_test_fiducial_list = test_fiducial_list(target_model, measFidList, 'meas',
                                                     score_func=algorithm_kwargs['score_func'], return_all=False,
                                                     threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=meas_cache)
-                if final_test_fiducial_list:
-                    printer.log('Final test of the candidate prep fiducial lists passed.', 1)
-                else:
-                    printer.log('Final test of the candidate prep fiducial lists failed.', 1)
+                final_result_test(final_test_fiducial_list, printer)
 
     elif algorithm == 'grasp':
         printer.log('Using GRASP algorithm.', 1)
@@ -316,10 +307,8 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                     final_test_fiducial_list = test_fiducial_list(target_model, prepFidList[0], 'prep',
                                                         score_func=algorithm_kwargs['score_func'], return_all=False,
                                                         threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=prep_cache)
-                    if final_test_fiducial_list:
-                        printer.log('Final test of the candidate prep fiducial lists passed.', 1)
-                    else:
-                        printer.log('Final test of the candidate prep fiducial lists failed.', 1)
+                    final_result_test(final_test_fiducial_list, printer)
+                    
             elif not algorithm_kwargs['return_all'] and prepFidList is not None:
                 prepScore = compute_composite_fiducial_score(
                     target_model, prepFidList, 'prep',
@@ -333,10 +322,8 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                     final_test_fiducial_list = test_fiducial_list(target_model, prepFidList, 'prep',
                                                         score_func=algorithm_kwargs['score_func'], return_all=False,
                                                         threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=prep_cache)
-                    if final_test_fiducial_list:
-                        printer.log('Final test of the candidate prep fiducial lists passed.', 1)
-                    else:
-                        printer.log('Final test of the candidate prep fiducial lists failed.', 1)
+                    final_result_test(final_test_fiducial_list, printer)
+                    
         if meas_fids:
             measFidList = _find_fiducials_grasp(model=target_model,
                                             prep_or_meas='meas',
@@ -356,10 +343,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                     final_test_fiducial_list = test_fiducial_list(target_model, measFidList[0], 'meas',
                                                         score_func=algorithm_kwargs['score_func'], return_all=False,
                                                         threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=meas_cache)
-                    if final_test_fiducial_list:
-                        printer.log('Final test of the candidate meas fiducial lists passed.', 1)
-                    else:
-                        printer.log('Final test of the candidate meas fiducial lists failed.', 1)
+                    final_result_test(final_test_fiducial_list, printer)
             elif not algorithm_kwargs['return_all'] and measFidList is not None:
                 measScore = compute_composite_fiducial_score(
                     target_model, measFidList, 'meas',
@@ -373,10 +357,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                     final_test_fiducial_list = test_fiducial_list(target_model, measFidList, 'meas',
                                                         score_func=algorithm_kwargs['score_func'], return_all=False,
                                                         threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=meas_cache)
-                    if final_test_fiducial_list:
-                        printer.log('Final test of the candidate meas fiducial lists passed.', 1)
-                    else:
-                        printer.log('Final test of the candidate meas fiducial lists failed.', 1)
+                    final_result_test(final_test_fiducial_list, printer)
     
     elif algorithm == 'greedy':
         printer.log('Using greedy algorithm.', 1)
@@ -419,10 +400,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                     final_test_fiducial_list = test_fiducial_list(target_model, prepFidList, 'prep',
                                                         score_func='all', return_all=False,
                                                         threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=prep_cache)
-                    if final_test_fiducial_list:
-                        printer.log('Final test of the candidate prep fiducial lists passed.', 1)
-                    else:
-                        printer.log('Final test of the candidate prep fiducial lists failed.', 1)
+                    final_result_test(final_test_fiducial_list, printer)
         if meas_fids:
             measFidList, measScore = _find_fiducials_greedy(model=target_model,
                                             prep_or_meas='meas',
@@ -440,10 +418,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                                                         score_func='all', return_all=False,
                                                         threshold=algorithm_kwargs.get('threshold', 1e-6), 
                                                         fid_cache=meas_cache)
-                    if final_test_fiducial_list:
-                        printer.log('Final test of the candidate meas fiducial lists passed.', 1)
-                    else:
-                        printer.log('Final test of the candidate meas fiducial lists failed.', 1)
+                    final_result_test(final_test_fiducial_list, printer)
                 
     else:
         raise ValueError("'{}' is not a valid algorithm "
@@ -484,7 +459,7 @@ def xor(*args):
     return output
     
 #function for cleaning up the available fiducial list to drop identities and circuits with duplicate effects
-def clean_fid_list(model, circuit_cache, available_fid_list,drop_identities=True, drop_duplicates=True, eq_thresh= 1e-6):
+def clean_fid_list(model, circuit_cache, available_fid_list,drop_identities=True, drop_duplicates=True, eq_thresh= 1e-6, assume_clifford=False):
     #initialize an identity matrix of the appropriate dimension
     
     cleaned_circuit_cache= circuit_cache.copy()
@@ -511,117 +486,77 @@ def clean_fid_list(model, circuit_cache, available_fid_list,drop_identities=True
         #generated in such a way to be listed in increasing order
         #of depth, so if we search for dups in that order this should
         #generally favor the shorted of a pair of duplicate PTMs.
-        #cleaned_cache_keys= list(cleaned_circuit_cache.keys())
-        #cleaned_cache_PTMs= list(cleaned_circuit_cache.values())
-        #len_cache= len(cleaned_cache_keys)
-        
+
         #reverse the list so that the longer circuits are at the start and shorter
         #at the end for better pop behavior.
         
         #TODO: add an option to partition the list into smaller chunks to dedupe
-        #separately before regrouping and deduping as a whole. Should be a good deal faster. 
+        #separately before regrouping and deduping as a whole. Heuristic, but should 
+        #be a good deal faster. 
         
-        unseen_circs  = list(cleaned_circuit_cache.keys())
-        unseen_circs.reverse()
-        unique_circs  = []
+        if assume_clifford:
+            #Leverage the fact that we know that the PTMs for clifford circuits
+            #should correspond to signed permutation matrices. Take each of the
+            #permuation matrices, flatten them, then get a list of the non-zero
+            #indices. Then for these non-zero indices construct a second list of
+            #the sign of these entries. This should uniquely identify each of the
+            #signed permutations.
+            reversed_ckt_list = list(cleaned_circuit_cache_1.keys())
+            reversed_ckt_list.reverse()
+            unique_vec_perm_reps= {}
+            for ckt in reversed_ckt_list:
+                flattened_PTM= _np.ravel(cleaned_circuit_cache_1[ckt])
+                #round to the nearest integer.
+                rounded_flattened_PTM= _np.round(flattened_PTM, decimals=0)
+                nonzero_indices= _np.nonzero(rounded_flattened_PTM)[0]
+                #get the signs of the nonzero elements.
+                signs= _np.sign(rounded_flattened_PTM[nonzero_indices])
+                #concatenate these two arrays
+                nonzero_indices_and_signs = _np.concatenate((nonzero_indices,signs))
+                #cast this array to a tuple and then add it to the dictionary
+                #I think technically I can hash the ndarrays directly, but just
+                #to be safe cast these as tuples first.
+                #Actually, I don't think I need to do the deduping in 2 stages.
+                #I should be able to directly use the tuples as keys and the
+                #ckts as the values in a python dictionary (which is implemented
+                #using hash tables on the back end).
+                unique_vec_perm_reps[tuple(nonzero_indices_and_signs)]= ckt
+            
+            #Now get the values of the unique_vec_perm_reps dictionary
+            #These should be the depuped circuits.
+            deduped_ckt_list= list(unique_vec_perm_reps.values())     
         
-        #While unseen_circs is not empty
-        while unseen_circs:
-            current_ckt = unseen_circs.pop()
-            current_ckt_PTM = cleaned_circuit_cache_1[current_ckt]
-            unique_circs.append(current_ckt)            
-            #now iterate through the remaining elements of the set of unseen circuits and remove any duplicates.
-            is_not_duplicate=[True]*len(unseen_circs)
-            for i, ckt in enumerate(unseen_circs):
-                #the default tolerance for allclose is probably fine.
-                if _np.linalg.norm(cleaned_circuit_cache_1[ckt]-current_ckt_PTM)<eq_thresh: #use same threshold as defined in the base find_fiducials function
-                    is_not_duplicate[i]=False
-            #reset the set of unseen circuits.
-            unseen_circs=list(itertools.compress(unseen_circs, is_not_duplicate))
-        
-        #rebuild the circuit cache now that it has been de-duped:
-        cleaned_circuit_cache_2= {ckt_key: cleaned_circuit_cache_1[ckt_key] for ckt_key in unique_circs}
-        
-    #now that we've de-duped the circuit_cache, we can pull out the keys of cleaned_circuit_cache_1 to get the
-    #new list of available fiducials.
-    
-    available_fid_list_strings= [ckt.str for ckt in available_fid_list]
-    
-    cleaned_availableFidList=[]
-    for i, fid_string in enumerate(available_fid_list_strings):
-        if fid_string in cleaned_circuit_cache_2:
-            cleaned_availableFidList.append(available_fid_list[i])
-    
-    return cleaned_availableFidList, cleaned_circuit_cache_2
-    
-#function for cleaning up the available fiducial list to drop identities and circuits with duplicate effects
-#Specialized for the case where our fiducials are promised to correspond to clifford operations
-#in which case we know that the matrices must correspond to permutation matrices which
-#gives us some additional structure to exploit.
-def clean_fid_list_clifford(model, circuit_cache, available_fid_list,drop_identities=True, drop_duplicates=True, eq_thresh= 1e-6):
-    #initialize an identity matrix of the appropriate dimension
-    
-    cleaned_circuit_cache= circuit_cache.copy()
-    
-    if drop_identities:        
-        Identity = _np.identity(model.dim, 'd')
-        
-        #remove identities
-        for ckt_key, PTM in circuit_cache.items():
-            #Don't remove the empty circuit if it is in the list.
-            if ckt_key=='{}' or ckt_key==():
-                continue
-            #the default tolerance for allclose is probably fine.
-            if _np.linalg.norm(PTM- Identity)<eq_thresh:
-                #then delete that circuit from the cleaned dictionary
-                del cleaned_circuit_cache[ckt_key]
-                
-    cleaned_circuit_cache_1= cleaned_circuit_cache.copy()            
-    
-    if drop_duplicates:
-        #remove circuits with duplicate PTMs
-        
-        #reverse the list so that the longer circuits are at the start and shorter
-        #at the end so that overwritten values in the dict are overwritten with the smallest
-        #length duplicate.
-        
-        #Leverage the fact that we know that the PTMs for clifford circuits
-        #should correspond to signed permutation matrices. Take each of the
-        #permuation matrices, flatten them, then get a list of the non-zero
-        #indices. Then for these non-zero indices construct a second list of
-        #the sign of these entries. This should uniquely identify each of the
-        #signed permutations.
-        reversed_ckt_list = list(cleaned_circuit_cache_1.keys())
-        reversed_ckt_list.reverse()
-        unique_vec_perm_reps= {}
-        for ckt in reversed_ckt_list:
-            flattened_PTM= _np.ravel(cleaned_circuit_cache_1[ckt])
-            #round to the nearest integer.
-            rounded_flattened_PTM= _np.round(flattened_PTM, decimals=0)
-            nonzero_indices= _np.nonzero(rounded_flattened_PTM)[0]
-            #get the signs of the nonzero elements.
-            signs= _np.sign(rounded_flattened_PTM[nonzero_indices])
-            #concatenate these two arrays
-            nonzero_indices_and_signs = _np.concatenate((nonzero_indices,signs))
-            #cast this array to a tuple and then add it to the dictionary
-            #I think technically I can hash the ndarrays directly, but just
-            #to be safe cast these as tuples first.
-            #Actually, I don't think I need to do the deduping in 2 stages.
-            #I should be able to directly use the tuples as keys and the
-            #ckts as the values in a python dictionary (which is implemented
-            #using hash tables on the back end).
-            unique_vec_perm_reps[tuple(nonzero_indices_and_signs)]= ckt
-        
-        #Now get the values of the unique_vec_perm_reps dictionary
-        #These should be the depuped circuits.
-        
-        deduped_ckt_list= list(unique_vec_perm_reps.values())
-        
+        #otherwise use a more generic method that doesn't rely on the structure of cliffords (but is slower).
+        else:
+            unseen_circs  = list(cleaned_circuit_cache.keys())
+            unseen_circs.reverse()
+            deduped_ckt_list  = []
+            
+            #While unseen_circs is not empty
+            while unseen_circs:
+                current_ckt = unseen_circs.pop()
+                current_ckt_PTM = cleaned_circuit_cache_1[current_ckt]
+                deduped_ckt_list.append(current_ckt)            
+                #now iterate through the remaining elements of the set of unseen circuits and remove any duplicates.
+                is_not_duplicate=[True]*len(unseen_circs)
+                for i, ckt in enumerate(unseen_circs):
+                    #the default tolerance for allclose is probably fine.
+                    if _np.linalg.norm(cleaned_circuit_cache_1[ckt]-current_ckt_PTM)<eq_thresh: #use same threshold as defined in the base find_fiducials function
+                        is_not_duplicate[i]=False
+                #reset the set of unseen circuits.
+                unseen_circs=list(itertools.compress(unseen_circs, is_not_duplicate))
+            
         #rebuild the circuit cache now that it has been de-duped:
         cleaned_circuit_cache_2= {ckt_key: cleaned_circuit_cache_1[ckt_key] for ckt_key in deduped_ckt_list}
-        
-    #now that we've de-duped the circuit_cache, we can pull out the keys of cleaned_circuit_cache_2 to get the
+    
+    #otherwise just make cleaned_circuit_cache_2 a copy of cleaned_circuit_cache from
+    #the identity dropping step.
+    else:
+        cleaned_circuit_cache_2= cleaned_circuit_cache.copy()
+     
+    #now that we've de-duped the circuit_cache, we can pull out the keys to get the
     #new list of available fiducials.
+    
     available_fid_list_strings= [ckt.str for ckt in available_fid_list]
     
     cleaned_availableFidList=[]
@@ -629,8 +564,7 @@ def clean_fid_list_clifford(model, circuit_cache, available_fid_list,drop_identi
         if fid_string in cleaned_circuit_cache_2:
             cleaned_availableFidList.append(available_fid_list[i])
     
-    return cleaned_availableFidList, cleaned_circuit_cache_2
-    
+    return cleaned_availableFidList, cleaned_circuit_cache_2    
 
 #new function for taking a list of available fiducials and generating a cache of the PTMs
 #this will also be useful trimming the list of effective identities and fiducials with
@@ -793,10 +727,8 @@ def create_prep_mxs(model, prep_fid_list, prep_cache=None):
     #numRho = len(model.preps)
     numFid = len(prep_fid_list)
     outputMatList = []
-    #print(prep_fid_list)
     
     if prep_cache is not None:
-        #print('Using Prep Cache')
         for rho_key in prep_cache[1]:
             outputMat = _np.zeros([dimRho, numFid], float)
             for i, prepFid in enumerate(prep_fid_list):
@@ -1001,11 +933,7 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
 #the implementation of the above scoring loop can be made much faster
 
     nonzero_score += l1_penalty * len(fid_list)
-
     nonzero_score += op_penalty * sum([len(fiducial) for fiducial in fid_list])
-    
-    
-    #print('nonzero_score before gate penalties: ', nonzero_score)
     
     #add the gate penalties.
     if gate_penalty is not None:
@@ -1016,10 +944,7 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
                 #representation of the ckt.
                 num_gate_instances= fiducial.str.count(gate)
                 nonzero_score+= num_gate_instances*penalty_value
-                        
-    #print('nonzero_score after gate penalties: ', nonzero_score)
-        
-
+                
     score = _scoring.CompositeScore(-N_nonzero, nonzero_score, N_nonzero)
 
     return (score, spectrum) if return_all else score
@@ -1792,59 +1717,61 @@ def _find_fiducials_greedy(model, fids_list, prep_or_meas, op_penalty=0.0,
         #if the best fiducial set is not yet initialized
         #and we have force_empty==True, then we will
         #initialize it with the index of the empty fiducial.
-        if (best_fiducial_set is None) and force_empty:
-            fidsLens = [len(fiducial) for fiducial in fids_list]
-            best_fiducial_set=[fids_list[fidsLens.index(0)]]
-            #calculate the score matrix
-            if prep_or_meas == 'prep':
-                fidArrayList = create_prep_mxs(model, best_fiducial_set, fid_cache)
-            elif prep_or_meas == 'meas':
-                fidArrayList = create_meas_mxs(model, best_fiducial_set, fid_cache)
-            current_best_score_mx= _np.concatenate(fidArrayList, axis=1)
-            current_best_score_gramian = current_best_score_mx@current_best_score_mx.conj().T
-            current_best_inv_trace = _np.trace(_np.linalg.pinv(current_best_score_gramian))
-            #Don't add penalties for first fiducial when forcing it to be the empty germ.
-            initial_rank= _np.linalg.matrix_rank(current_best_score_mx)
-            current_best_composite_score= _scoring.CompositeScore(-initial_rank, current_best_inv_trace, initial_rank)
-        #separate logic if force_empty is not true. In this case we'll loop through the list
-        #of fiducial indices and add the one with the best score.
-        elif best_fiducial_set is None:
-            for fiducial in fids_list:
-                #calculate the score matrix
-                #if prep_or_meas == 'prep':
-                #    fidArrayList = create_prep_mxs(model, [fiducial], fid_cache)
-                #elif prep_or_meas == 'meas':
-                #    fidArrayList = create_meas_mxs(model, [fiducial], fid_cache)
-                current_score_mx= fiducial_compact_EVD_cache[fiducial]
-                current_score_gramian= fiducial_compact_EVD_cache[fiducial]@fiducial_compact_EVD_cache[fiducial].T
-                current_inv_trace = _np.trace(_np.linalg.pinv(current_score_gramian, hermitian=True))
-                #Don't add penalties for first fiducial when forcing it to be the empty germ.
-                current_rank= _np.linalg.matrix_rank(current_score_mx)
-                penalized_inv_trace= add_penalties_greedy(current_inv_trace, [fiducial], l1_penalty, op_penalty, gate_penalty)
-                current_composite_score= _scoring.CompositeScore(-current_rank, penalized_inv_trace, current_rank)
-                
-                #if current_best_composite_score hasn't been initialized then we'll
-                #make the first thing we calculate the best.
-                if current_best_composite_score is None:
-                    current_best_composite_score= current_composite_score
-                    best_fiducial_set= [fiducial]
-                    #also set the current best values for the other variables
-                    current_best_score_mx= current_score_mx
-                    current_best_score_gramian= current_score_gramian
-                    current_best_inv_trace= current_inv_trace
-                #otherwise compare the current composite score to the current
-                #best and replace the best if the current one is better
-                else:    
-                    if current_composite_score < current_best_composite_score:
+        if best_fiducial_set is None:
+            if force_empty:
+                if (best_fiducial_set is None) and force_empty:
+                    fidsLens = [len(fiducial) for fiducial in fids_list]
+                    best_fiducial_set=[fids_list[fidsLens.index(0)]]
+                    #calculate the score matrix
+                    if prep_or_meas == 'prep':
+                        fidArrayList = create_prep_mxs(model, best_fiducial_set, fid_cache)
+                    elif prep_or_meas == 'meas':
+                        fidArrayList = create_meas_mxs(model, best_fiducial_set, fid_cache)
+                    current_best_score_mx= _np.concatenate(fidArrayList, axis=1)
+                    current_best_score_gramian = current_best_score_mx@current_best_score_mx.conj().T
+                    current_best_inv_trace = _np.trace(_np.linalg.pinv(current_best_score_gramian))
+                    #Don't add penalties for first fiducial when forcing it to be the empty germ.
+                    initial_rank= _np.linalg.matrix_rank(current_best_score_mx)
+                    current_best_composite_score= _scoring.CompositeScore(-initial_rank, current_best_inv_trace, initial_rank)
+            #separate logic if force_empty is not true. In this case we'll loop through the list
+            #of fiducial indices and add the one with the best score.
+            else: 
+                for fiducial in fids_list:
+                    #calculate the score matrix
+                    #if prep_or_meas == 'prep':
+                    #    fidArrayList = create_prep_mxs(model, [fiducial], fid_cache)
+                    #elif prep_or_meas == 'meas':
+                    #    fidArrayList = create_meas_mxs(model, [fiducial], fid_cache)
+                    current_score_mx= fiducial_compact_EVD_cache[fiducial]
+                    current_score_gramian= fiducial_compact_EVD_cache[fiducial]@fiducial_compact_EVD_cache[fiducial].T
+                    current_inv_trace = _np.trace(_np.linalg.pinv(current_score_gramian, hermitian=True))
+                    #Don't add penalties for first fiducial when forcing it to be the empty germ.
+                    current_rank= _np.linalg.matrix_rank(current_score_mx)
+                    penalized_inv_trace= add_penalties_greedy(current_inv_trace, [fiducial], l1_penalty, op_penalty, gate_penalty)
+                    current_composite_score= _scoring.CompositeScore(-current_rank, penalized_inv_trace, current_rank)
+                    
+                    #if current_best_composite_score hasn't been initialized then we'll
+                    #make the first thing we calculate the best.
+                    if current_best_composite_score is None:
                         current_best_composite_score= current_composite_score
-                        #swap out the best fiducial set:
                         best_fiducial_set= [fiducial]
                         #also set the current best values for the other variables
                         current_best_score_mx= current_score_mx
                         current_best_score_gramian= current_score_gramian
                         current_best_inv_trace= current_inv_trace
-                    else:
-                        continue
+                    #otherwise compare the current composite score to the current
+                    #best and replace the best if the current one is better
+                    else:    
+                        if current_composite_score < current_best_composite_score:
+                            current_best_composite_score= current_composite_score
+                            #swap out the best fiducial set:
+                            best_fiducial_set= [fiducial]
+                            #also set the current best values for the other variables
+                            current_best_score_mx= current_score_mx
+                            current_best_score_gramian= current_score_gramian
+                            current_best_inv_trace= current_inv_trace
+                        else:
+                            continue
         #If best_fiducial_set has been initialized then we must not be on the first iteration.
         #construct and update cache and loop through the 
         else:
@@ -1908,11 +1835,6 @@ def construct_compact_evd_cache(model, fids_list, prep_or_meas, fid_cache, eigen
         fid_mat_gramian = fid_mat@fid_mat.conj().T
         
         e, U = compact_EVD(fid_mat_gramian, eigenvalue_tolerance)
-        #if not _np.any(e) or not _np.any(U):
-        #    import ipdb
-        #    ipdb.set_trace()
-        #print('eigenvalues: ', e)
-        #print('U: ', U)
         sqrteU_dict[fiducial]= U@_np.diag(_np.sqrt(e))  
         
         #check reconstruction:

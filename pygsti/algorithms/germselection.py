@@ -146,7 +146,7 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
         If specified this is a number between 0 and 1 that indicates the random fraction of candidate
         germs to drop randomly following the deduping procedure.
         
-    mode : str, optional (default 'allJac')
+    mode : {'allJac', 'singleJac', 'compactEVD'}, optional (default 'allJac')
         A flag to indicate the caching scheme used for storing the Jacobians for the candidate
         germs. Default value of 'allJac' caches all of the Jacobians and requires the most memory.
         'singleJac' doesn't cache anything and instead generates these Jacobians on the fly. The
