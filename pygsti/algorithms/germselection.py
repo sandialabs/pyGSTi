@@ -27,9 +27,7 @@ from pygsti.tools import mpitools as _mpit
 from pygsti.baseobjs.statespace import ExplicitStateSpace as _ExplicitStateSpace
 from pygsti.baseobjs.statespace import QuditSpace as _QuditSpace
 
-
 FLOATSIZE = 8  # in bytes: TODO: a better way
-
 
 def find_germs(target_model, randomize=True, randomization_strength=1e-2,
                num_gs_copies=5, seed=None, candidate_germ_counts=None,
@@ -147,6 +145,42 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     toss_random_frac : float, optional
         If specified this is a number between 0 and 1 that indicates the random fraction of candidate
         germs to drop randomly following the deduping procedure.
+        
+    mode : {'allJac', 'singleJac', 'compactEVD'}, optional (default 'allJac')
+        A flag to indicate the caching scheme used for storing the Jacobians for the candidate
+        germs. Default value of 'allJac' caches all of the Jacobians and requires the most memory.
+        'singleJac' doesn't cache anything and instead generates these Jacobians on the fly. The
+        final option, 'compactEVD', is currently only configured to work with the greedy search 
+        algorithm. When selected the compact eigenvalue decomposition/compact SVD of each of
+        the Jacobians is constructed and is cached. This uses an intermediate amount of memory 
+        between singleJac and allJac. When compactEVD mode is selected perform the greedy
+        search iterations using an alternative method based on low-rank updates to the 
+        psuedoinverse. This alternative approach means that this mode also only works with the
+        score function option set to 'all'.
+    
+    force_rank_increase : bool, optional (default False) 
+        Optional flag that can be used in conjunction with the greedy search algorithm
+        in compactEVD mode. When set we require that each subsequant addition to the germ
+        set must increase the rank of the experiment design's composite Jacobian. Can potentially
+        speed up the search when set to True.
+        
+    save_cevd_cache_filename : str, optional (default None)
+        When set and using the greedy search algorithm in 'compactEVD' mode this writes
+        the compact EVD cache to disk using the specified filename.
+               
+    load_cevd_cache_filename : str, optional (default None)
+        A filename/path to load an existing compact EVD cache from. Useful for warmstarting
+        a germ set search with various cost function parameters, or for restarting a search
+        that failed/crashed/ran out of memory. Note that there are no safety checks to confirm 
+        that the compact EVD cache indeed corresponds to that for of currently specified
+        candidate circuit list, so care must be take to confirm that the candidate
+        germ lists are consistent across runs.
+        
+    file_compression : bool, optional (default False)
+        When True and a filename is given for the save_cevd_cache_filename the corresponding
+        numpy arrays are stored in a compressed format using numpy's savez_compressed.
+        Can significantly decrease the storage requirements on disk at the expense of
+        some additional computational cost writing and loading the files.
 
     Returns
     -------
@@ -1036,8 +1070,6 @@ def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
 #        
 #        #testing:
 #        
-#        #print('Is A symmetric?: ', _np.allclose(A, A.T))
-#        
 #        #if _np.linalg.norm(A.imag) > 1e-6:
 #        #    print("DB: imag = ",_np.linalg.norm(A.imag))
 #        #assert(_np.linalg.norm(A.imag) < 1e-6)
@@ -1626,7 +1658,6 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
                                    randomization_strength, num_copies, seed)
 
     dim = model_list[0].dim
-    #Np = model_list[0].num_params #wrong:? includes spam...
     Np = model_list[0].num_params
     assert(all([(mdl.dim == dim) for mdl in model_list])), \
         "All models must have the same dimension!"
@@ -1709,8 +1740,9 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
             [_compute_bulk_twirled_ddd(model, germs_list, tol,
                                        check, germLengths, comm, float_type=float_type)
              for model in model_list]
+        printer.log(f'Numpy Array Data Type: {twirledDerivDaggerDerivList[0].dtype}', 2)
         printer.log("Numpy array data type for twirled derivatives is: "+ str(twirledDerivDaggerDerivList[0].dtype)+
-                    " If this isn't what you specified then something went wrong.", 1) 
+                    " If this isn't what you specified then something went wrong.", 2) 
                     
         currentDDDList = []
         for i, derivDaggerDeriv in enumerate(twirledDerivDaggerDerivList):
@@ -3178,9 +3210,6 @@ def symmetric_low_rank_spectrum_update(update, orig_e, U, proj_U, force_rank_inc
 #    #forms an orthonormal basis for the component of update
 #    #that is in the complement of U.
 #    
-#    print('proj_U Shape: ', proj_U.shape)
-#    print('update shape: ', update.shape)
-#    
 #    proj_update= proj_U@update
 #    
 #    #Next take the RRQR decomposition of this matrix:
@@ -3194,21 +3223,12 @@ def symmetric_low_rank_spectrum_update(update, orig_e, U, proj_U, force_rank_inc
 #    if len(nonzero_indices_update[0])==0 and force_rank_increase:
 #        return None, None, False
 #    
-#    print('proj_update shape: ', proj_update.shape)
-#    
 #    P= q_update[: , nonzero_indices_update[0]]
-#    
-#    print('P shape: ', P.shape)
 #    
 #    updated_rank= len(orig_e)+ len(nonzero_indices_update[0])
 #    
-#    
-#    print('Change in rank= ',updated_rank-len(orig_e))
-#    
 #    #Now form the matrix R_update which is given by P.T @ proj_update.
 #    R_update= P.T@proj_update
-#    
-#    print('R_update Shape: ', R_update.shape)
 #    
 #    #R_update gets concatenated with U.T@update to form
 #    #a block column matrixblock_column= np.concatenate([U.T@update, R_update], axis=0)    
@@ -3222,16 +3242,6 @@ def symmetric_low_rank_spectrum_update(update, orig_e, U, proj_U, force_rank_inc
 #        print((R_update.T@R_update).shape)
 #        raise err
 #    pinv_orig_e_mat= _np.diag(1/orig_e)
-#    
-#    #print out a bunch of shapes for debugging:
-#    
-#    print('RRD Shape: ',  (R_update.T@R_update).shape)
-#    
-#    print('RRRDinv shape: ', RRRDinv.shape)
-#    print('Uta^T shape: ', (Uta.T).shape)
-#    print('pinv_orig_e_mat shape: ', pinv_orig_e_mat.shape)
-#    print('Uta shape: ', Uta.shape)
-#    print('RRRDinv^T shape: ', RRRDinv.T.shape)
 #    
 #    trace= _np.sum(1/orig_e) + _np.trace( RRRDinv@(_np.eye(Uta.shape[1]) + Uta.T@pinv_orig_e_mat@Uta)@RRRDinv.T )
 #    
@@ -3311,8 +3321,10 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         central_mat= _np.linalg.inv(_np.eye(beta.shape[1]) + pinv_sqrt_E_beta.T@pinv_sqrt_E_beta)
         
         #diagnostic information
+        #if this prints something bad happened
         if central_mat.shape == (0,0):
             print('central_mat shape: ', central_mat.shape)
+            
         #now calculate the diagonal elements of pinv_E_beta@central_mat@pinv_E_beta.T
         
         #Take the cholesky decomposition of the central matrix
@@ -3382,14 +3394,14 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
             print('Dinv Condition Number: ', _np.linalg.cond(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)))
             print('Minimum original eigenvalue: ', _np.min(orig_e))
             #raise err
-
+            
         if cholesky_success:
             pinv_E_beta_B_Dinv_chol= pinv_E_beta@B@Dinv_chol
             
             #Now construct the two matrices we need:  
             #numpy einsum based approach for the upper left block:
             upper_left_block_diag = _np.einsum('ij,ji->i', pinv_E_beta_B_Dinv_chol, pinv_E_beta_B_Dinv_chol.T) + _np.reshape(orig_e_inv, (len(orig_e), ))
-                        
+
             #The lower right seems fast enough as it is for now, but we can try an einsum style direct diagonal
             #calculation if need be.
             lower_right_block= (gamma@(orig_e_inv*gamma.T))+ pinv_R_update.T@pinv_R_update - gamma@pinv_E_beta_B_Dinv_chol@pinv_E_beta_B_Dinv_chol.T@gamma.T
@@ -3540,7 +3552,6 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                                    randomization_strength, num_copies, seed)
 
     dim = model_list[0].dim
-    #Np = model_list[0].num_params #wrong:? includes spam...
     Np = model_list[0].num_params
     assert(all([(mdl.dim == dim) for mdl in model_list])), \
         "All models must have the same dimension!"
@@ -3631,8 +3642,10 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
             [_compute_bulk_twirled_ddd(model, germs_list, tol,
                                        check, germLengths, comm, float_type=float_type)
              for model in model_list]
+
+        printer.log(f'Numpy Array Data Type: {twirledDerivDaggerDerivList[0].dtype}', 2)
         printer.log("Numpy array data type for twirled derivatives is: "+ str(twirledDerivDaggerDerivList[0].dtype)+
-                    " If this isn't what you specified then something went wrong.", 1) 
+                    " If this isn't what you specified then something went wrong.",  2) 
         currentDDDList = []
         for i, derivDaggerDeriv in enumerate(twirledDerivDaggerDerivList):
             currentDDDList.append(_np.sum(derivDaggerDeriv[_np.where(weights == 1)[0], :, :], axis=0))
@@ -3740,6 +3753,9 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         if mode=="compactEVD":
             #calculate the update cache for each element of currentDDDList 
             printer.log('Creating update cache.')
+            #TODO: I think I ought to be able to speed up the construction of the update
+            #cache by adding some logic to leverage the same trick I use now in the
+            #construction of the EVD cache, but that is a problem for another day.
             currentDDDList_update_cache = [construct_update_cache(currentDDD, evd_tol=evd_tol) for currentDDD in currentDDDList]
             #the return value of the update cache is a tuple with the elements
             #(e, U, projU)    
@@ -3789,17 +3805,9 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                                     **nonAC_kwargs))
                         testDDDs.append(testDDD)  # save in case this is a keeper
                     
-                    
                 elif mode == "compactEVD":
                     # Loop over all models
                     for k, update_cache in enumerate(currentDDDList_update_cache):
-                        #reconstruct the J^T J matrix from it's compact SVD
-                        #testDDD += twirledDerivDaggerDerivList[k][0][candidateGermIdx] @ \
-                        #           _np.diag(twirledDerivDaggerDerivList[k][1][candidateGermIdx]) @\
-                        #           twirledDerivDaggerDerivList[k][2][candidateGermIdx]
-                    # (else already checked above)
-                    
-                        #pass in the 
                     
                         nonAC_kwargs['germ_lengths'] = \
                             _np.array([len(germ) for germ in
@@ -3819,8 +3827,6 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                                                 germ_update=twirledDerivDaggerDerivList[k][candidateGermIdx], 
                                                 init_n=initN, **nonAC_kwargs))
                             
-                        
-
                 # Take the score for the current germ to be its worst score
                 # over all the models.
                 germScore = worstScore
@@ -4001,10 +4007,6 @@ def compute_composite_germ_set_score_compactevd(current_update_cache, germ_updat
 
         #now pull out just the top num_nongauge_params eigenvalues
         observableEigenvals = padded_updated_eigenvalues[-num_nongauge_params:]
-
-        #combinedDDD = _np.sum(partial_deriv_dagger_deriv, axis=0)
-        #sortedEigenvals = _np.sort(_np.real(_nla.eigvalsh(combinedDDD)))
-        #observableEigenvals = sortedEigenvals[-num_nongauge_params:]
     
         for N in range(init_n, len(observableEigenvals) + 1):
             scoredEigenvals = observableEigenvals[-N:]
@@ -4016,16 +4018,11 @@ def compute_composite_germ_set_score_compactevd(current_update_cache, germ_updat
                 AC_score = candidate_AC_score
                 N_AC = N
 
-    # OLD Apply penalties to the minor score; major part is just #amplified
-    #major_score = N_AC
-    #minor_score = AC_score + l1Score + opScore
-
     # Apply penalties to the major score
     major_score = -N_AC + opScore + l1Score
     minor_score = AC_score
     ret = _scoring.CompositeScore(major_score, minor_score, N_AC)
-    #DEBUG: ret.extra = {'opScore': opScore,
-    #    'sum(germ_lengths)': _np.sum(germ_lengths), 'l1': l1Score}
+
     return ret
 
 def compute_composite_germ_set_score_low_rank_trace(current_update_cache, germ_update, 
