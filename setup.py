@@ -49,6 +49,7 @@ extras = {
         'ipython',
         'notebook'
     ],
+    'mongodb': ['pymongo'],
     'msgpack': ['msgpack'],
     'extensions': ['cython'],
     'linting': [

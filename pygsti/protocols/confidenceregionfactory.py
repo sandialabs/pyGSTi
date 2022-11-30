@@ -21,7 +21,7 @@ import scipy.stats as _stats
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti.models.explicitcalc import P_RANK_TOL
-from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction as _PoissonPicDeltaLogLFunction
@@ -54,7 +54,7 @@ from pygsti.objectivefns.objectivefns import FreqWeightedChi2Function as _FreqWe
 #
 
 
-class ConfidenceRegionFactory(_NicelySerializable):
+class ConfidenceRegionFactory(_MongoSerializable):
     """
     An object which is capable of generating confidence intervals/regions.
 
@@ -182,6 +182,58 @@ class ConfidenceRegionFactory(_NicelySerializable):
                 ret.hessian_projection_parameters[projection_lbl] = params  # (param dict is entirely JSON-able)
                 ret.inv_hessian_projections[projection_lbl] = cls._decodemx(
                     state['inverse_hessian_projections'][projection_lbl])
+            ret.nNonGaugeParams = state['num_nongauge_params']
+            ret.nGaugeParams = state['num_gauge_params']
+        return ret
+
+    def _to_mongodb_serialization(self, mongodb):
+        #Serialize hessian matrices separately using GridFS
+        if self.hessian is not None:
+            import gridfs as _gridfs
+            import pickle as _pickle
+            fs = _gridfs.GridFS(mongodb, collection='pygsti_gridfs')
+            hessian_id = str(fs.put(_pickle.dumps(self.hessian, protocol=2)))  # str(.) to serialize bson.ObjectId
+            inv_hessian_projection_ids = {k: str(fs.put(_pickle.dumps(v, protocol=2)))
+                                          for k, v in self.inv_hessian_projections.items()}
+        else:
+            hessian_id = None
+            inv_hessian_projection_ids = {}
+
+        state = super()._to_mongodb_serialization(mongodb)
+        state.update({'model_label': self.model_lbl,
+                      'circuit_list_label': self.circuit_list_lbl,
+                      'nonmarkovian_radius_squared': self.nonMarkRadiusSq,
+                      'hessian_matrix_id': hessian_id,
+                      'hessian_projection_parameters': {k: v for k, v in self.hessian_projection_parameters.items()},
+                      'inverse_hessian_projection_ids': inv_hessian_projection_ids,
+                      'num_nongauge_params': int(self.nNonGaugeParams) if (self.nNonGaugeParams is not None) else None,
+                      'num_gauge_params': int(self.nGaugeParams) if (self.nGaugeParams is not None) else None,
+                      #Note: need int(.) casts above because int64 is *not* JSON serializable (?)
+                      #Note: we don't currently serialize self.linresponse_gstfit_params (!)
+                      })
+
+        return state
+
+    @classmethod
+    def _from_mongodb_serialization(cls, state, mongodb):
+        if state['hessian_matrix_id'] is not None:
+            import gridfs as _gridfs
+            import pickle as _pickle
+            from bson import ObjectId as _ObjectId
+            fs = _gridfs.GridFS(mongodb, collection='pygsti_gridfs')
+            hessian_mx = _pickle.loads(fs.get(_ObjectId(state['hessian_matrix_id'])).read())
+            inv_hessian_projections = {projection_lbl: _pickle.loads(fs.get(_ObjectId(projection_id)).read())
+                                       for projection_lbl, projection_id in state['inverse_hessian_projection_ids'].items()}
+        else:
+            hessian_mx = None
+            inv_hessian_projections = {}
+
+        ret = cls(None, state['model_label'], state['circuit_list_label'],
+                  hessian_mx, state['nonmarkovian_radius_squared'])
+        if 'hessian_projection_parameters' in state:
+            for projection_lbl, params in state['hessian_projection_parameters'].items():
+                ret.hessian_projection_parameters[projection_lbl] = params  # (param dict is entirely JSON-able)
+                ret.inv_hessian_projections[projection_lbl] = inv_hessian_projections[projection_lbl]
             ret.nNonGaugeParams = state['num_nongauge_params']
             ret.nGaugeParams = state['num_gauge_params']
         return ret
