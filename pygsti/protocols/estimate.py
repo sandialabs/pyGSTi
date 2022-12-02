@@ -83,6 +83,34 @@ class Estimate(object):
         return ret
 
     @classmethod
+    def from_mongodb(cls, mongodb_collection, doc_id, quick_load=False):
+        """
+        Initialize a new Estimate object from a Mongo database.
+
+        Parameters
+        ----------
+        mongodb_collection : pymongo.collection.Collection
+            The MongoDB collection to load data from.
+
+        doc_id : str
+            The user-defined identifier of the protocol object to load.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of components that may take
+            a long time to load.
+
+        Returns
+        -------
+        Protocol
+        """
+        ret = cls.__new__(cls)
+        ret.__dict__.update(_io.read_auxtree_from_mongodb(mongodb_collection, doc_id,
+                                                          'auxfile_types', quick_load=quick_load))
+        for crf in ret.confidence_region_factories.values():
+            crf.set_parent(ret)  # re-link confidence_region_factories
+        return ret
+
+    @classmethod
     def create_gst_estimate(cls, parent, target_model=None, seed_model=None,
                             models_by_iter=None, parameters=None):
         """
@@ -220,6 +248,51 @@ class Estimate(object):
         None
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+    def write_to_mongodb(self, mongodb_collection, doc_id=None, session=None, overwrite_existing=False):
+        """
+        Write this Estimate to a MongoDB database.
+
+        Parameters
+        ----------
+        mongodb_collection : pymongo.collection.Collection
+            The MongoDB collection to write to.
+
+        doc_id : str, optional
+            The user-defined identifier of the Estimate to write.  Can be
+            left as `None` to generate a random identifier.
+
+        session : pymongo.client_session.ClientSession, optional
+            MongoDB session object to use when interacting with the MongoDB
+            database. This can be used to implement transactions
+            among other things.
+
+        overwrite_existing : bool, optional
+            Whether existing documents should be overwritten.  The default of `False` causes
+            a ValueError to be raised if a document with the given `doc_id` already exists.
+            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
+            to a path can be done regardless of whether it already exists.
+
+        Returns
+        -------
+        None
+        """
+        _io.write_obj_to_mongodb_auxtree(self, mongodb_collection, doc_id, 'auxfile_types',
+                                         session=session, overwrite_existing=overwrite_existing)
+
+    @classmethod
+    def remove_from_mongodb(cls, mongodb_collection, doc_id, session=None):
+        """
+        Remove an Estimate from a MongoDB database.
+
+        Returns
+        -------
+        bool
+            `True` if the specified experiment design was removed, `False` if it didn't exist.
+        """
+        delcnt = _io.remove_auxtree_from_mongodb(mongodb_collection, doc_id, 'auxfile_types',
+                                                 session=session)
+        return bool(delcnt == 1)
 
     def retrieve_start_model(self, goparams):
         """

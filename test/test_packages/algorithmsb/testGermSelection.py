@@ -67,7 +67,7 @@ class GermSelectionTestCase(AlgorithmTestCase):
         pygsti.alg.find_germs_breadthfirst(gatesetNeighborhood, superGermSet,
                                            randomize=False, seed=2014, score_func='all',
                                            threshold=threshold, verbosity=1, op_penalty=1.0,
-                                           mem_limit=1024000)
+                                           mem_limit=2*1024000)
                                            
 
     def test_germsel_low_rank(self):

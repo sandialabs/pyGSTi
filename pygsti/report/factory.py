@@ -29,12 +29,14 @@ from pygsti import tools as _tools
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.objectivefns import wildcardbudget as _wildcardbudget
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.objectivefns.wildcardbudget import PrimitiveOpsSingleScaleWildcardBudget
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
@@ -356,9 +358,13 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 switchBd.eff_ds[d, i] = NA
                 switchBd.scaled_submxs_dict[d, i] = NA
 
-            switchBd.wildcard_budget_optional[d, i] = est.parameters.get("unmodeled_error", None)
+            wildcard = est.parameters.get("unmodeled_error", None)
+            if isinstance(wildcard, dict):  # assume a serialized budget object
+                wildcard = _wildcardbudget.WildcardBudget.from_nice_serialization(wildcard)
+
+            switchBd.wildcard_budget_optional[d, i] = wildcard
             if est.parameters.get("unmodeled_error", None):
-                switchBd.wildcard_budget[d, i] = est.parameters['unmodeled_error']
+                switchBd.wildcard_budget[d, i] = wildcard
             else:
                 switchBd.wildcard_budget[d, i] = NA
 
@@ -369,7 +375,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                                                                                      est.models['target'])
             except AttributeError:  # Implicit models don't support everything, like set_all_parameterizations
                 switchBd.mdl_gaugeinv_ep[d, i] = None
-            except AssertionError:  # if target is badly off, this can fail with an imaginary part assertion
+            except (ValueError, AssertionError):  # if target is badly off, e.g. an imaginary part assertion
                 switchBd.mdl_gaugeinv_ep[d, i] = None
 
             switchBd.mdl_final[d, i, :] = [est.models.get(l, NA) for l in gauge_opt_labels]
@@ -1212,6 +1218,16 @@ def construct_standard_report(results, title="auto",
                 flags.add('ShowScaling')
             if est.parameters.get('unmodeled_error', None):
                 flags.add('ShowUnmodeledError')
+                #check if the wildcard budget is an instance
+                #of the diamond distance model, in which case we
+                #will add an extra flag/plot to the report.
+                wildcard = est.parameters['unmodeled_error']
+                if isinstance(wildcard, dict):  # assume a serialized budget object
+                    wildcard = _wildcardbudget.WildcardBudget.from_nice_serialization(wildcard)
+                if (isinstance(wildcard, PrimitiveOpsSingleScaleWildcardBudget)
+                   and wildcard.reference_name == 'diamond distance'):
+                    flags.add('DiamondDistanceWildcard')
+
     if combine_robust:
         flags.add('CombineRobust')
 
@@ -1498,6 +1514,7 @@ def construct_nqnoise_report(results, title="auto",
         'colorBoxPlotKeyPlot': ws.BoxKeyPlot(switchBd.prep_fiducials, switchBd.meas_fiducials),
         'bestGatesetGaugeOptParamsTable': ws.GaugeOptParamsTable(switchBd.goparams),
         'gramBarPlot': ws.GramMatrixBarPlot(switchBd.ds, switchBd.mdl_target, 10, switchBd.fiducials_tup)
+        # Note by EGN 11/10/2022 - I don't think 'gramBarPlot' is needed here, maybe just a copy/paste oversight?
     }
 
     report_params = {

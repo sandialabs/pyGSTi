@@ -349,6 +349,7 @@ class Workspace(object):
         # goodness of fit
         self.FitComparisonTable = makefactory(_wt.FitComparisonTable)
         self.WildcardBudgetTable = makefactory(_wt.WildcardBudgetTable)
+        self.WildcardSingleScaleBarPlot = makefactory(_wp.WildcardSingleScaleBarPlot)
 
         #Specifically designed for reports
         self.BlankTable = makefactory(_wt.BlankTable)
