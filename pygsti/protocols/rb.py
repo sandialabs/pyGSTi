@@ -245,6 +245,34 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
                 defaultfit = 'full'
             self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        CliffordRBDesign
+        """
+        mapped_circuits_and_idealouts_by_depth = []
+        for circuit_list, idealout_list in zip(self.circuit_lists, self.idealout_lists):
+            mapped_circuits_and_idealouts_by_depth.append(
+                [(c.map_state_space_labels(mapper), iout) for c, iout in zip(circuit_list, idealout_list)])
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        if self.interleaved_circuit is not None:
+            raise NotImplementedError("TODO: figure out whether `interleaved_circuit` needs to be mapped!")
+        return CliffordRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
+                                                       mapped_qubit_labels,
+                                                       self.randomizeout, self.citerations, self.compilerargs,
+                                                       self.interleaved_circuit, self.descriptor,
+                                                       add_default_protocol=False)
+
 
 class DirectRBDesign(_vb.BenchmarkingDesign):
     """
@@ -564,6 +592,33 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
                 defaultfit = 'full'
             self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        DirectRBDesign
+        """
+        mapped_circuits_and_idealouts_by_depth = []
+        for circuit_list, idealout_list in zip(self.circuit_lists, self.idealout_lists):
+            mapped_circuits_and_idealouts_by_depth.append(
+                [(c.map_state_space_labels(mapper), iout) for c, iout in zip(circuit_list, idealout_list)])
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return DirectRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
+                                                     mapped_qubit_labels,
+                                                     self.sampler, self.samplerargs, self.addlocal,
+                                                     self.lsargs, self.randomizeout, self.cliffordtwirl,
+                                                     self.conditionaltwirl, self.citerations, self.compilerargs,
+                                                     self.partitioned, self.descriptor, add_default_protocol=False)
+
 
 class MirrorRBDesign(_vb.BenchmarkingDesign):
     """
@@ -778,6 +833,33 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
 
         if add_default_protocol:
             self.add_default_protocol(RB(name='RB', datatype='adjusted_success_probabilities', defaultfit='A-fixed'))
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        MirrorRBDesign
+        """
+        mapped_circuits_and_idealouts_by_depth = []
+        for circuit_list, idealout_list in zip(self.circuit_lists, self.idealout_lists):
+            mapped_circuits_and_idealouts_by_depth.append(
+                [(c.map_state_space_labels(mapper), iout) for c, iout in zip(circuit_list, idealout_list)])
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return DirectRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
+                                                     mapped_qubit_labels,
+                                                     self.circuit_type, self.sampler,
+                                                     self.samplerargs, self.localclifford,
+                                                     self.paulirandomize, self.descriptor,
+                                                     add_default_protocol=False)
 
 
 class RandomizedBenchmarking(_vb.SummaryStatistics):

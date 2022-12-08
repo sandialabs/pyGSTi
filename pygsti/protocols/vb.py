@@ -47,6 +47,26 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         super().__init__(circuit_lists, qubit_labels=qubit_labels, remove_duplicates=remove_duplicates)
         self.depths = depths
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        ByDepthDesign
+        """
+        mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
+                                for circuit_list in self.circuit_lists]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return ByDepthDesign(self.depths, mapped_circuit_lists, mapped_qubit_labels, remove_duplicates=False)
+
 
 class BenchmarkingDesign(ByDepthDesign):
     """
@@ -84,6 +104,27 @@ class BenchmarkingDesign(ByDepthDesign):
         super().__init__(depths, circuit_lists, qubit_labels, remove_duplicates)
         self.idealout_lists = ideal_outs
         self.auxfile_types['idealout_lists'] = 'json'
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        ByDepthDesign
+        """
+        mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
+                                for circuit_list in self.circuit_lists]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return BenchmarkingDesign(self.depths, mapped_circuit_lists, list(self.idealout_lists),
+                                  mapped_qubit_labels, remove_duplicates=False)
 
 
 class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
@@ -274,6 +315,32 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         self.localclifford = localclifford
         self.paulirandomize = paulirandomize
         self.fixed_versus_depth = fixed_versus_depth
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        PeriodicMirrorCircuitDesign
+        """
+        mapped_circuits_and_idealouts_by_depth = []
+        for circuit_list, idealout_list in zip(self.circuit_lists, self.idealout_lists):
+            mapped_circuits_and_idealouts_by_depth.append(
+                [(c.map_state_space_labels(mapper), iout) for c, iout in zip(circuit_list, idealout_list)])
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return PeriodicMirrorCircuitDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
+                                                                  mapped_qubit_labels,
+                                                                  self.sampler, self.samplerargs, self.localclifford,
+                                                                  self.paulirandomize, self.fixed_versus_depth,
+                                                                  self.descriptor)
 
 
 class SummaryStatistics(_proto.Protocol):

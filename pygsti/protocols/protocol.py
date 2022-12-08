@@ -1129,6 +1129,34 @@ class ExperimentDesign(_TreeNode):
         """
         return SimultaneousExperimentDesign.from_edesign(self)
 
+    def _mapped_qubit_labels(self, mapper):
+        if self.qubit_labels in ("multiple", ('*',)):
+            mapped_qubit_labels = self.qubit_labels
+        else:
+            mapped_qubit_labels = tuple([mapper[ql] for ql in self.qubit_labels]) if isinstance(mapper, dict) \
+                else tuple(map(mapper, self.qubit_labels))
+        return mapped_qubit_labels
+    
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new ExperimentDesign whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        mapped_children = {key: child.map_qubit_labels(mapper) for key, child in self._vals.items()}
+        return ExperimentDesign(mapped_circuits, mapped_qubit_labels, mapped_children, self._dirs)
+
 
 class CircuitListsDesign(ExperimentDesign):
     """
@@ -1294,6 +1322,28 @@ class CircuitListsDesign(ExperimentDesign):
         self.circuit_lists = truncated_lists
         #self.nested = False
         super()._truncate_to_available_data_inplace(dataset)
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        CircuitListsDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
+                                for circuit_list in self.circuit_lists]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return CircuitListsDesign(mapped_circuit_lists, mapped_circuits, mapped_qubit_labels,
+                                  self.nested, remove_duplicates=False)  # no need to remove duplicates
 
 
 class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the same dataset
@@ -1478,6 +1528,26 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
 
         self._dirs[key] = self._auto_dirname(key)
         self._vals[key] = val
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        CombinedExperimentDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        mapped_sub_designs = {key: child.map_qubit_labels(mapper) for key, child in self._vals.items()}
+        return CombinedExperimentDesign(mapped_sub_designs, mapped_circuits, mapped_qubit_labels, self._dirs)
 
 
 class SimultaneousExperimentDesign(ExperimentDesign):
@@ -1666,6 +1736,26 @@ class SimultaneousExperimentDesign(ExperimentDesign):
                 filtered_ds = filtered_ds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
         return ProtocolData(sub_design, filtered_ds)
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        SimultaneousExperimentDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        mapped_edesigns = [child.map_qubit_labels(mapper) for child in self._vals.values()]
+        return SimultaneousExperimentDesign(mapped_edesigns, mapped_circuits, mapped_qubit_labels)
+
 
 class FreeformDesign(ExperimentDesign):
     """
@@ -1752,6 +1842,25 @@ class FreeformDesign(ExperimentDesign):
             cdict[cir.str] = _NamedDict('ValueName', 'category', items=info)
         df = cdict.to_dataframe()
         return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=True)
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        FreeformDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return FreeformDesign(mapped_circuits, mapped_qubit_labels)
 
 
 class ProtocolData(_TreeNode):
