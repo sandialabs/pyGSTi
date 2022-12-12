@@ -260,10 +260,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         -------
         CliffordRBDesign
         """
-        mapped_circuits_and_idealouts_by_depth = []
-        for circuit_list, idealout_list in zip(self.circuit_lists, self.idealout_lists):
-            mapped_circuits_and_idealouts_by_depth.append(
-                [(c.map_state_space_labels(mapper), iout) for c, iout in zip(circuit_list, idealout_list)])
+        mapped_circuits_and_idealouts_by_depth = self._mapped_circuits_and_idealouts_by_depth(mapper)
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         if self.interleaved_circuit is not None:
             raise NotImplementedError("TODO: figure out whether `interleaved_circuit` needs to be mapped!")
@@ -607,10 +604,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
         -------
         DirectRBDesign
         """
-        mapped_circuits_and_idealouts_by_depth = []
-        for circuit_list, idealout_list in zip(self.circuit_lists, self.idealout_lists):
-            mapped_circuits_and_idealouts_by_depth.append(
-                [(c.map_state_space_labels(mapper), iout) for c, iout in zip(circuit_list, idealout_list)])
+        mapped_circuits_and_idealouts_by_depth = self._mapped_circuits_and_idealouts_by_depth(mapper)
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         return DirectRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
                                                      mapped_qubit_labels,
@@ -849,10 +843,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         -------
         MirrorRBDesign
         """
-        mapped_circuits_and_idealouts_by_depth = []
-        for circuit_list, idealout_list in zip(self.circuit_lists, self.idealout_lists):
-            mapped_circuits_and_idealouts_by_depth.append(
-                [(c.map_state_space_labels(mapper), iout) for c, iout in zip(circuit_list, idealout_list)])
+        mapped_circuits_and_idealouts_by_depth = self._mapped_circuits_and_idealouts_by_depth(mapper)
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         return DirectRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
                                                      mapped_qubit_labels,
