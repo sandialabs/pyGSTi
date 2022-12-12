@@ -291,13 +291,25 @@ class WriteOpsBySubcollection(dict):
             self[k].extend(v)
         self.standalone_writes.extend(other_ops.standalone_writes)
 
-    def add_one_op(self, subcollection_name, full_id, rest_of_info, overwrite_existing):
+    def add_one_op(self, subcollection_name, full_id, rest_of_info, overwrite_existing, root_mongo_collection):
         from pymongo import InsertOne, ReplaceOne
         assert(subcollection_name in self.allowed_subcollection_names)
         info = full_id.copy()
         info.update(rest_of_info)
-        self[subcollection_name].append(ReplaceOne(full_id, info, upsert=True)
-                                        if overwrite_existing else InsertOne(info))
+        if overwrite_existing is True:
+            self[subcollection_name].append(ReplaceOne(full_id, info, upsert=True))
+        else:
+            existing_doc = root_mongo_collection[subcollection_name].find_one(full_id)
+            if existing_doc is None:  # then insert the document as given
+                self[subcollection_name].append(InsertOne(info))
+            else:
+                info_to_check = prepare_doc_for_existing_doc_check(info, existing_doc)
+                if existing_doc != info_to_check:
+                    # overwrite_existing=False and a doc already exists AND docs are *different* => error
+                    diff_lines = recursive_compare_str(existing_doc, info_to_check, 'existing doc', 'doc to insert')
+                    raise ValueError("*Different* document with %s exists and `overwrite_existing=False`:\n%s"
+                                     % (str(full_id), '\n'.join(diff_lines)))
+                # else do nothing, since doc exists and matches what we want to write => no error
 
 
 def write_obj_to_mongodb_auxtree(obj, root_mongo_collection, doc_id, auxfile_types_member, omit_attributes=(),
@@ -399,9 +411,9 @@ def write_auxtree_to_mongodb(root_mongo_collection, doc_id, valuedict, auxfile_t
     to_insert['auxfile_types'] = auxfile_types
     to_insert['_id'] = doc_id
 
-    #Initial check
-    if not overwrite_existing and root_mongo_collection.count_documents({'_id': doc_id}, session=session) > 0:
-        raise ValueError("Document with id=%s exists and `overwrite_existing=False`" % str(doc_id))
+    #Initial check -- REMOVED because it's ok to "overwrite" the *same* data with overwrite_existing=False
+    #if not overwrite_existing and root_mongo_collection.count_documents({'_id': doc_id}, session=session) > 0:
+    #    raise ValueError("Document with id=%s exists and `overwrite_existing=False`" % str(doc_id))
 
     for key, val in valuedict.items():
         if key in auxfile_types: continue  # member is serialized to a separate (sub-)collection
@@ -416,7 +428,8 @@ def write_auxtree_to_mongodb(root_mongo_collection, doc_id, valuedict, auxfile_t
             auxmeta, ops = _write_subcollection_member(root_mongo_collection, doc_id, auxnm, typ, val,
                                                        session, overwrite_existing)
         except Exception as e:
-            raise ValueError("FAILED to prepare to write aux doc member %s w/format %s:" % (auxnm, typ)) from e
+            raise ValueError("FAILED to prepare to write aux doc member %s w/format %s (see direct cause above)"
+                             % (auxnm, typ)) from e
 
         write_ops.add_ops_by_subcollection(ops)
         if auxmeta is not None:
@@ -438,7 +451,16 @@ def write_auxtree_to_mongodb(root_mongo_collection, doc_id, valuedict, auxfile_t
         if overwrite_existing:
             root_mongo_collection.replace_one({'_id': doc_id}, to_insert, upsert=True, session=session)
         else:
-            root_mongo_collection.insert_one(to_insert, session=session)
+            existing_doc = root_mongo_collection.find_one({'_id': doc_id})
+            if existing_doc is None:  # then insert the document as given
+                root_mongo_collection.insert_one(to_insert, session=session)
+            else:
+                to_check = prepare_doc_for_existing_doc_check(to_insert, existing_doc)
+                if existing_doc != to_check:
+                    diff_lines = recursive_compare_str(existing_doc, to_check, 'existing doc', 'doc to insert')
+                    raise ValueError("*Different* document with _id=%s exists and `overwrite_existing=False`:\n%s"
+                                     % (str(doc_id), '\n'.join(diff_lines)))
+                # else do nothing, since doc exists and matches what we want to write => no error
 
     except Exception as e:
         if session is None:
@@ -510,21 +532,23 @@ def _write_subcollection_member(root_mongo_collection, parent_id, member_name, t
             for i, circuit in enumerate(val):
                 write_ops.add_one_op(cnm('circuits'), member_id,
                                      {'auxfile_type': cur_typ, 'index': i, 'circuit_str': circuit.str},
-                                     overwrite_existing)
+                                     overwrite_existing, root_mongo_collection)
 
         elif cur_typ == 'dir-serialized-object':
-            standalone_id = ObjectId()
+            existing_link_doc = root_mongo_collection[cnm('objects')].find_one(member_id)
+            standalone_id = ObjectId() if (existing_link_doc is None) else existing_link_doc['standalone_object_id']
             write_ops.standalone_writes.append((standalone_id, val, False))  # list of (id, object_to_write, bPartial)
             write_ops.add_one_op(cnm('objects'), member_id,
                                  {'auxfile_type': cur_typ, 'standalone_object_id': standalone_id},
-                                 overwrite_existing)
+                                 overwrite_existing, root_mongo_collection)
 
         elif cur_typ == 'partialdir-serialized-object':
-            standalone_id = ObjectId()
+            existing_link_doc = root_mongo_collection[cnm('objects')].find_one(member_id)
+            standalone_id = ObjectId() if (existing_link_doc is None) else existing_link_doc['standalone_object_id']
             write_ops.standalone_writes.append((standalone_id, val, True))  # list of (id, object_to_write, bPartial)
             write_ops.add_one_op(cnm('objects'), member_id,
                                  {'auxfile_type': cur_typ, 'standalone_object_id': standalone_id},
-                                 overwrite_existing)
+                                 overwrite_existing, root_mongo_collection)
 
         elif cur_typ == 'serialized-object':
             assert(isinstance(val, _NicelySerializable)), \
@@ -537,30 +561,31 @@ def _write_subcollection_member(root_mongo_collection, parent_id, member_name, t
                 sertype = "nice"
             write_ops.add_one_op(cnm('objects'), member_id, {'auxfile_type': cur_typ, 'object': jsonable,
                                                              'serialization_type': sertype},
-                                 overwrite_existing)
+                                 overwrite_existing, root_mongo_collection)
 
         elif cur_typ == 'circuit-str-json':
             for i, circuit in enumerate(val):
                 write_ops.add_one_op(cnm('circuits'), member_id,
                                      {'auxfile_type': cur_typ, 'index': i, 'circuit_str': circuit.str},
-                                     overwrite_existing)
+                                     overwrite_existing, root_mongo_collection)
 
         elif cur_typ == 'numpy-array':
             write_ops.add_one_op(cnm('arrays'), member_id,
                                  {'auxfile_type': cur_typ,
                                   'numpy_array': _Binary(_pickle.dumps(val, protocol=2), subtype=128)},
-                                 overwrite_existing)
+                                 overwrite_existing, root_mongo_collection)
 
         elif typ == 'json':
             _check_jsonable(val)
             write_ops.add_one_op(cnm('objects'), member_id,
-                                 {'auxfile_type': cur_typ, 'object': val}, overwrite_existing)
+                                 {'auxfile_type': cur_typ, 'object': val},
+                                 overwrite_existing, root_mongo_collection)
 
         elif typ == 'pickle':
             write_ops.add_one_op(cnm('objects'), member_id,
                                  {'auxfile_type': cur_typ,
                                   'object': _Binary(_pickle.dumps(val, protocol=2), subtype=128)},
-                                 overwrite_existing)
+                                 overwrite_existing, root_mongo_collection)
 
         else:
             raise ValueError("Invalid aux-file type: %s" % typ)
@@ -865,7 +890,7 @@ def write_dataset_to_mongodb(dataset, mongodb_collection, identifying_metadata,
     else:
         from bson.objectid import ObjectId as _ObjectId
         existing_dataset_doc = mongodb_collection.find_one(identifying_metadata, session=session)
-        dataset_id = existing_dataset_doc._id if (existing_dataset_doc is not None) else _ObjectId()
+        dataset_id = existing_dataset_doc['_id'] if (existing_dataset_doc is not None) else _ObjectId()
         identifying_metadata = identifying_metadata.copy()
         identifying_metadata['_id'] = dataset_id  # be sure to query & replace the same ID below
 
@@ -1042,3 +1067,102 @@ def mongodb_collection_names(custom_collection_names=None):
             assert(k in collection_names), "%s is an invalid collection-type (key)!" % str(k)
             collection_names[k] = v
     return collection_names
+
+
+def prepare_doc_for_existing_doc_check(doc, existing_doc, set_id=True, convert_tuples_to_lists=True):
+    """
+    Prepares a to-be inserted document for comparison with an existing document.
+
+    Optionally (see parameters):
+    1) sets _id of `doc` to that of `existing_doc`.  This is useful in cases where the _id
+       field is redundant with other uniquely identifying fields in the document, and so inserted
+       documents don't need to match this field.
+    2) converts all of `doc`'s tuples to lists, as the existing_doc is typically read from a MongoDB
+       which only stores lists and doesn't distinguish between lists and tuples.
+
+    Parameters
+    ----------
+    doc : dict
+        the document to prepare
+
+    existing_doc : dict
+        the existing document
+
+    set_id : bool, optional
+        when `True`, add an `'_id'` field to `doc` matching `existing_doc` when one
+        is not already present.
+
+    convert_tuples_to_lists : bool, optional
+        when `True` convert all of the tuples within `doc` to lists.
+
+    Returns
+    -------
+    dict
+        the prepared document.
+    """
+    def tup_to_list(obj):
+        if isinstance(obj, (tuple, list)):
+            return [tup_to_list(v) for v in obj]
+        elif isinstance(obj, dict):
+            return {k: tup_to_list(v) for k, v in obj.items()}
+        else:
+            return obj
+
+    doc = doc.copy()
+    if '_id' not in doc:  # Allow doc to lack an _id field and still be considered same as existing_doc
+        doc['_id'] = existing_doc['_id']
+    return tup_to_list(doc)
+
+
+def recursive_compare_str(a, b, a_name='first obj', b_name='second obj', prefix="", diff_accum=None):
+    """
+    Compares two objects and generates a list of strings describing how they differ.
+
+    Recursively traverses dictionaries, tuples, and lists.
+
+    Parameters
+    ----------
+    a, b : object
+        The objects to compare
+
+    a_name, b_name : str, optional
+        Names for the `a` and `b` objects for referencing them in the output strings.
+
+    prefix : str, optional
+        An optional prefix to the descriptions in the returned strings.
+
+    diff_accum : list, optional
+        An existing list that is accumulating difference-descriptions.
+        `None` means start a new list.
+
+    Returns
+    -------
+    list
+        A list of strings, each describing a difference between the objects.
+    """
+    typ = type(a)
+    if diff_accum is None:
+        diff_accum = []
+
+    if typ != type(b):
+        diff_accum.append(prefix + f": are different types ({typ} vs {type(b)})")
+
+    if isinstance(a, dict):
+        a_keys = set(a.keys())
+        b_keys = set(b.keys())
+        for k in a_keys.intersection(b_keys):
+            recursive_compare_str(a[k], b[k], a_name, b_name, f"{prefix}.{k}", diff_accum)
+        for k in (b_keys - a_keys):  # keys missing from a
+            diff_accum.append(f"{prefix}.{k}: missing from {a_name}")
+        for k in (a_keys - b_keys):  # keys missing from b
+            diff_accum.append(f"{prefix}.{k}: missing from {b_name}")
+    elif isinstance(a, (list, tuple)):
+        if len(a) != len(b):
+            diff_accum.append(f"{prefix}: have different lengths ({len(a)} vs {len(b)})")
+        else:
+            for i, (va, vb) in enumerate(zip(a, b)):
+                recursive_compare_str(va, vb, a_name, b_name, f"{prefix}[{i}]", diff_accum)
+    else:
+        if a != b:
+            diff_accum.append(f"{prefix}: {a} != {b}")
+    return diff_accum

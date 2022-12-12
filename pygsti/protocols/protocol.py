@@ -1030,7 +1030,8 @@ class ExperimentDesign(_TreeNode):
 
         collection_names = _io.mongodb_collection_names(custom_collection_names)
         _io.write_obj_to_mongodb_auxtree(self, mongodb[collection_names['edesigns']], doc_id, 'auxfile_types',
-                                         session=session, overwrite_existing=overwrite_existing)
+                                         session=session, overwrite_existing=overwrite_existing,
+                                         additional_meta={'children': {}})
         self._write_children_to_mongodb(mongodb, doc_id, update_children_in_edesign=True,
                                         custom_collection_names=custom_collection_names, session=session)
 
