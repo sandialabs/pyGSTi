@@ -423,6 +423,62 @@ def read_protocol_from_dir(dirname, quick_load=False, comm=None):
     return _metadir._cls_from_meta_json(dirname).from_dir(dirname, quick_load=quick_load)
 
 
+def read_protocol_from_mongodb(mongodb_collection, doc_id, quick_load=False):
+    """
+    Load a :class:`Protocol` from a MongoDB database.
+
+    Parameters
+    ----------
+    mongodb_collection : pymongo.collection.Collection
+        The MongoDB collection to load data from.
+
+    doc_id : str
+        The user-defined identifier of the protocol object to load.
+
+    quick_load : bool, optional
+        Setting this to True skips the loading of components that may take
+        a long time to load. This can be useful when this information isn't
+        needed and loading takes a long time.
+
+    Returns
+    -------
+    Protocol
+    """
+    doc = mongodb_collection.find_one({'_id': doc_id}, ['type'])
+    if 'type' not in doc:
+        raise ValueError("Document exists, but expected 'type' key within document is missing!")
+    return _metadir._class_for_name(doc['type']).from_mongodb(mongodb_collection, doc_id, quick_load=quick_load)
+
+
+def remove_protocol_from_mongodb(mongodb_collection, doc_id, session=None):
+    """
+    Remove a :class:`Protocol` from a MongoDB database.
+
+    If no protocol object with `doc_id` exists, this function returns `False`,
+    otherwise it returns `True`.
+
+    Parameters
+    ----------
+    mongodb_collection : pymongo.collection.Collection
+        The MongoDB collection to load data from.
+
+    doc_id : str
+        The user-defined identifier of the protocol object to remove.
+
+    session : pymongo.client_session.ClientSession, optional
+        MongoDB session object to use when interacting with the MongoDB
+        database. This can be used to implement transactions
+        among other things.
+
+    Returns
+    -------
+    bool
+        `True` if the specified protocol object was removed, `False` if it didn't exist.
+    """
+    from ..protocols import Protocol as _Protocol
+    return _Protocol.remove_from_mongodb(mongodb_collection, doc_id, session)
+
+
 @_deprecated_fn('read_edesign_from_dir')
 def load_edesign_from_dir(dirname, quick_load=False, comm=None):
     """Deprecated!"""
