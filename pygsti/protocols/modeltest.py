@@ -116,7 +116,7 @@ class ModelTest(_proto.Protocol):
         self.auxfile_types['target_model'] = 'serialized-object'
         self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
         self.auxfile_types['badfit_options'] = 'serialized-object'
-        self.auxfile_types['objfn_builders'] = 'serialized-object'
+        self.auxfile_types['objfn_builders'] = 'list:serialized-object'
 
         #Advanced options that could be changed by users who know what they're doing
         self.profile = 1

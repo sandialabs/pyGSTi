@@ -385,12 +385,14 @@ class ConfidenceRegionFactory(_MongoSerializable):
                                  minProbClip, probClipInterval, radius,
                                  comm=comm, mem_limit=mem_limit, verbosity=vb,
                                  op_label_aliases=aliases)
+
             jacobian = _tools.logl_jacobian(model, dataset, circuit_list,
                                             minProbClip, probClipInterval, radius,
                                             comm=comm, mem_limit=mem_limit, verbosity=vb)
 
-            nonMarkRadiusSq = max(2 * (_tools.logl_max(model, dataset)
-                                       - _tools.logl(model, dataset,
+            nonMarkRadiusSq = max(2 * (_tools.logl_max(model, dataset, circuit_list,
+                                                       op_label_aliases=aliases)
+                                       - _tools.logl(model, dataset, circuit_list,
                                                      op_label_aliases=aliases))
                                   - (nDataParams - nModelParams), MIN_NON_MARK_RADIUS)
 

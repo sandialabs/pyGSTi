@@ -318,7 +318,9 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
         #filter the circuit lists in `ret` using those in `self` (in case self includes only a subset of
         # the circuits dictated by the germs, fiducials, and  fidpairs).
-        return ret.truncate_to_design(self)
+        ret = ret.truncate_to_design(self)
+        ret.nested = self.nested  # must set nested flag again because truncate_to_design resets to False to be safe
+        return ret
 
 
 class GSTInitialModel(_NicelySerializable):
@@ -1522,7 +1524,7 @@ class StandardGST(_proto.Protocol):
         self.models_to_test = models_to_test
         self.target_model = target_model
         self.gaugeopt_suite = GSTGaugeOptSuite.cast(gaugeopt_suite)
-        self.objfn_builders = objfn_builders
+        self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders) if (objfn_builders is not None) else None
         self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
@@ -1589,6 +1591,8 @@ class StandardGST(_proto.Protocol):
                 data.edesign.processor_spec, None, evotype='default', simulator='auto',
                 ideal_gate_type='static', ideal_prep_type='auto', ideal_povm_type='auto',
                 embed_gates=False, basis='pp')  # HARDCODED basis!
+        else:
+            target_model = None  # Usually this path leads to an error being raised below.
 
         ret = ModelEstimateResults(data, self)
         with printer.progress_logging(1):
@@ -1596,6 +1600,10 @@ class StandardGST(_proto.Protocol):
                 printer.show_progress(i, len(modes), prefix='-- Std Practice: ', suffix=' (%s) --' % mode)
 
                 if mode == "Target":
+                    if target_model is None:
+                        raise ValueError(("Must specify `target_model` when creating this StandardGST, since one could"
+                                          " not be inferred from the given experiment design."))
+
                     model_to_test = target_model
                     mdltest = _ModelTest(model_to_test, target_model, self.gaugeopt_suite,
                                          mt_builder, self.badfit_options, verbosity=printer - 1, name=mode)
@@ -1609,6 +1617,10 @@ class StandardGST(_proto.Protocol):
                     ret.add_estimates(result)
 
                 else:
+                    if target_model is None:
+                        raise ValueError(("Must specify `target_model` when creating this StandardGST, since one could"
+                                          " not be inferred from the given experiment design."))
+
                     #Try to interpret `mode` as a parameterization
                     parameterization = mode  # for now, 1-1 correspondence
                     initial_model = target_model
