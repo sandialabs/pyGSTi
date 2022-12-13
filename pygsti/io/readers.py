@@ -571,7 +571,7 @@ def load_data_from_dir(dirname, quick_load=False, comm=None):
     return read_data_from_dir(dirname, quick_load, comm)
 
 
-def read_data_from_dir(dirname, quick_load=False, comm=None):
+def read_data_from_dir(dirname, preloaded_edesign=None, quick_load=False, comm=None):
     """
     Load a :class:`ProtocolData` from a directory on disk.
 
@@ -579,6 +579,11 @@ def read_data_from_dir(dirname, quick_load=False, comm=None):
     ----------
     dirname : string
         Directory name.
+
+    preloaded_edesign : ExperimentDesign, optional
+        The experiment deisgn belonging to the to-be-loaded data object, in cases
+        when this has been loaded already (only use this if you know what
+        you're doing).
 
     quick_load : bool, optional
         Setting this to True skips the loading of components that may take
@@ -598,10 +603,11 @@ def read_data_from_dir(dirname, quick_load=False, comm=None):
     except FileNotFoundError:
         from ..protocols import ProtocolData as _ProtocolData
         protocol_data = _ProtocolData  # use ProtocolData as default class
-    return protocol_data.from_dir(dirname, quick_load=quick_load)
+    return protocol_data.from_dir(dirname, preloaded_edesign=preloaded_edesign, quick_load=quick_load)
 
 
-def read_data_from_mongodb(mongodb, doc_id, quick_load=False, comm=None, custom_collection_names=None):
+def read_data_from_mongodb(mongodb, doc_id, preloaded_edesign=None, quick_load=False, comm=None,
+                           custom_collection_names=None):
     """
     Load a :class:`ProtocolData` from a MongoDB database.
 
@@ -612,6 +618,11 @@ def read_data_from_mongodb(mongodb, doc_id, quick_load=False, comm=None, custom_
 
     doc_id : str
         The user-defined identifier of the data to load.
+
+    preloaded_edesign : ExperimentDesign, optional
+        The experiment deisgn belonging to the to-be-loaded data object, in cases
+        when this has been loaded already (only use this if you know what
+        you're doing).
 
     quick_load : bool, optional
         Setting this to True skips the loading of components that may take
@@ -636,7 +647,7 @@ def read_data_from_mongodb(mongodb, doc_id, quick_load=False, comm=None, custom_
         data_cls = _ProtocolData
     else:
         data_cls = _metadir._class_for_name(doc['type'])
-    return data_cls.from_mongodb(mongodb, doc_id, quick_load=quick_load,
+    return data_cls.from_mongodb(mongodb, doc_id, preloaded_edesign=preloaded_edesign, quick_load=quick_load,
                                  custom_collection_names=custom_collection_names)
 
 

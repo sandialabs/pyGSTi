@@ -175,9 +175,10 @@ class Protocol(object):
 
         overwrite_existing : bool, optional
             Whether existing documents should be overwritten.  The default of `False` causes
-            a ValueError to be raised if a document with the given `doc_id` already exists.
-            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
-            to a path can be done regardless of whether it already exists.
+            a ValueError to be raised if a document with the given `doc_id` already exists and
+            doesn't match the document being written.  Setting this to `True` mimics the
+            behaviour of a typical filesystem, where writing to a path can be done regardless
+            of whether it already exists.
 
         Returns
         -------
@@ -1006,10 +1007,10 @@ class ExperimentDesign(_TreeNode):
 
         overwrite_existing : bool, optional
             Whether existing documents should be overwritten.  The default of `False` causes
-            a ValueError to be raised if a document with the given `doc_id` already exists.
-            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
-            to a path can be done regardless of whether it already exists.
-
+            a ValueError to be raised if a document with the given `doc_id` already exists and
+            doesn't match the document being written.  Setting this to `True` mimics the
+            behaviour of a typical filesystem, where writing to a path can be done regardless
+            of whether it already exists.
 
         Returns
         -------
@@ -1034,6 +1035,8 @@ class ExperimentDesign(_TreeNode):
                                          additional_meta={'children': {}})
         self._write_children_to_mongodb(mongodb, doc_id, update_children_in_edesign=True,
                                         custom_collection_names=custom_collection_names, session=session)
+        self._loaded_from = (mongodb, doc_id, custom_collection_names.copy()
+                             if (custom_collection_names is not None) else None)
 
     @classmethod
     def remove_from_mongodb(cls, mongodb, doc_id, custom_collection_names=None, session=None):
@@ -1896,7 +1899,7 @@ class ProtocolData(_TreeNode):
     CACHE_COLLECTION_NAME = "caches"  # or pygsti_caches?
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
+    def from_dir(cls, dirname, parent=None, name=None, preloaded_edesign=None, quick_load=False):
         """
         Initialize a new ProtocolData object from `dirname`.
 
@@ -1916,6 +1919,11 @@ class ProtocolData(_TreeNode):
             key of this data object beneath `parent`.  Only used when
             `parent` is not None.
 
+        preloaded_edesign : ExperimentDesign, optional
+            In the case that the :class:`ExperimentDesign` object for `dirname`
+            is already loaded, it can be passed in here.  Otherwise leave this
+            as None and it will be loaded.
+
         quick_load : bool, optional
             Setting this to True skips the loading of components that may take
             a long time, e.g. the actual raw data set(s). This can be useful
@@ -1927,8 +1935,9 @@ class ProtocolData(_TreeNode):
         ProtocolData
         """
         p = _pathlib.Path(dirname)
-        edesign = parent.edesign[name] if parent and name else \
-            _io.read_edesign_from_dir(dirname, quick_load=quick_load)
+        edesign = parent.edesign[name] if (parent and name) else \
+            (preloaded_edesign if preloaded_edesign is not None else
+             _io.read_edesign_from_dir(dirname, quick_load=quick_load))
 
         data_dir = p / 'data'
         #with open(data_dir / 'meta.json', 'r') as f:
@@ -1961,7 +1970,8 @@ class ProtocolData(_TreeNode):
         return ret
 
     @classmethod
-    def from_mongodb(cls, mongodb, doc_id, parent=None, name=None, quick_load=False, custom_collection_names=None):
+    def from_mongodb(cls, mongodb, doc_id, parent=None, name=None, preloaded_edesign=None,
+                     quick_load=False, custom_collection_names=None):
         """
         Initialize a new ProtocolData object from a Mongo database.
 
@@ -1983,6 +1993,11 @@ class ProtocolData(_TreeNode):
             key of this data object beneath `parent`.  Only used when
             `parent` is not None.
 
+        preloaded_edesign : ExperimentDesign, optional
+            In the case that the :class:`ExperimentDesign` object for `doc_id`
+            is already loaded, it can be passed in here.  Otherwise leave this
+            as None and it will be loaded.
+
         quick_load : bool, optional
             Setting this to True skips the loading of components that may take
             a long time, e.g. the actual raw data set(s). This can be useful
@@ -2000,8 +2015,9 @@ class ProtocolData(_TreeNode):
         """
         collection_names = _io.mongodb_collection_names(custom_collection_names)
         edesign = parent.edesign[name] if parent and name else \
-            _io.read_edesign_from_mongodb(mongodb, doc_id, quick_load, comm=None,
-                                          custom_collection_names=custom_collection_names)
+            (preloaded_edesign if preloaded_edesign is not None else
+             _io.read_edesign_from_mongodb(mongodb, doc_id, quick_load, comm=None,
+                                           custom_collection_names=custom_collection_names))
 
         if quick_load:
             dataset = None  # don't load any dataset - just the cache (usually b/c loading is slow)
@@ -2163,7 +2179,7 @@ class ProtocolData(_TreeNode):
         filtered_edesign = self.edesign.prune_tree(paths, paths_are_sorted)
         return build_data(filtered_edesign, self)
 
-    def write(self, dirname=None, parent=None):
+    def write(self, dirname=None, parent=None, edesign_already_written=False):
         """
         Write this protocol data to a directory.
 
@@ -2180,6 +2196,10 @@ class ProtocolData(_TreeNode):
             The parent protocol data, when a parent is writing this
             data as a sub-protocol-data object.  Otherwise leave as None.
 
+        edesign_already_written : bool, optional
+            If `True`, the experiment design within this data object is not written to
+            disk, and it is left to the caller to ensure the experiment design is saved.
+
         Returns
         -------
         None
@@ -2192,7 +2212,7 @@ class ProtocolData(_TreeNode):
         data_dir.mkdir(parents=True, exist_ok=True)
         _io.metadir._obj_to_meta_json(self, data_dir)
 
-        if parent is None:
+        if parent is None and not edesign_already_written:
             self.edesign.write(dirname)  # otherwise assume parent has already written edesign
 
         if self.dataset is not None:  # otherwise don't write any dataset
@@ -2211,8 +2231,8 @@ class ProtocolData(_TreeNode):
 
         self._write_children(dirname, write_subdir_json=False)  # writes sub-datas
 
-    def write_to_mongodb(self, mongodb, doc_id, parent=None, custom_collection_names=None,
-                         session=None, overwrite_existing=False):
+    def write_to_mongodb(self, mongodb, doc_id, parent=None, edesign_already_written=False,
+                         custom_collection_names=None, session=None, overwrite_existing=False):
         """
         Write this protocol data to a MongoDB database.
 
@@ -2233,6 +2253,10 @@ class ProtocolData(_TreeNode):
             The parent protocol data, when a parent is writing this
             data as a sub-protocol-data object.  Otherwise leave as None.
 
+        edesign_already_written : bool, optional
+            If `True`, the experiment design within this data object is not written to the
+            database, and it is left to the caller to ensure the experiment design is saved.
+
         custom_collection_names : dict, optional
             Overrides for the default MongoDB collection names used for storing different types of
             pyGSTi objects.  In this case, the `"edesigns"` and `"data"` keys of this dictionary
@@ -2245,10 +2269,10 @@ class ProtocolData(_TreeNode):
 
         overwrite_existing : bool, optional
             Whether existing documents should be overwritten.  The default of `False` causes
-            a ValueError to be raised if a document with the given `doc_id` already exists.
-            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
-            to a path can be done regardless of whether it already exists.
-
+            a ValueError to be raised if a document with the given `doc_id` already exists and
+            doesn't match the document being written.  Setting this to `True` mimics the
+            behaviour of a typical filesystem, where writing to a path can be done regardless
+            of whether it already exists.
 
         Returns
         -------
@@ -2275,7 +2299,7 @@ class ProtocolData(_TreeNode):
                                          auxfile_types_member=None, include_attributes=(),
                                          session=session, overwrite_existing=overwrite_existing)
 
-        if parent is None:  # otherwise assume parent has already written edesign
+        if parent is None and not edesign_already_written:  # assume parent writes edesign
             self.edesign.write_to_mongodb(mongodb, doc_id, None, custom_collection_names, session)
 
         if self.dataset is not None:  # otherwise don't write any dataset
@@ -3078,7 +3102,7 @@ class ProtocolResultsDir(_TreeNode):
         else:
             raise KeyError("Invalid key: %s" % str(key))
 
-    def write(self, dirname=None, parent=None):
+    def write(self, dirname=None, parent=None, data_already_written=False):
         """
         Write this "protocol results directory" to a directory.
 
@@ -3095,6 +3119,10 @@ class ProtocolResultsDir(_TreeNode):
             The parent protocol results directory, when a parent is writing this
             results dir as a sub-results-dir.  Otherwise leave as None.
 
+        data_already_written : bool, optional
+            If `True`, the data object within this results directory is not written to
+            disk, and it is left to the caller to ensure the data object is saved.
+
         Returns
         -------
         None
@@ -3103,7 +3131,8 @@ class ProtocolResultsDir(_TreeNode):
             dirname = self.data.edesign._loaded_from if isinstance(self.data.edesign._loaded_from, str) else None
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
 
-        if parent is None: self.data.write(dirname)  # assume parent has already written data
+        if parent is None and not data_already_written:  # assume parent writes data
+            self.data.write(dirname)
         dirname = _pathlib.Path(dirname)
 
         results_dir = dirname / 'results'
@@ -3117,7 +3146,8 @@ class ProtocolResultsDir(_TreeNode):
 
         self._write_children(dirname, write_subdir_json=False)  # writes sub-nodes
 
-    def write_to_mongodb(self, mongodb, doc_id, parent=None, custom_collection_names=None, session=None):
+    def write_to_mongodb(self, mongodb, doc_id, parent=None, data_already_written=False,
+                         custom_collection_names=None, session=None, overwrite_existing=False):
         """
         Write this protocol results directory to a MongoDB database.
 
@@ -3138,6 +3168,10 @@ class ProtocolResultsDir(_TreeNode):
             The parent protocol results directory, when a parent is writing this
             data as a sub-protocol-data object.  Otherwise leave as None.
 
+        data_already_written : bool, optional
+            If `True`, the data object within this results directory is not written to the
+            database, and it is left to the caller to ensure the data object is saved.
+
         custom_collection_names : dict, optional
             Overrides for the default MongoDB collection names used for storing different types of
             pyGSTi objects.  In this case, the `"edesigns"` and `"data"` keys of this dictionary
@@ -3147,6 +3181,13 @@ class ProtocolResultsDir(_TreeNode):
             MongoDB session object to use when interacting with the MongoDB
             database. This can be used to implement transactions
             among other things.
+
+        overwrite_existing : bool, optional
+            Whether existing documents should be overwritten.  The default of `False` causes
+            a ValueError to be raised if a document with the given `doc_id` already exists and
+            doesn't match the document being written.  Setting this to `True` mimics the
+            behaviour of a typical filesystem, where writing to a path can be done regardless
+            of whether it already exists.
 
         Returns
         -------
@@ -3166,8 +3207,9 @@ class ProtocolResultsDir(_TreeNode):
         if custom_collection_names is None and loaded_from[2] is not None and doc_id is None:
             custom_collection_names = loaded_from[2]  # override if inferring document id
 
-        if parent is None:
-            self.data.write_to_mongodb(mongodb, doc_id, None, custom_collection_names, session)
+        if parent is None and not data_already_written:  # assume parent writes data
+            self.data.write_to_mongodb(mongodb, doc_id, None, custom_collection_names, session,
+                                       overwrite_existing)
 
         ##Write our class information to mongodb, even though we don't currently use this when loading
         #_io.write_obj_to_mongodb_auxtree(self, mongodb[collection_names['resultdirs']], doc_id,
@@ -3178,7 +3220,7 @@ class ProtocolResultsDir(_TreeNode):
         #write the results
         for name, results in self.for_protocol.items():
             assert(results.name == name)
-            results.write_to_mongodb(mongodb, doc_id, data_already_written=True,
+            results.write_to_mongodb(mongodb, doc_id, data_already_written=True,  # (always True b/c we wrote it above)
                                      custom_collection_names=custom_collection_names, session=session)
         self._write_children_to_mongodb(mongodb, doc_id, update_children_in_edesign=False,
                                         custom_collection_names=custom_collection_names,
