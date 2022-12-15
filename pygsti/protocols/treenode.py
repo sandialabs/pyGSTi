@@ -93,18 +93,23 @@ class TreeNode(object):
                 instance = self.__class__  # no meta.json - default to same class as self
                 self._vals[nm] = instance.from_dir(subobj_dir, parent=self, name=nm, **kwargs)
 
-    def _init_children_from_mongodb(self, mongodb, child_collection_key, parent_id, custom_collection_names, **kwargs):
+    def _init_children_from_mongodb(self, mongodb, child_collection_key, parent_id, custom_collection_names,
+                                    preloaded_edesign=None, **kwargs):
         #dirname = _pathlib.Path(dirname)
         #edesign_dir = dirname / 'edesign'  # because subdirs.json is always & only in 'edesign'
         #with open(str(edesign_dir / 'subdirs.json'), 'r') as f:
         #    meta = _json.load(f)
         collection_names = _io.mongodb_collection_names(custom_collection_names)
-        edesign_doc = mongodb[collection_names['edesigns']].find_one({'_id': parent_id})
 
-        child_id_suffixes = {}
-        for child_id_suffix, nm in edesign_doc.get('children', {}).items():
-            if isinstance(nm, list): nm = tuple(nm)  # because json makes tuples->lists
-            child_id_suffixes[nm] = child_id_suffix
+        if preloaded_edesign is None:
+            edesign_doc = mongodb[collection_names['edesigns']].find_one({'_id': parent_id})
+
+            child_id_suffixes = {}
+            for child_id_suffix, nm in edesign_doc.get('children', {}).items():
+                if isinstance(nm, list): nm = tuple(nm)  # because json makes tuples->lists
+                child_id_suffixes[nm] = child_id_suffix
+        else:  # just take from already-loaded edesign
+            child_id_suffixes = preloaded_edesign._dirs.copy()
 
         self._dirs = child_id_suffixes  # held as _dirs because when serialized to disk these are dir names
         self._vals = {}

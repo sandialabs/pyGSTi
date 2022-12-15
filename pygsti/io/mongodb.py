@@ -433,7 +433,7 @@ def write_auxtree_to_mongodb(root_mongo_collection, doc_id, valuedict, auxfile_t
 
         write_ops.add_ops_by_subcollection(ops)
         if auxmeta is not None:
-            to_insert[auxnm] = auxmeta  # metadata about auxfile(s) for this auxnm
+            to_insert[auxnm] = auxmeta  # metadata about auxiliary document(s) for this aux name
 
     try:
         for standalone_id, obj, bPartial in write_ops.standalone_writes:

@@ -693,7 +693,8 @@ class ExperimentDesign(_TreeNode):
         ret = cls.__new__(cls)
         ret.__dict__.update(_io.read_auxtree_from_mongodb(mongodb[collection_names['edesigns']], doc_id,
                                                           'auxfile_types', quick_load=quick_load))
-        ret._init_children_from_mongodb(mongodb, 'edesigns', doc_id, custom_collection_names, quick_load=quick_load)
+        ret._init_children_from_mongodb(mongodb, 'edesigns', doc_id, custom_collection_names,
+                                        quick_load=quick_load, preloaded_edesign=None)  # we're loading the edesign now
         ret._loaded_from = (mongodb, doc_id, custom_collection_names.copy()
                             if (custom_collection_names is not None) else None)
 
@@ -2043,7 +2044,8 @@ class ProtocolData(_TreeNode):
                                             'protocoldata_parent': doc_id})
 
         ret = cls(edesign, dataset, cache)
-        ret._init_children_from_mongodb(mongodb, 'data', doc_id, custom_collection_names, quick_load=quick_load)
+        ret._init_children_from_mongodb(mongodb, 'data', doc_id, custom_collection_names,
+                                        quick_load=quick_load, preloaded_edesign=edesign)
         return ret
 
     def __init__(self, edesign, dataset=None, cache=None):
@@ -2614,7 +2616,7 @@ class ProtocolResults(object):
                                         omit_attributes=() if write_protocol else ('protocol',))
 
     def write_to_mongodb(self, mongodb=None, doc_id=None, data_already_written=False,
-                         custom_collection_names=None, session=None):
+                         custom_collection_names=None, session=None, overwrite_existing=False):
         """
         Write these protocol results to a MongoDB database.
 
@@ -2645,6 +2647,13 @@ class ProtocolResults(object):
             database. This can be used to implement transactions
             among other things.
 
+        overwrite_existing : bool, optional
+            Whether existing documents should be overwritten.  The default of `False` causes
+            a ValueError to be raised if a document with the given `doc_id` already exists and
+            doesn't match the document being written.  Setting this to `True` mimics the
+            behaviour of a typical filesystem, where writing to a path can be done regardless
+            of whether it already exists.
+
         Returns
         -------
         None
@@ -2666,14 +2675,14 @@ class ProtocolResults(object):
         #write edesign and data
         if not data_already_written:
             self.data.write_to_mongodb(mongodb, doc_id, custom_collection_names=custom_collection_names,
-                                       session=session)
+                                       session=session, overwrite_existing=overwrite_existing)
 
         #write qtys to results dir
         collection_names = _io.mongodb_collection_names(custom_collection_names)
         result_id = doc_id + '/' + self.name  # derive_child_id_from_parent_id(doc_id, self.name)
         self._write_partial_to_mongodb(mongodb[collection_names['results']], result_id, write_protocol=True,
                                        additional_meta={'directory_id': doc_id},
-                                       session=session)
+                                       session=session, overwrite_existing=overwrite_existing)
 
     def _write_partial_to_mongodb(self, mongodb_collection, result_id, write_protocol=False,
                                   additional_meta=None, session=None, overwrite_existing=False):
@@ -3029,7 +3038,8 @@ class ProtocolResultsDir(_TreeNode):
                 custom_collection_names=custom_collection_names)
 
         ret = cls(data, results, {})  # don't initialize children now
-        ret._init_children_from_mongodb(mongodb, None, doc_id, custom_collection_names, quick_load=quick_load)
+        ret._init_children_from_mongodb(mongodb, None, doc_id, custom_collection_names,
+                                        quick_load=quick_load, preloaded_edesign=data.edesign)
         return ret
 
     def __init__(self, data, protocol_results=None, children=None):
