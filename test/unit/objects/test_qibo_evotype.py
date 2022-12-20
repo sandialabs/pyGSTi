@@ -20,11 +20,12 @@ from pygsti.evotypes.densitymx_slow.opreps import OpRepIdentityPlusErrorgen
 from pygsti.evotypes.densitymx.opreps import OpRepDenseSuperop
 from ..util import BaseCase
 
+#also catch the attribute error here
 try:
     import qibo as _qibo
     if version.parse(_qibo.__version__) < version.parse("0.1.7"):
         _qibo = None  # version too low - doesn't contain all the builtin gates, e.g. qibo.gates.S
-except ImportError:
+except ImportError, AttributeError:
     _qibo = None
 
 
