@@ -31,8 +31,8 @@ jobs:
     strategy:
       fail-fast: false # Finish all tests even if one fails
       matrix:
-        os: [ubuntu-18.04, windows-2019]
-        python-version: [3.6, 3.7, 3.8, 3.9]
+        os: [ubuntu-20.04, windows-2019, macos-11]
+        python-version: [3.7, 3.8, 3.9, 3.10]
         nose-tests:
         - "algorithms"
         - "algorithmsb"
@@ -69,7 +69,7 @@ jobs:
         # but still compile Cython extensions
         python -m pip install -e .[testing]
     - name: Run test_packages Ubuntu ${{ matrix.nose-tests }}
-      if: ${{matrix.os == 'ubuntu-18.04'}}
+      if: ${{matrix.os == 'ubuntu-20.04'}}
       env:
         NOSETESTS: ${{ matrix.nose-tests }}
       run: |
@@ -84,6 +84,14 @@ jobs:
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         echo "nosetests: $Env:NOSETESTS"
         nosetests --traverse-namespace $Env:NOSETESTS
+    - name: Run test_packages MacOS ${{ matrix.nose-tests }}
+      if: ${{matrix.os == 'macos-11'}}
+      env:
+        NOSETESTS: ${{ matrix.nose-tests }}
+      run: |
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        echo "nosetests: $NOSETESTS"
+        nosetests $NOSETESTS
 
 
 
