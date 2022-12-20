@@ -54,6 +54,7 @@ class Model(_NicelySerializable):
     """
 
     def __init__(self, state_space):
+        super().__init__()
         self._state_space = _statespace.StateSpace.cast(state_space)
         self._num_modeltest_params = None
         self._hyperparams = {}

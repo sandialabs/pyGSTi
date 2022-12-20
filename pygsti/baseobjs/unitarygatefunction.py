@@ -36,3 +36,6 @@ class UnitaryGateFunction(_NicelySerializable):
         ret = cls()  # assumes no __init__ args
         ret.shape = tuple(state['shape'])
         return ret
+
+    def __init__(self):
+        super().__init__()

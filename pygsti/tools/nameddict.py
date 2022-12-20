@@ -72,7 +72,8 @@ class NamedDict(dict, _NicelySerializable):
         return head[None]
 
     def __init__(self, keyname=None, keytype=None, valname=None, valtype=None, items=()):
-        super().__init__(items)
+        dict.__init__(self, items)
+        _NicelySerializable.__init__(self)
         self.keyname = keyname
         self.valname = valname
         self.keytype = keytype

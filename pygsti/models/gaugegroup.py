@@ -46,6 +46,7 @@ class GaugeGroup(_NicelySerializable):
             A name for this group - used for reporting what type of
             gauge optimization was performed.
         """
+        super().__init__()
         self.name = name
 
     @property
@@ -94,7 +95,7 @@ class GaugeGroupElement(_NicelySerializable):
 
     def __init__(self):
         """Creates a new GaugeGroupElement"""
-        pass
+        super().__init__()
 
     @property
     def transform_matrix(self):
@@ -197,6 +198,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
     """
 
     def __init__(self, gauge_group_el):
+        super().__init__()
         self.inverse_element = gauge_group_el
 
     @property

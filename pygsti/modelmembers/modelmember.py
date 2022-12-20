@@ -142,7 +142,8 @@ class ModelMember(ModelChild, _NicelySerializable):
         self._dirty = False  # True when there's any *possibility* that this
         # gate's parameters have been changed since the
         # last setting of dirty=False
-        super(ModelMember, self).__init__(parent)
+        ModelChild.__init__(self, parent)
+        _NicelySerializable.__init__(self)
 
     @property
     def state_space(self):

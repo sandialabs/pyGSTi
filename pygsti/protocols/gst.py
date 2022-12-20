@@ -424,6 +424,7 @@ class GSTInitialModel(_NicelySerializable):
     def __init__(self, model=None, target_model=None, starting_point=None, depolarize_start=0, randomize_start=0,
                  lgst_gaugeopt_tol=1e-6, contract_start_to_cptp=False):
         # Note: starting_point can be an initial model or string
+        super().__init__()
         self.model = model
         self.target_model = target_model
         if starting_point is None:
@@ -664,6 +665,7 @@ class GSTBadFitOptions(_NicelySerializable):
                  wildcard_L1_weights=None, wildcard_primitive_op_labels=None,
                  wildcard_initial_budget=None, wildcard_methods=('neldermead',),
                  wildcard_inadmissable_action='print', wildcard1d_reference='diamond distance'):
+        super().__init__()
         valid_actions = ('wildcard', 'wildcard1d', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
             raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
@@ -694,14 +696,14 @@ class GSTBadFitOptions(_NicelySerializable):
     @classmethod
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         wildcard = state.get('wildcard', {})
-        cls(state['threshold'], tuple(state['actions']),
-            wildcard.get('budget_includes_spam', True),
-            wildcard.get('L1_weights', None),
-            wildcard.get('primitive_op_labels', None),
-            wildcard.get('initial_budget', None),
-            tuple(wildcard.get('methods', ['neldermead'])),
-            wildcard.get('inadmissable_action', 'print'),
-            wildcard.get('1d_reference', 'diamond distance'))
+        return cls(state['threshold'], tuple(state['actions']),
+                   wildcard.get('budget_includes_spam', True),
+                   wildcard.get('L1_weights', None),
+                   wildcard.get('primitive_op_labels', None),
+                   wildcard.get('initial_budget', None),
+                   tuple(wildcard.get('methods', ['neldermead'])),
+                   wildcard.get('inadmissable_action', 'print'),
+                   wildcard.get('1d_reference', 'diamond distance'))
 
 
 class GSTObjFnBuilders(_NicelySerializable):
@@ -786,6 +788,7 @@ class GSTObjFnBuilders(_NicelySerializable):
         return cls(iteration_builders, final_builders)
 
     def __init__(self, iteration_builders, final_builders=()):
+        super().__init__()
         self.iteration_builders = iteration_builders
         self.final_builders = final_builders
 
@@ -856,6 +859,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
             raise ValueError("Could not convert %s object to a gauge optimization suite!" % str(type(obj)))
 
     def __init__(self, gaugeopt_suite_names=None, gaugeopt_argument_dicts=None, gaugeopt_target=None):
+        super().__init__()
         if gaugeopt_suite_names is not None:
             self.gaugeopt_suite_names = (gaugeopt_suite_names,) \
                 if isinstance(gaugeopt_suite_names, str) else tuple(gaugeopt_suite_names)

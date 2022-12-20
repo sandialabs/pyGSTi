@@ -54,6 +54,7 @@ class WildcardBudget(_NicelySerializable):
             which can be varied when trying to find an optimal budget (similar
             to the parameters of a :class:`Model`).
         """
+        super().__init__()
         self.wildcard_vector = w_vec
 
     def to_vector(self):
