@@ -188,7 +188,7 @@ class QubitGraph(_NicelySerializable):
 
         #Determine whether we'll be using directions or not: set self.directions
         if initial_connectivity is not None:
-            if initial_connectivity.dtype == _np.bool:
+            if initial_connectivity.dtype == _np.bool_:
                 assert(direction_names is None), \
                     "`initial_connectivity` must hold *integer* direction-indices when `direction_names` is non-None"
             else:
