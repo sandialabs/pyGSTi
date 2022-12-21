@@ -1,5 +1,4 @@
 #!/bin/bash
-
 sudo brew update && \
 sudo brew install \
 gfortran libblas-dev liblapack-dev openmpi-bin openmpi-common openssh-client \
