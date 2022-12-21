@@ -1479,8 +1479,7 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
     if force:
         if force == "singletons":
             weights[_np.where(germLengths == 1)] = 1
-            goodGerms = [germ for germ
-                         in _np.array(germs_list)[_np.where(germLengths == 1)]]
+            goodGerms = [germ for i, germ in enumerate(germs_list) if germLengths[i] == 1]
         else:  # force should be a list of Circuits
             for opstr in force:
                 weights[germs_list.index(opstr)] = 1
