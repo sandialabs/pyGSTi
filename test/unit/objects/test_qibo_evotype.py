@@ -8,16 +8,24 @@ from pygsti.models import create_crosstalk_free_model
 from pygsti.circuits import Circuit
 from pygsti.modelpacks import smq2Q_XYI as std
 from pygsti.modelpacks import smq1Q_XYI as std1Q
-from pygsti.evotypes import qibo as evo_qibo  # don't clobber qibo!
+
+#Deprecated numpy calls are currently breaking the qibo import
+#so add in a catch for this exception and skip this test if that happens.
+try:
+    from pygsti.evotypes import qibo as evo_qibo  # don't clobber qibo!
+except AttributeError:
+    _qibo = None
+
 from pygsti.evotypes.densitymx_slow.opreps import OpRepIdentityPlusErrorgen
 from pygsti.evotypes.densitymx.opreps import OpRepDenseSuperop
 from ..util import BaseCase
 
+#also catch the attribute error here
 try:
     import qibo as _qibo
     if version.parse(_qibo.__version__) < version.parse("0.1.7"):
         _qibo = None  # version too low - doesn't contain all the builtin gates, e.g. qibo.gates.S
-except ImportError:
+except (ImportError, AttributeError):
     _qibo = None
 
 

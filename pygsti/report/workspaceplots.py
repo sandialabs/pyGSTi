@@ -1956,7 +1956,7 @@ def _outcome_to_str(x):  # same function as in writers.py
 
 
 def _addl_mx_fn_outcomes(plaq, x, y, layout):
-    slmx = _np.empty((plaq.num_rows, plaq.num_cols), dtype=_np.object)
+    slmx = _np.empty((plaq.num_rows, plaq.num_cols), dtype=_np.object_)
     for i, j, opstr in plaq:
         slmx[i, j] = ", ".join([_outcome_to_str(ol) for ol in layout.outcomes(opstr)])
     return slmx
