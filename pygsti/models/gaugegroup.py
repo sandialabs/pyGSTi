@@ -403,14 +403,14 @@ class OpGaugeGroupWithBasis(OpGaugeGroup):
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         state.update({'state_space_dimension': int(self._operation.state_space.dim),
-                      'basis': self._basis.to_nice_serialization(),
+                      'basis': self._basis if isinstance(self._basis, str) else self._basis.to_nice_serialization(),
                       'evotype': str(self._operation.evotype)
                       })
         return state
 
     @classmethod
     def _from_nice_serialization(cls, state):
-        basis = _Basis.from_nice_serialization(state['basis'])
+        basis = state['basis'] if isinstance(state['basis'], str) else _Basis.from_nice_serialization(state['basis'])
         return cls(_statespace.default_space_for_dim(state['state_space_dimension']), basis, state['evotype'])
 
 
