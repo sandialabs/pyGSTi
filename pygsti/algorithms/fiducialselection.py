@@ -145,7 +145,10 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
             Identity = _np.identity(target_model.dim, 'd')
 
             for gate in fidOps:
-                if frobeniusdist_squared(target_model.operations[gate], Identity) < eq_thresh:
+                mx = target_model.operations[gate]
+                if not isinstance(mx, _np.ndarray):
+                    mx = mx.to_dense()
+                if frobeniusdist_squared(mx, Identity) < eq_thresh:
                     fidOps.remove(gate)
         
         availableFidList = []
