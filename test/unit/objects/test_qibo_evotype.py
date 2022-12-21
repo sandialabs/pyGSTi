@@ -25,7 +25,7 @@ try:
     import qibo as _qibo
     if version.parse(_qibo.__version__) < version.parse("0.1.7"):
         _qibo = None  # version too low - doesn't contain all the builtin gates, e.g. qibo.gates.S
-except ImportError, AttributeError:
+except (ImportError, AttributeError):
     _qibo = None
 
 
