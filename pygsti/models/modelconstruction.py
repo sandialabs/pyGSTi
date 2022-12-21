@@ -1448,7 +1448,7 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
                     and processor_spec.nonstd_gate_unitaries[name].shape == std_gate_unitaries[name].shape
                     and _np.allclose(processor_spec.nonstd_gate_unitaries[name], std_gate_unitaries[name]))):
             stdname = name  # setting `stdname` != None means we can try to create a StaticStandardOp below
-        elif name in processor_spec.gate_unitaries:
+        elif name in processor_spec.gate_unitaries and not isinstance(U, (int, _np.int64)):
             stdname = _itgs.unitary_to_standard_gatename(U)  # possibly None
         else:
             stdname = None
@@ -2118,7 +2118,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         #printer.log("Creating Idle:")
         wt_maxhop_tuples = [(i, None) for i in range(1, max_idle_weight + 1)]
         modelnoise[global_idle_name] = _build_weight_maxhops_modelnoise(all_qudit_labels, wt_maxhop_tuples,
-                                                                        gate_type, conn)
+                                                                        gate_type, conn, gate_type_maxweights)
 
     # SPAM
     if max_spam_weight > 0:
