@@ -1942,6 +1942,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         maxhops=0, extra_weight_1_hops=0, extra_gate_weight=0,
         simulator="auto", evotype='default',
         gate_type="H+S", spam_type="H+S",
+        gate_type_maxweights=None,
         implicit_idle_mode="none", errcomp_type="gates",
         independent_gates=True, independent_spam=True,
         connected_highweight_errors=True,
@@ -2142,12 +2143,11 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
         weight_maxhops_tuples = weight_maxhops_tuples_1Q if gate_nQudits == 1 else weight_maxhops_tuples_2Q
         target_sslbls = ('@0',) if gate_nQudits == 1 else ('@0', '@1')
         modelnoise[gatenm] = _build_weight_maxhops_modelnoise(target_sslbls, weight_maxhops_tuples,
-                                                              gate_type, conn)
+                                                              gate_type, conn, gate_type_maxweights)
 
     return _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates,
                                          evotype, simulator, independent_gates, independent_spam,
                                          errcomp_type, implicit_idle_mode, basis, verbosity)
-
 
 def _iter_basis_inds(weight):
     """ Iterate over product of `weight` non-identity Pauli 1Q basis indices """
@@ -2191,7 +2191,7 @@ def _construct_restricted_weight_pauli_basis(wt, sparse=False):
     return _ExplicitBasis(errbasis, errbasis_lbls, real=True, sparse=sparse)
 
 
-def _build_weight_maxhops_modelnoise(target_sslbls, weight_maxhops_tuples, lnd_parameterization, connected=True):
+def _build_weight_maxhops_modelnoise(target_sslbls, weight_maxhops_tuples, lnd_parameterization, connected=True, maxweights=None):
 
     # This function:
     # loop over all size-`wt` *connected* combinations, `err_qudit_inds`, of the qudit indices in
@@ -2214,16 +2214,54 @@ def _build_weight_maxhops_modelnoise(target_sslbls, weight_maxhops_tuples, lnd_p
     if lnd_parameterization == 'none' or lnd_parameterization is None:
         return {}  # special case when we don't want any error parameterization
 
-    for wt, max_hops in weight_maxhops_tuples:
-        if max_hops is None or max_hops == 0:  # Note: maxHops not used in this case
-            stencil_lbl = _stencil.StencilLabelAllCombos(target_sslbls, wt, connected)
-        else:
-            stencil_lbl = _stencil.StencilLabelRadiusCombos(target_sslbls, max_hops, wt, connected)
+    lnd_parameterization = _op.LindbladParameterization.cast(lnd_parameterization)
 
-        local_state_space = _statespace.default_space_for_num_qubits(wt)  # this function assumes qubits and Pauli basis
-        modelnoise_dict[stencil_lbl] = _LindbladNoise.from_basis_coefficients(
-            lnd_parameterization, _construct_restricted_weight_pauli_basis(wt),
-            local_state_space)
+    if maxweights is None:
+        for wt, max_hops in weight_maxhops_tuples:
+            if max_hops is None or max_hops == 0:  # Note: maxHops not used in this case
+                stencil_lbl = _stencil.StencilLabelAllCombos(target_sslbls, wt, connected)
+            else:
+                stencil_lbl = _stencil.StencilLabelRadiusCombos(target_sslbls, max_hops, wt, connected)
+
+            local_state_space = _statespace.default_space_for_num_qubits(wt)  # this function assumes qubits and Pauli basis
+            modelnoise_dict[stencil_lbl] = _LindbladNoise.from_basis_coefficients(
+                lnd_parameterization, _construct_restricted_weight_pauli_basis(wt),
+                local_state_space)
+    else:
+        # Convert nice HSCA dict to coeff blocks & allowed weights
+        coeff_block_wts = {}
+        if 'H' in maxweights:
+            assert 'ham' in lnd_parameterization.block_types
+            coeff_block_wts['ham', 'elements'] = list(range(1, maxweights['H']+1))
+        if 'C' in maxweights or 'A' in maxweights:
+            assert 'other' in lnd_parameterization.block_types
+            coeff_block_wts['other', 'cholesky'] = list(range(1, max(maxweights.get('C', 0), maxweights.get('A', 0))+1))
+        if 'S' in maxweights:
+            assert any([btype in lnd_parameterization.block_types for btype in ['other_diagonal', 'other']])
+            max_CA_wts = max(coeff_block_wts.get(('other', 'cholesky'), [0]))
+            if maxweights['S'] > max_CA_wts:
+                coeff_block_wts['other_diagonal', 'cholesky'] = list(range(max_CA_wts+1, maxweights['S']+1))
+        
+        for wt, max_hops in weight_maxhops_tuples:
+            if max_hops is None or max_hops == 0:  # Note: maxHops not used in this case
+                stencil_lbl = _stencil.StencilLabelAllCombos(target_sslbls, wt, connected)
+            else:
+                stencil_lbl = _stencil.StencilLabelRadiusCombos(target_sslbls, max_hops, wt, connected)
+            
+            blocks = []
+            for blktype, blkparam in coeff_block_wts.keys():
+                if wt not in coeff_block_wts[blktype, blkparam]:
+                    # Not an allowed weight for this H/S/CA block
+                    continue
+
+                blocks.append(_op.lindbladcoefficients.LindbladCoefficientBlock(blktype,
+                    _construct_restricted_weight_pauli_basis(wt), param_mode=blkparam))
+            
+            blktypes = [k[0] for k in coeff_block_wts.keys()]
+            blkparams = [k[1] for k in coeff_block_wts.keys()]
+            modelnoise_dict[stencil_lbl] = _LindbladNoise(coeff_blocks=blocks,
+                parameterization=_op.LindbladParameterization(blktypes, blkparams))
+    
     return modelnoise_dict
 
 
@@ -2255,7 +2293,7 @@ def _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs
     if lindblad_error_coeffs is not None:
 
         if not allow_nonlocal:  # the easy case
-            modelnoises.append(_OpModelPerOpNoise({lbl: _LindbladNoise(val, lindblad_parameterization)
+            modelnoises.append(_OpModelPerOpNoise({lbl: _LindbladNoise(val, parameterization=lindblad_parameterization)
                                                    for lbl, val in lindblad_error_coeffs.items()}))
         else:  # then need to process labels like ('H', 'XX:0,1') or 'HXX:0,1'
             def process_stencil_labels(flat_lindblad_errs):
@@ -2309,13 +2347,13 @@ def _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs
                             local_errors[local_nm] = val
 
                 if len(nonlocal_errors) == 0:
-                    return _LindbladNoise(local_errors, lindblad_parameterization)
+                    return _LindbladNoise(local_errors, parameterization=lindblad_parameterization)
                 else:
                     all_errors = []
                     if len(local_errors) > 0:
-                        all_errors.append((None, _LindbladNoise(local_errors, lindblad_parameterization)))
+                        all_errors.append((None, _LindbladNoise(local_errors, parameterization=lindblad_parameterization)))
                     for sslbls, errdict in nonlocal_errors.items():
-                        all_errors.append((sslbls, _LindbladNoise(errdict, lindblad_parameterization)))
+                        all_errors.append((sslbls, _LindbladNoise(errdict, parameterization=lindblad_parameterization)))
                     return _collections.OrderedDict(all_errors)
 
             modelnoises.append(_OpModelPerOpNoise({lbl: process_stencil_labels(val)

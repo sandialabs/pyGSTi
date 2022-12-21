@@ -945,7 +945,7 @@ class LindbladNoise(OpNoise):
 
     Parameters
     ----------
-    error_coeffs : dict
+    error_coeffs : dict, optional
         A dictionary of Lindblad-term coefficients. Keys are
         `(termType, basisLabel1, <basisLabel2>)` tuples, where `termType` can be
         `"H"` (Hamiltonian), `"S"` (Stochastic/other), or `"A"` (Affine).  Hamiltonian
@@ -956,6 +956,10 @@ class LindbladNoise(OpNoise):
         with `nonham_mode != "all"` is selected.  `"S"` terms with 2 basis specify
         "off-diagonal" non-Hamiltonian Lindblad terms.  Basis labels can be
         strings or integers.  Values are complex coefficients.
+        One of error_coeffs and coeff_blocks must be set.
+    
+    coeff_blocks : list, optional
+        A list of LindbladCoefficientBlocks. One of error_coeffs and coeff_blocks must be set.
 
     parameterization : str or LindbladParameterization
         Determines the parameterization of the LindbladErrorgen objects used to represent this noise.
@@ -1019,10 +1023,13 @@ class LindbladNoise(OpNoise):
             blk = _LindbladCoefficientBlock(blk_type, lindblad_basis, initial_block_data=initial_data)
             elementary_errorgens.update(blk.elementary_errorgens)
 
-        return cls(elementary_errorgens, parameterization)
+        return cls(elementary_errorgens, None, parameterization)
 
-    def __init__(self, error_coeffs, parameterization='auto'):
+    def __init__(self, error_coeffs=None, coeff_blocks=None, parameterization='auto'):
+        assert (error_coeffs is not None and coeff_blocks is None) or (error_coeffs is None and coeff_blocks is not None), \
+            "One and only one of error_coeffs and coeff_blocks can be set"
         self.error_coeffs = error_coeffs  # keys are LocalElementaryErrorgenLabel objects
+        self.coeff_blocks = coeff_blocks
         self.parameterization = parameterization
 
     def create_errorgen(self, evotype, state_space):
@@ -1044,9 +1051,13 @@ class LindbladNoise(OpNoise):
         # Build LindbladErrorgen directly to have control over which parameters are set (leads to lower param counts)
         basis_size = state_space.dim  # e.g. 4 for a single qubit
         basis = _BuiltinBasis('PP', basis_size)
-        return _op.LindbladErrorgen.from_elementary_errorgens(
-            self.error_coeffs, self.parameterization, basis, mx_basis='pp',
-            truncate=False, evotype=evotype, state_space=state_space)
+        if self.error_coeffs is not None:
+            return _op.LindbladErrorgen.from_elementary_errorgens(
+                self.error_coeffs, self.parameterization, basis, mx_basis='pp',
+                truncate=False, evotype=evotype, state_space=state_space)
+        else:
+            return _op.LindbladErrorgen(self.coeff_blocks, 
+                basis, mx_basis='pp', evotype=evotype, state_space=state_space)
 
     def create_errormap(self, evotype, state_space):
         """

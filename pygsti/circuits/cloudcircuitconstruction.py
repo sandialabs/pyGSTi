@@ -1448,7 +1448,7 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
 
 def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
                                max_idle_weight=1, maxhops=0, extra_weight_1_hops=0, extra_gate_weight=0,
-                               parameterization="H+S", verbosity=0, cache=None, idle_only=False,
+                               parameterization="H+S", param_maxweights=None, verbosity=0, cache=None, idle_only=False,
                                idt_pauli_dicts=None, algorithm="greedy", idle_op_str=((),), comm=None):
     """
     Constructs a set of circuits that amplify all the parameters of a clould-noise model.
@@ -1607,6 +1607,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         simulator=_TermFSim(mode="taylor-order", max_order=1),
         gate_type=parameterization,
         spam_type=parameterization,
+        gate_type_maxweights=param_maxweights,
         evotype=evotype,
         errcomp_type="gates")
     clouds = model.clouds
@@ -1628,6 +1629,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         simulator=_MapFSim(),
         gate_type=parameterization,
         spam_type=parameterization,
+        gate_type_maxweights=param_maxweights,
         errcomp_type="gates",
         evotype=evotype)
     # for testing for synthetic idles - so no " terms"
@@ -1656,8 +1658,8 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
             max_idle_weight, 0, maxhops, extra_weight_1_hops,
             extra_gate_weight, verbosity=printer - 5,
             simulator=_TermFSim(mode="taylor-order", max_order=1),
-            gate_type=parameterization, spam_type=parameterization, evotype=evotype,
-            implicit_idle_mode="add_global", errcomp_type="gates")
+            gate_type=parameterization, spam_type=parameterization, gate_type_maxweights=param_maxweights,
+            evotype=evotype, implicit_idle_mode="add_global", errcomp_type="gates")
         idle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
         # these are the params we want to amplify at first...
         idle_params = idle_model.circuit_layer_operator(global_idle_lbl, typ='op').gpindices
@@ -1751,8 +1753,8 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
                     0, maxhops, extra_weight_1_hops,
                     extra_gate_weight, verbosity=printer - 5,
                     simulator=_TermFSim(mode="taylor-order", max_order=1),
-                    gate_type=parameterization, spam_type=parameterization, evotype=evotype,
-                    implicit_idle_mode="add_global", errcomp_type="gates")
+                    gate_type=parameterization, spam_type=parameterization, gate_type_maxweights=param_maxweights,
+                    evotype=evotype, implicit_idle_mode="add_global", errcomp_type="gates")
                 sidle_model._clean_paramvec()  # allocates/updates .gpindices of all blocks
                 # these are the params we want to amplify...
                 idle_params = sidle_model.circuit_layer_operator(sidle_pspec.global_idle_layer_label,
