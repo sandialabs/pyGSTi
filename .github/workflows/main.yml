@@ -37,9 +37,14 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Set up installation environment
+    - name: Set up installation environment (Ubuntu or Windows)
+      if: ${{matrix.os == 'ubuntu-20.04' || matrix.os == 'ubuntu-20.04'}}
       run: |
         ./.github/ci-scripts/before_install.sh
+    - name: Set up installation environment (MacOS)
+      if: ${{matrix.os == 'macos-11'}}
+      run: |
+        ./.github/ci-scripts/before_install_macos.sh
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
