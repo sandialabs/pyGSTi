@@ -260,6 +260,7 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
 
     if convert_model_to is not None:
         conversion_args = convert_model_to if isinstance(convert_model_to, (list, tuple)) else (convert_model_to,)
+        model = model.copy()  # don't alter the original model's parameterization (this would be unexpected)
         for args in conversion_args:
             if isinstance(args, str):
                 model.convert_members_inplace(args, set_default_gauge_group=True)
