@@ -2,7 +2,7 @@
 
 brew update && \
 brew install \
-gfortran libblas-dev liblapack-dev openmpi-bin openmpi-common openssh-client \
-openssh-server libopenmpi3 libopenmpi-dev libsuitesparse-dev
+gfortran openblas lapack openmpi \
+openssh suite-sparse
 cmake --version
 gcc --version
