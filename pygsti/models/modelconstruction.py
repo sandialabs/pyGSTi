@@ -1905,7 +1905,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
 
         return apply_stencil_fn(stencil, evotype, state_space, target_labels=lbl.sslbls,
                                 qudit_graph=processor_spec.qudit_graph,
-                                copy=independent_gates and (lbl not in modelnoise))  # no need to copy if first case
+                                copy=independent_gates)
 
     def build_cloudkey_fn(lbl):
         num_sslbls = len(lbl.sslbls) if (lbl.sslbls is not None) else None

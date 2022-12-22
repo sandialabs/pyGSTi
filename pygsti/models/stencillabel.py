@@ -261,8 +261,8 @@ class StencilLabelAllCombos(StencilLabel):
             resolved_chosen_sslbls = self._resolve_single_sslbls_tuple(chosen_sslbls, qubit_graph,
                                                                        state_space, target_lbls)
             if self.connected and len(chosen_sslbls) == 2 \
-               and qubit_graph.is_directly_connected(resolved_chosen_sslbls[0],
-                                                     resolved_chosen_sslbls[1]):
+               and not qubit_graph.is_directly_connected(resolved_chosen_sslbls[0],
+                                                         resolved_chosen_sslbls[1]):
                 continue  # TO UPDATE - check whether all wt indices are a connected subgraph
             ret.append(resolved_chosen_sslbls)
         return ret  # return a *list* of
