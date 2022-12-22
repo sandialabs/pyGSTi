@@ -937,7 +937,7 @@ def pairwise_indep_expts(q):
     for i in range(q):
         for a in range(q):
             for b in range(q):
-                vals[a*q+b,i] = _np.int(_np.mod(a*i+b,q))
+                vals[a*q+b,i] = _np.int_(_np.mod(a*i+b,q))
 
     length = _np.shape(vals)[0]
     return length, vals
