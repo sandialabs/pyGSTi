@@ -16,6 +16,8 @@ import scipy.sparse as _sps
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools.basistools import basis_matrices
 
+from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.tools import basistools as _bt
 
 def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_factor='auto'):
     """
@@ -230,3 +232,77 @@ def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N8
 
     if sparse: lind_errgen = lind_errgen.tocsr()
     return lind_errgen
+
+def extract_lindbladian_errorgen_coefficients(errorgen, errorgen_basis='pp',
+                                              lindblad_basis='gm'):
+    """
+    Decompose an error generator (given in basis `errorgen_basis`) as a Lindbladian (using 
+    basis `elementary_errorgen_basis`).
+
+    Mathematically, this routing decomposes an error generator M in terms of the coefficients of
+    the Hamiltonian and dissipative terms in the Lindblad equation:
+
+    M(rho) = -i Sum_m h_m [Lm, rho] + Sum_m,n d_m,n Ln*rho*Lm^dag - 1/2(rho*Lm^dag*Ln + Lm^dag*Ln*rho)
+
+    where rho is a density matrix. 
+
+    If M is written as a superoperator on a vectorized rho (column stacked), then L decomposes as
+
+    M = -i Sum_m h_m (I otimes Lm - Lm.T otimes I) 
+         + Sum_m,n d_m,n (Lm* otimes Ln - 1/2 Ln.T Lm* otimes I  - 1/2 I otimes Lm^dag Ln)
+
+    The sum is over {Lm}, a basis of normales, traceless matrices. 
+
+    This function returns the vector of Hamiltonian coefficients [h_m] and the PSD matrix of dissipative
+    coefficients [d_m,n].
+
+    Parameters
+    ----------
+    
+    errorgen : numpy.ndarray
+        d^2-dimensional matrix.
+
+    errorgen_basis : string or basis object
+        Basis in which `errorgen` is represented
+
+    lindblad_basis : string or basis object
+        Basis of d-dimensional matrices. Only basis[0] should be trace nonzero, and all 
+        matrices should be trace orthonormal.
+
+    TODO: What happens if we're given a basis that is not traceless? 
+          The decomposition doesn't work anymore. Do we have to subtract the trace?
+
+    Returns
+    -------
+    
+    lindblad_coefficients: d^2-1 dimensional list, d^2-1 x d^2-1 dimensional list 
+
+    """
+
+    # the same as decompose_errorgen but given a dict/list of elementary errorgens directly instead of a basis and type  
+    if isinstance(errorgen_basis, _Basis):
+        errorgen_std = _bt.change_basis(errorgen, errorgen_basis, errorgen_basis.create_equivalent('std'))
+
+        #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
+        errorgen_std = _bt.resize_std_mx(errorgen_std, 'expand', errorgen_basis.create_equivalent('std'),
+                                         errorgen_basis.create_simple_equivalent('std'))
+    else:
+        errorgen_std = _bt.change_basis(errorgen, errorgen_basis, "std")
+
+    d = errorgen_std.shape[0]
+    hams = _np.zeros([d-1], dtype='complex')
+    diss = _np.zeros([d-1,d-1], dtype='complex')
+    
+    lindblad_basis = _Basis.cast(lindblad_basis,dim=d)
+
+    for m, Lm in enumerate(lindblad_basis.elements[1:]):
+        if _np.abs(_np.trace(Lm)) > 1.e-5:
+            raise ValueError("Lindblad basis elements indexed 1 and above should be traceless.")
+        LHm = create_lindbladian_term_errorgen('H', Lm)
+        hams[m] = _np.trace(errorgen @ LHm.conjugate().T) / _np.trace(LHm @ LHm.conjugate().T)
+        
+        for n, Ln in enumerate(lindblad_basis.elements[1:]):            
+            LDmn = create_lindbladian_term_errorgen('O', Lm, Ln)
+            diss[m,n] = _np.trace(errorgen @ LDmn.conjugate().T)/ _np.trace(LDmn @ LDmn.conjugate().T)
+
+    return hams, diss
