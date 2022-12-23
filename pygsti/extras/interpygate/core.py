@@ -15,11 +15,13 @@ import itertools as _itertools
 
 import numpy as _np
 from scipy.interpolate import LinearNDInterpolator as _linND
+from scipy.linalg import cholesky
 
 from ...modelmembers.operations import DenseOperator as _DenseOperator
 from ...modelmembers.operations.opfactory import OpFactory as _OpFactory
 from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ...tools import optools as _ot
+from ...tools import lindbladtools as _lt
 
 try:
     from csaps import NdGridCubicSmoothingSpline as _cubicSpline
@@ -73,13 +75,22 @@ def _flatten(x):
     except TypeError:
         return None
 
+def _flatten_tri(d):
+    # flatten an upper-triangular matrix
+    try:
+        dim = len(d)
+        return [b for (i,a) in enumerate(d) for b in a[i:]]
+    except TypeError:
+        return None
+
 
 class _PhysicalBase(object):
-    def __init__(self, num_params, item_shape, aux_shape=None, num_params_evaluated_as_group=0):
+    def __init__(self, num_params, item_shape, aux_shape=None, num_params_evaluated_as_group=0, basis='pp'):
         self.num_params = num_params
         self.item_shape = item_shape
         self.aux_shape = aux_shape  # None means no aux data
         self.num_params_evaluated_as_group = num_params_evaluated_as_group
+        self.basis = basis
 
     def create_aux_info(self, v, comm=None):
         raise NotImplementedError("Derived classes must implement `create_aux_info`!")
@@ -87,11 +98,37 @@ class _PhysicalBase(object):
     def create_aux_infos(self, v, grouped_v, comm=None):
         raise NotImplementedError("Derived class must implement `create_aux_infos`!")
 
+    def to_ham_chol(self,errorgen):
+        # map an error generator to flattened hamiltonian and cholesky-factorized dissipitive
+        # Lindblad parameters
+        hams, diss = _lt.extract_lindbladian_errorgen_coefficients(errorgen,self.basis,'gm')
+        try:
+            chol = _flatten_tri(cholesky(diss))
+        except:
+            # TODO: This will introduce 10^-7 errors when they might not exist. What did Erik do?
+            diss += _np.eye(len(diss))*1.e-5
+            chol = _flatten_tri(cholesky(diss))
+
+        return hams.tolist() + chol
+
+    def from_ham_diss(self,hamsdiss):
+        # map flattened ham and diss Lindblad parameters to an error generator
+        dm1 = int((np.sqrt(8*len(hamsdiss)+9)-3)/2)
+        hams = hamsdiss[:dm1]
+        chol = hamsdiss[dm1:]
+        chol_factor = np.zeros([dm1,dm1],dtype='complex')
+        for ind in range(dm1):
+            chol_factor[ind,ind:] = chol[:dm1-ind]
+            chol = chol[dm1-ind:]
+        diss = chol.T@chol
+        errorgen = _lt.construct_errorgen_from_lindbladan_h_and_d(hams,diss,'gm',self.basis)
+        return errorgen
+
 
 class PhysicalProcess(_PhysicalBase):
 
-    def __init__(self, num_params, process_shape, aux_shape=None, num_params_evaluated_as_group=0):
-        super().__init__(num_params, process_shape, aux_shape, num_params_evaluated_as_group)
+    def __init__(self, num_params, process_shape, aux_shape=None, num_params_evaluated_as_group=0, basis='pp'):
+        super().__init__(num_params, process_shape, aux_shape, num_params_evaluated_as_group, basis)
 
     def create_process_matrix(self, v, comm=None):
         raise NotImplementedError("Derived classes must implement create_process_matrix!")
@@ -102,8 +139,8 @@ class PhysicalProcess(_PhysicalBase):
 
 class PhysicalErrorGenerator(_PhysicalBase):
 
-    def __init__(self, num_params, errorgen_shape, aux_shape=None, num_params_evaluated_as_group=0):
-        super().__init__(num_params, errorgen_shape, aux_shape, num_params_evaluated_as_group)
+    def __init__(self, num_params, errorgen_shape, aux_shape=None, num_params_evaluated_as_group=0, basis='pp'):
+        super().__init__(num_params, errorgen_shape, aux_shape, num_params_evaluated_as_group, basis)
 
     def create_errorgen_matrix(self, v, comm=None):
         raise NotImplementedError("Derived classes must implement create_errorgen_matrix!")
@@ -123,12 +160,14 @@ class OpPhysicalProcess(PhysicalProcess):
         return self.op.to_dense()
 
 
+
 class InterpolatedOpFactory(_OpFactory):
 
     @classmethod
     def create_by_interpolating_physical_process(cls, target_factory, physical_process, argument_ranges,
                                                  parameter_ranges, argument_indices=None, comm=None,
-                                                 mpi_workers_per_process=1, interpolator_and_args=None, verbosity=0):
+                                                 mpi_workers_per_process=1, interpolator_and_args=None, 
+                                                 verbosity=0, ensure_cptp=True):
         #printer = _VerbosityPrinter.create_printer(verbosity)
         nargs = len(argument_ranges)
         if argument_indices is None:
@@ -139,14 +178,30 @@ class InterpolatedOpFactory(_OpFactory):
 
         ngroups = physical_process.num_params_evaluated_as_group
         process_shape = physical_process.item_shape
+        if ensure_cptp:
+            process_shape = ((physical_process.item_shape[0]-1)**2,)
+
+        def vectorized_to_ham_chol(errorgens):
+            if ensure_cptp:
+                if len(errorgens.shape) == 2:
+                    # just a 
+                    return physical_process.to_ham_chol(errorgens)
+                elif len(errorgens.shape) >2:
+                    errorgens_temp = errorgens.reshape(_np.prod(errorgens.shape[:-2]),errorgens.shape[-2],errorgens.shape[-1])
+                    a = _np.array([physical_process.to_ham_chol(egen) for egen in errorgens_temp])
+                    return a.reshape(errorgens.shape[:-2] + (len(a[0]),))
+            else:
+                return errorgens
+
         if isinstance(physical_process, PhysicalErrorGenerator):
             if ngroups > 0:
                 def fn(v, grouped_v, comm):
-                    return physical_process.create_errorgen_matrices(v, grouped_v, comm=comm)
+                    return vectorized_to_ham_chol(physical_process.create_errorgen_matrices(v, grouped_v, comm=comm))
+                    
             else:
                 def fn(v, comm):
-                    return physical_process.create_errorgen_matrix(v, comm=comm)
-        else:
+                    return vectorized_to_ham_chol(physical_process.create_errorgen_matrix(v, comm=comm))
+        elif isinstance(physical_process, PhysicalProcess):
             if ngroups > 0:
                 def fn(v, grouped_v, comm):
                     process_mxs = physical_process.create_process_matrices(v, grouped_v, comm=comm)
@@ -154,7 +209,7 @@ class InterpolatedOpFactory(_OpFactory):
                         return None  # a "slave" processor that doesn't need to report a value (process_mxs can be None)
 
                     grouped_dims = tuple(map(len, grouped_v))
-                    ret = _np.empty(grouped_dims + process_shape, 'd')
+                    ret = _np.empty(grouped_dims + physical_process.item_shape, 'd')
                     assert(process_mxs.shape == ret.shape)
 
                     for index_tup, gv in zip(_itertools.product(*[range(d) for d in grouped_dims]),
@@ -167,8 +222,8 @@ class InterpolatedOpFactory(_OpFactory):
                         target_op.from_vector(params[0:target_op.num_params])
                         target_mx = target_op.to_dense()
 
-                        ret[index_tup] = _ot.error_generator(process_mxs[index_tup], target_mx, "pp", "logGTi-quick")
-                    return ret
+                        ret[index_tup] = _ot.error_generator(process_mxs[index_tup], target_mx, physical_process.basis, "logGTi-quick")
+                    return vectorized_to_ham_chol(ret)
             else:
                 def fn(v, comm):
                     process_mx = physical_process.create_process_matrix(v, comm=comm)
@@ -180,7 +235,7 @@ class InterpolatedOpFactory(_OpFactory):
                     target_op = target_factory.create_op(args, sslbls=None)
                     target_op.from_vector(params[0:target_op.num_params])
                     target_mx = target_op.to_dense()
-                    return _ot.error_generator(process_mx, target_mx, "pp", "logGTi-quick")
+                    return vectorized_to_ham_chol(_ot.error_generator(process_mx, target_mx, physical_process.basis, "logGTi-quick"))
 
         ranges = [None] * (len(argument_ranges) + len(parameter_ranges))
         for i, arg_range in zip(argument_indices, argument_ranges): ranges[i] = arg_range
