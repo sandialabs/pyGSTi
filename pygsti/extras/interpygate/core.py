@@ -83,6 +83,21 @@ def _flatten_tri(d):
     except TypeError:
         return None
 
+def _compute_dim_from_lindblad_coeffs(length):
+    return int((_np.sqrt(8*length+9)-3)/2)+1
+
+def _cptp_errorgen_from_lindblad_coeffs(hamsdiss, basis):
+        # map flattened ham and diss Lindblad parameters to an error generator
+        dm1 = _compute_dim_from_lindblad_coeffs(len(hamsdiss)) - 1
+        hams = hamsdiss[:dm1]
+        chol = hamsdiss[dm1:]
+        chol_factor = _np.zeros([dm1,dm1],dtype='complex')
+        for ind in range(dm1):
+            chol_factor[ind,ind:] = chol[:dm1-ind]
+            chol = chol[dm1-ind:]
+        diss = chol_factor.T@chol_factor
+        errorgen = _lt.construct_errorgen_from_lindbladian_h_and_d(hams,diss,'gm', basis)
+        return errorgen
 
 class _PhysicalBase(object):
     def __init__(self, num_params, item_shape, aux_shape=None, num_params_evaluated_as_group=0, basis='pp'):
@@ -111,18 +126,7 @@ class _PhysicalBase(object):
 
         return hams.tolist() + chol
 
-    def from_ham_diss(self,hamsdiss):
-        # map flattened ham and diss Lindblad parameters to an error generator
-        dm1 = int((np.sqrt(8*len(hamsdiss)+9)-3)/2)
-        hams = hamsdiss[:dm1]
-        chol = hamsdiss[dm1:]
-        chol_factor = np.zeros([dm1,dm1],dtype='complex')
-        for ind in range(dm1):
-            chol_factor[ind,ind:] = chol[:dm1-ind]
-            chol = chol[dm1-ind:]
-        diss = chol.T@chol
-        errorgen = _lt.construct_errorgen_from_lindbladan_h_and_d(hams,diss,'gm',self.basis)
-        return errorgen
+
 
 
 class PhysicalProcess(_PhysicalBase):
@@ -177,9 +181,11 @@ class InterpolatedOpFactory(_OpFactory):
         param_indices = _np.array(sorted(set(range(physical_process.num_params)) - set(argument_indices)), dtype=int)
 
         ngroups = physical_process.num_params_evaluated_as_group
-        process_shape = physical_process.item_shape
+        
         if ensure_cptp:
             process_shape = ((physical_process.item_shape[0]-1)**2,)
+        else:
+            process_shape = physical_process.item_shape
 
         def vectorized_to_ham_chol(errorgens):
             if ensure_cptp:
@@ -261,19 +267,25 @@ class InterpolatedOpFactory(_OpFactory):
         else:
             aux_interpolator = None
 
-        return cls(target_factory, argument_indices, base_interpolator, aux_interpolator)
+        return cls(target_factory, argument_indices, base_interpolator, aux_interpolator, ensure_cptp, physical_process.basis)
 
-    def __init__(self, target_factory, argument_indices, base_interpolator, aux_interpolator=None):
+    def __init__(self, target_factory, argument_indices, base_interpolator, aux_interpolator=None, ensure_cptp=True, basis='pp'):
         # NOTE: factory_argument_indices refer to the *interpolated* parameters, i.e. those of the interpolators.
         self.target_factory = target_factory
         self._argument_indices = argument_indices
         self.base_interpolator = base_interpolator
         self.aux_interpolator = aux_interpolator
+        self.ensure_cptp = ensure_cptp
+        self.basis = basis
 
-        dim = self.base_interpolator.qty_shape[0]
-        assert(self.base_interpolator.qty_shape == (dim, dim)), \
-            "Base interpolator must interpolate a square matrix value!"
-        assert(target_factory.state_space.dim == dim), "Target factory dim must match interpolated matrix dim!"
+        if ensure_cptp:
+            dim = _compute_dim_from_lindblad_coeffs(self.base_interpolator.qty_shape[0])
+        else:
+            dim = self.base_interpolator.qty_shape[0]
+
+        # assert(self.base_interpolator.qty_shape == (dim, dim)), \
+        #     "Base interpolator must interpolate a square matrix value!"
+        # assert(target_factory.state_space.dim == dim), "Target factory dim must match interpolated matrix dim!"
 
         num_interp_params = self.base_interpolator.num_params
         self.num_factory_args = len(self._argument_indices)
@@ -294,7 +306,8 @@ class InterpolatedOpFactory(_OpFactory):
             "Wrong number of factory args! (Expected %d and got %d)" % (self.num_factory_args, len(args))
 
         return InterpolatedDenseOp(target_op, self.base_interpolator, self.aux_interpolator, self.to_vector(),
-                                   _np.array(args), self._argument_indices)
+                                   _np.array(args), self._argument_indices, 
+                                   ensure_cptp=self.ensure_cptp, basis=self.basis)
 
     #def write(self, dirname):
     #    dirname = _pathlib.Path(dirname)
@@ -343,7 +356,8 @@ class InterpolatedDenseOp(_DenseOperator):
     @classmethod
     def create_by_interpolating_physical_process(cls, target_op, physical_process, parameter_ranges=None,
                                                  parameter_points=None, comm=None,
-                                                 mpi_workers_per_process=1, interpolator_and_args=None, verbosity=0):
+                                                 mpi_workers_per_process=1, interpolator_and_args=None, 
+                                                 verbosity=0, ensure_cptp=True):
         # object_to_interpolate is a PhysicalProcess (or a LinearOperator with adapter?)
         # XXX- anything with from_vector and to_dense methods
         # or a create_process_matrix(v, time=None) method.
@@ -352,14 +366,30 @@ class InterpolatedDenseOp(_DenseOperator):
 
         #printer = _VerbosityPrinter.create_printer(verbosity)
         ngroups = physical_process.num_params_evaluated_as_group
-        process_shape = physical_process.item_shape
+        if ensure_cptp:
+            process_shape = ((physical_process.item_shape[0]-1)**2,)
+        else:
+            process_shape = physical_process.item_shape
+
+        def vectorized_to_ham_chol(errorgens):
+            if ensure_cptp:
+                if len(errorgens.shape) == 2:
+                    # just a 
+                    return physical_process.to_ham_chol(errorgens)
+                elif len(errorgens.shape) >2:
+                    errorgens_temp = errorgens.reshape(_np.prod(errorgens.shape[:-2]),errorgens.shape[-2],errorgens.shape[-1])
+                    a = _np.array([physical_process.to_ham_chol(egen) for egen in errorgens_temp])
+                    return a.reshape(errorgens.shape[:-2] + (len(a[0]),))
+            else:
+                return errorgens
+
         if isinstance(physical_process, PhysicalErrorGenerator):
             if ngroups > 0:
                 def fn(v, grouped_v, comm):
-                    return physical_process.create_errorgen_matrices(v, grouped_v, comm=comm)
+                    return vectorized_to_ham_chol(physical_process.create_errorgen_matrices(v, grouped_v, comm=comm))
             else:
                 def fn(v, comm):
-                    return physical_process.create_errorgen_matrix(v, comm=comm)
+                    return vectorized_to_ham_chol(physical_process.create_errorgen_matrix(v, comm=comm))
         else:
             if ngroups > 0:
                 def fn(v, grouped_v, comm):
@@ -376,8 +406,8 @@ class InterpolatedDenseOp(_DenseOperator):
                         params = _np.concatenate((v, gv))
                         target_op.from_vector(params[0:target_op.num_params])
                         target_mx = target_op.to_dense()
-                        ret[index_tup] = _ot.error_generator(process_mxs[index_tup], target_mx, "pp", "logGTi-quick")
-                    return ret
+                        ret[index_tup] = _ot.error_generator(process_mxs[index_tup], target_mx, physical_process.basis, "logGTi-quick")
+                    return vectorized_to_ham_chol(ret)
             else:
                 def fn(v, comm):
                     process_mx = physical_process.create_process_matrix(v, comm=comm)
@@ -386,7 +416,7 @@ class InterpolatedDenseOp(_DenseOperator):
 
                     target_op.from_vector(v[0:target_op.num_params])
                     target_mx = target_op.to_dense()
-                    return _ot.error_generator(process_mx, target_mx, "pp", "logGTi-quick")
+                    return vectorized_to_ham_chol(_ot.error_generator(process_mx, target_mx, physical_process.basis, "logGTi-quick"))
 
         base_interp_builder = InterpolatedQuantityFactory(fn, process_shape, parameter_ranges, parameter_points,
                                                           ngroups, interpolator_and_args)
@@ -408,14 +438,16 @@ class InterpolatedDenseOp(_DenseOperator):
         else:
             aux_interpolator = None
 
-        return cls(target_op, base_interpolator, aux_interpolator)
+        return cls(target_op, base_interpolator, aux_interpolator, ensure_cptp=ensure_cptp, basis=physical_process.basis)
 
     def __init__(self, target_op, base_interpolator, aux_interpolator=None, initial_point=None,
-                 frozen_parameter_values=None, frozen_parameter_indices=None):
+                 frozen_parameter_values=None, frozen_parameter_indices=None, ensure_cptp=True, basis='pp'):
         # NOTE: frozen_parameter_indices refer to the *interpolated* parameters, i.e. those of the interpolators.
         self.target_op = target_op
         self.base_interpolator = base_interpolator
         self.aux_interpolator = aux_interpolator
+        self.ensure_cptp = ensure_cptp
+        self.basis = basis
 
         num_interp_params = self.base_interpolator.num_params
         self._frozen_indices = _np.array(frozen_parameter_indices) \
@@ -425,10 +457,14 @@ class InterpolatedDenseOp(_DenseOperator):
         self._parameterized_indices = _np.array(sorted(set(range(num_interp_params)) - set(self._frozen_indices)))
         self.aux_info = None
 
-        dim = self.base_interpolator.qty_shape[0]
-        assert(self.base_interpolator.qty_shape == (dim, dim)), \
-            "Base interpolator must interpolate a square matrix value!"
-        assert(target_op.dim == dim), "Target operation dim must match interpolated matrix dim!"
+        if ensure_cptp:
+            dim = _compute_dim_from_lindblad_coeffs(self.base_interpolator.qty_shape[0])
+        else:
+            dim = self.base_interpolator.qty_shape[0]
+
+        # assert(self.base_interpolator.qty_shape == (dim, dim)), \
+        #     "Base interpolator must interpolate a square matrix value!"
+        # assert(target_op.dim == dim), "Target operation dim must match interpolated matrix dim!"
 
         if initial_point is None:
             initial_point = []
@@ -469,6 +505,8 @@ class InterpolatedDenseOp(_DenseOperator):
         fullv[self._parameterized_indices] = self._paramvec
         fullv[self._frozen_indices] = self._frozen_values
         errorgen = self.base_interpolator(fullv)
+        if self.ensure_cptp:
+            errorgen = _cptp_errorgen_from_lindblad_coeffs(errorgen, self.basis)
         self._ptr[:, :] = _ot.operation_from_error_generator(errorgen, self.target_op.to_dense(), 'pp', 'logGTi')
         self._ptr_has_changed()
         if self.aux_interpolator is not None:

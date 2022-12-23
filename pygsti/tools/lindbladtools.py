@@ -296,36 +296,38 @@ def extract_lindbladian_errorgen_coefficients(errorgen, errorgen_basis='pp',
     lindblad_basis = _Basis.cast(lindblad_basis,dim=d)
 
     for m, Lm in enumerate(lindblad_basis.elements[1:]):
+        # Hamiltonian error generators are self dual
         if _np.abs(_np.trace(Lm)) > 1.e-5:
             raise ValueError("Lindblad basis elements indexed 1 and above should be traceless.")
         LHm = create_lindbladian_term_errorgen('H', Lm)
         Lm_norm = _np.trace(Lm @ Lm.conjugate().T) 
         LHm_norm = _np.trace(LHm @ LHm.conjugate().T) 
         # TODO: check that this minus sign is correct in all cases
-        hams[m] = -_np.trace(errorgen @ LHm.conjugate().T) / ( LHm_norm )
+        hams[m] = _np.trace(errorgen_std @ LHm.conjugate().T) / ( LHm_norm )
 
         for n, Ln in enumerate(lindblad_basis.elements[1:]):            
+            # Dual of dissipative error generator D(Lm,Ln) is (Ln.T \otimes Lm.dag) 
             Ln_norm = _np.trace(Ln @ Ln.conjugate().T)
             LDmn = create_lindbladian_term_errorgen('O', Lm, Ln)
-            diss[m,n] = _np.trace(errorgen @ _np.kron(Ln.T,Lm.conjugate().T)) / (Lm_norm * Ln_norm)
+            diss[m,n] = _np.trace(errorgen_std @ _np.kron(Ln.T,Lm.conjugate().T)) / (Lm_norm * Ln_norm)
 
     return hams, diss
 
 def construct_errorgen_from_lindbladian_h_and_d(hams,diss,lindblad_basis,errorgen_basis):
 
     d = len(hams) + 1
-    errorgen = _np.zeros([d,d],dtype='complex')
+    errorgen_std = _np.zeros([d,d],dtype='complex')
     lindblad_basis = _Basis.cast(lindblad_basis,dim=d)
 
     for m, Lm in enumerate(lindblad_basis.elements[1:]):
         if _np.abs(_np.trace(Lm)) > 1.e-5:
             raise ValueError("Lindblad basis elements indexed 1 and above should be traceless.")
         LHm = create_lindbladian_term_errorgen('H', Lm)
-        errorgen += hams[m] * LHm
+        errorgen_std += hams[m] * LHm
 
         for n, Ln in enumerate(lindblad_basis.elements[1:]):
             LDmn = create_lindbladian_term_errorgen('O', Lm, Ln)
-            errorgen += diss[m,n] * LDmn
+            errorgen_std += diss[m,n] * LDmn
 
-    errorgen = _bt.change_basis(errorgen,'std',errorgen_basis)
+    errorgen = _bt.change_basis(errorgen_std,'std',errorgen_basis)
     return errorgen
