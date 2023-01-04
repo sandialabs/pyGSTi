@@ -370,6 +370,10 @@ class StandardGSTDesign(GateSetTomographyDesign):
         else:
             fiducial_pairs = self.fiducial_pairs
 
+        if not (self.circuit_rules is None and self.aliases is None):
+            raise NotImplementedError(("Mapping qubit labels for a StandardGSTDesign with circuit rules"
+                                       " and/or aliases is not implemented yet."))
+
         dscheck = None; action_if_missing = 'raise'; verbosity = 0  # values we could add as arguments later if desired.
         return StandardGSTDesign(pspec, prep_fiducials, meas_fiducials,
                                  germs, self.maxlengths, self.germ_length_limits, fiducial_pairs,
