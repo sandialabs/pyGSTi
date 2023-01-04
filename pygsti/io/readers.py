@@ -423,14 +423,14 @@ def read_protocol_from_dir(dirname, quick_load=False, comm=None):
     return _metadir._cls_from_meta_json(dirname).from_dir(dirname, quick_load=quick_load)
 
 
-def read_protocol_from_mongodb(mongodb_collection, doc_id, quick_load=False):
+def read_protocol_from_mongodb(mongodb, doc_id, quick_load=False):
     """
     Load a :class:`Protocol` from a MongoDB database.
 
     Parameters
     ----------
-    mongodb_collection : pymongo.collection.Collection
-        The MongoDB collection to load data from.
+    mongodb : pymongo.database.Database
+        The MongoDB instance to load data from.
 
     doc_id : str
         The user-defined identifier of the protocol object to load.
@@ -444,13 +444,11 @@ def read_protocol_from_mongodb(mongodb_collection, doc_id, quick_load=False):
     -------
     Protocol
     """
-    doc = mongodb_collection.find_one({'_id': doc_id}, ['type'])
-    if 'type' not in doc:
-        raise ValueError("Document exists, but expected 'type' key within document is missing!")
-    return _metadir._class_for_name(doc['type']).from_mongodb(mongodb_collection, doc_id, quick_load=quick_load)
+    import pygsti.protocols as _proto
+    return _proto.Protocol.from_mongodb(mongodb, doc_id, quick_load=quick_load)
 
 
-def remove_protocol_from_mongodb(mongodb_collection, doc_id, session=None, recursive=False):
+def remove_protocol_from_mongodb(mongodb, doc_id, session=None, recursive=False):
     """
     Remove a :class:`Protocol` from a MongoDB database.
 
@@ -459,8 +457,8 @@ def remove_protocol_from_mongodb(mongodb_collection, doc_id, session=None, recur
 
     Parameters
     ----------
-    mongodb_collection : pymongo.collection.Collection
-        The MongoDB collection to load data from.
+    mongodb : pymongo.database.Database
+        The MongoDB instance to remove data from.
 
     doc_id : str
         The user-defined identifier of the protocol object to remove.
@@ -482,7 +480,7 @@ def remove_protocol_from_mongodb(mongodb_collection, doc_id, session=None, recur
         `True` if the specified protocol object was removed, `False` if it didn't exist.
     """
     from ..protocols import Protocol as _Protocol
-    return _Protocol.remove_from_mongodb(mongodb_collection, doc_id, session=session,
+    return _Protocol.remove_from_mongodb(mongodb, doc_id, session=session,
                                          recursive=recursive)
 
 
