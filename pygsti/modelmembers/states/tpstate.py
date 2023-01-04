@@ -198,4 +198,5 @@ class TPState(_DenseState):
     def _from_memoized_dict(cls, mm_dict, serial_memo):
         vec = cls._decodemx(mm_dict['dense_superket_vector'])
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
-        return cls(vec, None, mm_dict['evotype'], state_space)  # use basis=None to skip 1st element check
+        basis = _Basis.from_nice_serialization(mm_dict['basis']) if (mm_dict['basis'] is not None) else None
+        return cls(vec, basis, mm_dict['evotype'], state_space)  # use basis=None to skip 1st element check

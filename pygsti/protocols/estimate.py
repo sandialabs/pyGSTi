@@ -194,7 +194,8 @@ class Estimate(_MongoSerializable):
                               '_final_objfn_cache': 'dir-serialized-object',
                               'final_objfn_builder': 'serialized-object',
                               '_final_objfn': 'reset',
-                              '_gaugeopt_suite': 'serialized-object'
+                              '_gaugeopt_suite': 'serialized-object',
+                              '_dbcoordinates': 'none'
                               }
 
     @property
