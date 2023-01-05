@@ -193,7 +193,7 @@ class QubitGraph(_NicelySerializable):
                     "`initial_connectivity` must hold *integer* direction-indices when `direction_names` is non-None"
             else:
                 #TODO: fix numpy integer-type test here
-                assert(initial_connectivity.dtype == _np.int or initial_connectivity.dtype == _np.int64), \
+                assert(initial_connectivity.dtype == _np.int_ or initial_connectivity.dtype == _np.int64), \
                     ("`initial_connectivity` can only have dtype == bool or "
                      "int (but has dtype=%s)") % str(initial_connectivity.dtype)
                 assert(direction_names is not None), \

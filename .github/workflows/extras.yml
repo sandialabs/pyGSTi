@@ -17,7 +17,7 @@ env:
   NOSE_WITH_TIMER: 1
   NOSE_WITH_ID: 1
   NOSE_REDNOSE: 1
-  NOSE_WITH_COVERAGE: 1
+  NOSE_WITH_COVERAGE: 0
   NOSE_COVER_PACKAGE: "pygsti"
   #NOSE_PROCESSES: -1
   NOSE_NOPATH: ""
@@ -38,7 +38,6 @@ jobs:
         - "algorithmsb"
         - "report"
         - "reportb"
-        - "report"
         - "objects"
         - "tools"
         - "iotest"
