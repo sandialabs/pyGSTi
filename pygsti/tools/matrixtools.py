@@ -1136,10 +1136,10 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
 
     if pass_indices_to_metricfn:
         for i, x in enumerate(a):
-            weightMx[i, :] = [metricfn(i, j) for j, y in enumerate(b)]
+            weightMx[i, :] = _np.ravel(_np.array([metricfn(i, j) for j, y in enumerate(b)]))
     else:
         for i, x in enumerate(a):
-            weightMx[i, :] = [metricfn(x, y) for j, y in enumerate(b)]
+            weightMx[i, :] = _np.ravel(_np.array([metricfn(x, y) for j, y in enumerate(b)]))
 
     a_inds, b_inds = _spo.linear_sum_assignment(weightMx)
     assert(_np.allclose(a_inds, range(D))), "linear_sum_assignment returned unexpected row indices!"

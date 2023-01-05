@@ -3,9 +3,15 @@ from ..testutils import BaseTestCase
 
 import pygsti
 from pygsti.modelpacks import smq1Q_XYI as std
-from pygsti.evotypes import qibo as evo_qibo  # don't clobber qibo!
 
+#qibo is also currently suffering from numpy 1.24.0 related deprecation problems
+#that result in this dying on this import.
+try:
+    from pygsti.evotypes import qibo as evo_qibo  # don't clobber qibo!
+except (ImportError, AttributeError):
+    pass
 
+@unittest.skip("Qibo import is currently broken because of numpy 1.24, re-enable once the devs fix it.")
 class TestQiboGSTCase(BaseTestCase):
     def setUp(self):
         evo_qibo.densitymx_mode = True
