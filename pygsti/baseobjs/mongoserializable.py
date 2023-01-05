@@ -373,7 +373,7 @@ class WriteOpsByCollection(dict):
         doc['_id'] = doc_id
 
         if overwrite_existing is True:
-            self[collection_name].append(ReplaceOne(doc_id, doc, upsert=True))
+            self[collection_name].append(ReplaceOne({'_id': doc_id}, doc, upsert=True))
             #mongodb[collection_name].replace_one(doc_id, doc, upsert=True)  # alt line for DEBUG
         else:
             existing_doc = mongodb[collection_name].find_one(doc_id)
