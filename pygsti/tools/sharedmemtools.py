@@ -138,7 +138,9 @@ def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, memory_t
     else:
         if memory_tracker: memory_tracker.add_tracked_memory(nelements // hostcomm.size)
         if hostcomm.rank == 0:
-            shm = _shared_memory.SharedMemory(create=True, size=nelements * _np.dtype(dtype).itemsize)
+            #SharedMemory expects the size to be a python integer of the same type used as
+            #system default.
+            shm = _shared_memory.SharedMemory(create=True, size= int(nelements * _np.dtype(dtype).itemsize))
             assert(shm.size >= nelements * _np.dtype(dtype).itemsize)  # Note: not always == (minimum shm.size?)
             hostcomm.bcast(shm.name, root=0)
         else:

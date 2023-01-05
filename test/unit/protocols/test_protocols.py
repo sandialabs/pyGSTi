@@ -88,3 +88,65 @@ class ExperimentDesignTester(BaseCase):
         self.assertTrue(all([a == b for a,b in zip(edesign3['subdir1'].all_circuits_needing_data, self.gst_design.circuit_lists[0])]))
         self.assertTrue(all([a == b for a,b in zip(edesign3['subdir2'].all_circuits_needing_data, self.gst_design.circuit_lists[1])]))
 
+    def test_map_edesign_sslbls(self):
+        #Create a bunch of experiment designs:
+        from pygsti.protocols import ExperimentDesign, CircuitListsDesign, CombinedExperimentDesign, \
+            SimultaneousExperimentDesign, FreeformDesign, StandardGSTDesign, GateSetTomographyDesign, \
+            CliffordRBDesign, DirectRBDesign, MirrorRBDesign
+        from pygsti.processors import CliffordCompilationRules as CCR
+
+        circuits_on0 = pygsti.circuits.to_circuits(["{}@(0)", "Gxpi2:0", "Gypi2:0"], line_labels=(0,))
+        circuits_on0b = pygsti.circuits.to_circuits(["Gxpi2:0^2", "Gypi2:0^2"], line_labels=(0,))
+        circuits_on1 = pygsti.circuits.to_circuits(["Gxpi2:1^2", "Gypi2:1^2"], line_labels=(1,))
+        circuits_on01 = pygsti.circuits.to_circuits(["Gcnot:0:1", "Gxpi2:0Gypi2:1^2Gcnot:0:1Gxpi:0"],
+                                                    line_labels=(0,1))
+
+        #For GST edesigns
+        mdl = std.target_model()
+        gst_pspec = mdl.create_processor_spec()
+
+        #For RB edesigns
+        pspec = pygsti.processors.QubitProcessorSpec(2, ["Gxpi2", "Gypi2","Gxx"],
+                                                     geometry='line', qubit_labels=(0,1))
+        compilations = {"absolute": CCR.create_standard(pspec, "absolute", ("paulis", "1Qcliffords"), verbosity=0),
+                        "paulieq": CCR.create_standard(pspec, "paulieq", ("1Qcliffords", "allcnots"), verbosity=0),
+                        }
+
+        pspec1Q = pygsti.processors.QubitProcessorSpec(1, ["Gxpi2", "Gypi2","Gxmpi2", "Gympi2"],
+                                                       geometry='line', qubit_labels=(0,))
+        compilations1Q = {"absolute": CCR.create_standard(pspec1Q, "absolute", ("paulis", "1Qcliffords"), verbosity=0),
+                          "paulieq": CCR.create_standard(pspec1Q, "paulieq", ("1Qcliffords", "allcnots"), verbosity=0),
+                          }
+
+
+        edesigns = []
+        edesigns.append(ExperimentDesign(circuits_on0))
+        edesigns.append(CircuitListsDesign([circuits_on0, circuits_on0b]))
+        edesigns.append(CombinedExperimentDesign({'one': ExperimentDesign(circuits_on0),
+                                                  'two': ExperimentDesign(circuits_on1),
+                                                  'three': ExperimentDesign(circuits_on01)}, qubit_labels=(0,1)))
+        edesigns.append(SimultaneousExperimentDesign([ExperimentDesign(circuits_on0), ExperimentDesign(circuits_on1)]))
+        edesigns.append(FreeformDesign(circuits_on01))
+        edesigns.append(std.create_gst_experiment_design(2))
+        edesigns.append(GateSetTomographyDesign(gst_pspec, [circuits_on0, circuits_on0b]))
+        edesigns.append(CliffordRBDesign(pspec, compilations, depths=[0,2,5], circuits_per_depth=4))
+        edesigns.append(DirectRBDesign(pspec, compilations, depths=[0,2,5], circuits_per_depth=4))
+        edesigns.append(MirrorRBDesign(pspec1Q, depths=[0,2,4], circuits_per_depth=4,
+                                       clifford_compilations=compilations1Q))
+
+        for edesign in edesigns:
+            print("Testing edesign of type: ", str(type(edesign)))
+            orig_qubits = edesign.qubit_labels
+            for c in edesign.all_circuits_needing_data:
+                self.assertTrue(set(c.line_labels).issubset(orig_qubits))
+
+            if orig_qubits == (0,):
+                mapper = {0: 4}; mapped_qubits = (4,)
+            if orig_qubits == (1,):
+                mapper = {1: 5}; mapped_qubits = (5,)
+            if orig_qubits == (0,1):
+                mapper = {0:4, 1: 5}; mapped_qubits = (4,5)
+            mapped_edesign = edesign.map_qubit_labels(mapper)
+            self.assertEqual(mapped_edesign.qubit_labels, mapped_qubits)
+            for c in mapped_edesign.all_circuits_needing_data:
+                self.assertTrue(set(c.line_labels).issubset(mapped_qubits))
