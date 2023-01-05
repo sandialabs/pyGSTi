@@ -199,4 +199,10 @@ class TPState(_DenseState):
         vec = cls._decodemx(mm_dict['dense_superket_vector'])
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
         basis = _Basis.from_nice_serialization(mm_dict['basis']) if (mm_dict['basis'] is not None) else None
+
+        # HACK -- REMOVE LATER -- allows loading objs saved before fixing TP state bug
+        # at commit aa8a29049a9c3ddafe598d903602ab5afdb7aad4
+        if mm_dict['basis'] is not None and 'name' in mm_dict['basis'] and mm_dict['basis']['name'] == "*Empty*":
+            basis = None
+
         return cls(vec, basis, mm_dict['evotype'], state_space)  # use basis=None to skip 1st element check
