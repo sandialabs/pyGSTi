@@ -220,6 +220,19 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     
     printer.log('Length Available Germ List After Dropping Random Fraction: '+ str(len(availableGermsList)), 1)
     
+    #If we have specified a user specified germs to force inclusion of then there is a chance
+    #they got removed by the deduping and removal of random circuits above. The right way to fix this
+    #would be to add some logic to those subroutines that prevent this, but for now I am going to just 
+    #manually add them back in (this will result almost suredly in a couple duplicate circuits, but oh well).
+    if force is not None:
+        #iterate through the list of forced germs to check for inclusion and
+        #if missing append to the list of available germs.
+        if isinstance(force, list):
+            for forced_germ in force:
+                if not forced_germ in availableGermsList:
+                    availableGermsList.append(forced_germ)
+        printer.log('Length Available Germ List After Adding Back In Forced Germs: '+ str(len(availableGermsList)), 1)
+    
     #Add some checks related to the new option to switch up data types:
     if not assume_real:
         if not (float_type is _np.cdouble or float_type is _np.csingle):
@@ -3585,6 +3598,7 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
             for opstr in force:
                 weights[germs_list.index(opstr)] = 1
             goodGerms = force[:]
+            printer.log('Adding User-Specified Germs By Default: '+ str(goodGerms) ,1)
             
     #We should do the memory estimates before the pretest:
     FLOATSIZE= float_type(0).itemsize
