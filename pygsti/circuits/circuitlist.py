@@ -87,6 +87,7 @@ class CircuitList(_NicelySerializable):
         name : str, optional
             An optional name for this list, used for status messages.
         """
+        super().__init__()
         self._circuits = tuple(map(_Circuit.cast, circuits))  # *static* container - can't add/append
         self.op_label_aliases = op_label_aliases
         self.circuit_rules = circuit_rules

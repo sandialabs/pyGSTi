@@ -443,8 +443,12 @@ class StdInputParser(object):
                 outcomeLabels = [l.strip().split(':') for l in preamble_directives['Outcomes'].split(",")]
                 outcome_labels_specified_in_preamble = True
             if 'StdOutcomeQubits' in preamble_directives:
-                outcomeLabels = int(preamble_directives['Outcomes'])
+                outcomeLabels = int(preamble_directives['StdOutcomeQubits'])
                 outcome_labels_specified_in_preamble = True
+            if not outcome_labels_specified_in_preamble and 'Columns' in preamble_directives:
+                outcomeLabels = sorted(fixed_column_outcome_labels)
+                outcome_labels_specified_in_preamble = True
+
         finally:
             _os.chdir(orig_cwd)
 

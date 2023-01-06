@@ -53,6 +53,7 @@ class CircuitPlaquette(_NicelySerializable):
         """
         Create a new CircuitPlaquette.
         """
+        super().__init__()
         self.elements = _collections.OrderedDict(elements)
         self.circuit_rules = circuit_rules
         self.op_label_aliases = op_label_aliases

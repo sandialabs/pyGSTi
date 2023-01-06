@@ -46,6 +46,7 @@ class GaugeGroup(_NicelySerializable):
             A name for this group - used for reporting what type of
             gauge optimization was performed.
         """
+        super().__init__()
         self.name = name
 
     @property
@@ -94,7 +95,7 @@ class GaugeGroupElement(_NicelySerializable):
 
     def __init__(self):
         """Creates a new GaugeGroupElement"""
-        pass
+        super().__init__()
 
     @property
     def transform_matrix(self):
@@ -197,6 +198,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
     """
 
     def __init__(self, gauge_group_el):
+        super().__init__()
         self.inverse_element = gauge_group_el
 
     @property
@@ -401,14 +403,14 @@ class OpGaugeGroupWithBasis(OpGaugeGroup):
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         state.update({'state_space_dimension': int(self._operation.state_space.dim),
-                      'basis': self._basis.to_nice_serialization(),
+                      'basis': self._basis if isinstance(self._basis, str) else self._basis.to_nice_serialization(),
                       'evotype': str(self._operation.evotype)
                       })
         return state
 
     @classmethod
     def _from_nice_serialization(cls, state):
-        basis = _Basis.from_nice_serialization(state['basis'])
+        basis = state['basis'] if isinstance(state['basis'], str) else _Basis.from_nice_serialization(state['basis'])
         return cls(_statespace.default_space_for_dim(state['state_space_dimension']), basis, state['evotype'])
 
 

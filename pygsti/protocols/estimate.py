@@ -27,12 +27,13 @@ from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
 
 
-class Estimate(object):
+class Estimate(_MongoSerializable):
     """
     A class encapsulating the `Model` objects related to a single GST estimate up-to-gauge freedoms.
 
@@ -53,6 +54,7 @@ class Estimate(object):
         A dictionary of parameters associated with how these models
         were obtained.
     """
+    collection_name = "pygsti_estimates"
 
     @classmethod
     def from_dir(cls, dirname, quick_load=False):
@@ -78,34 +80,17 @@ class Estimate(object):
         """
         ret = cls.__new__(cls)
         ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
+        _MongoSerializable.__init__(ret)
         for crf in ret.confidence_region_factories.values():
             crf.set_parent(ret)  # re-link confidence_region_factories
         return ret
 
     @classmethod
-    def from_mongodb(cls, mongodb_collection, doc_id, quick_load=False):
-        """
-        Initialize a new Estimate object from a Mongo database.
-
-        Parameters
-        ----------
-        mongodb_collection : pymongo.collection.Collection
-            The MongoDB collection to load data from.
-
-        doc_id : str
-            The user-defined identifier of the protocol object to load.
-
-        quick_load : bool, optional
-            Setting this to True skips the loading of components that may take
-            a long time to load.
-
-        Returns
-        -------
-        Protocol
-        """
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
+        #def from_mongodb(cls, mongodb_collection, doc_id, ):
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.read_auxtree_from_mongodb(mongodb_collection, doc_id,
-                                                          'auxfile_types', quick_load=quick_load))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
+        _MongoSerializable.__init__(ret)
         for crf in ret.confidence_region_factories.values():
             crf.set_parent(ret)  # re-link confidence_region_factories
         return ret
@@ -168,6 +153,7 @@ class Estimate(object):
             A dictionary of parameters associated with how these models
             were obtained.
         """
+        super().__init__()
         self.parent = parent
         #self.parameters = _collections.OrderedDict()
         #self.goparameters = _collections.OrderedDict()
@@ -208,7 +194,8 @@ class Estimate(object):
                               '_final_objfn_cache': 'dir-serialized-object',
                               'final_objfn_builder': 'serialized-object',
                               '_final_objfn': 'reset',
-                              '_gaugeopt_suite': 'serialized-object'
+                              '_gaugeopt_suite': 'serialized-object',
+                              '_dbcoordinates': 'none'
                               }
 
     @property
@@ -249,36 +236,14 @@ class Estimate(object):
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
-    def write_to_mongodb(self, mongodb_collection, doc_id=None, session=None, overwrite_existing=False):
-        """
-        Write this Estimate to a MongoDB database.
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):
+        _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                     'auxfile_types', overwrite_existing=overwrite_existing)
 
-        Parameters
-        ----------
-        mongodb_collection : pymongo.collection.Collection
-            The MongoDB collection to write to.
-
-        doc_id : str, optional
-            The user-defined identifier of the Estimate to write.  Can be
-            left as `None` to generate a random identifier.
-
-        session : pymongo.client_session.ClientSession, optional
-            MongoDB session object to use when interacting with the MongoDB
-            database. This can be used to implement transactions
-            among other things.
-
-        overwrite_existing : bool, optional
-            Whether existing documents should be overwritten.  The default of `False` causes
-            a ValueError to be raised if a document with the given `doc_id` already exists.
-            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
-            to a path can be done regardless of whether it already exists.
-
-        Returns
-        -------
-        None
-        """
-        _io.write_obj_to_mongodb_auxtree(self, mongodb_collection, doc_id, 'auxfile_types',
-                                         session=session, overwrite_existing=overwrite_existing)
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
+                                        recursive=recursive)
 
     @classmethod
     def remove_from_mongodb(cls, mongodb_collection, doc_id, session=None):

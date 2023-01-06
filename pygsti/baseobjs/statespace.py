@@ -49,6 +49,9 @@ class StateSpace(_NicelySerializable):
             return QubitSpace(obj)
         return ExplicitStateSpace(obj)
 
+    def __init__(self):
+        super().__init__()
+
     @property
     def udim(self):
         """
@@ -579,6 +582,7 @@ class QuditSpace(StateSpace):
     """
 
     def __init__(self, nqudits_or_labels, udim_or_udims):
+        super().__init__()
         if isinstance(nqudits_or_labels, int):
             self.qudit_labels = tuple(range(nqudits_or_labels))
         else:
@@ -990,6 +994,7 @@ class ExplicitStateSpace(StateSpace):
         #Step1: convert label_list (and dims, if given) to a list of
         # elements describing each "tensor product block" - each of
         # which is a tuple of string labels.
+        super().__init__()
 
         def is_label(x):
             """ Return whether x is a valid space-label """
