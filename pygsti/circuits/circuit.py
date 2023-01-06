@@ -75,7 +75,7 @@ def _np_to_quil_def_str(name, input_array):
 def _num_to_rqc_str(num):
     """Convert float to string to be included in RQC quil DEFGATE block
     (as written by _np_to_quil_def_str)."""
-    num = _np.complex(_np.real_if_close(num))
+    num = _np.complex_(_np.real_if_close(num))
     if _np.imag(num) == 0:
         output = str(_np.real(num))
         return output

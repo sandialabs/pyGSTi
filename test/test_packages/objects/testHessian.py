@@ -319,10 +319,10 @@ class TestHessianMethods(BaseTestCase):
                 return np.array( float( np.dot( rhoVecs[0].T, povms[0][lbls[0]] ) ) )
             def fnOfSpam_1D(rhoVecs, povms):
                 lbls = list(povms[0].keys())
-                return np.array( [ np.dot( rhoVecs[0].T, povms[0][lbls[0]] ), 0] )
+                return np.array( [ float(np.dot( rhoVecs[0].T, povms[0][lbls[0]]) ), 0] )
             def fnOfSpam_2D(rhoVecs, povms):
                 lbls = list(povms[0].keys())
-                return np.array( [[ np.dot( rhoVecs[0].T, povms[0][lbls[0]] ), 0],[0,0]] )
+                return np.array( [[ float(np.dot( rhoVecs[0].T, povms[0][lbls[0]] )), 0],[0,0]] )
             def fnOfSpam_3D(rhoVecs, povms):
                 return np.zeros( (2,2,2), 'd') #just to test for error
 

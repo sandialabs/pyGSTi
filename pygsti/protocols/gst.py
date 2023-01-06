@@ -113,6 +113,29 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested, remove_duplicates)
         HasProcessorSpec.__init__(self, processorspec_filename_or_obj)
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        GateSetTomographyDesign
+        """
+        mapped_processorspec = self.processor_spec.map_qubit_labels(mapper)
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
+                                for circuit_list in self.circuit_lists]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return GateSetTomographyDesign(mapped_processorspec, mapped_circuit_lists, mapped_circuits,
+                                       mapped_qubit_labels, self.nested, remove_duplicates=False)
+
 
 class StandardGSTDesign(GateSetTomographyDesign):
     """
@@ -321,6 +344,42 @@ class StandardGSTDesign(GateSetTomographyDesign):
         ret = ret.truncate_to_design(self)
         ret.nested = self.nested  # must set nested flag again because truncate_to_design resets to False to be safe
         return ret
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        StandardGSTDesign
+        """
+        pspec = self.processor_spec.map_qudit_labels(mapper)
+        prep_fiducials = [c.map_state_space_labels(mapper) for c in self.prep_fiducials]
+        meas_fiducials = [c.map_state_space_labels(mapper) for c in self.meas_fiducials]
+        germs = [c.map_state_space_labels(mapper) for c in self.germs]
+        qubit_labels = self._mapped_qubit_labels(mapper)
+        if isinstance(self.fiducial_pairs, dict):
+            fiducial_pairs = {c.map_state_space_labels(mapper): v for c, v in self.fiducial_pairs.items()}
+        else:
+            fiducial_pairs = self.fiducial_pairs
+
+        if not (self.circuit_rules is None and self.aliases is None):
+            raise NotImplementedError(("Mapping qubit labels for a StandardGSTDesign with circuit rules"
+                                       " and/or aliases is not implemented yet."))
+
+        dscheck = None; action_if_missing = 'raise'; verbosity = 0  # values we could add as arguments later if desired.
+        return StandardGSTDesign(pspec, prep_fiducials, meas_fiducials,
+                                 germs, self.maxlengths, self.germ_length_limits, fiducial_pairs,
+                                 self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst, self.nested,
+                                 self.circuit_rules, self.aliases, dscheck, action_if_missing, qubit_labels,
+                                 verbosity, add_default_protocol=False)
 
 
 class GSTInitialModel(_NicelySerializable):
