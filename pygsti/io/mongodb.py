@@ -253,15 +253,10 @@ def _load_auxdoc_member(mongodb, member_name, typ, metadata, quick_load):
             obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
             val = _MongoSerializable.from_mongodb_doc(mongodb, obj_doc)  #, quick_load=quick_load)
 
-        elif cur_typ == 'circuit-str-json':  # same as text above
-            coll = mongodb[metadata['collection_name']]
-            circuit_doc_ids = metadata['ids']
-
-            circuit_strs = []
-            for circuit_doc_id in circuit_doc_ids:
-                cdoc = coll.find_one(circuit_doc_id)
-                circuit_strs.append(cdoc['circuit_str'])
-            val = _load.convert_strings_to_circuits(circuit_strs)
+        elif cur_typ == 'circuit-str-json':
+            from .readers import convert_strings_to_circuits as _convert_strings_to_circuits
+            obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
+            val = _convert_strings_to_circuits(obj_doc['circuit_str_json'])
 
         elif typ == 'numpy-array':
             array_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
@@ -440,6 +435,12 @@ def add_obj_auxtree_write_ops_and_update_doc(obj, doc, write_ops, mongodb, colle
     # Note2: include_attributes takes precedence over omit_attributes
     meta = {'type': _full_class_name(obj)}
     if additional_meta is not None: meta.update(additional_meta)
+
+    if (auxfile_types_member is not None) and ('_dbcoordinates' not in obj.__dict__[auxfile_types_member]):
+        # HACK for writing to DB old files that were loaded and don't have
+        # '_dbcoordinates': 'none' in their auxfile_types dict
+        obj._dbcoordinates = None
+        obj.__dict__[auxfile_types_member]['_dbcoordinates'] = 'none'
 
     if include_attributes is not None:  # include_attributes takes precedence over omit_attributes
         vals = {}
@@ -626,7 +627,7 @@ def add_auxtree_write_ops_and_update_doc(doc, write_ops, mongodb, collection_nam
         to_insert[key] = val
 
     for auxnm, typ in auxfile_types.items():
-        if typ in ('none', 'reset'):  # HACK needed?
+        if typ in ('none', 'reset'):
             continue
         val = valuedict[auxnm]
 
@@ -718,13 +719,13 @@ def _write_auxdoc_member(mongodb, write_ops, parent_collection_name, parent_id, 
             metadata = {'collection_name': val.collection_name, 'id': val_id}
 
         elif cur_typ == 'circuit-str-json':
-            circuit_doc_ids = []
-            for i, circuit in enumerate(val):
-                circuit_doc_ids.append(
-                    write_ops.add_one_op('pygsti_circuits', {'circuit_str': circuit.str},
-                                         {'circuit_str': circuit.str},  # add more circuit info in future?
-                                         overwrite_existing, mongodb, check_local_ops=True))
-            metadata = {'collection_name': 'pygsti_circuits', 'ids': circuit_doc_ids}
+            from .writers import convert_circuits_to_strings
+            id_dict = {'parent_id': parent_id, 'member_name': member_name}
+            data = id_dict.copy()
+            data['circuit_str_json'] = convert_circuits_to_strings(val)
+            obj_doc_id = write_ops.add_one_op('pygsti_json_data', id_dict, data,
+                                              overwrite_existing, mongodb, check_local_ops=True)
+            metadata = {'collection_name': 'pygsti_json_data', 'id': obj_doc_id}
 
         elif cur_typ == 'numpy-array':
             member_id = {'parent_collection': parent_collection_name, 'parent': parent_id, 'member_name': member_name}
@@ -841,12 +842,14 @@ def _remove_auxdoc_member(mongodb, member_name, typ, metadata, session, recursiv
             return  # done here
         elif metadata is None:
             return  # value was None and so no auxdoc was created -- nothing to remove
-        elif cur_typ in ('text-circuit-list', 'circuit-str-json'):
+        elif cur_typ == 'text-circuit-list':
             if recursive.circuits:
                 coll = mongodb[metadata['collection_name']]
                 circuit_doc_ids = metadata['ids']
                 for circuit_doc_id in circuit_doc_ids:
                     coll.delete_one({'_id': circuit_doc_id}, session=session)  # returns deleted count (0 or 1)
+        elif cur_typ == 'circuit-str-json':
+            mongodb[metadata['collection_name']].delete_one({'_id': metadata['id']}, session=session)
         elif cur_typ in ('dir-serialized-object', 'partialdir-serialized-object', 'serialized-object'):
             _MongoSerializable.remove_from_mongodb(mongodb, metadata['id'], metadata['collection_name'],
                                                    session, recursive=recursive)
