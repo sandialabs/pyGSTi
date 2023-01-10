@@ -561,14 +561,11 @@ def recursive_compare_str(a, b, a_name='first obj', b_name='second obj', prefix=
 def _find_one_doc(db, collection_name, doc_id, projection=None, error_if_no_doc=False):
     if doc_id is not None and not isinstance(doc_id, dict):
         doc_id = {'_id': doc_id}
-    docs = db[collection_name].find(doc_id, projection)  # works if doc_id is a dict or an ObjectId
-    single_doc = None
-    for doc in docs:  # weird having a loop here, but needed b/c cursor.count method deprecated
-        if single_doc is not None:
+    if '_id' not in doc_id:  # otherwise can bypass since if _id is specified a doc must be unique
+        if db[collection_name].count_documents(doc_id, limit=2) > 1:
             raise ValueError((f"Multiple records where identified by the given `doc_id` ({doc_id})."
                               " `doc_id` must specify exactly one record."))
-        single_doc = doc
-
+    single_doc = db[collection_name].find_one(doc_id, projection)
     if single_doc is None and error_if_no_doc:
         raise ValueError(f"Could not find document specified by {doc_id}!")
     return single_doc
