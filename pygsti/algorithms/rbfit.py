@@ -437,6 +437,7 @@ class FitResults(_NicelySerializable):
         bootstraps_failrate : float, optional
             The proporition of the estimates of the parameters from bootstrapped dataset failed.
         """
+        super().__init__()
         self.fittype = fittype
         self.seed = seed
         self.rtype = rtype

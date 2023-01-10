@@ -183,6 +183,7 @@ class QubitGraph(_NicelySerializable):
             `initial_edges`, and this argument is required whenever such
             indices are used.
         """
+        super().__init__()
         self.nqubits = len(qubit_labels)
         self.directed = directed
 
