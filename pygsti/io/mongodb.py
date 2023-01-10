@@ -740,7 +740,7 @@ def _write_auxdoc_member(mongodb, write_ops, parent_collection_name, parent_id, 
             member_id = {'parent_collection': parent_collection_name, 'parent': parent_id, 'member_name': member_name}
             val_doc = member_id.copy()
             val_doc.update({'auxdoc_type': cur_typ,
-                            'json_data': _Binary(_pickle.dumps(val, protocol=2), subtype=128)})
+                            'json_data': val})
             val_id = write_ops.add_one_op('pygsti_json_data', member_id, val_doc, overwrite_existing, mongodb)
             metadata = {'collection_name': 'pygsti_json_data', 'id': val_id}
 
