@@ -14,6 +14,7 @@ import copy as _copy
 import numpy as _np
 import itertools as _itertools
 import pathlib as _pathlib
+import warnings as _warnings
 
 from pygsti.protocols.treenode import TreeNode as _TreeNode
 from pygsti import io as _io
@@ -2741,6 +2742,16 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         if already_written_data_id is not None:
             doc['protocoldata_id'] = already_written_data_id
         elif parent is not None:  # assume parent has written data
+            coords_from_parent = doc['protocoldata_id'] = parent.data[name]._dbcoordinates
+            if coords_from_parent is None:  # parent's sub-data exists but hasn't actually been written
+                _warnings.warn(("Saving this ProtocolResultsDirs has prompted re-saving its data object because"
+                                " the data object didn't have any existing DB coordinates.  This *shouldn't*"
+                                " happen and this re-saving action is a last effort to finish this write operation"
+                                " without failing - you should check the results."))
+                # This may happen if parent data object didn't have all its sub-datas generated before is
+                # was saved.  Accessing the subdata above should have generated it, so re-saving the parent
+                # will hopefully cause the data to be saved correctly (i.e. with link to parent data object)
+                self.data.write_to_mongodb(mongodb, write_ops.session, overwrite_existing)
             doc['protocoldata_id'] = parent.data[name]._dbcoordinates[1]
         else:
             doc['protocoldata_id'] = self.data.write_to_mongodb(mongodb, write_ops.session, overwrite_existing)
