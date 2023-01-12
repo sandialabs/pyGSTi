@@ -41,12 +41,12 @@ class SingleQubitGate(interp.PhysicalProcess):
                  verbose=False,
                  cont_param_gate = False,
                  num_params = None,
-#                  process_shape = (4, 4),
+                 process_shape = (4, 4),
                  item_shape = (4,4),
                  aux_shape = None,
                  num_params_evaluated_as_group = 0,
                  ):
-
+        super().__init__(num_params, process_shape, aux_shape, num_params_evaluated_as_group)
         self.verbose = verbose
         self.cont_param_gate = cont_param_gate
         self.num_params = num_params
@@ -90,7 +90,7 @@ class SingleQubitGate(interp.PhysicalProcess):
 class InterpygateConstructionTester(BaseCase):
     @classmethod
     def setUpClass(cls):
-        super(InterpygateConstructionTester, cls).setUpClass()
+        super().setUpClass()
         cls.static_target = np.bmat([[np.eye(2),np.zeros([2,2])],
                                      [np.zeros([2,2]),np.sqrt(2)/2*(sigI++1.j*sigY)]])
         cls.target_op = SingleQubitTargetOp()
@@ -115,7 +115,7 @@ class InterpygateConstructionTester(BaseCase):
         opfactory_linear = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
                                 self.target_op, self.gate_process, argument_ranges=self.arg_ranges, 
                                 parameter_ranges=self.param_ranges, argument_indices=self.arg_indices, 
-                                interpolator_and_args='linear')
+                                interpolator_and_args='linear', ensure_cptp=False)
         op = opfactory_linear.create_op([0,np.pi/4])
         op.from_vector([1])
         self.assertArraysAlmostEqual(op, self.static_target)
@@ -123,7 +123,7 @@ class InterpygateConstructionTester(BaseCase):
         opfactory_spline = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
                                 self.target_op, self.gate_process, argument_ranges=self.arg_ranges, 
                                 parameter_ranges=self.param_ranges, argument_indices=self.arg_indices, 
-                                interpolator_and_args='spline')
+                                interpolator_and_args='spline', ensure_cptp=False)
         op = opfactory_spline.create_op([0,np.pi/4])
         op.from_vector([1])
         self.assertArraysAlmostEqual(op, self.static_target)
@@ -132,7 +132,7 @@ class InterpygateConstructionTester(BaseCase):
         opfactory_custom = opfactory_spline = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
                                 self.target_op, self.gate_process, argument_ranges=self.arg_ranges, 
                                 parameter_ranges=self.param_ranges, argument_indices=self.arg_indices, 
-                                interpolator_and_args=interpolator_and_args)
+                                interpolator_and_args=interpolator_and_args, ensure_cptp=False)
         op = opfactory_custom.create_op([0,np.pi/4])
         op.from_vector([1])
         self.assertArraysAlmostEqual(op, self.static_target)
@@ -142,7 +142,7 @@ class InterpygateConstructionTester(BaseCase):
 class InterpygateGSTTester(BaseCase):
     @classmethod
     def setUpClass(cls):
-        super(InterpygateGSTTester, cls).setUpClass()
+        super().setUpClass()
         target_op = SingleQubitTargetOp()
         param_ranges = [(0.9,1.1,3)]
         arg_ranges = [2*np.pi*(1+np.cos(np.linspace(np.pi,0, 7)))/2,
@@ -152,7 +152,7 @@ class InterpygateGSTTester(BaseCase):
         opfactory = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
                                 target_op, gate_process, argument_ranges=arg_ranges, 
                                 parameter_ranges=param_ranges, argument_indices=arg_indices, 
-                                interpolator_and_args='linear')
+                                interpolator_and_args='linear', ensure_cptp=False)
         x_gate = opfactory.create_op([0,np.pi/4])
         y_gate = opfactory.create_op([np.pi/2,np.pi/4]) 
 
@@ -194,6 +194,125 @@ class InterpygateGSTTester(BaseCase):
                 self.model, randomize=False, force=None, algorithm='greedy', verbosity=4)
 
         self.assertEqual(final_germs, [pygsti.circuits.circuit.Circuit('Gxpi2:0')])
+
+class InterpygateCPTPConstructionTester(BaseCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.static_target = np.bmat([[np.eye(2),np.zeros([2,2])],
+                                     [np.zeros([2,2]),np.sqrt(2)/2*(sigI++1.j*sigY)]])
+        cls.target_op = SingleQubitTargetOp()
+
+        cls.param_ranges = [(0.9,1.1,3)]
+        cls.arg_ranges = [2*np.pi*(1+np.cos(np.linspace(np.pi,0, 7)))/2,
+                      (0, np.pi, 3)] 
+        cls.arg_indices = [0,1]
+
+        cls.gate_process = SingleQubitGate(num_params = 3,num_params_evaluated_as_group = 1)
+        
+        
+    def test_target(self):
+        test = self.target_op.create_target_gate([0,np.pi/4])
+        self.assertArraysAlmostEqual(test, self.static_target)
+        
+    def test_create_gate(self):
+        test = self.gate_process.create_process_matrices([0,np.pi/4], grouped_v=[[1]])[0]
+        self.assertArraysAlmostEqual(test, self.static_target)
+
+    def test_create_opfactory(self):
+        opfactory_linear = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
+                                self.target_op, self.gate_process, argument_ranges=self.arg_ranges, 
+                                parameter_ranges=self.param_ranges, argument_indices=self.arg_indices, 
+                                interpolator_and_args='linear', ensure_cptp=True)
+        op = opfactory_linear.create_op([0,np.pi/4])
+        op.from_vector([1])
+        self.assertArraysAlmostEqual(op, self.static_target,places=7)
+
+        opfactory_spline = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
+                                self.target_op, self.gate_process, argument_ranges=self.arg_ranges, 
+                                parameter_ranges=self.param_ranges, argument_indices=self.arg_indices, 
+                                interpolator_and_args='spline', ensure_cptp=True)
+        op = opfactory_spline.create_op([0,np.pi/4])
+        op.from_vector([1])
+
+        self.assertArraysAlmostEqual(op, self.static_target,places=7)
+
+        interpolator_and_args = (_linND, {'rescale': True})
+        opfactory_custom = opfactory_spline = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
+                                self.target_op, self.gate_process, argument_ranges=self.arg_ranges, 
+                                parameter_ranges=self.param_ranges, argument_indices=self.arg_indices, 
+                                interpolator_and_args=interpolator_and_args, ensure_cptp=True)
+        op = opfactory_custom.create_op([0,np.pi/4])
+        op.from_vector([1])
+        self.assertArraysAlmostEqual(op, self.static_target,places=7)
+
+
+
+class InterpygateCPTPGSTTester(BaseCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        target_op = SingleQubitTargetOp()
+        param_ranges = [(0.9,1.1,3)]
+        arg_ranges = [2*np.pi*(1+np.cos(np.linspace(np.pi,0, 7)))/2,
+                  (0, np.pi, 3)] 
+        arg_indices = [0,1]
+        gate_process = SingleQubitGate(num_params = 3,num_params_evaluated_as_group = 1)
+        opfactory = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
+                                target_op, gate_process, argument_ranges=arg_ranges, 
+                                parameter_ranges=param_ranges, argument_indices=arg_indices, 
+                                interpolator_and_args='linear', ensure_cptp=True)
+        x_gate = opfactory.create_op([0,np.pi/4])
+        y_gate = opfactory.create_op([np.pi/2,np.pi/4]) 
+
+        cls.model = pygsti.models.ExplicitOpModel([0],'pp')
+        cls.model['rho0'] = [ 1/np.sqrt(2), 0, 0, 1/np.sqrt(2) ] # density matrix [[1, 0], [0, 0]] in Pauli basis
+        cls.model['Mdefault'] = pygsti.modelmembers.povms.UnconstrainedPOVM(
+            {'0': [ 1/np.sqrt(2), 0, 0, 1/np.sqrt(2) ],   # projector onto [[1, 0], [0, 0]] in Pauli basis
+             '1': [ 1/np.sqrt(2), 0, 0, -1/np.sqrt(2) ] }, evotype="default") # projector onto [[0, 0], [0, 1]] in Pauli basis
+        cls.model['Gxpi2',0] = x_gate
+        cls.model['Gypi2',0] = y_gate
+
+        
+    def test_gpindices(self):
+        model = self.model.copy()
+        model['rho0'].set_gpindices(slice(0,4),model)
+        model['Mdefault'].set_gpindices(slice(4,12),model)
+        model['Gxpi2',0].set_gpindices(slice(12,13),model)
+        model['Gypi2',0].set_gpindices(slice(12,13),model)
+        model._rebuild_paramvec()
+        self.assertEqual(model.num_params,13)
+        
+    def test_circuit_probabilities(self):
+        datagen_model = self.model.copy()
+        datagen_params = datagen_model.to_vector()
+        datagen_params[-2:] = [1.1,1.1]
+        datagen_model.from_vector(datagen_params)
+        probs = datagen_model.probabilities( (('Gxpi2',0),))
+        self.assertAlmostEqual(probs['0'],0.8247240241650917,places=7)
+
+    def test_germ_selection(self):
+        datagen_model = self.model.copy()
+        datagen_params = datagen_model.to_vector()
+        datagen_params[-2:] = [1.1,1.1]
+        datagen_model.from_vector(datagen_params)
+        
+        target_model = self.model.copy()
+        
+        final_germs = pygsti.algorithms.germselection.find_germs(
+                self.model, randomize=False, force=None, algorithm='greedy', verbosity=4)
+
+        self.assertEqual(final_germs, [pygsti.circuits.circuit.Circuit('Gxpi2:0')])
+
+
+
+
+
+
+
+
+
+
 
 
 

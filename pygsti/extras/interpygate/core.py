@@ -507,7 +507,7 @@ class InterpolatedDenseOp(_DenseOperator):
         errorgen = self.base_interpolator(fullv)
         if self.ensure_cptp:
             errorgen = _cptp_errorgen_from_lindblad_coeffs(errorgen, self.basis)
-        self._ptr[:, :] = _ot.operation_from_error_generator(errorgen, self.target_op.to_dense(), 'pp', 'logGTi')
+        self._ptr[:, :] = _np.real(_ot.operation_from_error_generator(errorgen, self.target_op.to_dense(), 'pp', 'logGTi'))
         self._ptr_has_changed()
         if self.aux_interpolator is not None:
             self.aux_info = self.aux_interpolator(fullv)
@@ -656,21 +656,33 @@ class InterpolatedQuantityFactory(object):
         else:
             my_points = my_points[0]
 
-        if rank in root_ranks:
-            #Only root ranks store data (fn_to_interpolate only needs to return results on root proc)
-            flat_data = _np.empty(len(my_points) * int(_np.product(expected_fn_output_shape)), dtype='d')
-            data = flat_data.view(); data.shape = (len(my_points),) + expected_fn_output_shape
-            if (comm is not None):
-                printer.log("Group %d processing %d points on %d processors." % (color, len(my_points),
-                                                                                 mpi_workers_per_process))
-        else:
-            flat_data = data = None  # to keep us from accidentally misusing these below
+        # if rank in root_ranks:
+        #     #Only root ranks store data (fn_to_interpolate only needs to return results on root proc)
+        #     flat_data = _np.empty(len(my_points) * int(_np.product(expected_fn_output_shape)), dtype='d')
+        #     data = flat_data.view(); data.shape = (len(my_points),) + expected_fn_output_shape
+        #     if (comm is not None):
+        #         printer.log("Group %d processing %d points on %d processors." % (color, len(my_points),
+        #                                                                          mpi_workers_per_process))
+        # else:
+        #     flat_data = data = None  # to keep us from accidentally misusing these below
 
         # compute the process matrices at each data point
         for ind, point in enumerate(my_points):
             printer.log("Evaluating index %d , data = %s" % (ind, str(point)))
             val = self.fn_to_interpolate(point, grouped_axial_pts, comm=groupcomm) if grouped_axial_pts \
                 else self.fn_to_interpolate(point, comm=groupcomm)
+
+            if ind == 0:
+                if rank in root_ranks:
+                    #Only root ranks store data (fn_to_interpolate only needs to return results on root proc)
+                    flat_data = _np.empty(len(my_points) * int(_np.product(expected_fn_output_shape)), dtype=type(val))
+                    data = flat_data.view(); data.shape = (len(my_points),) + expected_fn_output_shape
+                    if (comm is not None):
+                        printer.log("Group %d processing %d points on %d processors." % (color, len(my_points),
+                                                                                         mpi_workers_per_process))
+                else:
+                    flat_data = data = None  # to keep us from accidentally misusing these below
+            
             if rank in root_ranks:  # only the root proc of each groupcomm needs to produce a result
                 data[ind] = val     # (other procs can just return None, so val = None)
 
@@ -782,7 +794,7 @@ class InterpolatedQuantity(object):
         if not all([(a <= b <= c) for b, (a, c) in zip(v, self.parameter_ranges)]):
             raise ValueError("Parameter out of range.")
 
-        value = _np.zeros(self.qty_shape, dtype='d')
+        value = _np.zeros(self.qty_shape, dtype='complex')
         for i, interpolator in enumerate(self.interpolators.flat):
             value.flat[i] = interpolator(*v)
         return value
