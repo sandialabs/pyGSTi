@@ -2098,7 +2098,14 @@ def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, paramete
 def _compute_1d_reference_values_and_name(estimate, badfit_options):
     final_model = estimate.models['final iteration estimate']
     target_model = estimate.models['target']
-    gaugeopt_model = _alg.gaugeopt_to_target(final_model, target_model)
+    gaugeopt_model = estimate.models['stdgaugeopt'].copy() if 'stdgaugeopt' in estimate.models \
+        else _alg.gaugeopt_to_target(final_model, target_model)  # HACK!!! see below
+    # The above gaugeopt_to_target call may not work correctly, since it blindly uses the
+    # default gauge opt parameters (e.g. the final model may need to be converted to TP
+    # before gauge optimizing it).  Ideally we would plumb down from _add_gaugeopt_and_badfit
+    # the name of a gauge-optimized model if one exists, and if one doesn't maybe we just used
+    # the 'final iteration estimate'?  For now, just use 'stdgaugeopt' if it exists as a way of
+    # avoiding a gaugeopt failure here.
 
     if badfit_options.wildcard1d_reference == 'diamond distance':
         dd = {}
