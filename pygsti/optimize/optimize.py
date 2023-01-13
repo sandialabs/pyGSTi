@@ -367,7 +367,6 @@ def _fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
                             f[i] = fn(x[i])
 
 
-#TODO err_crit is never used?
 def _fmin_particle_swarm(f, x0, err_crit, iter_max, printer, popsize=100, c1=2, c2=2):
     """
     A simple implementation of the Particle Swarm Optimization Algorithm.
@@ -404,144 +403,54 @@ def _fmin_particle_swarm(f, x0, err_crit, iter_max, printer, popsize=100, c1=2, 
     scipy.optimize.Result object
         Includes members 'x', 'fun', 'success', and 'message'.
     """
-    dimensions = len(x0)
-    LARGE = 1e10
-
-    class Particle:
-        """ Particle "container" class """
-        pass
-
-    #initialize the particles
-    particles = []
-    for i in range(popsize):
-        p = Particle()
-        p.params = x0 + 2 * (_np.random.random(dimensions) - 0.5)
-        p.best = p.params[:]
-        p.fitness = LARGE  # large == bad fitness
-        p.v = _np.zeros(dimensions)
-        particles.append(p)
-
-    # let the first particle be the global best
-    gbest = particles[0]; ibest = 0
-    # bDoLocalFitnessOpt = False
-
-    #DEBUG
-    #if False:
-    #    import pickle as _pickle
-    #    bestGaugeMx = _pickle.load(open("bestGaugeMx.debug"))
-    #    lbfgsbGaugeMx = _pickle.load(open("lbfgsbGaugeMx.debug"))
-    #    cgGaugeMx = _pickle.load(open("cgGaugeMx.debug"))
-    #    initialGaugeMx = x0.reshape( (4,4) )
-    #
-    #    #DEBUG: dump line cut to plot
-    #    nPts = 100
-    #    print "DEBUG: best offsets = \n", bestGaugeMx - initialGaugeMx
-    #    print "DEBUG: lbfgs offsets = \n", lbfgsbGaugeMx - initialGaugeMx
-    #    print "DEBUG: cg offsets = \n", cgGaugeMx - initialGaugeMx
-    #
-    #    print "# DEBUG plot"
-    #    #fDebug = open("x0ToBest.dat","w")
-    #    #fDebug = open("x0ToLBFGS.dat","w")
-    #    fDebug = open("x0ToCG.dat","w")
-    #    #fDebug = open("LBFGSToBest.dat","w")
-    #    #fDebug = open("CGToBest.dat","w")
-    #    #fDebug = open("CGToLBFGS.dat","w")
-    #
-    #    for i in range(nPts+1):
-    #        alpha = float(i) / nPts
-    #        #matM = (1.0-alpha) * initialGaugeMx + alpha*bestGaugeMx
-    #        #matM = (1.0-alpha) * initialGaugeMx + alpha*lbfgsbGaugeMx
-    #        matM = (1.0-alpha) * initialGaugeMx + alpha*cgGaugeMx
-    #        #matM = (1.0-alpha) * lbfgsbGaugeMx + alpha*bestGaugeMx
-    #        #matM = (1.0-alpha) * cgGaugeMx + alpha*bestGaugeMx
-    #        #matM = (1.0-alpha) * cgGaugeMx + alpha*lbfgsbGaugeMx
-    #        print >> fDebug, "%g %g" % (alpha, f(matM.flatten()))
-    #    exit()
-    #
-    #
-    #    fDebug = open("lineDataFromX0.dat","w")
-    #    min_offset = -1; max_offset = 1
-    #    for i in range(nPts+1):
-    #        offset = min_offset + float(i)/nPts * (max_offset-min_offset)
-    #        print >> fDebug, "%g" % offset,
-    #
-    #        for k in range(len(x0)):
-    #            x = x0.copy(); x[k] += offset
-    #            try:
-    #                print >> fDebug, " %g" % f(x),
-    #            except:
-    #                print >> fDebug, " nan",
-    #        print >> fDebug, ""
-    #
-    #    print >> fDebug, "#END DEBUG plot"
-    #    exit()
-    #END DEBUG
-
-    #err = 1e10
-    for iter_num in range(iter_max):
-        w = 1.0  # - i/iter_max
-
-        #bDoLocalFitnessOpt = bool(iter_num > 20 and abs(lastBest-gbest.fitness) < 0.001 and iter_num % 10 == 0)
-        # lastBest = gbest.fitness
-        # minDistToBest = 1e10; minV = 1e10; maxV = 0 #DEBUG
-
-        for (ip, p) in enumerate(particles):
-            fitness = f(p.params)
-
-            #if bDoLocalFitnessOpt:
-            #    opts = {'maxiter': 100, 'maxfev': 100, 'disp': False }
-            #    local_soln = _spo.minimize(f,p.params,options=opts, method='L-BFGS-B',callback=None, tol=1e-2)
-            #    p.params = local_soln.x
-            #    fitness = local_soln.fun
-
-            if fitness < p.fitness:  # low 'fitness' is good b/c we're minimizing
-                p.fitness = fitness
-                p.best = p.params
-
-            if fitness < gbest.fitness:
-                gbest = p; ibest = ip
-
-            v = w * p.v + c1 * _np.random.random() * (p.best - p.params) \
-                + c2 * _np.random.random() * (gbest.params - p.params)
-            p.params = p.params + v
-            for (i, pv) in enumerate(p.params):
-                p.params[i] = ((pv + 1) % 2) - 1  # periodic b/c on box between -1 and 1
-
-            #from .. import tools as tools_
-            #matM = p.params.reshape( (4,4) )  #DEBUG
-            #minDistToBest = min(minDistToBest, _tools.frobeniusdist(
-            #                                    bestGaugeMx,matM)) #DEBUG
-            #minV = min( _np.linalg.norm(v), minV)
-            #maxV = max( _np.linalg.norm(v), maxV)
-
-        #print "DB: min diff from best = ", minDistToBest #DEBUG
-        #print "DB: min,max v = ", (minV,maxV)
-
-        #if False: #bDoLocalFitnessOpt:
-        #    opts = {'maxiter': 100, 'maxfev': 100, 'disp': False }
-        #    print "initial fun = ",gbest.fitness,
-        #    local_soln = _spo.minimize(f,gbest.params,options=opts, method='L-BFGS-B',callback=None, tol=1e-5)
-        #    gbest.params = local_soln.x
-        #    gbest.fitness = local_soln.fun
-        #    print "  final fun = ",gbest.fitness
-
-        printer.log("Iter %d: global best = %g (index %d)" % (iter_num, gbest.fitness, ibest))
-
-        #if err < err_crit:  break  #TODO: stopping condition
-
-    ## Uncomment to print particles
-    #for p in particles:
-    #    print 'params: %s, fitness: %s, best: %s' % (p.params, p.fitness, p.best)
-
-    solution = _optResult()
-    solution.x = gbest.params; solution.fun = gbest.fitness
-    solution.success = True
-#    if iter_num < maxiter:
-#        solution.success = True
-#    else:
-#        solution.success = False
-#        solution.message = "Maximum iterations exceeded"
-    return solution
+        
+        # Initialize the population
+        n = len(x0)
+        x = _np.zeros((popsize, n))
+        v = _np.zeros((popsize, n))
+        f = _np.zeros(popsize)
+        pbest = _np.zeros((popsize, n))
+        fbest = _np.zeros(popsize)
+        gbest = _np.zeros(n)
+        fgbest = _np.inf
+    
+        # Initialize the population
+        for i in range(popsize):
+            x[i] = x0 + _np.random.uniform(-1, 1, n)
+            v[i] = _np.random.uniform(-1, 1, n)
+            f[i] = f(x[i])
+            pbest[i] = x[i]
+            fbest[i] = f[i]
+            if f[i] < fgbest:
+                gbest = x[i]
+                fgbest = f[i]
+    
+        # Main loop
+        for i in range(iter_max):
+            for j in range(popsize):
+                v[j] += c1 * _np.random.uniform(0, 1, n) * (pbest[j] - x[j]) + \
+                    c2 * _np.random.uniform(0, 1, n) * (gbest - x[j])
+                x[j] += v[j]
+                f[j] = f(x[j])
+                if f[j] < fbest[j]:
+                    pbest[j] = x[j]
+                    fbest[j] = f[j]
+                    if f[j] < fgbest:
+                        gbest = x[j]
+                        fgbest = f[j]
+    
+            printer.log("Particle Swarm: iteration %d gives min = %f" % (i, fgbest))
+            if fgbest < err_crit: break
+    
+        solution = _optResult()
+        solution.x = gbest
+        solution.fun = fgbest
+        if i < iter_max:
+            solution.success = True
+        else:
+            solution.success = False
+            solution.message = "Maximum iterations exceeded"
+        return solution
 
 
 def _fmin_evolutionary(f, x0, num_generations, num_individuals, printer):
