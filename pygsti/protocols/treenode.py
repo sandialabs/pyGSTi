@@ -290,7 +290,8 @@ class TreeNode(object):
         # Note: this additional args to, e.g. write_to_mongodb
         children_names_by_subdir = {dirname: subname for subname, dirname in self._dirs.items()}
         children_ids_by_subdir = {}; child_collection_names = []
-        for nm, val in self._vals.items():  # only write *existing* values
+        #for nm, val in self._vals.items():  # only write *existing* values -- but causes issues re: existing DB docs
+        for nm, val in self.items():  # write *all* values, generating them if needed
             subdir = self._dirs[nm]
             child_id = val.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing,
                                                  parent=self, name=nm, **kwargs)
