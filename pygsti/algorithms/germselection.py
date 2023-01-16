@@ -297,7 +297,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'save_cevd_cache_filename': save_cevd_cache_filename,
             'load_cevd_cache_filename': load_cevd_cache_filename,
             'file_compression': file_compression,
-            'evd_tol': 1e-10
+            'evd_tol': 1e-10,
+            'initial_germ_set_test': True
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -3309,7 +3310,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
     q_update, r_update, _ = _sla.qr(proj_update, mode='economic', pivoting=True)
     
     #Construct P by taking the columns of q_update corresponding to non-zero values of r_A on the diagonal.
-    nonzero_indices_update= _np.nonzero(_np.abs(_np.diag(r_update))>1e-9)
+    nonzero_indices_update= _np.nonzero(_np.abs(_np.diag(r_update))>1e-9) #HARDCODED
     
     #if the rank doesn't increase then we can't use the Riedel approach.
     #Abort early and return a flag to indicate the rank did not increase.
@@ -3451,7 +3452,7 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                             float_type= _np.cdouble, 
                             mode="all-Jac", force_rank_increase=False,
                             save_cevd_cache_filename=None, load_cevd_cache_filename=None,
-                            file_compression=False, evd_tol=1e-10):
+                            file_compression=False, evd_tol=1e-10, initial_germ_set_test=True):
     """
     Greedy algorithm starting with 0 germs.
 
@@ -3551,6 +3552,14 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
     evd_tol : float, optional
         A threshold value to use when taking eigenvalue decompositions/SVDs such that
         values below this are set to zero.
+    
+    initial_germ_set_test : bool, optional (default True)
+        A flag indicating whether or not to check the initially constructed germ set, which
+        is either the list of singleton germs (if force='singletons'), a user specified list of
+        circuits is such a list if passed in for the value of force, or a greedily selected 
+        initial germ if force=None. This can be skipped to save computational time (the test can
+        be expensive) if the user has reason to believe this initial set won't be AC. Most of the time
+        this initial set won't be.
 
     Returns
     -------
@@ -3796,11 +3805,33 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
     else:  # should be unreachable since we set 'mode' internally above
         raise ValueError("Invalid mode: %s" % mode)  # pragma: no cover
 
-    initN = 1
-    #add a flag to fix a logging bug
-    first_outer_iter=True
+    #Add in a check for the initial germ list to see if we are already AC.
+    #Do this by properly initializing initN to the current number of non-zero
+    #eigenvalues, which will have the effect of short circuiting the while loop
+    #below if we are AC.
+    
+    #Use test_germs_list_completeness to check if the initial germ list is already AC,
+    #if so set initN equal to numNonGaugeParams in order to short circuit the greedy search
+    #loop below and simply return the initial goodGerms list.
+    if initial_germ_set_test:
+        printer.log('Testing initial germ list for AC.', 2)
+        initial_germ_set_completeness = test_germs_list_completeness(model_list, goodGerms,
+                                                                     score_func, threshold,
+                                                                     float_type=float_type)
+        if initial_germ_set_completeness == -1:
+            initN= numNonGaugeParams
+            first_outer_iter_log= False
+            printer.log('Initial germ list is AC, concluding search: ' + str(goodGerms), 2)
+        else:
+            initN=None
+            first_outer_iter_log= True
+            printer.log('Initial germ list is not AC, beginning greedy search loop.', 2)
+    else:
+        initN=None
+        first_outer_iter_log= True
+    
     while _np.any(weights == 0):
-        if first_outer_iter:
+        if first_outer_iter_log:
             printer.log("Outer iteration: %d germs" %
                         (len(goodGerms)), 2)
             first_outer_iter=False
