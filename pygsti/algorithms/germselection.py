@@ -3799,9 +3799,16 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         raise ValueError("Invalid mode: %s" % mode)  # pragma: no cover
 
     initN = 1
+    #add a flag to fix a logging bug
+    first_outer_iter=True
     while _np.any(weights == 0):
-        printer.log("Outer iteration: %d of %d amplified, %d germs" %
-                    (initN, numNonGaugeParams, len(goodGerms)), 2)
+        if first_outer_iter:
+            printer.log("Outer iteration: %d germs" %
+                        (len(goodGerms)), 2)
+            first_outer_iter=False
+        else:
+            printer.log("Outer iteration: %d of %d amplified, %d germs" %
+                        (initN, numNonGaugeParams, len(goodGerms)), 2)
         # As long as there are some unused germs, see if you need to add
         # another one.
         if initN == numNonGaugeParams:
