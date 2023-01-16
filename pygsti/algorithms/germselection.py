@@ -3786,14 +3786,12 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         nonzero_weight_indices= nonzero_weight_indices[0]
         for i, derivDaggerDeriv in enumerate(twirledDerivDaggerDerivList):
             #reconstruct the needed J^T J matrices
-            temp_DDD = None
             for j, idx in enumerate(nonzero_weight_indices):
                 if j==0:
                     temp_DDD = derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
                 else:
                     temp_DDD += derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
-            if temp_DDD is not None:
-                currentDDDList.append(temp_DDD)
+            currentDDDList.append(temp_DDD)
 
     else:  # should be unreachable since we set 'mode' internally above
         raise ValueError("Invalid mode: %s" % mode)  # pragma: no cover
