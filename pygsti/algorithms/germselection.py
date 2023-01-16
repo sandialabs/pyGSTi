@@ -3823,7 +3823,10 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
             first_outer_iter_log= False
             printer.log('Initial germ list is AC, concluding search: ' + str(goodGerms), 2)
         else:
-            initN=None
+            #less than ideal, but it looks like initN needs to be initialized to 1 instead of None
+            #as the placeholder if I don't want to dive into the score calculation code again to
+            #fix things at a high-effort to low-reward ratio (I don't).
+            initN=1
             first_outer_iter_log= True
             printer.log('Initial germ list is not AC, beginning greedy search loop.', 2)
     else:
