@@ -15,9 +15,10 @@ import pathlib as _pathlib
 import json as _json
 import numpy as _np
 import scipy.sparse as _sps
+from pygsti.baseobjs.mongoserializable import MongoSerializable
 
 
-class NicelySerializable(object):
+class NicelySerializable(MongoSerializable):
     """
     The base class for all "nicely serializable" objects in pyGSTi.
 
@@ -344,3 +345,11 @@ class NicelySerializable(object):
             return complex(val)
         else:
             return val
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb):
+        #Ignore mongodb, just init from doc:
+        return cls.from_nice_serialization(doc)
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):
+        doc.update(self.to_nice_serialization())

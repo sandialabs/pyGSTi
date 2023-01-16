@@ -185,6 +185,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         # elindex_outcome_tuples : dict w/keys == indices into `unique_circuits` (which is why `unique_circuits`
         #                          is needed) and values == lists of (element_index, outcome) pairs.
 
+        super().__init__()
         self.circuits = circuits if isinstance(circuits, _CircuitList) else _CircuitList(circuits)
         if unique_circuits is None and to_unique is None:
             unique_circuits, to_unique = self._compute_unique_circuits(circuits)

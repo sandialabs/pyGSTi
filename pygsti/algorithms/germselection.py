@@ -1479,8 +1479,7 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
     if force:
         if force == "singletons":
             weights[_np.where(germLengths == 1)] = 1
-            goodGerms = [germ for germ
-                         in _np.array(germs_list)[_np.where(germLengths == 1)]]
+            goodGerms = [germ for i, germ in enumerate(germs_list) if germLengths[i] == 1]
         else:  # force should be a list of Circuits
             for opstr in force:
                 weights[germs_list.index(opstr)] = 1
@@ -3684,10 +3683,10 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
             with _np.load(load_cevd_cache_filename) as cevd_cache:
                 twirledDerivDaggerDerivList=[list(cevd_cache.values())]
             
-        else: 
+        else:
             twirledDerivDaggerDerivList = \
                 [_compute_bulk_twirled_ddd_compact(model, germs_list, tol,
-                                                  evd_tol=evd_tol, float_type=float_type, printer=printer)
+                                                   evd_tol=evd_tol, float_type=float_type, printer=printer)
              for model in model_list]
              
             if save_cevd_cache_filename is not None:
@@ -3710,13 +3709,14 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         nonzero_weight_indices= nonzero_weight_indices[0]
         for i, derivDaggerDeriv in enumerate(twirledDerivDaggerDerivList):
             #reconstruct the needed J^T J matrices
+            temp_DDD = None
             for j, idx in enumerate(nonzero_weight_indices):
                 if j==0:
                     temp_DDD = derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
                 else:
                     temp_DDD += derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
-
-            currentDDDList.append(temp_DDD)
+            if temp_DDD is not None:
+                currentDDDList.append(temp_DDD)
 
     else:  # should be unreachable since we set 'mode' internally above
         raise ValueError("Invalid mode: %s" % mode)  # pragma: no cover

@@ -113,6 +113,29 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested, remove_duplicates)
         HasProcessorSpec.__init__(self, processorspec_filename_or_obj)
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        GateSetTomographyDesign
+        """
+        mapped_processorspec = self.processor_spec.map_qubit_labels(mapper)
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
+                                for circuit_list in self.circuit_lists]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return GateSetTomographyDesign(mapped_processorspec, mapped_circuit_lists, mapped_circuits,
+                                       mapped_qubit_labels, self.nested, remove_duplicates=False)
+
 
 class StandardGSTDesign(GateSetTomographyDesign):
     """
@@ -322,6 +345,42 @@ class StandardGSTDesign(GateSetTomographyDesign):
         ret.nested = self.nested  # must set nested flag again because truncate_to_design resets to False to be safe
         return ret
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        StandardGSTDesign
+        """
+        pspec = self.processor_spec.map_qudit_labels(mapper)
+        prep_fiducials = [c.map_state_space_labels(mapper) for c in self.prep_fiducials]
+        meas_fiducials = [c.map_state_space_labels(mapper) for c in self.meas_fiducials]
+        germs = [c.map_state_space_labels(mapper) for c in self.germs]
+        qubit_labels = self._mapped_qubit_labels(mapper)
+        if isinstance(self.fiducial_pairs, dict):
+            fiducial_pairs = {c.map_state_space_labels(mapper): v for c, v in self.fiducial_pairs.items()}
+        else:
+            fiducial_pairs = self.fiducial_pairs
+
+        if not (self.circuit_rules is None and self.aliases is None):
+            raise NotImplementedError(("Mapping qubit labels for a StandardGSTDesign with circuit rules"
+                                       " and/or aliases is not implemented yet."))
+
+        dscheck = None; action_if_missing = 'raise'; verbosity = 0  # values we could add as arguments later if desired.
+        return StandardGSTDesign(pspec, prep_fiducials, meas_fiducials,
+                                 germs, self.maxlengths, self.germ_length_limits, fiducial_pairs,
+                                 self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst, self.nested,
+                                 self.circuit_rules, self.aliases, dscheck, action_if_missing, qubit_labels,
+                                 verbosity, add_default_protocol=False)
+
 
 class GSTInitialModel(_NicelySerializable):
     """
@@ -369,6 +428,7 @@ class GSTInitialModel(_NicelySerializable):
     def __init__(self, model=None, target_model=None, starting_point=None, depolarize_start=0, randomize_start=0,
                  lgst_gaugeopt_tol=1e-6, contract_start_to_cptp=False):
         # Note: starting_point can be an initial model or string
+        super().__init__()
         self.model = model
         self.target_model = target_model
         if starting_point is None:
@@ -609,6 +669,7 @@ class GSTBadFitOptions(_NicelySerializable):
                  wildcard_L1_weights=None, wildcard_primitive_op_labels=None,
                  wildcard_initial_budget=None, wildcard_methods=('neldermead',),
                  wildcard_inadmissable_action='print', wildcard1d_reference='diamond distance'):
+        super().__init__()
         valid_actions = ('wildcard', 'wildcard1d', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
             raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
@@ -639,14 +700,14 @@ class GSTBadFitOptions(_NicelySerializable):
     @classmethod
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         wildcard = state.get('wildcard', {})
-        cls(state['threshold'], tuple(state['actions']),
-            wildcard.get('budget_includes_spam', True),
-            wildcard.get('L1_weights', None),
-            wildcard.get('primitive_op_labels', None),
-            wildcard.get('initial_budget', None),
-            tuple(wildcard.get('methods', ['neldermead'])),
-            wildcard.get('inadmissable_action', 'print'),
-            wildcard.get('1d_reference', 'diamond distance'))
+        return cls(state['threshold'], tuple(state['actions']),
+                   wildcard.get('budget_includes_spam', True),
+                   wildcard.get('L1_weights', None),
+                   wildcard.get('primitive_op_labels', None),
+                   wildcard.get('initial_budget', None),
+                   tuple(wildcard.get('methods', ['neldermead'])),
+                   wildcard.get('inadmissable_action', 'print'),
+                   wildcard.get('1d_reference', 'diamond distance'))
 
 
 class GSTObjFnBuilders(_NicelySerializable):
@@ -731,6 +792,7 @@ class GSTObjFnBuilders(_NicelySerializable):
         return cls(iteration_builders, final_builders)
 
     def __init__(self, iteration_builders, final_builders=()):
+        super().__init__()
         self.iteration_builders = iteration_builders
         self.final_builders = final_builders
 
@@ -801,6 +863,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
             raise ValueError("Could not convert %s object to a gauge optimization suite!" % str(type(obj)))
 
     def __init__(self, gaugeopt_suite_names=None, gaugeopt_argument_dicts=None, gaugeopt_target=None):
+        super().__init__()
         if gaugeopt_suite_names is not None:
             self.gaugeopt_suite_names = (gaugeopt_suite_names,) \
                 if isinstance(gaugeopt_suite_names, str) else tuple(gaugeopt_suite_names)
@@ -2035,7 +2098,14 @@ def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, paramete
 def _compute_1d_reference_values_and_name(estimate, badfit_options):
     final_model = estimate.models['final iteration estimate']
     target_model = estimate.models['target']
-    gaugeopt_model = _alg.gaugeopt_to_target(final_model, target_model)
+    gaugeopt_model = estimate.models['stdgaugeopt'].copy() if 'stdgaugeopt' in estimate.models \
+        else _alg.gaugeopt_to_target(final_model, target_model)  # HACK!!! see below
+    # The above gaugeopt_to_target call may not work correctly, since it blindly uses the
+    # default gauge opt parameters (e.g. the final model may need to be converted to TP
+    # before gauge optimizing it).  Ideally we would plumb down from _add_gaugeopt_and_badfit
+    # the name of a gauge-optimized model if one exists, and if one doesn't maybe we just used
+    # the 'final iteration estimate'?  For now, just use 'stdgaugeopt' if it exists as a way of
+    # avoiding a gaugeopt failure here.
 
     if badfit_options.wildcard1d_reference == 'diamond distance':
         dd = {}

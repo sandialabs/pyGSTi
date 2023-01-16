@@ -1426,7 +1426,7 @@ class SwitchValue(object):
         self.dependencies = dependencies
 
         shape = [len(self.parent.positionLabels[i]) for i in dependencies]
-        self.base = _np.empty(shape, dtype=_np.object)
+        self.base = _np.empty(shape, dtype=_np.object_)
         index_all = (slice(None, None),) * len(shape)
         self.base[index_all] = NotApplicable(self.ws)
 

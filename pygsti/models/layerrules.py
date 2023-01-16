@@ -26,6 +26,9 @@ class LayerRules(_NicelySerializable):
     tailored to a specific models.
     """
 
+    def __init__(self):
+        super().__init__()
+
     def _create_op_for_circuitlabel(self, model, circuitlbl):
         """
         A helper method for derived classes used for processing :class:`CircuitLabel` labels.

@@ -80,6 +80,7 @@ class ForwardSimulator(_NicelySerializable):
         return ()
 
     def __init__(self, model=None):
+        super().__init__()
         #self.dim = model.dim
         self.model = model
 

@@ -276,6 +276,7 @@ class Basis(_NicelySerializable):
             raise ValueError("Can't cast %s to be a basis!" % str(type(name_or_basis_or_matrices)))
 
     def __init__(self, name, longname, real, sparse):
+        super().__init__()
         self.name = name
         self.longname = longname
         self.real = real  # whether coefficients must be real (*not* whether elements are real - they're always complex)

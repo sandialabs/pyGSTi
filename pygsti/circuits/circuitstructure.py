@@ -53,6 +53,7 @@ class CircuitPlaquette(_NicelySerializable):
         """
         Create a new CircuitPlaquette.
         """
+        super().__init__()
         self.elements = _collections.OrderedDict(elements)
         self.circuit_rules = circuit_rules
         self.op_label_aliases = op_label_aliases
@@ -152,7 +153,7 @@ class CircuitPlaquette(_NicelySerializable):
                 ret[i, j] = sum(elementvec[layout.indices(opstr)])
         elif '%' in mergeop:
             fmt = mergeop
-            ret = _np.nan * _np.ones((self.num_rows, self.num_cols), dtype=_np.object)
+            ret = _np.nan * _np.ones((self.num_rows, self.num_cols), dtype=_np.object_)
             for (i, j), opstr in self.elements.items():
                 ret[i, j] = ", ".join(["NaN" if _np.isnan(x) else
                                        (fmt % x) for x in elementvec[layout.indices(opstr)]])

@@ -49,6 +49,9 @@ def _hack_sqrtm(a):
     if _np.any(_np.isnan(sqrt)):  # this is sometimes a good fallback when sqrtm doesn't work.
         ev, U = _np.linalg.eig(a)
         sqrt = _np.dot(U, _np.dot(_np.diag(_np.sqrt(ev)), _np.linalg.inv(U)))
+    # Scipy 1.10 fix for PR 16294 (which doubles precision of complex to complex)
+    if _np.iscomplexobj(a):
+        sqrt = sqrt.astype(a.dtype, copy=False)
 
     return sqrt
 
