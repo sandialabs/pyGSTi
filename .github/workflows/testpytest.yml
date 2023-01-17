@@ -49,6 +49,7 @@ jobs:
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        python scripts/importtestscript.py
+       python pygsti\evotypes\densitymx\__init__.py
        python -m pytest -n auto --cov=pygsti test/unit/modelmembers
 
 
