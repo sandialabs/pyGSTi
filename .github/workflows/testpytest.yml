@@ -48,6 +48,7 @@ jobs:
       if: ${{matrix.os == 'ubuntu-20.04'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+       python scripts/importtestscript.py
        python -m pytest -n auto --cov=pygsti test/unit/modelmembers
 
 
