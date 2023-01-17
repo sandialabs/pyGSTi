@@ -42,14 +42,15 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install wheel
         python -m pip install flake8
-        python -m pip install .[testing]
+        python -m pip install -e .[testing]
+        python setup.py build_ext --inplace
 
     - name: Run unit tests ubuntu
       if: ${{matrix.os == 'ubuntu-20.04'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        python scripts/importtestscript.py
-       python pygsti\evotypes\densitymx\__init__.py
+       python pygsti/evotypes/densitymx/__init__.py
        python -m pytest -n auto --cov=pygsti test/unit/modelmembers
 
 
