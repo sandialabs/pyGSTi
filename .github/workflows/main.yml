@@ -15,16 +15,6 @@ on:
 
 env:
   SKIP_DEAP: 1
-  NOSE_VERBOSE: 2
-  NOSE_WITH_TIMER: 1
-  NOSE_WITH_ID: 1
-  NOSE_REDNOSE: 1
-  NOSE_WITH_COVERAGE: 1
-  NOSE_COVER_PACKAGE: "pygsti"
-  #NOSE_PROCESSES: -1
-  NOSE_NOPATH: 1  use installed package, not source tree under CWD
-  NOSE_PROCESS_TIMEOUT: 2400
-  NOSE_WHERE: "test/unit/"
 
 jobs:
   build: # Main build + unit test check
@@ -72,21 +62,17 @@ jobs:
       if: ${{matrix.os == 'ubuntu-20.04'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       echo "nosetests: $NOSETESTS"  
-       nosetests --processes=-1 $NOSETESTS
+       python -m pytest -n auto --cov=pygsti test/unit
     - name: Run unit tests windows  
       if: ${{matrix.os == 'windows-2019'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       echo "nosetests: $Env:NOSETESTS"  
-       #nosetests $Env:NOSETESTS
-       nosetests --traverse-namespace
+       python -m pytest -n auto --cov=pygsti test/unit
     - name: Run unit tests MacOS  
       if: ${{matrix.os == 'macos-11'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       echo "nosetests: $NOSETESTS"  
-       nosetests --processes=-1 $NOSETESTS
+       python -m pytest -n auto --cov=pygsti test/unit
     
   
   push: # Push to stable "beta" branch on successful build
