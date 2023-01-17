@@ -61,6 +61,7 @@ extras = {
         'pytest',
         'pytest-xdist',
         'pytest-cov',
+        'nose',
         'csaps',
         'cvxopt',
         'cvxpy',
