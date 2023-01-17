@@ -2,7 +2,6 @@ import pickle
 
 import sys
 import numpy as np
-print('pygsti path', pygsti.__path__)
 try:
     import pygsti.evotypes.densitymx.statereps
 except ModuleNotFoundError:
