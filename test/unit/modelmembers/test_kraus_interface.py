@@ -2,10 +2,6 @@ import pickle
 
 import sys
 import numpy as np
-try:
-    import pygsti.evotypes.densitymx.statereps
-except ModuleNotFoundError:
-    print('importing pygsti.evotypes.densitymx.statereps failed. ModuleNotFoundError raised.')
 from pygsti.modelpacks import smq1Q_XYI
 from pygsti.baseobjs import QubitSpace, Basis
 from pygsti.modelmembers.operations import StochasticNoiseOp
