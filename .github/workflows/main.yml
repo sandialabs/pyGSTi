@@ -4,12 +4,12 @@
 name: Build and run tests
 
 on:
-  #push:
-  #  branches-ignore: [ "beta" ]
+  push:
+    branches-ignore: [ "beta" ]
   # Hacky way to only run pull requests from forked repositories (assumes : is not used in branch names unless forked)
   # https://github.community/t/how-to-trigger-an-action-on-push-or-pull-request-but-not-both/16662/10
-  #pull_request:
-  #  branches: [ "**:**" ]
+  pull_request:
+    branches: [ "**:**" ]
   # Allow running manually from Actions tab
   workflow_dispatch:
 
@@ -28,7 +28,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Set up installation environment (Ubuntu or Windows)
-      if: ${{matrix.os == 'ubuntu-20.04' || matrix.os == 'ubuntu-20.04'}}
+      if: ${{matrix.os == 'ubuntu-20.04' || matrix.os == 'windows-2019'}}
       run: |
         ./.github/ci-scripts/before_install.sh
     - name: Set up installation environment (MacOS)
@@ -70,6 +70,21 @@ jobs:
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        python -m pytest -n auto --cov=pygsti test/unit
     - name: Run unit tests MacOS  
+      if: ${{matrix.os == 'macos-11'}}
+      run: |
+       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+       python -m pytest -n auto --cov=pygsti test/unit
+    - name: Run notebook regression ubuntu
+      if: ${{matrix.os == 'ubuntu-20.04'}}
+      run: |
+       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+       python -m pytest -n auto --nbval-lax jupter_notebooks
+    - name: Run notebook regression windows 
+      if: ${{matrix.os == 'windows-2019'}}
+      run: |
+       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+       python -m pytest -n auto --cov=pygsti test/unit
+    - name: Run notebook regression MacOS  
       if: ${{matrix.os == 'macos-11'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
