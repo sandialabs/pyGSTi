@@ -14,7 +14,7 @@ Defines interpolated gate and factory classes
 import itertools as _itertools
 
 import numpy as _np
-from scipy.interpolate import LinearNDInterpolator as _linND
+from scipy.interpolate import LinearNDInterpolator as _linearND
 from scipy.linalg import cholesky
 
 from ...modelmembers.operations import DenseOperator as _DenseOperator
@@ -32,6 +32,45 @@ except ImportError:
     warnings.warn(("Warning - Cannot import csaps module for spline interpolation. "
                    "Interpolated gates will default to linear interpolation."))
 
+
+class constant_interpolator():
+    # Constant interpolator that always returns the mean. Typically, this is used 
+    # when some parameters are always zero. 
+    def __init__(self, mean):
+        self.mean = mean
+
+    def __call__(self, *v):
+        # might need to promote mean to a list
+        return self.mean
+
+def _constInterp(points, values, **kwargs):
+    mean = _np.mean(values)
+    print(f"AVERAGED to {mean}")
+    return constant_interpolator(mean)
+
+
+
+class complex_interpolator():
+    # Extends interpolators to complex numbers if necessary
+    def __init__(self, interp_re, interp_im):
+        self.interp_re = interp_re 
+        self.interp_im = interp_im
+
+    def __call__(self, *v):
+        output = self.interp_re(v) + 1.j*self.interp_im(v)
+        return output[0]
+
+def _linND(points, values, **kwargs):
+    # Modification of LinearNDInterpolator to accomodate complex numbers if necessary
+    if _np.all(_np.abs(values) < 1.e-7):
+        return _constInterp(points, values, **kwargs)
+    if _np.all(_np.abs(_np.imag(values)) < 1.e-7):
+        return _linearND(points, values, **kwargs)
+    else:
+        print("COMPLEXIFIED")
+        return complex_interpolator(_linearND(points, _np.real(values), **kwargs),
+                                    _linearND(points, _np.imag(values), **kwargs))
+
 if use_csaps:
     class custom_interpolator():
         # This class restructures the csaps.NdGridCubicSmoothingSpline API to be consistent
@@ -44,6 +83,9 @@ if use_csaps:
             return output[0]
 
     def _cubicSplineMod(points, values, **kwargs):
+        if _np.all(_np.abs(values) < 1.e-7):
+            return _constInterp(points, values, **kwargs)
+
         points = _np.array(points).T
         values = _np.array(values)
 
@@ -58,7 +100,16 @@ if use_csaps:
             s = (0,) * (idm) + (slice(None),) + (0,) * (n_variables - idm - 1)
             grid_points += [mesh[s]]
 
-        return custom_interpolator(_cubicSpline(grid_points, values, smooth=1))
+        if _np.all(_np.abs(values-_np.mean(values)) < 1.e-7):
+            print(f"AVERAGED to {_np.mean(values)}")
+            return _constInterp(points, values, **kwargs)
+        if _np.all(_np.abs(_np.imag(values)) < 1.e-7):
+            print(f"real CSAPS, {_np.abs(_np.mean(values))}")
+            return custom_interpolator(_cubicSpline(grid_points, values, smooth=1))
+        else:
+            print("COMPLEXIFIED")
+            return complex_interpolator(_cubicSpline(grid_points, _np.real(values), smooth=1),
+                                        _cubicSpline(grid_points, _np.imag(values), smooth=1))
 
     # interpolator_and_args = (spline_interpolator, {'shape': (7,3,3)})
 
@@ -620,7 +671,7 @@ class InterpolatedQuantityFactory(object):
             axial_points = []
             for rng in self._parameter_ranges:
                 if isinstance(rng, tuple):
-                    assert(len(rng) == 3), "Tuple range specifiers must have (min, max, npoints) form!"
+                    assert(len(rng) == 3), "Tuple range specifiers must have (min, max, _npoints) form!"
                     axial_points.append(_np.linspace(*rng))
                 else:
                     assert(isinstance(rng, _np.ndarray)), "Parameter ranges must be specified by tuples or arrays!"

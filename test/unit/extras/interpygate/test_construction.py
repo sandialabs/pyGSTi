@@ -203,9 +203,9 @@ class InterpygateCPTPConstructionTester(BaseCase):
                                      [np.zeros([2,2]),np.sqrt(2)/2*(sigI++1.j*sigY)]])
         cls.target_op = SingleQubitTargetOp()
 
-        cls.param_ranges = [(0.9,1.1,3)]
+        cls.param_ranges = [(0.9,1.1,5)]
         cls.arg_ranges = [2*np.pi*(1+np.cos(np.linspace(np.pi,0, 7)))/2,
-                      (0, np.pi, 3)] 
+                      (0, np.pi, 5)] 
         cls.arg_indices = [0,1]
 
         cls.gate_process = SingleQubitGate(num_params = 3,num_params_evaluated_as_group = 1)
@@ -226,6 +226,9 @@ class InterpygateCPTPConstructionTester(BaseCase):
                                 interpolator_and_args='linear', ensure_cptp=True)
         op = opfactory_linear.create_op([0,np.pi/4])
         op.from_vector([1])
+        print(op)
+        print(self.static_target)
+        print("HELLO!")
         self.assertArraysAlmostEqual(op, self.static_target,places=7)
 
         opfactory_spline = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
