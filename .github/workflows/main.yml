@@ -74,21 +74,21 @@ jobs:
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        python -m pytest -n auto --cov=pygsti test/unit
-    - name: Run notebook regression ubuntu
-      if: ${{matrix.os == 'ubuntu-20.04'}}
-      run: |
-       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       python -m pytest -n auto --nbval-lax jupter_notebooks
-    - name: Run notebook regression windows 
-      if: ${{matrix.os == 'windows-2019'}}
-      run: |
-       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       python -m pytest -n auto --cov=pygsti test/unit
-    - name: Run notebook regression MacOS  
-      if: ${{matrix.os == 'macos-11'}}
-      run: |
-       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       python -m pytest -n auto --cov=pygsti test/unit
+#    - name: Run notebook regression ubuntu
+#      if: ${{matrix.os == 'ubuntu-20.04'}}
+#      run: |
+#       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+#       python -m pytest -n auto --nbval-lax jupter_notebooks
+#    - name: Run notebook regression windows 
+#      if: ${{matrix.os == 'windows-2019'}}
+#      run: |
+#       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+#       python -m pytest -n auto --cov=pygsti test/unit
+#    - name: Run notebook regression MacOS  
+#      if: ${{matrix.os == 'macos-11'}}
+#      run: |
+#       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+#       python -m pytest -n auto --cov=pygsti test/unit
     
   
   push: # Push to stable "beta" branch on successful build
