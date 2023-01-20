@@ -724,7 +724,7 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, p
 
 def _load_model(model_filename_or_object):
     if isinstance(model_filename_or_object, str):
-        return _io.load_model(model_filename_or_object)
+        return _Model.read(model_filename_or_object)
     else:
         return model_filename_or_object  # assume a Model object
 

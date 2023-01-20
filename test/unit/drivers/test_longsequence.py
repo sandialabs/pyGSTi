@@ -117,7 +117,7 @@ class StdPracticeGSTTester(LongSequenceBase):
         #with open(model_path, 'wb') as f:
         #    pickle.dump(target_model, f)
 
-        result = ls.run_stdpractice_gst(ds_path, model_path, fiducial_path, fiducial_path, germ_path, self.maxLens,
+        result = ls.run_stdpractice_gst(ds_path, model_path+'.json', fiducial_path, fiducial_path, germ_path, self.maxLens,
                                         modes="full TP", comm=None, mem_limit=None, verbosity=5)
         # TODO assert correctness
 
@@ -256,7 +256,7 @@ class WholeGermPowersTester(LongSequenceGSTWithChi2):
             profile=2,
         )
         result = ls.run_long_sequence_gst(
-            ds_path, model_path, fiducial_path, fiducial_path, germ_path, self.maxLens,
+            ds_path, model_path+'.json', fiducial_path, fiducial_path, germ_path, self.maxLens,
             advanced_options=self.options, verbosity=10
         )
         # TODO assert correctness
