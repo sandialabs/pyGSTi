@@ -23,20 +23,7 @@ jobs:
       matrix:
         os: [ubuntu-20.04, windows-2019, macos-11]
         python-version: [3.7, 3.8, 3.9, '3.10']
-        extra-tests:
-        - "algorithms"
-        - "algorithmsb"
-        - "report"
-        - "reportb"
-        - "objects"
-        - "tools"
-        - "iotest"
-        - "drivers"
-        - "optimize"
-        - "construction"
-        - "extras"
-        # - "mpi" # Fails in GitHub Actions, passes locally but doesn't terminate threads properly
-
+        
     steps:
     - uses: actions/checkout@v2
     - name: Set up installation environment
@@ -58,30 +45,22 @@ jobs:
         # but still compile Cython extensions
         python -m pip install -e .[testing]
         python setup.py build_ext --inplace
-    - name: Run test_packages Ubuntu ${{ matrix.extra-tests }}
+    - name: Run test_packages Ubuntu
       if: ${{matrix.os == 'ubuntu-20.04'}}
-      env:
-        PYTESTS: ${{ matrix.extra-tests }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        echo "pytests: $PYTESTS"
-        python -m pytest -n auto  $PYTESTS
-    - name: Run test_packages Windows ${{ matrix.extra-tests }}
+        python -m pytest -n auto --ignore=test/test_packages/mpi --ignore=test/test_packages/mpi.old --ignore=test/test_packages/notebooks test/test_packages
+    - name: Run test_packages Windows
       if: ${{matrix.os == 'windows-2019'}}
-      env:
-        PYTESTS: ${{ matrix.extra-tests }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        echo "pytest: $Env:PYTESTS"
-        python -m pytest -n auto $Env:PYTESTS
-    - name: Run test_packages MacOS ${{ matrix.extra-tests }}
+        python -m pytest -n auto --ignore=test/test_packages/mpi --ignore=test/test_packages/mpi.old --ignore=test/test_packages/notebooks test/test_packages
+    - name: Run test_packages MacOS
       if: ${{matrix.os == 'macos-11'}}
-      env:
-        PYTESTS: ${{ matrix.extra-tests }}
+
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        echo "pytests: $PYTESTS"
-        python -m pytest -n auto  $PYTESTS
+        python -m pytest -n auto --ignore=test/test_packages/mpi --ignore=test/test_packages/mpi.old --ignore=test/test_packages/notebooks test/test_packages 
 
 
 
