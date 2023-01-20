@@ -21,14 +21,14 @@ from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 from pygsti.tools import unitary_to_superop, change_basis
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
-A = _np.matrix([[1, 0, 0, 0],
+A = _np.array([[1, 0, 0, 0],
                 #               [0,0,0,1],
                 [0, 1. / _np.sqrt(2), 1. / _np.sqrt(2), 0],
                 [0, 1. / _np.sqrt(2), -1. / _np.sqrt(2), 0],
                 [0, 0, 0, 1], ])
 
-X = _np.matrix([[0, 1], [1, 0]])
-Y = _np.matrix([[0, -1j], [1j, 0]])
+X = _np.array([[0, 1], [1, 0]])
+Y = _np.array([[0, -1j], [1j, 0]])
 
 
 def _x_2qubit(theta):
@@ -44,7 +44,7 @@ def _x_2qubit(theta):
     -------
     numpy.ndarray
     """
-    x = _np.matrix(_linalg.expm(-1j / 2. * theta * _np.matrix([[0, 1], [1, 0]])))
+    x = _np.array(_linalg.expm(-1j / 2. * theta * _np.array([[0, 1], [1, 0]])))
     return _np.kron(x, x)
 
 
@@ -61,7 +61,7 @@ def _y_2qubit(theta):
     -------
     numpy.ndarray
     """
-    y = _np.matrix(_linalg.expm(-1j / 2. * theta * _np.matrix([[0, -1j], [1j, 0]])))
+    y = _np.array(_linalg.expm(-1j / 2. * theta * _np.array([[0, -1j], [1j, 0]])))
     return _np.kron(y, y)
 
 
@@ -85,7 +85,7 @@ def _ms_2qubit(theta, phi):
     -------
     numpy.ndarray
     """
-    return _np.matrix(_linalg.expm(-1j / 2 * theta
+    return _np.array(_linalg.expm(-1j / 2 * theta
                                    * _np.kron(
                                        _np.cos(phi) * X + _np.sin(phi) * Y,
                                        _np.cos(phi) * X + _np.sin(phi) * Y)
@@ -96,7 +96,7 @@ def _ms_2qubit(theta, phi):
 
 
 #Removes columns and rows from input_arr
-def _remove_from_matrix(input_arr, columns, rows, output_type=_np.matrix):
+def _remove_from_matrix(input_arr, columns, rows, output_type=_np.array):
     input_arr = _np.array(input_arr)
     return output_type([
         [input_arr[row_num][col_num]
@@ -120,8 +120,8 @@ def to_qutrit_space(input_mat):
     -------
     numpy.ndarray
     """
-    input_mat = _np.matrix(input_mat)
-    return _remove_from_matrix(A * input_mat * A**-1, [2], [2])
+    input_mat = _np.array(input_mat)
+    return _remove_from_matrix(A * input_mat * _np.linalg.inv(A), [2], [2])
 #    return (A * input_mat * A**-1)[:3,:3]#Comment out above line and uncomment this line if you want the state space
 #labelling to be |0>=|00>,|1>=|11>,|2>~|01>+|10>
 
