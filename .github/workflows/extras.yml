@@ -13,16 +13,6 @@ on:
 
 env:
   SKIP_DEAP: 1
-  NOSE_VERBOSE: 2
-  NOSE_WITH_TIMER: 1
-  NOSE_WITH_ID: 1
-  NOSE_REDNOSE: 1
-  NOSE_WITH_COVERAGE: 0
-  NOSE_COVER_PACKAGE: "pygsti"
-  #NOSE_PROCESSES: -1
-  NOSE_NOPATH: ""
-  NOSE_PROCESS_TIMEOUT: 2400
-  NOSE_WHERE: "test/test_packages/"
 
 jobs:
   test_extras: # On stable branches, run extended tests
@@ -33,7 +23,7 @@ jobs:
       matrix:
         os: [ubuntu-20.04, windows-2019, macos-11]
         python-version: [3.7, 3.8, 3.9, '3.10']
-        nose-tests:
+        extra-tests:
         - "algorithms"
         - "algorithmsb"
         - "report"
@@ -67,30 +57,31 @@ jobs:
         # Installing with -e to keep installation local (for NOSE_NOPATH)
         # but still compile Cython extensions
         python -m pip install -e .[testing]
-    - name: Run test_packages Ubuntu ${{ matrix.nose-tests }}
+        python setup.py build_ext --inplace
+    - name: Run test_packages Ubuntu ${{ matrix.extra-tests }}
       if: ${{matrix.os == 'ubuntu-20.04'}}
       env:
-        NOSETESTS: ${{ matrix.nose-tests }}
+        PYTESTS: ${{ matrix.extra-tests }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        echo "nosetests: $NOSETESTS"
-        nosetests $NOSETESTS
-    - name: Run test_packages Windows ${{ matrix.nose-tests }}
+        echo "pytests: $PYTESTS"
+        python -m pytest -n auto  $PYTESTS
+    - name: Run test_packages Windows ${{ matrix.extra-tests }}
       if: ${{matrix.os == 'windows-2019'}}
       env:
-        NOSETESTS: ${{ matrix.nose-tests }}
+        PYTESTS: ${{ matrix.extra-tests }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        echo "nosetests: $Env:NOSETESTS"
-        nosetests --traverse-namespace $Env:NOSETESTS
-    - name: Run test_packages MacOS ${{ matrix.nose-tests }}
+        echo "pytest: $Env:PYTESTS"
+        python -m pytest -n auto $Env:PYTESTS
+    - name: Run test_packages MacOS ${{ matrix.extra-tests }}
       if: ${{matrix.os == 'macos-11'}}
       env:
-        NOSETESTS: ${{ matrix.nose-tests }}
+        PYTESTS: ${{ matrix.extra-tests }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        echo "nosetests: $NOSETESTS"
-        nosetests $NOSETESTS
+        echo "pytests: $PYTESTS"
+        python -m pytest -n auto  $PYTESTS
 
 
 
