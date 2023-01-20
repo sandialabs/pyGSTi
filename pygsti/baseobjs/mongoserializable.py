@@ -10,6 +10,7 @@ Defines the MongoSerializable class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 import importlib as _importlib
+import numpy as _np
 
 
 class MongoSerializable(object):
@@ -45,8 +46,8 @@ class MongoSerializable(object):
         """ Remove the records corresponding to the object with `doc_id`, minding the filter given by `recursive` """
         mongodb[collection_name].delete_one({'_id': doc_id}, session=session)  # just delete main document
 
-    def __init__(self):
-        self._dbcoordinates = None
+    def __init__(self, doc_id=None):
+        self._dbcoordinates = (self.collection_name, doc_id) if (doc_id is not None) else None
         #self.tags = {}  # FUTURE feature: save and load tags automatically?
 
     @classmethod
@@ -80,10 +81,10 @@ class MongoSerializable(object):
         doc = _find_one_doc(mongodb, cls.collection_name, doc_id)
         if doc is None:
             raise ValueError(f"No document found in collection '{cls.collection_name}' identified by {doc_id}")
-        return cls.from_mongodb_doc(mongodb, doc, **kwargs)
+        return cls.from_mongodb_doc(mongodb, cls.collection_name, doc, **kwargs)
 
     @classmethod
-    def from_mongodb_doc(cls, mongodb, doc, **kwargs):
+    def from_mongodb_doc(cls, mongodb, collection_name, doc, **kwargs):
         """
         Create and initialize an object from a MongoDB instance and pre-loaded primary document.
 
@@ -91,6 +92,10 @@ class MongoSerializable(object):
         ----------
         mongodb : pymongo.database.Database
             The MongoDB instance to load from.
+
+        collection_name : str
+            The collection name within `mongodb` that `doc` was loaded from.  This is needed
+            for the sole purpose of setting the created (returned) object's database "coordinates".
 
         doc : dict
             The already-retrieved main document for the object being loaded.  This takes the place
@@ -113,7 +118,7 @@ class MongoSerializable(object):
                 raise ValueError("Class '%s' is trying to load a serialized '%s' object (not a subclass)!"
                                  % (cls.__module__ + '.' + cls.__name__, doc['module'] + '.' + doc['class']))
             ret = c._create_obj_from_doc_and_mongodb(doc, mongodb, **kwargs)
-        ret._dbcoordinates = (cls.collection_name, doc['_id'])
+        ret._dbcoordinates = (collection_name, doc['_id'])
         return ret
 
     def write_to_mongodb(self, mongodb, session=None, overwrite_existing=False, **kwargs):
@@ -387,10 +392,11 @@ class WriteOpsByCollection(dict):
                 #mongodb[collection_name].insert_one(doc)  # alt line for DEBUG
             else:
                 #print("Found existing doc: ", doc.get('module','?'), doc.get('class','?'), doc.get('circuit_str','?'))
+                existing_to_chk = prepare_doc_for_existing_doc_check(existing_doc, None, False, False, False)
                 info_to_check = prepare_doc_for_existing_doc_check(doc, existing_doc)
-                if existing_doc != info_to_check:
+                if existing_to_chk != info_to_check:
                     # overwrite_existing=False and a doc already exists AND docs are *different* => error
-                    diff_lines = recursive_compare_str(existing_doc, info_to_check, 'existing doc', 'doc to insert')
+                    diff_lines = recursive_compare_str(existing_to_chk, info_to_check, 'existing doc', 'doc to insert')
                     raise ValueError("*Different* document with %s exists and `overwrite_existing=False`:\n%s"
                                      % (str(uid), '\n'.join(diff_lines)))
                 # else do nothing, since doc exists and matches what we want to write => no error
@@ -459,7 +465,8 @@ class WriteOpsByCollection(dict):
         return None
 
 
-def prepare_doc_for_existing_doc_check(doc, existing_doc, set_id=True, convert_tuples_to_lists=True):
+def prepare_doc_for_existing_doc_check(doc, existing_doc, set_id=True, convert_tuples_to_lists=True,
+                                       convert_numpy_dtypes=True, round_to_sigfigs=6):
     """
     Prepares a to-be inserted document for comparison with an existing document.
 
@@ -469,6 +476,8 @@ def prepare_doc_for_existing_doc_check(doc, existing_doc, set_id=True, convert_t
        documents don't need to match this field.
     2) converts all of `doc`'s tuples to lists, as the existing_doc is typically read from a MongoDB
        which only stores lists and doesn't distinguish between lists and tuples.
+    3) converts numpy datatypes to native python types
+    4) rounds floating point values
 
     Parameters
     ----------
@@ -485,23 +494,35 @@ def prepare_doc_for_existing_doc_check(doc, existing_doc, set_id=True, convert_t
     convert_tuples_to_lists : bool, optional
         when `True` convert all of the tuples within `doc` to lists.
 
+    convert_numpy_dtypes : bool, optional
+        when `True` convert numpy data types to native python types, e.g. np.float64 -> float.
+
     Returns
     -------
     dict
         the prepared document.
     """
-    def tup_to_list(obj):
-        if isinstance(obj, (tuple, list)):
-            return [tup_to_list(v) for v in obj]
+    def process(obj):
+        if isinstance(obj, list):
+            return [process(v) for v in obj]
+        elif isinstance(obj, tuple):
+            if convert_tuples_to_lists:
+                return [process(v) for v in obj]  # changes tuple -> list
+            else:
+                return tuple((process(v) for v in obj))
         elif isinstance(obj, dict):
-            return {k: tup_to_list(v) for k, v in obj.items()}
-        else:
-            return obj
+            return {k: process(v) for k, v in obj.items()}
+        elif isinstance(obj, _np.generic) and convert_numpy_dtypes:
+            obj = obj.item()
+
+        if isinstance(obj, float) and round_to_sigfigs:
+            obj = float(('%.' + str(round_to_sigfigs) + 'g') % obj)
+        return obj
 
     doc = doc.copy()
-    if '_id' not in doc:  # Allow doc to lack an _id field and still be considered same as existing_doc
+    if '_id' not in doc and set_id:  # Allow doc to lack an _id field and still be considered same as existing_doc
         doc['_id'] = existing_doc['_id']
-    return tup_to_list(doc)
+    return process(doc)
 
 
 def recursive_compare_str(a, b, a_name='first obj', b_name='second obj', prefix="", diff_accum=None):

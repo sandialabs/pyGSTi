@@ -146,6 +146,9 @@ def write_dataset(filename, dataset, circuits=None,
             else:
                 headerString += "# " + commentLine + '\n'
 
+    if dataset._dbcoordinates is not None:
+        headerString += '## DatabaseID = %s\n' % str(dataset._dbcoordinates[1])  # omit collection name
+
     if fixed_column_mode == "auto":
         if with_times == "auto":
             with_times = not dataset.has_trivial_timedependence

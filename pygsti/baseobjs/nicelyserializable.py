@@ -15,6 +15,7 @@ import pathlib as _pathlib
 import json as _json
 import numpy as _np
 import scipy.sparse as _sps
+import warnings as _warnings
 from pygsti.baseobjs.mongoserializable import MongoSerializable
 
 
@@ -131,10 +132,22 @@ class NicelySerializable(MongoSerializable):
         # (This method should rarely need to be overridden in derived (sub) classes.)
         if isinstance(state, dict) and state['module'] == cls.__module__ and state['class'] == cls.__name__:
             # then the state is actually for this class and we should call its _from_nice_serialization method:
-            return cls._from_nice_serialization(state)
+            ret = cls._from_nice_serialization(state)
         else:
             # otherwise, this call functions as a base class call that defers to the correct derived class
-            return NicelySerializable._from_nice_serialization.__func__(cls, state)
+            ret = NicelySerializable._from_nice_serialization.__func__(cls, state)
+
+        if 'dbcoordinates' in state:  # set ._dbcoordinates from a 'dbcoordinates' state value
+            try:
+                from bson.objectid import ObjectId as _ObjectId
+                ret._dbcoordinates = (state['dbcoordinates'][0], _ObjectId(state['dbcoordinates'][1]))
+            except ImportError:  # in case bson isn't installed
+                _warnings.warn("Could not read-in database coordinates because `bson` package is not installed.")
+                ret._dbcoordinates = None
+        else:
+            ret._dbcoordinates = None
+
+        return ret
 
     def to_nice_serialization(self):
         """
@@ -146,7 +159,12 @@ class NicelySerializable(MongoSerializable):
             Usually a dictionary representing the serialized object, but may also be another native
             Python type, e.g. a string or list.
         """
-        return self._to_nice_serialization()
+        state = self._to_nice_serialization()
+        if self._dbcoordinates is not None and isinstance(state, dict):
+            state['dbcoordinates'] = (self._dbcoordinates[0], str(self._dbcoordinates[1]))  # ObjectId -> str
+            # Note: don't do this in _to_nice_serialization, which is also used to for mongodb
+            #  methods, and we don't want dbcoordinates in DB documents
+        return state
 
     def write(self, path, **format_kwargs):
         """
@@ -250,7 +268,7 @@ class NicelySerializable(MongoSerializable):
                 format_kwargs = format_kwargs.copy()  # don't update caller's dict!
                 format_kwargs['indent'] = 4
 
-            json_dict = self._to_nice_serialization()
+            json_dict = self.to_nice_serialization()  # use non-underscore version so allows dbcoordinates
             _check_jsonable(json_dict)
             if f is not None:
                 _json.dump(json_dict, f, **format_kwargs)
@@ -352,4 +370,4 @@ class NicelySerializable(MongoSerializable):
         return cls.from_nice_serialization(doc)
 
     def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):
-        doc.update(self.to_nice_serialization())
+        doc.update(self._to_nice_serialization())  # use _to... so we don't have 'dbcoordinates'

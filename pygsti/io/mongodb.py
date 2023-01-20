@@ -243,15 +243,17 @@ def _load_auxdoc_member(mongodb, member_name, typ, metadata, quick_load):
 
         elif cur_typ == 'dir-serialized-object':
             obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
-            val = _MongoSerializable.from_mongodb_doc(mongodb, obj_doc, quick_load=quick_load)
+            val = _MongoSerializable.from_mongodb_doc(mongodb, metadata['collection_name'],
+                                                      obj_doc, quick_load=quick_load)
 
         elif cur_typ == 'partialdir-serialized-object':
             obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
-            val = _MongoSerializable.from_mongodb_doc(mongodb, obj_doc, quick_load=quick_load, load_data=False)
+            val = _MongoSerializable.from_mongodb_doc(mongodb, metadata['collection_name'],
+                                                      obj_doc, quick_load=quick_load, load_data=False)
 
         elif cur_typ == 'serialized-object':
             obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
-            val = _MongoSerializable.from_mongodb_doc(mongodb, obj_doc)  #, quick_load=quick_load)
+            val = _MongoSerializable.from_mongodb_doc(mongodb, metadata['collection_name'], obj_doc)
 
         elif cur_typ == 'circuit-str-json':
             from .readers import convert_strings_to_circuits as _convert_strings_to_circuits
@@ -436,11 +438,10 @@ def add_obj_auxtree_write_ops_and_update_doc(obj, doc, write_ops, mongodb, colle
     meta = {'type': _full_class_name(obj)}
     if additional_meta is not None: meta.update(additional_meta)
 
-    if (auxfile_types_member is not None) and ('_dbcoordinates' not in obj.__dict__[auxfile_types_member]):
-        # HACK for writing to DB old files that were loaded and don't have
-        # '_dbcoordinates': 'none' in their auxfile_types dict
-        obj._dbcoordinates = None
-        obj.__dict__[auxfile_types_member]['_dbcoordinates'] = 'none'
+    # Unless explicitly included, don't store _dbcoordinates in DB
+    coords_explicitly_included = include_attributes is not None and '_dbcoordinates' in include_attributes
+    if '_dbcoordinates' not in omit_attributes and not coords_explicitly_included:
+        omit_attributes = tuple(omit_attributes) + ('_dbcoordinates',)
 
     if include_attributes is not None:  # include_attributes takes precedence over omit_attributes
         vals = {}
@@ -459,7 +460,7 @@ def add_obj_auxtree_write_ops_and_update_doc(obj, doc, write_ops, mongodb, colle
             if o in vals: del vals[o]
             if o in auxtypes: del auxtypes[o]
     else:
-        vals = obj.__dict__
+        vals = obj.__dict__.copy()
         auxtypes = obj.__dict__[auxfile_types_member] if (auxfile_types_member is not None) else {}
 
     return add_auxtree_write_ops_and_update_doc(doc, write_ops, mongodb, collection_name, vals,
@@ -692,7 +693,7 @@ def _write_auxdoc_member(mongodb, write_ops, parent_collection_name, parent_id, 
         if val is None:   # None values don't get written
             pass
         elif cur_typ in ('none', 'reset'):  # explicitly don't get written
-            pass
+            pass  # and really we shouldn't ever get here since we short circuit in auxmember loop
 
         elif cur_typ == 'text-circuit-list':
             circuit_doc_ids = []

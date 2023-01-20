@@ -418,6 +418,7 @@ class StdInputParser(object):
         orig_cwd = _os.getcwd()
         outcomeLabels = None
         outcome_labels_specified_in_preamble = False
+        dbID = None
         if len(_os.path.dirname(filename)) > 0: _os.chdir(
             _os.path.dirname(filename))  # allow paths relative to datafile path
         try:
@@ -448,6 +449,13 @@ class StdInputParser(object):
             if not outcome_labels_specified_in_preamble and 'Columns' in preamble_directives:
                 outcomeLabels = sorted(fixed_column_outcome_labels)
                 outcome_labels_specified_in_preamble = True
+            if 'DatabaseID' in preamble_directives:
+                try:
+                    from bson.objectid import ObjectId as _ObjectId
+                    dbID = _ObjectId(preamble_directives['DatabaseID'])
+                except ImportError:
+                    _warnings.warn("Could not import DataSet's database ID because `bson` package is missing.")
+                    dbID = None
 
         finally:
             _os.chdir(orig_cwd)
@@ -455,6 +463,9 @@ class StdInputParser(object):
         #Read data lines of data file
         dataset = _DataSet(outcome_labels=outcomeLabels, collision_action=collision_action,
                            comment="\n".join(preamble_comments))
+
+        if dbID is not None:
+            dataset._dbcoordinates = (_DataSet.collection_name, dbID)
 
         if outcome_labels_specified_in_preamble and (fixed_column_outcome_labels is not None):
             fixed_column_outcome_indices = [dataset.olIndex[ol] for ol in fixed_column_outcome_labels]
@@ -553,11 +564,18 @@ class StdInputParser(object):
                                               if v != '--'])  # drop "empty" sentinels
                                     dataset.add_outcome_labels(outcome_labels, update_ol=False)
                                     outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
+
                             else:  # assume valueList is a list of (outcomeLabel, count) tuples -- see parse_dataline
                                 outcome_labels, count_values = zip(*valueList) if len(valueList) else ([], [])
                                 if not outcome_labels_specified_in_preamble:
                                     dataset.add_outcome_labels(outcome_labels, update_ol=False)
                                 outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
+
+                            # When reading in time-independent data (all at a single time), order (sort)
+                            # the counts according to outcome index to make it easier to compare datarows.
+                            assert len(set(outcome_indices)) == len(outcome_indices), "Duplicate fixed column!"
+                            outcome_indices, count_values = zip(*sorted(zip(outcome_indices, count_values)))
+
                             oliArray = _np.array(outcome_indices, dataset.oliType)
                             countArray = _np.array(count_values, dataset.repType)
 
