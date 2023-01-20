@@ -273,10 +273,11 @@ class Workspace(object):
         argnames = argspec.args
         assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
             "__init__ must begin with (self, ws, ...)"
-        
-        newargsig = argsig.replace(parameters= list(argsig.parameters.values())[2:])
-        
-        #Define a new factory function with appropriate signature
+
+        # Strip default values out of parameters so that we don't override the true incoming values with defaults
+        newargparams = [p.replace(default=_inspect.Parameter.empty) for p in argsig.parameters.values()][2:]
+        newargsig = _inspect.Signature(newargparams)
+
         signature = str(newargsig)
         signature = signature[1:-1]  # strip off parenthesis from ends of "(signature)"
 
