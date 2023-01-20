@@ -347,8 +347,6 @@ def pad_edesign_with_idle_lines(edesign, line_labels):
     ExperimentDesign
         An edesign where all circuits have been padded out with missing idle lines
     """
-    from pygsti.circuits import Circuit as _Circuit
-    from pygsti.protocols import CircuitListsDesign as _CircListDesign
     from pygsti.protocols import CombinedExperimentDesign as _CombinedDesign
     from pygsti.protocols import SimultaneousExperimentDesign as _SimulDesign
 
@@ -362,11 +360,5 @@ def pad_edesign_with_idle_lines(edesign, line_labels):
         
         return _CombinedDesign(new_designs, qubit_labels=line_labels)
 
-    # Create an empty design on the missing lines
-    missing_labels = tuple(set(line_labels) - set(edesign.qubit_labels))
-    empty_design = _CircListDesign([[
-        _Circuit([], line_labels=missing_labels)
-    ]])
-
-    # Tensor empty circuit on missing lines with original design
-    return _SimulDesign([edesign, empty_design], qubit_labels=line_labels)
+    # SimultaneousDesign with single design + full qubit labels tensors out the circuits with idle lines
+    return _SimulDesign([edesign], qubit_labels=line_labels)
