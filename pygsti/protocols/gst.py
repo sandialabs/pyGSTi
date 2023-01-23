@@ -2111,6 +2111,10 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options):
         dd = {}
         for key, op in gaugeopt_model.operations.items():
             dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+            if dd[key] < 0:  # indicates that diamonddist failed (cvxpy failure)
+                _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
+                                " Falling back to trace distance.") % str(key))
+                dd[key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
 
         spamdd = {}
         for key, op in gaugeopt_model.preps.items():
@@ -2581,6 +2585,16 @@ class ModelEstimateResults(_proto.ProtocolResults):
         ModelEstimateResults
         """
         ret = super().from_dir(dirname, name, preloaded_data, quick_load)  # loads members; doesn't make parent "links"
+        ret.circuit_lists = ret._create_circuit_lists(ret.data.edesign)  # because circuit_lists auxfile_type == 'none'
+        for est in ret.estimates.values():
+            est.parent = ret  # link estimate to parent results object
+        return ret
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False,
+                                         preloaded_data=None, load_protocol=True, load_data=True):
+        ret = super()._create_obj_from_doc_and_mongodb(doc, mongodb, quick_load, preloaded_data,
+                                                       load_protocol, load_data)
         ret.circuit_lists = ret._create_circuit_lists(ret.data.edesign)  # because circuit_lists auxfile_type == 'none'
         for est in ret.estimates.values():
             est.parent = ret  # link estimate to parent results object
