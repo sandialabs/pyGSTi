@@ -4,6 +4,8 @@
 name: Build and run notebook regression
 
 on:
+  push:
+    branches: [ "feature-ci-workflow-updates" ]
   # Allow running manually from Actions tab
   workflow_dispatch:
 
