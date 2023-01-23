@@ -220,6 +220,19 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     
     printer.log('Length Available Germ List After Dropping Random Fraction: '+ str(len(availableGermsList)), 1)
     
+    #If we have specified a user specified germs to force inclusion of then there is a chance
+    #they got removed by the deduping and removal of random circuits above. The right way to fix this
+    #would be to add some logic to those subroutines that prevent this, but for now I am going to just 
+    #manually add them back in (this will result almost suredly in a couple duplicate circuits, but oh well).
+    if force is not None:
+        #iterate through the list of forced germs to check for inclusion and
+        #if missing append to the list of available germs.
+        if isinstance(force, list):
+            for forced_germ in force:
+                if not forced_germ in availableGermsList:
+                    availableGermsList.append(forced_germ)
+        printer.log('Length Available Germ List After Adding Back In Forced Germs: '+ str(len(availableGermsList)), 1)
+    
     #Add some checks related to the new option to switch up data types:
     if not assume_real:
         if not (float_type is _np.cdouble or float_type is _np.csingle):
@@ -284,7 +297,8 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
             'save_cevd_cache_filename': save_cevd_cache_filename,
             'load_cevd_cache_filename': load_cevd_cache_filename,
             'file_compression': file_compression,
-            'evd_tol': 1e-10
+            'evd_tol': 1e-10,
+            'initial_germ_set_test': True
         }
         for key in default_kwargs:
             if key not in algorithm_kwargs:
@@ -616,6 +630,7 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
         The score for the germ set indicating how many parameters it amplifies
         and its numerical score restricted to those parameters.
     """
+    
     if partial_deriv_dagger_deriv is None:
         if model is None or partial_germs_list is None:
             raise ValueError("Must provide either partial_deriv_dagger_deriv or "
@@ -3295,7 +3310,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
     q_update, r_update, _ = _sla.qr(proj_update, mode='economic', pivoting=True)
     
     #Construct P by taking the columns of q_update corresponding to non-zero values of r_A on the diagonal.
-    nonzero_indices_update= _np.nonzero(_np.abs(_np.diag(r_update))>1e-9)
+    nonzero_indices_update= _np.nonzero(_np.abs(_np.diag(r_update))>1e-9) #HARDCODED
     
     #if the rank doesn't increase then we can't use the Riedel approach.
     #Abort early and return a flag to indicate the rank did not increase.
@@ -3437,7 +3452,7 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                             float_type= _np.cdouble, 
                             mode="all-Jac", force_rank_increase=False,
                             save_cevd_cache_filename=None, load_cevd_cache_filename=None,
-                            file_compression=False, evd_tol=1e-10):
+                            file_compression=False, evd_tol=1e-10, initial_germ_set_test=True):
     """
     Greedy algorithm starting with 0 germs.
 
@@ -3499,10 +3514,11 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         Whether to perform internal checks (will slow down run time
         substantially).
 
-    force : list of Circuits
+    force : str or list of Circuits, optional (default 'singletons')
         A list of `Circuit` objects which *must* be included in the final
         germ set.  If the special string "singletons" is given, then all of
-        the single gates (length-1 sequences) must be included.
+        the single gates (length-1 sequences) must be included. If none then
+        not circuits are forcibly included.
 
     pretest : boolean, optional
         Whether germ list should be initially checked for completeness.
@@ -3536,6 +3552,14 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
     evd_tol : float, optional
         A threshold value to use when taking eigenvalue decompositions/SVDs such that
         values below this are set to zero.
+    
+    initial_germ_set_test : bool, optional (default True)
+        A flag indicating whether or not to check the initially constructed germ set, which
+        is either the list of singleton germs (if force='singletons'), a user specified list of
+        circuits is such a list if passed in for the value of force, or a greedily selected 
+        initial germ if force=None. This can be skipped to save computational time (the test can
+        be expensive) if the user has reason to believe this initial set won't be AC. Most of the time
+        this initial set won't be.
 
     Returns
     -------
@@ -3574,18 +3598,6 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
 
     numGerms = len(germs_list)
 
-    goodGerms = []
-    weights = _np.zeros(numGerms, _np.int64)
-    if force:
-        if force == "singletons":
-            weights[_np.where(germLengths == 1)] = 1
-            goodGerms = [germ for i, germ in enumerate(germs_list) if germLengths[i] == 1]
-            printer.log('Adding Singleton Germs By Default: '+ str(goodGerms) ,1)
-        else:  # force should be a list of Circuits
-            for opstr in force:
-                weights[germs_list.index(opstr)] = 1
-            goodGerms = force[:]
-            
     #We should do the memory estimates before the pretest:
     FLOATSIZE= float_type(0).itemsize
 
@@ -3615,7 +3627,26 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
             
             printer.log("Not enough memory for all-Jac mode, falling back to single-Jac mode.", 1)
             
-            mode = "single-Jac"  # compute a single germ's jacobian at a time    
+            mode = "single-Jac"  # compute a single germ's jacobian at a time
+            
+    goodGerms = []
+    weights = _np.zeros(numGerms, _np.int64)
+    
+    #Either add the specified forced germs to the initial list or identify the best initial to start off the search.
+    if force == "singletons":
+        weights[_np.where(germLengths == 1)] = 1
+        goodGerms = [germ for i, germ in enumerate(germs_list) if germLengths[i] == 1]
+        printer.log('Adding Singleton Germs By Default: '+ str(goodGerms) ,1)
+    #if the value of force is a list then we'll assume it is a list of circuits.
+    elif isinstance(force, list):
+        for opstr in force:
+            weights[germs_list.index(opstr)] = 1
+        goodGerms = force[:]
+        printer.log('Adding User-Specified Germs By Default: '+ str(goodGerms) ,1)
+    elif force is None:
+        pass
+    else:
+        raise ValueError('Unsupported argument. Force must either be a string, list or None.')    
 
     if pretest:
         undercompleteModelNum = test_germs_list_completeness(model_list,
@@ -3632,48 +3663,30 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         printer.log("Complete initial germ set succeeds on all input models.", 1)
         printer.log("Now searching for best germ set.", 1)
 
-    printer.log("Starting germ set optimization. Lower score is better.", 1) 
+    printer.log("Starting germ set optimization. Lower score is better.", 1)
+    
+    # Dict of keyword arguments passed to compute_score_non_AC that don't
+    # change from call to call
+    nonAC_kwargs = {
+        'score_fn': lambda x: _scoring.list_score(x, score_func=score_func),
+        'threshold_ac': threshold,
+        'num_nongauge_params': numNonGaugeParams,
+        'op_penalty': op_penalty,
+        'float_type': float_type,
+    }
 
-    twirledDerivDaggerDerivList = None
-
-    if mode == "all-Jac":
+    #For all-Jac and compactEVD build out the requisite caches (plus all-zeros placeholders for single-Jac):
+    if mode == 'all-Jac':
         twirledDerivDaggerDerivList = \
             [_compute_bulk_twirled_ddd(model, germs_list, tol,
                                        check, germLengths, comm, float_type=float_type)
              for model in model_list]
 
-        printer.log(f'Numpy Array Data Type: {twirledDerivDaggerDerivList[0].dtype}', 2)
+        printer.log(f'Numpy Array Data Type: {twirledDerivDaggerDerivList[0].dtype}', 3)
         printer.log("Numpy array data type for twirled derivatives is: "+ str(twirledDerivDaggerDerivList[0].dtype)+
-                    " If this isn't what you specified then something went wrong.",  2) 
-        currentDDDList = []
-        for i, derivDaggerDeriv in enumerate(twirledDerivDaggerDerivList):
-            currentDDDList.append(_np.sum(derivDaggerDeriv[_np.where(weights == 1)[0], :, :], axis=0))
-
-    elif mode == "single-Jac":
-        currentDDDList = [_np.zeros((Np, Np), dtype=float_type) for mdl in model_list]
-
-        loc_Indices, _, _ = _mpit.distribute_indices(
-            list(range(len(goodGerms))), comm, False)
-
-        with printer.progress_logging(3):
-            for i, goodGermIdx in enumerate(loc_Indices):
-                printer.show_progress(i, len(loc_Indices),
-                                      prefix="Initial germ set computation",
-                                      suffix=germs_list[goodGermIdx].str)
-
-                for k, model in enumerate(model_list):
-                    currentDDDList[k] += _compute_twirled_ddd(
-                        model, germs_list[goodGermIdx], tol, float_type=float_type)
-
-        #aggregate each currendDDDList across all procs
-        if comm is not None and comm.Get_size() > 1:
-            for k, model in enumerate(model_list):
-                result = _np.empty((Np, Np), dtype=float_type)
-                comm.Allreduce(currentDDDList[k], result, op=MPI.SUM)
-                currentDDDList[k][:, :] = result[:, :]
-                result = None  # free mem
-                
-    elif mode== "compactEVD":
+                    " If this isn't what you specified then something went wrong.",  3) 
+                   
+    elif mode == 'compactEVD':
         #implement a new caching scheme which takes advantage of the fact that the J^T J matrices are typically
         #rather low-rank. Instead of caching the J^T J matrices for each germ we'll cache the compact EVD of these
         #and multiply the compact EVD components through each time we need one.
@@ -3700,42 +3713,134 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                     _np.savez_compressed(save_cevd_cache_filename,*twirledDerivDaggerDerivList[0])
                 else:
                     _np.savez(save_cevd_cache_filename,*twirledDerivDaggerDerivList[0])
-                
              #_compute_bulk_twirled_ddd_compact returns a tuple with two lists
              #corresponding to the U@diag(sqrt(2)), e  matrices for each germ's J^T J matrix's_list
              #compact evd.
+    
+    #if force is None then we need some logic to seeding the initial iteration of the search.
+    if force is None:
+        printer.log('Initializing greedy search. `force` is None so generating the germ set from scratch.',2)
+        #I want to loop through all of the models and then for each model through all of the germs
+        #I'll then pick the germ with the best performance, where best is defined as the least-bad across
+        #all models. 
+        initial_scores= [[_scoring.CompositeScore(-1.0e100, 0, None)]*len(model_list) for _ in range(len(germs_list))]
+        for i in range(len(germs_list)):
+            for j in range(len(model_list)):
+                if mode=='all-Jac':                
+                    #standard slicing squeezes the array losing the first index, which compute_composite_germ_set_score
+                    #is expecting, so use a trick with integer array slicing to preserve this
+                    derivDaggerDeriv = twirledDerivDaggerDerivList[j][[i],:,:]
+                    initial_scores[i][j] = compute_composite_germ_set_score(
+                                partial_deriv_dagger_deriv=derivDaggerDeriv, init_n=1, germ_lengths= [germLengths[i]],
+                                **nonAC_kwargs)
+                elif mode=='single-Jac':
+                    derivDaggerDeriv = _compute_twirled_ddd(model_list[j], germs_list[i], tol, float_type=float_type)
+                    initial_scores[i][j] = compute_composite_germ_set_score(
+                                partial_deriv_dagger_deriv=derivDaggerDeriv[None,:,:], init_n=1, germ_lengths= [germLengths[i]],
+                                **nonAC_kwargs)
+                elif mode=='compactEVD':
+                    initial_scores[i][j] = compute_composite_germ_set_score(
+                            partial_deriv_dagger_deriv=(twirledDerivDaggerDerivList[j][i] @ twirledDerivDaggerDerivList[j][i].T)[None,:,:], 
+                            init_n=1, germ_lengths= [germLengths[i]],
+                            **nonAC_kwargs)
+        #We should now have the composite scores for every germ and for every model. Now, for every germ we'll assign it's "best score"
+        #to be the worst score (maximum) for that germ among the models.
+        best_initial_scores= [_scoring.CompositeScore(-1.0e100, 0, None) for _ in range(len(germs_list))]
+        for i, initial_score_list in enumerate(initial_scores):
+            best_initial_scores[i]= max(initial_score_list)
+        
+        #finally find the minimum of these to select the best germ to initialize the list
+        best_initial_germ_index= best_initial_scores.index(min(best_initial_scores))
+        printer.log('Best initial germ found: ' + str(germs_list[best_initial_germ_index]), 2)
+        
+        #Set the weight of this germ to 1
+        #and add it to the good germs list
+        weights[best_initial_germ_index]=1
+        goodGerms.append(germs_list[best_initial_germ_index])
+    
+    
+    #Now that the initial germ list has been initialized (if necessary) use the initialized germ list to 
+    #create the initial currentDDDList.
+    if mode == "all-Jac":
+        currentDDDList = []
+        for i, derivDaggerDeriv in enumerate(twirledDerivDaggerDerivList):
+            currentDDDList.append(_np.sum(derivDaggerDeriv[_np.where(weights == 1)[0], :, :], axis=0))
+
+    elif mode == "single-Jac":
+        currentDDDList = [_np.zeros((Np, Np), dtype=float_type) for mdl in model_list] 
+        loc_Indices, _, _ = _mpit.distribute_indices(
+            list(range(len(goodGerms))), comm, False)
+
+        with printer.progress_logging(3):
+            for i, goodGermIdx in enumerate(loc_Indices):
+                printer.show_progress(i, len(loc_Indices),
+                                      prefix="Initial germ set computation",
+                                      suffix=germs_list[goodGermIdx].str)
+
+                for k, model in enumerate(model_list):
+                    currentDDDList[k] += _compute_twirled_ddd(
+                        model, germs_list[goodGermIdx], tol, float_type=float_type)
+
+        #aggregate each currendDDDList across all procs
+        if comm is not None and comm.Get_size() > 1:
+            for k, model in enumerate(model_list):
+                result = _np.empty((Np, Np), dtype=float_type)
+                comm.Allreduce(currentDDDList[k], result, op=MPI.SUM)
+                currentDDDList[k][:, :] = result[:, :]
+                result = None  # free mem
+                
+    elif mode== "compactEVD":
         currentDDDList = []
         nonzero_weight_indices= _np.nonzero(weights)
         nonzero_weight_indices= nonzero_weight_indices[0]
         for i, derivDaggerDeriv in enumerate(twirledDerivDaggerDerivList):
             #reconstruct the needed J^T J matrices
-            temp_DDD = None
             for j, idx in enumerate(nonzero_weight_indices):
                 if j==0:
                     temp_DDD = derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
                 else:
                     temp_DDD += derivDaggerDeriv[idx] @ derivDaggerDeriv[idx].T
-            if temp_DDD is not None:
-                currentDDDList.append(temp_DDD)
+            currentDDDList.append(temp_DDD)
 
     else:  # should be unreachable since we set 'mode' internally above
         raise ValueError("Invalid mode: %s" % mode)  # pragma: no cover
 
-    # Dict of keyword arguments passed to compute_score_non_AC that don't
-    # change from call to call
-    nonAC_kwargs = {
-        'score_fn': lambda x: _scoring.list_score(x, score_func=score_func),
-        'threshold_ac': threshold,
-        'num_nongauge_params': numNonGaugeParams,
-        'op_penalty': op_penalty,
-        'germ_lengths': germLengths,
-        'float_type': float_type,
-    }
-
-    initN = 1
+    #Add in a check for the initial germ list to see if we are already AC.
+    #Do this by properly initializing initN to the current number of non-zero
+    #eigenvalues, which will have the effect of short circuiting the while loop
+    #below if we are AC.
+    
+    #Use test_germs_list_completeness to check if the initial germ list is already AC,
+    #if so set initN equal to numNonGaugeParams in order to short circuit the greedy search
+    #loop below and simply return the initial goodGerms list.
+    if initial_germ_set_test:
+        printer.log('Testing initial germ list for AC.', 2)
+        initial_germ_set_completeness = test_germs_list_completeness(model_list, goodGerms,
+                                                                     score_func, threshold,
+                                                                     float_type=float_type)
+        if initial_germ_set_completeness == -1:
+            initN= numNonGaugeParams
+            first_outer_iter_log= False
+            printer.log('Initial germ list is AC, concluding search: ' + str(goodGerms), 2)
+        else:
+            #less than ideal, but it looks like initN needs to be initialized to 1 instead of None
+            #as the placeholder if I don't want to dive into the score calculation code again to
+            #fix things at a high-effort to low-reward ratio (I don't).
+            initN=1
+            first_outer_iter_log= True
+            printer.log('Initial germ list is not AC, beginning greedy search loop.', 2)
+    else:
+        initN=None
+        first_outer_iter_log= True
+    
     while _np.any(weights == 0):
-        printer.log("Outer iteration: %d of %d amplified, %d germs" %
-                    (initN, numNonGaugeParams, len(goodGerms)), 2)
+        if first_outer_iter_log:
+            printer.log("Outer iteration: %d germs" %
+                        (len(goodGerms)), 2)
+            first_outer_iter=False
+        else:
+            printer.log("Outer iteration: %d of %d amplified, %d germs" %
+                        (initN, numNonGaugeParams, len(goodGerms)), 2)
         # As long as there are some unused germs, see if you need to add
         # another one.
         if initN == numNonGaugeParams:

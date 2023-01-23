@@ -1786,10 +1786,13 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
             gaugeopt_suite.gaugeopt_target = target_model
         _add_gauge_opt(results, estlbl, gaugeopt_suite,
                        model_to_gaugeopt, unreliable_ops, comm, printer - 1)
-    profiler.add_time('%s: gauge optimization' % estlbl, tref); tref = _time.time()
-
-    _add_badfit_estimates(results, estlbl, badfit_options, optimizer, resource_alloc, printer)
-    profiler.add_time('%s: add badfit estimates' % estlbl, tref); tref = _time.time()
+        profiler.add_time('%s: gauge optimization' % estlbl, tref); tref = _time.time()
+        
+        _add_badfit_estimates(results, estlbl, badfit_options, optimizer, resource_alloc, printer, gaugeopt_suite= gaugeopt_suite)
+        profiler.add_time('%s: add badfit estimates' % estlbl, tref); tref = _time.time()
+    else:
+        _add_badfit_estimates(results, estlbl, badfit_options, optimizer, resource_alloc, printer)
+        profiler.add_time('%s: add badfit estimates' % estlbl, tref); tref = _time.time()
 
     #Add recorded info (even robust-related info) to the *base*
     #   estimate label's "stdout" meta information
@@ -1876,7 +1879,8 @@ def _add_gauge_opt(results, base_est_label, gaugeopt_suite, starting_model,
 
 
 def _add_badfit_estimates(results, base_estimate_label, badfit_options,
-                          optimizer=None, resource_alloc=None, verbosity=0):
+                          optimizer=None, resource_alloc=None, verbosity=0,
+                          gaugeopt_suite=None):
     """
     Add any and all "bad fit" estimates to `results`.
 
@@ -1900,7 +1904,14 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
 
     verbosity : int, optional
         Level of detail printed to stdout.
-
+    
+    gaugeopt_suite : GSTGaugeOptSuite, optional (default None)
+        Certain badfit actions can rely on gauge optimized estimates.
+        The main example currently is the 1-D wildcard models, which
+        can be based on gauge-variant functions such as the diamond distance.
+        When gauge optimization is applied this will ensure the gauge optimized
+        models used are consistent in the wildcard model and the parent estimates.
+        
     Returns
     -------
     None
@@ -1970,14 +1981,27 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
             if base_estimate_label != 'Target':
                 try:
                     budget = _compute_wildcard_budget_1d_model(base_estimate, objfn_cache, mdc_objfn, parameters,
-                                                               badfit_options, printer - 1)
+                                                               badfit_options, printer - 1, gaugeopt_suite)
+                    
+                    #if gaugeopt_labels is None then budget with be a PrimitiveOpsSingleScaleWildcardBudget
+                    #if it was non-empty though then we'll instead have budge as a dictionary with keys
+                    #corresponding to the elements of gaugeopt_labels. In this case let's  make
+                    #base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] a dictionary of
+                    #the serialized PrimitiveOpsSingleScaleWildcardBudget elements
+                    if gaugeopt_suite is not None:
+                        gaugeopt_labels = gaugeopt_suite.gaugeopt_suite_names
+                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = {lbl: budget[lbl].to_nice_serialization() for lbl in gaugeopt_labels} 
+                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] \
+                            = None
 
-                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = budget.to_nice_serialization()
-                    base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] \
-                        = None
+                        base_estimate.extra_parameters["unmodeled_error"] = {lbl: budget[lbl].to_nice_serialization() for lbl in gaugeopt_labels}
+                        base_estimate.extra_parameters["unmodeled_active_constraints"] = None
+                    else:
+                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = budget.to_nice_serialization() 
+                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] = None
 
-                    base_estimate.extra_parameters["unmodeled_error"] = budget.to_nice_serialization()
-                    base_estimate.extra_parameters["unmodeled_active_constraints"] = None
+                        base_estimate.extra_parameters["unmodeled_error"] = budget.to_nice_serialization()
+                        base_estimate.extra_parameters["unmodeled_active_constraints"] = None
                 except NotImplementedError as e:
                     printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
                     new_params['unmodeled_error'] = None
@@ -2025,7 +2049,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                     gauge_opt_params.copy(), go_gs_final, gokey, comm, printer - 1)
 
 
-def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, parameters, badfit_options, verbosity):
+def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, parameters, badfit_options, verbosity, gaugeopt_suite=None):
     """
     Create a wildcard budget for a model estimate. This version of the function produces a wildcard estimate
     using the model introduced by Tim and Stefan in the RCSGST paper.
@@ -2058,6 +2082,9 @@ def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, paramete
 
     verbosity : int, optional
         Level of detail printed to stdout.
+    
+    gaugeopt_suite : GSTGaugeOptSuite, optional (default None)
+        The 1-D wildcard models can be based on gauge-variant functions such as the diamond distance. When gauge optimization is applied this will ensure the gauge optimized models used are consistent in the wildcard model and the parent estimates.
 
     Returns
     -------
@@ -2086,45 +2113,76 @@ def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, paramete
     two_dlogl_threshold = _chi2.ppf(1 - percentile, max(ds_dof - nparams, 1))
     redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
 
-    ref, reference_name = _compute_1d_reference_values_and_name(estimate, badfit_options)
-    primitive_ops = list(ref.keys())
-    wcm = _wild.PrimitiveOpsSingleScaleWildcardBudget(primitive_ops, [ref[k] for k in primitive_ops],
+    ref, reference_name = _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_suite)
+    
+    if gaugeopt_suite is None: 
+        gaugeopt_labels = None
+        primitive_ops = list(ref.keys())
+    else:
+        gaugeopt_labels= gaugeopt_suite.gaugeopt_suite_names
+        primitive_ops = list(ref[list(gaugeopt_labels)[0]].keys())
+    
+    if gaugeopt_labels is None:
+        wcm = _wild.PrimitiveOpsSingleScaleWildcardBudget(primitive_ops, [ref[k] for k in primitive_ops],
                                                       reference_name=reference_name)
-    _opt.wildcardopt.optimize_wildcard_bisect_alpha(wcm, mdc_objfn, two_dlogl_threshold, redbox_threshold, printer,
+        _opt.wildcardopt.optimize_wildcard_bisect_alpha(wcm, mdc_objfn, two_dlogl_threshold, redbox_threshold, printer,
+                                                guess=0.1, tol=1e-3)  # results in optimized wcm
+    else:
+        wcm = {lbl:_wild.PrimitiveOpsSingleScaleWildcardBudget(primitive_ops, [ref[lbl][k] for k in primitive_ops],
+                                                      reference_name=reference_name) for lbl in gaugeopt_labels}
+        for budget_to_optimize in wcm.values():
+            _opt.wildcardopt.optimize_wildcard_bisect_alpha(budget_to_optimize, mdc_objfn, two_dlogl_threshold, redbox_threshold, printer,
                                                     guess=0.1, tol=1e-3)  # results in optimized wcm
+
     return wcm
 
 
-def _compute_1d_reference_values_and_name(estimate, badfit_options):
-    final_model = estimate.models['final iteration estimate']
-    target_model = estimate.models['target']
-    gaugeopt_model = estimate.models['stdgaugeopt'].copy() if 'stdgaugeopt' in estimate.models \
-        else _alg.gaugeopt_to_target(final_model, target_model)  # HACK!!! see below
-    # The above gaugeopt_to_target call may not work correctly, since it blindly uses the
-    # default gauge opt parameters (e.g. the final model may need to be converted to TP
-    # before gauge optimizing it).  Ideally we would plumb down from _add_gaugeopt_and_badfit
-    # the name of a gauge-optimized model if one exists, and if one doesn't maybe we just used
-    # the 'final iteration estimate'?  For now, just use 'stdgaugeopt' if it exists as a way of
-    # avoiding a gaugeopt failure here.
-
+def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_suite=None):
+    '''
+    DOCSTRING: TODO
+    '''
     if badfit_options.wildcard1d_reference == 'diamond distance':
-        dd = {}
-        for key, op in gaugeopt_model.operations.items():
-            dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
-            if dd[key] < 0:  # indicates that diamonddist failed (cvxpy failure)
-                _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
-                                " Falling back to trace distance.") % str(key))
-                dd[key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
+        if gaugeopt_suite is None:
+            final_model = estimate.models['final iteration estimate']
+            target_model = estimate.models['target']
+            gaugeopt_model = _alg.gaugeopt_to_target(final_model, target_model)
+            dd = {}
+            for key, op in gaugeopt_model.operations.items():
+                dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+                if dd[key] < 0:  # indicates that diamonddist failed (cvxpy failure)
+                    _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
+                                    " Falling back to trace distance.") % str(key))
+                    dd[key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
 
-        spamdd = {}
-        for key, op in gaugeopt_model.preps.items():
-            spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), 'pp'),
-                                           _tools.vec_to_stdmx(target_model.preps[key].to_dense(), 'pp'))
+            spamdd = {}
+            for key, op in gaugeopt_model.preps.items():
+                spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), 'pp'),
+                                               _tools.vec_to_stdmx(target_model.preps[key].to_dense(), 'pp'))
 
-        for key in gaugeopt_model.povms.keys():
-            spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
+            for key in gaugeopt_model.povms.keys():
+                spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
 
-        dd['SPAM'] = sum(spamdd.values())
+            dd['SPAM'] = sum(spamdd.values())
+
+        else:
+            #pull the target model from the gaugeopt suite. The GSTGaugeOptSuite doesn't currently
+            #support multiple targets, so this is safe for now.
+            target_model = gaugeopt_suite.gaugeopt_target
+            gaugeopt_models = [estimate.models[lbl] for lbl in gaugeopt_suite.gaugeopt_suite_names]
+            dd = {lbl: {} for lbl in gaugeopt_suite.gaugeopt_suite_names}
+            for gaugeopt_model, lbl in zip(gaugeopt_models, gaugeopt_suite.gaugeopt_suite_names):
+                for key, op in gaugeopt_model.operations.items():
+                    dd[lbl][key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+
+            spamdd = {}
+            for key, op in gaugeopt_model.preps.items():
+                spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), 'pp'),
+                                               _tools.vec_to_stdmx(target_model.preps[key].to_dense(), 'pp'))
+
+            for key in gaugeopt_model.povms.keys():
+                spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
+
+            dd[lbl]['SPAM'] = sum(spamdd.values())
         return dd, 'diamond distance'
     else:
         raise ValueError("Invalid wildcard1d_reference value (%s) in bad-fit options!"
