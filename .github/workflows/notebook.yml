@@ -1,13 +1,9 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: Build and run test extras
+name: Build and run notebook regression
 
 on:
-  push:
-    branches: [ "beta", "master" ]
-  #pull_requests
-  #  branches: [ "master", "develop", "beta" ]
   # Allow running manually from Actions tab
   workflow_dispatch:
 
@@ -15,7 +11,7 @@ env:
   SKIP_DEAP: 1
 
 jobs:
-  test_extras: # On stable branches, run extended tests
+  notebook_regression: # On stable branches, run extended tests
 
     runs-on: ${{ matrix.os }}
     strategy:
@@ -50,23 +46,6 @@ jobs:
         # but still compile Cython extensions
         python -m pip install -e .[testing]
         python setup.py build_ext --inplace
-    - name: Run test_packages Ubuntu
-      if: ${{matrix.os == 'ubuntu-20.04'}}
-      run: |
-        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --ignore=test/test_packages/mpi --ignore=test/test_packages/mpi.old --ignore=test/test_packages/notebooks test/test_packages
-    - name: Run test_packages Windows
-      if: ${{matrix.os == 'windows-2019'}}
-      run: |
-        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --ignore=test/test_packages/mpi --ignore=test/test_packages/mpi.old --ignore=test/test_packages/notebooks test/test_packages
-    - name: Run test_packages MacOS
-      if: ${{matrix.os == 'macos-11'}}
-
-      run: |
-        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --ignore=test/test_packages/mpi --ignore=test/test_packages/mpi.old --ignore=test/test_packages/notebooks test/test_packages
-        
     - name: Run notebook regression ubuntu
       if: ${{matrix.os == 'ubuntu-20.04'}}
       run: |
