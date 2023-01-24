@@ -30,7 +30,15 @@ test/output/pylint/*
 test/output/individual_coverage/*/*
 test/test_packages/cmp_chk_files/Fake_Dataset_none.txt.cache
 **.noseids
-**tutorial_files
+
+# Tutorial Notebook Unneeded Files #
+####################################
+jupyter_notebooks/Tutorials/tutorial_files/modeltest_report
+jupyter_notebooks/Tutorials/tutorial_files/gettingStartedReport
+#jupyter_notebooks/Examples/example_files/*.pkl
+#jupyter_notebooks/Examples/example_files/*.json
+
+
 
 # Compiled source #
 ###################
