@@ -78,7 +78,9 @@ extras = {
         'seaborn',
         'ply',
         'qibo<=0.1.7',
-        'cirq'
+        'cirq',
+        'notebook',
+        'ipython'
     ]
 }
 
