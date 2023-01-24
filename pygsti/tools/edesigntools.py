@@ -12,7 +12,6 @@ Tools for working with ExperimentDesigns
 
 import numpy as _np
 
-
 def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_1Q=None,
                                         gate_time_2Q=None, measure_reset_time=0.0,
                                         interbatch_latency=0.0, total_shots_per_circuit=1000,
@@ -331,3 +330,35 @@ def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, ter
         prev_L = L
 
     return fisher_information_by_L
+
+def pad_edesign_with_idle_lines(edesign, line_labels):
+    """Utility to explicitly pad out ExperimentDesigns with idle lines.
+
+    Parameters
+    ----------
+    edesign: ExperimentDesign
+        The edesign to be padded.
+
+    line_labels: tuple of int or str
+        Full line labels for the padded edesign.
+
+    Returns
+    -------
+    ExperimentDesign
+        An edesign where all circuits have been padded out with missing idle lines
+    """
+    from pygsti.protocols import CombinedExperimentDesign as _CombinedDesign
+    from pygsti.protocols import SimultaneousExperimentDesign as _SimulDesign
+
+    if set(edesign.qubit_labels) == set(line_labels):
+        return edesign
+    
+    if isinstance(edesign, _CombinedDesign):
+        new_designs = {}
+        for subkey, subdesign in edesign.items():
+            new_designs[subkey] = pad_edesign_with_idle_lines(subdesign, line_labels)
+        
+        return _CombinedDesign(new_designs, qubit_labels=line_labels)
+
+    # SimultaneousDesign with single design + full qubit labels tensors out the circuits with idle lines
+    return _SimulDesign([edesign], qubit_labels=line_labels)
