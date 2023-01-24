@@ -10,13 +10,10 @@
 *.pyd
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
-jupyter_notebooks/Tutorials/tutorial_files
 jupyter_notebooks/**/offline
-jupyter_notebooks/Examples/example_files
 test/test_packages/offline
 hooks/etc/permissions.yml
 *comm_output*.txt
-**tutorial_files
 *.lprof
 *.cache
 /.eggs/
