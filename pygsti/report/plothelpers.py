@@ -156,7 +156,13 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
                for x in gss.used_xs] for y in gss.used_ys]
     #Note: subMxs[y-index][x-index] is proper usage
     return subMxs
+    
+#define a modified version that is meant for working with CircuitList objects of lists of them.
+#@smart_cached
+def _compute_sub_mxs_circuit_list(circuit_lists, model, sub_mx_creation_fn, dataset=None, sub_mx_creation_fn_extra_arg=None):
+    subMxs = [sub_mx_creation_fn(circuit_list, sub_mx_creation_fn_extra_arg) for circuit_list in circuit_lists]
 
+    return subMxs
 
 @smart_cached
 def dscompare_llr_matrices(gsplaq, dscomparator):
