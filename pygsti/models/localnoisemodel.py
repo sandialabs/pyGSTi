@@ -397,6 +397,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 class _SimpleCompLayerRules(_LayerRules):
 
     def __init__(self, qubit_labels, implicit_idle_mode, singleq_idle_layer_labels, global_idle_layer_label):
+        super().__init__()
         self.implicit_idle_mode = implicit_idle_mode  # how to handle implied idles ("blanks") in circuits
         self.qubit_labels = qubit_labels
         self._use_global_idle = False
