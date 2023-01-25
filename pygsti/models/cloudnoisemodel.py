@@ -413,6 +413,7 @@ class CloudNoiseLayerRules(_LayerRules):
 
     def __init__(self, errcomp_type, qubit_labels, implicit_idle_mode, singleq_idle_layer_labels,
                  implied_global_idle_label):
+        super().__init__()
         self.qubit_labels = qubit_labels
         self.errcomp_type = errcomp_type
         self.implied_global_idle_label = implied_global_idle_label
