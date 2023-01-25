@@ -31,7 +31,7 @@ jobs:
         #download chp source code
         curl -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c https://www.scottaaronson.com/chp/chp.c
         #compile chp
-        gcc -o chp ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c
+        gcc -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c 
         #check the contents of the directory to make sure that the compiled executable is present
         ls /home/runner/work/pyGSTi/pyGSTi/jupyter_notebooks/Tutorials/algorithms/advanced/
     - name: Set up installation environment (MacOS)
@@ -41,7 +41,7 @@ jobs:
         #download chp source code
         curl -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c https://www.scottaaronson.com/chp/chp.c
         #compile chp source code
-        gcc -o chp ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c
+        gcc -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c 
         #check the contents of the directory to make sure that the compiled executable is present
         ls /home/runner/work/pyGSTi/pyGSTi/jupyter_notebooks/Tutorials/algorithms/advanced/
     - name: Set up Python ${{ matrix.python-version }}
