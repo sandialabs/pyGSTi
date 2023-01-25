@@ -28,10 +28,18 @@ jobs:
       if: ${{matrix.os == 'ubuntu-20.04' || matrix.os == 'windows-2019'}}
       run: |
         ./.github/ci-scripts/before_install.sh
+        #download chp source code
+        curl -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c https://www.scottaaronson.com/chp/chp.c
+        #compile chp
+        gcc ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c
     - name: Set up installation environment (MacOS)
       if: ${{matrix.os == 'macos-11'}}
       run: |
         ./.github/ci-scripts/before_install_macos.sh
+        #download chp source code
+        curl -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c https://www.scottaaronson.com/chp/chp.c
+        #compile chp source code
+        gcc ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
