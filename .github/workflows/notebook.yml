@@ -32,7 +32,6 @@ jobs:
         curl -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c https://www.scottaaronson.com/chp/chp.c
         #compile chp
         gcc -o chp ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c
-        echo ~
     - name: Set up installation environment (MacOS)
       if: ${{matrix.os == 'macos-11'}}
       run: |
@@ -41,7 +40,6 @@ jobs:
         curl -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c https://www.scottaaronson.com/chp/chp.c
         #compile chp source code
         gcc -o chp ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c
-        echo ~
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
