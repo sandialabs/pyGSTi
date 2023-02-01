@@ -23,7 +23,7 @@ from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _Model
 from pygsti.report import colormaps as _colormaps
 from pygsti.report import plothelpers as _ph
 from pygsti.report.figure import ReportFigure
-from pygsti.report.workspace import WorkspacePlot
+from pygsti.report.workspace import WorkspacePlot, NotApplicable
 from pygsti import algorithms as _alg
 from pygsti import baseobjs as _baseobjs
 from pygsti.objectivefns import objectivefns as _objfns
@@ -1757,7 +1757,7 @@ class ColorBoxPlot(WorkspacePlot):
                     mx_fn = _mx_fn_from_elements  # use a *global* function so cache can tell it's the same
                 elif isinstance(circuits, _CircuitList):
                     mx_fn = _mx_fn_from_elements_circuit_list
-                elif isinstance(circuit_struct, list) and all([isinstance(el, _CircuitList) for el in circuit_struct]):
+                elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
                     mx_fn = _mx_fn_from_elements_circuit_list
                 
                 extra_arg = (terms, objfn.layout, "sum")
@@ -1774,7 +1774,7 @@ class ColorBoxPlot(WorkspacePlot):
                     addl_hover_info_fns['p'] = (_mx_fn_from_elements_circuit_list, (objfn.probs, objfn.layout, "%.5g"))
                     addl_hover_info_fns['f'] = (_mx_fn_from_elements_circuit_list, (objfn.freqs, objfn.layout, "%.5g"))
                     addl_hover_info_fns['counts'] = (_mx_fn_from_elements_circuit_list, (objfn.counts, objfn.layout, "%d"))
-                elif isinstance(circuit_struct, list) and all([isinstance(el, _CircuitList) for el in circuit_struct]):
+                elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
                     addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes_circuit_list, objfn.layout)
                     addl_hover_info_fns['p'] = (_mx_fn_from_elements_circuit_list, (objfn.probs, objfn.layout, "%.5g"))
                     addl_hover_info_fns['f'] = (_mx_fn_from_elements_circuit_list, (objfn.freqs, objfn.layout, "%.5g"))
@@ -1930,7 +1930,7 @@ class ColorBoxPlot(WorkspacePlot):
                                                      addl_mx_fn, dataset, addl_extra_arg)
                     addl_hover_info[lbl] = addl_subMxs
 
-            elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuit_struct]):
+            elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
                 circuit_struct= circuits
                 subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model, mx_fn, dataset, extra_arg)
                 
@@ -1989,9 +1989,17 @@ class ColorBoxPlot(WorkspacePlot):
 
             elif colormapType in ("seq", "revseq", "blueseq", "redseq"):
                 if len(subMxs) > 0:
-                    max_abs = max([_np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
-                                   for ix in range(len(circuit_struct.used_xs))
-                                   for iy in range(len(circuit_struct.used_ys))])
+                    if isinstance(circuit_struct, _PlaquetteGridCircuitStructure):
+                        max_abs = max([_np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
+                                       for ix in range(len(circuit_struct.used_xs))
+                                       for iy in range(len(circuit_struct.used_ys))])
+                    #circuit_struct logic above should mean that we always have at least a length 1 list of
+                    #CircuitList objects if not a plaquette circuit structure by this point.
+                    elif isinstance(circuit_struct, list) and all([isinstance(el, _CircuitList) for el in circuit_struct]):
+                        max_abs = max([_np.max(_np.abs(_np.nan_to_num(subMxs[i][j])))
+                                       for i, ckt_list in enumerate(circuit_struct) 
+                                       for j in range(len(ckt_list))])
+                    
                 else: max_abs = 0
                 if max_abs == 0: max_abs = 1e-6  # pick a nonzero value if all entries are zero or nan
                 if colormapType == "seq": color = "whiteToBlack"
@@ -2004,13 +2012,13 @@ class ColorBoxPlot(WorkspacePlot):
 
             if typ == "boxes":
                 if not isinstance(circuit_struct, _PlaquetteGridCircuitStructure):
-                    #for circuit lists objects this should result in nothing getting plotted (which is the current behavior).
-                    circuit_struct= _PlaquetteGridCircuitStructure.cast(circuits)
-                    newfig = _circuit_color_boxplot(circuit_struct, subMxs, colormap,
-                                                colorbar, box_labels, prec,
-                                                hover_info, sum_up, invert,
-                                                scale, bgcolor, addl_hover_info)
+                    #if not a plaquette structure then maybe try returning a NotApplicable object
+                    #for the figure?
+                    return NotApplicable(self.ws)
                 else:
+                    #I am expecting this cast won't do anything at the moment, but
+                    #maybe down the line it will.
+                    circuit_struct= _PlaquetteGridCircuitStructure.cast(circuits)
                     newfig = _circuit_color_boxplot(circuit_struct, subMxs, colormap,
                                                 colorbar, box_labels, prec,
                                                 hover_info, sum_up, invert,
