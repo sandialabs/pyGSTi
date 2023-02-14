@@ -333,10 +333,11 @@ class LocalNoiseModel(_ImplicitOpModel):
     def _from_nice_serialization(cls, state):
         state_space = _statespace.StateSpace.from_nice_serialization(state['state_space'])
         #basis = _from_nice_serialization(state['basis'])
-        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
         simulator = _FSim.from_nice_serialization(state['simulator'])
         layer_rules = _LayerRules.from_nice_serialization(state['layer_rules'])
         processor_spec = _ProcessorSpec.from_nice_serialization(state['processor_spec'])
+        param_labels = state.get('parameter_labels', None)
+        param_bounds = state.get('parameter_bounds', None)
 
         # __init__ does too much, so we need to create an alternate __init__ function here:
         mdl = cls.__new__(cls)
@@ -344,6 +345,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         _ImplicitOpModel.__init__(mdl, state_space, layer_rules, 'pp',
                                   simulator=simulator, evotype=state['evotype'])
 
+        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'], mdl)
         flags = {'auto_embed': False, 'match_parent_statespace': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
         mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('prep_blks|layers', []))
@@ -357,6 +359,14 @@ class LocalNoiseModel(_ImplicitOpModel):
         mdl.factories['gates'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|gates', []))
         mdl.factories['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('factories|layers', []))
         mdl._clean_paramvec()
+
+        Np = len(mdl._paramlbls)  # _clean_paramvec sets up ._paramlbls so its length == # of params
+        if param_labels and len(param_labels) == Np:
+            mdl._paramlbls[:] = param_labels
+        if param_bounds is not None:
+            param_bounds = cls._decodemx(param_bounds)
+            if param_bounds.shape == (Np, 2):
+                mdl._param_bounds
 
         return mdl
 

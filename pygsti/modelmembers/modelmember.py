@@ -950,7 +950,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         raise NotImplementedError("Derived classes should implement this!")
 
     @classmethod
-    def from_memoized_dict(cls, mm_dict, serial_memo):
+    def from_memoized_dict(cls, mm_dict, serial_memo, parent_model):
         """Deserialize a ModelMember object and relink submembers from a memo.
 
         Parameters
@@ -966,18 +966,21 @@ class ModelMember(ModelChild, _NicelySerializable):
             This is similar but not the same as mmg_memo in to_memoized_dict(),
             as we do not need to build a ModelMemberGraph for deserialization.
 
+        parent_model: Model
+            The parent model that being build that will eventually hold this ModelMember object.
+            It's important to set this so that the Model considers the set gpindices *valid* and
+            doesn't just wipe them out when cleaning its parameter vector.
+
         Returns
         -------
         ModelMember
             An initialized object
         """
         cls._check_memoized_dict(mm_dict, serial_memo)
-
         obj = cls._from_memoized_dict(mm_dict, serial_memo)
 
         my_gpindices = _slct.list_to_slice(cls._decodemx(mm_dict['model_parameter_indices']), array_ok=True)
-        obj._set_only_my_gpindices(my_gpindices, parent=None)  # parent will get re-linked later (by Model)
-
+        obj._set_only_my_gpindices(my_gpindices, parent=parent_model)
         obj._submember_rpindices = tuple([_slct.list_to_slice(inds)
                                           for inds in mm_dict['relative_submember_parameter_indices']])
         if mm_dict['parameter_labels'] is not None:
