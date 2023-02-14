@@ -2693,6 +2693,31 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         _MongoSerializable.__init__(self)
         _TreeNode.__init__(self, self.data.edesign._dirs, children)
 
+    def add_results(self, for_protocol_name, results):
+        """
+        Add a new results object to this results directory node.
+
+        The added results object must share this result directory's data, i.e., its
+        `.data` attribute must match the `.data` of this directory.  This requirement
+        is usually met because the results have been created by running a protocol on
+        this directory's `.data`.  The results object is stored in the
+        `.for_protocol[for_protocol_name]` attribute of this directory.
+
+        Parameters
+        ----------
+        for_protocol_name : str
+            Name of the protocol to be added.
+
+        results : ProtocolResults
+            The results object to be added
+
+        Returns
+        -------
+        None
+        """
+        assert results.data is self.data, "Added result.data must be result directory's .data!"
+        self.for_protocol[for_protocol_name] = results
+
     def _create_childval(self, key):  # (this is how children are created on-demand)
         """ Create the value for `key` on demand. """
         if self.data.edesign._loaded_from and key in self._dirs:
