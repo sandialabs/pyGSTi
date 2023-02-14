@@ -367,14 +367,16 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                     wildcard = _wildcardbudget.WildcardBudget.from_nice_serialization(wildcard)
                 else:
                     wildcard = {lbl:_wildcardbudget.WildcardBudget.from_nice_serialization(budget) for lbl,budget in wildcard.items()}
-                    
+
             for j, gokey in enumerate(gauge_opt_labels):
-                switchBd.wildcard_budget_optional[d, i, j] = wildcard
+                switchBd.wildcard_budget_optional[d, i, j] = None
                 if wildcard is not None:
                     if isinstance(wildcard, _wildcardbudget.WildcardBudget):
                         switchBd.wildcard_budget[d, i, j] = wildcard
+                        switchBd.wildcard_budget_optional[d, i, j] = wildcard
                     elif isinstance(wildcard, dict):
                         switchBd.wildcard_budget[d, i, j] = wildcard[gokey]
+                        switchBd.wildcard_budget_optional[d, i, j] = wildcard[gokey]
                 else:
                     switchBd.wildcard_budget[d, i, j] = NA
 
@@ -384,6 +386,8 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 switchBd.mdl_gaugeinv_ep[d, i] = _tools.project_to_target_eigenspace(est.models[GIRepLbl],
                                                                                      est.models['target'])
             except AttributeError:  # Implicit models don't support everything, like set_all_parameterizations
+                switchBd.mdl_gaugeinv_ep[d, i] = None
+            except _np.linalg.LinAlgError:  # Failure to compute a best-case gauge transform can happen w/reduced models
                 switchBd.mdl_gaugeinv_ep[d, i] = None
             except (ValueError, AssertionError):  # if target is badly off, e.g. an imaginary part assertion
                 switchBd.mdl_gaugeinv_ep[d, i] = None
