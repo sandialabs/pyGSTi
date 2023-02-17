@@ -470,13 +470,13 @@ class GSTInitialModel(_NicelySerializable):
         # Note: should compute on rank 0 and distribute?
         starting_pt = self.starting_point
         if starting_pt == "User-supplied-Model":
-            mdl_start = self.model
+            mdl_start = self.model.copy()
 
         elif starting_pt in ("LGST", "LGST-if-possible"):
             #lgst_advanced = advancedOptions.copy(); lgst_advanced.update({'estimateLabel': "LGST", 'onBadFit': []})
 
             if self.model is not None:
-                mdl_start = self.model
+                mdl_start = self.model.copy()
             elif self.target_model is not None:
                 mdl_start = self.target_model.copy()
             else:
@@ -507,7 +507,7 @@ class GSTInitialModel(_NicelySerializable):
                 #Fall back to target or custom model
                 if self.model is not None:
                     starting_pt = "User-supplied-Model"
-                    mdl_start = self.model
+                    mdl_start = self.model.copy()
                 else:
                     starting_pt = "target"
                     # mdl_start = mdl_start (either the target model or constructed from edesign pspec)
