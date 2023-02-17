@@ -2621,7 +2621,7 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
 
     @classmethod
     def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, parent=None, name=None,
-                                         quick_load=False, preloaded_data=None):
+                                         quick_load=False, preloaded_data=None, read_all_results_for_data=False):
         data_id = doc['protocoldata_id']
         data = parent.data[name] if (parent and name) else \
             (preloaded_data if preloaded_data is not None else
@@ -2631,9 +2631,38 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         #Load results with same protocoldata_id as us (we don't actually use doc['result_ids'])
         results = {}
         result_collection = ProtocolResults.collection_name  # could store this in db (?)
-        for res_doc in mongodb[result_collection].find({'protocoldata_id': data_id}):
-            results[res_doc['name']] = ProtocolResults.from_mongodb_doc(mongodb, result_collection, res_doc,
-                                                                        preloaded_data=data, quick_load=quick_load)
+
+        #First pass - results that have their IDs stored directly
+        loaded_ids = set()
+        for result_name, result_id in doc['result_ids'].items():
+            try:
+                res = ProtocolResults.from_mongodb(mongodb, result_id, preloaded_data=data, quick_load=quick_load)
+                loaded_ids.add(result_id)
+            except Exception as e:
+                print("Failed to load results ", result_name, ' (so skipping):\n', str(e))
+            else:
+                results[result_name] = res
+
+        if read_all_results_for_data:
+            #Second pass - results with our protocol data id -- but don't let these overwrite existing results!
+            for res_doc in mongodb[result_collection].find({'protocoldata_id': data_id}):
+                if res_doc['_id'] in loaded_ids:
+                    continue  # already loaded
+
+                try:
+                    res = ProtocolResults.from_mongodb_doc(mongodb, result_collection, res_doc,
+                                                           preloaded_data=data, quick_load=quick_load)
+                except Exception as e:
+                    print("Failed to load results ", str(res_doc['name']), ':\n', str(e))
+                else:
+                    tag = 2
+                    nm = res_doc['name']
+                    while nm in results:
+                        nm = res_doc['name'] + ("-%d" % tag)
+                        tag += 1
+                    if nm != res_doc['name']:
+                        print("Note: result for key '%s' already exists -> storing as '%s'" % (res_doc['name'], nm))
+                    results[nm] = res
 
         ret = cls(data, results, {})  # don't initialize children now
         #Note: we never call the below update as it currently doesn't have anything in it.
@@ -2641,7 +2670,8 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         #                                                      ignore_meta=('_id', 'type', 'children_ids',
         #                                                                   'protocoldata_id', 'result_ids'),
         #                                                      quick_load=quick_load))
-        ret._init_children_from_mongodb_doc(doc, mongodb, preloaded_data=data, quick_load=quick_load)
+        ret._init_children_from_mongodb_doc(doc, mongodb, preloaded_data=data, quick_load=quick_load,
+                                            read_all_results_for_data=read_all_results_for_data)
         return ret
 
     def __init__(self, data, protocol_results=None, children=None):
