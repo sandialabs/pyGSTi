@@ -375,8 +375,8 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                         switchBd.wildcard_budget[d, i, j] = wildcard
                         switchBd.wildcard_budget_optional[d, i, j] = wildcard
                     elif isinstance(wildcard, dict):
-                        switchBd.wildcard_budget[d, i, j] = wildcard[gokey]
-                        switchBd.wildcard_budget_optional[d, i, j] = wildcard[gokey]
+                        switchBd.wildcard_budget[d, i, j] = wildcard.get(gokey, NA)
+                        switchBd.wildcard_budget_optional[d, i, j] = wildcard.get(gokey, None)
                 else:
                     switchBd.wildcard_budget[d, i, j] = NA
 
