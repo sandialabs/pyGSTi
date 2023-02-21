@@ -35,6 +35,7 @@ from pygsti.circuits.circuitparser import parse_label as _parse_label
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
+from pygsti.tools import listtools as _lt
 from pygsti.processors.processorspec import ProcessorSpec as _ProcessorSpec, QubitProcessorSpec as _QubitProcessorSpec
 
 
@@ -362,7 +363,7 @@ class LocalNoiseModel(_ImplicitOpModel):
 
         Np = len(mdl._paramlbls)  # _clean_paramvec sets up ._paramlbls so its length == # of params
         if param_labels and len(param_labels) == Np:
-            mdl._paramlbls[:] = param_labels
+            mdl._paramlbls[:] = [_lt.lists_to_tuples(lbl) for lbl in param_labels]
         if param_bounds is not None:
             param_bounds = cls._decodemx(param_bounds)
             if param_bounds.shape == (Np, 2):

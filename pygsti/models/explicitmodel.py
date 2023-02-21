@@ -42,6 +42,7 @@ from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
 from pygsti.tools import slicetools as _slct
+from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
@@ -1624,7 +1625,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         Np = len(mdl._paramlbls)  # _clean_paramvec sets up ._paramlbls so its length == # of params
         if param_labels and len(param_labels) == Np:
-            mdl._paramlbls[:] = param_labels
+            mdl._paramlbls[:] = [_lt.lists_to_tuples(lbl) for lbl in param_labels]
         if param_bounds is not None:
             param_bounds = cls._decodemx(param_bounds)
             if param_bounds.shape == (Np, 2):

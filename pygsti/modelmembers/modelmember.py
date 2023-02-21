@@ -984,8 +984,10 @@ class ModelMember(ModelChild, _NicelySerializable):
         obj._submember_rpindices = tuple([_slct.list_to_slice(inds)
                                           for inds in mm_dict['relative_submember_parameter_indices']])
         if mm_dict['parameter_labels'] is not None:
+            # 2-step init because otherwise we end up with a 2D array
             obj._paramlbls = _np.empty(len(mm_dict['parameter_labels']), dtype=object)
-            obj._paramlbls[:] = mm_dict['parameter_labels']  # 2-step init because otherwise we end up with a 2D array
+            obj._paramlbls[:] = [(tuple(lbl) if isinstance(lbl, list) else lbl)
+                                 for lbl in mm_dict['parameter_labels']]
         else:
             obj._paramlbls = None
         obj._param_bounds = cls._decodemx(mm_dict['parameter_bounds'])
