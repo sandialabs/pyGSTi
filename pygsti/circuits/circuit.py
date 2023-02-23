@@ -1806,7 +1806,7 @@ class Circuit(object):
             c = chr(ord(c) + 1)
         return cls(tuple([translateDict[cc] for cc in python_string]))
 
-    def serialize(self):
+    def serialize(self, expand_subcircuits=False):
         """
         Serialize the parallel gate operations of this Circuit.
 
@@ -1815,16 +1815,26 @@ class Circuit(object):
         elementary gate operation into its own layer.  Ordering is dictated by
         the ordering of the compound layer labels.
 
+        Parameters
+        ----------
+        expand_subcircuits : bool
+            Whether subcircuits should be expanded before performing the serialization.
+            If `False`, the circuit may contain :class:`CircuitLabel` layers.
+
         Returns
         -------
         Circuit
         """
+        if expand_subcircuits:
+            layertup = self.expand_subcircuits().layertup
+        else:
+            layertup = self.layertup
+
         serial_lbls = []
-        for lbl in self.layertup:
+        for lbl in layertup:
             if len(lbl.components) == 0:  # special case of an empty-layer label,
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
-            for c in lbl.components:
-                serial_lbls.append(c)
+            serial_lbls.extend(list(lbl.components) * lbl.reps)
         return Circuit._fastinit(tuple(serial_lbls), self.line_labels, editable=False, occurrence=self.occurrence)
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
