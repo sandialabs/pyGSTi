@@ -130,7 +130,9 @@ class GSTInitialModelTester(BaseCase):
         im = gst.GSTInitialModel(custom_model)
         mdl = im.retrieve_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, "User-supplied-Model")
-        self.assertTrue(mdl is custom_model)
+        self.assertArraysAlmostEqual(mdl.to_vector(), custom_model.to_vector())
+        #self.assertTrue(mdl is custom_model)  # No longer the case
+        # - see commit 72856fb23d5711e4b0a8e2373e02e4dd08e2ae46 -- now we copy the custom model
 
     def test_get_model_depolarized(self):
         #Depolarized start
