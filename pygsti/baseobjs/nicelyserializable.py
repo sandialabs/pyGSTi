@@ -161,7 +161,16 @@ class NicelySerializable(MongoSerializable):
         """
         state = self._to_nice_serialization()
         if self._dbcoordinates is not None and isinstance(state, dict):
-            state['dbcoordinates'] = (self._dbcoordinates[0], str(self._dbcoordinates[1]))  # ObjectId -> str
+            # HACK: the code below adds the special dbcoordinates attribute to `state` when we're serializing to
+            # something other than a MongoDB (which holds the dbcoordinates intrinsically in the document's
+            # location within the database and '_id' field).  The problem is that to_nice_serialization can't easily
+            # tell whether it's being called as part of a MongoDB serialization or not.  In the future we could plumb
+            # a flag or something else that determines this, but for now we add this fragile HACK that checks the
+            # caller names for 'add_mongodb_write_ops' (only in the call stack when we're serializing to MongoDB).
+            import inspect
+            outer_function_names = set([outer.function for outer in inspect.getouterframes(inspect.currentframe())])
+            if 'add_mongodb_write_ops' not in outer_function_names:
+                state['dbcoordinates'] = (self._dbcoordinates[0], str(self._dbcoordinates[1]))  # ObjectId -> str
             # Note: don't do this in _to_nice_serialization, which is also used to for mongodb
             #  methods, and we don't want dbcoordinates in DB documents
         return state
