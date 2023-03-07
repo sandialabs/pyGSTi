@@ -18,6 +18,8 @@ import scipy.sparse as _sps
 import warnings as _warnings
 from pygsti.baseobjs.mongoserializable import MongoSerializable
 
+class_location_changes = {}  # (module, class) mapping from OLD to NEW locations
+
 
 class NicelySerializable(MongoSerializable):
     """
@@ -312,8 +314,17 @@ class NicelySerializable(MongoSerializable):
     @classmethod
     def _state_class(cls, state, check_is_subclass=True):
         """ Returns the class specified by the given state dictionary"""
-        m = _importlib.import_module(state['module'])
-        c = getattr(m, state['class'])  # will raise AttributeError if class cannot be found
+        if (state['module'], state['class']) in class_location_changes:
+            state['module'], state['class'] = class_location_changes[state['module'], state['class']]
+        try:
+            m = _importlib.import_module(state['module'])
+            c = getattr(m, state['class'])  # will raise AttributeError if class cannot be found
+        except (ModuleNotFoundError, AttributeError) as e:
+            raise ImportError(("Class or module not found when instantiating a NicelySerializable"
+                               f" {state['module']}.{state['class']} object!  If this class has"
+                               " moved, consider adding (module, classname) mapping to"
+                               " pygsti.baseobjs.nicelyserializable.class_location_changes dict")) from e
+
         if check_is_subclass and not issubclass(c, cls):
             raise ValueError("Expected a subclass or instance of '%s' but state dict has '%s'!"
                              % (cls.__module__ + '.' + cls.__name__, state['module'] + '.' + state['class']))
