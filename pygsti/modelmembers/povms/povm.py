@@ -78,7 +78,7 @@ class POVM(_mm.ModelMember, _collections.OrderedDict):
         Initial values.  This should only be used internally in de-serialization.
     """
 
-    def __init__(self, state_space, evotype, rep=None, items=[]):
+    def __init__(self, state_space=None, evotype=None, rep=None, items=[]):
         self._readonly = False  # until init is done
         _collections.OrderedDict.__init__(self, items)
         _mm.ModelMember.__init__(self, state_space, evotype)
