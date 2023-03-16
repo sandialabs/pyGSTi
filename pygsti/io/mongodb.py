@@ -1019,3 +1019,41 @@ def remove_dict_from_mongodb(mongodb, collection_name, identifying_metadata, ses
     None
     """
     return mongodb[collection_name].delete_many(identifying_metadata, session=session)
+
+
+def create_mongodb_indices_for_pygsti_collections(mongodb):
+    """
+    Create, if not existing already, indices useful for speeding up pyGSTi MongoDB operations.
+
+    Indices are created as necessary within `pygsti_*` collections.  While
+    not necessary for database operations, these indices may dramatically speed
+    up the reading and writing of pygsti objects to/from a Mongo database.  You
+    only need to call this *once* per database, typically when the database is
+    first setup.
+
+    Parameters
+    ----------
+    mongodb : pymongo.database.Database
+        The MongoDB instance to create indices in.
+
+    Returns
+    -------
+    None
+    """
+    import pymongo as _pymongo
+
+    def create_unique_index(collection_name, index_name, keys):
+        ii = mongodb[collection_name].index_information()
+        if index_name in ii:
+            print("Index %s in %s collection already exists." % (index_name, collection_name))
+        else:
+            mongodb[collection_name].create_index(keys, name=index_name, unique=True)
+            print("Created index %s in %s collection." % (index_name, collection_name))
+
+    create_unique_index('pygsti_circuits', 'circuit_str', [('circuit_str', _pymongo.ASCENDING)])
+    create_unique_index('pygsti_datarows', 'parent_and_circuit', [('parent', _pymongo.ASCENDING),
+                                                                  ('circuit', _pymongo.ASCENDING)])
+    create_unique_index('pygsti_protocol_data_caches', 'parent_member_key',
+                        [('protocoldata_parent', _pymongo.ASCENDING),
+                         ('member', _pymongo.ASCENDING),
+                         ('key', _pymongo.ASCENDING)])

@@ -12,6 +12,8 @@ Defines the MongoSerializable class
 import importlib as _importlib
 import numpy as _np
 
+_indexinformation_cache = {}  # used to speedup mondodb index_information() queries
+
 
 class MongoSerializable(object):
     """
@@ -361,15 +363,19 @@ class WriteOpsByCollection(dict):
         if self.allowed_collection_names is None and collection_name not in self:
             self[collection_name] = []
 
+        existing_doc = None
+        tried_to_find_existing_doc = False
+
         #Get or create an id for the document to be inserted or replaced (or left as is)
         if isinstance(uid, dict):
             if '_id' in uid:
                 doc_id = uid['_id']
             else:
-                existing_doc = _find_one_doc(mongodb, collection_name, uid, ('_id',))
+                existing_doc = _find_one_doc(mongodb, collection_name, uid) #, ('_id',))  # entire doc so can use later
                 if existing_doc is None and check_local_ops:
                     existing_doc = self._find_one_local_doc(collection_name, uid)
                 doc_id = _ObjectId() if (existing_doc is None) else existing_doc['_id']
+                tried_to_find_existing_doc = True
         else:
             assert isinstance(uid, _ObjectId)
             doc_id = uid
@@ -381,7 +387,8 @@ class WriteOpsByCollection(dict):
             self[collection_name].append(ReplaceOne({'_id': doc_id}, doc, upsert=True))
             #mongodb[collection_name].replace_one(doc_id, doc, upsert=True)  # alt line for DEBUG
         else:
-            existing_doc = mongodb[collection_name].find_one(doc_id)
+            if not tried_to_find_existing_doc:  # then try now
+                existing_doc = mongodb[collection_name].find_one(doc_id)
             if existing_doc is None and check_local_ops:
                 existing_doc = self._find_one_local_doc(collection_name, doc_id)
                 if existing_doc is not None:
@@ -417,6 +424,7 @@ class WriteOpsByCollection(dict):
             self.special_ops.append({'type': 'GridFS_put',
                                      'collection_name': collection_name,
                                      'data': binary_data,
+                                     'overwrite_existing': overwrite_existing,
                                      'id': doc_id})
         return doc_id
 
@@ -442,7 +450,15 @@ class WriteOpsByCollection(dict):
             if op_info['type'] == 'GridFS_put':
                 import gridfs as _gridfs
                 fs = _gridfs.GridFS(mongodb, collection=op_info['collection_name'])
-                file_id = fs.put(op_info['data'], _id=op_info['id'])
+                try:
+                    file_id = fs.put(op_info['data'], _id=op_info['id'])
+                except _gridfs.errors.FileExists as e:
+                    if op_info['overwrite_existing']:
+                        fs.delete(op_info['id'])
+                        file_id = fs.put(op_info['data'], _id=op_info['id'])  # try again
+                    else:
+                        raise e
+
                 assert file_id == op_info['id']
             else:
                 raise ValueError("Invalid special op:" + str(op_info))
@@ -582,10 +598,24 @@ def recursive_compare_str(a, b, a_name='first obj', b_name='second obj', prefix=
 def _find_one_doc(db, collection_name, doc_id, projection=None, error_if_no_doc=False):
     if doc_id is not None and not isinstance(doc_id, dict):
         doc_id = {'_id': doc_id}
+
     if '_id' not in doc_id:  # otherwise can bypass since if _id is specified a doc must be unique
-        if db[collection_name].count_documents(doc_id, limit=2) > 1:
-            raise ValueError((f"Multiple records where identified by the given `doc_id` ({doc_id})."
-                              " `doc_id` must specify exactly one record."))
+        #Check to see if uid is a single lookup that corresponds to a *unique* index
+        doc_id_known_to_be_unique = False
+        doc_id_fields = set(doc_id.keys())
+
+        if (id(db), collection_name) not in _indexinformation_cache:  # cache index_information call for speed
+            _indexinformation_cache[id(db), collection_name] = db[collection_name].index_information()
+        for index_name, index_info in _indexinformation_cache[id(db), collection_name].items():
+            if index_info.get('unique', False) and doc_id_fields.issubset(set([k for k, d in index_info['key']])):
+                doc_id_known_to_be_unique = True
+                break
+        if not doc_id_known_to_be_unique:  # then check that this doc_id is indeed unique with a db call
+            # for DEBUG: print("UID without _id and not known unique: ", doc_id, " for ", collection_name)
+            if db[collection_name].count_documents(doc_id, limit=2) > 1:
+                raise ValueError((f"Multiple records where identified by the given `doc_id` ({doc_id})."
+                                  " `doc_id` must specify exactly one record."))
+
     single_doc = db[collection_name].find_one(doc_id, projection)
     if single_doc is None and error_if_no_doc:
         raise ValueError(f"Could not find document specified by {doc_id}!")
