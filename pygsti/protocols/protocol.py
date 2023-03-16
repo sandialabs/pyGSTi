@@ -2081,9 +2081,10 @@ class ProtocolData(_TreeNode, _MongoSerializable):
                     doc['dataset_collection_name'] = self.dataset.collection_name
 
         if self.cache:
-            _io.add_dict_to_mongodb_write_ops(self.cache, mongodb, self.CACHE_COLLECTION_NAME,
+            _io.add_dict_to_mongodb_write_ops(self.cache, write_ops, mongodb, self.CACHE_COLLECTION_NAME,
                                               {'member': 'cache',
-                                               'protocoldata_parent': doc_id})
+                                               'protocoldata_parent': doc_id}, overwrite_existing=overwrite_existing)
+            # Maybe always overwrite_existing should be True?
 
         self._add_children_write_ops_and_update_doc(doc, write_ops, mongodb,
                                                     overwrite_existing)  # writes sub-datas
@@ -2691,10 +2692,11 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
             The data from which *all* the Results objects in this
             ProtocolResultsDir are derived.
 
-        protocol_results : ProtocolResults, optional
-            An initial (single) results object to add.  The name of the
-            results object is used as its key within the `.for_protocol`
-            dictionary.  If None, then an empty results directory is created.
+        protocol_results : ProtocolResults or dict, optional
+            An initial dictionary of :class:`ProtocolResults` objects to add, or a single
+            results object. The name(s) of the results object(s) must be used as keys (and
+            will used as its key for a single results object).  This beccomes the created
+            object's `.for_protocol` dictionary.  If None, then an empty results directory is created.
 
         children : dict, optional
             A dictionary of the :class:`ProtocolResultsDir` objects that are
@@ -2707,7 +2709,12 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         ProtocolResultsDir
         """
         self.data = data  # edesign and data
-        self.for_protocol = protocol_results.copy() if protocol_results else {}
+        if isinstance(protocol_results, dict):
+            self.for_protocol = protocol_results.copy()
+        elif isinstance(protocol_results, ProtocolResults):
+            self.for_protocol = {protocol_results.name: protocol_results}
+        else:
+            self.for_protocol = {}
         assert(all([r.data is self.data for r in self.for_protocol.values()]))
 
         #self._children = children if (children is not None) else {}
