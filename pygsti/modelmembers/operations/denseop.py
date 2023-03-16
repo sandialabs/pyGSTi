@@ -421,7 +421,7 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
 
         evals, evecs = _np.linalg.eig(choi_mx)
         #assert(_np.allclose(evecs @ _np.diag(evals) @ (evecs.conjugate().T), choi_mx))
-        TOL = 1e-7
+        TOL = 1e-7  # consider lowering this tolerance as it leads to errors of this order in the Kraus decomp
         if any([ev <= -TOL for ev in evals]):
             raise ValueError("Cannot compute Kraus decomposition of non-positive-definite superoperator!")
         kraus_ops = [evecs[:, i].reshape(d, d) * _np.sqrt(ev) for i, ev in enumerate(evals) if abs(ev) > TOL]
