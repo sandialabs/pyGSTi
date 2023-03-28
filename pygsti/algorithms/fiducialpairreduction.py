@@ -31,7 +31,7 @@ from pygsti.tools import remove_duplicates as _remove_duplicates
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
-from pygsti.algorithms.germselection import construct_update_cache, minamide_style_inverse_trace, compact_EVD, compact_EVD_via_SVD
+from pygsti.algorithms.germselection import construct_update_cache, minamide_style_inverse_trace, compact_EVD, compact_EVD_via_SVD, germ_set_spanning_vectors
 from pygsti.algorithms import scoring as _scoring
 
 from pygsti.tools.matrixtools import print_mx
@@ -646,6 +646,9 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
 
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
     
+    #log the total number of parameters amplified overall.
+    total_num_amplified_parameters=0
+    
     printer.log("------  Per Germ (L=1) Fiducial Pair Reduction --------")
     with printer.progress_logging(1):
         for i, germ in enumerate(germs):
@@ -657,6 +660,8 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
             germMx = gsGerm.sim.product(germ)
             gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
+            total_num_amplified_parameters += gsGerm.num_params
+            
 
             printer.show_progress(i, len(germs),
                                   suffix='-- %s germ (%d params)' %
@@ -681,6 +686,8 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
                 print(err)
 
             pairListDict[germ] = candidate_solution_list  # add to final list of per-germ pairs
+            
+    printer.log('Total number of amplified parameters = %d'%(total_num_amplified_parameters),2)
 
     return pairListDict
 
@@ -893,7 +900,6 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             pairListDict[germ_power] = goodPairList  # add to final list of per-germ-power pairs
 
     return pairListDict
-
 
 def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials, germs,
                         test_lengths=(256, 2048), pre_povm_tuples="first", tol=0.75,
@@ -1574,3 +1580,497 @@ def filter_useless_fid_pairs(fiducial_indices, element_map, complete_jacobian, s
             continue
     #return the list of fiducial pair indices with non-trivial frobenius norm.
     return useful_fiducial_indices
+    
+    
+#-------------- Globally Aware Per-Germ FPR------------------------#
+    
+#Define a function that performs a modified version of per-germ FPR leveraging global informationally
+#about the amplificational properties of the germ set as a whole.
+
+def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials, meas_fiducials,
+                                                   germ_vector_spanning_set=None, germs=None, pre_povm_tuples="first",
+                                                   mem_limit=None, inv_trace_tol= 10, initial_seed_mode='greedy',
+                                                   evd_tol=1e-10, sensitivity_threshold=1e-10, seed=None ,verbosity=0, 
+                                                   check_complete_fid_set=False, float_type = _np.cdouble,
+                                                   germ_set_spanning_kwargs = None):
+    """
+    Finds a per-germ set of fiducial pairs that are amplificationally complete.
+
+    A "standard" set of GST circuits consists of all circuits of the form:
+
+    statePrep + prepFiducial + germPower + measureFiducial + measurement
+
+    This set is typically over-complete, and it is possible to restrict the
+    (prepFiducial, measureFiducial) pairs to a subset of all the possible
+    pairs given the separate `prep_fiducials` and `meas_fiducials` lists.  This function
+    attempts to find sets of fiducial pairs, one set per germ, that still
+    amplify all of the model's parameters (i.e. is "amplificationally
+    complete").  For each germ, a fiducial pair set is found that amplifies
+    all of the "parameters" (really linear combinations of them) that the
+    particular germ amplifies.
+
+    To test whether a set of fiducial pairs satisfies this condition, the
+    sum of projectors `P_i = dot(J_i,J_i^T)`, where `J_i` is a matrix of the
+    derivatives of each of the selected (prepFiducial+germ+effectFiducial)
+    sequence probabilities with respect to the i-th amplified parameter.
+
+    Parameters
+    ----------
+    target_model : Model
+        The target model used to determine amplificational completeness.
+
+    prep_fiducials : list of Circuits
+        Fiducial circuits used to construct an informationally complete
+        effective preparation.
+
+    meas_fiducials : list of Circuits
+        Fiducial circuits used to construct an informationally complete
+        effective measurement.
+
+    germ_vector_spanning_set : dictionary of lists
+        A dictionary with keys corresponding to germs and values
+        corresponding to lists of parameter vectors (less spam parameters)
+        for which we need sensitivity.
+    
+    germs : list of circuits
+        If passed in and germ_vector_spanning_set is None then we'll use this
+        in the calculation of the germ vector spanning set.
+
+    pre_povm_tuples : list or "first", optional
+        A list of `(prepLabel, povmLabel)` tuples to consider when
+        checking for completeness.  Usually this should be left as the special
+        (and default) value "first", which considers the first prep and POVM
+        contained in `target_model`.
+
+    verbosity : int, optional
+        How much detail to print to stdout.
+
+    mem_limit : int, optional
+        A memory limit in bytes.
+
+    Returns
+    -------
+    dict
+        A dictionary whose keys are the germ circuits and whose values are
+        lists of (iRhoFid,iMeasFid) tuples of integers, each specifying the
+        list of fiducial pairs for a particular germ (indices are into
+        `prep_fiducials` and `meas_fiducials`).
+    """
+
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
+
+    #if no germ_vector_spanning_set is passed in compute it here.
+    if germ_vector_spanning_set is None:
+        if germs is None:
+            raise ValueError('Must specify either germ_vector_spanning_set or germs.')
+        else:
+            default_germ_set_kwargs = {'assume_real':False, 
+                                       'num_nongauge_params': None,
+                                       'tol':1e-6,
+                                       'pretest': False,
+                                       'threshold':1e6}
+            used_kwargs = default_germ_set_kwargs.copy()
+            if germ_set_spanning_kwargs is not None:
+                used_kwargs.update(germ_set_spanning_kwargs)
+                                       
+            germ_vector_spanning_set = germ_set_spanning_vectors(target_model, germs, 
+                                                                 float_type=_np.cdouble, 
+                                                                 evd_tol = evd_tol,
+                                                                 verbosity=verbosity,
+                                                                 **used_kwargs)
+
+    if pre_povm_tuples == "first":
+        firstRho = list(target_model.preps.keys())[0]
+        firstPOVM = list(target_model.povms.keys())[0]
+        pre_povm_tuples = [(firstRho, firstPOVM)]
+    
+    #brief intercession to calculate the number of degrees of freedom for the povm.
+    num_effects= len(list(target_model.povms[pre_povm_tuples[0][1]].keys()))
+    dof_per_povm= num_effects-1
+       
+    pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
+                       for prepLbl, povmLbl in pre_povm_tuples]
+
+    pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
+    
+    #make the spam parameters of the target model static, as the output of the
+    #germ set spanning vector code doesn't include spam parameters.
+    target_model_static_spam = _make_spam_static(target_model)
+    
+    printer.log("------  Per Germ Global Fiducial Pair Reduction --------")
+    with printer.progress_logging(1):
+        for i, (germ, germ_vector_list) in enumerate(germ_vector_spanning_set.items()):
+            candidate_solution_list, best_score = get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuples,
+                                                                    target_model, germ, germ_vector_list, mem_limit,
+                                                                    printer, dof_per_povm,
+                                                                    inv_trace_tol, initial_seed_mode=initial_seed_mode,
+                                                                    check_complete_fid_set=check_complete_fid_set, evd_tol=evd_tol,
+                                                                    sensitivity_threshold=sensitivity_threshold, float_type= _np.cdouble)
+            
+            #print some output about the minimum eigenvalue acheived.
+            if best_score is not None:
+                printer.log('Score Achieved: ' + str(best_score), 2)
+            printer.log('Number of fid pairs in found solution: %d'%(len(candidate_solution_list)), 2)
+            
+            try:
+                assert(candidate_solution_list is not None)
+            except AssertionError as err:
+                print('Failed to find an acceptable fiducial set for germ power pair: ', germ)
+                print(err)
+
+            pairListDict[germ] = candidate_solution_list  # add to final list of per-germ pairs
+
+    return pairListDict
+    
+def get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuples,
+                                 target_model, germ, germ_vector_list, mem_limit, printer, dof_per_povm, 
+                                 inv_trace_tol=10, initial_seed_mode= 'greedy',
+                                 check_complete_fid_set= True, evd_tol=1e-10, sensitivity_threshold= 1e-10,
+                                 float_type = _np.cdouble):
+    #Get dP-matrix for full set of fiducials, where
+    # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
+    #   j is similar, and derivs are wrt the "eigenvalues" of the germ
+    #  (i.e. the parameters of target_model).
+    
+    #Let's assume here that the spam parameters have been set to static,
+    #so the only parameters are the gate parameters. This matches what is
+    #produced by the spanning germ set vector code.
+    
+    #Before doing anything check whether the germ_vector_list is empty, in which case
+    #we can skip it and return an empty list. (empty=False)
+    if not germ_vector_list:
+        return [], None
+    
+    #but, let's just do this again anyhow to be safe.
+    reduced_model = _make_spam_static(target_model)
+    
+    printer.log('Entered helper function _get_per_germ_fidpairs_global', 3)
+
+    nEStrs = len(meas_fiducials)
+    nPossiblePairs = len(prep_fiducials) * len(meas_fiducials)
+    
+    allPairIndices = list(range(nPossiblePairs))
+
+    print('Current Germ: ')
+    print(germ)
+    
+    printer.log('Number of possible pairs: %d'%(nPossiblePairs), 3)
+    
+    num_germ_vecs= len(germ_vector_list)
+    
+    printer.log('Number of amplified parameter directions needed for this germ: %d'%(num_germ_vecs), 2)
+
+    #Determine which fiducial-pair indices to iterate over
+    goodPairList = None; bestFirstEval = []; bestPairs = {}
+    
+    #loops over a number of pairs between min_pairs_needed and up to and not including the number of possible pairs
+    min_pairs_needed= ceil((num_germ_vecs/(nPossiblePairs*dof_per_povm))*nPossiblePairs)
+    printer.log('Minimum Number of Pairs Needed for this Germ: %d'%(min_pairs_needed), 2)
+    
+    lst = _gsc.create_circuits(
+        "pp[0]+f0+germ*power+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
+        germ=germ, pp=pre_povm_tuples, power=1,
+        order=('f0', 'f1', 'pp'))
+    
+    printer.log('Constructing Directional Derivatives for Full Fiducial Set' , 2)
+    
+    #concatenate the list of column vectors into a single matrix. 
+    germ_vector_mat = _np.concatenate(germ_vector_list, axis=1)
+    compact_directional_DDD_list = _compute_bulk_directional_ddd_compact(reduced_model, lst, germ_vector_mat, eps=evd_tol,
+                             comm=None, evd_tol=evd_tol,  float_type=float_type,
+                             printer=printer, return_eigs=False)
+    
+    #It can happen that there are fiducial pairs which are entirely insensitive to any
+    #of the selected amplified parameters, which show up as empty matrices in the list of directional derivatives.
+    #We should identify which fiducial pairs those are and remove them from the 
+    #search space.
+    
+    #TODO: Add back this functionality for the parameter vector based FPR.
+    printer.log('Removing useless fidcuial pairs with trivial sensitivity to the vector of parameters.', 3)
+    printer.log('Number of fiducial pairs before filtering trivial ones: %d' %(len(allPairIndices)), 3)
+    
+    #Directional derivative matrices with minimum eigenvalues below the evd_tol end up getting
+    #returned as empty matrices. Filter on that to strip those out.
+    cleaned_pair_indices_list= [idx for idx in allPairIndices if compact_directional_DDD_list[idx].any()]
+    
+    printer.log('Number of fiducial pairs after filtering trivial ones: %d' %(len(cleaned_pair_indices_list)), 3)
+    #Change the value of nPossiblePairs to reflect the filtered list
+    nPossiblePairs= len(cleaned_pair_indices_list)
+    
+    printer.log('Calculating Inverse Trace of Full Fiducial Set', 2)
+    
+    directional_DDD_complete = _np.sum(_np.stack([compact_directional_DDD_list[i]@compact_directional_DDD_list[i].T 
+                                                  for i in cleaned_pair_indices_list], axis=2), axis=2)
+    #print('directional_DDD_complete shape ' + str(directional_DDD_complete.shape))
+    inv_trace_complete= _np.trace(_np.linalg.pinv(directional_DDD_complete))
+    
+    printer.log('Full Fiducial Set Inverse Trace: %f' % (inv_trace_complete), 2)
+    
+    #Need to choose how to initially seed a set of candidate fiducials.
+    #I can think of two ways atm, one is to seed it with a random set of
+    #fiducial pairs of size min_pairs_needed, the other is to run
+    #the greedy search all the way from zero.
+    
+    #If random, pick a random set of fiducial pairs to start the search with:
+    #if initial_seed_mode=='random':
+        #set the seed for the prng:
+    #    _random.seed(seed)
+    #    initial_fiducial_set= list(_random_combination(cleaned_pair_indices_list, min_pairs_needed))
+    #    initial_pair_count= min_pairs_needed
+    #if starting from zero then we'll change min_pairs_needed to zero and set the initial_fiducial_set
+    #to None (may not be needed, will remove the placeholder value later if that is the case). May also
+    #need some special logic to handle the very first step of the search.
+    if initial_seed_mode=='greedy':
+        initial_fiducial_set=None
+        initial_pair_count=0
+    
+    printer.log('Initial fiducial set: ' + str(initial_fiducial_set), 3)
+    
+    current_best_fiducial_list= initial_fiducial_set
+    
+    for nNeededPairs in range(initial_pair_count, nPossiblePairs):
+        if nNeededPairs < min_pairs_needed:
+            printer.log("Searching for the best initial set of %d pairs. Need %d pairs for the initial set." %
+                    (nNeededPairs+1, min_pairs_needed), 3)
+        else:
+            printer.log("Beginning search for a good set of %d pairs" %
+                        (nNeededPairs), 3)
+            printer.log("    Inverse trace must be <= %g times more than the value for the full fiducial set" %
+                        (inv_trace_tol),3)
+            
+        #The pairs we want to iterate over in the upcoming greedy search are those
+        #in the set difference of allPairIndices-current_best_fiducial_list
+        if current_best_fiducial_list is None:
+            pairIndicesToIterateOver = cleaned_pair_indices_list
+            current_best_jacobian= None
+        else:
+            pairIndicesToIterateOver = list(set(cleaned_pair_indices_list)-set(current_best_fiducial_list))
+            current_best_jacobian= _np.sum(_np.stack([compact_directional_DDD_list[i]@compact_directional_DDD_list[i].T for i in current_best_fiducial_list],axis=2), axis=2)
+            current_best_inv_trace = _np.trace(_np.linalg.pinv(current_best_jacobian))
+         
+        #Construct the update cache for the current_best_fiducial_list's jacobian.
+        if current_best_jacobian is not None:
+            update_cache= construct_update_cache(current_best_jacobian, evd_tol=evd_tol)
+            current_best_rank= len(update_cache[0])
+
+            #make a CompositeScore object for the current best fiducial set.
+            current_best_score= _scoring.CompositeScore(-current_best_rank, current_best_inv_trace, current_best_rank)
+            
+        else:
+            update_cache= None  
+            current_best_score= None
+
+        printer.log('Initial Score: ' + str(current_best_score), 3)
+        
+        #Check if the initial set is good. This is needed for the edge case where we are at the first iteration
+        #after constructing a set of size min_pairs_needed to avoid having to wait till the end of the first
+        #iteration of this loop.
+        if (nNeededPairs>=min_pairs_needed) and (current_best_score.minor < inv_trace_tol*inv_trace_complete)\
+            and (current_best_score.major <= -num_germ_vecs):
+            break
+        
+        for pairIndexToTest in pairIndicesToIterateOver:    
+            printer.log('Tested Index: %d' %(pairIndexToTest), 4)
+            
+            #pull out the corresponding update from the directional derivative list.
+            update_to_test = compact_directional_DDD_list[pairIndexToTest]
+
+            #We need some logic to handle the case where we are starting from scratch
+            #and don't have an initial current_best_jacobian.
+            if (initial_pair_count==0) and (nNeededPairs==0) and (current_best_jacobian is None):
+                updated_pinv, updated_rank= _sla.pinv(update_to_test@update_to_test.T, return_rank=True)
+                updated_inv_trace= _np.trace(updated_pinv)
+                current_best_score =  _scoring.CompositeScore(-updated_rank, updated_inv_trace, updated_rank)
+                idx_current_best_update = pairIndexToTest
+            elif (initial_pair_count==0) and (nNeededPairs==0) and (current_best_jacobian is not None):
+                updated_pinv, updated_rank= _sla.pinv(update_to_test@update_to_test.T, return_rank=True)
+                updated_inv_trace= _np.trace(updated_pinv)
+                updated_score =  _scoring.CompositeScore(-updated_rank, updated_inv_trace, updated_rank)
+                if updated_score < current_best_score:
+                    current_best_score= updated_score
+                    idx_current_best_update = pairIndexToTest
+            #otherwise we already have an initial Jacobian and should use the standard update logic.
+            else:
+                updated_inv_trace, updated_rank, _ = minamide_style_inverse_trace(update_to_test, 
+                                                                 update_cache[0], update_cache[1], 
+                                                                 update_cache[2], False)
+                #Construct a composite score object where the major score is
+                #the rank of the updated jacobian and the minor score is
+                #the inverse trace.
+                updated_score= _scoring.CompositeScore(-updated_rank, updated_inv_trace, updated_rank)
+                
+                printer.log('Updated Score: '+ str(updated_score), 4)
+                
+                if updated_score < current_best_score:
+                    current_best_score=updated_score
+                    idx_current_best_update= pairIndexToTest
+        
+        #Add the best index found to the list for current_best_fiducial_list (or initialize it if this list isn't set yet).
+        if current_best_fiducial_list is None:
+            current_best_fiducial_list= [idx_current_best_update]
+        else:
+            current_best_fiducial_list.append(idx_current_best_update)
+            
+        printer.log('Index of best update fiducial : %d'%(idx_current_best_update), 3)
+        
+        #check whether we have found an acceptable reduced set of fiducials.
+        if (nNeededPairs>=min_pairs_needed) and (current_best_score.minor < inv_trace_tol*inv_trace_complete)\
+            and (current_best_score.major <= -num_germ_vecs):
+            break
+
+    #Get list of pairs as tuples for printing & returning
+    goodPairList = []
+    for i in current_best_fiducial_list:
+        prepfid_index = i // nEStrs; iEStr = i - prepfid_index * nEStrs
+        goodPairList.append((prepfid_index, iEStr))        
+                    
+    if goodPairList is None:
+        printer.log('Failed to find a sufficient fiducial set.',1)
+    printer.log('Exiting _get_per_germ_fidpairs_global', 4)
+    return goodPairList, current_best_score
+    
+#new function that computes the J^T J matrices but then returns the result in the form of the 
+#compact EVD in order to save on memory.    
+def _compute_bulk_directional_ddd_compact(model, circuits, vec_mat, eps,
+                             comm=None, evd_tol=1e-10,  float_type=_np.cdouble,
+                             printer=None, return_eigs=False):
+
+    """
+    Calculate the positive squares of the fiducial pair Jacobians.
+
+    DerivDaggerDeriv == array (JV).H@(JV) contributions from each fiducial pair.
+    V is a matrix with column vectors corresponding to vectors in model
+    parameter space that the germ needs to provide sensitivity to, and thus
+    the fiducial pairs need sensistivity to these as well.
+    
+    JV is a matrix of shape (num_probs, num_directions) that corresponds
+    to the directional derivative matrix for the probalities with respect
+    to the subset of amplified parameters selected for a germ.
+
+    Parameters
+    ----------
+    model : Model
+        The model defining the parameters to differentiate with respect to.
+        
+    circuits : list
+        A list of the circuit objects corresponding to the prep, germ, measurement
+        triplets under consideration.
+
+    vec_mat : ndarray
+        A matrix of shape (num_params, num_directions) where the column vectors
+        are directions in 
+
+    eps : float, optional
+        Tolerance used for testing whether two eigenvectors are degenerate
+        (i.e. abs(eval1 - eval2) < eps ? )
+        
+    evd_tol : float, optional
+        Tolerance used for determining if a singular value has zero magnitude when constructing the
+        compact SVD.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors.
+        
+    float_type : numpy dtype object, optional
+        Numpy data type to use in floating point arrays.
+        
+    return_eigs : bool, optional, default False
+       If True then additionally return a list of the arrays of eigenvalues for each
+       fiducial pair's derivative gramian.
+
+    Returns
+    -------
+    sqrteU_list : list of numpy ndarrays
+        list of the non-trivial left eigenvectors for the compact EVD for each germ
+        where each left eigenvector is multiplied by the sqrt of the corresponding eigenvalue.
+    e_list : ndarray
+        list of non-zero eigenvalue arrays for each germ.
+    """
+       
+    #TODO: Figure out how to pipe in a comm object to parallelize some of this with MPI.
+       
+    #model is assumed to have the spam parameters set to static, but let's enforce that
+    #again here for safety.
+    static_spam_model = _make_spam_static(model)
+        
+    sqrteU_list=[]
+    e_list=[]
+    
+    if printer is not None:
+        printer.log('Generating compact EVD Cache',1)
+        
+        #calculate the jacobians in bulk.
+        printer.log('Calculating Jacobians of Probabilities.', 2)
+        dprobs_dict = static_spam_model.sim.bulk_dprobs(circuits)
+        
+        printer.log('Constructing compact EVDs.', 2)
+        with printer.progress_logging(3):
+
+            for i, ckt in enumerate(circuits):                
+                printer.show_progress(iteration=i, total=len(circuits), bar_length=25)
+                
+                #repackage the outcome label indexed dictionary into an ndarray
+                #need to reshape the vectors along the way.
+                jac = _np.concatenate([_np.reshape(vec, (1,len(vec))) for vec in dprobs_dict[ckt].values()], axis= 0)
+                
+                #now calculate the direction derivative matrix.
+                directional_deriv = jac@vec_mat
+                #print('directional deriv shape: ' + str(directional_deriv.shape))
+                direc_deriv_gram = directional_deriv.T@directional_deriv
+                #print('directional deriv gram shape: ' + str(direc_deriv_gram.shape))                                        
+                #now take twirledDerivDerivDagger and construct its compact EVD.
+                e, U= compact_EVD(direc_deriv_gram, evd_tol)
+                e_list.append(e)
+                
+                #by doing this I am assuming that the matrix is PSD, but since these are all
+                #gramians that should be alright.
+                
+                #I want to use a rank-decomposition, so split the eigenvalues into a pair of diagonal
+                #matrices with the square roots of the eigenvalues on the diagonal and fold those into
+                #the matrix of eigenvectors by left multiplying.
+                
+                sqrteU_list.append( U@_np.diag(_np.sqrt(e)) )       
+    else: 
+        #calculate the jacobians in bulk.
+        dprobs_dict = static_spam_model.sim.bulk_dprobs(circuits)
+
+        for i, ckt in enumerate(circuits):                
+
+            #repackage the outcome label indexed dictionary into an ndarray
+            #need to reshape the vectors along the way.
+            jac = _np.concatenate([_np.reshape(vec, (1,len(vec))) for vec in dprobs_dict[ckt].values()], axis= 0)
+
+            #now calculate the direction derivative matrix.
+            directional_deriv = jac@vec_mat
+            direc_deriv_gram = directional_deriv.T@directional_deriv
+    
+            #now take twirledDerivDerivDagger and construct its compact EVD.
+            e, U= compact_EVD(direc_deriv_gram, evd_tol)
+            e_list.append(e)
+
+            sqrteU_list.append( U@_np.diag(_np.sqrt(e)) )         
+           
+    if return_eigs:
+        return sqrteU_list, e_list
+    else:
+        return sqrteU_list
+        
+def _make_spam_static(model):
+    #return a modified copy of the model (not in-place) where the spam elements are static.
+    #I could do this more elegantly, but the easiest thing is just to make a copy, set all
+    #of the parameterizations to static, then swap out the elements of original model.
+    #implicitly assuming we have an explicitopmodel here.
+    
+    model_copy = model.copy()
+    static_model_copy = model.copy()
+    static_model_copy.set_all_parameterizations('static')
+    
+    #swap out the elements of the model we need to.
+    model_copy.preps = static_model_copy.preps
+    model_copy.povms = static_model_copy.povms
+    
+    #I messed with the parameterizations, so i'll need to rebuild the model vector.
+    model_copy._rebuild_paramvec()
+    
+    return model_copy
