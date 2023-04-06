@@ -120,7 +120,7 @@ def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_
     return total_circ_time + total_upload_time
 
 
-def calculate_fisher_information_per_circuit(regularized_model, circuits):
+def calculate_fisher_information_per_circuit(regularized_model, circuits, approx=False):
     """Helper function to calculate all Fisher information terms for each circuit.
 
     This function can be used to pre-generate a cache for the
@@ -148,20 +148,32 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits):
 
     ps = regularized_model.sim.bulk_probs(circuits)
     js = regularized_model.sim.bulk_dprobs(circuits)
-    hs = regularized_model.sim.bulk_hprobs(circuits)
-
+    #if approx is true we  add in the hessian term as well.
+    if not approx:
+        hs = regularized_model.sim.bulk_hprobs(circuits)
+        total_hterm = {}
+    
     fisher_info_terms = {}
+    
     for circuit in circuits:
         if circuit not in fisher_info_terms:
             fisher_info_terms[circuit] = _np.zeros([num_params, num_params])
-
+            if not approx:
+                total_hterm[circuit] = _np.zeros([num_params, num_params])
         p = ps[circuit]
         j = js[circuit]
-        h = hs[circuit]
+        if not approx:
+            h = hs[circuit]
         for outcome in outcomes:
-            fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome]) / p[outcome] - h[outcome]
-
-    return fisher_info_terms
+            if not approx:
+                fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome]) / p[outcome] - h[outcome]
+                total_hterm[circuit] += h[outcome]
+            else:
+                fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome]) / p[outcome]
+    if approx:
+        return fisher_info_terms
+    else:
+        return fisher_info_terms, total_hterm
 
 
 def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache=None,
