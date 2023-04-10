@@ -4397,10 +4397,11 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
     
     #_compute_bulk_twirled_ddd returns a list of matrices of the form U@np.diag(np.sqrt(e)) where U@diag(e)@U^H is the compact eigenvalue decomposition of a matrix. It is done this way to ensure we have symmetric updates.
     
-    #Let's take the list of compactified U@np.diag(np.sqrt(e)) matrices, which are num_params x rank of twirled derivative in dimensions and concatenate them into a single array.
+    #Let's take the list of compactified U@np.diag(np.sqrt(e)) matrices, which are num_params x rank of twirled derivative in dimensions and concatenate them into a single array
+    printer.log('Concatenating compact EVDs', 2)
     composite_twirled_deriv_array = _np.concatenate(twirledDerivDaggerDerivList, axis =1)
     
-    printer.log('Complete germ set (overcomplete) number of amplified parameters: %d'%(composite_twirled_deriv_array.shape[1]), 2)
+    printer.log('Complete germ set (overcomplete) number of amplified parameters: %d'%(composite_twirled_deriv_array.shape[1]), 1)
     
     #also do this for the eigenvalues:
     composite_eigenvalue_array = _np.concatenate(germ_eigval_list, axis=None)
