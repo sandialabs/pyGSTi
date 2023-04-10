@@ -2922,7 +2922,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
     if printer is not None:
         printer.log('Generating compact EVD Cache',1)
         
-        with printer.progress_logging(2):
+        with printer.progress_logging(1):
     
             for i, germ in enumerate(germs_list):
             
@@ -4452,7 +4452,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
             break   # We are AC, so we can stop adding model parameter directions.
                 
         #precompute things that can be reused for the rank-one update
-        printer.log('Creating update cache.', 2)
+        printer.log('Creating update cache.', 3)
         if prev_update_cache is None:
             current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol)
         else:
