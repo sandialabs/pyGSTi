@@ -4314,7 +4314,8 @@ def stable_pinv(mat):
 
 def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_type=_np.cdouble, 
                               num_nongauge_params=None, tol = 1e-6, pretest=False, evd_tol = 1e-10,
-                              verbosity=1, threshold = 1e6): 
+                              verbosity=1, threshold = 1e6, mode = 'greedy', update_cache_low_rank = False,
+                              final_test = True): 
     """
     Parameters
     ----------
@@ -4347,6 +4348,29 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
     threshold : float, optional
         Value which the score (before penalties are applied) must be lower than
         for a germ set to be considered AC
+        
+    mode : string, optional (default 'greedy)'
+        An optional mode string for specifying the search heuristic used for
+        constructing the germ vector set. If 'greedy' we use a greedy search
+        algorithm based on low-rank updates. If 'RRQR' we use a heuristic for
+        the subset selection problem due to Golub, Klema and Stewart (1976),
+        detailed in chapter 12 of the book "Matrix Computations" by Golub and
+        Van Loan. 
+        
+    update_cache_low_rank : bool, optional (default = False)
+        A flag indicating whether the psuedoinverses in the update cache used 
+        as part of the low-rank update routine should themselves be updated
+        between iterations using low-rank updates. Setting this to True
+        gives a notable performance boost, but I have found that this can
+        also give rise to numerical stability issues, so caveat emptor.
+        Only set to True if you're sure of what you're doing.
+        
+    final_test : bool, optional (default True)
+        A flag indicating whether a final test should be performed to validate
+        the final score of the germ-vector set found using either the greedy
+        or RRQR based search heuristics. Can be useful in conjunction with
+        the use of update_cache_low_rank, as this can help detect numerical
+        stability problems in the use of low-rank updates for cache construction.
         
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
@@ -4406,97 +4430,168 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
     #also do this for the eigenvalues:
     composite_eigenvalue_array = _np.concatenate(germ_eigval_list, axis=None)
     
-    num_candidate_vecs= composite_twirled_deriv_array.shape[1]
-    
     #I am going to need to easily map back from indexes in the above 2 composite arrays and 
     #the corresponding germ, internal germ index pair.
     idx_to_germ_idx = [(germ, internal_idx) for germ_idx, germ in enumerate(germ_list) 
                                             for internal_idx in range(len(germ_eigval_list[germ_idx]))]
     
-    #Named weights for historical reasons, this is a binary vector of length equal to the total number
-    #of candidate eigenvectors for including in the J^T@J matrix.  
-    weights = _np.zeros(num_candidate_vecs, _np.int64)
-    
-    #Ok, now let's do the initial iteration of the greedy search and then use this to build off of using low-rank
-    #rank-update magic.
-    
-    #for the initial iteration since we're just adding a single vector, independent of the score function used
-    #we basically just want to choose the vector associated with the largest eigenvalue (as this will minimize both
-    #the psuedoinverse-trace and the minimum psuedoinverse eigenvalue conditions).
-    best_initial_vec_index= _np.argmax(composite_eigenvalue_array)
-    printer.log('Best initial vector found: ' + str(best_initial_vec_index), 2)
-    
-    #Set the weight of this vector to 1
-    weights[best_initial_vec_index]=1
-    
-    #and add it to a dictionary tracking for each germs the directions in model parameter
+    #Initialize a dictionary tracking for each germs the directions in model parameter
     #space being kept for that germ.
     germ_vec_dict = {germ : [] for germ in germ_list}
-    germ_vec_dict[idx_to_germ_idx[best_initial_vec_index][0]].append(composite_twirled_deriv_array[:, [best_initial_vec_index]]/_np.sqrt(composite_eigenvalue_array[best_initial_vec_index]))
-    #Note: I want the elements of the germ vector dict to correspond to normalized vectors in model
-    #parameter space, but the vectors corresponding to the columns of composite_twirled_deriv_array
-    #have a factor of sqrt(e) folded into them, so I am dividing that back out here.
     
-    #initial value of the current twirled derivative gramian.
-    currentDDD = composite_twirled_deriv_array[:, [best_initial_vec_index]]@ composite_twirled_deriv_array[:, [best_initial_vec_index]].T
+    if mode == 'greedy':
     
-    #Now start the greedy search. The initial number of amplified parameters is 1.
-    initN=1
-    #initialize a variable for the previous iteration's update cache to None
-    prev_update_cache = None
-    
-    while _np.any(weights == 0):
-        printer.log("Outer iteration: %d of %d amplified" %
-                        (initN, numNonGaugeParams), 2)
-                        
-        if initN == numNonGaugeParams:
-            break   # We are AC, so we can stop adding model parameter directions.
-                
-        #precompute things that can be reused for the rank-one update
-        printer.log('Creating update cache.', 3)
-        if prev_update_cache is None:
-            current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol)
-        else:
-            #do a rank one psuedoinverse update wrt the best vector from the prior round
-            current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol, 
-                                                                   prev_update_cache = prev_update_cache,
-                                                                   rank_one_update=composite_twirled_deriv_array[:, [idx_best_candidate_vec]])
-        
-        candidate_vec_indices = _np.where(weights == 0)[0]
-        
-        best_vec_score = _scoring.CompositeScore(1.0e100, 0, None)  # lower is better
-        idx_best_candidate_vec = None
-        
-        for i,idx in enumerate(candidate_vec_indices):
-            printer.log('Inner iter over candidate vectors, %d of %d'%(i, len(candidate_vec_indices)), 3)
-                                  
-            current_vec_score = compute_composite_vector_set_score(
-                                            current_update_cache= current_update_cache,
-                                            vector_update= composite_twirled_deriv_array[:, [idx]],
-                                            num_nongauge_params= numNonGaugeParams,
-                                            float_type= float_type)
+        num_candidate_vecs= composite_twirled_deriv_array.shape[1]
 
-            if current_vec_score < best_vec_score:
-                best_vec_score = current_vec_score
-                idx_best_candidate_vec = idx
+        #Named weights for historical reasons, this is a binary vector of length equal to the total number
+        #of candidate eigenvectors for including in the J^T@J matrix.  
+        weights = _np.zeros(num_candidate_vecs, _np.int64)
+        
+        #Ok, now let's do the initial iteration of the greedy search and then use this to build off of using low-rank
+        #rank-update magic.
+        
+        #for the initial iteration since we're just adding a single vector, independent of the score function used
+        #we basically just want to choose the vector associated with the largest eigenvalue (as this will minimize both
+        #the psuedoinverse-trace and the minimum psuedoinverse eigenvalue conditions).
+        best_initial_vec_index= _np.argmax(composite_eigenvalue_array)
+        printer.log('Best initial vector found: ' + str(best_initial_vec_index), 2)
+        
+        #Set the weight of this vector to 1
+        weights[best_initial_vec_index]=1
+        
+        #and add it to a dictionary tracking for each germs the directions in model parameter
+        #space being kept for that germ.
+        germ_vec_dict[idx_to_germ_idx[best_initial_vec_index][0]].append(composite_twirled_deriv_array[:, [best_initial_vec_index]]/_np.sqrt(composite_eigenvalue_array[best_initial_vec_index]))
+        #Note: I want the elements of the germ vector dict to correspond to normalized vectors in model
+        #parameter space, but the vectors corresponding to the columns of composite_twirled_deriv_array
+        #have a factor of sqrt(e) folded into them, so I am dividing that back out here.
+        
+        #initial value of the current twirled derivative gramian.
+        currentDDD = composite_twirled_deriv_array[:, [best_initial_vec_index]]@ composite_twirled_deriv_array[:, [best_initial_vec_index]].T
+        
+        #Now start the greedy search. The initial number of amplified parameters is 1.
+        initN=1
+        #initialize a variable for the previous iteration's update cache to None
+        prev_update_cache = None
+        
+        while _np.any(weights == 0):
+            printer.log("Outer iteration: %d of %d amplified" %
+                            (initN, numNonGaugeParams), 2)
+                            
+            if initN == numNonGaugeParams:
+                break   # We are AC, so we can stop adding model parameter directions.
+                    
+            #precompute things that can be reused for the rank-one update
+            printer.log('Creating update cache.', 3)
+            if prev_update_cache is None:
+                current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol)
+            else:
+                if update_cache_low_rank == True:
+                    #do a rank one psuedoinverse update wrt the best vector from the prior round
+                    current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol, 
+                                                                           prev_update_cache = prev_update_cache,
+                                                                           rank_one_update=composite_twirled_deriv_array[:, [idx_best_candidate_vec]])
+                else:
+                    #otherwise rebuild the update cache from scratch using a fresh psuedoinverse. Could be useful if worried about stability.
+                    current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol)
+            
+            candidate_vec_indices = _np.where(weights == 0)[0]
+            
+            best_vec_score = _scoring.CompositeScore(1.0e100, 0, None)  # lower is better
+            idx_best_candidate_vec = None
+            
+            for i,idx in enumerate(candidate_vec_indices):
+                printer.log('Inner iter over candidate vectors, %d of %d'%(i, len(candidate_vec_indices)), 3)
+                                      
+                current_vec_score = compute_composite_vector_set_score(
+                                                current_update_cache= current_update_cache,
+                                                vector_update= composite_twirled_deriv_array[:, [idx]],
+                                                num_nongauge_params= numNonGaugeParams,
+                                                float_type= float_type)
+
+                if current_vec_score < best_vec_score:
+                    best_vec_score = current_vec_score
+                    idx_best_candidate_vec = idx
+                    
+            #update the weight vector:
+            weights[idx_best_candidate_vec]=1
+            
+            #update initN for the next round, this should just be the N value for the best_vec_score
+            initN= best_vec_score.N
+            
+            #logging for the best found score at this iteration:
+            printer.log('Best score this iteration: ' + str(best_vec_score), 2)
+            
+            #update currentDDD
+            currentDDD= composite_twirled_deriv_array[:, _np.where(weights == 1)[0]]@ composite_twirled_deriv_array[:, _np.where(weights == 1)[0]].T
+        
+            #Add this vector to the germ vector dictionary
+            germ_vec_dict[idx_to_germ_idx[idx_best_candidate_vec][0]].append(composite_twirled_deriv_array[:, [idx_best_candidate_vec]]/_np.sqrt(composite_eigenvalue_array[idx_best_candidate_vec]))
+            
+            #set the previous update cache to the current one in preparation for the next round through the loop.
+            prev_update_cache = current_update_cache
+            
+        printer.log('Returning best found vector set. Final Score: ' + str(best_vec_score),1)
+        
+        #if true, perform a final test and verify that the final score 
+        if final_test:
+            #restricted version of the psuedoinverse trace that only looks at the non-gauge parameters.
+            #Only care about gramians, so assume hermitian
+            def restricted_pinv_trace(mat, num_nongauge):
+                #flip so in descending order
+                evals = _np.flip(_np.linalg.eigvalsh(mat), axis=0)
+                restricted_evals = evals[0:num_nongauge]
+                pinv_evals = 1/restricted_evals
+                rank = _np.count_nonzero(restricted_evals > 1e-7) #HARDCODED
                 
-        #update the weight vector:
-        weights[idx_best_candidate_vec]=1
+                return _np.sum(pinv_evals), rank
+            
+            #also validate the rank:    
+            final_test_pinv, final_test_rank = restricted_pinv_trace(currentDDD, numNonGaugeParams)
+            
+            #compare these to the results of the greedy search and raise and error if they are significantly different.
+            #Hardcoded tolerance is primarily meant to detect catastrophic failures, hence it being pretty large.
+            if (abs(final_test_pinv - best_vec_score.minor) > 1) or (final_test_rank != best_vec_score.N): #HARDCODED
+                raise ValueError(f'Final test failed. Either the psuedoinverse traces are different or the final ranks are different. \n'
+                                 + f'The final psuedoinverse-trace from the test is: {final_test_pinv} and the final rank from the test is: {final_test_rank} \n'
+                                 + f'The final psuedoinverse-trace from the greedy search is: {best_vec_score.minor} and the final rank from the greedy search is: {best_vec_score.N}')
+            
+    #add in a new code path for using the SVD/RRQR based heuristic.
+    elif mode == 'RRQR':
+        #Start by calculating the singular value decomposition of the composite_twirled_deriv_array
+        #Only need the V matrix.
+        _, _, Vh = _np.linalg.svd(composite_twirled_deriv_array, full_matrices=False, compute_uv=True, hermitian=False)
+       
+        #target rank = numNonGaugeParams
+        #Take the rank revealing QR decomposition of the submatrix of Vh corresponding
+        #to the first numNonGaugeParams rows.
+        #I actually only need the column permutation as well.
+        _, P = _sla.qr(Vh[0:numNonGaugeParams, :], mode='r', pivoting=True)
         
-        #update initN for the next round, this should just be the N value for the best_vec_score
-        initN= best_vec_score.N
+        #We should be able to use the integer array returned by the RRQR to
+        #index directly into the composite_twirled_deriv_array
+        permuted_composite_twirled_deriv_array = composite_twirled_deriv_array[:, P]
+        print('permutation', P)
+        print('Pre-permuted array shape ', composite_twirled_deriv_array.shape)
+        print('Permuted array shape ', permuted_composite_twirled_deriv_array.shape)
+        #As for the subset to take, we want the first numNonGaugeParams columns
+        #of the permuted array
+        selected_vector_subset = permuted_composite_twirled_deriv_array[:, 0:numNonGaugeParams]
+        print('Selected vector subset array shape: ', selected_vector_subset.shape)
         
-        #update currentDDD
-        currentDDD= composite_twirled_deriv_array[:, _np.where(weights == 1)[0]]@ composite_twirled_deriv_array[:, _np.where(weights == 1)[0]].T
-    
-        #Add this vector to the germ vector dictionary
-        germ_vec_dict[idx_to_germ_idx[idx_best_candidate_vec][0]].append(composite_twirled_deriv_array[:, [idx_best_candidate_vec]]/_np.sqrt(composite_eigenvalue_array[idx_best_candidate_vec]))
+        #Add the vectors to the germ vector dictionary
+        for vec_idx in P[0:numNonGaugeParams]:
+            germ_vec_dict[idx_to_germ_idx[vec_idx][0]].append(composite_twirled_deriv_array[:, [vec_idx]]/_np.sqrt(composite_eigenvalue_array[vec_idx]))
         
-        #set the previous update cache to the current one in preparation for the next round through the loop.
-        prev_update_cache = current_update_cache
+        #temporarily copy, fix the return behavior later to avoid this.
+        currentDDD= selected_vector_subset @ selected_vector_subset.T
+        #Need to map back the selected vectors indices (which we should be able to pull
+        #directly by taking the first numNonGaugeParams of P) and use them to map back into
+        #the germ set for germ_vec_dict construction purposes.
         
-    printer.log('Returning best found vector set. Final Score: ' + str(best_vec_score))
-        
+    else:
+        raise NotImplementedError('The specified mode string ' + mode + ' is not currently implemented. Please use either greedy or RRQR.')    
+
     return germ_vec_dict, currentDDD
 
 #Updated composite score calculating function specialized to 
