@@ -381,7 +381,7 @@ class ExplicitOpModel(_mdl.OpModel):
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
 
     def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
-                                  instrument_type="auto", extra=None):
+                                  instrument_type="auto", ideal_model=None):
         """
         Convert all gates, states, and POVMs to a specific parameterization type.
 
@@ -411,10 +411,10 @@ class ExplicitOpModel(_mdl.OpModel):
               "d". This removes the CPTP constraint on the gates and SPAM
               operations (and as such is seldom used).
 
-        extra : dict, optional
-            For `"H+S terms"` type, this may specify a dictionary
-            of unitary gates and pure state vectors to be used
-            as the *ideal* operation of each gate/SPAM operation.
+        ideal_model : Model, optional
+            This may specify an ideal model of unitary gates and pure state vectors
+            to be used as the *ideal* operation of each gate/SPAM operation, which
+            is particularly useful as target for CPTP-based conversions.
 
         Returns
         -------
@@ -422,17 +422,20 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         typ = gate_type
 
-        assert(extra is None), "`extra` argument is unused and should be left as `None`"
-        if extra is None: extra = {}
+        # Set ideal model to static when used as targets (specifically needed for CPTP prep/povms)
+        static_model = None
+        if ideal_model is not None:
+            static_model = ideal_model.copy()
+            static_model.set_all_parameterizations('static')
 
         rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
         povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
         ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
 
-        self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True)
-        self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True)
-        self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True)
-        self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True)
+        self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model)
+        self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model)
+        self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model)
+        self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model)
         self.set_default_gauge_group_for_member_type(typ)
 
     def __setstate__(self, state_dict):
