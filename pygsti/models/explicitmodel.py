@@ -439,7 +439,7 @@ class ExplicitOpModel(_mdl.OpModel):
             self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model)
         except ValueError as e:
             raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
-                "try providing a target model to avoid possible branch cuts.") from e
+                "try providing an ideal_model to avoid possible branch cuts.") from e
         
         self.set_default_gauge_group_for_member_type(typ)
 
