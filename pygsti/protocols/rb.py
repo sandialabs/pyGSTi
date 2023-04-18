@@ -815,7 +815,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
 
     def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                          circuit_type, sampler, samplerargs, localclifford, paulirandomize, descriptor,
-                         add_default_protocol, seed=seed):
+                         add_default_protocol, seed=None):
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.descriptor = descriptor
