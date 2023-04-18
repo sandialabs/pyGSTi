@@ -48,12 +48,7 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             else:
                 return cls(obj[0], (obj[1:],))  # e.g. "HXX" => ('H','XX')
         elif isinstance(obj, (tuple, list)):
-            if all([isinstance(el, str) for el in obj[1:]]):
-                return cls(obj[0], obj[1:])  # e.g. ('H','XX') or ('S', 'X', 'Y')
-            else:
-                # This could be a tuple like ('H', ('X',), (1,)), which would be a GlobalElementaryErrorgenLabel
-                geel = GlobalElementaryErrorgenLabel.cast(obj)
-                return cls.cast(geel, sslbls)
+            return cls(obj[0], obj[1:])  # e.g. ('H','XX') or ('S', 'X', 'Y')
         else:
             raise ValueError("Cannot convert %s to a local elementary errorgen label!" % str(obj))
 
