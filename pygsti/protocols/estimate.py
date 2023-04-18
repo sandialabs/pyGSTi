@@ -902,6 +902,7 @@ class Estimate(_MongoSerializable):
         #  comm objects (in their layouts)
         del to_pickle['_final_mdc_store']
         del to_pickle['_final_objfn']
+        del to_pickle['_final_objfn_cache']
 
         # don't pickle parent (will create circular reference)
         del to_pickle['parent']
@@ -920,6 +921,7 @@ class Estimate(_MongoSerializable):
         # reset MDC objective function and store objects
         state_dict['_final_mdc_store'] = None
         state_dict['_final_objfn'] = None
+        state_dict['_final_objfn_cache'] = None
 
         self.__dict__.update(state_dict)
         for crf in self.confidence_region_factories.values():
