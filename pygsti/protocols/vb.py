@@ -292,7 +292,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, clifford_compilations=None,
                  sampler='edgegrab', samplerargs=(0.125,),
                  localclifford=True, paulirandomize=True, fixed_versus_depth=False,
-                 descriptor='A random germ mirror circuit experiment', seed=seed):
+                 descriptor='A random germ mirror circuit experiment', seed=None):
 
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = [[] for d in depths]
