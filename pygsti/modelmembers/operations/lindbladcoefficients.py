@@ -77,6 +77,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
     def __init__(self, block_type, basis, basis_element_labels=None, initial_block_data=None, param_mode='static',
                  truncate=False):
+        super().__init__()
         self._block_type = block_type  # 'ham' or 'other' or 'other_diagonal'
         self._param_mode = param_mode  # 'static', 'elements', 'cholesky', or 'real_cholesky', 'depol', 'reldepol'
         self._basis = basis  # must be a full Basis object, not just a string, as we otherwise don't know dimension

@@ -817,7 +817,8 @@ def read_results_from_mongodb(mongodb, doc_id, preloaded_data=None, quick_load=F
     return _ProtocolResults.from_mongodb(mongodb, doc_id, preloaded_data=preloaded_data, quick_load=quick_load)
 
 
-def read_resultsdir_from_mongodb(mongodb, doc_id, preloaded_data=None, quick_load=False, comm=None):
+def read_resultsdir_from_mongodb(mongodb, doc_id, preloaded_data=None, quick_load=False,
+                                 read_all_results_for_data=False, comm=None):
     """
     Load a :class:`ProtocolsResultsDir` from a MongoDB database.
 
@@ -839,6 +840,14 @@ def read_resultsdir_from_mongodb(mongodb, doc_id, preloaded_data=None, quick_loa
         components that may take a long time to load. This can be useful
         all the information of interest lies only within the results objects.
 
+    read_all_results_for_data : bool, optional
+        If `True`, the loaded result directory and sub-directories will read in all the results
+        objects stored in the database associated with their :class:`ProtocolData` object.  Duplicate
+        keys will be renamed to avoid collisions with warning messages are printed.  If `False`
+        (the default), then only the specific results associated with the directory when it was last
+        saved are loaded.  This can sometimes be useful for loading old results that have been overwritten
+        but still exist in the database.
+
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator used to synchronize database access.
 
@@ -849,7 +858,8 @@ def read_resultsdir_from_mongodb(mongodb, doc_id, preloaded_data=None, quick_loa
     #Currently, there's just a single ProtocolResultsDir class.  If we want to allow custom classes
     # we'll need to use the 'resultdirs' collection to store this information (FUTURE)
     from ..protocols import ProtocolResultsDir as _ProtocolResultsDir
-    return _ProtocolResultsDir.from_mongodb(mongodb, doc_id, preloaded_data=preloaded_data, quick_load=quick_load)
+    return _ProtocolResultsDir.from_mongodb(mongodb, doc_id, preloaded_data=preloaded_data,
+                                            quick_load=quick_load, read_all_results_for_data=read_all_results_for_data)
 
 
 def remove_results_from_mongodb(mongodb, doc_id, comm=None, session=None, recursive="default"):
