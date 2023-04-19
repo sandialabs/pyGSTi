@@ -360,7 +360,7 @@ class LindbladErrorgen(_LinearOperator):
         identity_label_1Q = 'I'  # maybe we could get this from a 1Q basis somewhere?
         sslbls = state_space.sole_tensor_product_block_labels  # first TPB labels == all labels
         elementary_errorgens = _collections.OrderedDict(
-            [_LocalElementaryErrorgenLabel.cast(lbl, sslbls, identity_label_1Q, val)
+            [(_LocalElementaryErrorgenLabel.cast(lbl, sslbls, identity_label_1Q), val)
              for lbl, val in elementary_errorgens.items()])
 
         parameterization = LindbladParameterization.minimal_from_elementary_errorgens(elementary_errorgens) \
