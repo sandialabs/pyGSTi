@@ -48,7 +48,19 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             else:
                 return cls(obj[0], (obj[1:],))  # e.g. "HXX" => ('H','XX')
         elif isinstance(obj, (tuple, list)):
-            return cls(obj[0], obj[1:])  # e.g. ('H','XX') or ('S', 'X', 'Y')
+            if all(isinstance(el, str) for el in obj):
+                return cls(obj[0], obj[1:])  # e.g. ('H','XX') or ('S', 'X', 'Y')
+            else:
+                # e.g. ('H', ('X',), (1,)) or other GlobalElementaryErrorgenLabel tuples
+                assert(sslbls is not None), "Cannot convert global-like tuples -> local elementary errogen label without `sslbls`!"
+                indices_to_replace = [sslbls.index(sslbl) for sslbl in obj[2]]
+                local_bels = []
+                for global_lbl in obj[1]:
+                    local_bel = [identity_label] * len(sslbls)
+                    for kk, k in enumerate(indices_to_replace):
+                        local_bel[k] = global_lbl[kk]
+                    local_bels.append(''.join(local_bel))
+                return cls(obj[0], local_bels)
         else:
             raise ValueError("Cannot convert %s to a local elementary errorgen label!" % str(obj))
 
