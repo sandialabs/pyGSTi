@@ -213,6 +213,10 @@ class IBMQExperiment(dict):
         -------
         None
         """
+        
+        #Get the backend version
+        backend_version = ibmq_backend.version
+        
         total_waits = 0
         self['qjob'] = [] if self['qjob'] is None else self['qjob']
         self['job_ids'] = [] if self['job_ids'] is None else self['job_ids']
@@ -232,8 +236,18 @@ class IBMQExperiment(dict):
                 print(f'Given job limit and active jobs, only {allowed_jobs} can be submitted')
 
             stop = min(start + allowed_jobs, len(self['qobj']))
-
-        for batch_idx, qobj in enumerate(self['qobj']):
+        
+        #if the backend version is 1 I believe this should correspond to the use of the legacy
+        #qiskit-ibmq-provider API which supports passing in Qobj objects for specifying experiments
+        #if the backend version is 2 I believe this should correspond to the new API in qiskit-ibm-provider.
+        #This new API doesn't support passing in Qobjs into the run method for backends, so we need
+        #to pass in the list of QuantumCircuit objects directly.
+        if backend_version == 1:
+            batch_iterator = enumerate(self['qobj'])
+        elif backend_version >= 2:
+            batch_iterator = enumerate(self['qiskit_QuantumCircuits'])
+        
+        for batch_idx, batch in batch_iterator:
             if batch_idx < start or batch_idx >= stop:
                 continue
 
@@ -244,7 +258,12 @@ class IBMQExperiment(dict):
                 try:
                     backend_properties = ibmq_backend.properties()
                     self['submit_time_calibration_data'].append(backend_properties.to_dict())
-                    self['qjob'].append(ibmq_backend.run(qobj))
+                    #if using the new API we need to pass in the number of shots.
+                    if backend_version == 1:
+                        self['qjob'].append(ibmq_backend.run(batch))
+                    else:
+                        self['qjob'].append(ibmq_backend.run(batch, shots = self['num_shots']))
+                        
                     status = self['qjob'][-1].status()
                     initializing = True
                     initializing_steps = 0
