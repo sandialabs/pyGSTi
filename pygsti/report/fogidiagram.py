@@ -1207,7 +1207,7 @@ _template = """<html>
     <!-- <script type="text/javascript"
                  src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script> -->
     <!-- <script src="https://code.jquery.com/jquery-3.6.4.min.js"
-                 integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script> -->
+                 integrity="sha256-oP6HI9z1XaZNBrJURtCoUT5SUnxFr8s3BzRl+cbzUq8=" crossorigin="anonymous"></script> -->
 
     <style type="text/css">
       body {{
