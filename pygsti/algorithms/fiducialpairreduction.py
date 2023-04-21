@@ -2154,7 +2154,10 @@ def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, pre_pov
         
     jacobian_dicts = {}
         
-    for germ in germs:        
+    for germ in germs:       
+        if comm is None or comm.Get_rank() ==0:
+            print('Current germ:', germ)
+         
         lst = _gsc.create_circuits(
             "pp[0]+f0+germ*power+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
             germ=germ, pp=pre_povm_tuples, power=1,
