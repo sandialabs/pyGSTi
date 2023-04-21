@@ -1592,7 +1592,7 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
                                                    mem_limit=None, inv_trace_tol= 10, initial_seed_mode='greedy',
                                                    evd_tol=1e-10, sensitivity_threshold=1e-10, seed=None ,verbosity=0, 
                                                    check_complete_fid_set=False, float_type = _np.cdouble,
-                                                   germ_set_spanning_kwargs = None):
+                                                   germ_set_spanning_kwargs = None, precomputed_jacobians = None):
     """
     Finds a per-germ set of fiducial pairs that are amplificationally complete.
 
@@ -1647,6 +1647,11 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
 
     mem_limit : int, optional
         A memory limit in bytes.
+        
+    precomputed_jacobians : dict, optional (default None)
+        An optional dictionary of precomputed jacobian dictionaries for the
+        germ fidcuials pair set. The keys are germs and the values are the dictionaries
+        corresponding that that germ-fiducial-pair set's jacobian.
 
     Returns
     -------
@@ -1693,6 +1698,11 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
 
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
     
+    #if precomputed_jacobians is None then make sure we pass in None for each germ
+    #hack this in without branching by constructing a dictionary of Nones.
+    if precomputed_jacobians is None:
+        precomputed_jacobians = {germ:None for germ in germ_vector_spanning_set.keys()}
+    
     #make the spam parameters of the target model static, as the output of the
     #germ set spanning vector code doesn't include spam parameters.
     target_model_static_spam = _make_spam_static(target_model)
@@ -1705,7 +1715,8 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
                                                                     printer, dof_per_povm,
                                                                     inv_trace_tol, initial_seed_mode=initial_seed_mode,
                                                                     check_complete_fid_set=check_complete_fid_set, evd_tol=evd_tol,
-                                                                    sensitivity_threshold=sensitivity_threshold, float_type= _np.cdouble)
+                                                                    sensitivity_threshold=sensitivity_threshold, float_type= _np.cdouble,
+                                                                    dprobs_dict = precomputed_jacobians[germ])
             
             #print some output about the minimum eigenvalue acheived.
             if best_score is not None:
@@ -1726,7 +1737,7 @@ def get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuple
                                  target_model, germ, germ_vector_list, mem_limit, printer, dof_per_povm, 
                                  inv_trace_tol=10, initial_seed_mode= 'greedy',
                                  check_complete_fid_set= True, evd_tol=1e-10, sensitivity_threshold= 1e-10,
-                                 float_type = _np.cdouble):
+                                 float_type = _np.cdouble, dprobs_dict = None):                      
     #Get dP-matrix for full set of fiducials, where
     # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
     #   j is similar, and derivs are wrt the "eigenvalues" of the germ
@@ -1778,7 +1789,7 @@ def get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuple
     germ_vector_mat = _np.concatenate(germ_vector_list, axis=1)
     compact_directional_DDD_list = _compute_bulk_directional_ddd_compact(reduced_model, lst, germ_vector_mat, eps=evd_tol,
                              comm=None, evd_tol=evd_tol,  float_type=float_type,
-                             printer=printer, return_eigs=False)
+                             printer=printer, return_eigs=False, dprobs_dict = dprobs_dict)
     
     #It can happen that there are fiducial pairs which are entirely insensitive to any
     #of the selected amplified parameters, which show up as empty matrices in the list of directional derivatives.
@@ -1933,7 +1944,7 @@ def get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuple
 #compact EVD in order to save on memory.    
 def _compute_bulk_directional_ddd_compact(model, circuits, vec_mat, eps,
                              comm=None, evd_tol=1e-10,  float_type=_np.cdouble,
-                             printer=None, return_eigs=False):
+                             printer=None, return_eigs=False, dprobs_dict= None):
 
     """
     Calculate the positive squares of the fiducial pair Jacobians.
@@ -1978,6 +1989,12 @@ def _compute_bulk_directional_ddd_compact(model, circuits, vec_mat, eps,
     return_eigs : bool, optional, default False
        If True then additionally return a list of the arrays of eigenvalues for each
        fiducial pair's derivative gramian.
+       
+    dprobs_dict : dictionary, optional (default None).
+        Optionally can pass in a precomputed dictionary of jacobians (in the format output
+        by bulk_dprobs) in which case they are not re-computed here. This can be useful
+        if you want to use MPI for calculating the probabilities while using the native
+        multi-threading in BLAS apis for other calculations. 
 
     Returns
     -------
@@ -2001,8 +2018,9 @@ def _compute_bulk_directional_ddd_compact(model, circuits, vec_mat, eps,
         printer.log('Generating compact EVD Cache',1)
         
         #calculate the jacobians in bulk.
-        printer.log('Calculating Jacobians of Probabilities.', 2)
-        dprobs_dict = static_spam_model.sim.bulk_dprobs(circuits)
+        if dprobs_dict is None:
+            printer.log('Calculating Jacobians of Probabilities.', 2)
+            dprobs_dict = static_spam_model.sim.bulk_dprobs(circuits)
         
         printer.log('Constructing compact EVDs.', 2)
         with printer.progress_logging(3):
@@ -2033,7 +2051,8 @@ def _compute_bulk_directional_ddd_compact(model, circuits, vec_mat, eps,
                 sqrteU_list.append( U@_np.diag(_np.sqrt(e)) )       
     else: 
         #calculate the jacobians in bulk.
-        dprobs_dict = static_spam_model.sim.bulk_dprobs(circuits)
+        if dprobs_dict is None:
+            dprobs_dict = static_spam_model.sim.bulk_dprobs(circuits)
 
         for i, ckt in enumerate(circuits):                
 
@@ -2074,3 +2093,75 @@ def _make_spam_static(model):
     model_copy._rebuild_paramvec()
     
     return model_copy
+    
+#write a helper function for precomputing the jacobian dictionaries from bulk_dprobs
+#which can then be passed into the construction of the compactEVD caches.
+
+def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, pre_povm_tuples = 'first', comm=None, mem_limit=None):
+    """
+    Function for precomputing the jacobian dictionaries from bulk_dprobs
+    for a model with its SPAM parameters frozen, as needed for certain
+    FPR applications. Can take a comm object for parallelization of the
+    jacobian calculation using MPI.
+    
+    model : Model
+        The model used for calculating the jacobian with respect to.
+        
+    germs :list of Circuits
+        Germs to construct the jacobian dictionaries for.
+    
+    prep_fiducials : list of Circuits
+        A list of preparation fiducials circuits.
+    
+    meas_fiducials : list of Circuits
+        A list of measurement fiducial circuits.
+        
+    pre_povm_tuples : str or list of tuples (default 'first')
+        Either a string or list of tuples. When a list of tuples
+        these correspond to native state prep and native POVM pairs.
+        When the special keyword argument 'first' is passed in the first
+        native prep and first native POVM are used.
+    
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator for distributing the computation
+        across multiple processors is used for the jacobian calculation.
+        
+    mem_limit : int, optional (default None)
+        An optional per-worker memory limit, in bytes.
+        
+    Returns
+    --------
+    jacobian_dicts : dictionary of dictionaries
+        A dictionary whose keys correspond to germs and whose values correspond
+        the jacobian dictionaries for the list of circuits induced by that germ
+        together with the set of fiducials pairs. Format of these correspond
+        to the format returned by bulk_dprobs.
+    
+    """
+    resource_alloc = _baseobjs.ResourceAllocation(comm= comm, mem_limit = mem_limit)
+    
+    #construct the list of circuits
+    if pre_povm_tuples == "first":
+        firstRho = list(model.preps.keys())[0]
+        firstPOVM = list(model.povms.keys())[0]
+        pre_povm_tuples = [(firstRho, firstPOVM)]
+        
+    pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
+                       for prepLbl, povmLbl in pre_povm_tuples]
+        
+    #freeze the SPAM model parameters:
+    static_spam_model = _make_spam_static(model)
+        
+    jacobian_dicts = {}
+        
+    for germ in germs:        
+        lst = _gsc.create_circuits(
+            "pp[0]+f0+germ*power+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
+            germ=germ, pp=pre_povm_tuples, power=1,
+            order=('f0', 'f1', 'pp'))
+        
+        #calculate the dprobs dictionary in bulk.
+        dprobs_dict = static_spam_model.sim.bulk_dprobs(lst, resource_alloc)        
+        jacobian_dicts[germ] = dprobs_dict
+        
+    return jacobian_dicts
