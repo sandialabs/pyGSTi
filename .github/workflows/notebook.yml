@@ -56,6 +56,8 @@ jobs:
         # but still compile Cython extensions
         python -m pip install -e .[testing]
         python setup.py build_ext --inplace
+        # run pip freeze so I can do some debugging
+        pip freeze
     - name: Run notebook regression ubuntu
       if: ${{matrix.os == 'ubuntu-20.04'}}
       run: |
