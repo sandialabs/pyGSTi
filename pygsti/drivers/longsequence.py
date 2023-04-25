@@ -22,7 +22,7 @@ from pygsti.processors import ProcessorSpec as _ProcessorSpec
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.baseobjs.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
 from pygsti.models.model import Model as _Model
-from pygsti.models.modelconstruction import _create_explicit_model
+from pygsti.models.modelconstruction import _create_explicit_model, create_explicit_model
 from pygsti.protocols.gst import _load_pspec_or_model
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
@@ -152,8 +152,8 @@ def run_model_test(model_filename_or_object,
     if isinstance(pspec_or_model, _Model):
         target_model= pspec_or_model
     elif isinstance(pspec_or_model, _ProcessorSpec):
-        target_model= _create_explicit_model(pspec_or_model, 
-                                             basis= _load_model(model_filename_or_object).basis())
+        target_model= create_explicit_model(pspec_or_model, 
+                                             basis= _load_model(model_filename_or_object).basis)
 
     #Create the protocol
     proto = _proto.ModelTest(_load_model(model_filename_or_object), target_model, gopt_suite,
