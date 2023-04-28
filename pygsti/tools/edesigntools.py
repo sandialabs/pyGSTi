@@ -122,7 +122,7 @@ def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_
     return total_circ_time + total_upload_time
 
 
-def calculate_fisher_information_per_circuit(regularized_model, circuits, approx=False, comm = None, mem_limit = None):
+def calculate_fisher_information_per_circuit(regularized_model, circuits, approx=False, verbosity=1, comm = None, mem_limit = None):
     """Helper function to calculate all Fisher information terms for each circuit.
 
     This function can be used to pre-generate a cache for the
@@ -142,6 +142,9 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
     approx: bool, optional (default False)
         When set to true use the approximate fisher information where we drop the 
         hessian term. Significantly faster to compute than when including the hessian.
+        
+    verbosity: int, optional (default 1)
+        Used to control the level of output printed by a VerbosityPrinter object.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -157,20 +160,28 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
         Dictionary where keys are circuits and values are (num_params, num_params) Fisher information
         matrices for a single circuit.
     """
+    
+    printer = _baseobjs.VerbosityPrinter(verbosity, comm)
+    
     num_params = regularized_model.num_params
     outcomes = regularized_model.sim.probs(()).keys()
     
     resource_alloc = _baseobjs.ResourceAllocation(comm= comm, mem_limit = mem_limit)
     
+    printer.log('Calculating Probabilities, Jacobians and Hessians (if not using approx FIM).', 2)
+    printer.log('Calculating Probabilities.', 3)
     ps = regularized_model.sim.bulk_probs(circuits, resource_alloc)
+    printer.log('Calculating Jacobians.', 3)
     js = regularized_model.sim.bulk_dprobs(circuits, resource_alloc)
     #if approx is true we  add in the hessian term as well.
     if not approx:
+        printer.log('Calculating Hessians.', 3)
         hs = regularized_model.sim.bulk_hprobs(circuits, resource_alloc)
         total_hterm = {}
     
     #only do the combination of the terms for the fim on rank 0
     if comm is None or comm.Get_rank() == 0: 
+        printer.log('Accumulating terms for per-circuit FIM.', 3)
         fisher_info_terms = {}
         
         for circuit in circuits:
@@ -193,10 +204,13 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
         if not approx:
             total_hterm = None
     
-    if comm is not None:  # broadcast to non-root procs
-        fisher_info_terms = comm.bcast(fisher_info_terms, root=0)
-        if not approx:
-            total_hterm = comm.bcast(total_hterm, root=0)
+    #The term caches are often large enough to exceed the maximum MPI message size. We're currently configured
+    #to only do the accumulation on the base rank, so right now we can actually just skip this broadcase (and
+    #save some memory while we're at it). If needed we can sort out a chunking scheme to sidestep the MPI issue down the line.
+    #if comm is not None:  # broadcast to non-root procs
+    #    fisher_info_terms = comm.bcast(fisher_info_terms, root=0)
+    #    if not approx:
+    #        total_hterm = comm.bcast(total_hterm, root=0)
                 
     if approx:
         return fisher_info_terms
@@ -287,7 +301,7 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
         if len(needed_circuits):
             printer.log('Adding needed terms to the per-circuit term cache.',2)
             new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, 
-                                                                 approx, comm=comm, mem_limit=mem_limit)
+                                                                 approx, verbosity=verbosity, comm=comm, mem_limit=mem_limit)
             term_cache.update(new_terms)
 
         # Collect all terms, do this on rank zero:
@@ -315,17 +329,19 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
                 printer.show_progress(iteration = i, total=len(chunked_circuit_lists), bar_length=50, 
                                       suffix= f'Circuit chunk {i} out of {len(chunked_circuit_lists)}')
                 new_terms = calculate_fisher_information_per_circuit(regularized_model, ckt_chunk, 
-                                                                     approx, comm=comm, mem_limit=mem_limit)
+                                                                     approx, verbosity=verbosity, comm=comm, mem_limit=mem_limit)
                 # Collect all terms, do this on rank zero:
                 if comm is None or comm.Get_rank() == 0:
                     for circ in ckt_chunk:
                         fisher_information += new_terms[circ] * num_shots[circ]
                 #free up the memory from new_terms:
                 del new_terms
-    #We can probably actually get away with never returning the fisher information matrix on the other ranks,
-    #but I'll look into that more another time.
-    if comm is not None:
-        fisher_information = comm.bcast(fisher_information, root=0)
+    #The fisher information matrices looks to sometimes be larger than the default allowed buffer size for
+    #MPI messages, which breaks the broadcasting. For now we don't actually need the fisher information
+    #matrices to be returned on all of the ranks so let's skip this broadcast until we have implemented
+    #a way to chunk out the MPI messages so that they are small enough.
+    #if comm is not None:
+    #    fisher_information = comm.bcast(fisher_information, root=0)
     
     return fisher_information
 
@@ -413,7 +429,7 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
             term_cache = {}
         needed_circuits = [c for ckt_list in circuit_lists for c in ckt_list if c not in term_cache]
         if len(needed_circuits):
-            new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, approx, 
+            new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, approx, verbosity=verbosity, 
                                                                  comm=comm, mem_limit=mem_limit)
             term_cache.update(new_terms)
         #should have already used the comm in the construction of the term cache, so this is just and accumulation
@@ -423,7 +439,7 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
             for L, ckt_list in zip(Ls, circuit_lists):
                 printer.log(f'Computing fisher information matrix for L={L}',2)
                 fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
-                                                               term_cache=term_cache, regularize_spam=False)
+                                                               term_cache=term_cache, regularize_spam=False, verbosity=verbosity)
         else:
             fisher_information_by_L = None
         
@@ -441,7 +457,7 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
                                                            verbosity = verbosity,
                                                            comm=comm, mem_limit=mem_limit)
     
-    #Probably don't actually need to return the dictionary on all ranks, but sorting that out is a problem for another day.    
+    #In memory efficient mode the fisher information is None on any rank other than 0 when using MPI.    
     return fisher_information_by_L
 
 def pad_edesign_with_idle_lines(edesign, line_labels):
