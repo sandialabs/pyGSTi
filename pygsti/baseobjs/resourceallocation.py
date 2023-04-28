@@ -257,8 +257,8 @@ class ResourceAllocation(object):
         nbytes = num_elements * _np.dtype(dtype).itemsize
         self.allocated_memory += nbytes
         if self.mem_limit is not None and self.allocated_memory > self.mem_limit:
-            raise MemoryError("User-supplied memory limit of %.2fGB has been exceeded!"
-                              % (self.mem_limit / (1024.0**3)))
+            raise MemoryError("User-supplied memory limit of %.2fGB has been exceeded! Allocation of %.2fGB requested."
+                              % (self.mem_limit / (1024.0**3), self.allocated_memory / (1024.0**3)))
         yield
         self.allocated_memory -= nbytes
 
