@@ -414,7 +414,8 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
         fisher_information_by_L = {}
         for L, ckt_list in zip(Ls, circuit_lists):
             fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
-                                                           term_cache=None, regularize_spam=False, 
+                                                           term_cache=None, regularize_spam=False,
+                                                           approx = approx, 
                                                            mem_efficient_mode=mem_efficient_mode,
                                                            circuit_chunk_size = circuit_chunk_size,
                                                            comm=comm, mem_limit=mem_limit)
