@@ -301,7 +301,7 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
         chunked_circuit_lists= _np.array_split(_np.asarray(circuits, dtype=object), circuit_chunk_size)
         #now loop through the chunked circuit lists and proceed similarly as above, but freeing up
         #memory as we go along.
-        for ckt_chunk in chunked_ckt_lists:
+        for ckt_chunk in chunked_circuit_lists:
             new_terms = calculate_fisher_information_per_circuit(regularized_model, ckt_chunk, 
                                                                  approx, comm=comm, mem_limit=mem_limit)
             # Collect all terms, do this on rank zero:
