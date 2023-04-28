@@ -205,7 +205,7 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
 
 def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache=None,
                                         regularize_spam=True, approx= False, mem_efficient_mode= False, 
-                                        circuit_chunk_size = 100, comm = None, mem_limit = None):
+                                        circuit_chunk_size = 100,, verbosity=1, comm = None, mem_limit = None):
     """Calculate the Fisher information matrix for a set of circuits and a model.
 
     Note that the model should be regularized so that no probability should be very small
@@ -246,6 +246,9 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
         Used in conjunction with mem_efficient_mode. This sets the maximum number of circuits to
         simultaneously construct the per-circuit contributions to the fisher information for
         at any one time.
+        
+    verbosity: int, optional (default 1)
+        Used to control the level of output printed by a VerbosityPrinter object.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -260,6 +263,9 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
     fisher_information: numpy.ndarray
         Fisher information matrix of size (num_params, num_params)
     """
+    
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
+    
     # Regularize model
     regularized_model = model.copy()
     if regularize_spam:
@@ -278,12 +284,14 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
             term_cache = {}
         needed_circuits = [c for c in circuits if c not in term_cache]
         if len(needed_circuits):
+            printer.log('Adding needed terms to the per-circuit term cache.',2)
             new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, 
                                                                  approx, comm=comm, mem_limit=mem_limit)
             term_cache.update(new_terms)
 
         # Collect all terms, do this on rank zero:
         if comm is None or comm.Get_rank() == 0: 
+            printer.log('Accumulating per-circuit contributions to fisher information.', 2)
             fisher_information = _np.zeros((num_params, num_params))
             for circ in circuits:
                 fisher_information += term_cache[circ] * num_shots[circ]
@@ -301,15 +309,18 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
         chunked_circuit_lists= _np.array_split(_np.asarray(circuits, dtype=object), circuit_chunk_size)
         #now loop through the chunked circuit lists and proceed similarly as above, but freeing up
         #memory as we go along.
-        for ckt_chunk in chunked_circuit_lists:
-            new_terms = calculate_fisher_information_per_circuit(regularized_model, ckt_chunk, 
-                                                                 approx, comm=comm, mem_limit=mem_limit)
-            # Collect all terms, do this on rank zero:
-            if comm is None or comm.Get_rank() == 0:
-                for circ in ckt_chunk:
-                    fisher_information += new_terms[circ] * num_shots[circ]
-            #free up the memory from new_terms:
-            del new_terms
+        with printer.progress_logging(2):
+            for i, ckt_chunk in enumerate(chunked_circuit_lists):
+                printer.show_progress(iteration = i, total=len(chunked_circuit_lists), bar_length=50, 
+                                      suffix= f'Circuit chunk {i} out of {len(chunked_circuit_lists)}')
+                new_terms = calculate_fisher_information_per_circuit(regularized_model, ckt_chunk, 
+                                                                     approx, comm=comm, mem_limit=mem_limit)
+                # Collect all terms, do this on rank zero:
+                if comm is None or comm.Get_rank() == 0:
+                    for circ in ckt_chunk:
+                        fisher_information += new_terms[circ] * num_shots[circ]
+                #free up the memory from new_terms:
+                del new_terms
     #We can probably actually get away with never returning the fisher information matrix on the other ranks,
     #but I'll look into that more another time.
     if comm is not None:
@@ -321,6 +332,7 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
 def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_shots=1, term_cache=None,
                                                regularize_spam=True, cumulative=True, approx = False,
                                                mem_efficient_mode= False, circuit_chunk_size = 100,
+                                               verbosity= 1,
                                                comm = None, mem_limit = None):
     """Calculate a set of Fisher information matrices for a set of circuits grouped by iteration.
 
@@ -362,6 +374,9 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
         Used in conjunction with mem_efficient_mode. This sets the maximum number of circuits to
         simultaneously construct the per-circuit contributions to the fisher information for
         at any one time.
+        
+    verbosity: int, optional (default 1)
+        Used to control the level of output printed by a VerbosityPrinter object.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -376,6 +391,9 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
     fisher_information_by_L: dict
         Dictionary with keys as circuit length L and value as Fisher information matrices
     """
+    
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
+    
     # Regularize model
     regularized_model = model.copy()
     if regularize_spam:
@@ -402,6 +420,7 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
         if comm is None or comm.Get_rank() == 0:
             fisher_information_by_L = {}
             for L, ckt_list in zip(Ls, circuit_lists):
+                printer.log(f'Computing fisher information matrix for L={L}',2)
                 fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
                                                                term_cache=term_cache, regularize_spam=False)
         else:
@@ -418,6 +437,7 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
                                                            approx = approx, 
                                                            mem_efficient_mode=mem_efficient_mode,
                                                            circuit_chunk_size = circuit_chunk_size,
+                                                           verbosity = verbosity,
                                                            comm=comm, mem_limit=mem_limit)
     
     #Probably don't actually need to return the dictionary on all ranks, but sorting that out is a problem for another day.    
