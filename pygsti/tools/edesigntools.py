@@ -11,6 +11,7 @@ Tools for working with ExperimentDesigns
 #***************************************************************************************************
 
 import numpy as _np
+import pygsti.baseobjs as _baseobjs
 
 def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_1Q=None,
                                         gate_time_2Q=None, measure_reset_time=0.0,
@@ -120,7 +121,7 @@ def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_
     return total_circ_time + total_upload_time
 
 
-def calculate_fisher_information_per_circuit(regularized_model, circuits, approx=False):
+def calculate_fisher_information_per_circuit(regularized_model, circuits, approx=False, comm = None, mem_limit = None):
     """Helper function to calculate all Fisher information terms for each circuit.
 
     This function can be used to pre-generate a cache for the
@@ -136,6 +137,18 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
 
     circuits: list
         List of circuits to compute Fisher information for.
+        
+    approx: bool, optional (default False)
+        When set to true use the approximate fisher information where we drop the 
+        hessian term. Significantly faster to compute than when including the hessian.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+        
+    mem_limit : int, optional
+        A rough memory limit in bytes which is used to determine job allocation
+        when there are multiple processors.
 
     Returns
     -------
@@ -145,31 +158,45 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
     """
     num_params = regularized_model.num_params
     outcomes = regularized_model.sim.probs(()).keys()
-
-    ps = regularized_model.sim.bulk_probs(circuits)
-    js = regularized_model.sim.bulk_dprobs(circuits)
+    
+    resource_alloc = _baseobjs.ResourceAllocation(comm= comm, mem_limit = mem_limit)
+    
+    ps = regularized_model.sim.bulk_probs(circuits, resource_alloc)
+    js = regularized_model.sim.bulk_dprobs(circuits, resource_alloc)
     #if approx is true we  add in the hessian term as well.
     if not approx:
-        hs = regularized_model.sim.bulk_hprobs(circuits)
+        hs = regularized_model.sim.bulk_hprobs(circuits, resource_alloc)
         total_hterm = {}
     
-    fisher_info_terms = {}
-    
-    for circuit in circuits:
-        if circuit not in fisher_info_terms:
-            fisher_info_terms[circuit] = _np.zeros([num_params, num_params])
+    #only do the combination of the terms for the fim on rank 0
+    if comm is None or comm.Get_rank() == 0: 
+        fisher_info_terms = {}
+        
+        for circuit in circuits:
+            if circuit not in fisher_info_terms:
+                fisher_info_terms[circuit] = _np.zeros([num_params, num_params])
+                if not approx:
+                    total_hterm[circuit] = _np.zeros([num_params, num_params])
+            p = ps[circuit]
+            j = js[circuit]
             if not approx:
-                total_hterm[circuit] = _np.zeros([num_params, num_params])
-        p = ps[circuit]
-        j = js[circuit]
+                h = hs[circuit]
+            for outcome in outcomes:
+                if not approx:
+                    fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome]) / p[outcome] - h[outcome]
+                    total_hterm[circuit] += h[outcome]
+                else:
+                    fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome]) / p[outcome]
+    else:
+        fisher_info_terms = None
         if not approx:
-            h = hs[circuit]
-        for outcome in outcomes:
-            if not approx:
-                fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome]) / p[outcome] - h[outcome]
-                total_hterm[circuit] += h[outcome]
-            else:
-                fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome]) / p[outcome]
+            total_hterm = None
+    
+    if comm is not None:  # broadcast to non-root procs
+        fisher_info_terms = comm.bcast(fisher_info_terms, root=0)
+        if not approx:
+            total_hterm = comm.bcast(total_hterm, root=0)
+                
     if approx:
         return fisher_info_terms
     else:
@@ -177,7 +204,7 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
 
 
 def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache=None,
-                                        regularize_spam=True):
+                                        regularize_spam=True, approx= False, comm = None, mem_limit = None):
     """Calculate the Fisher information matrix for a set of circuits and a model.
 
     Note that the model should be regularized so that no probability should be very small
@@ -206,7 +233,19 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
         If True, depolarizing SPAM noise is added to prevent 0 probabilities for numerical
         stability. Note that this may fail if the model does not have a dense SPAM
         paramerization. In that case, pass an already "regularized" model and set this to False.
+        
+    approx: bool, optional (default False)
+        When set to true use the approximate fisher information where we drop the 
+        hessian term. Significantly faster to compute than when including the hessian.
 
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+        
+    mem_limit : int, optional
+        A rough memory limit in bytes which is used to determine job allocation
+        when there are multiple processors.
+        
     Returns
     -------
     fisher_information: numpy.ndarray
@@ -229,14 +268,21 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
         term_cache = {}
     needed_circuits = [c for c in circuits if c not in term_cache]
     if len(needed_circuits):
-        new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits)
+        new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, 
+                                                             approx, comm=comm, mem_limit=mem_limit)
         term_cache.update(new_terms)
 
-    # Collect all terms
-    fisher_information = _np.zeros((num_params, num_params))
-    for circ in circuits:
-        fisher_information += term_cache[circ] * num_shots[circ]
-
+    # Collect all terms, do this on rank zero:
+    if comm is None or comm.Get_rank() == 0: 
+        fisher_information = _np.zeros((num_params, num_params))
+        for circ in circuits:
+            fisher_information += term_cache[circ] * num_shots[circ]
+    else:
+        fisher_information = None
+        
+    if comm is not None:
+        fisher_information = comm.bcast(fisher_information, root=0)
+    
     return fisher_information
 
 
