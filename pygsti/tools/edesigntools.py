@@ -204,7 +204,8 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
 
 
 def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache=None,
-                                        regularize_spam=True, approx= False, comm = None, mem_limit = None):
+                                        regularize_spam=True, approx= False, mem_efficient_mode= False, 
+                                        circuit_chunk_size = 100, comm = None, mem_limit = None):
     """Calculate the Fisher information matrix for a set of circuits and a model.
 
     Note that the model should be regularized so that no probability should be very small
@@ -238,6 +239,14 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
         When set to true use the approximate fisher information where we drop the 
         hessian term. Significantly faster to compute than when including the hessian.
 
+    mem_efficient_mode: bool, optional (default False)
+        If true avoid constructing the intermediate term cache to save on memory.
+        
+    circuit_chunk_size, int, optional (default 100)
+        Used in conjunction with mem_efficient_mode. This sets the maximum number of circuits to
+        simultaneously construct the per-circuit contributions to the fisher information for
+        at any one time.
+
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
@@ -264,22 +273,45 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
         num_shots = {c: num_shots for c in circuits}
 
     # Calculate all needed terms
-    if term_cache is None:
-        term_cache = {}
-    needed_circuits = [c for c in circuits if c not in term_cache]
-    if len(needed_circuits):
-        new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, 
-                                                             approx, comm=comm, mem_limit=mem_limit)
-        term_cache.update(new_terms)
+    if not mem_efficient_mode:
+        if term_cache is None:
+            term_cache = {}
+        needed_circuits = [c for c in circuits if c not in term_cache]
+        if len(needed_circuits):
+            new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, 
+                                                                 approx, comm=comm, mem_limit=mem_limit)
+            term_cache.update(new_terms)
 
-    # Collect all terms, do this on rank zero:
-    if comm is None or comm.Get_rank() == 0: 
-        fisher_information = _np.zeros((num_params, num_params))
-        for circ in circuits:
-            fisher_information += term_cache[circ] * num_shots[circ]
+        # Collect all terms, do this on rank zero:
+        if comm is None or comm.Get_rank() == 0: 
+            fisher_information = _np.zeros((num_params, num_params))
+            for circ in circuits:
+                fisher_information += term_cache[circ] * num_shots[circ]
+        else:
+            fisher_information = None
+    #if working in memory efficient mode get the terms we need in smaller
+    #chunks and build up the fisher information matrix as we go along.
     else:
-        fisher_information = None
-        
+        #initialize the empty fisher information matrix on rank 0:
+        if comm is None or comm.Get_rank() == 0: 
+            fisher_information = _np.zeros((num_params, num_params))
+        else:
+            fisher_information = None
+        #divide up the list of circuits into chunks of size at most circuit_chunk_size
+        chunked_circuit_lists= _np.array_split(_np.asarray(circuits, dtype=object), circuit_chunk_size)
+        #now loop through the chunked circuit lists and proceed similarly as above, but freeing up
+        #memory as we go along.
+        for ckt_chunk in chunked_ckt_lists:
+            new_terms = calculate_fisher_information_per_circuit(regularized_model, ckt_chunk, 
+                                                                 approx, comm=comm, mem_limit=mem_limit)
+            # Collect all terms, do this on rank zero:
+            if comm is None or comm.Get_rank() == 0:
+                for circ in ckt_chunk:
+                    fisher_information += new_terms[circ] * num_shots[circ]
+            #free up the memory from new_terms:
+            del new_terms
+    #We can probably actually get away with never returning the fisher information matrix on the other ranks,
+    #but I'll look into that more another time.
     if comm is not None:
         fisher_information = comm.bcast(fisher_information, root=0)
     
@@ -288,6 +320,7 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
 
 def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_shots=1, term_cache=None,
                                                regularize_spam=True, cumulative=True, approx = False,
+                                               mem_efficient_mode= False, circuit_chunk_size = 100,
                                                comm = None, mem_limit = None):
     """Calculate a set of Fisher information matrices for a set of circuits grouped by iteration.
 
@@ -321,6 +354,14 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
     approx: bool, optional (default False)
         When set to true use the approximate fisher information where we drop the 
         hessian term. Significantly faster to compute than when including the hessian.
+        
+    mem_efficient_mode: bool, optional (default False)
+        If true avoid constructing the intermediate term cache to save on memory.
+        
+    circuit_chunk_size, int, optional (default 100)
+        Used in conjunction with mem_efficient_mode. This sets the maximum number of circuits to
+        simultaneously construct the per-circuit contributions to the fisher information for
+        at any one time.
 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
@@ -347,29 +388,38 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
         num_shots = {c: num_shots for ckt_list in circuit_lists for c in ckt_list}
 
     # Calculate all needed terms
-    if term_cache is None:
-        term_cache = {}
-    needed_circuits = [c for ckt_list in circuit_lists for c in ckt_list if c not in term_cache]
-    if len(needed_circuits):
-        new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, approx, 
-                                                             comm=comm, mem_limit=mem_limit)
-        term_cache.update(new_terms)
-
     
-    
-    #should have already used the comm in the construction of the term cache, so this is just and accumulation
-    #step so do this on rank 0 and broadcast.
-    if comm is None or comm.Get_rank() == 0:
-        fisher_information_by_L = {}
-        for L, ckt_list in zip(Ls, circuit_lists):
-            fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
-                                                           term_cache=term_cache, regularize_spam=False)
-    else:
-        fisher_information_by_L = None
-    
-    if comm is not None:
-        fisher_information_by_L = comm.bcast(fisher_information_by_L, root=0)
+    if not mem_efficient_mode:
+        if term_cache is None:
+            term_cache = {}
+        needed_circuits = [c for ckt_list in circuit_lists for c in ckt_list if c not in term_cache]
+        if len(needed_circuits):
+            new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, approx, 
+                                                                 comm=comm, mem_limit=mem_limit)
+            term_cache.update(new_terms)
+        #should have already used the comm in the construction of the term cache, so this is just and accumulation
+        #step so do this on rank 0 and broadcast.
+        if comm is None or comm.Get_rank() == 0:
+            fisher_information_by_L = {}
+            for L, ckt_list in zip(Ls, circuit_lists):
+                fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
+                                                               term_cache=term_cache, regularize_spam=False)
+        else:
+            fisher_information_by_L = None
         
+        if comm is not None:
+            fisher_information_by_L = comm.bcast(fisher_information_by_L, root=0)
+        
+    else:
+        fisher_information_by_L = {}
+            for L, ckt_list in zip(Ls, circuit_lists):
+                fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
+                                                               term_cache=None, regularize_spam=False, 
+                                                               mem_efficient_mode=mem_efficient_mode,
+                                                               circuit_chunk_size = circuit_chunk_size,
+                                                               comm=comm, mem_limit=mem_limit)
+    
+    #Probably don't actually need to return the dictionary on all ranks, but sorting that out is a problem for another day.    
     return fisher_information_by_L
 
 def pad_edesign_with_idle_lines(edesign, line_labels):
