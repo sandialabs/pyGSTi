@@ -286,8 +286,9 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
     return fisher_information
 
 
-def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, term_cache=None,
-                                               regularize_spam=True, cumulative=True):
+def calculate_fisher_information_matrices_by_L(model, circuit_lists, num_shots=1, term_cache=None,
+                                               regularize_spam=True, cumulative=True, approx = False,
+                                               comm = None, mem_limit = None):
     """Calculate a set of Fisher information matrices for a set of circuits grouped by iteration.
 
     Parameters
@@ -295,10 +296,9 @@ def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, ter
     model: OpModel
         The model used to calculate the terms of the Fisher information matrix.
 
-    circuits: list
-        List of circuits in the experiment design. Should be passed in using a PlaquetteGridCircuitStructure
-        object or a comparable circuit structure, most likely by using all_circuits_needing_data with an
-        experiment design object.
+    circuit_lists: list of lists of circuits or CircuitLists
+        Circuit lists for the experiment design for each L. Most likely from the value of
+        the `circuit_lists` attribute of most experiment design objects.
 
     num_shots: int or dict
         If int, specifies how many shots each circuit gets. If dict, keys must be circuits
@@ -317,6 +317,18 @@ def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, ter
 
     cumulative: bool
         Whether to include Fisher information matrices for lower L (True) or not.
+        
+    approx: bool, optional (default False)
+        When set to true use the approximate fisher information where we drop the 
+        hessian term. Significantly faster to compute than when including the hessian.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+        
+    mem_limit : int, optional
+        A rough memory limit in bytes which is used to determine job allocation
+        when there are multiple processors.
 
     Returns
     -------
@@ -329,64 +341,35 @@ def calculate_fisher_information_matrices_by_L(model, circuits, num_shots=1, ter
         regularized_model = regularized_model.depolarize(spam_noise=1e-3)
 
     if isinstance(num_shots, dict):
-        assert _np.all([c in num_shots for c in circuits]), \
+        assert _np.all([c in num_shots for ckt_list in circuit_lists for c in ckt_list]), \
             "If a dict, num_shots must have an entry for every circuit in the list"
     else:
-        num_shots = {c: num_shots for c in circuits}
+        num_shots = {c: num_shots for ckt_list in circuit_lists for c in ckt_list}
 
     # Calculate all needed terms
     if term_cache is None:
         term_cache = {}
-    needed_circuits = [c for c in circuits if c not in term_cache]
+    needed_circuits = [c for ckt_list in circuit_lists for c in ckt_list if c not in term_cache]
     if len(needed_circuits):
-        new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits)
+        new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, approx, 
+                                                             comm=comm, mem_limit=mem_limit)
         term_cache.update(new_terms)
 
-    # We want to make sure we don't double count circuits, so keep track of what we've seen
-    seen_circs = set()
-
-    fisher_information_by_L = {}
-    prev_L = None
     
-    #Check whether we need to add in addtional circuits from _additonal_circuit by checking if it is empty.
-    if circuits._additional_circuits:
+    
+    #should have already used the comm in the construction of the term cache, so this is just and accumulation
+    #step so do this on rank 0 and broadcast.
+    if comm is None or comm.Get_rank() == 0:
+        fisher_information_by_L = {}
+        for L, ckt_list in zip(Ls, circuit_lists):
+            fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
+                                                           term_cache=term_cache, regularize_spam=False)
+    else:
+        fisher_information_by_L = None
+    
+    if comm is not None:
+        fisher_information_by_L = comm.bcast(fisher_information_by_L, root=0)
         
-        unique_circs = list(set(circuits._additional_circuits) - seen_circs)
-        fim_term = calculate_fisher_information_matrix(regularized_model, unique_circs, num_shots,
-                                                       term_cache=term_cache, regularize_spam=False)
-
-        # Update seen circuits
-        seen_circs = seen_circs.union(unique_circs)
-
-        # Initialize the L=1 term of the dictionary     
-        fisher_information_by_L[1] = fim_term
-
-        # Update L for next round
-        prev_L = 1
-    
-    for (L, germ), plaq in circuits.iter_plaquettes():
-        # Build FIM for any new circuits included in this plaquette
-        plaq_circs = list(plaq.circuits)
-        unique_circs = list(set(plaq_circs) - seen_circs)
-        fim_term = calculate_fisher_information_matrix(regularized_model, unique_circs, num_shots,
-                                                       term_cache=term_cache, regularize_spam=False)
-
-        # Update seen circuits
-        seen_circs = seen_circs.union(unique_circs)
-
-        # Update Fisher information (multiple plaquettes can contribute to one L,
-        # and we also handle cumulative logic here)
-        if L not in fisher_information_by_L:
-            fisher_information_by_L[L] = fim_term
-
-            if cumulative and prev_L is not None:
-                fisher_information_by_L[L] += fisher_information_by_L[prev_L]
-        else:
-            fisher_information_by_L[L] += fim_term
-
-        # Update L for next round
-        prev_L = L
-
     return fisher_information_by_L
 
 def pad_edesign_with_idle_lines(edesign, line_labels):
