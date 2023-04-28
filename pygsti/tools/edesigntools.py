@@ -286,7 +286,7 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
     return fisher_information
 
 
-def calculate_fisher_information_matrices_by_L(model, circuit_lists, num_shots=1, term_cache=None,
+def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_shots=1, term_cache=None,
                                                regularize_spam=True, cumulative=True, approx = False,
                                                comm = None, mem_limit = None):
     """Calculate a set of Fisher information matrices for a set of circuits grouped by iteration.
