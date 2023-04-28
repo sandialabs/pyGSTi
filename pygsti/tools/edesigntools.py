@@ -161,7 +161,7 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
         matrices for a single circuit.
     """
     
-    printer = _baseobjs.VerbosityPrinter(verbosity, comm)
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     
     num_params = regularized_model.num_params
     outcomes = regularized_model.sim.probs(()).keys()
