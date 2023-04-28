@@ -12,6 +12,7 @@ Tools for working with ExperimentDesigns
 
 import numpy as _np
 import pygsti.baseobjs as _baseobjs
+from math import ceil
 
 def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_1Q=None,
                                         gate_time_2Q=None, measure_reset_time=0.0,
@@ -205,7 +206,7 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
 
 def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache=None,
                                         regularize_spam=True, approx= False, mem_efficient_mode= False, 
-                                        circuit_chunk_size = 100,, verbosity=1, comm = None, mem_limit = None):
+                                        circuit_chunk_size = 100, verbosity=1, comm = None, mem_limit = None):
     """Calculate the Fisher information matrix for a set of circuits and a model.
 
     Note that the model should be regularized so that no probability should be very small
@@ -306,7 +307,7 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
         else:
             fisher_information = None
         #divide up the list of circuits into chunks of size at most circuit_chunk_size
-        chunked_circuit_lists= _np.array_split(_np.asarray(circuits, dtype=object), circuit_chunk_size)
+        chunked_circuit_lists= _np.array_split(_np.asarray(circuits, dtype=object), ceil(len(circuits)/circuit_chunk_size))
         #now loop through the chunked circuit lists and proceed similarly as above, but freeing up
         #memory as we go along.
         with printer.progress_logging(2):
