@@ -412,12 +412,12 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
         
     else:
         fisher_information_by_L = {}
-            for L, ckt_list in zip(Ls, circuit_lists):
-                fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
-                                                               term_cache=None, regularize_spam=False, 
-                                                               mem_efficient_mode=mem_efficient_mode,
-                                                               circuit_chunk_size = circuit_chunk_size,
-                                                               comm=comm, mem_limit=mem_limit)
+        for L, ckt_list in zip(Ls, circuit_lists):
+            fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
+                                                           term_cache=None, regularize_spam=False, 
+                                                           mem_efficient_mode=mem_efficient_mode,
+                                                           circuit_chunk_size = circuit_chunk_size,
+                                                           comm=comm, mem_limit=mem_limit)
     
     #Probably don't actually need to return the dictionary on all ranks, but sorting that out is a problem for another day.    
     return fisher_information_by_L
