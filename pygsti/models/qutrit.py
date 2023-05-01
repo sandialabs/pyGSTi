@@ -21,7 +21,7 @@ from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 from pygsti.tools import unitary_to_superop, change_basis
 
 #Define 2 qubit to symmetric (+) antisymmetric space transformation A:
-A = _np.array([[1, 0, 0, 0],
+A = _np.matrix([[1, 0, 0, 0],
                 #               [0,0,0,1],
                 [0, 1. / _np.sqrt(2), 1. / _np.sqrt(2), 0],
                 [0, 1. / _np.sqrt(2), -1. / _np.sqrt(2), 0],
