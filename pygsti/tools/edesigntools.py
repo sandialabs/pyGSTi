@@ -13,6 +13,7 @@ Tools for working with ExperimentDesigns
 import numpy as _np
 import pygsti.baseobjs as _baseobjs
 from math import ceil
+from mpi4py import MPI
 
 def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_1Q=None,
                                         gate_time_2Q=None, measure_reset_time=0.0,
@@ -122,7 +123,7 @@ def calculate_edesign_estimated_runtime(edesign, gate_time_dict=None, gate_time_
     return total_circ_time + total_upload_time
 
 
-def calculate_fisher_information_per_circuit(regularized_model, circuits, approx=False, verbosity=1, comm = None, mem_limit = None):
+def calculate_fisher_information_per_circuit(regularized_model, circuits, approx=False, verbosity=1, comm = None, mem_limit = None, shared_memory=False):
     """Helper function to calculate all Fisher information terms for each circuit.
 
     This function can be used to pre-generate a cache for the
@@ -168,6 +169,9 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
     
     resource_alloc = _baseobjs.ResourceAllocation(comm= comm, mem_limit = mem_limit)
     
+    import time
+    
+    start = time.time()
     printer.log('Calculating Probabilities, Jacobians and Hessians (if not using approx FIM).', 2)
     printer.log('Calculating Probabilities.', 3)
     ps = regularized_model.sim.bulk_probs(circuits, resource_alloc)
@@ -178,40 +182,266 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
         printer.log('Calculating Hessians.', 3)
         hs = regularized_model.sim.bulk_hprobs(circuits, resource_alloc)
         total_hterm = {}
-    
-    #only do the combination of the terms for the fim on rank 0
-    if comm is None or comm.Get_rank() == 0: 
-        printer.log('Accumulating terms for per-circuit FIM.', 3)
-        fisher_info_terms = {}
         
-        for circuit in circuits:
-            if circuit not in fisher_info_terms:
-                fisher_info_terms[circuit] = _np.zeros([num_params, num_params])
-                if not approx:
-                    total_hterm[circuit] = _np.zeros([num_params, num_params])
+    end = time.time()
+    
+    printer.log(f'Elapsed time: {end-start}', 3)
+    
+    if comm is not None:
+    #divide the job of doing the accumulation among the ranks:
+        if comm.Get_rank() ==0:
+            printer.log('Prepping data for scatter on rank 0.', 3)
+            start = time.time()
+            num_procs = comm.Get_size()
+            #Possible edge case when length of circuit list is less than the number of processors?
+            split_circuit_list = _np.array_split(_np.asarray(circuits, dtype = object), num_procs)
+            #need to make this hashable so mpi4py can scatter the sublists using pickle:
+            split_circuit_list = [tuple(sublist) for sublist in split_circuit_list]
+            
+            #The other ranks also don't have a copy of the p, j and h dictionaries as
+            #the forward simulator only returns those on rank 0. Need to distribute these too.
+            split_ps = []
+            for sublist in split_circuit_list:
+                ps_for_sublist = {}
+                for ckt in sublist:
+                    ps_for_sublist[ckt] = ps[ckt]
+                split_ps.append(ps_for_sublist)
+            split_js = []
+            for sublist in split_circuit_list:
+                js_for_sublist = {}
+                for ckt in sublist:
+                    js_for_sublist[ckt] = js[ckt]
+                split_js.append(js_for_sublist)
+            if not approx:
+                split_hs = []
+                for sublist in split_circuit_list:
+                    hs_for_sublist = {}
+                    for ckt in sublist:
+                        hs_for_sublist[ckt] = hs[ckt]
+                    split_hs.append(hs_for_sublist)
+            end = time.time()
+            printer.log(f'Elapsed time {end-start}', 3)
+        else:
+            split_circuit_list = None
+            split_ps = None
+            split_js = None
+            if not approx:
+                split_hs = None
+            #ps, js and hs should already be initialized to None by the forward sim calls.
+        #scatter these lists among the procs
+        
+        printer.log('Scattering among ranks.', 3)
+        start=time.time()
+        split_circuit_list = comm.scatter(split_circuit_list, root=0)
+        ps = comm.scatter(split_ps, root=0)
+        js = comm.scatter(split_js, root=0)
+        if not approx:
+            hs = comm.scatter(split_hs, root=0)
+            
+        end = time.time()
+        printer.log(f'Elapsed time {end-start}', 3)
+        
+        #now that we have scattered them we don't need the split lists for p, j and h anymore
+        del split_ps, split_js
+        if not approx:
+            del split_hs
+        
+        #print(f'Rank {comm.Get_rank()} {split_circuit_list}')
+        
+    #helper function for distribution using MPI
+    def accumulate_fim_matrix_per_circuit(subcircuits):
+        printer.log('Accumulating terms for per-circuit FIM.', 3)
+        fisher_info_terms = _np.zeros([len(subcircuits),num_params, num_params])
+        if not approx:
+            total_hterm = _np.zeros([len(subcircuits), num_params, num_params])
+        
+        for k, circuit in enumerate(subcircuits):
             p = ps[circuit]
             j = js[circuit]
             if not approx:
                 h = hs[circuit]
-            for outcome in outcomes:
+            for i, outcome in enumerate(outcomes):
                 if not approx:
-                    fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome]) / p[outcome] - h[outcome]
-                    total_hterm[circuit] += h[outcome]
+                    fisher_info_terms[k,:,:] += _np.outer(j[outcome], j[outcome]) / p[outcome] - h[outcome]
+                    total_hterm[k,:,:] += h[outcome]
                 else:
-                    fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome]) / p[outcome]
-    else:
-        fisher_info_terms = None
+                    #fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome]) / p[outcome]
+                    #faster outer product
+                    jvec = (1/_np.sqrt(p[outcome]))*j[outcome]
+                    fisher_info_terms[k,:,:] +=_np.dot(jvec, jvec.T)
+        if approx:
+            return fisher_info_terms
+        else:
+            return fisher_info_terms, total_hterm
+            
+    if comm is not None:    
+        #now calculate the fisher information terms on each rank:
+        printer.log('Distributed accumulation of FIM.')
+        start = time.time()
+        if approx:
+            split_fisher_info_terms = accumulate_fim_matrix_per_circuit(split_circuit_list)
+        else:
+            split_fisher_info_terms, total_hterm = accumulate_fim_matrix_per_circuit(split_circuit_list)
+        end = time.time()
+        
+        printer.log(f'Elapsed time {end-start}', 3)
+
+        #gather these back onto rank 0.
+        #This should return a list of dictionaries to rank 0.
+        printer.log('Gathering accumulated FIMs', 3)
+        start = time.time()
+        #intialize a buffer to gather the data on rank 0.
+        #get the sizes of the returned ndarrays on each rank for split_fisher_info_terms:
+        # Collect local array sizes using the high-level mpi4py gather on rank 0
+        printer.log('Scattering split fisher term sizes', 4)
+        split_fisher_info_terms_size = split_fisher_info_terms.size
+        split_fisher_info_terms_sizes = comm.allgather(split_fisher_info_terms_size)
+        
+        printer.log('Scattered split fisher term sizes', 4)
+        
+        if not shared_memory:
+            if comm.Get_rank() == 0:
+                #1D buffer long enough to hold every element, will then reshape this later.
+                fisher_info_recv_buffer = _np.empty(_np.sum(split_fisher_info_terms_sizes), dtype= _np.double)
+                if not approx:
+                    #hterms are same size as fisher info terms
+                    total_hterm_recv_buffer = _np.empty(_np.sum(split_fisher_info_terms_sizes), dtype= _np.double)
+            else:
+                fisher_info_recv_buffer = None
+                if not approx:
+                    total_hterm_recv_buffer = None
+            #Gatherv on rank 0:
+            comm.Gatherv(sendbuf=split_fisher_info_terms, recvbuf=(fisher_info_recv_buffer, split_fisher_info_terms_sizes), root=0)
+            if not approx:
+                comm.Gatherv(sendbuf=total_hterm, recvbuf=(total_hterm_recv_buffer, split_fisher_info_terms_sizes), root=0)
+        #if using shared memory allocate a shared buffer and have the ranks write into it with their corresponding fisher infos:
+        else:
+            printer.log('Using shared memory for gathering.', 4)
+            # create a shared array of size 1000 elements of type double
+            size = _np.sum(split_fisher_info_terms_sizes)
+            itemsize = MPI.DOUBLE.Get_size() 
+            if comm.Get_rank() == 0: 
+                nbytes = size * itemsize 
+            else: 
+                nbytes = 0
+            
+            start1 = time.time()
+            printer.log('Allocating shared memory', 4)
+            # on rank 0, create the shared block
+            # on other ranks get a handle to it (known as a window in MPI speak)
+            fisher_win = MPI.Win.Allocate_shared(nbytes, itemsize, comm=comm) 
+            if not approx:
+                hterm_win = MPI.Win.Allocate_shared(nbytes, itemsize, comm=comm) 
+            comm.Barrier()
+            end1= time.time()
+            printer.log(f'Elapsed time {end1-start1}',4)
+            
+            printer.log('Putting ndarrays in shared memory', 4)
+            start1= time.time()
+            # create a numpy array whose data points to the shared mem
+            buf_fisher, itemsize_fisher = fisher_win.Shared_query(0)
+            assert itemsize_fisher == MPI.DOUBLE.Get_size()
+            shared_fisher_info_array = _np.ndarray(buffer=buf_fisher, dtype=_np.double, shape=(size,)) 
+            
+            if not approx:
+                buf_hterm, itemsize_hterm = hterm_win.Shared_query(0)
+                assert itemsize_hterm == MPI.DOUBLE.Get_size()
+                shared_hterm_array = _np.ndarray(buffer=buf_hterm, dtype=_np.double, shape=(size,)) 
+            end1= time.time()
+            printer.log(f'Elapsed time: {end1-start1}', 4)
+            #Now have the ranks write into the shared arrays:
+            #each rank has an array of size split_fisher_info_terms_sizes[rank]
+            start_indices =  _np.array([0]+list(_np.cumsum(split_fisher_info_terms_sizes[1:])))
+            end_indices = start_indices + split_fisher_info_terms_sizes
+            
+            current_rank = comm.Get_rank()
+            
+            printer.log('Assigning shared memory on all ranks', 4)
+            start1 = time.time()
+            #reshape(-1) is a view into the flattened array
+            shared_fisher_info_array[start_indices[current_rank]:end_indices[current_rank]] = split_fisher_info_terms.reshape(-1)
+            if not approx:
+                shared_hterm_array[start_indices[current_rank]:end_indices[current_rank]] = total_hterm.reshape(-1)
+            end1= time.time()
+            printer.log(f'Elapsed time: {end1-start1}', 4)
+            
+            #wait for all ranks to finish
+            comm.Barrier()
+            
+        #Reshape the array:
+        if comm.Get_rank()==0:
+            
+            printer.log('Reshaping Fisher Info Arrays on rank 0', 4)
+            start1= time.time()
+            if not shared_memory:
+                reshaped_fisher_info_view= fisher_info_recv_buffer.reshape((len(circuits), num_params, num_params))
+                if not approx:
+                    reshaped_hterm_view= total_hterm_recv_buffer.reshape((len(circuits), num_params, num_params))
+            else:
+                #despite name let's actually make this a copy
+                reshaped_fisher_info_view= shared_fisher_info_array.reshape((len(circuits), num_params, num_params)).copy()
+                if not approx:
+                    reshaped_hterm_view= shared_hterm_array.reshape((len(circuits), num_params, num_params)).copy()
+            end1= time.time()
+            printer.log(f'Elapsed time {end1-start1}', 4)
+        #fisher_info_terms_list = comm.gather(split_fisher_info_terms, root=0)
+        end = time.time()
+        
+        printer.log(f'Elapsed time: {end-start}', 3)
+        
+        #free up memory now that we've gathered things.
+        del split_fisher_info_terms
         if not approx:
-            total_hterm = None
-    
-    #The term caches are often large enough to exceed the maximum MPI message size. We're currently configured
-    #to only do the accumulation on the base rank, so right now we can actually just skip this broadcase (and
-    #save some memory while we're at it). If needed we can sort out a chunking scheme to sidestep the MPI issue down the line.
-    #if comm is not None:  # broadcast to non-root procs
-    #    fisher_info_terms = comm.bcast(fisher_info_terms, root=0)
-    #    if not approx:
-    #        total_hterm = comm.bcast(total_hterm, root=0)
+            del total_hterm
                 
+        #on rank 0 we'll reconstruct a single dictionary for the term dict from the numpy array.
+        if comm.Get_rank() == 0:
+            #if approx we have only a single return value,
+            #otherwise the elements of fisher_info_terms_list will be a 2-tuple with the second
+            #element being the hessian term dictionary.
+            printer.log('Re-combining term dicts on rank 0.')
+            start = time.time()
+            fisher_info_terms = {ckt: reshaped_fisher_info_view[i,:,:] for i, ckt in enumerate(circuits)}
+            if not approx:
+                total_hterm = {ckt: reshaped_hterm_view[i,:,:] for i, ckt in enumerate(circuits)}
+            #if approx:
+            #    fisher_info_terms = fisher_info_terms_list[0]
+            #    for other_fisher_info_terms in fisher_info_terms_list[1:]:
+            #        fisher_info_terms.update(other_fisher_info_terms)
+            #else:
+            #    fisher_info_terms = fisher_info_terms_list[0][0]
+            #    for other_fisher_info_terms, _ in fisher_info_terms_list[1:]:
+            #        fisher_info_terms.update(other_fisher_info_terms)
+            #    total_hterm = fisher_info_terms_list[0][1]
+            #    for _, other_hterms in fisher_info_terms_list[1:]:
+            #        total_hterm.update(other_hterms)    
+            end = time.time()
+            printer.log(f'Elapsed time: {end-start}',3)
+            
+            #deallocate shared memory window:
+            if shared_memory:
+                fisher_win.Free()
+                if not approx:
+                    hterm_win.Free()
+                comm.Barrier()
+            
+        else:
+            fisher_info_terms = None
+            if approx:
+                total_hterm= None
+    
+    #otherwise do things without splitting up among multiple cores.
+    else:
+        if approx:
+            fisher_info_terms = accumulate_fim_matrix_per_circuit(circuits)
+        else:
+            fisher_info_terms, total_hterm = accumulate_fim_matrix_per_circuit(circuits)
+    
+        fisher_info_terms = {ckt: fisher_info_terms[i,:,:] for i, ckt in enumerate(circuits)}
+        if not approx:
+            total_hterm = {ckt: total_hterm[i,:,:] for i, ckt in enumerate(circuits)}
+        
+    
     if approx:
         return fisher_info_terms
     else:
@@ -448,14 +678,28 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
         
     else:
         fisher_information_by_L = {}
-        for L, ckt_list in zip(Ls, circuit_lists):
-            fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
-                                                           term_cache=None, regularize_spam=False,
-                                                           approx = approx, 
-                                                           mem_efficient_mode=mem_efficient_mode,
-                                                           circuit_chunk_size = circuit_chunk_size,
-                                                           verbosity = verbosity,
-                                                           comm=comm, mem_limit=mem_limit)
+        #get the unique ckts for each circuit list:
+        unique_circuit_lists = [circuit_lists[0]] + [list(set(circuit_lists[i])-set(circuit_lists[i-1])) for i in range(1,len(circuit_lists))]
+        assert(len(unique_circuit_lists) == len(circuit_lists))
+        
+        for i, (L, ckt_list) in enumerate(zip(Ls, unique_circuit_lists)):
+            if i==0:
+                fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
+                                                               term_cache=None, regularize_spam=False,
+                                                               approx = approx, 
+                                                               mem_efficient_mode=mem_efficient_mode,
+                                                               circuit_chunk_size = circuit_chunk_size,
+                                                               verbosity = verbosity,
+                                                               comm=comm, mem_limit=mem_limit)
+            else:
+                fisher_information_by_L[L] = fisher_information_by_L[Ls[i-1]] + \
+                                             calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
+                                                               term_cache=None, regularize_spam=False,
+                                                               approx = approx, 
+                                                               mem_efficient_mode=mem_efficient_mode,
+                                                               circuit_chunk_size = circuit_chunk_size,
+                                                               verbosity = verbosity,
+                                                               comm=comm, mem_limit=mem_limit)
     
     #In memory efficient mode the fisher information is None on any rank other than 0 when using MPI.    
     return fisher_information_by_L
