@@ -133,10 +133,10 @@ def estimate_angles(dataset, angle_sin_strs, angle_cos_strs, angle_name="epsilon
     if length_list is None:
         length_list = [2**k for k in range(genNum)]
     for i, length in enumerate(length_list):
-        xhatTemp = _np.sum(dataset[angle_sin_strs[i]][up_label] for up_label in up_labels)
-        yhatTemp = _np.sum(dataset[angle_cos_strs[i]][up_label] for up_label in up_labels)
-        Nx = xhatTemp + _np.sum(dataset[angle_sin_strs[i]][dn_label] for dn_label in dn_labels)
-        Ny = yhatTemp + _np.sum(dataset[angle_cos_strs[i]][dn_label] for dn_label in dn_labels)
+        xhatTemp = sum(dataset[angle_sin_strs[i]][up_label] for up_label in up_labels)
+        yhatTemp = sum(dataset[angle_cos_strs[i]][up_label] for up_label in up_labels)
+        Nx = xhatTemp + sum(dataset[angle_sin_strs[i]][dn_label] for dn_label in dn_labels)
+        Ny = yhatTemp + sum(dataset[angle_cos_strs[i]][dn_label] for dn_label in dn_labels)
 #        xhatTemp = dataset[angle_sin_strs[i]]['0']
 #        yhatTemp = dataset[angle_cos_strs[i]]['0']
 #        Nx = xhatTemp + dataset[angle_sin_strs[i]]['1']

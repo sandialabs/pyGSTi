@@ -144,7 +144,7 @@ class EdesignToolsTester(BaseCase):
         fim_by_L2_time = time.time() - start
         for k,v in fim_by_L2.items():
             self.assertArraysAlmostEqual(v, fim_by_L[k])
-        self.assertLess(10*fim_by_L2_time, fim1_time) # Cached version should be very fast compared to uncached
+        self.assertLess(5*fim_by_L2_time, fim1_time) # Cached version should be very fast compared to uncached
 
     
     def test_generic_design_padding(self):

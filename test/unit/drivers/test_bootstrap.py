@@ -1,3 +1,5 @@
+import pytest
+
 from pygsti import algorithms as alg, circuits as pc
 from pygsti.drivers import bootstrap as bs
 from pygsti.modelpacks.legacy import std1Q_XYI as std
@@ -46,7 +48,7 @@ class BootstrapDatasetTester(BootstrapBase):
         with self.assertRaises(ValueError):
             bs.create_bootstrap_dataset(self.ds, 'nonparametric', self.mdl, seed=1)
 
-
+@pytest.mark.filterwarnings('ignore:Setting the first element of a max-length list to zero') # Explicitly using this to build LGST only
 class BootstrapModelTester(BootstrapBase):
     def setUp(self):
         super(BootstrapModelTester, self).setUp()
@@ -100,7 +102,7 @@ class BootstrapModelTester(BootstrapBase):
     #            return_data=False
     #        )
 
-
+@pytest.mark.filterwarnings('ignore:Setting the first element of a max-length list to zero') # Explicitly using this to build LGST only
 class BootstrapUtilityTester(BootstrapBase):
     @classmethod
     def setUpClass(cls):

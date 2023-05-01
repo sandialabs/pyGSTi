@@ -9,7 +9,7 @@ class ExperimentDesignTester(BaseCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.gst_design = std.get_gst_experiment_design(4)
+        cls.gst_design = std.create_gst_experiment_design(4)
 
     def test_promotion(self):
         circuits = pygsti.circuits.to_circuits(["{}@(0)", "Gxpi2:0", "Gypi2:0"])

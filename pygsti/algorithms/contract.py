@@ -79,7 +79,7 @@ def contract(model, to_what, dataset=None, maxiter=1000000, tol=0.01, use_direct
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
-    if to_what == 'CPTP':
+    if to_what in ('CPTP', 'CPTPLND'):
         if use_direct_cp:
             _, contractedModel = _contract_to_cp_direct(model, printer, tp_also=True, maxiter=maxiter)
         else:

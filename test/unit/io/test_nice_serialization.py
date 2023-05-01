@@ -23,7 +23,7 @@ class NiceSerializationTester(BaseCase):
         return obj2
 
     def setUp(self):
-        self.gst_design = smq1Q_XYI.get_gst_experiment_design(4, qubit_labels=[0])
+        self.gst_design = smq1Q_XYI.create_gst_experiment_design(4, qubit_labels=[0])
 
         nQubits = 2
         self.pspec_2Q = QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot'), geometry="line",
