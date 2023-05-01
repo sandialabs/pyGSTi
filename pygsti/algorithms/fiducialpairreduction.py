@@ -55,7 +55,7 @@ def _random_combination(indices_tuple, r):
     return tuple(indices_tuple[i] for i in iis)
 
 
-@_deprecated_fn('find_sufficient_fiducial_pairs_per_germ_power')
+@_deprecated_fn('find_sufficient_fiducial_pairs_per_germ')
 def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials, germs,
                                    test_lengths=(256, 2048), prep_povm_tuples="first", tol=0.75,
                                    search_mode="sequential", n_random=100, seed=None,

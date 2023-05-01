@@ -1,3 +1,5 @@
+import pytest
+
 import pickle
 from collections import OrderedDict
 
@@ -200,6 +202,7 @@ class DataSetMethodBase(object):
             self.assertTrue(opstr in self.ds)
             self.assertTrue(Circuit(opstr) in self.ds)
 
+    @pytest.mark.filterwarnings('ignore:No counts in the requested time range') # Specifically testing an empty slice
     def test_time_slice(self):
         empty_slice = self.ds.time_slice(100.0, 101.0)
         ds_slice = self.ds.time_slice(1.0, 2.0)

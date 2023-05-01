@@ -118,7 +118,7 @@ class OpToolsTester(BaseCase):
 
     def test_unitary_to_process_mx(self):
         identity = np.identity(2)
-        processMx = ot.unitary_to_process_mx(identity)
+        processMx = ot.unitary_to_std_process_mx(identity)
         self.assertArraysAlmostEqual(processMx, np.identity(4))
 
 
