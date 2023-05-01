@@ -1237,7 +1237,8 @@ class Circuit(object):
 
     def insert_idling_layers(self, insert_before, num_to_insert, lines=None):
         """
-        Inserts into this circuit one or more idling (blank) layers.
+        Inserts into this circuit one or more idling (blank) layers,
+        returning a copy.
 
         By default, complete layer(s) are inserted.  The `lines` argument
         allows you to insert partial layers (on only a subset of the lines).
@@ -1265,7 +1266,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.insert_idling_layers_inplace(insert_before, num_to_insert, lines)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def insert_idling_layers_inplace(self, insert_before, num_to_insert, lines=None):
@@ -1355,7 +1356,8 @@ class Circuit(object):
 
     def insert_labels_into_layers(self, lbls, layer_to_insert_before, lines=None):
         """
-        Inserts into this circuit the contents of `lbls` into new full or partial layers.
+        Inserts into this circuit the contents of `lbls` into new full or partial layers,
+        returning a copy.
 
         By default, complete layer(s) are inserted.  The `lines` argument
         allows you to insert partial layers (on only a subset of the lines).
@@ -1385,7 +1387,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.insert_labels_into_layers_inplace(lbls, layer_to_insert_before, lines)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def insert_labels_into_layers_inplace(self, lbls, layer_to_insert_before, lines=None):
@@ -1428,7 +1430,7 @@ class Circuit(object):
 
     def insert_idling_lines(self, insert_before, line_labels):
         """
-        Insert one or more idling (blank) lines into this circuit.
+        Insert one or more idling (blank) lines into this circuit, returning a copy.
 
         Parameters
         ----------
@@ -1446,7 +1448,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.insert_idling_lines_inplace(insert_before, line_labels)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def insert_idling_lines_inplace(self, insert_before, line_labels):
@@ -1551,7 +1553,7 @@ class Circuit(object):
 
     def insert_labels_as_lines(self, lbls, layer_to_insert_before=None, line_to_insert_before=None, line_labels="auto"):
         """
-        Inserts into this circuit the contents of `lbls` into new lines.
+        Inserts into this circuit the contents of `lbls` into new lines, returning a copy.
 
         By default, `lbls` is inserted at the beginning of the new lines(s). The
         `layer_to_insert_before` argument allows you to insert `lbls` beginning at
@@ -1585,7 +1587,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.insert_labels_as_lines_inplace(lbls, layer_to_insert_before, line_to_insert_before, line_labels)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def _append_labels_as_lines(self, lbls, layer_to_insert_before=None, line_labels="auto"):
@@ -1954,7 +1956,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.expand_subcircuits_inplace()
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def factorize_repetitions_inplace(self):
@@ -2000,7 +2002,7 @@ class Circuit(object):
 
     def insert_layer(self, circuit_layer, j):
         """
-        Inserts a single layer into a circuit.
+        Inserts a single layer into a circuit, returning a copy.
 
         The input layer does not need to contain a gate that acts on
         every qubit, but it should not contain more than one gate on
@@ -2022,7 +2024,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.insert_layer_inplace(circuit_layer, j)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def insert_layer_inplace(self, circuit_layer, j):
@@ -2057,7 +2059,7 @@ class Circuit(object):
 
     def insert_circuit(self, circuit, j):
         """
-        Inserts a circuit into this circuit.
+        Inserts a circuit into this circuit, returning a copy.
 
         The circuit to insert can be over more qubits than this circuit, as long
         as all qubits that are not part of this circuit are idling. In this
@@ -2080,7 +2082,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.insert_circuit_inplace(circuit, j)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def insert_circuit_inplace(self, circuit, j):
@@ -2120,7 +2122,7 @@ class Circuit(object):
 
     def append_circuit(self, circuit):
         """
-        Append a circuit to the end of this circuit.
+        Append a circuit to the end of this circuit, returning a copy.
 
         This circuit must satisfy the requirements of
         :method:`insert_circuit()`. See that method for more details.
@@ -2134,7 +2136,7 @@ class Circuit(object):
         -------
         Circuit
         """
-        self.insert_circuit(circuit, self.num_layers)
+        return self.insert_circuit(circuit, self.num_layers)
 
     def append_circuit_inplace(self, circuit):
         """
@@ -2156,7 +2158,7 @@ class Circuit(object):
 
     def prefix_circuit(self, circuit):
         """
-        Prefix a circuit to the beginning of this circuit.
+        Prefix a circuit to the beginning of this circuit, returning a copy.
 
         This circuit must satisfy the requirements of the
         :method:`insert_circuit()`. See that method for more details.
@@ -2170,7 +2172,7 @@ class Circuit(object):
         -------
         Circuit
         """
-        self.insert_circuit(circuit, 0)
+        return self.insert_circuit(circuit, 0)
 
     def prefix_circuit_inplace(self, circuit):
         """
@@ -2246,7 +2248,7 @@ class Circuit(object):
 
     def tensor_circuit(self, circuit, line_order=None):
         """
-        The tensor product of this circuit and `circuit`.
+        The tensor product of this circuit and `circuit`, returning a copy.
 
         That is, it adds `circuit` to this circuit as new lines.  The line
         labels of `circuit` must be disjoint from the line labels of this
@@ -2269,7 +2271,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.tensor_circuit_inplace(circuit, line_order)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def replace_layer_with_circuit_inplace(self, circuit, j):
@@ -2293,7 +2295,8 @@ class Circuit(object):
 
     def replace_layer_with_circuit(self, circuit, j):
         """
-        Replaces the `j`-th layer of this circuit with `circuit`.
+        Replaces the `j`-th layer of this circuit with `circuit`,
+        returning a copy.
 
         Parameters
         ----------
@@ -2309,7 +2312,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.replace_layer_with_circuit_inplace(circuit, j)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def replace_gatename_inplace(self, old_gatename, new_gatename):
@@ -2371,7 +2374,7 @@ class Circuit(object):
             #Could to this in both cases, but is slow for large static circuits
             cpy = self.copy(editable=True)
             cpy.replace_gatename_inplace(old_gatename, new_gatename)
-            cpy.done_editing()
+            if self._static: cpy.done_editing()
             return cpy
         else:  # static case: so self._labels is a tuple of Labels
             return Circuit([lbl.replace_name(old_gatename, new_gatename)
@@ -2426,7 +2429,7 @@ class Circuit(object):
         # Slow for large static circuits - maybe make a faster case?
         cpy = self.copy(editable=True)
         cpy.replace_gatename_with_idle_inplace(gatename)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def replace_layer(self, old_layer, new_layer):
@@ -2728,7 +2731,7 @@ class Circuit(object):
 
     def reorder_lines(self, order):
         """
-        Reorders the lines (wires/qubits) of the circuit.
+        Reorders the lines (wires/qubits) of the circuit, returning a copy.
 
         Note that the ordering of the lines is unimportant for most purposes.
 
@@ -2744,7 +2747,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.reorder_lines_inplace(order)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def _is_line_idling(self, line_label, idle_layer_labels=None):
@@ -2849,7 +2852,8 @@ class Circuit(object):
 
     def delete_idling_lines(self, idle_layer_labels=None):
         """
-        Removes from this circuit all lines that are idling at every layer.
+        Removes from this circuit all lines that are idling at every layer,
+        returning a copy.
 
         Parameters
         ----------
@@ -2865,7 +2869,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.delete_idling_lines_inplace(idle_layer_labels)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def replace_with_idling_line_inplace(self, line_label, clear_straddlers=True):
