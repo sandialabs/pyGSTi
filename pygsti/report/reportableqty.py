@@ -108,7 +108,7 @@ class ReportableQty(object):
         self.nonMarkovianEBs = non_markovian_ebs
 
     def __str__(self):
-        def f(x, y): return (str(x) + " +/- " + str(y)) if y else str(x)
+        def f(val, specs): return str(val)
         return self.render_with(f)
 
     def __repr__(self):

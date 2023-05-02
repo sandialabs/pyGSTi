@@ -1,3 +1,5 @@
+import pytest
+
 import pickle
 
 from pygsti.baseobjs.label import Label as L
@@ -6,41 +8,36 @@ from pygsti.serialization import jsoncodec
 from pygsti.circuits import Circuit
 from ..util import BaseCase
 
+labels = [
+    L('Gx', 0),  # a LabelTup
+    L('Gx', (0, 1)),  # a LabelTup
+    L(('Gx', 0, 1)),  # a LabelTup
+    L('Gx'),  # a LabelStr
+    L('Gx', None),  # still a LabelStr
+    L([('Gx', 0), ('Gy', 0)]),  # a LabelTupTup of LabelTup objs
+    L((('Gx', None), ('Gy', None))),  # a LabelTupTup of LabelStr objs
+    L([('Gx', 0)]),  # just a LabelTup b/c only one component
+    L([L('Gx'), L('Gy')]),  # a LabelTupTup of LabelStrs
+    L(L('Gx'))  # Init from another label
+]
 
-def test_label_methods():
-    def test_to_native(label):
-        native = label.to_native()
-        from_native = L(native)
-        assert label == from_native
+@pytest.mark.parametrize('label', labels)
+def test_to_native(label):
+    native = label.to_native()
+    from_native = L(native)
+    assert label == from_native
 
-    def test_pickle(label):
-        s = pickle.dumps(label)
-        l2 = pickle.loads(s)
-        assert type(label) == type(l2)
+@pytest.mark.parametrize('label', labels)
+def test_pickle(label):
+    s = pickle.dumps(label)
+    l2 = pickle.loads(s)
+    assert type(label) == type(l2)
 
-    def test_json_encode(label):
-        j = jsoncodec.encode_obj(label, False)
-        l2 = jsoncodec.decode_obj(j, False)
-        assert type(label) == type(l2)
-
-    labels = [
-        L('Gx', 0),  # a LabelTup
-        L('Gx', (0, 1)),  # a LabelTup
-        L(('Gx', 0, 1)),  # a LabelTup
-        L('Gx'),  # a LabelStr
-        L('Gx', None),  # still a LabelStr
-        L([('Gx', 0), ('Gy', 0)]),  # a LabelTupTup of LabelTup objs
-        L((('Gx', None), ('Gy', None))),  # a LabelTupTup of LabelStr objs
-        L([('Gx', 0)]),  # just a LabelTup b/c only one component
-        L([L('Gx'), L('Gy')]),  # a LabelTupTup of LabelStrs
-        L(L('Gx'))  # Init from another label
-    ]
-
-    for lbl in labels:
-        yield test_to_native, lbl
-        yield test_pickle, lbl
-        yield test_json_encode, lbl
-
+@pytest.mark.parametrize('label', labels)
+def test_json_encode(label):
+    j = jsoncodec.encode_obj(label, False)
+    l2 = jsoncodec.decode_obj(j, False)
+    assert type(label) == type(l2)
 
 class LabelTester(BaseCase):
     def test_circuit_init(self):

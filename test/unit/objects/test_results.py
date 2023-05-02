@@ -13,11 +13,11 @@ class ResultsBase(object):
         self.model = pkg.mdl_lsgst_go
         self.ds = pkg.dataset
         self.maxLengthList = pkg.maxLengthList
-        self.gss = pkg.lsgstStructs
+        self.gss = pkg.lsgstStrings
 
         # Construct results
         edesign = CircuitListsDesign([CircuitList(circuit_struct)
-                                      for circuit_struct in pkg.lsgstStructs])
+                                      for circuit_struct in pkg.lsgstStrings])
         data = ProtocolData(edesign, pkg.dataset)
         self.res = ModelEstimateResults(data, Protocol("test-protocol"))
 
@@ -69,7 +69,7 @@ class PopulatedResultsTester(ResultsBase, BaseCase):
     def test_add_estimate_from_results(self):
         # add_estimates from other results
         edesign = CircuitListsDesign([CircuitList(circuit_struct)
-                                      for circuit_struct in pkg.lsgstStructs])
+                                      for circuit_struct in pkg.lsgstStrings])
         data = ProtocolData(edesign, pkg.dataset)
         res2 = ModelEstimateResults(data, Protocol("test-protocol2"))
 

@@ -42,6 +42,7 @@ from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
 from pygsti.tools import slicetools as _slct
+from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
@@ -1598,12 +1599,13 @@ class ExplicitOpModel(_mdl.OpModel):
     def _from_nice_serialization(cls, state):
         state_space = _statespace.StateSpace.from_nice_serialization(state['state_space'])
         basis = _Basis.from_nice_serialization(state['basis'])
-        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
         simulator = _FSim.from_nice_serialization(state['simulator'])
         default_gauge_group = _GaugeGroup.from_nice_serialization(state['default_gauge_group']) \
             if (state['default_gauge_group'] is not None) else None
         param_interposer = _ModelParamsInterposer.from_nice_serialization(state['parameter_interposer']) \
             if (state['parameter_interposer'] is not None) else None
+        param_labels = state.get('parameter_labels', None)
+        param_bounds = state.get('parameter_bounds', None)
 
         mdl = cls(state_space, basis, state['default_gate_type'],
                   state['default_prep_type'], state['default_povm_type'],
@@ -1611,6 +1613,7 @@ class ExplicitOpModel(_mdl.OpModel):
                   state['gate_prefix'], state['povm_prefix'], state['instrument_prefix'],
                   simulator, state['evotype'])
 
+        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'], mdl)
         mdl.preps.update(modelmembers.get('preps', {}))
         mdl.povms.update(modelmembers.get('povms', {}))
         mdl.operations.update(modelmembers.get('operations', {}))
@@ -1619,6 +1622,15 @@ class ExplicitOpModel(_mdl.OpModel):
         mdl._clean_paramvec()
         mdl.default_gauge_group = default_gauge_group
         mdl.param_interposer = param_interposer
+
+        Np = len(mdl._paramlbls)  # _clean_paramvec sets up ._paramlbls so its length == # of params
+        if param_labels and len(param_labels) == Np:
+            mdl._paramlbls[:] = [_lt.lists_to_tuples(lbl) for lbl in param_labels]
+        if param_bounds is not None:
+            param_bounds = cls._decodemx(param_bounds)
+            if param_bounds.shape == (Np, 2):
+                mdl._param_bounds
+
         return mdl
 
     def errorgen_coefficients(self, normalized_elem_gens=True):

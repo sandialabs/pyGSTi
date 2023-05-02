@@ -10,13 +10,10 @@
 *.pyd
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
-jupyter_notebooks/Tutorials/tutorial_files
 jupyter_notebooks/**/offline
-jupyter_notebooks/Examples/example_files
 test/test_packages/offline
 hooks/etc/permissions.yml
 *comm_output*.txt
-**tutorial_files
 *.lprof
 *.cache
 /.eggs/
@@ -33,7 +30,22 @@ test/output/pylint/*
 test/output/individual_coverage/*/*
 test/test_packages/cmp_chk_files/Fake_Dataset_none.txt.cache
 **.noseids
-**tutorial_files
+
+# Tutorial Notebook Untracked Files #
+####################################
+jupyter_notebooks/Tutorials/tutorial_files/modeltest_report
+jupyter_notebooks/Tutorials/tutorial_files/gettingStartedReport
+jupyter_notebooks/Examples/example_files/*.pkl
+jupyter_notebooks/Examples/example_files/*.json
+jupyter_notebooks/Tutorials/tutorial_files/exampleReport
+jupyter_notebooks/Tutorials/tutorial_files/exampleStdReport
+jupyter_notebooks/Tutorials/tutorial_files/exampleMultiEstimateReport
+jupyter_notebooks/Tutorials/tutorial_files/exampleMultiEstimateReport2
+jupyter_notebooks/Tutorials/tutorial_files/exampleMultiDataSetReport
+jupyter_notebooks/Tutorials/tutorial_files/exampleBriefReport
+jupyter_notebooks/Tutorials/tutorial_files/*.ipynb
+jupyter_notebooks/Tutorials/tutorial_files/tempTest
+
 
 # Compiled source #
 ###################

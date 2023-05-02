@@ -79,8 +79,8 @@ class Estimate(_MongoSerializable):
         Protocol
         """
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         _MongoSerializable.__init__(ret)
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         for crf in ret.confidence_region_factories.values():
             crf.set_parent(ret)  # re-link confidence_region_factories
         return ret
@@ -89,8 +89,8 @@ class Estimate(_MongoSerializable):
     def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
         #def from_mongodb(cls, mongodb_collection, doc_id, ):
         ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret, doc.get('_id', None))
         ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
-        _MongoSerializable.__init__(ret)
         for crf in ret.confidence_region_factories.values():
             crf.set_parent(ret)  # re-link confidence_region_factories
         return ret
@@ -194,8 +194,7 @@ class Estimate(_MongoSerializable):
                               '_final_objfn_cache': 'dir-serialized-object',
                               'final_objfn_builder': 'serialized-object',
                               '_final_objfn': 'reset',
-                              '_gaugeopt_suite': 'serialized-object',
-                              '_dbcoordinates': 'none'
+                              '_gaugeopt_suite': 'serialized-object'
                               }
 
     @property

@@ -65,7 +65,10 @@ class Model(_NicelySerializable):
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'state_space': self.state_space.to_nice_serialization()})
+        state.update({'state_space': self.state_space.to_nice_serialization(),
+                      'parameter_labels': list(self._paramlbls) if len(self._paramlbls) > 0 else None,
+                      'parameter_bounds': (self._encodemx(self._param_bounds)
+                                           if (self._param_bounds is not None) else None)})
         return state
 
     @property

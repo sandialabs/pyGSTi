@@ -16,7 +16,13 @@ msgpack_uses_binary_strs = _msgpack.version < (1, 0, 0)  # msgpack only used bin
 from pygsti.serialization.jsoncodec import encode_obj
 from pygsti.serialization.jsoncodec import decode_obj
 
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
+_deprecation_msg= 'Use of the python msgpack module for serialization of pygsti objects is deprecated.'\
+                  +' Most pysgti objects now natively support json serialization and deserialization and '\
+                  + 'users should migrate to that functionality when possible.'
+
+@_deprecated_fn(_deprecation_msg)
 def dumps(obj, **kwargs):
     """
     An overload of msgpack.dumps that works with pyGSTi types
@@ -33,7 +39,7 @@ def dumps(obj, **kwargs):
     enc = encode_obj(obj, msgpack_uses_binary_strs)
     return _msgpack.packb(enc, **kwargs)
 
-
+@_deprecated_fn(_deprecation_msg)
 def dump(obj, f, **kwargs):
     """
     An overload of msgpack.dump that works with pyGSTi types
@@ -53,7 +59,7 @@ def dump(obj, f, **kwargs):
     enc = encode_obj(obj, msgpack_uses_binary_strs)
     _msgpack.pack(enc, f, **kwargs)
 
-
+@_deprecated_fn(_deprecation_msg)
 def loads(s, **kwargs):
     """
     An overload of msgpack.loads that works with pyGSTi types
@@ -70,7 +76,7 @@ def loads(s, **kwargs):
     decoded_msgpack = _msgpack.unpackb(s, **kwargs)  # load normal MSGPACK
     return decode_obj(decoded_msgpack, msgpack_uses_binary_strs)  # makes pygsti objects
 
-
+@_deprecated_fn(_deprecation_msg)
 def load(f, **kwargs):
     """
     An overload of msgpack.load that works with pyGSTi types
