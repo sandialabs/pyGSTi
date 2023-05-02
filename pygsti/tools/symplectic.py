@@ -13,7 +13,6 @@ Symplectic representation utility functions
 import numpy as _np
 import copy as _copy
 
-from scipy.sparse import rand
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.smartcache import smart_cached
 from pygsti.tools import matrixmod2 as _mtx

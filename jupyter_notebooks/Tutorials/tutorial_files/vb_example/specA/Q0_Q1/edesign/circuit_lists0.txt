@@ -1,0 +1,1 @@
+[Gxpi2:Q1Gxpi2:Q0][Gypi2:Q1Gypi2:Q0]Gypi2:Q0Gcphase:Q0:Q1[Gypi2:Q0Gxpi2:Q1][Gypi2:Q1Gxpi2:Q0][Gxpi2:Q1Gxpi2:Q0][Gypi2:Q1Gypi2:Q0][Gypi2:Q1Gypi2:Q0][Gxpi2:Q0Gxpi2:Q1][Gxpi2:Q0Gxpi2:Q1][Gypi2:Q0Gypi2:Q1][Gypi2:Q0Gypi2:Q1][Gxpi2:Q1Gypi2:Q0]Gypi2:Q1Gxpi2:Q1Gcphase:Q0:Q1[Gypi2:Q0Gypi2:Q1][Gxpi2:Q1Gypi2:Q0]Gxpi2:Q0@(Q0,Q1)

@@ -1,6 +1,8 @@
 import numpy as np
 import scipy
 
+import pytest
+
 import pygsti.models.modelconstruction as mc
 import pygsti.circuits.cloudcircuitconstruction as cc
 import pygsti.modelpacks.stdtarget as stdtarget
@@ -9,6 +11,8 @@ from pygsti.circuits import Circuit
 from pygsti.data import DataSet
 from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 from ..util import BaseCase
+
+
 
 
 class KCoverageTester(BaseCase):
@@ -36,14 +40,15 @@ class StdModuleBase(object):
                     self.assertGreater(len(gl.sslbls), 0)
 
 
+@pytest.mark.filterwarnings("ignore:The function stdmodule_to_smqmodule is deprecated") #Explicitly testing this
 class Std1Q_XYITester(StdModuleBase, BaseCase):
     std = std1Q_XYI
 
-
+@pytest.mark.filterwarnings("ignore:The function stdmodule_to_smqmodule is deprecated") #Explicitly testing this
 class Std2Q_XXYYIITester(StdModuleBase, BaseCase):
     std = std2Q_XXYYII
 
-
+@pytest.mark.filterwarnings("ignore:The function stdmodule_to_smqmodule is deprecated") #Explicitly testing this
 class Std2Q_XYICNOTTester(StdModuleBase, BaseCase):
     std = std2Q_XYICNOT
 
