@@ -257,7 +257,9 @@ class IBMQExperiment(dict):
             while not submit_status:
                 try:
                     backend_properties = ibmq_backend.properties()
-                    self['submit_time_calibration_data'].append(backend_properties.to_dict())
+                    #If using a simulator backend then backend_properties is None
+                    if not ibmq_backend.simulator:
+                        self['submit_time_calibration_data'].append(backend_properties.to_dict())
                     #if using the new API we need to pass in the number of shots.
                     if backend_version == 1:
                         self['qjob'].append(ibmq_backend.run(batch))
