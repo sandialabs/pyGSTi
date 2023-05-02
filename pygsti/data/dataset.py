@@ -3141,7 +3141,7 @@ class DataSet(_MongoSerializable):
 
     @classmethod
     def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, collision_action="aggregate",
-                                         record_zero_counts=False, with_times="auto",
+                                         record_zero_counts=True, with_times="auto",
                                          circuit_parse_cache=None, verbosity=1):
         from pymongo import ASCENDING, DESCENDING
         from pygsti.io import stdinput as _stdinput

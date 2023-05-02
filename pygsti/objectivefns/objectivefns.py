@@ -6625,16 +6625,16 @@ class CachedObjectiveFunction(_NicelySerializable):
         """
         import pygsti.io as _io
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         _NicelySerializable.__init__(ret)
+        ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         return ret
 
     @classmethod
     def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
         import pygsti.io as _io
         ret = cls.__new__(cls)
+        _NicelySerializable.__init__(ret, doc.get('_id', None))
         ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
-        _NicelySerializable.__init__(ret)
         return ret
 
     def __init__(self, objective_function):

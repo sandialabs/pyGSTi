@@ -470,13 +470,13 @@ class GSTInitialModel(_NicelySerializable):
         # Note: should compute on rank 0 and distribute?
         starting_pt = self.starting_point
         if starting_pt == "User-supplied-Model":
-            mdl_start = self.model
+            mdl_start = self.model.copy()
 
         elif starting_pt in ("LGST", "LGST-if-possible"):
             #lgst_advanced = advancedOptions.copy(); lgst_advanced.update({'estimateLabel': "LGST", 'onBadFit': []})
 
             if self.model is not None:
-                mdl_start = self.model
+                mdl_start = self.model.copy()
             elif self.target_model is not None:
                 mdl_start = self.target_model.copy()
             else:
@@ -507,7 +507,7 @@ class GSTInitialModel(_NicelySerializable):
                 #Fall back to target or custom model
                 if self.model is not None:
                     starting_pt = "User-supplied-Model"
-                    mdl_start = self.model
+                    mdl_start = self.model.copy()
                 else:
                     starting_pt = "target"
                     # mdl_start = mdl_start (either the target model or constructed from edesign pspec)
@@ -2136,6 +2136,7 @@ def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, paramete
 
     return wcm
 
+
 def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_suite=None):
     '''
     DOCSTRING: TODO
@@ -2148,6 +2149,10 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
             dd = {}
             for key, op in gaugeopt_model.operations.items():
                 dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+                if dd[key] < 0:  # indicates that diamonddist failed (cvxpy failure)
+                    _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
+                                    " Falling back to trace distance.") % str(key))
+                    dd[key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
 
             spamdd = {}
             for key, op in gaugeopt_model.preps.items():
@@ -2158,13 +2163,13 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
                 spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
 
             dd['SPAM'] = sum(spamdd.values())
-            
+
         else:
             #pull the target model from the gaugeopt suite. The GSTGaugeOptSuite doesn't currently
-            #support multiple targets, so this is safe for now. 
-            target_model= gaugeopt_suite.gaugeopt_target
-            gaugeopt_models= [estimate.models[lbl] for lbl in gaugeopt_suite.gaugeopt_suite_names]
-            dd = {lbl:{} for lbl in gaugeopt_suite.gaugeopt_suite_names}
+            #support multiple targets, so this is safe for now.
+            target_model = gaugeopt_suite.gaugeopt_target
+            gaugeopt_models = [estimate.models[lbl] for lbl in gaugeopt_suite.gaugeopt_suite_names]
+            dd = {lbl: {} for lbl in gaugeopt_suite.gaugeopt_suite_names}
             for gaugeopt_model, lbl in zip(gaugeopt_models, gaugeopt_suite.gaugeopt_suite_names):
                 for key, op in gaugeopt_model.operations.items():
                     dd[lbl][key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
@@ -2638,6 +2643,16 @@ class ModelEstimateResults(_proto.ProtocolResults):
         ModelEstimateResults
         """
         ret = super().from_dir(dirname, name, preloaded_data, quick_load)  # loads members; doesn't make parent "links"
+        ret.circuit_lists = ret._create_circuit_lists(ret.data.edesign)  # because circuit_lists auxfile_type == 'none'
+        for est in ret.estimates.values():
+            est.parent = ret  # link estimate to parent results object
+        return ret
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False,
+                                         preloaded_data=None, load_protocol=True, load_data=True):
+        ret = super()._create_obj_from_doc_and_mongodb(doc, mongodb, quick_load, preloaded_data,
+                                                       load_protocol, load_data)
         ret.circuit_lists = ret._create_circuit_lists(ret.data.edesign)  # because circuit_lists auxfile_type == 'none'
         for est in ret.estimates.values():
             est.parent = ret  # link estimate to parent results object

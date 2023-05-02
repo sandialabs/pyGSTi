@@ -1808,7 +1808,7 @@ class Circuit(object):
             c = chr(ord(c) + 1)
         return cls(tuple([translateDict[cc] for cc in python_string]))
 
-    def serialize(self):
+    def serialize(self, expand_subcircuits=False):
         """
         Serialize the parallel gate operations of this Circuit.
 
@@ -1817,16 +1817,26 @@ class Circuit(object):
         elementary gate operation into its own layer.  Ordering is dictated by
         the ordering of the compound layer labels.
 
+        Parameters
+        ----------
+        expand_subcircuits : bool
+            Whether subcircuits should be expanded before performing the serialization.
+            If `False`, the circuit may contain :class:`CircuitLabel` layers.
+
         Returns
         -------
         Circuit
         """
+        if expand_subcircuits:
+            layertup = self.expand_subcircuits().layertup
+        else:
+            layertup = self.layertup
+
         serial_lbls = []
-        for lbl in self.layertup:
+        for lbl in layertup:
             if len(lbl.components) == 0:  # special case of an empty-layer label,
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
-            for c in lbl.components:
-                serial_lbls.append(c)
+            serial_lbls.extend(list(lbl.components) * lbl.reps)
         return Circuit._fastinit(tuple(serial_lbls), self.line_labels, editable=False, occurrence=self.occurrence)
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
@@ -3591,15 +3601,15 @@ class Circuit(object):
         d = self.num_layers
 
         f = open(filename, 'w')
-        f.write("\documentclass{article}\n")
+        f.write("\\documentclass{article}\n")
         f.write("\\usepackage{mathtools}\n")
         f.write("\\usepackage{xcolor}\n")
         f.write("\\usepackage[paperwidth=" + str(5. + d * .3)
                 + "in, paperheight=" + str(2 + n * 0.2) + "in,margin=0.5in]{geometry}")
-        f.write("\input{Qcircuit}\n")
+        f.write("\\input{Qcircuit}\n")
         f.write("\\begin{document}\n")
         f.write("\\begin{equation*}\n")
-        f.write("\Qcircuit @C=1.0em @R=0.5em {\n")
+        f.write("\\Qcircuit @C=1.0em @R=0.5em {\n")
 
         for q in range(0, n):
             qstring = '&'
@@ -3609,26 +3619,26 @@ class Circuit(object):
                 gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
                 nqubits = len(gate_qubits)
                 if gate.name == self.identity:
-                    qstring += ' \qw &'
+                    qstring += r' \qw &'
                 elif gate.name in ('CNOT', 'Gcnot') and nqubits == 2:
                     if gate_qubits[0] == q:
-                        qstring += ' \ctrl{' + str(gate_qubits[1] - q) + '} &'
+                        qstring += r' \ctrl{' + str(gate_qubits[1] - q) + '} &'
                     else:
-                        qstring += ' \\targ &'
+                        qstring += r' \targ &'
                 elif gate.name in ('CPHASE', 'Gcphase') and nqubits == 2:
                     if gate_qubits[0] == q:
-                        qstring += ' \ctrl{' + str(gate_qubits[1] - q) + '} &'
+                        qstring += r' \ctrl{' + str(gate_qubits[1] - q) + '} &'
                     else:
-                        qstring += ' \control \qw &'
+                        qstring += r' \control \qw &'
 
                 else:
-                    qstring += ' \gate{' + str(gate.name) + '} &'
+                    qstring += r' \gate{' + str(gate.name) + '} &'
 
-            qstring += ' \qw & \\' + '\\ \n'
+            qstring += r' \qw & \\' + '\\ \n'
             f.write(qstring)
 
-        f.write("}\end{equation*}\n")
-        f.write("\end{document}")
+        f.write("}\\end{equation*}\n")
+        f.write("\\end{document}")
         f.close()
 
     def convert_to_cirq(self,

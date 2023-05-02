@@ -833,7 +833,7 @@ def _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min_qvec, circ=None, to
     return qvec, W
 
 
-def update_circuit_probs(probs, freqs, circuit_budget):
+def update_circuit_probs(probs, freqs, circuit_budget, circuit=None):
     qvec = probs
     fvec = freqs
     W = circuit_budget
@@ -845,7 +845,7 @@ def update_circuit_probs(probs, freqs, circuit_budget):
     if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
         return fvec
 
-    qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min(qvec), base_tol)
+    qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min(qvec), circuit, base_tol)
 
     initialTVD = 0.5 * sum(_np.abs(qvec - fvec))  # update current TVD
     if initialTVD <= W + tol:  # TVD is "in-budget" for this circuit due to adjustment; leave as is

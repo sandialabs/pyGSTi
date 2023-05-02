@@ -1225,6 +1225,19 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
 
         return
 
+    def copy(self):
+        """
+        Creates a copy of this :class:`RandomizedBenchmarkingResults` object.
+
+        Returns
+        -------
+        RandomizedBenchmarkingResults
+        """
+        #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
+        data = _proto.ProtocolData(self.data.edesign, self.data.dataset)
+        cpy = RandomizedBenchmarkingResults(data, self.protocol, self.fits, self.depths, self.defaultfit)
+        return cpy
+
 
 RB = RandomizedBenchmarking
 RBResults = RandomizedBenchmarkingResults  # shorthand
