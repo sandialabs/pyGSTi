@@ -493,7 +493,7 @@ def merge_jinja_template(qtys, output_filename, template_dir=None, template_name
     qtys : dict
         A dictionary of workspace quantities (switchboards and outputs).
 
-    output_filename : str
+    output_filename : str or pathlib.Path
         The output filename.
 
     template_dir : str, optional
@@ -546,7 +546,7 @@ def merge_jinja_template(qtys, output_filename, template_dir=None, template_name
     None
     """
 
-    assert(output_filename.endswith(".html")), "output_filename should have ended with .html!"
+    assert(str(output_filename).endswith(".html")), "output_filename should have ended with .html!"
     out_file = Path(output_filename).absolute()
     out_path = out_file.parent
     static_path = out_path / 'offline'
@@ -589,7 +589,7 @@ def merge_jinja_template(qtys, output_filename, template_dir=None, template_name
         outfile.write(template.render(render_params))
 
     if auto_open:
-        url = 'file://' + _os.path.abspath(output_filename)
+        url = 'file://' + _os.path.abspath(str(output_filename))
         _webbrowser.open(url)
 
 

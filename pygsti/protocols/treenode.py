@@ -70,7 +70,9 @@ class TreeNode(object):
 
         child_dirs = {}
         for d, nm in meta.get('directories', {}).items():
-            if isinstance(nm, list): nm = tuple(nm)  # because json makes tuples->lists
+            def convert(l):
+                return tuple(convert(x) for x in l) if type(l) is list else l
+            if isinstance(nm, list): nm = convert(nm)  # because json makes tuples->lists
             child_dirs[nm] = d
 
         self._dirs = child_dirs
@@ -92,6 +94,33 @@ class TreeNode(object):
             else:
                 instance = self.__class__  # no meta.json - default to same class as self
                 self._vals[nm] = instance.from_dir(subobj_dir, parent=self, name=nm, **kwargs)
+
+    def _init_children_from_mongodb_doc(self, doc, mongodb, **kwargs):
+        #if preloaded_edesign is None:
+        #    edesign_doc = mongodb[collection_names['edesigns']].find_one({'_id': parent_id})
+        #
+        #    child_id_suffixes = {}
+        #    for child_id_suffix, nm in edesign_doc.get('children', {}).items():
+        #        if isinstance(nm, list): nm = tuple(nm)  # because json makes tuples->lists
+        #        child_id_suffixes[nm] = child_id_suffix
+        #else:  # just take from already-loaded edesign
+        #    child_id_suffixes = preloaded_edesign._dirs.copy()
+
+        self._dirs = {nm: subdir for subdir, nm in doc['children'].items()}
+        self._vals = {}
+
+        for subdir, child_id in doc['children_ids'].items():
+            child_nm = doc['children'][subdir]
+            child_doc = mongodb[doc['children_collection_name']].find_one({'_id': child_id})
+            if child_doc is None:  # if there's no child document, generate the child value later
+                continue  # don't load anything - create child value on demand
+
+            if 'type' in child_doc:  # if child document contains information about what type of object it is
+                classobj = _io.metadir._class_for_name(child_doc['type'])
+            else:
+                classobj = self.__class__
+            self._vals[child_nm] = classobj.from_mongodb(mongodb, child_id, parent=self, name=child_nm, **kwargs)
+
 
     def keys(self):
         """
@@ -258,3 +287,34 @@ class TreeNode(object):
             outdir = dirname / subdir
             outdir.mkdir(exist_ok=True)
             self._vals[nm].write(outdir, parent=self)
+
+    def _add_children_write_ops_and_update_doc(self, doc, write_ops, mongodb, overwrite_existing, **kwargs):
+        # Note: this additional args to, e.g. write_to_mongodb
+        children_names_by_subdir = {dirname: subname for subname, dirname in self._dirs.items()}
+        children_ids_by_subdir = {}; child_collection_names = []
+        #for nm, val in self._vals.items():  # only write *existing* values -- but causes issues re: existing DB docs
+        for nm, val in self.items():  # write *all* values, generating them if needed
+            subdir = self._dirs[nm]
+            child_id = val.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing,
+                                                 parent=self, name=nm, **kwargs)
+            children_ids_by_subdir[subdir] = child_id
+            child_collection_names.append(val.collection_name)
+        doc['children'] = children_names_by_subdir
+        doc['children_ids'] = children_ids_by_subdir
+
+        if len(child_collection_names) > 0:
+            assert all([nm == child_collection_names[0] for nm in child_collection_names]), \
+                "Children must all be in same collection!"
+            doc['children_collection_name'] = child_collection_names[0]
+        else:
+            doc['children_collection_name'] = None
+
+    @classmethod
+    def _remove_children_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
+        doc = mongodb[collection_name].find_one({'_id': doc_id})
+        if doc is not None:
+            for subdir, child_id in doc['children_ids'].items():
+                #print(f"DB: Removing {str(cls.__name__)} child dir: {subdir} (id {child_id})")
+                _MongoSerializable.remove_from_mongodb(mongodb, child_id, doc['children_collection_name'],
+                                                       session, recursive)

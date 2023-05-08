@@ -27,12 +27,13 @@ from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
 
 
-class Estimate(object):
+class Estimate(_MongoSerializable):
     """
     A class encapsulating the `Model` objects related to a single GST estimate up-to-gauge freedoms.
 
@@ -53,6 +54,7 @@ class Estimate(object):
         A dictionary of parameters associated with how these models
         were obtained.
     """
+    collection_name = "pygsti_estimates"
 
     @classmethod
     def from_dir(cls, dirname, quick_load=False):
@@ -77,7 +79,18 @@ class Estimate(object):
         Protocol
         """
         ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret)
         ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
+        for crf in ret.confidence_region_factories.values():
+            crf.set_parent(ret)  # re-link confidence_region_factories
+        return ret
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
+        #def from_mongodb(cls, mongodb_collection, doc_id, ):
+        ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret, doc.get('_id', None))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
         for crf in ret.confidence_region_factories.values():
             crf.set_parent(ret)  # re-link confidence_region_factories
         return ret
@@ -140,6 +153,7 @@ class Estimate(object):
             A dictionary of parameters associated with how these models
             were obtained.
         """
+        super().__init__()
         self.parent = parent
         #self.parameters = _collections.OrderedDict()
         #self.goparameters = _collections.OrderedDict()
@@ -220,6 +234,29 @@ class Estimate(object):
         None
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):
+        _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                     'auxfile_types', overwrite_existing=overwrite_existing)
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
+                                        recursive=recursive)
+
+    @classmethod
+    def remove_from_mongodb(cls, mongodb_collection, doc_id, session=None):
+        """
+        Remove an Estimate from a MongoDB database.
+
+        Returns
+        -------
+        bool
+            `True` if the specified experiment design was removed, `False` if it didn't exist.
+        """
+        delcnt = _io.remove_auxtree_from_mongodb(mongodb_collection, doc_id, 'auxfile_types',
+                                                 session=session)
+        return bool(delcnt == 1)
 
     def retrieve_start_model(self, goparams):
         """
@@ -864,6 +901,7 @@ class Estimate(object):
         #  comm objects (in their layouts)
         del to_pickle['_final_mdc_store']
         del to_pickle['_final_objfn']
+        del to_pickle['_final_objfn_cache']
 
         # don't pickle parent (will create circular reference)
         del to_pickle['parent']
@@ -882,6 +920,7 @@ class Estimate(object):
         # reset MDC objective function and store objects
         state_dict['_final_mdc_store'] = None
         state_dict['_final_objfn'] = None
+        state_dict['_final_objfn_cache'] = None
 
         self.__dict__.update(state_dict)
         for crf in self.confidence_region_factories.values():

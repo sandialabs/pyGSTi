@@ -13,7 +13,9 @@ Functions for selecting a complete set of fiducials for a GST analysis.
 import numpy as _np
 import scipy
 import random
-
+import itertools
+from warnings import warn
+from math import floor
 from pygsti.algorithms import grasp as _grasp
 from pygsti.algorithms import scoring as _scoring
 from pygsti import circuits as _circuits
@@ -21,10 +23,16 @@ from pygsti import baseobjs as _baseobjs
 from pygsti.modelmembers.povms import ComplementPOVMEffect as _ComplementPOVMEffect
 from pygsti.tools import frobeniusdist_squared
 
+from pygsti.algorithms.germselection import construct_update_cache, minamide_style_inverse_trace, compact_EVD, compact_EVD_via_SVD
+
 
 def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
-                   ops_to_omit=None, force_empty=True, max_fid_length=2,
-                   algorithm='grasp', algorithm_kwargs=None, verbosity=1):
+                   ops_to_omit=None, force_empty=True, candidate_fid_counts=2,
+                   algorithm='grasp', algorithm_kwargs=None, verbosity=1,
+                   prep_fids=True, meas_fids=True, candidate_list=None,
+                   return_candidate_list=False, final_test= False, 
+                   assume_clifford=False, candidate_seed=None, 
+                   max_fid_length=None):
     """
     Generate prep and measurement fiducials for a given target model.
 
@@ -55,12 +63,18 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         Whether or not to force all fiducial sets to contain the empty gate
         string as a fiducial.
 
-    max_fid_length : int, optional
-        The maximum number of gates to include in a fiducial. The default is
-        not guaranteed to work for arbitrary models (particularly for quantum
-        systems larger than a single qubit).
+    candidate_fid_counts : int or dic, optional
+        A dictionary of *fid_length* : *count* key-value pairs, specifying
+        the fiducial "candidate list" - a list of potential fiducials to draw from.
+        *count* is either an integer specifying the number of random fiducials
+        considered at the given *fid_length* or the special values `"all upto"`
+        that considers all of the of all the fiducials of length up to
+        the corresponding *fid_length*. If the keyword 'all' is used for the
+        count value then all circuits at that particular length are added. 
+        If and integer, all germs of up to length
+        that length are used, the equivalent of `{specified_int: 'all upto'}`.
 
-    algorithm : {'slack', 'grasp'}, optional
+    algorithm : {'slack', 'grasp', 'greedy'}, optional
         Specifies the algorithm to use to generate the fiducials. Current
         options are:
 
@@ -69,6 +83,10 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         'grasp'
             Use GRASP to generate random greedy fiducial sets and then locally
             optimize them. See :func:`_find_fiducials_grasp` for more
+            details.
+        'greedy'
+            Use a greedy algorithm accelerated using low-rank update techniques.
+            See :func:`_find_fiducials_greedy` for more
             details.
 
     algorithm_kwargs : dict
@@ -80,6 +98,32 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     verbosity : int, optional
         How much detail to send to stdout.
 
+    candidate_list : list of circuits, optional
+        A user specified manually selected list of candidate fiducial circuits.
+        Can speed up testing multiple objective function options, for example.
+    
+    return_candidate_list: bool, optional (default False)
+        When True we return the full list of deduped candidate fiducials considered
+        along with the final fiducial lists.
+        
+    final_test : bool, optional (default False)
+        When true a final check is performed on the returned solution for the candidate
+        prep and measurement lists using the function test_fiducial_list to verify
+        we have an acceptable candidate set (this uses a different code path in some cases so
+        can be used to detect errors). 
+        
+    assume_clifford : bool, optional (default False)
+        When true then we assume that all of the circuits are clifford circuits,
+        which allows us to use a faster deduping routine exploiting the properties
+        of clifford circuits.
+        
+    max_fid_length : int, optional (deprecated)
+        The maximum number of gates to include in a fiducial. The default is
+        not guaranteed to work for arbitrary models (particularly for quantum
+        systems larger than a single qubit). This keyword is now deprecated.
+        The behavior of the keyword is now equivalent to passing in an int
+        for the candidate_fid_counts argument.
+
     Returns
     -------
     prepFidList : list of Circuits
@@ -88,20 +132,91 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         A list containing the circuits for the measurement fiducials.
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
-    if ops_to_omit is None:
-        ops_to_omit = []
+    
+    #If the user hasn't specified a candidate list manually then generate one:
+    if candidate_list is None:
+        if ops_to_omit is None:
+            ops_to_omit = []
+        
+        fidOps = [gate for gate in target_model.operations if gate not in ops_to_omit]
+        
+        if omit_identity:
+            # we assume identity gate is always the identity mx regardless of basis
+            Identity = _np.identity(target_model.dim, 'd')
 
-    fidOps = [gate for gate in target_model.operations if gate not in ops_to_omit]
-
-    if omit_identity:
-        # we assume identity gate is always the identity mx regardless of basis
-        Identity = _np.identity(target_model.dim, 'd')
-
-        for gate in fidOps:
-            if frobeniusdist_squared(target_model.operations[gate], Identity) < eq_thresh:
-                fidOps.remove(gate)
-
-    availableFidList = _circuits.list_all_circuits(fidOps, 0, max_fid_length)
+            for gate in fidOps:
+                mx = target_model.operations[gate]
+                if not isinstance(mx, _np.ndarray):
+                    mx = mx.to_dense()
+                try:
+                    if frobeniusdist_squared(mx, Identity) < eq_thresh:
+                        fidOps.remove(gate)
+                except ValueError as e:
+                    raise ValueError('If shapes do not match, this may be a unitary/process matrix mismatch. ' +
+                        'Consider using a parameterization like "full" or "full TP" to avoid this.') from e
+        
+        availableFidList = []
+        if max_fid_length is not None:
+            warn('max_fid_length is now deprecated and will be replaced by the kwarg candidate_fid_counts. See documentation for how to achieve the old behavior with the new kwarg.')
+            if candidate_fid_counts is not None:
+                warn('Specifying max_fid_length without setting candidate_fid_counts results the settings specified in candidate_fid_counts being overridden.\
+                candidate_fid_counts is set by defaults, so this might be expected, but if this is not the desired behavior then please verify your arguments.')
+            #now overrive the value of candidate_fid_counts
+            candidate_fid_counts= max_fid_length
+        if isinstance(candidate_fid_counts, int): 
+            candidate_fid_counts = {candidate_fid_counts: 'all upto'}
+        
+        for fidLength, count in candidate_fid_counts.items():
+            if count == "all upto":
+                availableFidList.extend(_circuits.list_all_circuits(fidOps, 0, fidLength))
+            #if "all" then include all circuits at that particular length.
+            elif count =="all":
+                availableFidList.extend(_circuits.list_all_circuits_one_len(fidOps, fidLength))
+            else:
+                availableFidList.extend(_circuits.list_random_circuits_onelen(
+                    fidOps, fidLength, count, seed=candidate_seed))
+        
+        printer.log('Initial Length Available Fiducial List: '+ str(len(availableFidList)), 1)
+        printer.log('Creating cache of fiducial process matrices.', 3)
+        circuit_cache= create_circuit_cache(target_model,availableFidList)
+        printer.log('Completed cache of fiducial process matrices.', 3)
+        
+        #Now that we have a cache of PTMs as numpy arrays for the initial list of available fiducials
+        #we can clean this list up to remove any effective identities and circuits with duplicate effects.
+        #Use a flag to check if we can assume these are clifford circuits in which case
+        #we can use a more efficient deduping routine.
+        cleaned_availableFidList, cleaned_circuit_cache = clean_fid_list(target_model, circuit_cache, availableFidList,
+                                                                            drop_identities=True, drop_duplicates=True,
+                                                                            eq_thresh=eq_thresh, assume_clifford=assume_clifford)
+        
+        printer.log('Length Available Fiducial List Dropped Identities and Duplicates: ' + str(len(cleaned_availableFidList)), 1)
+        
+        #TODO: I can speed this up a bit more by looking through the available fiducial list for
+        #circuits that are effective identities. Reducing the search space should be a big time-space
+        #saver.
+    #otherwise if the user has manually specified a list of fiducials then set cleaned_availableFidList to that and
+    #create the circuit cache.
+    else:
+        cleaned_availableFidList = candidate_list
+        cleaned_circuit_cache= create_circuit_cache(target_model,cleaned_availableFidList)
+    
+    #generate a cache for the allowed preps and effects based on availableFidList
+    if prep_fids:
+        prep_cache= create_prep_cache(target_model, cleaned_availableFidList, cleaned_circuit_cache)
+    #TODO: I can technically speed things up even more if we're using the same
+    #set of available fidcuials for state prep and measurement since we only
+    #would need to do generate the transfer matrices for each circuit once.
+    #probably not the most impactful change for the short-term though, performance
+    #wise.
+    if meas_fids:
+        meas_cache= create_meas_cache(target_model, cleaned_availableFidList, cleaned_circuit_cache)
+    
+    #define function for final test result printing
+    def final_result_test(final_fids, verb_printer):
+        if final_fids:
+            verb_printer.log('Final test of the candidate meas fiducial lists passed.', 1)
+        else:
+            verb_printer.log('Final test of the candidate meas fiducial lists failed.', 1)
 
     if algorithm_kwargs is None:
         # Avoid danger of using empty dict for default value.
@@ -110,7 +225,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     if algorithm == 'slack':
         printer.log('Using slack algorithm.', 1)
         default_kwargs = {
-            'fid_list': availableFidList,
+            'fid_list': cleaned_availableFidList,
             'verbosity': max(0, verbosity - 1),
             'force_empty': force_empty,
             'score_func': 'all',
@@ -133,6 +248,13 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
             printer.log('Preparation fiducials:', 1)
             printer.log(str([fid.str for fid in prepFidList]), 1)
             printer.log('Score: {}'.format(prepScore.minor), 1)
+            #if requested do a final check with test_fiducial_list
+            #to verify the algorithm succeeds
+            if final_test:
+                final_test_fiducial_list = test_fiducial_list(target_model, prepFidList, 'prep',
+                                                    score_func=algorithm_kwargs['score_func'], return_all=False,
+                                                    threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=prep_cache)
+                final_result_test(final_test_fiducial_list, printer)
 
         measFidList = _find_fiducials_integer_slack(model=target_model,
                                                     prep_or_meas='meas',
@@ -144,11 +266,18 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
             printer.log('Measurement fiducials:', 1)
             printer.log(str([fid.str for fid in measFidList]), 1)
             printer.log('Score: {}'.format(measScore.minor), 1)
+            #if requested do a final check with test_fiducial_list
+            #to verify the algorithm succeeds
+            if final_test:
+                final_test_fiducial_list = test_fiducial_list(target_model, measFidList, 'meas',
+                                                    score_func=algorithm_kwargs['score_func'], return_all=False,
+                                                    threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=meas_cache)
+                final_result_test(final_test_fiducial_list, printer)
 
     elif algorithm == 'grasp':
         printer.log('Using GRASP algorithm.', 1)
         default_kwargs = {
-            'fids_list': availableFidList,
+            'fids_list': cleaned_availableFidList,
             'alpha': 0.1,   # No real reason for setting this value of alpha.
             'op_penalty': 0.1,
             'verbosity': max(0, verbosity - 1),
@@ -159,50 +288,154 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         for key in default_kwargs:
             if key not in algorithm_kwargs:
                 algorithm_kwargs[key] = default_kwargs[key]
-
-        prepFidList = _find_fiducials_grasp(model=target_model,
-                                            prep_or_meas='prep',
+                
+        #initialize the prep and measurement fid lists to None
+        #so that None gets returned if we aren't running that part
+        #of the fiducial search.
+        prepFidList=None
+        measFidList=None
+                
+        if prep_fids:
+            prepFidList = _find_fiducials_grasp(model=target_model,
+                                            prep_or_meas='prep', 
+                                            fid_cache= prep_cache,
                                             **algorithm_kwargs)
 
-        if algorithm_kwargs['return_all'] and prepFidList[0] is not None:
-            prepScore = compute_composite_fiducial_score(
-                target_model, prepFidList[0], 'prep',
-                score_func=algorithm_kwargs['score_func'])
-            printer.log('Preparation fiducials:', 1)
-            printer.log(str([fid.str for fid in prepFidList[0]]), 1)
-            printer.log('Score: {}'.format(prepScore.minor), 1)
-        elif not algorithm_kwargs['return_all'] and prepFidList is not None:
-            prepScore = compute_composite_fiducial_score(
-                target_model, prepFidList, 'prep',
-                score_func=algorithm_kwargs['score_func'])
-            printer.log('Preparation fiducials:', 1)
-            printer.log(str([fid.str for fid in prepFidList]), 1)
-            printer.log('Score: {}'.format(prepScore.minor), 1)
-
-        measFidList = _find_fiducials_grasp(model=target_model,
+            if algorithm_kwargs['return_all'] and prepFidList[0] is not None:
+                prepScore = compute_composite_fiducial_score(
+                    target_model, prepFidList[0], 'prep',
+                    score_func=algorithm_kwargs['score_func'])
+                printer.log('Preparation fiducials:', 1)
+                printer.log(str([fid.str for fid in prepFidList[0]]), 1)
+                printer.log('Score: {}'.format(prepScore.minor), 1)
+                #if requested do a final check with test_fiducial_list
+                #to verify the algorithm succeeds
+                if final_test:
+                    final_test_fiducial_list = test_fiducial_list(target_model, prepFidList[0], 'prep',
+                                                        score_func=algorithm_kwargs['score_func'], return_all=False,
+                                                        threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=prep_cache)
+                    final_result_test(final_test_fiducial_list, printer)
+                    
+            elif not algorithm_kwargs['return_all'] and prepFidList is not None:
+                prepScore = compute_composite_fiducial_score(
+                    target_model, prepFidList, 'prep',
+                    score_func=algorithm_kwargs['score_func'])
+                printer.log('Preparation fiducials:', 1)
+                printer.log(str([fid.str for fid in prepFidList]), 1)
+                printer.log('Score: {}'.format(prepScore.minor), 1)
+                #if requested do a final check with test_fiducial_list
+                #to verify the algorithm succeeds
+                if final_test:
+                    final_test_fiducial_list = test_fiducial_list(target_model, prepFidList, 'prep',
+                                                        score_func=algorithm_kwargs['score_func'], return_all=False,
+                                                        threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=prep_cache)
+                    final_result_test(final_test_fiducial_list, printer)
+                    
+        if meas_fids:
+            measFidList = _find_fiducials_grasp(model=target_model,
                                             prep_or_meas='meas',
+                                            fid_cache=meas_cache,
                                             **algorithm_kwargs)
 
-        if algorithm_kwargs['return_all'] and measFidList[0] is not None:
-            measScore = compute_composite_fiducial_score(
-                target_model, measFidList[0], 'meas',
-                score_func=algorithm_kwargs['score_func'])
-            printer.log('Measurement fiducials:', 1)
-            printer.log(str([fid.str for fid in measFidList[0]]), 1)
-            printer.log('Score: {}'.format(measScore.minor), 1)
-        elif not algorithm_kwargs['return_all'] and measFidList is not None:
-            measScore = compute_composite_fiducial_score(
-                target_model, measFidList, 'meas',
-                score_func=algorithm_kwargs['score_func'])
-            printer.log('Measurement fiducials:', 1)
-            printer.log(str([fid.str for fid in measFidList]), 1)
-            printer.log('Score: {}'.format(measScore.minor), 1)
-
+            if algorithm_kwargs['return_all'] and measFidList[0] is not None:
+                measScore = compute_composite_fiducial_score(
+                    target_model, measFidList[0], 'meas',
+                    score_func=algorithm_kwargs['score_func'])
+                printer.log('Measurement fiducials:', 1)
+                printer.log(str([fid.str for fid in measFidList[0]]), 1)
+                printer.log('Score: {}'.format(measScore.minor), 1)
+                #if requested do a final check with test_fiducial_list
+                #to verify the algorithm succeeds
+                if final_test:
+                    final_test_fiducial_list = test_fiducial_list(target_model, measFidList[0], 'meas',
+                                                        score_func=algorithm_kwargs['score_func'], return_all=False,
+                                                        threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=meas_cache)
+                    final_result_test(final_test_fiducial_list, printer)
+            elif not algorithm_kwargs['return_all'] and measFidList is not None:
+                measScore = compute_composite_fiducial_score(
+                    target_model, measFidList, 'meas',
+                    score_func=algorithm_kwargs['score_func'])
+                printer.log('Measurement fiducials:', 1)
+                printer.log(str([fid.str for fid in measFidList]), 1)
+                printer.log('Score: {}'.format(measScore.minor), 1)
+                #if requested do a final check with test_fiducial_list
+                #to verify the algorithm succeeds
+                if final_test:
+                    final_test_fiducial_list = test_fiducial_list(target_model, measFidList, 'meas',
+                                                        score_func=algorithm_kwargs['score_func'], return_all=False,
+                                                        threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=meas_cache)
+                    final_result_test(final_test_fiducial_list, printer)
+    
+    elif algorithm == 'greedy':
+        printer.log('Using greedy algorithm.', 1)
+        default_kwargs = {
+            'fids_list': cleaned_availableFidList,
+            'op_penalty': 0.1,
+            'verbosity': verbosity,
+            'force_empty': force_empty
+        }
+        
+        #We only support 'all' for the score function with the
+        #greedy algorithm, so raise an error for other values.
+        if (algorithm_kwargs.get('score_func', None) is not None) and \
+           (algorithm_kwargs.get('score_func', None) != 'all'):
+            raise ValueError('The greedy fiducial search algorithm currently only support the score function \'all\'.')
+        
+        for key in default_kwargs:
+            if key not in algorithm_kwargs:
+                algorithm_kwargs[key] = default_kwargs[key]
+                
+        #initialize the prep and measurement fid lists to None
+        #so that None gets returned if we aren't running that part
+        #of the fiducial search.
+        prepFidList=None
+        measFidList=None
+                
+        if prep_fids:
+            prepFidList, prepScore = _find_fiducials_greedy(model=target_model,
+                                            prep_or_meas='prep', 
+                                            fid_cache= prep_cache,
+                                            **algorithm_kwargs)
+            if prepFidList is not None:
+                printer.log('Preparation fiducials:', 1)
+                printer.log(str([fid.str for fid in prepFidList]), 1)
+                printer.log('Score: {}'.format(prepScore.minor), 1)
+                
+                #if requested do a final check with test_fiducial_list
+                #to verify the algorithm succeeds
+                if final_test:
+                    final_test_fiducial_list = test_fiducial_list(target_model, prepFidList, 'prep',
+                                                        score_func='all', return_all=False,
+                                                        threshold=algorithm_kwargs.get('threshold', 1e-6), fid_cache=prep_cache)
+                    final_result_test(final_test_fiducial_list, printer)
+        if meas_fids:
+            measFidList, measScore = _find_fiducials_greedy(model=target_model,
+                                            prep_or_meas='meas',
+                                            fid_cache=meas_cache,
+                                            **algorithm_kwargs)
+            if measFidList is not None:
+                printer.log('Measurement fiducials:', 1)
+                printer.log(str([fid.str for fid in measFidList]), 1)
+                printer.log('Score: {}'.format(measScore.minor), 1)
+                
+                #if requested do a final check with test_fiducial_list
+                #to verify the algorithm succeeds
+                if final_test:
+                    final_test_fiducial_list = test_fiducial_list(target_model, measFidList, 'meas',
+                                                        score_func='all', return_all=False,
+                                                        threshold=algorithm_kwargs.get('threshold', 1e-6), 
+                                                        fid_cache=meas_cache)
+                    final_result_test(final_test_fiducial_list, printer)
+                
     else:
         raise ValueError("'{}' is not a valid algorithm "
                          "identifier.".format(algorithm))
-
-    return prepFidList, measFidList
+    
+    
+    if return_candidate_list:
+        return prepFidList, measFidList, cleaned_availableFidList
+    else:
+        return prepFidList, measFidList    
 
 
 #def bool_list_to_ind_list(boolList):
@@ -231,9 +464,244 @@ def xor(*args):
 
     output = sum(bool(x) for x in args) == 1
     return output
+    
+#function for cleaning up the available fiducial list to drop identities and circuits with duplicate effects
+def clean_fid_list(model, circuit_cache, available_fid_list,drop_identities=True, drop_duplicates=True, eq_thresh= 1e-6, assume_clifford=False):
+    #initialize an identity matrix of the appropriate dimension
+    
+    cleaned_circuit_cache= circuit_cache.copy()
+    
+    
+    if drop_identities:        
+        Identity = _np.identity(model.dim, 'd')
+        
+        #remove identities
+        for ckt_key, PTM in circuit_cache.items():
+            #Don't remove the empty circuit if it is in the list.
+            if ckt_key=='{}' or ckt_key==():
+                continue
+            #the default tolerance for allclose is probably fine.
+            if _np.linalg.norm(PTM- Identity)<eq_thresh:
+                #then delete that circuit from the cleaned dictionary
+                del cleaned_circuit_cache[ckt_key]
+                
+    cleaned_circuit_cache_1= cleaned_circuit_cache.copy()            
+                
+    if drop_duplicates:
+        #remove circuits with duplicate PTMs
+        #The list of available fidcuials is typically
+        #generated in such a way to be listed in increasing order
+        #of depth, so if we search for dups in that order this should
+        #generally favor the shorted of a pair of duplicate PTMs.
+
+        #reverse the list so that the longer circuits are at the start and shorter
+        #at the end for better pop behavior.
+        
+        #TODO: add an option to partition the list into smaller chunks to dedupe
+        #separately before regrouping and deduping as a whole. Heuristic, but should 
+        #be a good deal faster. 
+        
+        if assume_clifford:
+            #Leverage the fact that we know that the PTMs for clifford circuits
+            #should correspond to signed permutation matrices. Take each of the
+            #permuation matrices, flatten them, then get a list of the non-zero
+            #indices. Then for these non-zero indices construct a second list of
+            #the sign of these entries. This should uniquely identify each of the
+            #signed permutations.
+            reversed_ckt_list = list(cleaned_circuit_cache_1.keys())
+            reversed_ckt_list.reverse()
+            unique_vec_perm_reps= {}
+            for ckt in reversed_ckt_list:
+                flattened_PTM= _np.ravel(cleaned_circuit_cache_1[ckt])
+                #round to the nearest integer.
+                rounded_flattened_PTM= _np.round(flattened_PTM, decimals=0)
+                nonzero_indices= _np.nonzero(rounded_flattened_PTM)[0]
+                #get the signs of the nonzero elements.
+                signs= _np.sign(rounded_flattened_PTM[nonzero_indices])
+                #concatenate these two arrays
+                nonzero_indices_and_signs = _np.concatenate((nonzero_indices,signs))
+                #cast this array to a tuple and then add it to the dictionary
+                #I think technically I can hash the ndarrays directly, but just
+                #to be safe cast these as tuples first.
+                #Actually, I don't think I need to do the deduping in 2 stages.
+                #I should be able to directly use the tuples as keys and the
+                #ckts as the values in a python dictionary (which is implemented
+                #using hash tables on the back end).
+                unique_vec_perm_reps[tuple(nonzero_indices_and_signs)]= ckt
+            
+            #Now get the values of the unique_vec_perm_reps dictionary
+            #These should be the depuped circuits.
+            deduped_ckt_list= list(unique_vec_perm_reps.values())     
+        
+        #otherwise use a more generic method that doesn't rely on the structure of cliffords (but is slower).
+        else:
+            unseen_circs  = list(cleaned_circuit_cache.keys())
+            unseen_circs.reverse()
+            deduped_ckt_list  = []
+            
+            #While unseen_circs is not empty
+            while unseen_circs:
+                current_ckt = unseen_circs.pop()
+                current_ckt_PTM = cleaned_circuit_cache_1[current_ckt]
+                deduped_ckt_list.append(current_ckt)            
+                #now iterate through the remaining elements of the set of unseen circuits and remove any duplicates.
+                is_not_duplicate=[True]*len(unseen_circs)
+                for i, ckt in enumerate(unseen_circs):
+                    #the default tolerance for allclose is probably fine.
+                    if _np.linalg.norm(cleaned_circuit_cache_1[ckt]-current_ckt_PTM)<eq_thresh: #use same threshold as defined in the base find_fiducials function
+                        is_not_duplicate[i]=False
+                #reset the set of unseen circuits.
+                unseen_circs=list(itertools.compress(unseen_circs, is_not_duplicate))
+            
+        #rebuild the circuit cache now that it has been de-duped:
+        cleaned_circuit_cache_2= {ckt_key: cleaned_circuit_cache_1[ckt_key] for ckt_key in deduped_ckt_list}
+    
+    #otherwise just make cleaned_circuit_cache_2 a copy of cleaned_circuit_cache from
+    #the identity dropping step.
+    else:
+        cleaned_circuit_cache_2= cleaned_circuit_cache.copy()
+     
+    #now that we've de-duped the circuit_cache, we can pull out the keys to get the
+    #new list of available fiducials.
+    
+    available_fid_list_strings= [ckt.str for ckt in available_fid_list]
+    
+    cleaned_availableFidList=[]
+    for i, fid_string in enumerate(available_fid_list_strings):
+        if fid_string in cleaned_circuit_cache_2:
+            cleaned_availableFidList.append(available_fid_list[i])
+    
+    return cleaned_availableFidList, cleaned_circuit_cache_2    
+
+#new function for taking a list of available fiducials and generating a cache of the PTMs
+#this will also be useful trimming the list of effective identities and fiducials with
+#duplicated effects.
+
+def create_circuit_cache(model, circuit_list):
+    """
+    Function for generating a cache of PTMs for the available fiducials.
+    
+    Parameters
+    ----------
+    model : Model
+        The model (associates operation matrices with operation labels).
+
+    ckt_list : list of Circuits
+        Full list of all fiducial circuits avalable for constructing an informationally complete state preparation.
+    
+    Returns
+    -------
+    dictionary
+        A dictionary with keys given by circuits with corresponding
+        entries being the PTMs for that circuit.
+    
+    """
+    
+    circuit_cache= {}
+    for circuit in circuit_list:
+        circuit_cache[circuit.str] = model.sim.product(circuit)
+    
+    return circuit_cache
 
 
-def create_prep_mxs(model, prep_fid_list):
+#new function for generating a cache for the elements of the prep matrices and measurement matrices
+#produced by create_prep_mxs and create_meas_mxs. Will also update those two functions to take a cache as
+#an argument and generate the list returned by them more efficiently.
+
+def create_prep_cache(model, available_prep_fid_list, circuit_cache=None):
+    """
+    Make a dictionary structure mapping native state preps and circuits to numpy
+    column vectors for the corresponding effective state prep.
+    
+    This can then be passed into 'create_prep_mxs' to more efficiently generate the
+    matrices for score function evaluation.
+    Parameters
+    ----------
+    model : Model
+        The model (associates operation matrices with operation labels).
+
+    available_prep_fid_list : list of Circuits
+        Full list of all fiducial circuits avalable for constructing an informationally complete state preparation.
+
+    circuit_cache : dict
+        dictionary of PTMs for the circuits in the available_prep_fid_list
+    
+    Returns
+    -------
+    dictionary
+        A dictionary with keys given be tuples of the form (native_prep, ckt) with corresponding
+        entries being the numpy vectors for that state prep.
+    """
+    
+    prep_cache = {}
+    keylist=[]
+    
+    if circuit_cache is not None:
+        for rho in model.preps.values():
+            new_key= rho.to_vector().tobytes()
+            keylist.append(new_key)
+            for prepFid in available_prep_fid_list:
+                prep_cache[(new_key,prepFid.str)] = _np.dot(circuit_cache[prepFid.str], rho.to_dense())
+    
+    else:
+        for rho in model.preps.values():
+            new_key= rho.to_vector().tobytes()
+            keylist.append(new_key)
+            for prepFid in available_prep_fid_list:
+                prep_cache[(new_key,prepFid.str)] = _np.dot(model.sim.product(prepFid), rho.to_dense())
+    return prep_cache, keylist
+    
+
+def create_meas_cache(model, available_meas_fid_list, circuit_cache=None):
+    """
+    Make a dictionary structure mapping native measurements and circuits to numpy
+    column vectors corresponding to the transpose of the effective measurement effects.
+    
+    This can then be passed into 'create_meas_mxs' to more efficiently generate the
+    matrices for score function evaluation.
+    Parameters
+    ----------
+    model : Model
+        The model (associates operation matrices with operation labels).
+
+    available_meas_fid_list : list of Circuits
+        Full list of all fiducial circuits avalable for constructing an informationally complete measurements.
+        
+    circuit_cache : dict
+        dictionary of PTMs for the circuits in the available_meas_fid_list
+
+    Returns
+    -------
+    tuple with dictionary and lists of POVM and Effect Key pairs.
+        A dictionary with keys given be tuples of the form (native_povm, native_povm_effect, ckt) with corresponding
+        entries being the numpy vectors for the transpose of that effective measurement effect.
+    """
+    
+    meas_cache = {}
+    keypairlist=[]
+    
+    if circuit_cache is not None:
+        for povm in model.povms.values():
+            for E in povm.values():
+                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+                new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_vector().tobytes())
+                keypairlist.append(new_povm_effect_key_pair)
+                for measFid in available_meas_fid_list:
+                    meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid.str)] = _np.dot(E.to_dense(), circuit_cache[measFid.str])    
+    
+    else:
+        for povm in model.povms.values():
+            for E in povm.values():
+                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+                new_povm_effect_key_pair= (povm.to_vector().tobytes(), E.to_vector().tobytes())
+                keypairlist.append(new_povm_effect_key_pair)
+                for measFid in available_meas_fid_list:
+                    meas_cache[(new_povm_effect_key_pair[0],new_povm_effect_key_pair[1],measFid.str)] = _np.dot(E.to_dense(), model.sim.product(measFid))
+                    
+    return meas_cache, keypairlist
+  
+
+def create_prep_mxs(model, prep_fid_list, prep_cache=None):
     """
     Make a list of matrices for the model preparation operations.
 
@@ -248,6 +716,11 @@ def create_prep_mxs(model, prep_fid_list):
 
     prep_fid_list : list of Circuits
         List of fiducial circuits for constructing an informationally complete state preparation.
+        
+    prep_cache : dictionary of effective state preps
+        Dictionary of effective state preps cache used to accelerate the generation of the matrices
+        used for score function evaluation. Default value is None.
+    
 
     Returns
     -------
@@ -261,15 +734,34 @@ def create_prep_mxs(model, prep_fid_list):
     #numRho = len(model.preps)
     numFid = len(prep_fid_list)
     outputMatList = []
-    for rho in list(model.preps.values()):
-        outputMat = _np.zeros([dimRho, numFid], float)
-        for i, prepFid in enumerate(prep_fid_list):
-            outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho.to_dense())
-        outputMatList.append(outputMat)
+    
+    if prep_cache is not None:
+        for rho_key in prep_cache[1]:
+            outputMat = _np.zeros([dimRho, numFid], float)
+            for i, prepFid in enumerate(prep_fid_list):
+                #if the key doesn't exist in the cache for some reason then we'll revert back to
+                #doing the matrix multiplication again.
+                #Actually, this is slowing things down a good amount, let's just print a
+                #descriptive error message if the key is missing 
+                try:
+                    outputMat[:, i] = prep_cache[0][(rho_key,prepFid.str)]
+                except KeyError as err:
+                    print('A (Rho, Circuit) pair is missing from the cache, all such pairs should be available is using the caching option.')
+                    raise err                
+                    #outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho.to_dense())
+            outputMatList.append(outputMat)
+    
+    else:
+        for rho in model.preps.values():
+            outputMat = _np.zeros([dimRho, numFid], float)
+            for i, prepFid in enumerate(prep_fid_list):
+                outputMat[:, i] = _np.dot(model.sim.product(prepFid), rho.to_dense())
+            outputMatList.append(outputMat)    
+    
     return outputMatList
 
 
-def create_meas_mxs(model, meas_fid_list):
+def create_meas_mxs(model, meas_fid_list, meas_cache=None):
     """
     Make a list of matrices for the model measurement operations.
 
@@ -284,6 +776,10 @@ def create_meas_mxs(model, meas_fid_list):
 
     meas_fid_list : list of Circuits
         List of fiducial circuits for constructing an informationally complete measurement.
+       
+    meas_cache : dictionary of effective measurement effects
+        Dictionary of effective measurement effects cache used to accelerate the generation of the matrices
+        used for score function evaluation. Entries are columns of the transpose of the effects. Default value is None.
 
     Returns
     -------
@@ -296,19 +792,39 @@ def create_meas_mxs(model, meas_fid_list):
     dimE = model.dim
     numFid = len(meas_fid_list)
     outputMatList = []
-    for povm in model.povms.values():
-        for E in povm.values():
-            if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+     
+    if meas_cache is not None:
+        
+        for povm_key, E_key in meas_cache[1]:
             outputMat = _np.zeros([dimE, numFid], float)
             for i, measFid in enumerate(meas_fid_list):
-                outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))
+                #if the key doesn't exist in the cache for some reason then we'll revert back to
+                #doing the matrix multiplication again.
+                #Actually, this is slowing things down a good amount, let's just print a
+                #descriptive error message if the key is missing 
+                try:
+                    outputMat[:, i] = meas_cache[0][(povm_key, E_key,measFid.str)] 
+                except KeyError as err:
+                    print('A (POVM, Effect, Circuit) pair is missing from the cache, all such pairs should be available is using the caching option.')
+                    raise err
+                    #outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))
             outputMatList.append(outputMat)
+    
+    else:
+        for povm in model.povms.values():
+            for E in povm.values():
+                if isinstance(E, _ComplementPOVMEffect): continue  # complement is dependent on others
+                outputMat = _np.zeros([dimE, numFid], float)
+                for i, measFid in enumerate(meas_fid_list):
+                    outputMat[:, i] = _np.dot(E.to_dense(), model.sim.product(measFid))
+                outputMatList.append(outputMat)
+            
     return outputMatList
 
 
 def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='all',
                                      threshold=1e6, return_all=False, op_penalty=0.0,
-                                     l1_penalty=0.0):
+                                     l1_penalty=0.0, gate_penalty=None, fid_cache= None):
     """
     Compute a composite score for a fiducial list.
 
@@ -344,13 +860,24 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
     return_all : bool, optional (default is False)
         Whether the spectrum should be returned along with the score.
 
-    op_penalty : float, optional (defailt is 0.0)
+    op_penalty : float, optional (default is 0.0)
         Coefficient of a penalty linear in the total number of gates in all
         fiducials that is added to ``score.minor``.
 
-    l1_penalty : float, optional (defailt is 0.0)
+    l1_penalty : float, optional (default is 0.0)
         Coefficient of a penalty linear in the number of fiducials that is
         added to ``score.minor``.
+        
+    gate_penalty : dict, optional
+        A dictionary with keys given by individual gates and values corresponding
+        to the penalty to add for each instance of that gate in the fiducial set.
+        
+    fid_cache : dict, optional (default is None)
+        A dictionary of either effective state preparations or measurement effects
+        used to accelerate the generation of the matrix used for scoring.
+        It's assumed that the user will pass in the correct cache based on the type
+        of fiducial set being created (if wrong a fall back will revert to redoing all the
+        matrix multiplication again).
 
     Returns
     -------
@@ -362,9 +889,9 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
     """
     # dimRho = model.dim
     if prep_or_meas == 'prep':
-        fidArrayList = create_prep_mxs(model, fid_list)
+        fidArrayList = create_prep_mxs(model, fid_list, fid_cache)
     elif prep_or_meas == 'meas':
-        fidArrayList = create_meas_mxs(model, fid_list)
+        fidArrayList = create_meas_mxs(model, fid_list, fid_cache)
     else:
         raise ValueError('Invalid value "{}" for prep_or_meas (must be "prep" '
                          'or "meas")!'.format(prep_or_meas))
@@ -372,22 +899,59 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
     numFids = len(fid_list)
     scoreMx = _np.concatenate(fidArrayList, axis=1)  # shape = (dimRho, nFiducials*nPrepsOrEffects)
     scoreSqMx = _np.dot(scoreMx, scoreMx.T)  # shape = (dimRho, dimRho)
-    spectrum = sorted(_np.abs(_np.linalg.eigvalsh(scoreSqMx)))
+    spectrum = _np.sort(_np.abs(_np.linalg.eigvalsh(scoreSqMx)))
+    
     specLen = len(spectrum)
-    N_nonzero = 0
-    nonzero_score = _np.inf
-    for N in range(1, specLen + 1):
-        score = numFids * _scoring.list_score(spectrum[-N:], score_func)
-        if score <= 0 or _np.isinf(score) or score > threshold:
-            break   # We've found a zero eigenvalue.
+    N_nonzero = specLen- _np.count_nonzero(spectrum<10**-10) #HARDCODED Spectrum Threshold
+    if N_nonzero==0:
+        nonzero_score = _np.inf
+    else:
+        #The scoring function in list_score is meant to be generic, but for 
+        #performance reasons I want to take advantage of the fact that I know
+        #certain things have already been done to the spectrum, so I'm going to
+        #inline the scoring here and leave list_score alone.
+        
+        #don't need to check for zeros since I already counted the number
+        #of nonzero eigenvalues above and handled that case there
+        if score_func == 'all':
+            #no need to the absolute value since I did that above
+            #Non-np sum and min are faster for small arrays/lists but slower for
+            #large ones.
+            nonzero_score = numFids*_np.sum(1. /spectrum[-N_nonzero:])
+        elif score_func == 'worst':
+            nonzero_score = numFids*(1. / _np.min(spectrum[-N_nonzero:]))
         else:
-            nonzero_score = score
-            N_nonzero = N
+            raise ValueError("'%s' is not a valid value for score_func.  "
+                             "Either 'all' or 'worst' must be specified!"
+                             % score_func)
+    
+        #nonzero_score = numFids * _scoring.list_score(spectrum[-N_nonzero:], score_func)
+        
+#    nonzero_score = _np.inf
+#    for N in range(1, specLen + 1):
+#        print(spectrum[-N:])
+#        score = numFids * _scoring.list_score(spectrum[-N:], score_func)
+#        if score <= 0 or _np.isinf(score) or score > threshold:
+#            break   # We've found a zero eigenvalue.
+#        else:
+#            nonzero_score = score
+#            N_nonzero = N
+
+#the implementation of the above scoring loop can be made much faster
 
     nonzero_score += l1_penalty * len(fid_list)
-
     nonzero_score += op_penalty * sum([len(fiducial) for fiducial in fid_list])
-
+    
+    #add the gate penalties.
+    if gate_penalty is not None:
+        for gate, penalty_value in gate_penalty.items():
+            #loop through each ckt in the fiducial list.
+            for fiducial in fid_list:
+                #alternative approach using the string 
+                #representation of the ckt.
+                num_gate_instances= fiducial.str.count(gate)
+                nonzero_score+= num_gate_instances*penalty_value
+                
     score = _scoring.CompositeScore(-N_nonzero, nonzero_score, N_nonzero)
 
     return (score, spectrum) if return_all else score
@@ -395,7 +959,7 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
 
 def test_fiducial_list(model, fid_list, prep_or_meas, score_func='all',
                        return_all=False, threshold=1e6, l1_penalty=0.0,
-                       op_penalty=0.0):
+                       op_penalty=0.0, fid_cache=None):
     """
     Tests a prep or measure fiducial list for informational completeness.
 
@@ -434,13 +998,20 @@ def test_fiducial_list(model, fid_list, prep_or_meas, score_func='all',
         Specifies a maximum score for the score matrix, above which the
         fiducial set is rejected as informationally incomplete.
 
-    l1_penalty : float, optional (defailt is 0.0)
+    l1_penalty : float, optional (default is 0.0)
         Coefficient of a penalty linear in the number of fiducials that is
         added to ``score.minor``.
 
-    op_penalty : float, optional (defailt is 0.0)
+    op_penalty : float, optional (default is 0.0)
         Coefficient of a penalty linear in the total number of gates in all
         fiducials that is added to ``score.minor``.
+        
+    fid_cache : dict, optional (default is None)    
+        A dictionary of either effective state preparations or measurement effects
+        used to accelerate the generation of the matrix used for scoring.
+        It's assumed that the user will pass in the correct cache based on the type
+        of fiducial set being created (if wrong a fall back will revert to redoing all the
+        matrix multiplication again).
 
     Returns
     -------
@@ -458,7 +1029,7 @@ def test_fiducial_list(model, fid_list, prep_or_meas, score_func='all',
     score, spectrum = compute_composite_fiducial_score(
         model, fid_list, prep_or_meas, score_func=score_func,
         threshold=threshold, return_all=True, l1_penalty=l1_penalty,
-        op_penalty=op_penalty)
+        op_penalty=op_penalty, fid_cache=fid_cache)
 
     if score.N < len(spectrum):
         testResult = False
@@ -863,9 +1434,9 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
 
 def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
                           iterations=5, score_func='all', op_penalty=0.0,
-                          l1_penalty=0.0, return_all=False,
+                          l1_penalty=0.0, gate_penalty=None, return_all=False,
                           force_empty=True, threshold=1e6, seed=None,
-                          verbosity=0):
+                          verbosity=0, fid_cache= None):
     """
     Use GRASP to find a high-performing set of fiducials.
 
@@ -912,6 +1483,10 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
     l1_penalty : float, optional (defailt is 0.0)
         Coefficient of a penalty linear in the number of fiducials that is
         added to ``score.minor``.
+        
+    gate_penalty : dict, optional
+        A dictionary with keys given by individual gates and values corresponding
+        to the penalty to add for each instance of that gate in the fiducial set.
 
     return_all : bool, optional (default is False)
         If true, function returns reciprocals of eigenvalues of fiducial score
@@ -931,6 +1506,14 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
 
     verbosity : int, optional
         How much detail to send to stdout.
+        
+    fid_cache : dict, optional (default is None)
+        A dictionary of either effective state preparations or measurement effects
+        used to accelerate the generation of the matrix used for scoring.
+        It's assumed that the user will pass in the correct cache based on the type
+        of fiducial set being created (if wrong a fall back will revert to redoing all the
+        matrix multiplication again).
+        
 
     Returns
     -------
@@ -955,7 +1538,7 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
 
     initial_test = test_fiducial_list(model, fids_list, prep_or_meas,
                                       score_func=score_func, return_all=False,
-                                      threshold=threshold)
+                                      threshold=threshold, fid_cache=fid_cache)
     if initial_test:
         printer.log("Complete initial fiducial set succeeds.", 1)
         printer.log("Now searching for best fiducial set.", 1)
@@ -985,6 +1568,8 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
         'op_penalty': op_penalty,
         'return_all': False,
         'l1_penalty': 0.0,
+        'fid_cache': fid_cache,
+        'gate_penalty' : gate_penalty
     }
 
     final_compute_kwargs = compute_kwargs.copy()
@@ -1039,3 +1624,266 @@ def _find_fiducials_grasp(model, fids_list, prep_or_meas, alpha,
     bestSoln = localSolns[_np.argmin(finalScores)]
 
     return (bestSoln, initialSolns, localSolns) if return_all else bestSoln
+    
+def _find_fiducials_greedy(model, fids_list, prep_or_meas, op_penalty=0.0,
+                          l1_penalty=0.0, gate_penalty=None,
+                          force_empty=True, threshold=1e6,
+                          verbosity=0, fid_cache= None, evd_tol=1e-10):
+    """
+    Use greedy search to find a high-performing set of fiducials.
+
+    Parameters
+    ----------
+    model : Model
+        The model (associates operation matrices with operation labels).
+
+    fids_list : list of Circuits
+        List of fiducial circuits to test.
+
+    prep_or_meas : string ("prep" or "meas")
+        Are we testing preparation or measurement fiducials?
+
+    op_penalty : float, optional (defailt is 0.0)
+        Coefficient of a penalty linear in the total number of gates in all
+        fiducials that is added to ``score.minor``.
+
+    l1_penalty : float, optional (defailt is 0.0)
+        Coefficient of a penalty linear in the number of fiducials that is
+        added to ``score.minor``.
+        
+    gate_penalty : dict, optional
+        A dictionary with keys given by individual gates and values corresponding
+        to the penalty to add for each instance of that gate in the fiducial set.
+
+    force_empty : bool, optional
+        When `True`, the empty circuit must be a member of the chosen set.
+
+    threshold : float, optional (default is 1e6)
+        Specifies a maximum score for the score matrix, above which the
+        fiducial set is rejected as informationally incomplete.
+
+    verbosity : int, optional
+        How much detail to send to stdout.
+        
+    fid_cache : dict, optional (default is None)
+        A dictionary of either effective state preparations or measurement effects
+        used to accelerate the generation of the matrix used for scoring.
+        It's assumed that the user will pass in the correct cache based on the type
+        of fiducial set being created (if wrong a fall back will revert to redoing all the
+        matrix multiplication again).
+        
+    evd_tol : float, optional (default 1e-10)
+        Cutoff value for truncating small eigenvalues when building low-rank updates
+        caches.
+
+    Returns
+    -------
+    best_fiducials : list
+        The best-scoring list of fiducial circuits.
+
+    """
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
+
+    if prep_or_meas not in ['prep', 'meas']:
+        raise ValueError("'{}' is an invalid value for prep_or_meas (must be "
+                         "'prep' or 'meas')!".format(prep_or_meas))
+
+    initial_test = test_fiducial_list(model, fids_list, prep_or_meas,
+                                      score_func='all', return_all=False,
+                                      threshold=threshold, fid_cache=fid_cache)
+    if initial_test:
+        printer.log("Complete initial fiducial set succeeds.", 1)
+        printer.log("Now searching for best fiducial set.", 1)
+    else:
+        printer.warning("Complete initial fiducial set FAILS.")
+        printer.warning("Aborting search.")
+        return None, None
+
+    printer.log("Starting fiducial list optimization. Lower score is better.",
+                1)
+    
+    dimRho = model.dim
+    feasibleThreshold = _scoring.CompositeScore(-dimRho, threshold, dimRho)
+    
+    #Build a compact EVD cache for the fiducials
+    fiducial_compact_EVD_cache= construct_compact_evd_cache(model, fids_list, prep_or_meas, fid_cache, eigenvalue_tolerance=evd_tol)
+    
+    #initialize a container for the indices of the candidate fiducial set
+    #along with a bunch of other variables we'll need.
+    best_fiducial_set= None
+    acceptable_candidate_found= False
+    current_best_score_mx= None
+    current_best_score_gramian= None
+    current_update_cache=None
+    current_best_inv_trace= None
+    current_best_composite_score= None
+    
+    #Continue iterating until acceptable solution is found.
+
+    while not acceptable_candidate_found:
+        #if the best fiducial set is not yet initialized
+        #and we have force_empty==True, then we will
+        #initialize it with the index of the empty fiducial.
+        if best_fiducial_set is None:
+            if force_empty:
+                if (best_fiducial_set is None) and force_empty:
+                    fidsLens = [len(fiducial) for fiducial in fids_list]
+                    best_fiducial_set=[fids_list[fidsLens.index(0)]]
+                    #calculate the score matrix
+                    if prep_or_meas == 'prep':
+                        fidArrayList = create_prep_mxs(model, best_fiducial_set, fid_cache)
+                    elif prep_or_meas == 'meas':
+                        fidArrayList = create_meas_mxs(model, best_fiducial_set, fid_cache)
+                    current_best_score_mx= _np.concatenate(fidArrayList, axis=1)
+                    current_best_score_gramian = current_best_score_mx@current_best_score_mx.conj().T
+                    current_best_inv_trace = _np.trace(_np.linalg.pinv(current_best_score_gramian))
+                    #Don't add penalties for first fiducial when forcing it to be the empty germ.
+                    initial_rank= _np.linalg.matrix_rank(current_best_score_mx)
+                    current_best_composite_score= _scoring.CompositeScore(-initial_rank, current_best_inv_trace, initial_rank)
+            #separate logic if force_empty is not true. In this case we'll loop through the list
+            #of fiducial indices and add the one with the best score.
+            else: 
+                for fiducial in fids_list:
+                    #calculate the score matrix
+                    #if prep_or_meas == 'prep':
+                    #    fidArrayList = create_prep_mxs(model, [fiducial], fid_cache)
+                    #elif prep_or_meas == 'meas':
+                    #    fidArrayList = create_meas_mxs(model, [fiducial], fid_cache)
+                    current_score_mx= fiducial_compact_EVD_cache[fiducial]
+                    current_score_gramian= fiducial_compact_EVD_cache[fiducial]@fiducial_compact_EVD_cache[fiducial].T
+                    current_inv_trace = _np.trace(_np.linalg.pinv(current_score_gramian, hermitian=True))
+                    #Don't add penalties for first fiducial when forcing it to be the empty germ.
+                    current_rank= _np.linalg.matrix_rank(current_score_mx)
+                    penalized_inv_trace= add_penalties_greedy(current_inv_trace, [fiducial], l1_penalty, op_penalty, gate_penalty)
+                    current_composite_score= _scoring.CompositeScore(-current_rank, penalized_inv_trace, current_rank)
+                    
+                    #if current_best_composite_score hasn't been initialized then we'll
+                    #make the first thing we calculate the best.
+                    if current_best_composite_score is None:
+                        current_best_composite_score= current_composite_score
+                        best_fiducial_set= [fiducial]
+                        #also set the current best values for the other variables
+                        current_best_score_mx= current_score_mx
+                        current_best_score_gramian= current_score_gramian
+                        current_best_inv_trace= current_inv_trace
+                    #otherwise compare the current composite score to the current
+                    #best and replace the best if the current one is better
+                    else:    
+                        if current_composite_score < current_best_composite_score:
+                            current_best_composite_score= current_composite_score
+                            #swap out the best fiducial set:
+                            best_fiducial_set= [fiducial]
+                            #also set the current best values for the other variables
+                            current_best_score_mx= current_score_mx
+                            current_best_score_gramian= current_score_gramian
+                            current_best_inv_trace= current_inv_trace
+                        else:
+                            continue
+        #If best_fiducial_set has been initialized then we must not be on the first iteration.
+        #construct and update cache and loop through the 
+        else:
+            #reinitialize current_best_update to None.
+            current_best_update=None
+            #Start by building an update cache:
+            current_update_cache= construct_update_cache(current_best_score_gramian, evd_tol)
+            #now loop through the fiducials and keep track of the best update.
+            for fiducial in fids_list:
+                printer.log('Testing fiducial: '+ str(fiducial), 4)
+                #if the fiducial is already in best_fiducial_set then
+                #skip this one:
+                if fiducial in best_fiducial_set:
+                    printer.log('Already in set, skipping.', 4)
+                    continue
+                #otherwise we will compute the updated score.
+                current_inv_trace, updated_rank, _= minamide_style_inverse_trace(fiducial_compact_EVD_cache[fiducial], current_update_cache[0], current_update_cache[1],                                                                 current_update_cache[2], force_rank_increase=False)
+                #Add penalty terms to the current_inv_trace before constructing the composite score
+                #for this update:
+                penalized_inv_trace = add_penalties_greedy(current_inv_trace, best_fiducial_set+[fiducial],
+                                                           l1_penalty, op_penalty, gate_penalty)
+                
+                #check if the new composite score is less than the best seen and if so replace
+                #the best one with the current one.
+                current_composite_score= _scoring.CompositeScore(-updated_rank, penalized_inv_trace, updated_rank)
+                printer.log('Composite score for this update: '+ str(current_composite_score), 4)
+                if current_composite_score < current_best_composite_score:
+                    current_best_composite_score= current_composite_score
+                    current_best_update= fiducial
+            #append the best update that was found to the best_fiducial_set list
+            printer.log('Best fiducial update found: '+ str(current_best_update), 2)
+            printer.log(str(current_best_composite_score), 2)
+            best_fiducial_set.append(current_best_update)
+            #also update the current best score gramian for the next update cache calculation
+            current_best_score_gramian= current_best_score_gramian +\
+                                        fiducial_compact_EVD_cache[current_best_update]@fiducial_compact_EVD_cache[current_best_update].conj().T
+        #now we'll check to see if we have found and acceptable candidate solution
+        #compare to the threshold score we set above.
+        if current_best_composite_score < feasibleThreshold:
+            acceptable_candidate_found= True
+            printer.log('Acceptable candidate solution found.', 1)
+            printer.log(str(current_best_composite_score),1)
+            printer.log('Exiting greedy search.')
+            
+    #return the final list of fiducials as well as the final score
+    final_score= current_best_composite_score
+    
+    return best_fiducial_set, final_score    
+    
+#helper function for building a compact evd cache:
+def construct_compact_evd_cache(model, fids_list, prep_or_meas, fid_cache, eigenvalue_tolerance=1e-10):
+    sqrteU_dict = {}
+    
+    for fiducial in fids_list:
+        if prep_or_meas == 'prep':
+            fidArrayList = create_prep_mxs(model, [fiducial], fid_cache)
+        elif prep_or_meas == 'meas':
+            fidArrayList = create_meas_mxs(model, [fiducial], fid_cache)
+        
+        fid_mat= _np.concatenate(fidArrayList, axis=1)
+        fid_mat_gramian = fid_mat@fid_mat.conj().T
+        
+        e, U = compact_EVD(fid_mat_gramian, eigenvalue_tolerance)
+        sqrteU_dict[fiducial]= U@_np.diag(_np.sqrt(e))  
+        
+        #check reconstruction:
+        #print('Norm to reconstruction: ', _np.linalg.norm(fid_mat_gramian- (U@_np.diag(_np.sqrt(e)))@(U@_np.diag(_np.sqrt(e))).conj().T))
+    return sqrteU_dict        
+    
+def add_penalties_greedy(unpenalized_score, fid_list, l1_penalty=0, op_penalty=0, gate_penalty=None):
+    """
+    Parameters
+    ----------
+    unpenalized_score : float 
+        The score function value to add penalty terms to.
+    
+    l1_penalty : float, optional (default 0.0)
+        A penalty term associated with the number of fiducials in a candidate list.
+    
+    op_penalty : float, optional (default 0.0)
+        A penalty term associated with the total number of gate operations
+        used in aggregate across all of the fiducials in a candidate set.
+    
+    gate_penalty : dict, optional (default None)
+        A dictionary with keys given by gate labels
+        and values corresponding to a penalty term for that gate.
+        This penalty is added for each instance of a gate in the dictionary
+        across all fiducials in a candidate list of fiducials.
+    """
+    penalized_score=unpenalized_score
+    
+    #add l1_penalty
+    penalized_score += l1_penalty * len(fid_list)
+
+    #add op_penalty
+    penalized_score += op_penalty * sum([len(fiducial) for fiducial in fid_list])
+   
+    #add the gate penalties.
+    if gate_penalty is not None:
+        for gate, penalty_value in gate_penalty.items():
+            #loop through each ckt in the fiducial list.
+            for fiducial in fid_list:
+                #alternative approach using the string 
+                #representation of the ckt.
+                num_gate_instances= fiducial.str.count(gate)
+                penalized_score+= num_gate_instances*penalty_value
+    
+    return penalized_score

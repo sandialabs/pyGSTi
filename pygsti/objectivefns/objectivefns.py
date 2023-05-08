@@ -216,6 +216,7 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         return builder
 
     def __init__(self, cls_to_build, name=None, description=None, regularization=None, penalties=None, **kwargs):
+        super().__init__()
         self.name = name if (name is not None) else cls_to_build.__name__
         self.description = description if (description is not None) else "_objfn"  # "Sum of Chi^2" OR "2*Delta(log(L))"
         self.cls_to_build = cls_to_build
@@ -6598,6 +6599,7 @@ class CachedObjectiveFunction(_NicelySerializable):
 
     The cache may only have values on the rank-0 proc (??)
     """
+    collection_name = "pygsti_cached_objective_fns"
 
     @classmethod
     def from_dir(cls, dirname, quick_load=False):
@@ -6623,11 +6625,20 @@ class CachedObjectiveFunction(_NicelySerializable):
         """
         import pygsti.io as _io
         ret = cls.__new__(cls)
+        _NicelySerializable.__init__(ret)
         ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         return ret
 
-    def __init__(self, objective_function):
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
+        import pygsti.io as _io
+        ret = cls.__new__(cls)
+        _NicelySerializable.__init__(ret, doc.get('_id', None))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
+        return ret
 
+    def __init__(self, objective_function):
+        super().__init__()
         self.layout = objective_function.layout.global_layout
         self.model_paramvec = objective_function.model.to_vector().copy()
 
@@ -6687,6 +6698,17 @@ class CachedObjectiveFunction(_NicelySerializable):
         """
         import pygsti.io as _io
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):
+        import pygsti.io as _io
+        _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                     'auxfile_types', overwrite_existing=overwrite_existing)
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        import pygsti.io as _io
+        _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
+                                        recursive=recursive)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()

@@ -29,7 +29,7 @@ def is_integer(x):
     bool
     """
     #TODO: combine with compattools.isint(x) ??
-    return bool(isinstance(x, int) or isinstance(x, _np.integer))
+    return bool(isinstance(x, int) or isinstance(x, _np.int_))
 
 
 def construct_1q_clifford_group():

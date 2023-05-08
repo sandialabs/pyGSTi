@@ -91,6 +91,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
         whenver `hessian` is, and should be left as `None` when `hessian`
         is not specified.
     """
+    collection_name = "pygsti_confidence_region_factories"
 
     def __init__(self, parent, model_lbl, circuit_list_lbl,
                  hessian=None, non_mark_radius_sq=None):
@@ -123,6 +124,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
             whenver `hessian` is, and should be left as `None` when `hessian`
             is not specified.
         """
+        super().__init__()
 
         #May be specified (together) whey hessian has already been computed
         assert(hessian is None or non_mark_radius_sq is not None), \
@@ -185,6 +187,73 @@ class ConfidenceRegionFactory(_NicelySerializable):
             ret.nNonGaugeParams = state['num_nongauge_params']
             ret.nGaugeParams = state['num_gauge_params']
         return ret
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):
+        #Serialize hessian matrices separately using GridFS
+        doc_id_str = str(doc['_id'])
+        if self.hessian is not None:
+            import pickle as _pickle
+            hessian_id = doc_id_str + "/hessian"
+            write_ops.add_gridfs_put_op('pygsti_gridfs', hessian_id,
+                                        _pickle.dumps(self.hessian, protocol=2),
+                                        overwrite_existing, mongodb)
+
+            inv_hessian_projection_ids = {}
+            for k, v in self.inv_hessian_projections.items():
+                inv_hessian_proj_id = doc_id_str + "/inv_hessian_projections/" + k
+                write_ops.add_gridfs_put_op('pygsti_gridfs', inv_hessian_proj_id,
+                                            _pickle.dumps(v, protocol=2), overwrite_existing, mongodb)
+                inv_hessian_projection_ids[k] = inv_hessian_proj_id
+        else:
+            hessian_id = None
+            inv_hessian_projection_ids = {}
+
+        doc.update({'model_label': self.model_lbl,
+                    'circuit_list_label': self.circuit_list_lbl,
+                    'nonmarkovian_radius_squared': self.nonMarkRadiusSq,
+                    'hessian_matrix_id': hessian_id,
+                    'hessian_projection_parameters': {k: v for k, v in self.hessian_projection_parameters.items()},
+                    'inverse_hessian_projection_ids': inv_hessian_projection_ids,
+                    'num_nongauge_params': int(self.nNonGaugeParams) if (self.nNonGaugeParams is not None) else None,
+                    'num_gauge_params': int(self.nGaugeParams) if (self.nGaugeParams is not None) else None,
+                    #Note: need int(.) casts above because int64 is *not* JSON serializable (?)
+                    #Note: we don't currently serialize self.linresponse_gstfit_params (!)
+                    })
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb):
+        if doc['hessian_matrix_id'] is not None:
+            import gridfs as _gridfs
+            import pickle as _pickle
+            fs = _gridfs.GridFS(mongodb, collection='pygsti_gridfs')
+            hessian_mx = _pickle.loads(fs.get(doc['hessian_matrix_id']).read())
+            inv_hessian_projections = {proj_lbl: _pickle.loads(fs.get(proj_id).read())
+                                       for proj_lbl, proj_id in doc['inverse_hessian_projection_ids'].items()}
+        else:
+            hessian_mx = None
+            inv_hessian_projections = {}
+
+        ret = cls(None, doc['model_label'], doc['circuit_list_label'],
+                  hessian_mx, doc['nonmarkovian_radius_squared'])
+        if 'hessian_projection_parameters' in doc:
+            for projection_lbl, params in doc['hessian_projection_parameters'].items():
+                ret.hessian_projection_parameters[projection_lbl] = params  # (param dict is entirely JSON-able)
+                ret.inv_hessian_projections[projection_lbl] = inv_hessian_projections[projection_lbl]
+            ret.nNonGaugeParams = doc['num_nongauge_params']
+            ret.nGaugeParams = doc['num_gauge_params']
+        return ret
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        doc = mongodb[collection_name].find_one_and_delete({'_id': doc_id}, session=session)
+        if doc is not None:
+            if doc['hessian_matrix_id'] is not None:
+                import gridfs as _gridfs
+                import pickle as _pickle
+                fs = _gridfs.GridFS(mongodb, collection='pygsti_gridfs')
+                fs.delete(doc['hessian_matrix_id'], session=session)
+                for proj_id in doc['inverse_hessian_projection_ids'].values():
+                    fs.delete(proj_id, session=session)
 
     def set_parent(self, parent):
         """
@@ -333,12 +402,14 @@ class ConfidenceRegionFactory(_NicelySerializable):
                                  minProbClip, probClipInterval, radius,
                                  comm=comm, mem_limit=mem_limit, verbosity=vb,
                                  op_label_aliases=aliases)
+
             jacobian = _tools.logl_jacobian(model, dataset, circuit_list,
                                             minProbClip, probClipInterval, radius,
                                             comm=comm, mem_limit=mem_limit, verbosity=vb)
 
-            nonMarkRadiusSq = max(2 * (_tools.logl_max(model, dataset)
-                                       - _tools.logl(model, dataset,
+            nonMarkRadiusSq = max(2 * (_tools.logl_max(model, dataset, circuit_list,
+                                                       op_label_aliases=aliases)
+                                       - _tools.logl(model, dataset, circuit_list,
                                                      op_label_aliases=aliases))
                                   - (nDataParams - nModelParams), MIN_NON_MARK_RADIUS)
 

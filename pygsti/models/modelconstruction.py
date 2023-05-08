@@ -206,7 +206,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
     state_space = _statespace.StateSpace.cast(state_space)
     if isinstance(basis, str):
         basis = _Basis.cast(basis, state_space)
-    assert(state_space.dim == basis.dim), \
+    assert (state_space.dim == basis.dim), \
         "State space labels dim (%s) != basis dim (%s)" % (state_space.dim, basis.dim)
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -278,10 +278,10 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # opTermInFinalBasis = embed_operation(pp_opMx, tuple(labels), indicesToParameterize)
 
         elif opName in ('X', 'Y', 'Z'):  # single-qubit gate names
-            assert(len(args) == 2)  # theta, qubit-index
+            assert (len(args) == 2)  # theta, qubit-index
             theta = eval(args[0], {"__builtins__": None}, {'pi': _np.pi})
             label = to_label(args[1])
-            assert(state_space.label_dimension(label) == 4), "%s gate must act on qubits!" % opName
+            assert (state_space.label_dimension(label) == 4), "%s gate must act on qubits!" % opName
 
             if opName == 'X': ex = -1j * theta * sigmax / 2
             elif opName == 'Y': ex = -1j * theta * sigmay / 2
@@ -304,13 +304,13 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
         elif opName == 'N':  # more general single-qubit gate
-            assert(len(args) == 5)  # theta, sigmaX-coeff, sigmaY-coeff, sigmaZ-coeff, qubit-index
+            assert (len(args) == 5)  # theta, sigmaX-coeff, sigmaY-coeff, sigmaZ-coeff, qubit-index
             theta = eval(args[0], {"__builtins__": None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
             sxCoeff = eval(args[1], {"__builtins__": None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
             syCoeff = eval(args[2], {"__builtins__": None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
             szCoeff = eval(args[3], {"__builtins__": None}, {'pi': _np.pi, 'sqrt': _np.sqrt})
             label = to_label(args[4])
-            assert(state_space.label_dimension(label) == 4), "%s gate must act on qubits!" % opName
+            assert (state_space.label_dimension(label) == 4), "%s gate must act on qubits!" % opName
 
             ex = -1j * theta * (sxCoeff * sigmax / 2. + syCoeff * sigmay / 2. + szCoeff * sigmaz / 2.)
             # complex 2x2 unitary matrix operating on single qubit in Pauli-product basis
@@ -326,7 +326,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
         elif opName in ('CX', 'CY', 'CZ', 'CNOT', 'CPHASE'):  # two-qubit gate names
 
             if opName in ('CX', 'CY', 'CZ'):
-                assert(len(args) == 3)  # theta, qubit-label1, qubit-label2
+                assert (len(args) == 3)  # theta, qubit-label1, qubit-label2
                 theta = eval(args[0], {"__builtins__": None}, {'pi': _np.pi})
                 label1 = to_label(args[1]); label2 = to_label(args[2])
 
@@ -336,7 +336,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
                 Utarget = _spl.expm(ex)  # 2x2 unitary matrix operating on target qubit
 
             else:  # opName in ('CNOT','CPHASE')
-                assert(len(args) == 2)  # qubit-label1, qubit-label2
+                assert (len(args) == 2)  # qubit-label1, qubit-label2
                 label1 = to_label(args[0]); label2 = to_label(args[1])
 
                 if opName == 'CNOT':
@@ -348,7 +348,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
 
             # 4x4 unitary matrix operating on isolated two-qubit space
             U = _np.identity(4, 'complex'); U[2:, 2:] = Utarget
-            assert(state_space.label_dimension(label1) == 4 and state_space.label_dimension(label2) == 4), \
+            assert (state_space.label_dimension(label1) == 4 and state_space.label_dimension(label2) == 4), \
                 "%s gate must act on qubits!" % opName
             # complex 4x4 unitary matrix operating on two-qubit in Pauli-product basis
             Uop = _op.StaticUnitaryOp(U, 'pp', build_evotype)
@@ -366,8 +366,38 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
             # a real 4*num_qubits x 4*num_qubits mx superoperator in final basis
             superop_mx_in_basis = _bt.change_basis(superop_mx_pp, 'pp', basis)
 
+        elif opName == 'ZZ':
+            # Unitary in acting on the state-space { |A>, |B>, |C>, |D> } == { |00>, |01>, |10>, |11> }.
+            # This unitary rotates the second qubit by pi/2 in either the (+) or (-) direction based on
+            # the state of the first qubit.
+            U = 1. / _np.sqrt(2) * _np.array([[1 - 1j, 0, 0, 0],
+                                              [0, 1 + 1j, 0, 0],
+                                              [0, 0, 1 + 1j, 0],
+                                              [0, 0, 0, 1 - 1j]])
+
+            # Convert this unitary into a "superoperator", which acts on the
+            # space of vectorized density matrices instead of just the state space.
+            # These superoperators are what GST calls "gates".
+            superop_mx_in_basis = _ot.unitary_to_superop(U, "pp")
+
+        elif opName == 'XX':
+            # Unitary in acting on the state-space { |A>, |B>, |C>, |D> } == { |00>, |01>, |10>, |11> }.
+            # This unitary rotates the second qubit by pi/2 in either the (+) or (-) direction based on
+            # the state of the first qubit.
+            U = 1. / _np.sqrt(2) * _np.array([[1, 0, 0, -1j],
+                                              [0, 1, -1j, 0],
+                                              [0, -1j, 1, 0],
+                                              [-1j, 0, 0, 1]])
+
+            # Convert this unitary into a "superoperator", which acts on the
+            # space of vectorized density matrices instead of just the state space.
+            # These superoperators are what GST calls "gates".
+            superop_mx_in_basis = _ot.unitary_to_superop(U, "pp")
+
         elif opName == "LX":  # TODO - better way to describe leakage?
-            assert(len(args) == 3)  # theta, dmIndex1, dmIndex2 - X rotation between any two density matrix basis states
+            assert (len(args) == 3)  # theta, dmIndex1, dmIndex2
+            # X rotation between any two density matrix basis states
+
             theta = eval(args[0], {"__builtins__": None}, {'pi': _np.pi})
             i1 = int(args[1])  # row/column index of a single *state* within the density matrix
             i2 = int(args[2])  # row/column index of a single *state* within the density matrix
@@ -407,7 +437,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
         final_superop_mx = _np.dot(final_superop_mx, mx)
 
     if basis.real:
-        assert(_np.linalg.norm(final_superop_mx.imag) < 1e-6), "Operation matrix should be real but isn't!"
+        assert (_np.linalg.norm(final_superop_mx.imag) < 1e-6), "Operation matrix should be real but isn't!"
         final_superop_mx = _np.real(final_superop_mx)
 
     return _op.create_from_superop_mx(final_superop_mx, parameterization, basis,
@@ -769,9 +799,12 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                 and processor_spec.nonstd_gate_unitaries[gn].shape == std_gate_unitaries[gn].shape
                 and _np.allclose(processor_spec.nonstd_gate_unitaries[gn], std_gate_unitaries[gn]))):
             stdname = gn  # setting `stdname` != None means we can try to create a StaticStandardOp below
-        else:
+        #if gate_unitary is an integer we'll be creating an n-qubit idle gate and won't associate a standard name to it
+        elif isinstance(gate_unitary, (int, _np.int64)):
+            stdname=None    
+        else:    
             stdname = _itgs.unitary_to_standard_gatename(gate_unitary)  # possibly None
-
+        
         if callable(resolved_avail) or resolved_avail == '*':
             assert (embed_gates), "Cannot create factories with `embed_gates=False` yet!"
             key = _label.Label(gn) if (gn != gn_to_make_emptytup) else _label.Label(())
@@ -798,7 +831,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     continue
 
                 if gate_is_factory:
-                    assert(embed_gates), "Cannot create factories with `embed_gates=False` yet!"
+                    assert (embed_gates), "Cannot create factories with `embed_gates=False` yet!"
                     # TODO: check for modelnoise on *local* factory, i.e. create_errormap(gn, ...)??
                     if inds is None or inds == tuple(qudit_labels):  # then no need to embed
                         ideal_factory = local_gates[gn]
@@ -810,7 +843,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                 else:
                     if inds is None or inds == tuple(qudit_labels):  # then no need to embed
                         if isinstance(gate_unitary, (int, _np.int64)):  # interpret gate_unitary as identity
-                            assert(gate_unitary == len(qudit_labels)), \
+                            assert (gate_unitary == len(qudit_labels)), \
                                 "Idle unitary as int should be on all qudits for %s" % (str(gn))
                             ideal_gate = _op.ComposedOp([], evotype, state_space)  # (identity gate on *all* qudits)
                         else:
@@ -871,7 +904,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     if isinstance(spec, str):
                         if spec.isdigit():  # all([l in ('0', '1') for l in spec]): for qubits
                             bydigit_index = effect_spec
-                            assert(len(bydigit_index) == num_qudits), \
+                            assert (len(bydigit_index) == num_qudits), \
                                 "Wrong number of qudits in '%s': expected %d" % (spec, num_qudits)
                             v = _np.zeros(state_space.udim)
                             inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
@@ -879,18 +912,18 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                             v[index] = 1.0
                         elif (not is_prep) and spec.startswith("E") and spec[len('E'):].isdigit():
                             index = int(spec[len('E'):])
-                            assert(0 <= index < state_space.udim), \
+                            assert (0 <= index < state_space.udim), \
                                 "Index in '%s' out of bounds for state space with udim %d" % (spec, state_space.udim)
                             v = _np.zeros(state_space.udim); v[index] = 1.0
                         elif is_prep and spec.startswith("rho") and spec[len('rho'):].isdigit():
                             index = int(effect_spec[len('rho'):])
-                            assert(0 <= index < state_space.udim), \
+                            assert (0 <= index < state_space.udim), \
                                 "Index in '%s' out of bounds for state space with udim %d" % (spec, state_space.udim)
                             v = _np.zeros(state_space.udim); v[index] = 1.0
                         else:
                             raise ValueError("Unrecognized instrument member spec '%s'" % spec)
                     elif isinstance(spec, _np.ndarray):
-                        assert(len(spec) == state_space.udim), \
+                        assert (len(spec) == state_space.udim), \
                             "Expected length-%d (not %d!) array to specify a state of %s" % (
                                 state_space.udim, len(spec), str(state_space))
                         v = spec
@@ -911,7 +944,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                         else:
                             member += _np.outer(effect_vec, prep_vec)
 
-                    assert(member is not None), \
+                    assert (member is not None), \
                         "You must provide at least one rank-1 specifier for each instrument member!"
                     inst_members[k] = member
                 ideal_instrument = _instrument.Instrument(inst_members)
@@ -1077,13 +1110,13 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
 
                 if prep_spec.startswith('rho_') and prep_spec[len('rho_'):].isdigit():  # all in ('0', '1') for qubits
                     bydigit_index = prep_spec[len('rho_'):]
-                    assert(len(bydigit_index) == num_qudits), \
+                    assert (len(bydigit_index) == num_qudits), \
                         "Wrong number of qudits in '%s': expected %d" % (prep_spec, num_qudits)
                     ideal_prep = _state.ComputationalBasisState([(0 if (l == '0') else 1) for l in bydigit_index],
                                                                 basis, evotype, state_space)
                 elif prep_spec.startswith("rho") and prep_spec[len('rho'):].isdigit():
                     index = int(prep_spec[len('rho'):])
-                    assert(0 <= index < state_space.udim), \
+                    assert (0 <= index < state_space.udim), \
                         "Index in '%s' out of bounds for state space with udim %d" % (prep_spec, state_space.udim)
                     binary_index = '{{0:0{}b}}'.format(num_qudits).format(index)  # must UPDATE to work with qudits
                     ideal_prep = _state.ComputationalBasisState([(0 if (l == '0') else 1) for l in binary_index],
@@ -1120,13 +1153,13 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             if isinstance(prep_spec, str):
                 if prep_spec.startswith('rho_') and all([l in ('0', '1') for l in prep_spec[len('rho_'):]]):
                     bydigit_index = prep_spec[len('rho_'):]
-                    assert(len(bydigit_index) == num_qudits), \
+                    assert (len(bydigit_index) == num_qudits), \
                         "Wrong number of qudits in '%s': expected %d" % (prep_spec, num_qudits)
                     prep_factors = [_create_ideal_1Q_prep(udim, int(l))
                                     for udim, l in zip(processor_spec.qudit_udims, bydigit_index)]
                 elif prep_spec.startswith("rho") and prep_spec[len('rho'):].isdigit():
                     index = int(prep_spec[len('rho'):])
-                    assert(0 <= index < state_space.udim), \
+                    assert (0 <= index < state_space.udim), \
                         "Index in '%s' out of bounds for state space with udim %d" % (prep_spec, state_space.udim)
                     #binary_index = '{{0:0{}b}}'.format(num_qubits).format(index)  # OLD: for qubits
                     bydigit_index = _decomp_index_to_digits(index, processor_spec.qudit_udims)
@@ -1154,7 +1187,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
             if isinstance(prep_spec, str):
                 if prep_spec.startswith('rho_') and prep_spec[len('rho_'):].isdigit():
                     bydigit_index = prep_spec[len('rho_'):]
-                    assert(len(bydigit_index) == num_qudits), \
+                    assert (len(bydigit_index) == num_qudits), \
                         "Wrong number of qudits in '%s': expected %d" % (prep_spec, num_qudits)
                     v = _np.zeros(state_space.udim)
                     inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
@@ -1162,14 +1195,14 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                     ideal_prep = _state.create_from_pure_vector(v, vectype, basis, evotype, state_space=state_space)
                 elif prep_spec.startswith("rho") and prep_spec[len('rho'):].isdigit():
                     index = int(prep_spec[len('rho'):])
-                    assert(0 <= index < state_space.udim), \
+                    assert (0 <= index < state_space.udim), \
                         "Index in '%s' out of bounds for state space with udim %d" % (prep_spec, state_space.udim)
                     v = _np.zeros(state_space.udim); v[index] = 1.0
                     ideal_prep = _state.create_from_pure_vector(v, vectype, basis, evotype, state_space=state_space)
                 else:
                     raise ValueError("Unrecognized state preparation spec '%s'" % prep_spec)
             elif isinstance(prep_spec, _np.ndarray):
-                assert(len(prep_spec) == state_space.udim), \
+                assert (len(prep_spec) == state_space.udim), \
                     "Expected length-%d (not %d!) array to specify a state of %s" % (
                         state_space.udim, len(prep_spec), str(state_space))
                 ideal_prep = _state.create_from_pure_vector(prep_spec, vectype, basis, evotype, state_space=state_space)
@@ -1280,7 +1313,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                     if isinstance(effect_spec, str) or isinstance(effect_spec, _np.ndarray):
                         effect_spec = [effect_spec]
 
-                    assert(len(effect_spec) > 0), \
+                    assert (len(effect_spec) > 0), \
                         "You must provide at least one component effect specifier for each POVM effect!"
 
                     effect_components = []
@@ -1289,7 +1322,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                         if isinstance(comp_espec, str):
                             if comp_espec.isdigit():  # all([l in ('0', '1') for l in comp_espec]) for qubits
                                 bydigit_index = comp_espec
-                                assert(len(bydigit_index) == num_qudits), \
+                                assert (len(bydigit_index) == num_qudits), \
                                     "Wrong number of qudits in '%s': expected %d" % (comp_espec, num_qudits)
                                 v = _np.zeros(state_space.udim)
                                 inc = _np.flip(_np.cumprod(list(reversed(processor_spec.qudit_udims[1:] + (1,)))))
@@ -1298,7 +1331,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                                 effect_components.append(v)
                             elif comp_espec.startswith("E") and comp_espec[len('E'):].isdigit():
                                 index = int(comp_espec[len('E'):])
-                                assert(0 <= index < state_space.udim), \
+                                assert (0 <= index < state_space.udim), \
                                     "Index in '%s' out of bounds for state space with udim %d" % (
                                         comp_espec, state_space.udim)
                                 v = _np.zeros(state_space.udim); v[index] = 1.0
@@ -1306,7 +1339,7 @@ def _create_spam_layers(processor_spec, modelnoise, local_noise,
                             else:
                                 raise ValueError("Unrecognized POVM effect spec '%s'" % comp_espec)
                         elif isinstance(comp_espec, _np.ndarray):
-                            assert(len(comp_espec) == state_space.udim), \
+                            assert (len(comp_espec) == state_space.udim), \
                                 "Expected length-%d (not %d!) array to specify a state of %s" % (
                                     state_space.udim, len(comp_espec), str(state_space))
                             effect_components.append(comp_espec)
@@ -1418,7 +1451,7 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
                     and processor_spec.nonstd_gate_unitaries[name].shape == std_gate_unitaries[name].shape
                     and _np.allclose(processor_spec.nonstd_gate_unitaries[name], std_gate_unitaries[name]))):
             stdname = name  # setting `stdname` != None means we can try to create a StaticStandardOp below
-        elif name in processor_spec.gate_unitaries:
+        elif name in processor_spec.gate_unitaries and not isinstance(U, (int, _np.int64)):
             stdname = _itgs.unitary_to_standard_gatename(U)  # possibly None
         else:
             stdname = None
@@ -2082,7 +2115,7 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
 
     # Global Idle
     if max_idle_weight > 0:
-        assert(global_idle_name is not None), \
+        assert (global_idle_name is not None), \
             "`max_idle_weight` must equal 0 for processor specs without a global idle gate!"
         #printer.log("Creating Idle:")
         wt_maxhop_tuples = [(i, None) for i in range(1, max_idle_weight + 1)]
@@ -2257,7 +2290,7 @@ def _build_modelnoise_from_args(depolarization_strengths, stochastic_error_probs
                         else:
                             #Note: sslbls should always be the same if there are multiple basisEls,
                             #  i.e for nm == ('S',bel1,bel2)
-                            assert(sslbls is bel_sslbls or sslbls == bel_sslbls), \
+                            assert (sslbls is bel_sslbls or sslbls == bel_sslbls), \
                                 "All basis elements of the same error term must operate on the *same* state!"
                         local_nm.append(bel_name)  # drop the state space labels, e.g. "XY:Q0,Q1" => "XY"
 

@@ -14,6 +14,7 @@ import copy as _copy
 import numpy as _np
 import itertools as _itertools
 import pathlib as _pathlib
+import warnings as _warnings
 
 from pygsti.protocols.treenode import TreeNode as _TreeNode
 from pygsti import io as _io
@@ -22,9 +23,10 @@ from pygsti import data as _data
 from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.dataframetools import _process_dataframe
+from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
 
 
-class Protocol(object):
+class Protocol(_MongoSerializable):
     """
     An analysis routine that is run on experimental data.  A generalized notion of a  QCVV protocol.
 
@@ -40,6 +42,7 @@ class Protocol(object):
         results produced by this protocol.  If None, the class name will
         be used.
     """
+    collection_name = "pygsti_protocols"
 
     @classmethod
     def from_dir(cls, dirname, quick_load=False):
@@ -64,7 +67,16 @@ class Protocol(object):
         Protocol
         """
         ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret)
         ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
+        ret._init_unserialized_attributes()
+        return ret
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
+        ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret, doc.get('_id', None))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
         ret._init_unserialized_attributes()
         return ret
 
@@ -127,6 +139,16 @@ class Protocol(object):
         None
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):
+        _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                     'auxfile_types', overwrite_existing=overwrite_existing)
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        if recursive.protocols:
+            _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
+                                            recursive=recursive)
 
     def setup_nameddict(self, final_dict):
         """
@@ -489,7 +511,7 @@ class DefaultRunner(ProtocolRunner):
         return ret
 
 
-class ExperimentDesign(_TreeNode):
+class ExperimentDesign(_TreeNode, _MongoSerializable):
     """
     An experimental-design specification for one or more QCVV protocols.
 
@@ -537,6 +559,7 @@ class ExperimentDesign(_TreeNode):
         The category that describes the children of this object.  This
         is used as a heading for the keys of `children`.
     """
+    collection_name = "pygsti_experiment_designs"
 
     @classmethod
     def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
@@ -570,6 +593,7 @@ class ExperimentDesign(_TreeNode):
         """
         dirname = _pathlib.Path(dirname)
         ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret)
         ret.__dict__.update(_io.load_meta_based_dir(dirname / 'edesign', 'auxfile_types', quick_load=quick_load))
         ret._init_children(dirname, 'edesign', quick_load=quick_load)
         ret._loaded_from = str(dirname.absolute())
@@ -577,6 +601,20 @@ class ExperimentDesign(_TreeNode):
         #Fixes to JSON codec's conversion of tuples => lists
         ret.qubit_labels = tuple(ret.qubit_labels) if isinstance(ret.qubit_labels, list) else ret.qubit_labels
 
+        return ret
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, parent=None, name=None, quick_load=False):
+        ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret, doc.get('_id', None))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types',
+                                                              ignore_meta=('_id', 'type', 'children_ids'),
+                                                              quick_load=quick_load))
+        ret._init_children_from_mongodb_doc(doc, mongodb, quick_load=quick_load)
+        ret._loaded_from = None
+
+        #Fixes to JSON codec's conversion of tuples => lists
+        ret.qubit_labels = tuple(ret.qubit_labels) if isinstance(ret.qubit_labels, list) else ret.qubit_labels
         return ret
 
     @classmethod
@@ -677,7 +715,8 @@ class ExperimentDesign(_TreeNode):
             {subname: self._auto_dirname(subname) for subname in children}
 
         assert(set(children.keys()) == set(children_dirs.keys()))
-        super().__init__(children_dirs, children)
+        _MongoSerializable.__init__(self)
+        _TreeNode.__init__(self, children_dirs, children)
 
     def _auto_dirname(self, child_key):
         """ A helper function to generate a default directory name base off of a sub-name key """
@@ -846,8 +885,23 @@ class ExperimentDesign(_TreeNode):
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
 
         _io.write_obj_to_meta_based_dir(self, _pathlib.Path(dirname) / 'edesign', 'auxfile_types')
+
         self._write_children(dirname)
         self._loaded_from = str(_pathlib.Path(dirname).absolute())  # for future writes
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                overwrite_existing, parent=None, name=None):
+        _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                     'auxfile_types', overwrite_existing=overwrite_existing)
+        self._add_children_write_ops_and_update_doc(doc, write_ops, mongodb, overwrite_existing)
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        if recursive.children:
+            cls._remove_children_from_mongodb(mongodb, collection_name, doc_id, session, recursive)
+        if recursive.edesigns:
+            _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
+                                            recursive=recursive)
 
     def setup_nameddict(self, final_dict):
         """
@@ -927,6 +981,34 @@ class ExperimentDesign(_TreeNode):
         SimultaneousExperimentDesign
         """
         return SimultaneousExperimentDesign.from_edesign(self)
+
+    def _mapped_qubit_labels(self, mapper):
+        if self.qubit_labels in ("multiple", ('*',)):
+            mapped_qubit_labels = self.qubit_labels
+        else:
+            mapped_qubit_labels = tuple([mapper[ql] for ql in self.qubit_labels]) if isinstance(mapper, dict) \
+                else tuple(map(mapper, self.qubit_labels))
+        return mapped_qubit_labels
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new ExperimentDesign whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        mapped_children = {key: child.map_qubit_labels(mapper) for key, child in self._vals.items()}
+        return ExperimentDesign(mapped_circuits, mapped_qubit_labels, mapped_children, self._dirs)
 
 
 class CircuitListsDesign(ExperimentDesign):
@@ -1093,6 +1175,28 @@ class CircuitListsDesign(ExperimentDesign):
         self.circuit_lists = truncated_lists
         #self.nested = False
         super()._truncate_to_available_data_inplace(dataset)
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        CircuitListsDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
+                                for circuit_list in self.circuit_lists]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return CircuitListsDesign(mapped_circuit_lists, mapped_circuits, mapped_qubit_labels,
+                                  self.nested, remove_duplicates=False)  # no need to remove duplicates
 
 
 class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the same dataset
@@ -1277,6 +1381,26 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
 
         self._dirs[key] = self._auto_dirname(key)
         self._vals[key] = val
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        CombinedExperimentDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        mapped_sub_designs = {key: child.map_qubit_labels(mapper) for key, child in self._vals.items()}
+        return CombinedExperimentDesign(mapped_sub_designs, mapped_circuits, mapped_qubit_labels, self._dirs)
 
 
 class SimultaneousExperimentDesign(ExperimentDesign):
@@ -1465,6 +1589,26 @@ class SimultaneousExperimentDesign(ExperimentDesign):
                 filtered_ds = filtered_ds.process_circuits(lambda c: actual_to_desired[c], aggregate=False)
         return ProtocolData(sub_design, filtered_ds)
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        SimultaneousExperimentDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        mapped_edesigns = [child.map_qubit_labels(mapper) for child in self._vals.values()]
+        return SimultaneousExperimentDesign(mapped_edesigns, mapped_circuits, mapped_qubit_labels)
+
 
 class FreeformDesign(ExperimentDesign):
     """
@@ -1552,8 +1696,27 @@ class FreeformDesign(ExperimentDesign):
         df = cdict.to_dataframe()
         return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=True)
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
 
-class ProtocolData(_TreeNode):
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        FreeformDesign
+        """
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return FreeformDesign(mapped_circuits, mapped_qubit_labels)
+
+
+class ProtocolData(_TreeNode, _MongoSerializable):
     """
     Represents the experimental data needed to run one or more QCVV protocols.
 
@@ -1581,9 +1744,12 @@ class ProtocolData(_TreeNode):
     passes : dict
         A dictionary of the data on a per-pass basis (works even it there's just one pass).
     """
+    collection_name = "pygsti_protocol_data"
+    CACHE_COLLECTION_NAME = "pygsti_protocol_data_caches"
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
+    def from_dir(cls, dirname, parent=None, name=None, preloaded_edesign=None, quick_load=False,
+                 record_zero_counts=True):
         """
         Initialize a new ProtocolData object from `dirname`.
 
@@ -1599,9 +1765,14 @@ class ProtocolData(_TreeNode):
             Primarily used internally - if in doubt, leave this as `None`.
 
         name : str, optional
-            The sub-name of the design object being loaded, i.e. the
+            The sub-name of the object being loaded, i.e. the
             key of this data object beneath `parent`.  Only used when
             `parent` is not None.
+
+        preloaded_edesign : ExperimentDesign, optional
+            In the case that the :class:`ExperimentDesign` object for `dirname`
+            is already loaded, it can be passed in here.  Otherwise leave this
+            as None and it will be loaded.
 
         quick_load : bool, optional
             Setting this to True skips the loading of components that may take
@@ -1609,17 +1780,21 @@ class ProtocolData(_TreeNode):
             when loading takes a long time and all the information of interest
             lies elsewhere, e.g. in an encompassing results object.
 
+        record_zero_counts : bool, optional
+            Whether zero-counts are actually recorded (stored) in the datasets
+            held within this ProtocolData object.
+
         Returns
         -------
         ProtocolData
         """
         p = _pathlib.Path(dirname)
-        edesign = parent.edesign[name] if parent and name else \
-            _io.read_edesign_from_dir(dirname, quick_load=quick_load)
+        edesign = parent.edesign[name] if (parent and name) else \
+            (preloaded_edesign if preloaded_edesign is not None else
+             _io.read_edesign_from_dir(dirname, quick_load=quick_load))
 
         data_dir = p / 'data'
-        #with open(data_dir / 'meta.json', 'r') as f:
-        #    meta = _json.load(f)
+        attributes_from_meta = _io.load_meta_based_dir(data_dir, auxfile_types_member=None, quick_load=quick_load)
 
         if quick_load:
             dataset = None  # don't load any dataset - just the cache (usually b/c loading is slow)
@@ -1631,9 +1806,11 @@ class ProtocolData(_TreeNode):
                 if parent is None: parent = ProtocolData.from_dir(dirname / '..')
                 dataset = parent.dataset
             elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
-                dataset = _io.read_dataset(dataset_files[0], ignore_zero_count_lines=False, verbosity=0)
+                dataset = _io.read_dataset(dataset_files[0], record_zero_counts=record_zero_counts,
+                                           ignore_zero_count_lines=False, verbosity=0)
             else:
-                dataset = {pth.stem: _io.read_dataset(pth, ignore_zero_count_lines=False, verbosity=0)
+                dataset = {pth.stem: _io.read_dataset(pth, record_zero_counts=record_zero_counts,
+                                                      ignore_zero_count_lines=False, verbosity=0)
                            for pth in dataset_files}
                 #FUTURE: use MultiDataSet, BUT in addition to init_from_dict we'll need to add truncate, filter, and
                 # process_circuits support for MultiDataSet objects -- for now (above) we just use dicts of DataSets.
@@ -1644,7 +1821,35 @@ class ProtocolData(_TreeNode):
         cache = _io.metadir._read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
         ret = cls(edesign, dataset, cache)
+        ret.__dict__.update(attributes_from_meta)  # attribute updates, e.g. dbcoordinates
         ret._init_children(dirname, 'data', quick_load=quick_load)  # loads child nodes
+        return ret
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, parent=None, name=None,
+                                         quick_load=False, preloaded_edesign=None, record_zero_counts=True):
+        edesign = parent.edesign[name] if parent and name else \
+            (preloaded_edesign if preloaded_edesign is not None else
+             _io.read_edesign_from_mongodb(mongodb, doc['edesign_id'], quick_load=quick_load, comm=None))
+
+        if quick_load:
+            dataset = None  # don't load any dataset - just the cache (usually b/c loading is slow)
+        else:
+            #Load dataset or multidataset from database
+            if 'dataset_id' in doc:
+                dataset = _data.DataSet.from_mongodb(mongodb, doc['dataset_id'], record_zero_counts=record_zero_counts)
+            elif 'dataset_ids' in doc:
+                dataset = {}
+                for dsname, ds_id in doc['dataset_ids'].items():
+                    dataset[dsname] = _data.DataSet.from_mongodb(mongodb, ds_id, record_zero_counts=record_zero_counts)
+
+        doc_id = doc['_id']
+        cache = _io.read_dict_from_mongodb(mongodb, cls.CACHE_COLLECTION_NAME,
+                                           {'member': 'cache',
+                                            'protocoldata_parent': doc_id})
+
+        ret = cls(edesign, dataset, cache)
+        ret._init_children_from_mongodb_doc(doc, mongodb, preloaded_edesign=edesign, quick_load=quick_load)
         return ret
 
     def __init__(self, edesign, dataset=None, cache=None):
@@ -1687,7 +1892,8 @@ class ProtocolData(_TreeNode):
 
         if self.edesign is None:
             self.edesign = ExperimentDesign(list(ds_to_get_circuits_from.keys()))
-        super().__init__(self.edesign._dirs, {})  # children created on-demand
+        _MongoSerializable.__init__(self)
+        _TreeNode.__init__(self, self.edesign._dirs, {})  # children created on-demand
 
     def __getstate__(self):
         # don't pickle ourself recursively if self._passdatas contains just ourself
@@ -1780,7 +1986,7 @@ class ProtocolData(_TreeNode):
         filtered_edesign = self.edesign.prune_tree(paths, paths_are_sorted)
         return build_data(filtered_edesign, self)
 
-    def write(self, dirname=None, parent=None):
+    def write(self, dirname=None, parent=None, edesign_already_written=False):
         """
         Write this protocol data to a directory.
 
@@ -1797,6 +2003,10 @@ class ProtocolData(_TreeNode):
             The parent protocol data, when a parent is writing this
             data as a sub-protocol-data object.  Otherwise leave as None.
 
+        edesign_already_written : bool, optional
+            If `True`, the experiment design within this data object is not written to
+            disk, and it is left to the caller to ensure the experiment design is saved.
+
         Returns
         -------
         None
@@ -1807,9 +2017,11 @@ class ProtocolData(_TreeNode):
         dirname = _pathlib.Path(dirname)
         data_dir = dirname / 'data'
         data_dir.mkdir(parents=True, exist_ok=True)
-        _io.metadir._obj_to_meta_json(self, data_dir)
+        _io.metadir.write_obj_to_meta_based_dir(self, data_dir, auxfile_types_member=None,
+                                                include_attributes=('_dbcoordinates',))  # just include DB coordinates
+        #Write our class information but no member data other than _dbcoordinates to meta.json
 
-        if parent is None:
+        if parent is None and not edesign_already_written:
             self.edesign.write(dirname)  # otherwise assume parent has already written edesign
 
         if self.dataset is not None:  # otherwise don't write any dataset
@@ -1827,6 +2039,78 @@ class ProtocolData(_TreeNode):
             _io.write_dict_to_json_or_pkl_files(self.cache, data_dir / 'cache')
 
         self._write_children(dirname, write_subdir_json=False)  # writes sub-datas
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                overwrite_existing, parent=None, name=None,
+                                                already_written_edesign_id=None):
+        #Note: adding args beyond overwrite_existing allow 1) use with TreeNode children functions, which
+        # supply 'parent' when this object is a child and 2) additional kwargs (`already_written_edesign_id` in this
+        # case) for write_to_mongodb calls
+
+        #Write our class information (*not* any member data, so include_attributes == ()) to mongodb,
+        # even though we don't currently use this when loading (FUTURE work)
+        _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                     auxfile_types_member=None, include_attributes=(),
+                                                     overwrite_existing=overwrite_existing)
+
+        if already_written_edesign_id is not None:
+            doc['edesign_id'] = already_written_edesign_id
+        elif parent is not None:  # assume parent has written edesign
+            doc['edesign_id'] = parent.edesign[name]._dbcoordinates[1]
+        else:
+            doc['edesign_id'] = self.edesign.write_to_mongodb(mongodb, write_ops.session, overwrite_existing)
+            # Don't do: self.edesign.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing)
+            # because this doesn't actually perform the write, which we need to access IDs in
+            # children (via ._dbcoordinates)
+
+        doc_id = doc['_id']
+        if self.dataset is not None:  # otherwise don't write any dataset
+            if parent and (self.dataset is parent.dataset):
+                pass  # then no need to write any data
+            else:
+                if isinstance(self.dataset, (_data.MultiDataSet, dict)):
+                    ds_ids = {}; ds_cnms = set()
+                    for dsname, ds in self.dataset.items():
+                        ds_ids[dsname] = ds.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing)
+                        ds_cnms.add(ds.collection_name)
+                    assert len(ds_cnms) == 0, "All datasets must be saved in *same* collection!"
+                    doc['dataset_ids'] = ds_ids
+                    doc['dataset_collection_name'] = next(iter(ds_cnms)) if (len(ds_cnms) > 0) else None
+                else:
+                    doc['dataset_id'] = self.dataset.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing)
+                    doc['dataset_collection_name'] = self.dataset.collection_name
+
+        if self.cache:
+            _io.add_dict_to_mongodb_write_ops(self.cache, write_ops, mongodb, self.CACHE_COLLECTION_NAME,
+                                              {'member': 'cache',
+                                               'protocoldata_parent': doc_id}, overwrite_existing=overwrite_existing)
+            # Maybe always overwrite_existing should be True?
+
+        self._add_children_write_ops_and_update_doc(doc, write_ops, mongodb,
+                                                    overwrite_existing)  # writes sub-datas
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        doc = mongodb[collection_name].find_one({'_id': doc_id}, session=session)
+        if recursive.children:
+            cls._remove_children_from_mongodb(mongodb, collection_name, doc_id, session, recursive)
+
+        if recursive.data:
+            _io.remove_dict_from_mongodb(mongodb, cls.CACHE_COLLECTION_NAME,
+                                         {'member': 'cache',
+                                          'protocoldata_parent': doc_id},
+                                         session=session)
+
+            dataset_ids = doc['dataset_ids'] if ('dataset_ids' in doc) else {None: doc['dataset_id']}
+            for ds_id in dataset_ids.values():
+                _data.DataSet.remove_from_mongodb(mongodb, ds_id, doc['dataset_collection_name'], session, recursive)
+
+            # Remove ProtocolData document itself
+            _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
+                                            recursive=recursive)
+
+        # Perhaps parent has already done this, but try to remove edesign anyway
+        _io.remove_edesign_from_mongodb(mongodb, doc['edesign_id'], session, recursive)
 
     def setup_nameddict(self, final_dict):
         """
@@ -1891,7 +2175,7 @@ class ProtocolData(_TreeNode):
         return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=True)
 
 
-class ProtocolResults(object):
+class ProtocolResults(_MongoSerializable):
     """
     Stores the results from running a QCVV protocol on data.
 
@@ -1906,6 +2190,7 @@ class ProtocolResults(object):
     protocol_instance : Protocol
         The protocol that created these results.
     """
+    collection_name = "pygsti_results"
 
     @classmethod
     def from_dir(cls, dirname, name, preloaded_data=None, quick_load=False):
@@ -1948,12 +2233,30 @@ class ProtocolResults(object):
     def _from_dir_partial(cls, dirname, quick_load=False, load_protocol=False):
         """
         Internal method for loading only the results-specific data, and not the `data` member.
-        This method may be used independently by derived ProtocolResults objecsts which contain
+        This method may be used independently by derived ProtocolResults objects which contain
         multiple sub-results (e.g. MultiPassResults)
         """
         ignore = ('type',) if load_protocol else ('type', 'protocol')
         ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret)
         ret.__dict__.update(_io.load_meta_based_dir(dirname, 'auxfile_types', ignore, quick_load=quick_load))
+        return ret
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False,
+                                         preloaded_data=None, load_protocol=True, load_data=True):
+        ignore = ('_id', 'type', 'protocoldata_id')  # don't load these as members
+        if not load_protocol:
+            ignore += ('protocol',)
+        ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret, doc.get('_id', None))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', ignore,
+                                                              quick_load=quick_load))
+
+        if load_data:  # can we get rid of this?
+            ret.data = (preloaded_data if preloaded_data is not None else
+                        _io.read_data_from_mongodb(mongodb, doc['protocoldata_id'],
+                                                   quick_load=quick_load, comm=None))
         return ret
 
     def __init__(self, data, protocol_instance):
@@ -1972,6 +2275,7 @@ class ProtocolResults(object):
         -------
         ProtocolResults
         """
+        super().__init__()
         self.name = protocol_instance.name  # just for convenience in JSON dir
         self.protocol = protocol_instance
         self.data = data
@@ -2022,6 +2326,26 @@ class ProtocolResults(object):
         """
         _io.write_obj_to_meta_based_dir(self, results_dir, 'auxfile_types',
                                         omit_attributes=() if write_protocol else ('protocol',))
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                overwrite_existing, already_written_data_id=None):
+        if already_written_data_id is not None:
+            doc['protocoldata_id'] = already_written_data_id
+        else:
+            doc['protocoldata_id'] = self.data.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing)
+
+        _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, 'auxfile_types',
+                                                     overwrite_existing=overwrite_existing)
+        #omit_attributes=() if write_protocol else ('protocol',),
+        #additional_meta={'directory_id': doc_id},
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        doc = mongodb[collection_name].find_one({'_id': doc_id}, session=session)
+        if recursive.results:
+            _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
+                                            recursive=recursive)
+        _io.remove_data_from_mongodb(mongodb, doc['protocoldata_id'], session, recursive)
 
     def to_nameddict(self):
         """
@@ -2205,7 +2529,7 @@ class MultiPassResults(ProtocolResults):
         return cpy
 
 
-class ProtocolResultsDir(_TreeNode):
+class ProtocolResultsDir(_TreeNode, _MongoSerializable):
     """
     Holds a dictionary of :class:`ProtocolResults` objects.
 
@@ -2237,6 +2561,7 @@ class ProtocolResultsDir(_TreeNode):
         automatically created based upon the tree given by `data`.  (To
         avoid creating any children, you can pass an empty dict here.)
     """
+    collection_name = "pygsti_results_directories"
 
     @classmethod
     def from_dir(cls, dirname, parent=None, name=None, preloaded_data=None, quick_load=False):
@@ -2281,6 +2606,9 @@ class ProtocolResultsDir(_TreeNode):
         #Load results in results_dir
         results = {}
         results_dir = dirname / 'results'
+        attributes_from_meta = _io.load_meta_based_dir(results_dir, auxfile_types_member=None, quick_load=quick_load) \
+            if (results_dir / 'meta.json').exists() else {}  # Back-compatibility (old result dirs have no meta.json)
+
         if results_dir.is_dir():  # if results_dir doesn't exist that's ok (just no results to load)
             for pth in results_dir.iterdir():
                 if pth.is_dir() and (pth / 'meta.json').is_file():
@@ -2288,7 +2616,63 @@ class ProtocolResultsDir(_TreeNode):
                         dirname, pth.name, preloaded_data=data, quick_load=quick_load)
 
         ret = cls(data, results, {})  # don't initialize children now
+        ret.__dict__.update(attributes_from_meta)  # attribute updates, e.g. dbcoordinates
         ret._init_children(dirname, meta_subdir='results', quick_load=quick_load)
+        return ret
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, parent=None, name=None,
+                                         quick_load=False, preloaded_data=None, read_all_results_for_data=False):
+        data_id = doc['protocoldata_id']
+        data = parent.data[name] if (parent and name) else \
+            (preloaded_data if preloaded_data is not None else
+             _io.read_data_from_mongodb(mongodb, data_id, quick_load=quick_load, comm=None))
+        assert data._dbcoordinates[1] == data_id, "Inconsistent preloaded vs recorded ProtocolData ID!"
+
+        #Load results with same protocoldata_id as us (we don't actually use doc['result_ids'])
+        results = {}
+        result_collection = ProtocolResults.collection_name  # could store this in db (?)
+
+        #First pass - results that have their IDs stored directly
+        loaded_ids = set()
+        for result_name, result_id in doc['result_ids'].items():
+            try:
+                res = ProtocolResults.from_mongodb(mongodb, result_id, preloaded_data=data, quick_load=quick_load)
+                loaded_ids.add(result_id)
+            except Exception as e:
+                print("Failed to load results ", result_name, ' (so skipping):\n', str(e))
+            else:
+                results[result_name] = res
+
+        if read_all_results_for_data:
+            #Second pass - results with our protocol data id -- but don't let these overwrite existing results!
+            for res_doc in mongodb[result_collection].find({'protocoldata_id': data_id}):
+                if res_doc['_id'] in loaded_ids:
+                    continue  # already loaded
+
+                try:
+                    res = ProtocolResults.from_mongodb_doc(mongodb, result_collection, res_doc,
+                                                           preloaded_data=data, quick_load=quick_load)
+                except Exception as e:
+                    print("Failed to load results ", str(res_doc['name']), ':\n', str(e))
+                else:
+                    tag = 2
+                    nm = res_doc['name']
+                    while nm in results:
+                        nm = res_doc['name'] + ("-%d" % tag)
+                        tag += 1
+                    if nm != res_doc['name']:
+                        print("Note: result for key '%s' already exists -> storing as '%s'" % (res_doc['name'], nm))
+                    results[nm] = res
+
+        ret = cls(data, results, {})  # don't initialize children now
+        #Note: we never call the below update as it currently doesn't have anything in it.
+        #ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types',
+        #                                                      ignore_meta=('_id', 'type', 'children_ids',
+        #                                                                   'protocoldata_id', 'result_ids'),
+        #                                                      quick_load=quick_load))
+        ret._init_children_from_mongodb_doc(doc, mongodb, preloaded_data=data, quick_load=quick_load,
+                                            read_all_results_for_data=read_all_results_for_data)
         return ret
 
     def __init__(self, data, protocol_results=None, children=None):
@@ -2308,10 +2692,11 @@ class ProtocolResultsDir(_TreeNode):
             The data from which *all* the Results objects in this
             ProtocolResultsDir are derived.
 
-        protocol_results : ProtocolResults, optional
-            An initial (single) results object to add.  The name of the
-            results object is used as its key within the `.for_protocol`
-            dictionary.  If None, then an empty results directory is created.
+        protocol_results : ProtocolResults or dict, optional
+            An initial dictionary of :class:`ProtocolResults` objects to add, or a single
+            results object. The name(s) of the results object(s) must be used as keys (and
+            will used as its key for a single results object).  This beccomes the created
+            object's `.for_protocol` dictionary.  If None, then an empty results directory is created.
 
         children : dict, optional
             A dictionary of the :class:`ProtocolResultsDir` objects that are
@@ -2324,7 +2709,12 @@ class ProtocolResultsDir(_TreeNode):
         ProtocolResultsDir
         """
         self.data = data  # edesign and data
-        self.for_protocol = protocol_results.copy() if protocol_results else {}
+        if isinstance(protocol_results, dict):
+            self.for_protocol = protocol_results.copy()
+        elif isinstance(protocol_results, ProtocolResults):
+            self.for_protocol = {protocol_results.name: protocol_results}
+        else:
+            self.for_protocol = {}
         assert(all([r.data is self.data for r in self.for_protocol.values()]))
 
         #self._children = children if (children is not None) else {}
@@ -2337,7 +2727,33 @@ class ProtocolResultsDir(_TreeNode):
         else:
             children = children.copy()
 
-        super().__init__(self.data.edesign._dirs, children)
+        _MongoSerializable.__init__(self)
+        _TreeNode.__init__(self, self.data.edesign._dirs, children)
+
+    def add_results(self, for_protocol_name, results):
+        """
+        Add a new results object to this results directory node.
+
+        The added results object must share this result directory's data, i.e., its
+        `.data` attribute must match the `.data` of this directory.  This requirement
+        is usually met because the results have been created by running a protocol on
+        this directory's `.data`.  The results object is stored in the
+        `.for_protocol[for_protocol_name]` attribute of this directory.
+
+        Parameters
+        ----------
+        for_protocol_name : str
+            Name of the protocol to be added.
+
+        results : ProtocolResults
+            The results object to be added
+
+        Returns
+        -------
+        None
+        """
+        assert results.data is self.data, "Added result.data must be result directory's .data!"
+        self.for_protocol[for_protocol_name] = results
 
     def _create_childval(self, key):  # (this is how children are created on-demand)
         """ Create the value for `key` on demand. """
@@ -2360,7 +2776,7 @@ class ProtocolResultsDir(_TreeNode):
         else:
             raise KeyError("Invalid key: %s" % str(key))
 
-    def write(self, dirname=None, parent=None):
+    def write(self, dirname=None, parent=None, data_already_written=False):
         """
         Write this "protocol results directory" to a directory.
 
@@ -2377,6 +2793,10 @@ class ProtocolResultsDir(_TreeNode):
             The parent protocol results directory, when a parent is writing this
             results dir as a sub-results-dir.  Otherwise leave as None.
 
+        data_already_written : bool, optional
+            If `True`, the data object within this results directory is not written to
+            disk, and it is left to the caller to ensure the data object is saved.
+
         Returns
         -------
         None
@@ -2385,12 +2805,15 @@ class ProtocolResultsDir(_TreeNode):
             dirname = self.data.edesign._loaded_from
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
 
-        if parent is None: self.data.write(dirname)  # assume parent has already written data
+        if parent is None and not data_already_written:  # assume parent writes data
+            self.data.write(dirname)
         dirname = _pathlib.Path(dirname)
 
         results_dir = dirname / 'results'
         results_dir.mkdir(parents=True, exist_ok=True)
-        _io.metadir._obj_to_meta_json(self, results_dir)
+        _io.metadir.write_obj_to_meta_based_dir(self, results_dir, auxfile_types_member=None,
+                                                include_attributes=('_dbcoordinates',))  # just include DB coordinates
+        #Write our class information but no member data other than _dbcoordinates to meta.json
 
         #write the results
         for name, results in self.for_protocol.items():
@@ -2398,6 +2821,50 @@ class ProtocolResultsDir(_TreeNode):
             results.write(dirname, data_already_written=True)
 
         self._write_children(dirname, write_subdir_json=False)  # writes sub-nodes
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                overwrite_existing, parent=None, name=None,
+                                                already_written_data_id=None):
+        if already_written_data_id is not None:
+            doc['protocoldata_id'] = already_written_data_id
+        elif parent is not None:  # assume parent has written data
+            coords_from_parent = doc['protocoldata_id'] = parent.data[name]._dbcoordinates
+            if coords_from_parent is None:  # parent's sub-data exists but hasn't actually been written
+                _warnings.warn(("Saving this ProtocolResultsDirs has prompted re-saving its data object because"
+                                " the data object didn't have any existing DB coordinates.  This *shouldn't*"
+                                " happen and this re-saving action is a last effort to finish this write operation"
+                                " without failing - you should check the results."))
+                # This may happen if parent data object didn't have all its sub-datas generated before is
+                # was saved.  Accessing the subdata above should have generated it, so re-saving the parent
+                # will hopefully cause the data to be saved correctly (i.e. with link to parent data object)
+                self.data.write_to_mongodb(mongodb, write_ops.session, overwrite_existing)
+            doc['protocoldata_id'] = parent.data[name]._dbcoordinates[1]
+        else:
+            doc['protocoldata_id'] = self.data.write_to_mongodb(mongodb, write_ops.session, overwrite_existing)
+            # Not: self.data.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing), see edesign_id comment above
+
+        #write the results
+        result_ids = {}
+        for name, results in self.for_protocol.items():
+            assert(results.name == name)
+            result_ids[name] = results.add_mongodb_write_ops(write_ops, mongodb, overwrite_existing,
+                                                             already_written_data_id=doc['protocoldata_id'])
+        doc['result_ids'] = result_ids
+        self._add_children_write_ops_and_update_doc(doc, write_ops, mongodb, overwrite_existing)
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        doc = mongodb[collection_name].find_one({'_id': doc_id}, session=session)
+        if recursive.children:
+            cls._remove_children_from_mongodb(mongodb, collection_name, doc_id, session, recursive)
+
+        if recursive.results:
+            for name, result_id in doc['result_ids'].items():
+                ProtocolResults.remove_from_mongodb(mongodb, result_id, session=session, recursive=recursive)
+            mongodb[collection_name].delete_one({'_id': doc_id}, session=session)  # delete main document
+
+        # Perhaps parent has already done this, but try to remove data anyway
+        _io.remove_data_from_mongodb(mongodb, doc['protocoldata_id'], session, recursive)
 
     def _result_namedicts_on_this_node(self):
         nds = [v.to_nameddict() for v in self.for_protocol.values()]

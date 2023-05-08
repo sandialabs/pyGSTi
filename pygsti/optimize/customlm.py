@@ -104,6 +104,9 @@ class Optimizer(_NicelySerializable):
         else:
             return cls(**obj) if obj else cls()
 
+    def __init__(self):
+        super().__init__()
+
 
 class CustomLMOptimizer(Optimizer):
     """
@@ -211,6 +214,7 @@ class CustomLMOptimizer(Optimizer):
                  uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0,
                  oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal"):
 
+        super().__init__()
         if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
         self.maxiter = maxiter
         self.maxfev = maxfev

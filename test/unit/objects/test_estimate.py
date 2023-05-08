@@ -16,7 +16,7 @@ class EstimateBase(object):
         cls.maxLengthList = pkg.maxLengthList
 
         edesign = CircuitListsDesign([CircuitList(circuit_struct)
-                                      for circuit_struct in pkg.lsgstStructs])
+                                      for circuit_struct in pkg.lsgstStrings])
         data = ProtocolData(edesign, pkg.dataset)
         cls.res = ModelEstimateResults(data, Protocol("test-protocol"))
 

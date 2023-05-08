@@ -24,6 +24,7 @@ import numpy as _np
 
 from pygsti.circuits import circuit as _cir
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
+from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
 from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
@@ -821,7 +822,7 @@ def _round_int_repcnt(nreps):
         return int(round(nreps))
 
 
-class DataSet(object):
+class DataSet(_MongoSerializable):
     """
     An association between Circuits and outcome counts, serving as the input data for many QCVV protocols.
 
@@ -909,6 +910,7 @@ class DataSet(object):
         Keys should be the circuits in this DataSet and value should
         be Python dictionaries.
     """
+    collection_name = "pygsti_datasets"
 
     def __init__(self, oli_data=None, time_data=None, rep_data=None,
                  circuits=None, circuit_indices=None,
@@ -955,7 +957,7 @@ class DataSet(object):
             the outcome labels should be those for a standard set of this many qubits.
 
         outcome_label_indices : ordered dictionary
-            An OrderedDict with keys equal to spam labels (strings) and value equal to
+            An OrderedDict with keys equal to outcome labels and values equal to
             integer indices associating a spam label with given index.  Only
             specify this argument OR outcome_labels, not both.
 
@@ -992,6 +994,8 @@ class DataSet(object):
         DataSet
            a new data set object.
         """
+        super().__init__()
+
         # uuid for efficient hashing (set when done adding data or loading from file)
         self.uuid = None
 
@@ -3134,3 +3138,107 @@ class DataSet(object):
 
         df = cdict.to_dataframe()
         return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns)
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, collision_action="aggregate",
+                                         record_zero_counts=True, with_times="auto",
+                                         circuit_parse_cache=None, verbosity=1):
+        from pymongo import ASCENDING, DESCENDING
+        from pygsti.io import stdinput as _stdinput
+        datarow_collection_name = doc['datarow_collection_name']
+        outcomeLabels = doc['outcomes']
+
+        dataset = DataSet(outcome_labels=outcomeLabels, collision_action=collision_action,
+                          comment=doc['comment'])
+        parser = _stdinput.StdInputParser()
+
+        datarow_collection = mongodb[datarow_collection_name]
+        for i, datarow_doc in enumerate(datarow_collection.find({'parent': doc['_id']}).sort('index', ASCENDING)):
+            if i != datarow_doc['index']:
+                _warnings.warn("Data set's row data is incomplete! There seem to be missing rows.")
+
+            circuit = parser.parse_circuit(datarow_doc['circuit'], lookup={},  # allow a lookup to be passed?
+                                           create_subcircuits=not _cir.Circuit.default_expand_subcircuits)
+
+            oliArray = _np.array(datarow_doc['outcome_indices'], dataset.oliType)
+            countArray = _np.array(datarow_doc['repetitions'], dataset.repType)
+            if 'times' not in datarow_doc:  # with_times can be False or 'auto'
+                if with_times is True:
+                    raise ValueError("Circuit %d does not contain time information and 'with_times=True'" % i)
+                timeArray = _np.zeros(countArray.shape[0], dataset.timeType)
+            else:
+                if with_times is False:
+                    raise ValueError("Circuit %d contains time information and 'with_times=False'" % i)
+                timeArray = _np.array(datarow_doc['time'], dataset.timeType)
+
+            dataset._add_raw_arrays(circuit, oliArray, timeArray, countArray,
+                                    overwrite_existing=True,
+                                    record_zero_counts=record_zero_counts,
+                                    aux=datarow_doc.get('aux', {}))
+
+        dataset.done_adding_data()
+        return dataset
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing,
+                                                circuits=None, outcome_label_order=None, with_times="auto",
+                                                datarow_collection_name='pygsti_datarows'):
+        if circuits is not None:
+            if len(circuits) > 0 and not isinstance(circuits[0], _cir.Circuit):
+                raise ValueError("Argument circuits must be a list of Circuit objects!")
+        else:
+            circuits = list(self.keys())
+
+        if outcome_label_order is not None:  # convert to tuples if needed
+            outcome_label_order = [(ol,) if isinstance(ol, str) else ol
+                                   for ol in outcome_label_order]
+
+        outcomeLabels = self.outcome_labels
+        if outcome_label_order is not None:
+            assert(len(outcome_label_order) == len(outcomeLabels))
+            assert(all([ol in outcomeLabels for ol in outcome_label_order]))
+            assert(all([ol in outcome_label_order for ol in outcomeLabels]))
+            outcomeLabels = outcome_label_order
+            oli_map_data = {self.olIndex[ol]: i for i, ol in enumerate(outcomeLabels)}  # dataset -> stored indices
+
+            def oli_map(outcome_label_indices):
+                return [oli_map_data[i] for i in outcome_label_indices]
+        else:
+            def oli_map(outcome_label_indices):
+                return [i.item() for i in outcome_label_indices]  # converts numpy types -> native python types
+
+        doc['outcomes'] = outcomeLabels
+        doc['comment'] = self.comment if hasattr(self, 'comment') else None
+        doc['datarow_collection_name'] = datarow_collection_name
+
+        if with_times == "auto":
+            trivial_times = self.has_trivial_timedependence
+        else:
+            trivial_times = not with_times
+
+        dataset_id = doc['_id']
+
+        for i, circuit in enumerate(circuits):  # circuit should be a Circuit object here
+            dataRow = self[circuit]
+            datarow_doc = {'index': i,
+                           'circuit': circuit.str,
+                           'parent': dataset_id,
+                           'outcome_indices': oli_map(dataRow.oli),
+                           'repetitions': [r.item() for r in dataRow.reps]  # converts numpy -> Python native types
+                           }
+
+            if trivial_times:  # ensure that "repetitions" are just "counts" in trivial-time case
+                assert(len(dataRow.oli) == len(set(dataRow.oli))), "Duplicate value in trivial-time data set row!"
+            else:
+                datarow_doc['times'] = list(dataRow.time)
+
+            if dataRow.aux:
+                datarow_doc['aux'] = dataRow.aux  # needs to be JSON-able!
+
+            write_ops.add_one_op(datarow_collection_name, {'circuit': circuit.str, 'parent': dataset_id},
+                                 datarow_doc, overwrite_existing, mongodb)
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        dataset_doc = mongodb[collection_name].find_one_and_delete({'_id': doc_id}, session=session)
+        datarow_collection_name = dataset_doc['datarow_collection_name']
+        mongodb[datarow_collection_name].delete_many({'parent': dataset_doc['_id']}, session=session)

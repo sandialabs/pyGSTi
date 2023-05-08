@@ -16,6 +16,7 @@ import warnings as _warnings
 import json as _json
 
 from pygsti.io import metadir as _metadir
+from pygsti.io import mongodb as _mongodb
 from pygsti.io import stdinput as _stdinput
 from pygsti import baseobjs as _baseobjs
 from pygsti import circuits as _circuits
@@ -422,6 +423,67 @@ def read_protocol_from_dir(dirname, quick_load=False, comm=None):
     return _metadir._cls_from_meta_json(dirname).from_dir(dirname, quick_load=quick_load)
 
 
+def read_protocol_from_mongodb(mongodb, doc_id, quick_load=False):
+    """
+    Load a :class:`Protocol` from a MongoDB database.
+
+    Parameters
+    ----------
+    mongodb : pymongo.database.Database
+        The MongoDB instance to load data from.
+
+    doc_id : str
+        The user-defined identifier of the protocol object to load.
+
+    quick_load : bool, optional
+        Setting this to True skips the loading of components that may take
+        a long time to load. This can be useful when this information isn't
+        needed and loading takes a long time.
+
+    Returns
+    -------
+    Protocol
+    """
+    import pygsti.protocols as _proto
+    return _proto.Protocol.from_mongodb(mongodb, doc_id, quick_load=quick_load)
+
+
+def remove_protocol_from_mongodb(mongodb, doc_id, session=None, recursive=False):
+    """
+    Remove a :class:`Protocol` from a MongoDB database.
+
+    If no protocol object with `doc_id` exists, this function returns `False`,
+    otherwise it returns `True`.
+
+    Parameters
+    ----------
+    mongodb : pymongo.database.Database
+        The MongoDB instance to remove data from.
+
+    doc_id : str
+        The user-defined identifier of the protocol object to remove.
+
+    session : pymongo.client_session.ClientSession, optional
+        MongoDB session object to use when interacting with the MongoDB
+        database. This can be used to implement transactions
+        among other things.
+
+    recursive : RecursiveRemovalSpecification, optional
+        An object that filters the type of documents that are removed.
+        Used when working with inter-related experiment designs, data,
+        and results objects to only remove the types of documents you
+        know aren't being shared with other documents.
+
+    Returns
+    -------
+    bool
+        `True` if the specified protocol object was removed, `False` if it didn't exist.
+    """
+    from ..protocols import Protocol as _Protocol
+    return _Protocol.remove_from_mongodb(mongodb, doc_id, session=session,
+                                         recursive=recursive)
+
+
 @_deprecated_fn('read_edesign_from_dir')
 def load_edesign_from_dir(dirname, quick_load=False, comm=None):
     """Deprecated!"""
@@ -494,13 +556,77 @@ def create_edesign_from_dir(dirname):
         raise ValueError("Could not create an experiment design from the files in this directory!")
 
 
+def read_edesign_from_mongodb(mongodb, doc_id, quick_load=False, comm=None):
+    """
+    Load a :class:`ExperimentDesign` from a MongoDB database.
+
+    Parameters
+    ----------
+    mongodb : pymongo.database.Database
+        The MongoDB instance to load data from.
+
+    doc_id : str
+        The user-defined identifier of the experiment design to load.
+
+    quick_load : bool, optional
+        Setting this to True skips the loading of components that may take
+        a long time to load. This can be useful when this information isn't
+        needed and loading takes a long time.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize file access.
+
+    Returns
+    -------
+    ExperimentDesign
+    """
+    import pygsti.protocols as _proto
+    return _proto.ExperimentDesign.from_mongodb(mongodb, doc_id, quick_load=quick_load)
+
+
+def remove_edesign_from_mongodb(mongodb, doc_id, session=None, recursive="default"):
+    """
+    Remove an :class:`ExperimentDesign` from a MongoDB database.
+
+    If no experiment design with `doc_id` exists, this function returns `False`,
+    otherwise it returns `True`.
+
+    Parameters
+    ----------
+    mongodb : pymongo.database.Database
+        The MongoDB instance to remove data from.
+
+    doc_id : str
+        The user-defined identifier of the experiment design to remove.
+
+    session : pymongo.client_session.ClientSession, optional
+        MongoDB session object to use when interacting with the MongoDB
+        database. This can be used to implement transactions
+        among other things.
+
+    recursive : RecursiveRemovalSpecification, optional
+        An object that filters the type of documents that are removed.
+        Used when working with inter-related experiment designs, data,
+        and results objects to only remove the types of documents you
+        know aren't being shared with other documents.
+
+    Returns
+    -------
+    bool
+        `True` if the specified experiment design was removed, `False` if it didn't exist.
+    """
+    from ..protocols import ExperimentDesign as _ExperimentDesign
+    return _ExperimentDesign.remove_from_mongodb(mongodb, doc_id, session=session,
+                                                 recursive=recursive)
+
+
 @_deprecated_fn('read_data_from_dir')
 def load_data_from_dir(dirname, quick_load=False, comm=None):
     """Deprecated!"""
     return read_data_from_dir(dirname, quick_load, comm)
 
 
-def read_data_from_dir(dirname, quick_load=False, comm=None):
+def read_data_from_dir(dirname, preloaded_edesign=None, quick_load=False, comm=None):
     """
     Load a :class:`ProtocolData` from a directory on disk.
 
@@ -508,6 +634,11 @@ def read_data_from_dir(dirname, quick_load=False, comm=None):
     ----------
     dirname : string
         Directory name.
+
+    preloaded_edesign : ExperimentDesign, optional
+        The experiment deisgn belonging to the to-be-loaded data object, in cases
+        when this has been loaded already (only use this if you know what
+        you're doing).
 
     quick_load : bool, optional
         Setting this to True skips the loading of components that may take
@@ -527,7 +658,76 @@ def read_data_from_dir(dirname, quick_load=False, comm=None):
     except FileNotFoundError:
         from ..protocols import ProtocolData as _ProtocolData
         protocol_data = _ProtocolData  # use ProtocolData as default class
-    return protocol_data.from_dir(dirname, quick_load=quick_load)
+    return protocol_data.from_dir(dirname, preloaded_edesign=preloaded_edesign, quick_load=quick_load)
+
+
+def read_data_from_mongodb(mongodb, doc_id, preloaded_edesign=None, quick_load=False, comm=None):
+    """
+    Load a :class:`ProtocolData` from a MongoDB database.
+
+    Parameters
+    ----------
+    mongodb : pymongo.database.Database
+        The MongoDB instance to load data from.
+
+    doc_id : str
+        The user-defined identifier of the data to load.
+
+    preloaded_edesign : ExperimentDesign, optional
+        The experiment deisgn belonging to the to-be-loaded data object, in cases
+        when this has been loaded already (only use this if you know what
+        you're doing).
+
+    quick_load : bool, optional
+        Setting this to True skips the loading of components that may take
+        a long time to load. This can be useful when this information isn't
+        needed and loading takes a long time.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize database access.
+
+    Returns
+    -------
+    ProtocolData
+    """
+    import pygsti.protocols as _proto
+    return _proto.ProtocolData.from_mongodb(mongodb, doc_id, preloaded_edesign=preloaded_edesign, quick_load=quick_load)
+
+
+def remove_data_from_mongodb(mongodb, doc_id, session=None, recursive="default"):
+    """
+    Remove :class:`ProtocolData` from a MongoDB database.
+
+    If no experiment design with `doc_id` exists, this function returns `False`,
+    otherwise it returns `True`.
+
+    Parameters
+    ----------
+    mongodb : pymongo.database.Database
+        The MongoDB instance to remove data from.
+
+    doc_id : str
+        The user-defined identifier of the experiment design to remove.
+
+    session : pymongo.client_session.ClientSession, optional
+        MongoDB session object to use when interacting with the MongoDB
+        database. This can be used to implement transactions
+        among other things.
+
+    recursive : RecursiveRemovalSpecification, optional
+        An object that filters the type of documents that are removed.
+        Used when working with inter-related experiment designs, data,
+        and results objects to only remove the types of documents you
+        know aren't being shared with other documents.
+
+    Returns
+    -------
+    bool
+        `True` if the specified experiment design was removed, `False` if it didn't exist.
+    """
+    from ..protocols import ProtocolData as _ProtocolData
+    return _ProtocolData.remove_from_mongodb(mongodb, doc_id, session,
+                                             recursive=recursive)
 
 
 @_deprecated_fn('read_results_from_dir')
@@ -582,3 +782,154 @@ def read_results_from_dir(dirname, name=None, preloaded_data=None, quick_load=Fa
         return cls.from_dir(dirname, preloaded_data=preloaded_data, quick_load=quick_load)
     else:  # it's a ProtocolResults object
         return _metadir._cls_from_meta_json(results_dir / name).from_dir(dirname, name, preloaded_data, quick_load)
+
+
+def read_results_from_mongodb(mongodb, doc_id, preloaded_data=None, quick_load=False, comm=None):
+    """
+    Load a :class:`ProtocolResults` from a MongoDB database.
+
+    Parameters
+    ----------
+    mongodb : pymongo.database.Database
+        The MongoDB instance to load data from.
+
+    doc_id : str
+        The user-defined identifier of the results directory to load.
+
+    preloaded_data : ProtocolData, optional
+        The data object belonging to the to-be-loaded results, in cases
+        when this has been loaded already (only use this if you know what
+        you're doing).
+
+    quick_load : bool, optional
+        Setting this to True skips the loading of data and experiment-design
+        components that may take a long time to load. This can be useful
+        all the information of interest lies only within the results objects.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize database access.
+
+    Returns
+    -------
+    ProtocolResults
+    """
+    from ..protocols import ProtocolResults as _ProtocolResults
+    return _ProtocolResults.from_mongodb(mongodb, doc_id, preloaded_data=preloaded_data, quick_load=quick_load)
+
+
+def read_resultsdir_from_mongodb(mongodb, doc_id, preloaded_data=None, quick_load=False,
+                                 read_all_results_for_data=False, comm=None):
+    """
+    Load a :class:`ProtocolsResultsDir` from a MongoDB database.
+
+    Parameters
+    ----------
+    mongodb : pymongo.database.Database
+        The MongoDB instance to load data from.
+
+    doc_id : str
+        The user-defined identifier of the results directory to load.
+
+    preloaded_data : ProtocolData, optional
+        The data object belonging to the to-be-loaded results, in cases
+        when this has been loaded already (only use this if you know what
+        you're doing).
+
+    quick_load : bool, optional
+        Setting this to True skips the loading of data and experiment-design
+        components that may take a long time to load. This can be useful
+        all the information of interest lies only within the results objects.
+
+    read_all_results_for_data : bool, optional
+        If `True`, the loaded result directory and sub-directories will read in all the results
+        objects stored in the database associated with their :class:`ProtocolData` object.  Duplicate
+        keys will be renamed to avoid collisions with warning messages are printed.  If `False`
+        (the default), then only the specific results associated with the directory when it was last
+        saved are loaded.  This can sometimes be useful for loading old results that have been overwritten
+        but still exist in the database.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize database access.
+
+    Returns
+    -------
+    ProtocolResultsDir
+    """
+    #Currently, there's just a single ProtocolResultsDir class.  If we want to allow custom classes
+    # we'll need to use the 'resultdirs' collection to store this information (FUTURE)
+    from ..protocols import ProtocolResultsDir as _ProtocolResultsDir
+    return _ProtocolResultsDir.from_mongodb(mongodb, doc_id, preloaded_data=preloaded_data,
+                                            quick_load=quick_load, read_all_results_for_data=read_all_results_for_data)
+
+
+def remove_results_from_mongodb(mongodb, doc_id, comm=None, session=None, recursive="default"):
+    """
+    Remove :class:`ProtocolResults` data from a MongoDB database.
+
+    Which object type is removed depends on whether `name` is given: if it is, then
+    data corresponding to a :class:`ProtocolResults` object is removed.  If not, that of
+    a :class:`ProtocolsResultsDir` is removed.
+
+    Parameters
+    ----------
+    mongodb : pymongo.database.Database
+        The MongoDB instance to remove data from.
+
+    doc_id : str
+        The user-defined identifier of the results directory to remove.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize database access.
+
+    session : pymongo.client_session.ClientSession, optional
+        MongoDB session object to use when interacting with the MongoDB
+        database. This can be used to implement transactions
+        among other things.
+
+    recursive : RecursiveRemovalSpecification, optional
+        An object that filters the type of documents that are removed.
+        Used when working with inter-related experiment designs, data,
+        and results objects to only remove the types of documents you
+        know aren't being shared with other documents.
+
+    Returns
+    -------
+    None
+    """
+    from ..protocols import ProtocolResults as _ProtocolResults
+    return _ProtocolResults.remove_from_mongodb(mongodb, doc_id, session=session, recursive=recursive)
+
+
+def remove_resultsdir_from_mongodb(mongodb, doc_id, comm=None, session=None, recursive="default"):
+    """
+    Remove :class:`ProtocolsResultsDir` data from a MongoDB database.
+
+    Parameters
+    ----------
+    mongodb : pymongo.database.Database
+        The MongoDB instance to remove data from.
+
+    doc_id : str
+        The user-defined identifier of the results directory to remove.
+
+    comm : mpi4py.MPI.Comm, optional
+        When not ``None``, an MPI communicator used to synchronize database access.
+
+    session : pymongo.client_session.ClientSession, optional
+        MongoDB session object to use when interacting with the MongoDB
+        database. This can be used to implement transactions
+        among other things.
+
+    recursive : RecursiveRemovalSpecification, optional
+        An object that filters the type of documents that are removed.
+        Used when working with inter-related experiment designs, data,
+        and results objects to only remove the types of documents you
+        know aren't being shared with other documents.
+
+    Returns
+    -------
+    None
+    """
+    #See FUTURE comment in read_results_from_mongodb above
+    from ..protocols import ProtocolResultsDir as _ProtocolResultsDir
+    return _ProtocolResultsDir.remove_from_mongodb(mongodb, doc_id, session=session, recursive=recursive)

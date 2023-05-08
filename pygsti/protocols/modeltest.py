@@ -116,7 +116,7 @@ class ModelTest(_proto.Protocol):
         self.auxfile_types['target_model'] = 'serialized-object'
         self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
         self.auxfile_types['badfit_options'] = 'serialized-object'
-        self.auxfile_types['objfn_builders'] = 'serialized-object'
+        self.auxfile_types['objfn_builders'] = 'list:serialized-object'
 
         #Advanced options that could be changed by users who know what they're doing
         self.profile = 1
@@ -207,6 +207,7 @@ class ModelTest(_proto.Protocol):
         if target_model is not None:
             models['target'] = target_model
         ret.add_estimate(_Estimate(ret, models, parameters, extra_parameters=extra_parameters), estimate_key=self.name)
+        
         return _add_gaugeopt_and_badfit(ret, self.name, target_model, self.gaugeopt_suite,
                                         self.unreliable_ops, self.badfit_options,
                                         None, resource_alloc, printer)

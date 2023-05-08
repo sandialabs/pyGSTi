@@ -268,17 +268,17 @@ class Workspace(object):
     def _makefactory(self, cls, autodisplay):  # , printer=_objs.VerbosityPrinter(1)):
         # XXX this indirection is so wild -- can we please rewrite directly?
         #Manipulate argument list of cls.__init__
-        argspec = _inspect.getargspec(cls.__init__)
-        argnames = argspec[0]
+        argspec = _inspect.getfullargspec(cls.__init__)
+        argsig = _inspect.signature(cls.__init__)
+        argnames = argspec.args
         assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
             "__init__ must begin with (self, ws, ...)"
 
-        factoryfn_argnames = argnames[2:]  # strip off self & ws args
-        newargspec = (factoryfn_argnames,) + argspec[1:]
+        # Strip default values out of parameters so that we don't override the true incoming values with defaults
+        newargparams = [p.replace(default=_inspect.Parameter.empty) for p in argsig.parameters.values()][2:]
+        newargsig = _inspect.Signature(newargparams)
 
-        #Define a new factory function with appropriate signature
-        signature = _inspect.formatargspec(
-            formatvalue=lambda val: "", *newargspec)
+        signature = str(newargsig)
         signature = signature[1:-1]  # strip off parenthesis from ends of "(signature)"
 
         if autodisplay:
@@ -349,6 +349,7 @@ class Workspace(object):
         # goodness of fit
         self.FitComparisonTable = makefactory(_wt.FitComparisonTable)
         self.WildcardBudgetTable = makefactory(_wt.WildcardBudgetTable)
+        self.WildcardSingleScaleBarPlot = makefactory(_wp.WildcardSingleScaleBarPlot)
 
         #Specifically designed for reports
         self.BlankTable = makefactory(_wt.BlankTable)
@@ -1425,7 +1426,7 @@ class SwitchValue(object):
         self.dependencies = dependencies
 
         shape = [len(self.parent.positionLabels[i]) for i in dependencies]
-        self.base = _np.empty(shape, dtype=_np.object)
+        self.base = _np.empty(shape, dtype=_np.object_)
         index_all = (slice(None, None),) * len(shape)
         self.base[index_all] = NotApplicable(self.ws)
 

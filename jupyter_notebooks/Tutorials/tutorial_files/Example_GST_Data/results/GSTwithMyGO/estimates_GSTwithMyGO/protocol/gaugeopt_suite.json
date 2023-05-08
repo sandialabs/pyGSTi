@@ -1,0 +1,17 @@
+{
+    "module": "pygsti.protocols.gst",
+    "class": "GSTGaugeOptSuite",
+    "version": 0,
+    "gaugeopt_suite_names": null,
+    "gaugeopt_argument_dicts": {
+        "my_gauge_opt": [
+            {
+                "item_weights": {
+                    "gates": 1.0,
+                    "spam": 0.001
+                }
+            }
+        ]
+    },
+    "gaugeopt_target": null
+}

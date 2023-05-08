@@ -1956,7 +1956,7 @@ def _outcome_to_str(x):  # same function as in writers.py
 
 
 def _addl_mx_fn_outcomes(plaq, x, y, layout):
-    slmx = _np.empty((plaq.num_rows, plaq.num_cols), dtype=_np.object)
+    slmx = _np.empty((plaq.num_rows, plaq.num_cols), dtype=_np.object_)
     for i, j, opstr in plaq:
         slmx[i, j] = ", ".join([_outcome_to_str(ol) for ol in layout.outcomes(opstr)])
     return slmx
@@ -3470,6 +3470,45 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
             pythonVal['noChangeTrace'] = {'x': noChangeTrace['x'], 'y': noChangeTrace['y']}
         return ReportFigure(go.Figure(data=data, layout=layout),
                             None, pythonVal)
+
+
+class WildcardSingleScaleBarPlot(WorkspacePlot):
+    """
+    Stacked bar plot showing per-gate reference values and wildcard budgets.
+
+    Typically these reference values are a gate metric comparable to wildcard
+    budget such as diamond distance, and the bars show the relative modeled vs.
+    unmodeled error.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    budget : PrimitiveOpsSingleScaleWildcardBudget
+        Wildcard budget to be plotted.
+    """
+
+    def __init__(self, ws, budget, scale=1.0, reference_name='Reference Value'):
+        super(WildcardSingleScaleBarPlot, self).__init__(ws, self._create, budget, scale, reference_name)
+
+    def _create(self, budget, scale, reference_name):
+
+        per_op_wildcard_values = budget.per_op_wildcard_vector
+        ref_values = budget.reference_values
+        gate_labels = budget.primitive_op_labels
+
+        x_axis = go.layout.XAxis(dtick=1, tickmode='array', tickvals=list(range(len(gate_labels))),
+                                 ticktext=[str(label) for label in gate_labels])
+        y_axis = go.layout.YAxis(tickformat='.1e')
+
+        layout = go.Layout(barmode='stack', xaxis=x_axis, yaxis=y_axis,
+                           width=650 * scale, height=350 * scale)
+
+        ref_bar = go.Bar(y=ref_values, name=reference_name, width=.5)
+        wildcard_bar = go.Bar(y=per_op_wildcard_values, name='Wildcard', width=.5)
+
+        return ReportFigure(go.Figure(data=[ref_bar, wildcard_bar], layout=layout))
 
 
 class RandomizedBenchmarkingPlot(WorkspacePlot):

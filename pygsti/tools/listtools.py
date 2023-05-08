@@ -361,6 +361,30 @@ def incd_product(*args):
     return
 
 
+def lists_to_tuples(obj):
+    """
+    Recursively replaces lists with tuples.
+
+    Can be useful for fixing tuples that were serialized to json or mongodb.
+    Recurses on lists, tuples, and dicts within `obj`.
+
+    Parameters
+    ----------
+    obj : object
+        Object to convert.
+
+    Returns
+    -------
+    object
+    """
+    if isinstance(obj, (list, tuple)):
+        return tuple((lists_to_tuples(el) for el in obj))
+    elif isinstance(obj, dict):
+        return {lists_to_tuples(k): lists_to_tuples(v) for k, v in obj.items()}
+    else:
+        return obj
+
+
 # ------------------------------------------------------------------------------
 # Machinery initially designed for an in-place take operation, which computes
 # how to do in-place permutations of arrays/lists efficiently.  Kept here

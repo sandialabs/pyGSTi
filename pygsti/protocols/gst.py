@@ -113,6 +113,29 @@ class GateSetTomographyDesign(_proto.CircuitListsDesign, HasProcessorSpec):
         super().__init__(circuit_lists, all_circuits_needing_data, qubit_labels, nested, remove_duplicates)
         HasProcessorSpec.__init__(self, processorspec_filename_or_obj)
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        GateSetTomographyDesign
+        """
+        mapped_processorspec = self.processor_spec.map_qubit_labels(mapper)
+        mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
+        mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
+                                for circuit_list in self.circuit_lists]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return GateSetTomographyDesign(mapped_processorspec, mapped_circuit_lists, mapped_circuits,
+                                       mapped_qubit_labels, self.nested, remove_duplicates=False)
+
 
 class StandardGSTDesign(GateSetTomographyDesign):
     """
@@ -318,7 +341,45 @@ class StandardGSTDesign(GateSetTomographyDesign):
 
         #filter the circuit lists in `ret` using those in `self` (in case self includes only a subset of
         # the circuits dictated by the germs, fiducials, and  fidpairs).
-        return ret.truncate_to_design(self)
+        ret = ret.truncate_to_design(self)
+        ret.nested = self.nested  # must set nested flag again because truncate_to_design resets to False to be safe
+        return ret
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        StandardGSTDesign
+        """
+        pspec = self.processor_spec.map_qudit_labels(mapper)
+        prep_fiducials = [c.map_state_space_labels(mapper) for c in self.prep_fiducials]
+        meas_fiducials = [c.map_state_space_labels(mapper) for c in self.meas_fiducials]
+        germs = [c.map_state_space_labels(mapper) for c in self.germs]
+        qubit_labels = self._mapped_qubit_labels(mapper)
+        if isinstance(self.fiducial_pairs, dict):
+            fiducial_pairs = {c.map_state_space_labels(mapper): v for c, v in self.fiducial_pairs.items()}
+        else:
+            fiducial_pairs = self.fiducial_pairs
+
+        if not (self.circuit_rules is None and self.aliases is None):
+            raise NotImplementedError(("Mapping qubit labels for a StandardGSTDesign with circuit rules"
+                                       " and/or aliases is not implemented yet."))
+
+        dscheck = None; action_if_missing = 'raise'; verbosity = 0  # values we could add as arguments later if desired.
+        return StandardGSTDesign(pspec, prep_fiducials, meas_fiducials,
+                                 germs, self.maxlengths, self.germ_length_limits, fiducial_pairs,
+                                 self.fpr_keep_fraction, self.fpr_keep_seed, self.include_lgst, self.nested,
+                                 self.circuit_rules, self.aliases, dscheck, action_if_missing, qubit_labels,
+                                 verbosity, add_default_protocol=False)
 
 
 class GSTInitialModel(_NicelySerializable):
@@ -367,6 +428,7 @@ class GSTInitialModel(_NicelySerializable):
     def __init__(self, model=None, target_model=None, starting_point=None, depolarize_start=0, randomize_start=0,
                  lgst_gaugeopt_tol=1e-6, contract_start_to_cptp=False):
         # Note: starting_point can be an initial model or string
+        super().__init__()
         self.model = model
         self.target_model = target_model
         if starting_point is None:
@@ -408,13 +470,13 @@ class GSTInitialModel(_NicelySerializable):
         # Note: should compute on rank 0 and distribute?
         starting_pt = self.starting_point
         if starting_pt == "User-supplied-Model":
-            mdl_start = self.model
+            mdl_start = self.model.copy()
 
         elif starting_pt in ("LGST", "LGST-if-possible"):
             #lgst_advanced = advancedOptions.copy(); lgst_advanced.update({'estimateLabel': "LGST", 'onBadFit': []})
 
             if self.model is not None:
-                mdl_start = self.model
+                mdl_start = self.model.copy()
             elif self.target_model is not None:
                 mdl_start = self.target_model.copy()
             else:
@@ -445,7 +507,7 @@ class GSTInitialModel(_NicelySerializable):
                 #Fall back to target or custom model
                 if self.model is not None:
                     starting_pt = "User-supplied-Model"
-                    mdl_start = self.model
+                    mdl_start = self.model.copy()
                 else:
                     starting_pt = "target"
                     # mdl_start = mdl_start (either the target model or constructed from edesign pspec)
@@ -524,11 +586,62 @@ class GSTBadFitOptions(_NicelySerializable):
         GST fit is considered satisfactory (and no "bad-fit" processing is needed).
 
     actions : tuple, optional
-        Actions to take when a GST fit is unsatisfactory.
+        Actions to take when a GST fit is unsatisfactory. Allowed actions include:
+        - 'wildcard': Find an admissable wildcard model...
+        - 'ddist_wildcard': Fits a single parameter wildcard model in which
+          the amount of wildcard error added to an operation is proportional
+          to the diamond distance between that operation and the target.
+        - 'robust': scale data according out "robust statistics v1" algorithm,
+           where we drastically scale down (reduce) the data due to especially
+           poorly fitting circuits.  Namely, if a circuit's log-likelihood ratio
+           exceeds the 95% confidence region about its expected value (the # of
+           degrees of freedom in the circuits outcomes), then the data is scaled
+           by the `expected_value / actual_value`, so that the new value exactly
+           matches what would be expected.  Ideally there are only a few of these
+           "outlier" circuits, which correspond errors in the measurement apparatus.
+        - 'Robust': same as 'robust', but re-optimize the final objective function
+           (usually the log-likelihood) after performing the scaling to get the
+           final estimate.
+        - 'robust+': scale data according out "robust statistics v2" algorithm,
+           which performs the v1 algorithm (see 'robust' above) and then further
+           rescales all the circuit data to achieve the desired chi2 distribution
+           of per-circuit goodness-of-fit values *without reordering* these values.
+        - 'Robust+': same as 'robust+', but re-optimize the final objective function
+           (usually the log-likelihood) after performing the scaling to get the
+           final estimate.
+        - 'do nothing': do not perform any additional actions.  Used to help avoid
+           the need for special cases when working with multiple types of bad-fit actions.
 
     wildcard_budget_includes_spam : bool, optional
         Include a SPAM budget within the wildcard budget used to process
         the `"wildcard"` action.
+
+    wildcard_L1_weights :  np.array, optional
+        An array of weights affecting the L1 penalty term used to select a feasible
+        wildcard error vector `w_i` that minimizes `sum_i weight_i* |w_i|` (a weighted
+        L1 norm).  Elements of this array must correspond to those of the wildcard budget
+        being optimized, typically the primitive operations of the estimated model - but
+        to get the order right you should specify `wildcard_primitive_op_labels` to be sure.
+        If `None`, then all weights are assumed to be 1.
+
+    wildcard_primitive_op_labels: list, optional
+        The primitive operation labels used to construct the :class:`PrimitiveOpsWildcardBudget`
+        that is optimized.  If `None`, equal to `model.primitive_op_labels + model.primitive_instrument_labels`
+        where `model` is the estimated model, with `'SPAM'` at the end if `wildcard_budget_includes_spam`
+        is True.  When specified, should contain a subset of the default values.
+
+    wildcard_methods: tuple, optional
+        A list of the methods to use to optimize the wildcard error vector.  Default is `("neldermead",)`.
+        Options include `"neldermead"`, `"barrier"`, `"cvxopt"`, `"cvxopt_smoothed"`, `"cvxopt_small"`,
+        and `"cvxpy_noagg"`.  So many methods exist because different convex solvers behave differently
+        (unfortunately).  Leave as the default as a safe option, but `"barrier"` is pretty reliable and much
+        faster than `"neldermead"`, and is a good option so long as it runs.
+
+    wildcard_inadmissable_action: {"print", "raise"}, optional
+        What to do when an inadmissable wildcard error vector is found.  The default just prints this
+        information and continues, while `"raise"` raises a `ValueError`.  Often you just want this information
+        printed so that when the wildcard analysis fails in this way it doesn't cause the rest of an analysis
+        to abort.
     """
 
     @classmethod
@@ -555,8 +668,9 @@ class GSTBadFitOptions(_NicelySerializable):
                  wildcard_budget_includes_spam=True,
                  wildcard_L1_weights=None, wildcard_primitive_op_labels=None,
                  wildcard_initial_budget=None, wildcard_methods=('neldermead',),
-                 wildcard_inadmissable_action='print'):
-        valid_actions = ('wildcard', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
+                 wildcard_inadmissable_action='print', wildcard1d_reference='diamond distance'):
+        super().__init__()
+        valid_actions = ('wildcard', 'wildcard1d', 'Robust+', 'Robust', 'robust+', 'robust', 'do nothing')
         if not all([(action in valid_actions) for action in actions]):
             raise ValueError("Invalid action in %s! Allowed actions are %s" % (str(actions), str(valid_actions)))
         self.threshold = float(threshold)
@@ -567,6 +681,7 @@ class GSTBadFitOptions(_NicelySerializable):
         self.wildcard_initial_budget = wildcard_initial_budget
         self.wildcard_methods = wildcard_methods
         self.wildcard_inadmissable_action = wildcard_inadmissable_action  # can be 'raise' or 'print'
+        self.wildcard1d_reference = wildcard1d_reference
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
@@ -577,20 +692,22 @@ class GSTBadFitOptions(_NicelySerializable):
                                    'primitive_op_labels': self.wildcard_primitive_op_labels,
                                    'initial_budget': self.wildcard_initial_budget,  # serializable?
                                    'methods': self.wildcard_methods,
-                                   'indadmissable_action': self.wildcard_inadmissable_action},
+                                   'indadmissable_action': self.wildcard_inadmissable_action,
+                                   '1d_reference': self.wildcard1d_reference},
                       })
         return state
 
     @classmethod
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         wildcard = state.get('wildcard', {})
-        cls(state['threshold'], tuple(state['actions']),
-            wildcard.get('budget_includes_spam', True),
-            wildcard.get('L1_weights', None),
-            wildcard.get('primitive_op_labels', None),
-            wildcard.get('initial_budget', None),
-            tuple(wildcard.get('methods', ['neldermead'])),
-            wildcard.get('inadmissable_action', 'print'))
+        return cls(state['threshold'], tuple(state['actions']),
+                   wildcard.get('budget_includes_spam', True),
+                   wildcard.get('L1_weights', None),
+                   wildcard.get('primitive_op_labels', None),
+                   wildcard.get('initial_budget', None),
+                   tuple(wildcard.get('methods', ['neldermead'])),
+                   wildcard.get('inadmissable_action', 'print'),
+                   wildcard.get('1d_reference', 'diamond distance'))
 
 
 class GSTObjFnBuilders(_NicelySerializable):
@@ -675,6 +792,7 @@ class GSTObjFnBuilders(_NicelySerializable):
         return cls(iteration_builders, final_builders)
 
     def __init__(self, iteration_builders, final_builders=()):
+        super().__init__()
         self.iteration_builders = iteration_builders
         self.final_builders = final_builders
 
@@ -745,6 +863,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
             raise ValueError("Could not convert %s object to a gauge optimization suite!" % str(type(obj)))
 
     def __init__(self, gaugeopt_suite_names=None, gaugeopt_argument_dicts=None, gaugeopt_target=None):
+        super().__init__()
         if gaugeopt_suite_names is not None:
             self.gaugeopt_suite_names = (gaugeopt_suite_names,) \
                 if isinstance(gaugeopt_suite_names, str) else tuple(gaugeopt_suite_names)
@@ -1468,7 +1587,7 @@ class StandardGST(_proto.Protocol):
         self.models_to_test = models_to_test
         self.target_model = target_model
         self.gaugeopt_suite = GSTGaugeOptSuite.cast(gaugeopt_suite)
-        self.objfn_builders = objfn_builders
+        self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders) if (objfn_builders is not None) else None
         self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
@@ -1535,6 +1654,8 @@ class StandardGST(_proto.Protocol):
                 data.edesign.processor_spec, None, evotype='default', simulator='auto',
                 ideal_gate_type='static', ideal_prep_type='auto', ideal_povm_type='auto',
                 embed_gates=False, basis='pp')  # HARDCODED basis!
+        else:
+            target_model = None  # Usually this path leads to an error being raised below.
 
         ret = ModelEstimateResults(data, self)
         with printer.progress_logging(1):
@@ -1542,6 +1663,10 @@ class StandardGST(_proto.Protocol):
                 printer.show_progress(i, len(modes), prefix='-- Std Practice: ', suffix=' (%s) --' % mode)
 
                 if mode == "Target":
+                    if target_model is None:
+                        raise ValueError(("Must specify `target_model` when creating this StandardGST, since one could"
+                                          " not be inferred from the given experiment design."))
+
                     model_to_test = target_model
                     mdltest = _ModelTest(model_to_test, target_model, self.gaugeopt_suite,
                                          mt_builder, self.badfit_options, verbosity=printer - 1, name=mode)
@@ -1555,6 +1680,10 @@ class StandardGST(_proto.Protocol):
                     ret.add_estimates(result)
 
                 else:
+                    if target_model is None:
+                        raise ValueError(("Must specify `target_model` when creating this StandardGST, since one could"
+                                          " not be inferred from the given experiment design."))
+
                     #Try to interpret `mode` as a parameterization
                     parameterization = mode  # for now, 1-1 correspondence
                     initial_model = target_model
@@ -1657,10 +1786,13 @@ def _add_gaugeopt_and_badfit(results, estlbl, target_model, gaugeopt_suite,
             gaugeopt_suite.gaugeopt_target = target_model
         _add_gauge_opt(results, estlbl, gaugeopt_suite,
                        model_to_gaugeopt, unreliable_ops, comm, printer - 1)
-    profiler.add_time('%s: gauge optimization' % estlbl, tref); tref = _time.time()
-
-    _add_badfit_estimates(results, estlbl, badfit_options, optimizer, resource_alloc, printer)
-    profiler.add_time('%s: add badfit estimates' % estlbl, tref); tref = _time.time()
+        profiler.add_time('%s: gauge optimization' % estlbl, tref); tref = _time.time()
+        
+        _add_badfit_estimates(results, estlbl, badfit_options, optimizer, resource_alloc, printer, gaugeopt_suite= gaugeopt_suite)
+        profiler.add_time('%s: add badfit estimates' % estlbl, tref); tref = _time.time()
+    else:
+        _add_badfit_estimates(results, estlbl, badfit_options, optimizer, resource_alloc, printer)
+        profiler.add_time('%s: add badfit estimates' % estlbl, tref); tref = _time.time()
 
     #Add recorded info (even robust-related info) to the *base*
     #   estimate label's "stdout" meta information
@@ -1747,7 +1879,8 @@ def _add_gauge_opt(results, base_est_label, gaugeopt_suite, starting_model,
 
 
 def _add_badfit_estimates(results, base_estimate_label, badfit_options,
-                          optimizer=None, resource_alloc=None, verbosity=0):
+                          optimizer=None, resource_alloc=None, verbosity=0,
+                          gaugeopt_suite=None):
     """
     Add any and all "bad fit" estimates to `results`.
 
@@ -1771,7 +1904,14 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
 
     verbosity : int, optional
         Level of detail printed to stdout.
-
+    
+    gaugeopt_suite : GSTGaugeOptSuite, optional (default None)
+        Certain badfit actions can rely on gauge optimized estimates.
+        The main example currently is the 1-D wildcard models, which
+        can be based on gauge-variant functions such as the diamond distance.
+        When gauge optimization is applied this will ensure the gauge optimized
+        models used are consistent in the wildcard model and the parent estimates.
+        
     Returns
     -------
     None
@@ -1819,13 +1959,13 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
             try:
                 budget_dict = _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options, printer - 1)
                 for chain_name, (unmodeled, active_constraint_list) in budget_dict.items():
-                    base_estimate.extra_parameters[chain_name + "_unmodeled_error"] = unmodeled
+                    base_estimate.extra_parameters[chain_name + "_unmodeled_error"] = unmodeled.to_nice_serialization()
                     base_estimate.extra_parameters[chain_name + "_unmodeled_active_constraints"] \
                         = active_constraint_list
                 if len(budget_dict) > 0:  # also store first chain info w/empty chain name (convenience)
                     first_chain = next(iter(budget_dict))
                     unmodeled, active_constraint_list = budget_dict[first_chain]
-                    base_estimate.extra_parameters["unmodeled_error"] = unmodeled
+                    base_estimate.extra_parameters["unmodeled_error"] = unmodeled.to_nice_serialization()
                     base_estimate.extra_parameters["unmodeled_active_constraints"] = active_constraint_list
             except NotImplementedError as e:
                 printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
@@ -1834,6 +1974,45 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
             #    printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
             #    new_params['unmodeled_error'] = None
             continue  # no need to add a new estimate - we just update the base estimate
+
+        elif badfit_typ == 'wildcard1d':
+
+            #If this estimate is the target model then skip adding the diamond distance wildcard.
+            if base_estimate_label != 'Target':
+                try:
+                    budget = _compute_wildcard_budget_1d_model(base_estimate, objfn_cache, mdc_objfn, parameters,
+                                                               badfit_options, printer - 1, gaugeopt_suite)
+                    
+                    #if gaugeopt_labels is None then budget with be a PrimitiveOpsSingleScaleWildcardBudget
+                    #if it was non-empty though then we'll instead have budge as a dictionary with keys
+                    #corresponding to the elements of gaugeopt_labels. In this case let's  make
+                    #base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] a dictionary of
+                    #the serialized PrimitiveOpsSingleScaleWildcardBudget elements
+                    if gaugeopt_suite is not None:
+                        gaugeopt_labels = gaugeopt_suite.gaugeopt_suite_names
+                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = {lbl: budget[lbl].to_nice_serialization() for lbl in gaugeopt_labels} 
+                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] \
+                            = None
+
+                        base_estimate.extra_parameters["unmodeled_error"] = {lbl: budget[lbl].to_nice_serialization() for lbl in gaugeopt_labels}
+                        base_estimate.extra_parameters["unmodeled_active_constraints"] = None
+                    else:
+                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = budget.to_nice_serialization() 
+                        base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] = None
+
+                        base_estimate.extra_parameters["unmodeled_error"] = budget.to_nice_serialization()
+                        base_estimate.extra_parameters["unmodeled_active_constraints"] = None
+                except NotImplementedError as e:
+                    printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
+                    new_params['unmodeled_error'] = None
+                #except AssertionError as e:
+                #    printer.warning("Failed to get wildcard budget - continuing anyway.  Error was:\n" + str(e))
+                #    new_params['unmodeled_error'] = None
+                continue  # no need to add a new estimate - we just update the base estimate
+
+            else:
+                printer.log('Diamond distance wildcard model is incompatible with the Target estimate, skipping.', 3)
+                continue
 
         elif badfit_typ == "do nothing":
             continue  # go to next on-bad-fit directive
@@ -1868,6 +2047,146 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                 go_gs_final = base_estimate.models[gokey]
                 results.estimates[base_estimate_label + '.' + badfit_typ].add_gaugeoptimized(
                     gauge_opt_params.copy(), go_gs_final, gokey, comm, printer - 1)
+
+
+def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, parameters, badfit_options, verbosity, gaugeopt_suite=None):
+    """
+    Create a wildcard budget for a model estimate. This version of the function produces a wildcard estimate
+    using the model introduced by Tim and Stefan in the RCSGST paper.
+    TODO: docstring (update)
+
+    Parameters
+    ----------
+    model : Model
+        The model to add a wildcard budget to.
+
+    ds : DataSet
+        The data the model predictions are being compared with.
+
+    circuits_to_use : list
+        The circuits whose data are compared.
+
+    parameters : dict
+        Various parameters of the estimate at hand.
+
+    badfit_options : GSTBadFitOptions, optional
+        Options specifying what post-processing actions should be performed when
+        a fit is unsatisfactory.  Contains detailed parameters for wildcard budget
+        creation.
+
+    comm : mpi4py.MPI.Comm, optional
+        An MPI communicator used to run this computation in parallel.
+
+    mem_limit : int, optional
+        A rough per-processor memory limit in bytes.
+
+    verbosity : int, optional
+        Level of detail printed to stdout.
+    
+    gaugeopt_suite : GSTGaugeOptSuite, optional (default None)
+        The 1-D wildcard models can be based on gauge-variant functions such as the diamond distance. When gauge optimization is applied this will ensure the gauge optimized models used are consistent in the wildcard model and the parent estimates.
+
+    Returns
+    -------
+    PrimitiveOpsWildcardBudget
+    """
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, mdc_objfn.resource_alloc)
+    badfit_options = GSTBadFitOptions.cast(badfit_options)
+    model = mdc_objfn.model
+    ds = mdc_objfn.dataset
+    global_circuits_to_use = mdc_objfn.global_circuits
+
+    printer.log("******************* Adding Wildcard Budget **************************")
+
+    #cache construction code.
+    # Extract model, dataset, objfn, etc.
+    # Note: must evaluate mdc_objfn *before* passing to wildcard fn init so internal probs are init
+    mdc_objfn.fn(model.to_vector())
+
+    ## PYGSTI TRANSPLANT from pygsti.protocols.gst._compute_wildcard_budget
+    # Compute the various thresholds
+    ds_dof = ds.degrees_of_freedom(global_circuits_to_use)
+    nparams = model.num_modeltest_params  # just use total number of params
+    percentile = 0.025
+    nboxes = len(global_circuits_to_use)
+
+    two_dlogl_threshold = _chi2.ppf(1 - percentile, max(ds_dof - nparams, 1))
+    redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
+
+    ref, reference_name = _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_suite)
+    
+    if gaugeopt_suite is None: 
+        gaugeopt_labels = None
+        primitive_ops = list(ref.keys())
+    else:
+        gaugeopt_labels= gaugeopt_suite.gaugeopt_suite_names
+        primitive_ops = list(ref[list(gaugeopt_labels)[0]].keys())
+    
+    if gaugeopt_labels is None:
+        wcm = _wild.PrimitiveOpsSingleScaleWildcardBudget(primitive_ops, [ref[k] for k in primitive_ops],
+                                                      reference_name=reference_name)
+        _opt.wildcardopt.optimize_wildcard_bisect_alpha(wcm, mdc_objfn, two_dlogl_threshold, redbox_threshold, printer,
+                                                guess=0.1, tol=1e-3)  # results in optimized wcm
+    else:
+        wcm = {lbl:_wild.PrimitiveOpsSingleScaleWildcardBudget(primitive_ops, [ref[lbl][k] for k in primitive_ops],
+                                                      reference_name=reference_name) for lbl in gaugeopt_labels}
+        for budget_to_optimize in wcm.values():
+            _opt.wildcardopt.optimize_wildcard_bisect_alpha(budget_to_optimize, mdc_objfn, two_dlogl_threshold, redbox_threshold, printer,
+                                                    guess=0.1, tol=1e-3)  # results in optimized wcm
+
+    return wcm
+
+
+def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_suite=None):
+    '''
+    DOCSTRING: TODO
+    '''
+    if badfit_options.wildcard1d_reference == 'diamond distance':
+        if gaugeopt_suite is None:
+            final_model = estimate.models['final iteration estimate']
+            target_model = estimate.models['target']
+            gaugeopt_model = _alg.gaugeopt_to_target(final_model, target_model)
+            dd = {}
+            for key, op in gaugeopt_model.operations.items():
+                dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+                if dd[key] < 0:  # indicates that diamonddist failed (cvxpy failure)
+                    _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
+                                    " Falling back to trace distance.") % str(key))
+                    dd[key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
+
+            spamdd = {}
+            for key, op in gaugeopt_model.preps.items():
+                spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), 'pp'),
+                                               _tools.vec_to_stdmx(target_model.preps[key].to_dense(), 'pp'))
+
+            for key in gaugeopt_model.povms.keys():
+                spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
+
+            dd['SPAM'] = sum(spamdd.values())
+
+        else:
+            #pull the target model from the gaugeopt suite. The GSTGaugeOptSuite doesn't currently
+            #support multiple targets, so this is safe for now.
+            target_model = gaugeopt_suite.gaugeopt_target
+            gaugeopt_models = [estimate.models[lbl] for lbl in gaugeopt_suite.gaugeopt_suite_names]
+            dd = {lbl: {} for lbl in gaugeopt_suite.gaugeopt_suite_names}
+            for gaugeopt_model, lbl in zip(gaugeopt_models, gaugeopt_suite.gaugeopt_suite_names):
+                for key, op in gaugeopt_model.operations.items():
+                    dd[lbl][key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+
+            spamdd = {}
+            for key, op in gaugeopt_model.preps.items():
+                spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), 'pp'),
+                                               _tools.vec_to_stdmx(target_model.preps[key].to_dense(), 'pp'))
+
+            for key in gaugeopt_model.povms.keys():
+                spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
+
+            dd[lbl]['SPAM'] = sum(spamdd.values())
+        return dd, 'diamond distance'
+    else:
+        raise ValueError("Invalid wildcard1d_reference value (%s) in bad-fit options!"
+                         % str(badfit_options.wildcard1d_reference))
 
 
 def _compute_robust_scaling(scale_typ, objfn_cache, mdc_objfn):
@@ -2044,7 +2363,7 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
     L1weights = _np.ones(budget.num_params)
     if badfit_options.wildcard_L1_weights:
         for op_label, weight in badfit_options.wildcard_L1_weights.items():
-            L1weights[budget.primOpLookup[op_label]] = weight
+            L1weights[budget.primitive_op_param_index[op_label]] = weight
         printer.log("Using non-uniform L1 weights: " + str(list(L1weights)))
 
     # Note: must evaluate mdc_objfn *before* passing to wildcard fn init so internal probs are init
@@ -2169,10 +2488,11 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
 
                 circ_ind_max = _np.argmax(percircuit_constraint)
                 if glob_constraint > 0:
-                    active_constraints['global'] = glob_constraint,
+                    active_constraints['global'] = float(glob_constraint),
                 if percircuit_constraint[circ_ind_max] > 0:
-                    active_constraints['percircuit'] = (circ_ind_max, global_circuits_to_use[circ_ind_max],
-                                                        percircuit_constraint[circ_ind_max])
+                    active_constraints['percircuit'] = (int(circ_ind_max), global_circuits_to_use[circ_ind_max].str,
+                                                        float(percircuit_constraint[circ_ind_max]))
+                #Note: make sure active_constraints is JSON serializable (this is why we put the circuit *str* in)
             else:
                 if budget_was_optimized:
                     printer.log((" - Element %.3g is %.3g. This is below %.3g, so trialing snapping to zero"
@@ -2195,15 +2515,15 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
         # Note: active_constraints_list is typically stored in parameters['unmodeled_error active constraints']
         # of the relevant Estimate object.
         primOp_labels = _collections.defaultdict(list)
-        for lbl, i in budget.primOpLookup.items(): primOp_labels[i].append(str(lbl))
+        for lbl, i in budget.primitive_op_param_index.items(): primOp_labels[i].append(str(lbl))
         for i, active_constraints in enumerate(active_constraints_list):
             if active_constraints:
                 printer.log("** ACTIVE constraints for " + "--".join(primOp_labels[i]) + " **")
                 if 'global' in active_constraints:
                     printer.log("   global constraint:" + str(active_constraints['global']))
                 if 'percircuit' in active_constraints:
-                    _, circuit, constraint_amt = active_constraints['percircuit']
-                    printer.log("   per-circuit constraint:" + circuit.str + " = " + str(constraint_amt))
+                    _, circuit_str, constraint_amt = active_constraints['percircuit']
+                    printer.log("   per-circuit constraint:" + circuit_str + " = " + str(constraint_amt))
             else:
                 printer.log("(no active constraints for " + "--".join(primOp_labels[i]) + ")")
         printer.log("")
@@ -2323,6 +2643,16 @@ class ModelEstimateResults(_proto.ProtocolResults):
         ModelEstimateResults
         """
         ret = super().from_dir(dirname, name, preloaded_data, quick_load)  # loads members; doesn't make parent "links"
+        ret.circuit_lists = ret._create_circuit_lists(ret.data.edesign)  # because circuit_lists auxfile_type == 'none'
+        for est in ret.estimates.values():
+            est.parent = ret  # link estimate to parent results object
+        return ret
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False,
+                                         preloaded_data=None, load_protocol=True, load_data=True):
+        ret = super()._create_obj_from_doc_and_mongodb(doc, mongodb, quick_load, preloaded_data,
+                                                       load_protocol, load_data)
         ret.circuit_lists = ret._create_circuit_lists(ret.data.edesign)  # because circuit_lists auxfile_type == 'none'
         for est in ret.estimates.values():
             est.parent = ret  # link estimate to parent results object
