@@ -373,7 +373,8 @@ G2            20  80    5 195
         #print " ==> DataSet:\n", ds
 
         #test file with no header
-        ds = std.parse_datafile(temp_files + "/sip_test2.data")
+        with self.assertRaises(AssertionError):
+            std.parse_datafile(temp_files + "/sip_test2.data")
 
         #test file with bad data
         with self.assertRaises(ValueError):

@@ -574,7 +574,8 @@ class StdInputParser(object):
                             # When reading in time-independent data (all at a single time), order (sort)
                             # the counts according to outcome index to make it easier to compare datarows.
                             assert len(set(outcome_indices)) == len(outcome_indices), "Duplicate fixed column!"
-                            outcome_indices, count_values = zip(*sorted(zip(outcome_indices, count_values)))
+                            if len(outcome_indices) > 0:  # sort count values by outcome index unless there aren't any
+                                outcome_indices, count_values = zip(*sorted(zip(outcome_indices, count_values)))
 
                             oliArray = _np.array(outcome_indices, dataset.oliType)
                             countArray = _np.array(count_values, dataset.repType)

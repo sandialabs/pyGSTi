@@ -213,8 +213,8 @@ G1(G2G3)^2
 {}            100 0
 """)
     def test_parse_datafile_no_header(self, tmp_path):
-        ds = self.std.parse_datafile(tmp_path)
-        # TODO assert correctness
+        with self.assertRaises(AssertionError):
+            ds = self.std.parse_datafile(tmp_path)
 
     @with_temp_file("""#Data File with bad syntax
 ## Columns = 0 count, 1 count
