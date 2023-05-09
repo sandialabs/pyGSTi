@@ -157,7 +157,7 @@ class OpRepSparse(OpRep):
     def to_dense(self, on_space):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx_slow' evotype cannot produce Hilbert-space ops!")
-        return self.A.todense()
+        return self.A.toarray()
 
 
 class OpRepStandard(OpRepDenseSuperop):

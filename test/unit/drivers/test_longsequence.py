@@ -79,25 +79,25 @@ class StdPracticeGSTTester(LongSequenceBase):
         self.mdl_guess = self.model.depolarize(op_noise=0.01, spam_noise=0.01)
 
     def test_stdpractice_gst_TP(self):
-        result = ls.run_stdpractice_gst(self.ds, self.pspec, self.fiducials, self.fiducials, self.germs, self.maxLens,
+        result = ls.run_stdpractice_gst(self.ds, self.model, self.fiducials, self.fiducials, self.germs, self.maxLens,
                                         modes="full TP", models_to_test={"Test": self.mdl_guess}, comm=None,
                                         mem_limit=None, verbosity=5)
         # TODO assert correctness
 
     def test_stdpractice_gst_CPTP(self):
-        result = ls.run_stdpractice_gst(self.ds, self.pspec, self.fiducials, self.fiducials, self.germs, self.maxLens,
-                                        modes="CPTP", models_to_test={"Test": self.mdl_guess}, comm=None,
+        result = ls.run_stdpractice_gst(self.ds, self.model, self.fiducials, self.fiducials, self.germs, self.maxLens,
+                                        modes="CPTPLND", models_to_test={"Test": self.mdl_guess}, comm=None,
                                         mem_limit=None, verbosity=5)
         # TODO assert correctness
 
     def test_stdpractice_gst_Test(self):
-        result = ls.run_stdpractice_gst(self.ds, self.pspec, self.fiducials, self.fiducials, self.germs, self.maxLens,
+        result = ls.run_stdpractice_gst(self.ds, self.model, self.fiducials, self.fiducials, self.germs, self.maxLens,
                                         modes="Test", models_to_test={"Test": self.mdl_guess}, comm=None,
                                         mem_limit=None, verbosity=5)
         # TODO assert correctness
 
     def test_stdpractice_gst_Target(self):
-        result = ls.run_stdpractice_gst(self.ds, self.pspec, self.fiducials, self.fiducials, self.germs, self.maxLens,
+        result = ls.run_stdpractice_gst(self.ds, self.model, self.fiducials, self.fiducials, self.germs, self.maxLens,
                                         modes="Target", models_to_test={"Test": self.mdl_guess}, comm=None,
                                         mem_limit=None, verbosity=5)
         # TODO assert correctness
@@ -113,11 +113,11 @@ class StdPracticeGSTTester(LongSequenceBase):
         io.write_circuit_list(fiducial_path, self.fiducials)
         io.write_circuit_list(germ_path, self.germs)
         target_model = create_explicit_model(self.pspec, ideal_gate_type='static')
-        io.write_model(target_model, model_path)
+        target_model.write(model_path + '.json')
         #with open(model_path, 'wb') as f:
         #    pickle.dump(target_model, f)
 
-        result = ls.run_stdpractice_gst(ds_path, model_path, fiducial_path, fiducial_path, germ_path, self.maxLens,
+        result = ls.run_stdpractice_gst(ds_path, model_path+'.json', fiducial_path, fiducial_path, germ_path, self.maxLens,
                                         modes="full TP", comm=None, mem_limit=None, verbosity=5)
         # TODO assert correctness
 
@@ -247,7 +247,7 @@ class WholeGermPowersTester(LongSequenceGSTWithChi2):
     @with_temp_path
     def test_long_sequence_gst_with_file_args(self, ds_path, model_path, fiducial_path, germ_path):
         io.write_dataset(ds_path, self.ds, self.lsgstStrings[-1])
-        io.write_model(self.model, model_path)
+        self.model.write(model_path + '.json')
         io.write_circuit_list(fiducial_path, self.fiducials)
         io.write_circuit_list(germ_path, self.germs)
 
@@ -256,7 +256,7 @@ class WholeGermPowersTester(LongSequenceGSTWithChi2):
             profile=2,
         )
         result = ls.run_long_sequence_gst(
-            ds_path, model_path, fiducial_path, fiducial_path, germ_path, self.maxLens,
+            ds_path, model_path+'.json', fiducial_path, fiducial_path, germ_path, self.maxLens,
             advanced_options=self.options, verbosity=10
         )
         # TODO assert correctness
@@ -266,7 +266,7 @@ class CPTPGatesTester(LongSequenceGSTBase):
     # TODO optimize!!
     def setUp(self):
         super(CPTPGatesTester, self).setUp()
-        self.model.set_all_parameterizations("CPTP")
+        self.model.set_all_parameterizations("CPTPLND")
 
 
 class SGatesTester(LongSequenceGSTBase):

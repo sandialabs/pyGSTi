@@ -622,7 +622,7 @@ class GateConstructionBase(object):
                           [0, 1, 0, 0],
                           [0, 0, 0, 1],
                           [0, 0, 1, 0]], 'd')
-        cnotMx = pygsti.tools.unitary_to_process_mx(Ucnot)
+        cnotMx = pygsti.tools.unitary_to_std_process_mx(Ucnot)
         self.CNOT_chk = pygsti.tools.change_basis(cnotMx, "std", self.basis)
 
         #CPHASE gate
@@ -630,7 +630,7 @@ class GateConstructionBase(object):
                             [0, 1, 0, 0],
                             [0, 0, 1, 0],
                             [0, 0, 0, -1]], 'd')
-        cphaseMx = pygsti.tools.unitary_to_process_mx(Ucphase)
+        cphaseMx = pygsti.tools.unitary_to_std_process_mx(Ucphase)
         self.CPHASE_chk = pygsti.tools.change_basis(cphaseMx, "std", self.basis)
         self.ident = mc.create_operation("I(Q0)", [('Q0',)], self.basis, param)
         self.rotXa = mc.create_operation("X(pi/2,Q0)", [('Q0',)], self.basis, param)

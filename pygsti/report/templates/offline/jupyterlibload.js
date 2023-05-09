@@ -7,6 +7,6 @@ if(typeof requirejs === "undefined") {
     console.log("Loading offline requireJS");
 }
 if(typeof window.jQuery === "undefined") {
-    document.write("<script src='offline/jquery-3.2.1.min.js'><\/script>");
+    document.write("<script src='offline/jquery-3.6.4.min.js'><\/script>");
     console.log("Loading offline jQuery");
 }

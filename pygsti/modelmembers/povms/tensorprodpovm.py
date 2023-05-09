@@ -265,6 +265,6 @@ class TensorProductPOVM(_POVM):
         #s = "Tensor-product POVM with effect labels:\n"
         #s += ", ".join(self.keys()) + "\n"
         #s += " Effects (one per column):\n"
-        #s += _mt.mx_to_string( _np.concatenate( [effect.todense() for effect in self.values()],
+        #s += _mt.mx_to_string( _np.concatenate( [effect.toarray() for effect in self.values()],
         #                                   axis=1), width=6, prec=2)
         return s

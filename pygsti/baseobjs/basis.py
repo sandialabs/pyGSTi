@@ -1047,10 +1047,10 @@ class ExplicitBasis(Basis):
 
     def __hash__(self):
         if self.sparse:
-            els_to_hash = tuple(((_np.round(el.data, 6).tostring(), el.indices.tostring(), el.indptr.tostring())
+            els_to_hash = tuple(((_np.round(el.data, 6).tobytes(), el.indices.tobytes(), el.indptr.tobytes())
                                  for el in self.elements))   # hash sparse matrices
         else:
-            els_to_hash = tuple((_np.round(el, 6).tostring() for el in self.elements))
+            els_to_hash = tuple((_np.round(el, 6).tobytes() for el in self.elements))
         return hash((self.dim, self.elshape, self.sparse, self.labels, els_to_hash))  # TODO: hash vector els?
         # OLD return hash((self.name, self.dim, self.elshape, self.sparse))  # better?
 
