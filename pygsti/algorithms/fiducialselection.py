@@ -164,14 +164,17 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         
         for fidLength, count in candidate_fid_counts.items():
             if count == "all upto":
-                availableFidList.extend(_circuits.list_all_circuits(fidOps, 0, fidLength))
+                #Add the empty fiducial separate to get the circuit labels correct.
+                availableFidList.append(_circuits.Circuit(_baseobjs.Label(()), line_labels= target_model.state_space.qudit_labels))
+                #add everything else up to fidLength
+                availableFidList.extend(_circuits.list_all_circuits(fidOps, 1, fidLength))
             #if "all" then include all circuits at that particular length.
             elif count =="all":
                 availableFidList.extend(_circuits.list_all_circuits_one_len(fidOps, fidLength))
             else:
                 availableFidList.extend(_circuits.list_random_circuits_onelen(
                     fidOps, fidLength, count, seed=candidate_seed))
-        
+                    
         printer.log('Initial Length Available Fiducial List: '+ str(len(availableFidList)), 1)
         printer.log('Creating cache of fiducial process matrices.', 3)
         circuit_cache= create_circuit_cache(target_model,availableFidList)
@@ -184,6 +187,13 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         cleaned_availableFidList, cleaned_circuit_cache = clean_fid_list(target_model, circuit_cache, availableFidList,
                                                                             drop_identities=True, drop_duplicates=True,
                                                                             eq_thresh=eq_thresh, assume_clifford=assume_clifford)
+        
+        #add in logic forcing the empty fiducial into the candidate list if force_empty is true and it is not present.
+        if not any([len(ckt)==0 for ckt in cleaned_availableFidList]) and force_empty:
+            cleaned_availableFidList.append(_circuits.Circuit(_baseobjs.Label(()), line_labels= target_model.state_space.qudit_labels))
+            #and add this to the circuit cache.
+            cleaned_circuit_cache.update(create_circuit_cache(target_model, [cleaned_availableFidList[-1]]))
+            
         
         printer.log('Length Available Fiducial List Dropped Identities and Duplicates: ' + str(len(cleaned_availableFidList)), 1)
         
