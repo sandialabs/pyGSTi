@@ -779,7 +779,6 @@ class LindbladCoefficientBlock(_NicelySerializable):
         v : numpy.ndarray
             A 1D array of real parameter values.
         """
-
         if self._param_mode == 'static':
             assert(len(v) == 0), "'static' paramterized blocks should have zero parameters!"
             return  # self.block_data remains the same - no update
