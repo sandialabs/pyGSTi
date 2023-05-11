@@ -4561,7 +4561,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         -------
         numpy.ndarray
         """
-        omitted_probs = 1.0 - _np.array([_np.sum(probs[self.layout.indices_for_index(i)])
+        omitted_probs = 1.0 - _np.array([probs[self.layout.indices_for_index(i)].sum()
                                          for i in self.indicesOfCircuitsWithOmittedData])
         return self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
 
