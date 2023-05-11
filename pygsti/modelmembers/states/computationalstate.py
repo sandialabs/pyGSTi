@@ -138,7 +138,7 @@ class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
 
         state_space = _statespace.default_space_for_num_qubits(len(self._zvals)) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
-        basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
+        basis = _Basis.cast(basis, state_space)  # basis for Hilbert-Schmidt (superop) space
 
         evotype = _Evotype.cast(evotype)
         self._evotype = evotype  # set this before call to _State.__init__ so self.to_dense() can work...
