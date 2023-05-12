@@ -24,6 +24,7 @@ from pygsti.tools import compilationtools as _comp
 
 try: import qsearch as _qsearch
 except: _qsearch = None
+from scipy.stats import unitary_group
 
 ################################
 #### BEGIN CODE FROM JORDAN ######
@@ -3155,7 +3156,7 @@ def create_udrb_circuit(pspec, length, qubit_labels = None, layer_type='standard
         drb_circ = drb_circ.copy(editable=True)
     else:
         mean_two_q_gates = twoQ_gate_density*n/2
-        u = stats.unitary_group.rvs(2**n) #generate Haar-random unitary
+        u = unitary_group.rvs(2**n) #generate Haar-random unitary
         ###use the compiler###
         drb_circ = compile_unitary_qsearch(u, qubit_labels = qubit_labels).copy(editable = True)
 
