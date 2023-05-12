@@ -36,7 +36,7 @@ The primary goals of the pyGSTi project are to:
 # Extra requirements
 extras = {
     'diamond_norm': [
-        'cvxopt<=1.3.0.1',
+        'cvxopt',
         'cvxpy'
     ],
     'memory_profiling': ['psutil'],
@@ -64,7 +64,7 @@ extras = {
         'nbval',
         'nose',
         'csaps',
-        'cvxopt',
+        'cvxopt<=1.3.0.1',
         'cvxpy',
         'cython',
         'matplotlib',
