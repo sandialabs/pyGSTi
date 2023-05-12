@@ -22,6 +22,9 @@ from pygsti.tools import group as _rbobjs
 from pygsti.tools import symplectic as _symp
 from pygsti.tools import compilationtools as _comp
 
+try: import qsearch as _qsearch
+except: _qsearch = None
+
 ################################
 #### BEGIN CODE FROM JORDAN ######
 ################################
@@ -3128,3 +3131,186 @@ def create_random_germpower_mirror_circuits(pspec, absolute_compilation, depths,
         outlist.append(idealout)
 
     return circlist, outlist, aux
+
+
+def create_udrb_circuit(pspec, length, qubit_labels = None, layer_type='standard',twoQ_gate_density = 1/2, angles=[_np.pi/2, -1*_np.pi/2]):
+    #generates a unitary direct RB circuit
+
+    if qubit_labels == None:
+        qubit_labels = pspec.qubit_labels
+        
+    n = len(qubit_labels)
+    
+    #pspec.add_std_model("standard_unitary", parameterization='static unitary')
+    model = pygsti.models.create_crosstalk_free_model(pspec, evotype='statevec', simulator='matrix') #pspec.models['standard_unitary']
+    
+    if n == 1:
+        mean_two_q_gates = 0
+        ###for 1Q, currently sampling Haar-random unitaries with pyGSTi terms###
+        #params = _rc.sample_haar_random_one_qubit_unitary_parameters()
+
+        drb_circ = _rc.sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec)
+        #print(drb_circ)
+        u = model.sim.product(drb_circ)
+        drb_circ = drb_circ.copy(editable=True)
+    else:
+        mean_two_q_gates = twoQ_gate_density*n/2
+        u = stats.unitary_group.rvs(2**n) #generate Haar-random unitary
+        ###use the compiler###
+        drb_circ = compile_unitary_qsearch(u, qubit_labels = qubit_labels).copy(editable = True)
+
+    
+    #generate d random layers, alternating Haar-random 1Q unitaries and 2Q gates
+    circuit = _cir.Circuit(layer_labels=[], line_labels=qubit_labels, editable=True)
+    
+####replace with existing pygsti machinery for generating these circuits#######
+    #have option to sample alternating laters or mixed layers
+    if layer_type=='cz-zxzxz':
+        _rc.sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=qubit_labels, two_q_gate_density=twoQ_gate_density,
+                                   one_q_gate_type='haar',
+                                   two_q_gate_args_lists={'Gczr': [(str(a),) for a in angles]})
+    elif layer_type=='standard':                                   
+        _rc.sample_circuit_layer_by_edgegrab(pspec, qubit_labels=qubit_labels, two_q_gate_density=twoQ_gate_density, one_q_gate_names=None,
+                                     gate_args_lists=None, rand_state=None)                                   
+                                   
+    #for a in range(length):
+    #   #generate random 1q unitary layer
+    #    new_layer = sample_1q_unitary_layer(pspec, qubit_labels)
+    #    #append new layer to circuit
+    #    circuit.append_circuit_inplace(new_layer)
+    #    #generate 2q gate layer
+    #    sampled_layer = sample_cz_layer_by_edgegrab(pspec, qubit_labels=qubit_labels, mean_two_q_gates=mean_two_q_gates, angles=angles)
+    #    if sampled_layer == []: new_layer = _cir.Circuit(layer_labels=[], line_labels=qubit_labels, editable=True)
+    #    else: new_layer = _cir.Circuit([sampled_layer])
+    #    #append new layer to circuit
+    #    circuit.append_circuit_inplace(new_layer)
+    ####
+    
+    #circuit.done_editing()
+    
+    #get unitary for circuit 
+
+    circ_unitary = model.sim.product(circuit)
+    
+    drb_circ.append_circuit_inplace(circuit)
+    
+    #multiply u by new circ operation
+    u_net =_np.dot(circ_unitary, u)
+    
+    #invert this matrix
+    u_inv =_np.linalg.inv(u_net)
+    
+    #pick a random n-qubit Pauli to be the net Pauli
+    paulis = [pygsti.internalgates.standard_gatename_unitaries()['Gc'+str(3*k)] for k in range(4)]
+    pauli_choice = [_np.random.randint(4) for _ in range(n)]
+    random_pauli = functools.reduce(_np.kron, [paulis[i] for i in pauli_choice])
+    inv_mat =_np.dot(random_pauli, u_inv) #multiply in random pauli
+    
+    ####USE THE COMPILER###
+    #single-qubit edge case
+    if n == 1:
+        inv_circ = compile_1q_unitary(inv_mat, qubit_labels = qubit_labels) #.copy(editable=True)
+        #print(np.dot(np.linalg.inv(inv_mat), model.sim.product(inv_circ)))
+    else:
+        inv_circ = compile_unitary_qsearch(inv_mat, qubit_labels = qubit_labels).copy(editable = True)
+    drb_circ.append_circuit_inplace(inv_circ)
+    drb_circ.done_editing()
+    #####################
+    
+    #compute ideal output
+    idealout = ''.join(['0' if p==0 or p==3 else '1' for p in pauli_choice])
+    
+    
+    #return circuit and target bitstring
+    return (drb_circ, idealout)
+
+def compile_1q_unitary(u, qubit_labels = None):
+    if qubit_labels == None:
+        q = 'Q0'
+    else:
+        q = qubit_labels[0]
+    alpha = 0.5*(_np.angle(u[0][0])+_np.angle(u[1][1]))
+    #print(u)
+    u *=_np.exp(-1j*alpha)
+    #print(u)
+    psi =_np.angle(u[0][0])
+    chi =_np.angle(u[0][1])
+    phi =_np.arctan2((np.exp(-1j*chi)*u[0][1]).real,(np.exp(-1j*psi)*u[0][0]).real)
+    #print(phi)
+    #print(psi)
+    #print(chi)
+    
+    #print([[np.exp(1j*psi)*np.cos(phi),_np.exp(1j*chi)*np.sin(phi)],[-1*np.exp(-1j*chi)*np.sin(phi),_np.exp(-1j*psi)*np.cos(phi)]])
+    
+    theta1 = _mod_2pi(psi - chi +_np.pi)
+    theta2 = _mod_2pi(_np.pi - 2*phi)
+    theta3 = _mod_2pi(psi + chi)
+    #print(theta1, theta2, theta3)
+    
+    #print([[np.exp(0.5*1j*(theta1+theta3))*np.sin(theta2/2),_np.exp(-1j*(0.5*(theta1-theta3)-np.pi))*np.cos(theta2/2)], 
+          #[np.exp(-1j*(0.5*(theta3-theta1)+np.pi))*np.cos(theta2/2), -1*np.exp(-0.5*1j*(theta1+theta3))*np.sin(theta2/2)]])
+    
+    gate = 'Gzr;{t1}:{q}Gc16:{q}Gzr;{t2}:{q}Gc16:{q}Gzr;{t3}:{q}'.format(q=q, t1=theta1, t2=theta2, t3=theta3)
+            
+    gate_as_circ = _cir.Circuit(None, stringrep=gate)
+    
+    #print(model.sim.product(gate_as_circ))
+    #print(np.dot(np.linalg.inv(model.sim.product(gate_as_circ)), u))
+    return gate_as_circ
+
+def compile_unitary_qsearch(u, qubit_labels = None):
+    if qubit_labels == None:
+        n = int(_np.log2(u.shape[0]))
+        qubit_labels = ['Q'+str(i) for i in range(n)]
+        
+    options = _qsearch.options.Options()
+    options.__setattr__('gateset', _qsearch.gatesets.U3CNOTLinear())
+    options.__setattr__('target', u)
+    compiler = _qsearch.SearchCompiler(options)
+    result = compiler.compile()
+    
+    assembler_options = _qsearch.options.Options()
+    assembler_options.__setattr__('assemblydict', _qsearch.assemblers.assemblydict_openqasm)
+    assembler = _qsearch.assemblers.DictionaryAssembler(options = assembler_options)
+    result = assembler.assemble(result)
+    
+    #remove initial junk
+    result = result[result.find(';')+1:]
+    result = result[result.find(';')+1:]
+    #initialize a circuit
+    c = ''
+    #add gates one-by-one
+    while result != '\n':
+        new_gate = result[:result.find(';')] #get openQASM string for gate
+        result = result[(result.find(';')+1):]
+        #convert gate name to pyGSTi
+        qasm_gate = new_gate[:new_gate.find('(')]
+        if qasm_gate == '\nU':
+            params = new_gate[new_gate.find('(')+1:new_gate.find(')')].split(', ')
+            theta1 = -1*float(params[2])
+            theta2 = -1*float(params[0]) +_np.pi
+            theta3 = -1*float(params[1]) +_np.pi
+            new_gate_q = int(new_gate[new_gate.find('q[')+2:new_gate.find(']')])
+            new_q_label = qubit_labels[new_gate_q]
+            gate = 'Gzr;{t1}:{q}Gc16:{q}Gzr;{t2}:{q}Gc16:{q}Gzr;{t3}:{q}'.format(q=new_q_label, t1=theta1, t2=theta2, t3=theta3)
+            
+            
+        else:
+            new_gate_qs = new_gate[4:]
+            #now should have 'q[i] q[j]'
+            new_gate_qs = new_gate_qs.replace('q[', '').replace(']', '')
+            qubits = list(map(int, new_gate_qs.split(', ')))
+            q1 = qubit_labels[qubits[0]]
+            q2 = qubit_labels[qubits[1]]
+            t1 = str(_np.pi)
+            t2 = str(_np.pi/2)
+            h = 'Gzr;{t1}:{q2}Gc16:{q2}Gzr;{t2}:{q2}Gc16:{q2}Gzr;{t1}:{q2}'.format(q2 = q2, t1 = t1, t2=t2)
+            cphase = 'Gcphase:{q2}:{q1}'.format(q1=q1, q2=q2)
+            gate=h+cphase+h
+        
+        #add gate to circuit
+        c += gate
+
+    circ = _cir.Circuit(None, stringrep=c).parallelize()
+
+    return circ
