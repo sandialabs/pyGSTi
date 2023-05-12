@@ -76,6 +76,11 @@ class OutcomeLabelDict(_collections.OrderedDict):
             key = OutcomeLabelDict.to_outcome(key)
         super(OutcomeLabelDict, self).__setitem__(key, val)
 
+    def get(self, key, default):
+        if not OutcomeLabelDict._strict:
+            key = OutcomeLabelDict.to_outcome(key)
+        return super(OutcomeLabelDict, self).get(key, default)
+
     def getitem_unsafe(self, key, defaultval):
         """
         Gets an item without checking that `key` is a properly formatted outcome tuple.

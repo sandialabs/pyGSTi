@@ -811,11 +811,11 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                               circuit_type, sampler, samplerargs, localclifford, paulirandomize, descriptor,
-                              add_default_protocol)
+                              add_default_protocol, seed=seed)
 
     def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                          circuit_type, sampler, samplerargs, localclifford, paulirandomize, descriptor,
-                         add_default_protocol):
+                         add_default_protocol, seed=None):
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.descriptor = descriptor
@@ -824,6 +824,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         self.samplerargs = samplerargs
         self.localclifford = localclifford
         self.paulirandomize = paulirandomize
+        self.seed = seed
 
         if add_default_protocol:
             self.add_default_protocol(RB(name='RB', datatype='adjusted_success_probabilities', defaultfit='A-fixed'))
@@ -1223,6 +1224,19 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         else: _plt.show()
 
         return
+
+    def copy(self):
+        """
+        Creates a copy of this :class:`RandomizedBenchmarkingResults` object.
+
+        Returns
+        -------
+        RandomizedBenchmarkingResults
+        """
+        #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
+        data = _proto.ProtocolData(self.data.edesign, self.data.dataset)
+        cpy = RandomizedBenchmarkingResults(data, self.protocol, self.fits, self.depths, self.defaultfit)
+        return cpy
 
 
 RB = RandomizedBenchmarking

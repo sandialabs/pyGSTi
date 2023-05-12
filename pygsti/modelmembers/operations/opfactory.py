@@ -461,13 +461,15 @@ class EmbeddingOpFactory(OpFactory):
         """
         mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
         mm_dict['num_target_labels'] = self.num_target_labels
-        mm_dict['allowed_sslbls_fn'] = self.allowed_sslbls_fn.to_nice_serialization()
+        mm_dict['allowed_sslbls_fn'] = self.allowed_sslbls_fn.to_nice_serialization() \
+            if (self.allowed_sslbls_fn is not None) else None
         return mm_dict
 
     @classmethod
     def _from_memoized_dict(cls, mm_dict, serial_memo):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
-        allowed_sslbls_fn = _NicelySerializable.from_nice_serialization(mm_dict['allowed_sslbls_fn'])
+        allowed_sslbls_fn = _NicelySerializable.from_nice_serialization(mm_dict['allowed_sslbls_fn']) \
+            if (mm_dict['allowed_sslbls_fn'] is not None) else None
         return cls(state_space, serial_memo[mm_dict['submembers'][0]],
                    mm_dict['num_target_labels'], allowed_sslbls_fn)
 

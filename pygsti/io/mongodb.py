@@ -243,25 +243,22 @@ def _load_auxdoc_member(mongodb, member_name, typ, metadata, quick_load):
 
         elif cur_typ == 'dir-serialized-object':
             obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
-            val = _MongoSerializable.from_mongodb_doc(mongodb, obj_doc, quick_load=quick_load)
+            val = _MongoSerializable.from_mongodb_doc(mongodb, metadata['collection_name'],
+                                                      obj_doc, quick_load=quick_load)
 
         elif cur_typ == 'partialdir-serialized-object':
             obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
-            val = _MongoSerializable.from_mongodb_doc(mongodb, obj_doc, quick_load=quick_load, load_data=False)
+            val = _MongoSerializable.from_mongodb_doc(mongodb, metadata['collection_name'],
+                                                      obj_doc, quick_load=quick_load, load_data=False)
 
         elif cur_typ == 'serialized-object':
             obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
-            val = _MongoSerializable.from_mongodb_doc(mongodb, obj_doc)  #, quick_load=quick_load)
+            val = _MongoSerializable.from_mongodb_doc(mongodb, metadata['collection_name'], obj_doc)
 
-        elif cur_typ == 'circuit-str-json':  # same as text above
-            coll = mongodb[metadata['collection_name']]
-            circuit_doc_ids = metadata['ids']
-
-            circuit_strs = []
-            for circuit_doc_id in circuit_doc_ids:
-                cdoc = coll.find_one(circuit_doc_id)
-                circuit_strs.append(cdoc['circuit_str'])
-            val = _load.convert_strings_to_circuits(circuit_strs)
+        elif cur_typ == 'circuit-str-json':
+            from .readers import convert_strings_to_circuits as _convert_strings_to_circuits
+            obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
+            val = _convert_strings_to_circuits(obj_doc['circuit_str_json'])
 
         elif typ == 'numpy-array':
             array_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
@@ -441,6 +438,11 @@ def add_obj_auxtree_write_ops_and_update_doc(obj, doc, write_ops, mongodb, colle
     meta = {'type': _full_class_name(obj)}
     if additional_meta is not None: meta.update(additional_meta)
 
+    # Unless explicitly included, don't store _dbcoordinates in DB
+    coords_explicitly_included = include_attributes is not None and '_dbcoordinates' in include_attributes
+    if '_dbcoordinates' not in omit_attributes and not coords_explicitly_included:
+        omit_attributes = tuple(omit_attributes) + ('_dbcoordinates',)
+
     if include_attributes is not None:  # include_attributes takes precedence over omit_attributes
         vals = {}
         auxtypes = {}
@@ -458,7 +460,7 @@ def add_obj_auxtree_write_ops_and_update_doc(obj, doc, write_ops, mongodb, colle
             if o in vals: del vals[o]
             if o in auxtypes: del auxtypes[o]
     else:
-        vals = obj.__dict__
+        vals = obj.__dict__.copy()
         auxtypes = obj.__dict__[auxfile_types_member] if (auxfile_types_member is not None) else {}
 
     return add_auxtree_write_ops_and_update_doc(doc, write_ops, mongodb, collection_name, vals,
@@ -626,7 +628,7 @@ def add_auxtree_write_ops_and_update_doc(doc, write_ops, mongodb, collection_nam
         to_insert[key] = val
 
     for auxnm, typ in auxfile_types.items():
-        if typ in ('none', 'reset'):  # HACK needed?
+        if typ in ('none', 'reset'):
             continue
         val = valuedict[auxnm]
 
@@ -691,7 +693,7 @@ def _write_auxdoc_member(mongodb, write_ops, parent_collection_name, parent_id, 
         if val is None:   # None values don't get written
             pass
         elif cur_typ in ('none', 'reset'):  # explicitly don't get written
-            pass
+            pass  # and really we shouldn't ever get here since we short circuit in auxmember loop
 
         elif cur_typ == 'text-circuit-list':
             circuit_doc_ids = []
@@ -718,13 +720,13 @@ def _write_auxdoc_member(mongodb, write_ops, parent_collection_name, parent_id, 
             metadata = {'collection_name': val.collection_name, 'id': val_id}
 
         elif cur_typ == 'circuit-str-json':
-            circuit_doc_ids = []
-            for i, circuit in enumerate(val):
-                circuit_doc_ids.append(
-                    write_ops.add_one_op('pygsti_circuits', {'circuit_str': circuit.str},
-                                         {'circuit_str': circuit.str},  # add more circuit info in future?
-                                         overwrite_existing, mongodb, check_local_ops=True))
-            metadata = {'collection_name': 'pygsti_circuits', 'ids': circuit_doc_ids}
+            from .writers import convert_circuits_to_strings
+            id_dict = {'parent_id': parent_id, 'member_name': member_name}
+            data = id_dict.copy()
+            data['circuit_str_json'] = convert_circuits_to_strings(val)
+            obj_doc_id = write_ops.add_one_op('pygsti_json_data', id_dict, data,
+                                              overwrite_existing, mongodb, check_local_ops=True)
+            metadata = {'collection_name': 'pygsti_json_data', 'id': obj_doc_id}
 
         elif cur_typ == 'numpy-array':
             member_id = {'parent_collection': parent_collection_name, 'parent': parent_id, 'member_name': member_name}
@@ -739,7 +741,7 @@ def _write_auxdoc_member(mongodb, write_ops, parent_collection_name, parent_id, 
             member_id = {'parent_collection': parent_collection_name, 'parent': parent_id, 'member_name': member_name}
             val_doc = member_id.copy()
             val_doc.update({'auxdoc_type': cur_typ,
-                            'json_data': _Binary(_pickle.dumps(val, protocol=2), subtype=128)})
+                            'json_data': val})
             val_id = write_ops.add_one_op('pygsti_json_data', member_id, val_doc, overwrite_existing, mongodb)
             metadata = {'collection_name': 'pygsti_json_data', 'id': val_id}
 
@@ -841,12 +843,14 @@ def _remove_auxdoc_member(mongodb, member_name, typ, metadata, session, recursiv
             return  # done here
         elif metadata is None:
             return  # value was None and so no auxdoc was created -- nothing to remove
-        elif cur_typ in ('text-circuit-list', 'circuit-str-json'):
+        elif cur_typ == 'text-circuit-list':
             if recursive.circuits:
                 coll = mongodb[metadata['collection_name']]
                 circuit_doc_ids = metadata['ids']
                 for circuit_doc_id in circuit_doc_ids:
                     coll.delete_one({'_id': circuit_doc_id}, session=session)  # returns deleted count (0 or 1)
+        elif cur_typ == 'circuit-str-json':
+            mongodb[metadata['collection_name']].delete_one({'_id': metadata['id']}, session=session)
         elif cur_typ in ('dir-serialized-object', 'partialdir-serialized-object', 'serialized-object'):
             _MongoSerializable.remove_from_mongodb(mongodb, metadata['id'], metadata['collection_name'],
                                                    session, recursive=recursive)
@@ -1015,3 +1019,41 @@ def remove_dict_from_mongodb(mongodb, collection_name, identifying_metadata, ses
     None
     """
     return mongodb[collection_name].delete_many(identifying_metadata, session=session)
+
+
+def create_mongodb_indices_for_pygsti_collections(mongodb):
+    """
+    Create, if not existing already, indices useful for speeding up pyGSTi MongoDB operations.
+
+    Indices are created as necessary within `pygsti_*` collections.  While
+    not necessary for database operations, these indices may dramatically speed
+    up the reading and writing of pygsti objects to/from a Mongo database.  You
+    only need to call this *once* per database, typically when the database is
+    first setup.
+
+    Parameters
+    ----------
+    mongodb : pymongo.database.Database
+        The MongoDB instance to create indices in.
+
+    Returns
+    -------
+    None
+    """
+    import pymongo as _pymongo
+
+    def create_unique_index(collection_name, index_name, keys):
+        ii = mongodb[collection_name].index_information()
+        if index_name in ii:
+            print("Index %s in %s collection already exists." % (index_name, collection_name))
+        else:
+            mongodb[collection_name].create_index(keys, name=index_name, unique=True)
+            print("Created index %s in %s collection." % (index_name, collection_name))
+
+    create_unique_index('pygsti_circuits', 'circuit_str', [('circuit_str', _pymongo.ASCENDING)])
+    create_unique_index('pygsti_datarows', 'parent_and_circuit', [('parent', _pymongo.ASCENDING),
+                                                                  ('circuit', _pymongo.ASCENDING)])
+    create_unique_index('pygsti_protocol_data_caches', 'parent_member_key',
+                        [('protocoldata_parent', _pymongo.ASCENDING),
+                         ('member', _pymongo.ASCENDING),
+                         ('key', _pymongo.ASCENDING)])

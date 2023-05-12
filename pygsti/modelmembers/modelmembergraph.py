@@ -20,7 +20,7 @@ class ModelMemberGraph(object):
     """A directed acyclic graph of dependencies of ModelMembers"""
 
     @classmethod
-    def load_modelmembers_from_serialization_dict(cls, sdict):
+    def load_modelmembers_from_serialization_dict(cls, sdict, parent_model):
         """Create a nested dictionary of model members from a previously serialized graph.
 
         Parameters
@@ -41,7 +41,7 @@ class ModelMemberGraph(object):
         for mm_node_serialized_id_str, mm_node_dict in sdict.items():
             mm_node_serialized_id = int(mm_node_serialized_id_str)  # convert string keys back to integers
             mm_class = ModelMember._state_class(mm_node_dict)  # checks this is a ModelMember-derived class
-            mm_serial[mm_node_serialized_id] = mm_class.from_memoized_dict(mm_node_dict, mm_serial)
+            mm_serial[mm_node_serialized_id] = mm_class.from_memoized_dict(mm_node_dict, mm_serial, parent_model)
             if 'memberdict_types' in mm_node_dict and 'memberdict_labels' in mm_node_dict:
                 for mm_type, lbl_str in zip(mm_node_dict['memberdict_types'], mm_node_dict['memberdict_labels']):
                     lbl = _parse_label(lbl_str)

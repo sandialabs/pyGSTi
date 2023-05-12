@@ -351,15 +351,18 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         #  columns of flattened_dprod.
         uniqueOpLabels = sorted(list(set(revOpLabelList)))
         for opLabel in uniqueOpLabels:
-            gate = self.model.circuit_layer_operator(opLabel, 'op')
-            op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
-            dop_dopLabel = gate.deriv_wrt_params(op_wrtFilter)
+            #REMOVE gate = self.model.circuit_layer_operator(opLabel, 'op')
+            #REMOVE op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
+            #REMOVE dop_dopLabel = gate.deriv_wrt_params(op_wrtFilter)
+            dop_dopLabel = self._doperation(opLabel, flat=True, wrt_filter=wrt_filter)  # (dim**2, num_deriv_cols)
 
             for (i, gl) in enumerate(revOpLabelList):
                 if gl != opLabel: continue  # loop over locations of opLabel
                 LRproduct = _np.kron(leftProds[i], rightProdsT[N - 1 - i])  # (dim**2, dim**2)
-                _fas(flattened_dprod, [None, gpindices],
-                     _np.dot(LRproduct, dop_dopLabel), add=True)  # (dim**2, n_params[opLabel])
+                flattened_dprod += _np.dot(LRproduct, dop_dopLabel)  # (dim**2, num_deriv_cols)
+                #REMOVE _fas(flattened_dprod, [None, gpindices],
+                #REMOVE      _np.dot(LRproduct, dop_dopLabel), add=True)  # (dim**2, n_params[opLabel])
+
 
         if flat:
             return flattened_dprod
