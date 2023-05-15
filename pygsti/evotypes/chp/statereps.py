@@ -61,7 +61,8 @@ class StateRep(_basereps.StateRep):
 
 class StateRepComputational(StateRep):
     def __init__(self, zvals, basis, state_space):
-        assert (basis.name in ['pp', 'PP']), "Only Pauli basis is allowed for 'chp' evotype"
+        assert all([nm in ('pp', 'PP') for nm in basis.name.split('*')]), \
+            "Only Pauli basis is allowed for 'chp' evotype"
 
         chp_ops = []
         x_ops = _itgs.standard_gatenames_chp_conversions()['Gxpi']
