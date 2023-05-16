@@ -26,6 +26,7 @@ from pygsti import baseobjs as _baseobjs
 from pygsti.tools import mpitools as _mpit
 from pygsti.baseobjs.statespace import ExplicitStateSpace as _ExplicitStateSpace
 from pygsti.baseobjs.statespace import QuditSpace as _QuditSpace
+from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 
 FLOATSIZE = 8  # in bytes: TODO: a better way
 
@@ -3610,6 +3611,21 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
     printer.log('Number of gauge parameters: ' + str(numGaugeParams), 1) 
     printer.log('Number of non-gauge parameters: ' + str(numNonGaugeParams), 1)
 
+    #Add some logic to support germ selection on gate sets containing static gates without parameters
+    #In this case we need to avoid germs consisting solely of the parameterless gates. I could catch this
+    #later, but better to clean up the candidate list upfront (smaller search spaces are good).
+    #This only works for ExplicitModels so skip otherwise
+    if isinstance(model_list[0], _ExplicitOpModel):
+        cleaned_germs_list = []
+        for germ in germs_list:
+            num_params_for_germ = 0
+            for lbl in germ:
+                if lbl in model_list[0].operations:
+                    num_params_for_germ += model_list[0].operations[lbl].num_params
+            if num_params_for_germ>0:
+                cleaned_germs_list.append(germ)
+        germs_list = cleaned_germs_list
+        
     germLengths = _np.array([len(germ) for germ in germs_list], _np.int64)
 
     numGerms = len(germs_list)
