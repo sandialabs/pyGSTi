@@ -457,12 +457,15 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                 dgerm_dparams = target_model.sim.dproduct(germ, flat=True)
                 deigparams_dgerm = _np.linalg.pinv(dgerm_deigparams)
                 deigparams_dparams = _np.dot(deigparams_dgerm, dgerm_dparams)
+                num_germ_params = _np.linalg.matrix_rank(deigparams_dparams, tol=_np.sqrt(1e-7))
+                #Note: above HARDCODED RANK_TOL=1e-7 should match that in _get_per_germ_power_fidpairs (for consistency)
             else:
+                num_germ_params = gsGerm.num_params
                 deigparams_dparams = None
 
             printer.show_progress(i, len(germs),
                                   suffix='-- %s germ (%d params)' %
-                                  (repr(germ), gsGerm.num_params))
+                                  (repr(germ), num_germ_params))
 
             #Determine which fiducial-pair indices to iterate over
             #initial run
