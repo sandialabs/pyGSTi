@@ -282,7 +282,7 @@ def _tvd(n_list_list):
     N0 = _np.sum(n_list_list[0])
     N1 = _np.sum(n_list_list[1])
 
-    return 0.5 * _np.sum(_np.abs(n_list_list[0][i] / N0 - n_list_list[1][i] / N1) for i in range(num_outcomes))
+    return 0.5 * sum(_np.abs(n_list_list[0][i] / N0 - n_list_list[1][i] / N1) for i in range(num_outcomes))
 
 
 class DataComparator():

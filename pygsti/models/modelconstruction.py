@@ -799,9 +799,12 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                 and processor_spec.nonstd_gate_unitaries[gn].shape == std_gate_unitaries[gn].shape
                 and _np.allclose(processor_spec.nonstd_gate_unitaries[gn], std_gate_unitaries[gn]))):
             stdname = gn  # setting `stdname` != None means we can try to create a StaticStandardOp below
-        else:
+        #if gate_unitary is an integer we'll be creating an n-qubit idle gate and won't associate a standard name to it
+        elif isinstance(gate_unitary, (int, _np.int64)):
+            stdname=None    
+        else:    
             stdname = _itgs.unitary_to_standard_gatename(gate_unitary)  # possibly None
-
+        
         if callable(resolved_avail) or resolved_avail == '*':
             assert (embed_gates), "Cannot create factories with `embed_gates=False` yet!"
             key = _label.Label(gn) if (gn != gn_to_make_emptytup) else _label.Label(())
@@ -1448,7 +1451,7 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
                     and processor_spec.nonstd_gate_unitaries[name].shape == std_gate_unitaries[name].shape
                     and _np.allclose(processor_spec.nonstd_gate_unitaries[name], std_gate_unitaries[name]))):
             stdname = name  # setting `stdname` != None means we can try to create a StaticStandardOp below
-        elif name in processor_spec.gate_unitaries:
+        elif name in processor_spec.gate_unitaries and not isinstance(U, (int, _np.int64)):
             stdname = _itgs.unitary_to_standard_gatename(U)  # possibly None
         else:
             stdname = None

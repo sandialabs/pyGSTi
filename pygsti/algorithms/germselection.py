@@ -991,6 +991,7 @@ def _remove_spam_vectors(model):
         del reducedModel.preps[prepLabel]
     for povmLabel in list(reducedModel.povms.keys()):
         del reducedModel.povms[povmLabel]
+    reducedModel._mark_for_rebuild()
     return reducedModel
 
 

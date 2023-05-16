@@ -58,25 +58,29 @@ extras = {
     ],
     'interpygate': ['csaps'],
     'testing': [
-        'coverage',
+        'pytest',
+        'pytest-xdist',
+        'pytest-cov',
+        'nbval',
+        'nose',
         'csaps',
-        'cvxopt',
+        'cvxopt<=1.3.0.1',
         'cvxpy',
         'cython',
         'matplotlib',
         'mpi4py',
         'msgpack',
-        'nose',
-        'nose-timer',
         'packaging',
         'pandas',
         'psutil',
-        'rednose',
         'zmq',
         'jinja2',
         'seaborn',
         'ply',
-        'qibo<=0.1.7'
+        'qibo<=0.1.7',
+        'cirq',
+        'notebook',
+        'ipython'
     ]
 }
 

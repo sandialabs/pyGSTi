@@ -42,6 +42,7 @@ from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
 from pygsti.tools import fogitools as _fogit
 from pygsti.tools import slicetools as _slct
+from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
@@ -381,7 +382,7 @@ class ExplicitOpModel(_mdl.OpModel):
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
 
     def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
-                                  instrument_type="auto", extra=None):
+                                  instrument_type="auto", ideal_model=None):
         """
         Convert all gates, states, and POVMs to a specific parameterization type.
 
@@ -411,10 +412,10 @@ class ExplicitOpModel(_mdl.OpModel):
               "d". This removes the CPTP constraint on the gates and SPAM
               operations (and as such is seldom used).
 
-        extra : dict, optional
-            For `"H+S terms"` type, this may specify a dictionary
-            of unitary gates and pure state vectors to be used
-            as the *ideal* operation of each gate/SPAM operation.
+        ideal_model : Model, optional
+            This may specify an ideal model of unitary gates and pure state vectors
+            to be used as the *ideal* operation of each gate/SPAM operation, which
+            is particularly useful as target for CPTP-based conversions.
 
         Returns
         -------
@@ -422,17 +423,25 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         typ = gate_type
 
-        assert(extra is None), "`extra` argument is unused and should be left as `None`"
-        if extra is None: extra = {}
+        # Set ideal model to static when used as targets (specifically needed for CPTP prep/povms)
+        static_model = None
+        if ideal_model is not None:
+            static_model = ideal_model.copy()
+            static_model.set_all_parameterizations('static')
 
         rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
         povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
         ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
 
-        self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True)
-        self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True)
-        self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True)
-        self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True)
+        try:
+            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model)
+            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model)
+            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model)
+        except ValueError as e:
+            raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
+                "try providing an ideal_model to avoid possible branch cuts.") from e
+        
         self.set_default_gauge_group_for_member_type(typ)
 
     def __setstate__(self, state_dict):
@@ -1598,12 +1607,13 @@ class ExplicitOpModel(_mdl.OpModel):
     def _from_nice_serialization(cls, state):
         state_space = _statespace.StateSpace.from_nice_serialization(state['state_space'])
         basis = _Basis.from_nice_serialization(state['basis'])
-        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
         simulator = _FSim.from_nice_serialization(state['simulator'])
         default_gauge_group = _GaugeGroup.from_nice_serialization(state['default_gauge_group']) \
             if (state['default_gauge_group'] is not None) else None
         param_interposer = _ModelParamsInterposer.from_nice_serialization(state['parameter_interposer']) \
             if (state['parameter_interposer'] is not None) else None
+        param_labels = state.get('parameter_labels', None)
+        param_bounds = state.get('parameter_bounds', None)
 
         mdl = cls(state_space, basis, state['default_gate_type'],
                   state['default_prep_type'], state['default_povm_type'],
@@ -1611,6 +1621,7 @@ class ExplicitOpModel(_mdl.OpModel):
                   state['gate_prefix'], state['povm_prefix'], state['instrument_prefix'],
                   simulator, state['evotype'])
 
+        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'], mdl)
         mdl.preps.update(modelmembers.get('preps', {}))
         mdl.povms.update(modelmembers.get('povms', {}))
         mdl.operations.update(modelmembers.get('operations', {}))
@@ -1619,6 +1630,15 @@ class ExplicitOpModel(_mdl.OpModel):
         mdl._clean_paramvec()
         mdl.default_gauge_group = default_gauge_group
         mdl.param_interposer = param_interposer
+
+        Np = len(mdl._paramlbls)  # _clean_paramvec sets up ._paramlbls so its length == # of params
+        if param_labels and len(param_labels) == Np:
+            mdl._paramlbls[:] = [_lt.lists_to_tuples(lbl) for lbl in param_labels]
+        if param_bounds is not None:
+            param_bounds = cls._decodemx(param_bounds)
+            if param_bounds.shape == (Np, 2):
+                mdl._param_bounds
+
         return mdl
 
     def errorgen_coefficients(self, normalized_elem_gens=True):

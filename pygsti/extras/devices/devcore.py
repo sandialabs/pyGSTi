@@ -44,7 +44,7 @@ from pygsti.models import oplessmodel as _oplessmodel, modelconstruction as _mco
 from pygsti.modelmembers.povms import povm as _povm
 from pygsti.tools import rbtools as _anl
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
-
+from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 
 @_deprecated_fn('basic_device_information')
 def get_device_specs(devname):
@@ -155,9 +155,14 @@ def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges
 
     for edge in removeedges: del edgelist[edgelist.index(edge)]
 
-    availability = {two_qubit_gate: edgelist}
-    #print(availability)
-    return _QubitProcessorSpec(total_qubits, gate_names, availability=availability, qubit_labels=qubits)
+    # Replaced availability with a QubitGraph due to a bug(?) in how an availability is propogated
+    # into a QubitProcessorSpec's QubitGraph (whereas the `geometry` input is directly stored as 
+    # the provided QubitGraph).
+    #availability = {two_qubit_gate: edgelist}
+
+    qubit_graph = _QubitGraph(qubits, initial_edges=edgelist)
+
+    return _QubitProcessorSpec(total_qubits, gate_names, geometry=qubit_graph, qubit_labels=qubits)
 
 
 def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native={}, calformat=None,

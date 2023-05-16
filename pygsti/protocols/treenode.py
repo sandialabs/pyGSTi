@@ -70,7 +70,9 @@ class TreeNode(object):
 
         child_dirs = {}
         for d, nm in meta.get('directories', {}).items():
-            if isinstance(nm, list): nm = tuple(nm)  # because json makes tuples->lists
+            def convert(l):
+                return tuple(convert(x) for x in l) if type(l) is list else l
+            if isinstance(nm, list): nm = convert(nm)  # because json makes tuples->lists
             child_dirs[nm] = d
 
         self._dirs = child_dirs

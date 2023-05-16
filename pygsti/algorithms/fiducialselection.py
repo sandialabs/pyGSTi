@@ -148,8 +148,12 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
                 mx = target_model.operations[gate]
                 if not isinstance(mx, _np.ndarray):
                     mx = mx.to_dense()
-                if frobeniusdist_squared(mx, Identity) < eq_thresh:
-                    fidOps.remove(gate)
+                try:
+                    if frobeniusdist_squared(mx, Identity) < eq_thresh:
+                        fidOps.remove(gate)
+                except ValueError as e:
+                    raise ValueError('If shapes do not match, this may be a unitary/process matrix mismatch. ' +
+                        'Consider using a parameterization like "full" or "full TP" to avoid this.') from e
         
         availableFidList = []
         if max_fid_length is not None:

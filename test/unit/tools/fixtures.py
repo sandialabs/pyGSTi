@@ -9,7 +9,7 @@ ns.model = std.target_model()
 ns.opLabels = list(ns.model.operations.keys())
 ns.fiducials = std.fiducials
 ns.germs = std.germs
-ns.maxLengthList = [0, 1, 2, 4, 8]
+ns.maxLengthList = [1, 2, 4, 8]
 ns.CM = profiler._get_mem_usage()
 
 
@@ -45,7 +45,7 @@ def mdl_lgst_go(self):
 
 @ns.memo
 def mdl_clgst(self):
-    return pygsti.contract(self.mdl_lgst_go, "CPTP")
+    return pygsti.contract(self.mdl_lgst_go, "CPTPLND")
 
 
 @ns.memo
