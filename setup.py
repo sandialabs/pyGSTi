@@ -463,7 +463,7 @@ try:
                 "pygsti/forwardsims/mapforwardsim_calc_densitymx.pyx",
                 "pygsti/evotypes/densitymx/statecreps.cpp",
             ],
-            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            include_dirs=['.', 'pygsti/evotypes', 'pygsti/evotypes/densitymx', np.get_include()],
             language="c++",
             extra_link_args=["-std=c++11"]
         ),
@@ -474,7 +474,7 @@ try:
                 "pygsti/evotypes/statevec/statecreps.cpp",
                 "pygsti/evotypes/basecreps.cpp"
             ],
-            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            include_dirs=['.', 'pygsti/evotypes', 'pygsti/evotypes/statevec', np.get_include()],
             language="c++",
             extra_link_args=["-std=c++11"]
         ),
@@ -485,7 +485,7 @@ try:
                 "pygsti/evotypes/stabilizer/statecreps.cpp",
                 "pygsti/evotypes/basecreps.cpp"
             ],
-            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            include_dirs=['.', 'pygsti/evotypes', 'pygsti/evotypes/stabilizer', np.get_include()],
             language="c++",
             extra_link_args=["-std=c++11"]
         ),
