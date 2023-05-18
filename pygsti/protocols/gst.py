@@ -2173,6 +2173,10 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
             for gaugeopt_model, lbl in zip(gaugeopt_models, gaugeopt_suite.gaugeopt_suite_names):
                 for key, op in gaugeopt_model.operations.items():
                     dd[lbl][key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+                    if dd[lbl][key] < 0:  # indicates that diamonddist failed (cvxpy failure)
+                        _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
+                                        " Falling back to trace distance.") % str(key))
+                        dd[lbl][key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
 
             spamdd = {}
             for key, op in gaugeopt_model.preps.items():
