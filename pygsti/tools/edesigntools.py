@@ -168,29 +168,18 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
     
     resource_alloc = _baseobjs.ResourceAllocation(comm= comm, mem_limit = mem_limit)
     
-    import time
-    
-    start = time.time()
-    printer.log('Calculating Probabilities, Jacobians and Hessians (if not using approx FIM).', 2)
-    printer.log('Calculating Probabilities.', 3)
+    printer.log('Calculating Probabilities, Jacobians and Hessians (if not using approx FIM).', 3)
     ps = regularized_model.sim.bulk_probs(circuits, resource_alloc)
-    printer.log('Calculating Jacobians.', 3)
     js = regularized_model.sim.bulk_dprobs(circuits, resource_alloc)
     #if approx is true we add in the hessian term as well.
     if not approx:
         printer.log('Calculating Hessians.', 3)
         hs = regularized_model.sim.bulk_hprobs(circuits, resource_alloc)
-        total_hterm = {}
-        
-    end = time.time()
-    
-    printer.log(f'Elapsed time: {end-start}', 3)
-    
+        total_hterm = {
+
     if comm is not None:
     #divide the job of doing the accumulation among the ranks:
         if comm.Get_rank() ==0:
-            printer.log('Prepping data for scatter on rank 0.', 3)
-            start = time.time()
             num_procs = comm.Get_size()
             #Possible edge case when length of circuit list is less than the number of processors?
             split_circuit_list = _np.array_split(_np.asarray(circuits, dtype = object), num_procs)
@@ -218,8 +207,7 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
                     for ckt in sublist:
                         hs_for_sublist[ckt] = hs[ckt]
                     split_hs.append(hs_for_sublist)
-            end = time.time()
-            printer.log(f'Elapsed time {end-start}', 3)
+
         else:
             split_circuit_list = None
             split_ps = None
@@ -229,17 +217,12 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
             #ps, js and hs should already be initialized to None by the forward sim calls.
         #scatter these lists among the procs
         
-        printer.log('Scattering among ranks.', 3)
-        start=time.time()
         split_circuit_list = comm.scatter(split_circuit_list, root=0)
         ps = comm.scatter(split_ps, root=0)
         js = comm.scatter(split_js, root=0)
         if not approx:
             hs = comm.scatter(split_hs, root=0)
             
-        end = time.time()
-        printer.log(f'Elapsed time {end-start}', 3)
-        
         #now that we have scattered them we don't need the split lists for p, j and h anymore
         del split_ps, split_js
         if not approx:
@@ -247,7 +230,6 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
   
         #now calculate the fisher information terms on each rank:
         printer.log('Distributed calculation of FIM.', 4)
-        start = time.time()
         if approx:
             split_fisher_info_terms = accumulate_fim_matrix_per_circuit(split_circuit_list, num_params, 
                                                                         outcomes, ps, js,
@@ -258,22 +240,16 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
                                                                                      outcomes, ps, js,
                                                                                      printer,
                                                                                      hs, approx=False)
-        end = time.time()
-        
-        printer.log(f'Elapsed time {end-start}', 3)
 
         #gather these back onto rank 0.
         #This should return a list of dictionaries to rank 0.
         printer.log('Gathering accumulated FIMs', 3)
-        start = time.time()
         #intialize a buffer to gather the data on rank 0.
         #get the sizes of the returned ndarrays on each rank for split_fisher_info_terms:
         # Collect local array sizes using the high-level mpi4py gather on rank 0
         printer.log('Scattering split fisher term sizes', 4)
         split_fisher_info_terms_size = split_fisher_info_terms.size
         split_fisher_info_terms_sizes = comm.allgather(split_fisher_info_terms_size)
-        
-        printer.log('Scattered split fisher term sizes', 4)
         
         if comm.Get_rank() == 0:
             #1D buffer long enough to hold every element, will then reshape this later.
@@ -293,15 +269,9 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
         #Reshape the array:
         if comm.Get_rank()==0:
             printer.log('Reshaping Fisher Info Arrays on rank 0', 4)
-            start1= time.time()
             reshaped_fisher_info_view= fisher_info_recv_buffer.reshape((len(circuits), num_params, num_params))
             if not approx:
                 reshaped_hterm_view= total_hterm_recv_buffer.reshape((len(circuits), num_params, num_params))
-            end1= time.time()
-            printer.log(f'Elapsed time {end1-start1}', 4)
-        end = time.time()
-        
-        printer.log(f'Elapsed time: {end-start}', 3)
         
         #free up memory now that we've gathered things.
         del split_fisher_info_terms
@@ -313,13 +283,9 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
             #if approx we have only a single return value,
             #otherwise the elements of fisher_info_terms_list will be a 2-tuple with the second
             #element being the hessian term dictionary.
-            printer.log('Re-combining term dicts on rank 0.', 3)
-            start = time.time()
             fisher_info_terms = {ckt: reshaped_fisher_info_view[i,:,:] for i, ckt in enumerate(circuits)}
             if not approx:
                 total_hterm = {ckt: reshaped_hterm_view[i,:,:] for i, ckt in enumerate(circuits)}
-            end = time.time()
-            printer.log(f'Elapsed time: {end-start}',3)
             
         else:
             fisher_info_terms = None
@@ -663,29 +629,17 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
     
     resource_alloc = _baseobjs.ResourceAllocation(comm= comm, mem_limit = mem_limit)
     
-    import time
-    
-    start = time.time()
-    printer.log('Calculating Probabilities, Jacobians and Hessians (if not using approx FIM).', 2)
-    printer.log('Calculating Probabilities.', 3)
+    printer.log('Calculating Probabilities, Jacobians and Hessians (if not using approx FIM).', 3)
     ps = regularized_model.sim.bulk_probs(circuits, resource_alloc)
-    printer.log('Calculating Jacobians.', 3)
     js = regularized_model.sim.bulk_dprobs(circuits, resource_alloc)
     #if approx is true we  add in the hessian term as well.
     if not approx:
-        printer.log('Calculating Hessians.', 3)
         hs = regularized_model.sim.bulk_hprobs(circuits, resource_alloc)
         total_hterm = {}
         
-    end = time.time()
-    
-    printer.log(f'Elapsed time: {end-start}', 3)
-    
     if comm is not None:
     #divide the job of doing the accumulation among the ranks:
         if comm.Get_rank() ==0:
-            printer.log('Prepping data for scatter on rank 0.', 3)
-            start = time.time()
             num_procs = comm.Get_size()
             #Possible edge case when length of circuit list is less than the number of processors?
             split_circuit_list = _np.array_split(_np.asarray(circuits, dtype = object), num_procs)
@@ -713,8 +667,6 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
                     for ckt in sublist:
                         hs_for_sublist[ckt] = hs[ckt]
                     split_hs.append(hs_for_sublist)
-            end = time.time()
-            printer.log(f'Elapsed time {end-start}', 3)
         else:
             split_circuit_list = None
             split_ps = None
@@ -724,16 +676,11 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
             #ps, js and hs should already be initialized to None by the forward sim calls.
         #scatter these lists among the procs
         
-        printer.log('Scattering among ranks.', 3)
-        start=time.time()
         split_circuit_list = comm.scatter(split_circuit_list, root=0)
         ps = comm.scatter(split_ps, root=0)
         js = comm.scatter(split_js, root=0)
         if not approx:
             hs = comm.scatter(split_hs, root=0)
-        
-        end = time.time()
-        printer.log(f'Elapsed time {end-start}', 3)
         
         #now that we have scattered them we don't need the split lists for p, j and h anymore
         del split_ps, split_js
@@ -742,8 +689,7 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
             
     if comm is not None:    
         #now calculate the fisher information terms on each rank:
-        printer.log('Distributed accumulation of FIM.', 2)
-        start = time.time()
+        printer.log('Distributed accumulation of FIM.', 3)
         if approx:
             split_fisher_info_terms = accumulate_fim_matrix(split_circuit_list, num_params, 
                                                             num_shots, outcomes, ps, js,
@@ -754,14 +700,7 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
                                                                                 num_shots, outcomes, ps, js,
                                                                                 printer,
                                                                                 hs, approx=False)
-        end = time.time()
-        
-        printer.log(f'Elapsed time {end-start}', 3)
-
-        #Reduce these back on rank 0
-        printer.log('Reducing accumulated FIMs to rank 0 w/sum', 3)
-        start = time.time()
-
+                                                                                
         if comm.Get_rank() == 0:
             #1D buffer long enough to hold every element, will then reshape this later.
             fisher_info_recv_buffer = _np.zeros(num_params**2, dtype= _np.double)
@@ -777,22 +716,13 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
         if not approx:
             comm.Reduce(sendbuf=split_total_hterm, recvbuf=total_hterm_recv_buffer, root=0)
         #Reshape the array:
-        if comm.Get_rank()==0:
-            printer.log('Reshaping Fisher Info Arrays on rank 0', 4)
-            start1= time.time()
             fisher_info_term= fisher_info_recv_buffer.reshape((num_params, num_params))
             if not approx:
                 total_hterm= total_hterm_recv_buffer.reshape((num_params, num_params))
-            end1= time.time()
-            printer.log(f'Elapsed time {end1-start1}', 4)
-       
         else:
             fisher_info_term = None
             if approx:
                 total_hterm= None
-         
-        end = time.time()
-        printer.log(f'Elapsed time: {end-start}', 3)
         
         #free up memory now that we've gathered things.
         del split_fisher_info_terms
@@ -816,7 +746,7 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
     
 #helper function for distribution using MPI
 def accumulate_fim_matrix(subcircuits, num_params, num_shots, outcomes, ps, js, printer, hs=None, approx=False):
-    printer.log('Accumulating terms for per-circuit FIM.', 3)
+    printer.log('Accumulating terms for per-circuit FIM.', 4)
     fisher_info_terms = _np.zeros([num_params, num_params], dtype = _np.double)
     if not approx:
         total_hterm = _np.zeros([num_params, num_params], dtype = _np.double)
@@ -848,7 +778,7 @@ def accumulate_fim_matrix(subcircuits, num_params, num_shots, outcomes, ps, js, 
     
 #helper function for distribution using MPI
 def accumulate_fim_matrix_per_circuit(subcircuits, num_params, outcomes, ps, js, printer, hs=None, approx=False):
-    printer.log('Accumulating terms for per-circuit FIM.', 3)
+    printer.log('Accumulating terms for per-circuit FIM.', 4)
     fisher_info_terms = _np.zeros([len(subcircuits),num_params, num_params])
     if not approx:
         total_hterm = _np.zeros([len(subcircuits), num_params, num_params])
