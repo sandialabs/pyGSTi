@@ -175,7 +175,6 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
     if not approx:
         printer.log('Calculating Hessians.', 3)
         hs = regularized_model.sim.bulk_hprobs(circuits, resource_alloc)
-        total_hterm = {
 
     if comm is not None:
     #divide the job of doing the accumulation among the ranks:
@@ -635,7 +634,6 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
     #if approx is true we  add in the hessian term as well.
     if not approx:
         hs = regularized_model.sim.bulk_hprobs(circuits, resource_alloc)
-        total_hterm = {}
         
     if comm is not None:
     #divide the job of doing the accumulation among the ranks:
