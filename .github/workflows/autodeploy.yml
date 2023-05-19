@@ -8,7 +8,7 @@ on:
     branches: [ "master" ]
     # Pattern matched against refs/tags
     tags:        
-      - '*'           # Push events to every tag not containing '/' (use '**' for hierarchical tags)
+      - 'v*'           # Push events to every tag not containing '/' (use '**' for hierarchical tags)
 
   # Dont allow running manually from Actions tab -- use manualdeploy for this
   #workflow_dispatch:

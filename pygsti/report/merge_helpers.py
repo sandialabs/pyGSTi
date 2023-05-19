@@ -18,8 +18,6 @@ import subprocess as _subprocess
 import webbrowser as _webbrowser
 from pathlib import Path
 
-from markupsafe import Markup
-
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools import timed_block as _timed_block
 
@@ -27,6 +25,7 @@ try:
     from jinja2.runtime import Undefined as _Undefined
 except ImportError:
     _Undefined = ()
+
 
 
 def _read_contents(filename):
@@ -467,7 +466,7 @@ def _make_jinja_env(static_path, template_dir=None, render_options=None, link_to
         # XXX we gotta find a better way, this is so wild dude
         contents = offline_loader.get_source(env, filename)[0]
 
-        return Markup(contents)
+        return markupsafe.Markup(contents)
 
 
     @jinja_filter
@@ -475,7 +474,7 @@ def _make_jinja_env(static_path, template_dir=None, render_options=None, link_to
     def render(eval_ctx, value):
         html = _render_as_html(value, render_options or {}, link_to)
 
-        return Markup(html) if eval_ctx.autoescape else html
+        return markupsafe.Markup(html) if eval_ctx.autoescape else html
 
     return env
 
