@@ -1698,7 +1698,7 @@ class StandardGST(_proto.Protocol):
                     
                     #set up the initial model:
                     if self.initial_model is None:
-                        initial_model = GSTInitialModel(target_model, starting_point = 'target')
+                        initial_model = GSTInitialModel(target_model= target_model, starting_point = 'target')
                     elif isinstance(self.initial_model, _Model):
                         initial_model = GSTInitialModel(self.initial_model)
                     elif isinstance(self.initial_model, GSTInitialModel):
@@ -1711,7 +1711,7 @@ class StandardGST(_proto.Protocol):
                         elif isinstance(initial_model, GSTInitialModel):
                             pass
                         elif initial_model is None:
-                            intial_model = GSTInitialModel(target_model, starting_point= 'target')
+                            intial_model = GSTInitialModel(target_model= target_model, starting_point= 'target')
                     else:
                         raise ValueError('Unsupported input type for initial model. Must be a Model, GSTInitialModel or None.')
                     
