@@ -2803,7 +2803,8 @@ class DataSet(_MongoSerializable):
                     'collisionAction': self.collisionAction,
                     'uuid': self.uuid,
                     'auxInfo': self.auxInfo,
-                    'comment': self.comment}
+                    'comment': self.comment,
+                    'dbcoordinates': self._dbcoordinates}
         return toPickle
 
     def __setstate__(self, state_dict):
@@ -2855,6 +2856,7 @@ class DataSet(_MongoSerializable):
             self.timeType = _np.dtype(state_dict['timeType'])
             self.repType = _np.dtype(state_dict['repType'])
             self.comment = state_dict.get('comment', '')
+            self._dbcoordinates = state_dict.get('dbcoordinates', None)
             if bStatic:  # always empty - don't save this, just init
                 self.cnt_cache = {opstr: _ld.OutcomeLabelDict() for opstr in self.cirIndex}
             else: self.cnt_cache = None
