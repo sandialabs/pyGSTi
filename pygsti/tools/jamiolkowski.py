@@ -88,7 +88,7 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp'):
     numpy array
         the Choi matrix, normalized to have trace == 1, in the desired basis.
     """
-    operation_mx = _np.asarray(operation_mx.to_dense())
+    operation_mx = _np.asarray(operation_mx)
     op_mx_basis = _bt.create_basis_for_matrix(operation_mx, op_mx_basis)
     opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, op_mx_basis.create_equivalent('std'))
 
@@ -213,7 +213,7 @@ def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis):
     """
 
     #first, get operation matrix into std basis
-    operation_mx = _np.asarray(operation_mx.to_dense())
+    operation_mx = _np.asarray(operation_mx)
     op_mx_basis = _bt.create_basis_for_matrix(operation_mx, op_mx_basis)
     opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, op_mx_basis.create_equivalent('std'))
 
