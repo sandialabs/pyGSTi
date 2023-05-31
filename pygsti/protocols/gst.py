@@ -1717,7 +1717,10 @@ class StandardGST(_proto.Protocol):
                     
                     try:
                         #By this point the initial model should be a GSTInitialModel, so call this on the contained model.
-                        initial_model.model.set_all_parameterizations(parameterization)
+                        if initial_model.model is not None:
+                            initial_model.model.set_all_parameterizations(parameterization)
+                        else:
+                            initial_model.target_model.set_all_parameterizations(parameterization)
                     except ValueError as e:
                         raise ValueError("Could not interpret '%s' mode as a parameterization! Details:\n%s"
                                          % (mode, str(e)))
