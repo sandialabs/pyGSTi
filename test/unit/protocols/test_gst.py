@@ -19,7 +19,7 @@ class GSTUtilTester(BaseCase):
     def setUpClass(cls):
 
         #Construct a results object
-        gst_design = smq1Q_XYI.get_gst_experiment_design(max_max_length=4)
+        gst_design = smq1Q_XYI.create_gst_experiment_design(max_max_length=4)
         mdl_target = smq1Q_XYI.target_model()
         mdl_datagen = mdl_target.depolarize(op_noise=0.05, spam_noise=0.025)
 
@@ -103,7 +103,7 @@ class GSTInitialModelTester(BaseCase):
     """
 
     def setUp(self):
-        self.edesign = smq1Q_XYI.get_gst_experiment_design(max_max_length=2)
+        self.edesign = smq1Q_XYI.create_gst_experiment_design(max_max_length=2)
         self.target_model = smq1Q_XYI.target_model()
 
     def tearDown(self):
@@ -130,7 +130,9 @@ class GSTInitialModelTester(BaseCase):
         im = gst.GSTInitialModel(custom_model)
         mdl = im.retrieve_model(self.edesign, None, None, None)
         self.assertEqual(im.starting_point, "User-supplied-Model")
-        self.assertTrue(mdl is custom_model)
+        self.assertArraysAlmostEqual(mdl.to_vector(), custom_model.to_vector())
+        #self.assertTrue(mdl is custom_model)  # No longer the case
+        # - see commit 72856fb23d5711e4b0a8e2373e02e4dd08e2ae46 -- now we copy the custom model
 
     def test_get_model_depolarized(self):
         #Depolarized start
@@ -205,7 +207,7 @@ class BaseProtocolData(object):
 
     @classmethod
     def setUpClass(cls):
-        cls.gst_design = smq1Q_XYI.get_gst_experiment_design(max_max_length=4)
+        cls.gst_design = smq1Q_XYI.create_gst_experiment_design(max_max_length=4)
         cls.mdl_target = smq1Q_XYI.target_model()
         cls.mdl_datagen = cls.mdl_target.depolarize(op_noise=0.05, spam_noise=0.025)
 
@@ -219,7 +221,7 @@ class GateSetTomographyTester(BaseProtocolData, BaseCase):
     """
 
     def test_run(self):
-        proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTP"), 'stdgaugeopt', name="testGST")
+        proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"), 'stdgaugeopt', name="testGST")
         results = proto.run(self.gst_data)
 
         mdl_result = results.estimates["testGST"].models['stdgaugeopt']
@@ -254,14 +256,14 @@ class StandardGSTTester(BaseProtocolData, BaseCase):
     """
 
     def test_run(self):
-        proto = gst.StandardGST(modes="full TP,CPTP,Target")
+        proto = gst.StandardGST(modes="full TP,CPTPLND,Target")
         results = proto.run(self.gst_data)
 
         mdl_result = results.estimates["full TP"].models['stdgaugeopt']
         twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
         self.assertLessEqual(twoDLogL, 1.0)  # should be near 0 for perfect data
 
-        mdl_result = results.estimates["CPTP"].models['stdgaugeopt']
+        mdl_result = results.estimates["CPTPLND"].models['stdgaugeopt']
         twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
         self.assertLessEqual(twoDLogL, 1.0)  # should be near 0 for perfect data
 

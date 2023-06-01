@@ -1,0 +1,362 @@
+# CHANGELOG
+
+## [0.9.11.1] - 2023-05-19
+
+### Fixed
+
+- Guarded an optional markupsafe import for report generation
+
+## [0.9.11] - 2023-05-16
+
+### Added
+
+- WeakForwardSimulator class and Kraus operator representation to facilitate weak simulation via "unraveling" (#255)
+- Experimental forward simulator interface with the qibo<=0.1.7 package (#257)
+- Support for single-parameter wildcard models and serialization of wildcard models (#267)
+- MongoDB serialization support (#276, #284)
+- Modelpacks for Molmer-Sorenson gates (#281)
+- Utility functions for mapping qubit labels and padding ExperimentDesigns (#283, #290)
+- CI integration for example and tutorial Jupyter notebooks
+
+### Fixed
+
+- Various fixes to enable forward simulation with CHP for many qubits (#241)
+- Various fixes in report generation (#242)
+- Various circuit mirroring fixes (#243)
+- Various RNG seeding fixes (#246, #254)
+- Various fixes for fiducial selection, germ selection, and fiducial pair reduction (#261, #292)
+- Improved performance of entanglement fidelity calculations (#263)
+- Various linear algebra routine exception handling fixes (#268)
+- Various wildcard model fixes (#279, #294)
+- Various NumPy deprecations and fixes for Windows (#285, #287, #288)
+
+### Changed
+
+- Updates to first-order gauge-invariant (FOGI) model parameterizations (#258)
+- Moved to jinja2>=3.0 (#259)
+- Significant performance enhancements for fiducial selection, germ selection, and fiducial pair reduction (#270, #274, #280)
+- Python 3.6 support dropped and 3.10 support added
+- Testing framework moved from nose to pytest
+
+### Deprecated
+
+- Serialization functions with prefix 'load_' are deprecated for 'read_' versions for consistency
+
+### Removed
+
+- CHPForwardSimulator has been removed in favor of WeakForwardSimulator with 'chp' evotype
+- install_locally.py script has been removed
+
+## [0.9.10.1] - 2022-03-15
+
+### Added
+
+- adds tools to estimating the wall time needed to execute an experiment design on a quantum processor.
+- adds "pad_1Q" implicit idle mode, which pads empty space in a circuit with 1-qubit idle operations.
+- adds SPAM and instrument elements to processor specifications.
+- adds QuditProcessorSpec object, so that processors containing multiple qudits can be readily modeled.
+
+### Fixed
+
+- fixes Windows-specific problems related to 32- vs 64-bit integers.
+- fixes issues with extras.interpygate so that germ selection works and the number of gauge parameters can be specified manually.
+- fixes bugs and adds functionality to first-order-gauge-invariant (FOGI) analysis routines.
+- fixes a bug in Hessian projection that affects (and corrects) error bar computation.
+
+### Changed
+
+- improves circuit simulation performance when using operation factories (e.g., for modeling continuously parameterized gates)
+- revamps elementary error generator functionality to closely match arXiv:2103.01928, where there are H, S, C, and A type elementary generators.
+- default gauge optimization workflow changed for Lindblad-constrained models: now these models are converted to TP and gauge optimized over the entire TP gauge group (unitary group optimization was seen to be problematic for Lindblad-constrained models).
+
+## [0.9.10] - 2021-08-03
+
+A significant update, which primarily updates the package’s API to become more consistent, uniform, and following PEP8 style guidance. This unfortunately breaks backward compatibility with previous releases, but brings the package substantially closer to the future version 1.0 when the API will be stabilized. Most of the changes needed to update existing scripts should be straightforward, as names themselves are similar (though their location within the package may have changed) and now conform, for the most part, to the PEP8 style. Updated documentation and tutorials can also provide help to users seeking to update code that uses version 0.9.9.3 and lower. Note that pickle files are not compatible between any prior version of pyGSTi and this one (though most dataset files are). In addition to the many name and sub-package location updates, additional functionality has been added.
+
+### Added
+
+- Adds a new interface for external circuit simulators. This should allow pyGSTi to provide access to more powerful circuit simulation algorithms in the future. In this release, the interface has been used to incorporate the CHP Clifford-circuit simulator as an option. This update was made possible through an extensive refactoring and development “evolution types” in pyGSTi, which are also simpler to use now.
+- Adds support for distributed and shared memory.. This more efficiently splits many computations among multiple processors, avoiding the need to gather memory to a single processor and thereby reducing the memory requirement by a factor of up to the processor count. This update also allows pyGSTi to take advantage of the fact that multiple cores on a single machine (node) can share memory. The new implementation automatically detects when processors can share memory and utilizes this feature by default, avoiding copying in favor of access to shared memory.
+- Adds ability to serialize (read from & write to disk) most of pyGSTi’s object types using a robust and JSON-compatible format. Most objects now possess read and write methods for this purpose. This, by design, largely obviates the need to store data in Python pickle files, which are both fragile and pose security risks.
+- Adds a new flexible type of data set (FreeformDataset) and simulator (FreeformSimulator) objects that allow arbitrary data to be computed for and associated with circuits.
+- Adds a means of directly running experiments on IBMQ hardware when provided with proper credentials (see the pygsti.extras.ibmq package).
+- Adds initial support interpolating the results of computationally intensive physics simulations to create and optimize “physical models”. This functionality exists in pygsti.extras.interpygate.
+- Add the ability to place simple bounds on a model’s parameters when it is optimized. This is particularly relevant for restricting the aforementioned “physical models” to the region where their interpolation is valid.
+- Adds additional support for fitting data to time-dependent models (time dependent gate set tomography).
+
+### Fixed
+
+- Fixes many bugs and addresses or resolves many issues.
+
+### Changed
+
+- Enhancements to model creation routines. ProcessorSpec objects now play a central role, as they define the API of a quantum processor. Processor specification objects are used to construct models and experiment designs. Model construction routines have been revamped, and allow noise to be more easily added to models. The construction of different model types (explicit, local, or cloud-noise) is much more unified by construction routines having similar argument lists and behaviors. The use of “implied idle” gates in models and circuits cleaner and simpler to understand.
+- Model parameterization is more transparent. Known how a model is parameterized is easier thanks to the ability to label parameters and print them out more straightforwardly. More sophisticated parameterization is possible by “collecting” parameters or by constructing models from the ground up. The parameter allocation framework is updated to be more robust. (For example model members don’t need to be added to models before their number of parameters can be queried.) When testing models, the number of parameters of the model can be specified manually, using the new num_modeltest_params attribute.
+- Improves randomized and volumetric benchmarks. Increased incorporation of Pandas dataframes makes analysis of data from multiple benchmarking experiments possible.
+- Improves and expands the interface with Google’s Cirq package. The new DataSet.add_cirq_trial_result method can be used to import Cirq.TrialResult objects, and supports using cirq.WaitGate within the conversion method Circuit.convert_to_cirq.
+- Updates wildcard error computations, adding options and more robust optimization methods.
+- The package’s deployment process has updated from providing only a source distribution (requiring users to compile the C-extensions on their own if they wanted to use them) to building wheels for several common platforms and python versions. This update should save many users time and effort installing pyGSTi.
+
+## [0.9.9.3] - 2020-09-23
+
+### Fixed
+
+- Fixes a bug affecting the generation of drift reports.
+
+## [0.9.9.2] - 2020-06-02
+
+### Added
+
+- Adds no_mpi target, which installs all extras except for mpi4py
+
+### Fixed
+
+- Fixes a number of other (rarely used) install target names.
+
+## [0.9.9.1] - 2020-02-19
+
+### Fixed
+
+- fixes bugs in setup scripts that resulted in pip install failing to copy some essential files and users getting a "missing replib" error when trying to import pygsti.
+- fixes compatibility issues with the more recent Numpy versions that caused flags.writeable errors when using MPI (see issue 119).
+- fixes compatibility issues with the recently released msgpack package version 1.0 (and higher).
+
+## [0.9.9] - 2020-02-17
+
+### Added
+
+- adds a new API which centers around Protocol objects, and makes it easier to run one or multiple protocols on a many-qubit quantum processor. See the new 00-Protocols.ipynb tutorial for more details.
+- new benchmarking protocols, including volumetric benchmarks and mirror randomized-benchmarking.
+- more gauge-invariant metrics are available within reports.
+
+### Changed
+
+- improvements to multi-qubit GST capabilities.
+- performance improvements, particularly in the area of working with large data-sets.
+- HTML reports have been updated to by default use a new AJAX-free framework that eliminates many of the browser compatibility problems that users experienced in the past.
+- Python version 2 support has been dropped. Python 3.5 and higher are now the only python versions pyGSTi officially supports.\
+- the root package directory has been updated for greater simplicity and standardization with other packages. If you "install" new pyGSTi versions by running "git pull", you'll also need to run pip -e install . again or you'll get a warning message the pyGSTi cannot be found.
+
+## [0.9.8.3] - 2019-10-23
+
+### Fixed
+
+- Fixed the issue of weird ('\*',) line labels in circuit construction routines when used with multi-qubit notation circuits, e.g. (0,)-labeled circuits getting erroneous ('\*',0)-labeled circuits created.
+- Fixed bug in optools.fidelity for special case of trace-reducing rank-1 ops.
+- Now handling sqrtm failure in optools._hack_sqrt as a warning instead of assertion error.
+
+## [0.9.8.2] - 2019-09-06
+
+### Fixed
+
+- adds compensation for a scaling factor in matrixtools.unitary_superoperator_matrix_log which would cause an assertion to fail in some circumstances.
+
+## [0.9.8.1] - 2019-07-24
+
+### Changed
+
+- pyGSTi is distributed with the Apache License version 2.0, included in LICENSE.
+
+## [0.9.8] - 2019-06-29
+
+### Added
+
+- framework for time-dependent models and continuously-parameterized gates.
+- added support for simple Pauli-stochastic noise operators.
+- new tutorials for: idle tomgraphy, drift characterization, time-dependent GST, simulating RB data, continuously-parameterized gates, building implicit models (updated with crosstalk-free and cloud-crosstalk constructions)
+
+### Changed
+
+- revamped drift detection code
+- expanded Circuit objects can include arguments and time durations.
+- expanded ability to create implicit models (local- and cloud-noise models) makes this process easier and more intuitive. Related to this, the error generators of LindbladOp objects can more easily be constructed and modified.
+- more robust support for different bases (adds a new hierarchy of basis objects).
+- updated documentation and bug fixes
+
+## [0.9.7.5] - 2019-05-29
+
+### Fixed
+
+- adds the package pygsti.extras.idletomography which was missing from setup.py.
+
+## [0.9.7.4] - 2019-04-23
+
+### Fixed
+
+- fixes a bug in running GST (in evaluating the log-likelihood) when the data contains zero-counts for some/all of the outcomes of a circuit.
+
+## [0.9.7.3] - 2019-04-18
+
+### Fixed
+
+- Fixes pip installation issue caused by latest version of plotly (v3.8), which manifests itself as an inability to import _plot_html. This hotfix simply pins the required Plot.ly version to < 3.7.1; compatibility with Plot.ly version 3.8 will be included in the next non-hotfix release.
+
+## [0.9.7.2] - 2019-03-19
+
+### Fixed
+
+- Minor bug fixes are also included.
+
+### Changed
+
+- updates and extends pyGSTi's drift-detection protocols.
+
+## [0.9.7.1] - 2019-01-31
+
+### Fixed
+
+- fixes an issue whereby copied Model objects aren't given new UUIDs. This is relevant when generating reports which view multiple models.
+
+## [0.9.7] - 2019-01-21
+
+A significant update which shifts pyGSTi's focus to multiple qubits. Previous version, treated 1- and 2-qubit systems as the "normal" case, and n-qubit systems as the "special" case (evidenced by object and function naming and features, i.e. pyGSTi's API). This version takes a big step toward treating 1- and 2-qubit systems as special cases of a single, more general, n-qubit case.
+
+This update breaks backward compatibility, which can mostly (often completely) be restored by running the included pyGSTi/scripts/update2v0.9.7.py script on old scripts and/or notebooks.
+
+This update also revamps the tutorials, giving them into an intuitive network of hyper-linked notebooks. The updates will make both broadly learning what pyGSTi can do and located detailed guidance of specific topics much easier than it was in past versions. Begin by opening the pyGSTi/jupyter_notebooks/START_HERE.ipynb notebook.
+
+### Added
+
+- Adds beta-level implementation of "Idle Tomography" (a new multi-qubit characterization protocol)
+- Adds ability to compose gates by adding together their error generators.
+- Adds support for exporting Circuit objects to IBM's OpenQASM specification and Rigetti Quantum Computing's Quil specification (more coming soon).
+- Adds new "implicit" noise models designed for multi-qubit processors.
+
+### Fixed
+
+- Bug fixes (particularly in the computation of gauge-invariant fidelities).
+
+### Changed
+
+- the drift-detection sub-module is amidst an upgrade and is not completely functional in this release.
+
+## [0.9.6] - 2018-10-10
+
+### Added
+
+- Updated and expanded data set comparison tools (e.g., more sophisticated hypothesis testing)
+- adds Lindblad-parameterized SPAM operators.
+- adds more gate & SPAM operator parameterizations, including affine and depolarization errors.
+
+## [0.9.5] - 2018-07-30
+
+### Added
+
+- Direct Randomized Benchmarking (DRB) method. Includes sequence selection and data analysis routines (see new tutorials 17-18).
+- Improved Clifford Randomized Benchmarking support (see tutorial 16).
+- support for multi-qubit circuits (new Circuit object; see tutorial 15).
+- ability to easily create LGST-only reports (see new example notebook).
+
+### Changed
+
+- improvements to the DataSet object: you can now store "sparse" counts (where not every outcome is observed) and add meta-data to lines after a '#' symbol.
+- compatibility with plotly v3.0+ and cvxpy v1.0+.
+
+## [0.9.4.4] - 2018-03-28
+
+### Fixed
+
+- Updates setup script so that newer versions of pip correctly identify and install dependencies when installing via pip.
+
+## [0.9.4.3] - 2018-03-20
+
+### Fixed
+
+- Fixes remaining "module not found" errors that may occur when trying to import pygsti after installing from PyPi.
+
+## [0.9.4.2] - 2018-03-20
+
+### Fixed
+
+- Fixes some of the "module not found" errors that may occur when trying to import pygsti after installing from PyPi.
+
+## [0.9.4.1] - 2018-03-19
+
+### Fixed
+
+- fixes PyPi install error regarding "fastcalc.pyx not found".
+
+## [0.9.4] - 2018-03-02
+
+### Added
+
+- new do_stdpractice_gst driver facilitates multiple GST estimates.
+- support for multiple state preparations and POVMs.
+- adds tutorial, example, and FAQ notebooks.
+- many more pre-loaded "standard" gate sets.
+
+### Changed
+
+- switches to HTML reports and plotly plots (vs. PDF reports and matplotlib plots).
+- updated Results object stores multiple estimates instead of just one.
+- improved multi-qubit support (richer gate set models possible).
+
+## [0.9.3] - 2017-02-06
+
+### Added
+
+- adds Robust Phase Estimation (RPE) capability
+- adds initial support for qutrit reports
+- adds tutorials for parallel processing (MPI), gate string reduction, and RPE
+
+### Changed
+
+- comments in data set text files can now be carried through to reports
+- metadata tables have been added at the end of 'full' and 'general' reports
+
+## [0.9.2] - 2016-12-24
+
+### Added
+
+- adds Randomized Benchmarking support.
+
+### Changed
+
+- optimizes and enhances MPI performance.
+- improves "general" report to include more analysis.
+- updates gauge optimization to be more flexible.
+- updates the "standard" 2-qubit germs and fiducials.
+
+## [0.9.1.1] - 2016-07-21
+
+### Added
+
+- adds timing info and other tweaks to stdout messages
+
+### Changed
+
+- performance optimization of reports
+- more robust fake data generation
+
+## [0.9.1] - 2016-07-16
+
+### Added
+
+- new "fiducial pair reduction" protocol reduces the number of gate sequences required by GST.
+
+### Changed
+
+- converted to Python3 (but backward compatible with Python2.7)
+- improvements to germ and fiducial selection algorithms
+- expanded options for gauge optimization
+- improved code stability & maintenance
+- unified stdout printing & progress indicators
+- minor bug fixes & performance enhancements
+
+## [0.9.1-beta] - 2016-06-14
+
+### Added
+
+- support for 2-qubit gate set tomography (2Q-GST).
+- initial support for parameterized gates & SPAM operations.
+- initial support for MPI.
+
+### Changed
+
+- cleaner interfaces to objects (GateSet, DataSet, etc.).
+
+## [0.9.1-alpha] - 2016-02-17
+
+### Added
+
+- created to test zenodo DOI creation and integration for this project.

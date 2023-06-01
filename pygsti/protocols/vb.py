@@ -292,7 +292,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, clifford_compilations=None,
                  sampler='edgegrab', samplerargs=(0.125,),
                  localclifford=True, paulirandomize=True, fixed_versus_depth=False,
-                 descriptor='A random germ mirror circuit experiment'):
+                 descriptor='A random germ mirror circuit experiment', seed=None):
 
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = [[] for d in depths]
@@ -301,20 +301,25 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         assert(clifford_compilations is not None)
         abs_clifford_compilations = clifford_compilations['absolute']
 
+        if seed is None:
+            self.seed = _np.random.randint(1, 1e6)  # Pick a random seed
+        else:
+            self.seed = seed
+
         for j in range(circuits_per_depth):
             circtemp, outtemp, junk = _rc.create_random_germpower_mirror_circuits(
                 pspec, abs_clifford_compilations, depths, qubit_labels=qubit_labels, localclifford=localclifford,
                 paulirandomize=paulirandomize, interacting_qs_density=samplerargs[0],
-                fixed_versus_depth=fixed_versus_depth)
+                fixed_versus_depth=fixed_versus_depth, seed=seed)
             for ind in range(len(depths)):
                 circuit_lists[ind].append(circtemp[ind])
                 ideal_outs[ind].append((''.join(map(str, outtemp[ind])),))
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                              sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor)
+                              sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor, seed=seed)
 
     def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                         sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor):
+                         sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor, seed=None):
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.descriptor = descriptor
@@ -323,6 +328,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         self.localclifford = localclifford
         self.paulirandomize = paulirandomize
         self.fixed_versus_depth = fixed_versus_depth
+        self.seed = seed
 
     def map_qubit_labels(self, mapper):
         """

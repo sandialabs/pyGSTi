@@ -10,7 +10,7 @@ ns.model = std.target_model()
 ns.opLabels = list(ns.model.operations.keys())
 ns.fiducials = std.fiducials
 ns.germs = std.germs
-ns.maxLengthList = [0, 1, 2]
+ns.maxLengthList = [1, 2]
 
 
 _SEED = 1234

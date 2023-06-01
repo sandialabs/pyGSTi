@@ -324,7 +324,7 @@ def column_norms(m, ord=None):
 
     if _sps.issparse(m):
         #this could be done more efficiently, e.g. by converting to csc and taking column norms directly
-        norms = _np.array([_np.linalg.norm(m[:, j].todense(), ord=o) for j, o in enumerate(ord_list)])
+        norms = _np.array([_np.linalg.norm(m[:, j].toarray(), ord=o) for j, o in enumerate(ord_list)])
     else:
         norms = _np.array([_np.linalg.norm(m[:, j], ord=o) for j, o in enumerate(ord_list)])
     return norms

@@ -351,7 +351,6 @@ class ImplicitOpModel(_mdl.OpModel):
         state_space = _StateSpace.from_nice_serialization(state['state_space'])
         layer_rules = _LayerRules.from_nice_serialization(state['layer_rules'])
         basis = _Basis.from_nice_serialization(state['basis'])
-        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
         simulator = _FSim.from_nice_serialization(state['simulator'])
 
         mdl = cls(state_space, layer_rules, basis, simulator, state['evotype'])
@@ -363,6 +362,8 @@ class ImplicitOpModel(_mdl.OpModel):
             'instrument_blks': mdl.instrument_blks,
             'factories': mdl.factories,
         }
+
+        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'], mdl)
         for mm_key, mm_dict in modelmembers.items():
             root_key, sub_key = mm_key.split('|')
             root_dicts[root_key][sub_key].update(mm_dict)  # Note: sub_keys should already be created

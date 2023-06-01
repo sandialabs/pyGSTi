@@ -22,7 +22,8 @@ from pygsti.processors import ProcessorSpec as _ProcessorSpec
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.baseobjs.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOptions
 from pygsti.models.model import Model as _Model
-from pygsti.models.modelconstruction import _create_explicit_model
+from pygsti.models.modelconstruction import _create_explicit_model, create_explicit_model
+from pygsti.protocols.gst import _load_pspec_or_model
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -145,9 +146,17 @@ def run_model_test(model_filename_or_object,
     builder = _objfns.ObjectiveFunctionBuilder.create_from(advanced_options.get('objective', 'logl'),
                                                            advanced_options.get('use_freq_weighted_chi2', False))
     _update_objfn_builders([builder], advanced_options)
+    
+    #load in the processor spec/model and if needed build a target model for the model test
+    pspec_or_model= _load_pspec_or_model(processorspec_filename_or_object)
+    if isinstance(pspec_or_model, _Model):
+        target_model= pspec_or_model
+    elif isinstance(pspec_or_model, _ProcessorSpec):
+        target_model= create_explicit_model(pspec_or_model, 
+                                             basis= _load_model(model_filename_or_object).basis)
 
     #Create the protocol
-    proto = _proto.ModelTest(_load_model(model_filename_or_object), None, gopt_suite,
+    proto = _proto.ModelTest(_load_model(model_filename_or_object), target_model, gopt_suite,
                              builder, _get_badfit_options(advanced_options),
                              advanced_options.get('set trivial gauge group', True), printer,
                              name=advanced_options.get('estimate_label', None))
@@ -724,7 +733,7 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, p
 
 def _load_model(model_filename_or_object):
     if isinstance(model_filename_or_object, str):
-        return _io.load_model(model_filename_or_object)
+        return _Model.read(model_filename_or_object)
     else:
         return model_filename_or_object  # assume a Model object
 

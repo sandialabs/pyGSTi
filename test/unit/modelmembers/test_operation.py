@@ -621,7 +621,7 @@ class LindbladErrorgenTester(BaseCase):
         errgen = bt.change_basis(errgen, 'std', mx_basis)
 
         eg = op.LindbladErrorgen.from_error_generator(                                                                                                              
-            errgen, "CPTP", 'pp', truncate=False, mx_basis="pp", evotype='default')
+            errgen, "CPTPLND", 'pp', truncate=False, mx_basis="pp", evotype='default')
         self.assertTrue(np.allclose(eg.to_dense(), errgen))
 
         errgen_copy = eg.copy()
@@ -636,7 +636,7 @@ class LindbladErrorgenTester(BaseCase):
                             [0, 0, 0, 1],
                             [0, 0, -1, 0]], 'd')
         eg = op.LindbladErrorgen.from_error_generator(
-            densemx, "CPTP", 'pp', truncate=True, mx_basis="pp", evotype='default')
+            densemx, "CPTPLND", 'pp', truncate=True, mx_basis="pp", evotype='default')
         errgen_copy = eg.copy()
         T = UnitaryGaugeGroupElement(np.identity(4, 'd'))
         errgen_copy.transform_inplace(T)
@@ -702,7 +702,7 @@ class CPTPLindbladErrorgenTester(LindbladErrorgenBase, BaseCase):
     def build_gate():
         mx = np.identity(4, 'd')
         return op.LindbladErrorgen.from_operation_matrix(
-            mx, "CPTP", "pp", truncate=True, mx_basis="pp", evotype='default'
+            mx, "CPTPLND", "pp", truncate=True, mx_basis="pp", evotype='default'
         )
 
 
@@ -728,7 +728,7 @@ class CPTPLindbladSparseOpTester(LindbladErrorgenBase, BaseCase):
                             [0, 0, -1, 0]], 'd')
         sparsemx = sps.csr_matrix(densemx, dtype='d')
         return op.LindbladErrorgen.from_operation_matrix(
-            sparsemx, "CPTP", 'pp', truncate=True, mx_basis="pp", evotype='default'
+            sparsemx, "CPTPLND", 'pp', truncate=True, mx_basis="pp", evotype='default'
         )
 
 

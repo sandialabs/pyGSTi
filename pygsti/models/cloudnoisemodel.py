@@ -38,6 +38,7 @@ from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 from pygsti.tools import basistools as _bt
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import optools as _ot
+from pygsti.tools import listtools as _lt
 from pygsti.baseobjs.basisconstructors import sqrt2, id2x2, sigmax, sigmay, sigmaz
 from pygsti.processors.processorspec import ProcessorSpec as _ProcessorSpec, QubitProcessorSpec as _QubitProcessorSpec
 
@@ -341,10 +342,11 @@ class CloudNoiseModel(_ImplicitOpModel):
     def _from_nice_serialization(cls, state):
         state_space = _statespace.StateSpace.from_nice_serialization(state['state_space'])
         #basis = _nice_serialization(state['basis'])
-        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'])
         simulator = _FSim.from_nice_serialization(state['simulator'])
         layer_rules = _LayerRules.from_nice_serialization(state['layer_rules'])
         processor_spec = _ProcessorSpec.from_nice_serialization(state['processor_spec'])
+        param_labels = state.get('parameter_labels', None)
+        param_bounds = state.get('parameter_bounds', None)
 
         # __init__ does too much, so we need to create an alternate __init__ function here:
         mdl = cls.__new__(cls)
@@ -353,6 +355,7 @@ class CloudNoiseModel(_ImplicitOpModel):
         _ImplicitOpModel.__init__(mdl, state_space, layer_rules, 'pp',
                                   simulator=simulator, evotype=state['evotype'])
 
+        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'], mdl)
         flags = {'auto_embed': False, 'match_parent_statespace': False,
                  'match_parent_evotype': True, 'cast_to_type': None}
         mdl.prep_blks['layers'] = _OrderedMemberDict(mdl, None, None, flags, modelmembers.get('prep_blks|layers', []))
@@ -372,6 +375,14 @@ class CloudNoiseModel(_ImplicitOpModel):
 
         mdl._clouds = _collections.OrderedDict()
         mdl._clean_paramvec()
+
+        Np = len(mdl._paramlbls)  # _clean_paramvec sets up ._paramlbls so its length == # of params
+        if param_labels and len(param_labels) == Np:
+            mdl._paramlbls[:] = [_lt.lists_to_tuples(lbl) for lbl in param_labels]
+        if param_bounds is not None:
+            param_bounds = cls._decodemx(param_bounds)
+            if param_bounds.shape == (Np, 2):
+                mdl._param_bounds
 
         return mdl
 
@@ -413,6 +424,7 @@ class CloudNoiseLayerRules(_LayerRules):
 
     def __init__(self, errcomp_type, qubit_labels, implicit_idle_mode, singleq_idle_layer_labels,
                  implied_global_idle_label):
+        super().__init__()
         self.qubit_labels = qubit_labels
         self.errcomp_type = errcomp_type
         self.implied_global_idle_label = implied_global_idle_label
