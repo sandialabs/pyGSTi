@@ -1711,7 +1711,7 @@ class StandardGST(_proto.Protocol):
                         elif isinstance(initial_model, GSTInitialModel):
                             pass
                         elif initial_model is None:
-                            intial_model = GSTInitialModel(target_model= target_model, starting_point= 'target')
+                            initial_model = GSTInitialModel(target_model= target_model, starting_point= 'target')
                     else:
                         raise ValueError('Unsupported input type for initial model. Must be a Model, GSTInitialModel or None.')
                     
