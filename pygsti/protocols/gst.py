@@ -1601,7 +1601,38 @@ class StandardGST(_proto.Protocol):
         self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
-        self.initial_model = initial_model
+        
+        #set up the initial model, only need to construct entries for the fitting-based modes, so we can
+        #skip entries in models_to_test.
+        initial_model_modes = []
+        for mode in self.modes:
+            if mode =='Target' or ((models_to_test is not None) and (mode in models_to_test)):
+                continue
+            else:
+                initial_model_modes.append(mode)
+
+        #only construct these if there are fitting-based modes.
+        if initial_model_modes:
+            if initial_model is None:
+                initial_model_dict = {mode: GSTInitialModel(target_model= target_model, starting_point = 'target') for mode in initial_model_modes}
+            elif isinstance(initial_model, _Model):
+                initial_model_dict = {mode: GSTInitialModel(initial_model) for mode in initial_model_modes}
+            elif isinstance(initial_model, GSTInitialModel):
+                initial_model_dict = {mode: initial_model for mode in initial_model_modes}    
+            elif isinstance(initial_model, dict):
+                initial_model_dict ={}
+                for mode in initial_model_modes:
+                    initial_model_for_mode = initial_model.get(mode, None)
+                    if isinstance(initial_model_for_mode, _Model):
+                        initial_model_dict[mode] = GSTInitialModel(initial_model_for_mode)
+                    elif isinstance(initial_model_for_mode, GSTInitialModel):
+                        initial_model_dict[mode] = initial_model_for_mode
+                    elif initial_model_for_mode is None:
+                        initial_model_dict[mode] = GSTInitialModel(target_model= target_model, starting_point= 'target')
+        else:
+            initial_model_dict = None
+        
+        self.initial_model = initial_model_dict
 
         if not isinstance(optimizer, _opt.Optimizer) and isinstance(optimizer, dict) \
            and 'first_fditer' not in optimizer:  # then a dict was cast into a CustomLMOptimizer above.
@@ -1615,6 +1646,7 @@ class StandardGST(_proto.Protocol):
         self.auxfile_types['objfn_builders'] = 'serialized-object'
         self.auxfile_types['optimizer'] = 'serialized-object'
         self.auxfile_types['badfit_options'] = 'serialized-object'
+        self.auxfile_types['initial_model'] = 'dict:serialized-object'
 
     #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, max_lengths):
     #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, max_lengths)
@@ -1696,25 +1728,10 @@ class StandardGST(_proto.Protocol):
                     #Try to interpret `mode` as a parameterization
                     parameterization = mode  # for now, 1-1 correspondence
                     
-                    #set up the initial model:
-                    if self.initial_model is None:
-                        initial_model = GSTInitialModel(target_model= target_model, starting_point = 'target')
-                    elif isinstance(self.initial_model, _Model):
-                        initial_model = GSTInitialModel(self.initial_model)
-                    elif isinstance(self.initial_model, GSTInitialModel):
-                        initial_model = self.initial_model
-                    elif isinstance(self.initial_model, dict):
-                        initial_model = self.initial_model.get(mode, None)
-                        if isinstance(initial_model, _Model):
-                            initial_model = GSTInitialModel(initial_model)
-                        #don't need to do anything in this case, just adding it for readability
-                        elif isinstance(initial_model, GSTInitialModel):
-                            pass
-                        elif initial_model is None:
-                            intial_model = GSTInitialModel(target_model= target_model, starting_point= 'target')
-                    else:
-                        raise ValueError('Unsupported input type for initial model. Must be a Model, GSTInitialModel or None.')
-                    
+                    #If we've gotten to this point every remaining mode should have an entry
+                    #in the initial model dictonary
+                    initial_model = self.initial_model[mode]
+                        
                     try:
                         #By this point the initial model should be a GSTInitialModel, so call this on the contained model.
                         if initial_model.model is not None:
@@ -2365,8 +2382,6 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
     # if p is prob that box is red and there are N boxes, then prob of no red boxes is q = (1-p)^N ~= 1-p*N
     # and so probability of any red boxes is ~p*N.  Here `percentile` is the probability of seeing *any* red
     # boxes, i.e. ~p*N, so to compute the prob of a single box being red we compute `p = percentile/N`.
-
-    #print("DB2: ",twoDeltaLogL_threshold,redbox_threshold)
 
     assert(isinstance(mdc_objfn, _objfns.PoissonPicDeltaLogLFunction)), \
         "Can only use wildcard scaling with 'logl' objective!"
