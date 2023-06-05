@@ -1,6 +1,12 @@
 # CHANGELOG
 
-## [Unreleased]
+## [0.9.11.1] - 2023-05-19
+
+### Fixed
+
+- Guarded an optional markupsafe import for report generation
+
+## [0.9.11] - 2023-05-16
 
 ### Added
 
