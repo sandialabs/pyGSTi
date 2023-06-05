@@ -256,9 +256,8 @@ def _load_auxdoc_member(mongodb, member_name, typ, metadata, quick_load):
             val = _MongoSerializable.from_mongodb_doc(mongodb, metadata['collection_name'], obj_doc)
 
         elif cur_typ == 'circuit-str-json':
-            from .readers import convert_strings_to_circuits as _convert_strings_to_circuits
             obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
-            val = _convert_strings_to_circuits(obj_doc['circuit_str_json'])
+            val = _load.convert_strings_to_circuits(obj_doc['circuit_str_json'])
 
         elif typ == 'numpy-array':
             array_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
