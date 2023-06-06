@@ -15,12 +15,16 @@ import itertools as _itertools
 
 import numpy as _np
 
+import pygsti.models as _models 
+
+
 from pygsti.algorithms import compilers as _cmpl
 from pygsti.circuits import circuit as _cir
 from pygsti.baseobjs import label as _lbl
 from pygsti.tools import group as _rbobjs
 from pygsti.tools import symplectic as _symp
 from pygsti.tools import compilationtools as _comp
+from pygsti.tools import internalgates as _gates
 
 try: import qsearch as _qsearch
 except: _qsearch = None
@@ -3143,14 +3147,14 @@ def create_udrb_circuit(pspec, length, qubit_labels = None, layer_type='standard
     n = len(qubit_labels)
     
     #pspec.add_std_model("standard_unitary", parameterization='static unitary')
-    model = pygsti.models.create_crosstalk_free_model(pspec, evotype='statevec', simulator='matrix') #pspec.models['standard_unitary']
+    model = _models.create_crosstalk_free_model(pspec, evotype='statevec', simulator='matrix') #pspec.models['standard_unitary']
     
     if n == 1:
         mean_two_q_gates = 0
         ###for 1Q, currently sampling Haar-random unitaries with pyGSTi terms###
         #params = _rc.sample_haar_random_one_qubit_unitary_parameters()
 
-        drb_circ = _rc.sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec)
+        drb_circ = sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec)
         #print(drb_circ)
         u = model.sim.product(drb_circ)
         drb_circ = drb_circ.copy(editable=True)
@@ -3167,11 +3171,11 @@ def create_udrb_circuit(pspec, length, qubit_labels = None, layer_type='standard
 ####replace with existing pygsti machinery for generating these circuits#######
     #have option to sample alternating laters or mixed layers
     if layer_type=='cz-zxzxz':
-        _rc.sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=qubit_labels, two_q_gate_density=twoQ_gate_density,
+        sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=qubit_labels, two_q_gate_density=twoQ_gate_density,
                                    one_q_gate_type='haar',
                                    two_q_gate_args_lists={'Gczr': [(str(a),) for a in angles]})
     elif layer_type=='standard':                                   
-        _rc.sample_circuit_layer_by_edgegrab(pspec, qubit_labels=qubit_labels, two_q_gate_density=twoQ_gate_density, one_q_gate_names=None,
+        sample_circuit_layer_by_edgegrab(pspec, qubit_labels=qubit_labels, two_q_gate_density=twoQ_gate_density, one_q_gate_names=None,
                                      gate_args_lists=None, rand_state=None)                                   
                                    
     #for a in range(length):
@@ -3202,9 +3206,12 @@ def create_udrb_circuit(pspec, length, qubit_labels = None, layer_type='standard
     u_inv =_np.linalg.inv(u_net)
     
     #pick a random n-qubit Pauli to be the net Pauli
-    paulis = [pygsti.internalgates.standard_gatename_unitaries()['Gc'+str(3*k)] for k in range(4)]
+    paulis = [_gates.standard_gatename_unitaries()['Gc'+str(3*k)] for k in range(4)]
     pauli_choice = [_np.random.randint(4) for _ in range(n)]
-    random_pauli = functools.reduce(_np.kron, [paulis[i] for i in pauli_choice])
+    random_pauli = paulis[pauli_choice[0]]
+    for i in pauli_choice[1:]:
+    	random_pauli = _np.kron(random_pauli, paulis[i])
+    #random_pauli = functools.reduce(_np.kron, [paulis[i] for i in pauli_choice])
     inv_mat =_np.dot(random_pauli, u_inv) #multiply in random pauli
     
     ####USE THE COMPILER###
