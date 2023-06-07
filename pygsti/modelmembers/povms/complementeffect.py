@@ -43,7 +43,7 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         "complement" POVM effect vector.
     """
 
-    def __init__(self, identity, other_effects):
+    def __init__(self, identity, other_effects, called_from_reduce=False):
         evotype = other_effects[0]._evotype
         state_space = other_effects[0].state_space
 
@@ -62,8 +62,11 @@ class ComplementPOVMEffect(_ConjugatedStatePOVMEffect):
         # 2) set the gpindices of the elements of other_spamvecs so
         #    that they index into our local parameter vector.
 
-        _ConjugatedStatePOVMEffect.__init__(self, self.identity.copy())
-        self.init_gpindices()  # initialize our gpindices based on sub-members
+        _ConjugatedStatePOVMEffect.__init__(self, self.identity.copy(), called_from_reduce)
+        if not called_from_reduce:
+            self.init_gpindices()  # initialize our gpindices based on sub-members
+        else:
+            self.allocate_gpindices(10000, None, submembers_already_allocated=True)
         self._construct_vector()  # reset's self.base
 
     def _construct_vector(self):

@@ -139,12 +139,15 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
         i.e, a (dim,1)-shaped array.
     """
 
-    def __init__(self, state):
+    def __init__(self, state, called_from_reduce=False):
         self.state = state
         evotype = state._evotype
         rep = evotype.create_conjugatedstate_effect_rep(state._rep)
         _POVMEffect.__init__(self, rep, evotype)
-        self.init_gpindices()  # initialize our gpindices based on sub-members
+        if not called_from_reduce:
+            self.init_gpindices()  # initialize our gpindices based on sub-members
+        else:
+            self.allocate_gpindices(10000, None, submembers_already_allocated=True)
 
     @property
     def _basis(self):
