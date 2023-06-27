@@ -21,7 +21,12 @@ import scipy.stats as _stats
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti.models.explicitcalc import P_RANK_TOL
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
+from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction as _PoissonPicDeltaLogLFunction
+from pygsti.objectivefns.objectivefns import Chi2Function as _Chi2Function
+from pygsti.objectivefns.objectivefns import FreqWeightedChi2Function as _FreqWeightedChi2Function
 
 
 # NON-MARKOVIAN ERROR BARS
@@ -49,7 +54,7 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 #
 
 
-class ConfidenceRegionFactory(object):
+class ConfidenceRegionFactory(_NicelySerializable):
     """
     An object which is capable of generating confidence intervals/regions.
 
@@ -86,6 +91,7 @@ class ConfidenceRegionFactory(object):
         whenver `hessian` is, and should be left as `None` when `hessian`
         is not specified.
     """
+    collection_name = "pygsti_confidence_region_factories"
 
     def __init__(self, parent, model_lbl, circuit_list_lbl,
                  hessian=None, non_mark_radius_sq=None):
@@ -118,11 +124,13 @@ class ConfidenceRegionFactory(object):
             whenver `hessian` is, and should be left as `None` when `hessian`
             is not specified.
         """
+        super().__init__()
 
         #May be specified (together) whey hessian has already been computed
         assert(hessian is None or non_mark_radius_sq is not None), \
             "'non_mark_radius_sq' must be non-None when 'hessian' is specified"
         self.hessian = hessian
+        self.jacobian = None  # just for sanity checking hessian projection
         self.nonMarkRadiusSq = non_mark_radius_sq
 
         self.hessian_projection_parameters = _collections.OrderedDict()
@@ -149,6 +157,103 @@ class ConfidenceRegionFactory(object):
     def __setstate__(self, state_dict):
         self.__dict__.update(state_dict)
         self.parent = None  # initialize to None upon unpickling
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'model_label': self.model_lbl,
+                      'circuit_list_label': self.circuit_list_lbl,
+                      'nonmarkovian_radius_squared': self.nonMarkRadiusSq,
+                      'hessian_matrix': self._encodemx(self.hessian) if (self.hessian is not None) else None,
+                      'hessian_projection_parameters': {k: v for k, v in self.hessian_projection_parameters.items()},
+                      'inverse_hessian_projections': {k: self._encodemx(v)
+                                                      for k, v in self.inv_hessian_projections.items()},
+                      'num_nongauge_params': int(self.nNonGaugeParams) if (self.nNonGaugeParams is not None) else None,
+                      'num_gauge_params': int(self.nGaugeParams) if (self.nGaugeParams is not None) else None,
+                      #Note: need int(.) casts above because int64 is *not* JSON serializable (?)
+                      #Note: we don't currently serialize self.linresponse_gstfit_params (!)
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        ret = cls(None, state['model_label'], state['circuit_list_label'],
+                  cls._decodemx(state['hessian_matrix']) if (state['hessian_matrix'] is not None) else None,
+                  state['nonmarkovian_radius_squared'])
+        if 'hessian_projection_parameters' in state:  # for backward compatibility
+            for projection_lbl, params in state['hessian_projection_parameters'].items():
+                ret.hessian_projection_parameters[projection_lbl] = params  # (param dict is entirely JSON-able)
+                ret.inv_hessian_projections[projection_lbl] = cls._decodemx(
+                    state['inverse_hessian_projections'][projection_lbl])
+            ret.nNonGaugeParams = state['num_nongauge_params']
+            ret.nGaugeParams = state['num_gauge_params']
+        return ret
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):
+        #Serialize hessian matrices separately using GridFS
+        doc_id_str = str(doc['_id'])
+        if self.hessian is not None:
+            import pickle as _pickle
+            hessian_id = doc_id_str + "/hessian"
+            write_ops.add_gridfs_put_op('pygsti_gridfs', hessian_id,
+                                        _pickle.dumps(self.hessian, protocol=2),
+                                        overwrite_existing, mongodb)
+
+            inv_hessian_projection_ids = {}
+            for k, v in self.inv_hessian_projections.items():
+                inv_hessian_proj_id = doc_id_str + "/inv_hessian_projections/" + k
+                write_ops.add_gridfs_put_op('pygsti_gridfs', inv_hessian_proj_id,
+                                            _pickle.dumps(v, protocol=2), overwrite_existing, mongodb)
+                inv_hessian_projection_ids[k] = inv_hessian_proj_id
+        else:
+            hessian_id = None
+            inv_hessian_projection_ids = {}
+
+        doc.update({'model_label': self.model_lbl,
+                    'circuit_list_label': self.circuit_list_lbl,
+                    'nonmarkovian_radius_squared': self.nonMarkRadiusSq,
+                    'hessian_matrix_id': hessian_id,
+                    'hessian_projection_parameters': {k: v for k, v in self.hessian_projection_parameters.items()},
+                    'inverse_hessian_projection_ids': inv_hessian_projection_ids,
+                    'num_nongauge_params': int(self.nNonGaugeParams) if (self.nNonGaugeParams is not None) else None,
+                    'num_gauge_params': int(self.nGaugeParams) if (self.nGaugeParams is not None) else None,
+                    #Note: need int(.) casts above because int64 is *not* JSON serializable (?)
+                    #Note: we don't currently serialize self.linresponse_gstfit_params (!)
+                    })
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb):
+        if doc['hessian_matrix_id'] is not None:
+            import gridfs as _gridfs
+            import pickle as _pickle
+            fs = _gridfs.GridFS(mongodb, collection='pygsti_gridfs')
+            hessian_mx = _pickle.loads(fs.get(doc['hessian_matrix_id']).read())
+            inv_hessian_projections = {proj_lbl: _pickle.loads(fs.get(proj_id).read())
+                                       for proj_lbl, proj_id in doc['inverse_hessian_projection_ids'].items()}
+        else:
+            hessian_mx = None
+            inv_hessian_projections = {}
+
+        ret = cls(None, doc['model_label'], doc['circuit_list_label'],
+                  hessian_mx, doc['nonmarkovian_radius_squared'])
+        if 'hessian_projection_parameters' in doc:
+            for projection_lbl, params in doc['hessian_projection_parameters'].items():
+                ret.hessian_projection_parameters[projection_lbl] = params  # (param dict is entirely JSON-able)
+                ret.inv_hessian_projections[projection_lbl] = inv_hessian_projections[projection_lbl]
+            ret.nNonGaugeParams = doc['num_nongauge_params']
+            ret.nGaugeParams = doc['num_gauge_params']
+        return ret
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        doc = mongodb[collection_name].find_one_and_delete({'_id': doc_id}, session=session)
+        if doc is not None:
+            if doc['hessian_matrix_id'] is not None:
+                import gridfs as _gridfs
+                import pickle as _pickle
+                fs = _gridfs.GridFS(mongodb, collection='pygsti_gridfs')
+                fs.delete(doc['hessian_matrix_id'], session=session)
+                for proj_id in doc['inverse_hessian_projection_ids'].values():
+                    fs.delete(proj_id, session=session)
 
     def set_parent(self, parent):
         """
@@ -251,18 +356,26 @@ class ConfidenceRegionFactory(object):
         dataset = self.parent.parent.dataset
 
         #extract any parameters we can get from the Estimate
-        parameters = self.parent.parameters
-        obj = parameters.get('objective', 'logl')
-        minProbClip = parameters.get('minProbClip', 1e-4)
-        minProbClipForWeighting = parameters.get('minProbClipForWeighting', 1e-4)
-        probClipInterval = parameters.get('probClipInterval', (-1e6, 1e6))
-        radius = parameters.get('radius', 1e-4)
-        cptp_penalty_factor = parameters.get('cptpPenaltyFactor', 0)
-        spam_penalty_factor = parameters.get('spamPenaltyFactor', 0)
-        useFreqWt = parameters.get('useFreqWeightedChiSq', False)
-        aliases = parameters.get('opLabelAliases', None)
-        if mem_limit is None:
-            mem_limit = parameters.get('mem_limit', None)
+        objfn_builder = self.parent.final_objfn_builder
+        regularization = objfn_builder.regularization if (objfn_builder.regularization is not None) else {}
+        penalties = objfn_builder.penalties if (objfn_builder.penalties is not None) else {}
+
+        if issubclass(objfn_builder.cls_to_build, _PoissonPicDeltaLogLFunction):
+            obj = 'logl'
+            useFreqWt = False
+        elif issubclass(objfn_builder.cls_to_build, (_Chi2Function, _FreqWeightedChi2Function)):
+            obj = 'chi2'
+            useFreqWt = issubclass(objfn_builder.cls_to_build, _FreqWeightedChi2Function)
+        else:
+            raise ValueError("Unsupported objective function class: " + objfn_builder.cls_to_build.__name__)
+
+        minProbClip = regularization.get('min_prob_clip', 1e-4)
+        minProbClipForWeighting = regularization.get('min_prob_clip_for_weighting', 1e-4)
+        probClipInterval = penalties.get('prob_clip_interval', (-1e6, 1e6))
+        radius = regularization.get('radius', 1e-4)
+        cptp_penalty_factor = penalties.get('cptp_penalty_factor', 0)
+        spam_penalty_factor = penalties.get('spam_penalty_factor', 0)
+        aliases = circuit_list.op_label_aliases if isinstance(circuit_list, _CircuitList) else None
 
         vb = 3 if mem_limit else 0  # only show details of hessian comp when there's a mem limit (a heuristic)
 
@@ -273,7 +386,10 @@ class ConfidenceRegionFactory(object):
         #Expand operation label aliases used in DataSet lookups
         ds_circuit_list = _tools.apply_aliases_to_circuits(circuit_list, aliases)
 
-        nModelParams = model.num_nongauge_params
+        try:
+            nModelParams = model.num_nongauge_params
+        except AttributeError:
+            nModelParams = model.num_params  # fallback for models that don't implement num_nongauge_params
         nDataParams = dataset.degrees_of_freedom(ds_circuit_list)
         #number of independent parameters in dataset (max. model # of params)
 
@@ -287,8 +403,13 @@ class ConfidenceRegionFactory(object):
                                  comm=comm, mem_limit=mem_limit, verbosity=vb,
                                  op_label_aliases=aliases)
 
-            nonMarkRadiusSq = max(2 * (_tools.logl_max(model, dataset)
-                                       - _tools.logl(model, dataset,
+            jacobian = _tools.logl_jacobian(model, dataset, circuit_list,
+                                            minProbClip, probClipInterval, radius,
+                                            comm=comm, mem_limit=mem_limit, verbosity=vb)
+
+            nonMarkRadiusSq = max(2 * (_tools.logl_max(model, dataset, circuit_list,
+                                                       op_label_aliases=aliases)
+                                       - _tools.logl(model, dataset, circuit_list,
                                                      op_label_aliases=aliases))
                                   - (nDataParams - nModelParams), MIN_NON_MARK_RADIUS)
 
@@ -297,12 +418,16 @@ class ConfidenceRegionFactory(object):
                                minProbClipForWeighting,
                                probClipInterval, mem_limit=mem_limit,
                                op_label_aliases=aliases) for f in (_tools.chi2, _tools.chi2_hessian)]
+            jacobian = _tools.chi2_jacobian(model, dataset, circuit_list,
+                                            minProbClipForWeighting, probClipInterval, mem_limit=mem_limit,
+                                            comm=comm, op_label_aliases=aliases)
 
             nonMarkRadiusSq = max(chi2 - (nDataParams - nModelParams), MIN_NON_MARK_RADIUS)
         else:
             raise ValueError("Invalid objective '%s'" % obj)
 
         self.hessian = hessian
+        self.jacobian = jacobian
         self.nonMarkRadiusSq = nonMarkRadiusSq
         return hessian
 
@@ -354,15 +479,15 @@ class ConfidenceRegionFactory(object):
             label = projection_type
 
         model = self.parent.models[self.model_lbl]
-        proj_non_gauge = model.compute_nongauge_projector()
-        self.nNonGaugeParams = _np.linalg.matrix_rank(proj_non_gauge, P_RANK_TOL)
+        nongauge_space, gauge_space = model.compute_nongauge_and_gauge_spaces()
+        self.nNonGaugeParams = nongauge_space.shape[1]
         self.nGaugeParams = model.num_params - self.nNonGaugeParams
 
         #Project Hessian onto non-gauge space
         if projection_type == 'none':
             projected_hessian = self.hessian
         elif projection_type == 'std':
-            projected_hessian = _np.dot(proj_non_gauge, _np.dot(self.hessian, proj_non_gauge))
+            projected_hessian = self._project_hessian(self.hessian, nongauge_space, gauge_space, self.jacobian)
         elif projection_type == 'optimal gate CIs':
             projected_hessian = self._opt_projection_for_operation_cis("L-BFGS-B", maxiter, maxiter,
                                                                        tol, verbosity=3)  # verbosity for DEBUG
@@ -512,6 +637,37 @@ class ConfidenceRegionFactory(object):
         #    _warnings.warn("Number of non-gauge parameters in model and confidence region do "
         #                   + " not match.  This indicates an internal logic error.")
 
+    def _project_hessian(self, hessian, nongauge_space, gauge_space, gradient=None):
+        # as from model.nongauge_gauge_spaces(self, item_weights=None, non_gauge_mix_mx=None)
+
+        # Step1: transform hessian into a (nongauge + gauge) coordinate system
+        # to transform H -> H' in another coordinate system v -> w = B @ v:
+        # v.T @ H @ v = some 2nd deriv = v.T @ B.T @ H' @ B @ v in another basis
+        # so H' = invB.T @ H @ invB
+        assert(_np.allclose(hessian, hessian.T))
+        invB = _np.concatenate([nongauge_space, gauge_space], axis=1)  # takes (nongauge,guage) -> orig coords
+        B = _np.linalg.inv(invB)  # takes orig -> (nongauge,gauge) coords
+        Hprime = invB.T @ hessian @ invB
+        #assert(_np.allclose(Hprime, Hprime.T))  # doesn't handle large magnituge Hessians well
+        assert(_np.linalg.norm(Hprime - Hprime.T) / _np.linalg.norm(Hprime) < 1e-7)
+
+        if gradient is not None:  # Check that Hprime is block-diagonal -- off-diag should be ~O(gradient)
+            coupling = Hprime[0:nongauge_space.shape[1], nongauge_space.shape[1]:]
+            if _np.linalg.norm(coupling) / (1e-6 + _np.linalg.norm(gradient)) > 5:
+                _warnings.warn("Gauge-nongauge mixed partials have unusually high magnitude: \n"
+                               + "|off-diag blk| = %.2g should be ~ |gradient| = %.2g" %
+                               (_np.linalg.norm(coupling), _np.linalg.norm(gradient)))
+
+        # Step2: zero out gauge-space block and coupling blocks (essentially project to non-gauge)
+        n = nongauge_space.shape[1]
+        Hprime[0:n, n:] = 0.0
+        Hprime[n:, 0:n] = 0.0
+        Hprime[n:, n:] = 0.0
+
+        # Step3: transform back to original coordinate system w -> v = invB @ w
+        projected_hessian = B.T @ Hprime @ B
+        return projected_hessian
+
     def _opt_projection_for_operation_cis(self, method="L-BFGS-B", maxiter=10000,
                                           maxfev=10000, tol=1e-6, verbosity=0):
         printer = _VerbosityPrinter.create_printer(verbosity)
@@ -524,8 +680,8 @@ class ConfidenceRegionFactory(object):
 
         def _objective_func(vector_m):
             matM = vector_m.reshape((self.nNonGaugeParams, self.nGaugeParams))
-            proj_extra = model.compute_nongauge_projector(non_gauge_mix_mx=matM)
-            projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
+            nongauge_space, gauge_space = model.compute_nongauge_and_gauge_spaces(non_gauge_mix_mx=matM)
+            projected_hessian_ex = self._project_hessian(base_hessian, nongauge_space, gauge_space)
 
             sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl, self.circuit_list_lbl,
                                               projected_hessian_ex, 0.0)
@@ -546,8 +702,8 @@ class ConfidenceRegionFactory(object):
                                callback=print_obj_func if verbosity > 2 else None)
 
         mixMx = minSol.x.reshape((self.nNonGaugeParams, self.nGaugeParams))
-        proj_extra = model.compute_nongauge_projector(non_gauge_mix_mx=mixMx)
-        projected_hessian_ex = _np.dot(proj_extra, _np.dot(base_hessian, proj_extra))
+        nongauge_space, gauge_space = model.compute_nongauge_and_gauge_spaces(non_gauge_mix_mx=mixMx)
+        projected_hessian_ex = self._project_hessian(base_hessian, nongauge_space, gauge_space)
 
         printer.log('The resulting min sqrt(sum(operationCIs**2)): %g' % minSol.fun, 2)
         return projected_hessian_ex
@@ -562,8 +718,8 @@ class ConfidenceRegionFactory(object):
         printer.log("--- Hessian Projector Optimization from separate SPAM and Gate weighting ---", 2, indent_offset=-1)
 
         #get gate-intrinsic-error
-        proj = model.compute_nongauge_projector(item_weights={'gates': 1.0, 'spam': 0.0})
-        projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
+        nongauge_space, gauge_space = model.compute_nongauge_and_gauge_spaces(item_weights={'gates': 1.0, 'spam': 1e-4})
+        projected_hessian = self._project_hessian(base_hessian, nongauge_space, gauge_space)
         sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl,
                                           self.circuit_list_lbl, projected_hessian, 0.0)
         sub_crf.project_hessian('none')
@@ -573,8 +729,8 @@ class ConfidenceRegionFactory(object):
         op_intrinsic_err = _np.sqrt(_np.mean(operationCIs**2))
 
         #get spam-intrinsic-error
-        proj = model.compute_nongauge_projector(item_weights={'gates': 0.0, 'spam': 1.0})
-        projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
+        nongauge_space, gauge_space = model.compute_nongauge_and_gauge_spaces(item_weights={'gates': 1e-4, 'spam': 1.0})
+        projected_hessian = self._project_hessian(base_hessian, nongauge_space, gauge_space)
         sub_crf = ConfidenceRegionFactory(self.parent, self.model_lbl,
                                           self.circuit_list_lbl, projected_hessian, 0.0)
         sub_crf.project_hessian('none')
@@ -585,8 +741,9 @@ class ConfidenceRegionFactory(object):
         spam_intrinsic_err = _np.sqrt(_np.mean(spamCIs**2))
 
         ratio = op_intrinsic_err / spam_intrinsic_err
-        proj = model.compute_nongauge_projector(item_weights={'gates': 1.0, 'spam': ratio})
-        projected_hessian = _np.dot(proj, _np.dot(base_hessian, proj))
+        nongauge_space, gauge_space = model.compute_nongauge_and_gauge_spaces(
+            item_weights={'gates': 1.0, 'spam': ratio})
+        projected_hessian = self._project_hessian(base_hessian, nongauge_space, gauge_space)
 
         if printer.verbosity >= 2:
             #Create crfv here just to extract #'s for print stmts
@@ -890,7 +1047,7 @@ class ConfidenceRegionFactoryView(object):
         #Get finite difference derivative gradF that is shape (nParams, <shape of f0>)
         gradF = _create_empty_grad_f(f0, nParams)
 
-        fn_dependencies = fn_obj.get_dependencies()
+        fn_dependencies = fn_obj.list_dependencies()
         if 'all' in fn_dependencies:
             fn_dependencies = ['all']  # no need to do anything else
         if 'spam' in fn_dependencies:

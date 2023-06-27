@@ -58,7 +58,7 @@ cdef extern from "opcreps.h" namespace "CReps_densitymx":
         StateCRep* adjoint_acton(StateCRep*, StateCRep*)
 
     cdef cppclass OpCRep_Sum(OpCRep):
-        OpCRep_Sum(vector[OpCRep*], INT) except +
+        OpCRep_Sum(vector[OpCRep*], double*, INT) except +
         StateCRep* acton(StateCRep*, StateCRep*)
         StateCRep* adjoint_acton(StateCRep*, StateCRep*)
 

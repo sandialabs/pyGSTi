@@ -140,9 +140,9 @@ class Benchmarker(object):
                 best_boundary_index = 0
                 best_vb_at_best_boundary_index = None
                 for (ind, qs) in specsforw:
-                    vbdata = self.get_volumetric_benchmark_data(depths, widths=[w, ], datatype=datatype,
-                                                                statistic=statistic, specs={ind: [qs, ]},
-                                                                aggregate=aggregate, rescaler=rescaler)['data']
+                    vbdata = self.volumetric_benchmark_data(depths, widths=[w, ], datatype=datatype,
+                                                            statistic=statistic, specs={ind: [qs, ]},
+                                                            aggregate=aggregate, rescaler=rescaler)['data']
                     # Only looking at 1 width, so drop the width key, and keep only the depths with data
                     if not aggregate:
                         vbdata = {d: vbdata[d][w][passnum] for d in vbdata.keys() if w in vbdata[d].keys()}
@@ -197,8 +197,8 @@ class Benchmarker(object):
 
         return selected_regions
 
-    def get_volumetric_benchmark_data(self, depths, widths='all', datatype='success_probabilities',
-                                      statistic='mean', specs=None, aggregate=True, rescaler='auto'):
+    def volumetric_benchmark_data(self, depths, widths='all', datatype='success_probabilities',
+                                  statistic='mean', specs=None, aggregate=True, rescaler='auto'):
 
         # maxmax : max over all depths/widths larger or equal
         # minmin : min over all deoths/widths smaller or equal.
@@ -393,7 +393,7 @@ class Benchmarker(object):
 
         return out
 
-    def get_flattened_data(self, specs=None, aggregate=True):
+    def flattened_data(self, specs=None, aggregate=True):
 
         flattened_data = {}
 
@@ -510,7 +510,7 @@ class Benchmarker(object):
 
     #     for circ
 
-    def get_summary_data(self, datatype, specindex, qubits=None):
+    def summary_data(self, datatype, specindex, qubits=None):
 
         spec = self._specs[specindex]
         structure = spec.get_structure()
@@ -561,7 +561,7 @@ class Benchmarker(object):
         #preddtypes = ('success_probabilities', )
         auxtypes = ['twoQgate_count', 'depth', 'target', 'width', 'circuit_index'] + auxtypes
 
-        def get_datatype(datatype, dsrow, circ, target, qubits):
+        def _get_datatype(datatype, dsrow, circ, target, qubits):
 
             if datatype == 'success_counts':
                 return _analysis.marginalized_success_counts(dsrow, circ, target, qubits)
@@ -680,11 +680,11 @@ class Benchmarker(object):
                     #print('---', i)
                     for qubits_ind, qubits in enumerate(structure):
                         for datatype in datatypes:
-                            x = get_datatype(datatype, dsrow, circ, target, qubits)
+                            x = _get_datatype(datatype, dsrow, circ, target, qubits)
                             summarydata[specind][qubits][datatype][depth][ds_ind].append(x)
                             # Only do predictions on the first pass dataset.
                             if preddskey is not None and ds_ind == 0:
-                                x = get_datatype(datatype, pdsrow, circ, target, qubits)
+                                x = _get_datatype(datatype, pdsrow, circ, target, qubits)
                                 predsummarydata[preddskey][specind][qubits][datatype][depth].append(x)
 
                         # Only do predictions and aux on the first pass dataset.

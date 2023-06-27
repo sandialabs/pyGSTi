@@ -44,7 +44,10 @@ edgelist = [
     ('Q13', 'Q14'), ('Q14', 'Q13'),
     # 4th column of connections
     ('Q17', 'Q18'), ('Q18', 'Q17'),
-    ('Q19', 'Q20'), ('Q20', 'Q19')
+    ('Q19', 'Q20'), ('Q20', 'Q19'),
+    # 5th column of connections
+    ('Q23', 'Q24'), ('Q24', 'Q23'),
+    ('Q24', 'Q25'), ('Q25', 'Q24'),
 ]
 
 spec_format = 'ibmq_v2019'

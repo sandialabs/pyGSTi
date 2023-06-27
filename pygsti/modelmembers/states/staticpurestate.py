@@ -12,11 +12,12 @@ The StaticPureState class and supporting functionality.
 
 import numpy as _np
 from pygsti.modelmembers import term as _term
+from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.modelmembers.states.densestate import DensePureState as _DensePureState
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 
-class StaticPureState(_DensePureState):
+class StaticPureState(_DensePureState, _NoErrorGeneratorInterface):
     """
     A pure state vector that is completely fixed, or "static" (i.e. that posesses no parameters).
 
@@ -103,3 +104,10 @@ class StaticPureState(_DensePureState):
                 return [], (vtape, ctape)
             else:
                 return []
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        # static objects must also test their values in is_similar, since these aren't parameters.
+        return (super()._is_similar(other, rtol, atol)
+                and _np.allclose(self.to_dense(), other.to_dense(), rtol=rtol, atol=atol))

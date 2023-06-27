@@ -24,21 +24,23 @@ from pygsti.report import merge_helpers as _merge
 from pygsti.report import reportables as _reportables
 from pygsti.report import section as _section
 from pygsti.report import workspace as _ws
-from pygsti import _version
+from pygsti._version import version as _pygsti_version
 from pygsti import tools as _tools
 from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.objectivefns import objectivefns as _objfns
+from pygsti.objectivefns import wildcardbudget as _wildcardbudget
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.objectivefns.wildcardbudget import PrimitiveOpsSingleScaleWildcardBudget
 
 #maybe import these from drivers.longsequence so they stay synced?
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]  # ".wildcard" (not a separate estimate anymore)
-DEFAULT_BAD_FIT_THRESHOLD = 2.0
+DEFAULT_NONMARK_ERRBAR_THRESHOLD = 100000.0  # essentially disable since we have better ways of quantifying this now
 
 
 def _add_new_labels(running_lbls, current_lbls):
@@ -236,8 +238,8 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
 
     switchBd.add("eff_ds", (0, 1))
     switchBd.add("modvi_ds", (0, 1))
-    switchBd.add("wildcard_budget", (0, 1))
-    switchBd.add("wildcard_budget_optional", (0, 1))
+    switchBd.add("wildcard_budget", (0, 1, 2))
+    switchBd.add("wildcard_budget_optional", (0, 1, 2))
     switchBd.add("scaled_submxs_dict", (0, 1))
     switchBd.add("mdl_target", (0, 1))
     switchBd.add("params", (0, 1))
@@ -356,11 +358,27 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 switchBd.eff_ds[d, i] = NA
                 switchBd.scaled_submxs_dict[d, i] = NA
 
-            switchBd.wildcard_budget_optional[d, i] = est.parameters.get("unmodeled_error", None)
-            if est.parameters.get("unmodeled_error", None):
-                switchBd.wildcard_budget[d, i] = est.parameters['unmodeled_error']
-            else:
-                switchBd.wildcard_budget[d, i] = NA
+            wildcard = est.parameters.get("unmodeled_error", None)
+            if isinstance(wildcard, dict):  # this is either a serialized budget object
+                #or a dictionary of serialized budget objects. Let's check which:
+                #technically the following could get broken by a user naming a gauge-opt
+                #opt suite 'module', I'll think of a better fix for this at some point.
+                if 'module' in wildcard.keys():
+                    wildcard = _wildcardbudget.WildcardBudget.from_nice_serialization(wildcard)
+                else:
+                    wildcard = {lbl:_wildcardbudget.WildcardBudget.from_nice_serialization(budget) for lbl,budget in wildcard.items()}
+
+            for j, gokey in enumerate(gauge_opt_labels):
+                switchBd.wildcard_budget_optional[d, i, j] = None
+                if wildcard is not None:
+                    if isinstance(wildcard, _wildcardbudget.WildcardBudget):
+                        switchBd.wildcard_budget[d, i, j] = wildcard
+                        switchBd.wildcard_budget_optional[d, i, j] = wildcard
+                    elif isinstance(wildcard, dict):
+                        switchBd.wildcard_budget[d, i, j] = wildcard.get(gokey, NA)
+                        switchBd.wildcard_budget_optional[d, i, j] = wildcard.get(gokey, None)
+                else:
+                    switchBd.wildcard_budget[d, i, j] = NA
 
             switchBd.mdl_target[d, i] = est.models['target']
             switchBd.mdl_gaugeinv[d, i] = est.models[GIRepLbl]
@@ -369,7 +387,9 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                                                                                      est.models['target'])
             except AttributeError:  # Implicit models don't support everything, like set_all_parameterizations
                 switchBd.mdl_gaugeinv_ep[d, i] = None
-            except AssertionError:  # if target is badly off, this can fail with an imaginary part assertion
+            except _np.linalg.LinAlgError:  # Failure to compute a best-case gauge transform can happen w/reduced models
+                switchBd.mdl_gaugeinv_ep[d, i] = None
+            except (ValueError, AssertionError):  # if target is badly off, e.g. an imaginary part assertion
                 switchBd.mdl_gaugeinv_ep[d, i] = None
 
             switchBd.mdl_final[d, i, :] = [est.models.get(l, NA) for l in gauge_opt_labels]
@@ -381,10 +401,11 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             for iL, L in enumerate(swLs):  # allow different results to have different Ls
                 if L in loc_Ls:
                     k = loc_Ls.index(L)
-                    switchBd.mdl_current[d, i, iL] = est.models['iteration estimates'][k]
-                    switchBd.mdl_current_modvi[d, i, iL] = est_modvi.models['iteration estimates'][k]
-            switchBd.mdl_all[d, i] = est.models['iteration estimates']
-            switchBd.mdl_all_modvi[d, i] = est_modvi.models['iteration estimates']
+                    switchBd.mdl_current[d, i, iL] = est.models['iteration %d estimate' % k]
+                    switchBd.mdl_current_modvi[d, i, iL] = est_modvi.models['iteration %d estimate' % k]
+            switchBd.mdl_all[d, i] = [est.models['iteration %d estimate' % k] for k in range(est.num_iterations)]
+            switchBd.mdl_all_modvi[d, i] = [est_modvi.models['iteration %d estimate' % k]
+                                            for k in range(est_modvi.num_iterations)]
 
             if confidence_level is not None:
                 misfit_sigma = est.misfit_sigma()
@@ -449,7 +470,6 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
         return {}
 
     idt_results_dict = {}
-    GiStr = _Circuit((idt_idle_op,))
 
     from ..extras import idletomography as _idt
     autodict = bool(idt_pauli_dicts == "auto")
@@ -464,6 +484,9 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
             idt_pauli_dicts = _idt.determine_paulidicts(idt_target)
             if idt_pauli_dicts is None:
                 continue  # automatic creation failed -> skip
+
+        qubit_labels = idt_target.state_space.sole_tensor_product_block_labels
+        GiStr = _Circuit((idt_idle_op,), line_labels=qubit_labels)
 
         circuits_final = results.circuit_lists['final']
         if not isinstance(circuits_final, _CircuitList): continue
@@ -484,12 +507,12 @@ def _construct_idtresults(idt_idle_op, idt_pauli_dicts, gst_results_dict, printe
         maxLengths = circuit_struct.xs
         # just use "L0" (first maxLength) - all should have same fidpairs
         plaq = circuit_struct.plaquette(maxLengths[0], GiStr)
-        pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(plaq.fidpairs, idt_pauli_dicts, nQubits)
+        pauli_fidpairs = _idt.fidpairs_to_pauli_fidpairs(list(plaq.fidpairs.values()), idt_pauli_dicts, nQubits)
         idt_advanced = {'pauli_fidpairs': pauli_fidpairs, 'jacobian mode': "together"}
         printer.log(" * Running idle tomography on %s dataset *" % ky)
         idtresults = _idt.do_idle_tomography(nQubits, results.dataset, maxLengths, idt_pauli_dicts,
                                              maxweight=2,  # HARDCODED for now (FUTURE)
-                                             idle_string=idStr, advancedOptions=idt_advanced)
+                                             idle_string=idStr, advanced_options=idt_advanced)
         idt_results_dict[ky] = idtresults
 
     return idt_results_dict
@@ -544,7 +567,7 @@ def _create_single_metric_switchboard(ws, results_dict, b_gauge_inv,
 def create_general_report(results, filename, title="auto",
                           confidence_level=None,
                           linlog_percentile=5, errgen_type="logGTi",
-                          nmthreshold=50, precision=None,
+                          nmthreshold=DEFAULT_NONMARK_ERRBAR_THRESHOLD, precision=None,
                           comm=None, ws=None, auto_open=False,
                           cachefile=None, brief=False, connected=False,
                           link_to=None, resizable=True, autosize='initial',
@@ -1074,7 +1097,7 @@ def find_std_clifford_compilation(model, verbosity=0):
     for module_name in smq_modules:
         mod = importlib.import_module("pygsti.modelpacks." + module_name)
         if model.state_space.num_tensor_product_blocks > 1: continue  # only try to match for single-TPB cases
-        qubit_labels = model.state_space.tensor_product_block_labels(0)  # this usually gets the qubit labels
+        qubit_labels = model.state_space.sole_tensor_product_block_labels  # usually the qubit labels
         if len(mod._sslbls) != len(qubit_labels): continue  # wrong number of qubits!
         if _StateSpace.cast(mod._sslbls).dim != _StateSpace.cast(qubit_labels).dim: continue
 
@@ -1175,7 +1198,7 @@ def construct_standard_report(results, title="auto",
 
     advanced_options = advanced_options or {}
     linlogPercentile = advanced_options.get('linlog percentile', 5)
-    nmthreshold = advanced_options.get('nmthreshold', DEFAULT_BAD_FIT_THRESHOLD)
+    nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
     embed_figures = advanced_options.get('embed_figures', True)
     combine_robust = advanced_options.get('combine_robust', True)
     idtPauliDicts = advanced_options.get('idt_basis_dicts', 'auto')
@@ -1196,7 +1219,7 @@ def construct_standard_report(results, title="auto",
                         " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+               ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
 
     results = results if isinstance(results, dict) else {"unique": results}
 
@@ -1209,6 +1232,22 @@ def construct_standard_report(results, title="auto",
                 flags.add('ShowScaling')
             if est.parameters.get('unmodeled_error', None):
                 flags.add('ShowUnmodeledError')
+                #check if the wildcard budget is an instance
+                #of the diamond distance model, in which case we
+                #will add an extra flag/plot to the report.
+                wildcard = est.parameters['unmodeled_error']
+                if isinstance(wildcard, dict):  # assume a serialized budget object
+                    #check if this is a dictionary of serialized budget objects or just one.
+                    #If a dictionary just deserialize the first (this is not a great way to
+                    #do this, circle back to this).
+                    if 'module' in wildcard.keys():
+                        wildcard = _wildcardbudget.WildcardBudget.from_nice_serialization(wildcard)
+                    else:
+                        wildcard = _wildcardbudget.WildcardBudget.from_nice_serialization(list(wildcard.values())[0])
+                if (isinstance(wildcard, PrimitiveOpsSingleScaleWildcardBudget)
+                   and wildcard.reference_name == 'diamond distance'):
+                    flags.add('DiamondDistanceWildcard')
+
     if combine_robust:
         flags.add('CombineRobust')
 
@@ -1400,7 +1439,7 @@ def construct_nqnoise_report(results, title="auto",
 
     advanced_options = advanced_options or {}
     linlogPercentile = advanced_options.get('linlog percentile', 5)
-    nmthreshold = advanced_options.get('nmthreshold', DEFAULT_BAD_FIT_THRESHOLD)
+    nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
     embed_figures = advanced_options.get('embed_figures', True)
     combine_robust = advanced_options.get('combine_robust', True)
     idtPauliDicts = advanced_options.get('idt_basis_dicts', 'auto')
@@ -1421,7 +1460,7 @@ def construct_nqnoise_report(results, title="auto",
                         " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+               ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
 
     results = results if isinstance(results, dict) else {"unique": results}
 
@@ -1495,6 +1534,7 @@ def construct_nqnoise_report(results, title="auto",
         'colorBoxPlotKeyPlot': ws.BoxKeyPlot(switchBd.prep_fiducials, switchBd.meas_fiducials),
         'bestGatesetGaugeOptParamsTable': ws.GaugeOptParamsTable(switchBd.goparams),
         'gramBarPlot': ws.GramMatrixBarPlot(switchBd.ds, switchBd.mdl_target, 10, switchBd.fiducials_tup)
+        # Note by EGN 11/10/2022 - I don't think 'gramBarPlot' is needed here, maybe just a copy/paste oversight?
     }
 
     report_params = {
@@ -1581,7 +1621,7 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
                         " for you: '{}'.").format(autoname))
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+               ('Keywords', 'GST'), ('pyGSTi Version', _pygsti_version)]
 
     results_dict = results if isinstance(results, dict) else {"unique": results}
     assert(len(results_dict) == 1), "Drift reports do not support multiple results objects yet."

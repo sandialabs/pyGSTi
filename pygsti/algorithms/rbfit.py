@@ -13,6 +13,7 @@ Functions for analyzing RB data
 import numpy as _np
 from scipy.optimize import curve_fit as _curve_fit
 
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import rbtools as _rbt
 
 
@@ -190,13 +191,20 @@ def std_least_squares_fit(lengths, asps, n, seed=None, asymptote=None, ftype='fu
     if asymptote is not None: A = asymptote
     else: A = 1 / 2**n
     # First perform a fit with a fixed asymptotic value
-    FAF_results = custom_least_squares_fit(lengths, asps, n, a=A, seed=seed)
+    FAF_results = custom_least_squares_fit(lengths, asps, n, a=A, seed=seed, rtype=rtype)
+    if ftype == 'FA':
+        return FAF_results
+
+    if not all([x in FAF_results['estimates'] for x in ('a', 'b', 'p')]):
+        raise ValueError(("Initial fixed-asymptotic RB fit failed and is needed to seed requested %s fit type."
+                          " Please check that the RB data is valid.") % ftype)
+
     # Full fit is seeded by the fixed asymptote fit.
     seed_full = [FAF_results['estimates']['a'], FAF_results['estimates']['b'], FAF_results['estimates']['p']]
-    FF_results = custom_least_squares_fit(lengths, asps, n, seed=seed_full)
+    FF_results = custom_least_squares_fit(lengths, asps, n, seed=seed_full, rtype=rtype)
+
     # Returns the requested fit type.
     if ftype == 'full': return FF_results
-    elif ftype == 'FA': return FAF_results
     elif ftype == 'full+FA': return FF_results, FAF_results
     else: raise ValueError("The `ftype` value is invalid!")
 
@@ -243,7 +251,7 @@ def custom_least_squares_fit(lengths, asps, n, a=None, b=None, seed=None, rtype=
     variable['a'] = True
     variable['b'] = True
     variable['p'] = True
-    lengths = _np.array(lengths, int)
+    lengths = _np.array(lengths, _np.int64)
     asps = _np.array(asps, 'd')
 
     # The fit to do if a fixed value for a is given
@@ -339,7 +347,7 @@ def custom_least_squares_fit(lengths, asps, n, a=None, b=None, seed=None, rtype=
         estimates['a'] = a
         estimates['b'] = b
         estimates['p'] = p
-        estimates['r'] = _rbt.p_to_r(p, 2**n)
+        estimates['r'] = _rbt.p_to_r(p, 2**n, rtype)
 
     results = {}
     results['estimates'] = estimates
@@ -351,7 +359,7 @@ def custom_least_squares_fit(lengths, asps, n, a=None, b=None, seed=None, rtype=
     return results
 
 
-class FitResults(object):
+class FitResults(_NicelySerializable):
     """
     An object to contain the results from fitting RB data.
 
@@ -429,6 +437,7 @@ class FitResults(object):
         bootstraps_failrate : float, optional
             The proporition of the estimates of the parameters from bootstrapped dataset failed.
         """
+        super().__init__()
         self.fittype = fittype
         self.seed = seed
         self.rtype = rtype
@@ -440,6 +449,26 @@ class FitResults(object):
 
         self.bootstraps = bootstraps
         self.bootstraps_failrate = bootstraps_failrate
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'fit_type': self.fittype,
+                      'seed': self.seed,
+                      'r_type': self.rtype,
+                      'success': self.success,
+                      'estimates': self.estimates,
+                      'variable': self.variable,
+                      'stds': self.stds,
+                      'bootstraps': self.bootstraps,
+                      'bootstraps_failrate': self.bootstraps_failrate
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(state['fit_type'], state['seed'], state['r_type'], state['success'],
+                   state['estimates'], state['variable'], state['stds'],
+                   state['bootstraps'], state['bootstraps_failrate'])
 
 # Obsolute RB results class
 # class SimpleRBResults(object):

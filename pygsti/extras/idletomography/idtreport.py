@@ -562,7 +562,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
         #min/max
         m = -M
 
-        def get_plot_info(qubits, rate_dict):
+        def _get_plot_info(qubits, rate_dict):
             wt = len(qubits)  # the weight of the errors
             basisLblLookup = {_pobjs.NQPauliOp(''.join(tup)): i for i, tup in
                               enumerate(_itertools.product(["X", "Y", "Z"], repeat=wt))}
@@ -590,7 +590,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
 
             for disp in display:
                 if disp == "H" and ky in ham_rates:
-                    values, xlabels, ylabels = get_plot_info(ky, ham_rates[ky])
+                    values, xlabels, ylabels = _get_plot_info(ky, ham_rates[ky])
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws, values, m, M, xlabels, ylabels,
@@ -602,7 +602,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                         row_formatters.append('Brackets')
 
                 if disp == "S" and ky in sto_rates:
-                    values, xlabels, ylabels = get_plot_info(ky, sto_rates[ky])
+                    values, xlabels, ylabels = _get_plot_info(ky, sto_rates[ky])
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws, values, m, M, xlabels, ylabels,
@@ -614,7 +614,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                         row_formatters.append('Brackets')
 
                 if disp == "A" and ky in aff_rates:
-                    values, xlabels, ylabels = get_plot_info(ky, aff_rates[ky])
+                    values, xlabels, ylabels = _get_plot_info(ky, aff_rates[ky])
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws, values, m, M, xlabels, ylabels,
@@ -803,7 +803,7 @@ def create_idletomography_report(results, filename, title="auto",
     qtys['date'] = _time.strftime("%B %d, %Y")
 
     pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.__version__)]
+               ('Keywords', 'GST'), ('pyGSTi Version', _version.version)]
     qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
 
     # Generate Switchboard

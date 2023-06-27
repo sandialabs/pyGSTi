@@ -16,12 +16,14 @@ import itertools as _itertools
 import functools as _functools
 import numpy as _np
 
+from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.modelmembers.povms.computationaleffect import ComputationalBasisPOVMEffect as _ComputationalBasisPOVMEffect
 from pygsti.modelmembers.povms.povm import POVM as _POVM
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.evotypes import Evotype as _Evotype
 
 
-class ComputationalBasisPOVM(_POVM):
+class ComputationalBasisPOVM(_POVM, _NoErrorGeneratorInterface):
     """
     A POVM that "measures" states in the computational "Z" basis.
 
@@ -70,11 +72,16 @@ class ComputationalBasisPOVM(_POVM):
         #LATER - do something with qubit_filter here
         # qubits = self.qubit_filter if (self.qubit_filter is not None) else list(range(self.nqubits))
 
+        evotype = _Evotype.cast(evotype)
         items = []  # init as empty (lazy creation of members)
         if state_space is None:
             state_space = _statespace.QubitSpace(nqubits)
         assert(state_space.num_qubits == nqubits), "`state_space` must describe %d qubits!" % nqubits
-        super(ComputationalBasisPOVM, self).__init__(state_space, evotype, items)
+        try:
+            rep = evotype.create_computational_povm_rep(self.nqubits, self.qubit_filter)
+        except AttributeError:
+            rep = None
+        super(ComputationalBasisPOVM, self).__init__(state_space, evotype, rep, items)
 
     def __contains__(self, key):
         """ For lazy creation of effect vectors """
@@ -92,10 +99,10 @@ class ComputationalBasisPOVM(_POVM):
         """
         An iterator over the effect (outcome) labels of this POVM.
         """
-        # TODO: CHP short circuit
-        if self._evotype == 'chp':
-            return
-            yield
+        # TODO: CHP short circuit  -- check: where/when is this needed? ------------------------------------------------------------------------
+        #if self._evotype == 'chp':
+        #    return
+        #    yield
 
         iterover = [('0', '1')] * self.nqubits
         for k in _itertools.product(*iterover):
@@ -118,13 +125,16 @@ class ComputationalBasisPOVM(_POVM):
     def __getitem__(self, key):
         """ For lazy creation of effect vectors """
         if _collections.OrderedDict.__contains__(self, key):
-            return _collections.OrderedDict.__getitem__(self, key)
-        elif key in self:  # calls __contains__ to efficiently check for membership
+            ret = _collections.OrderedDict.__getitem__(self, key)
+            if ret.parent is self.parent:  # check for "stale" cached effect vector, and
+                return ret  # ensure we return an effect for our parent!
+
+        if key in self:  # calls __contains__ to efficiently check for membership
             #create effect vector now that it's been requested (lazy creation)
             # decompose key into separate factor-effect labels
             outcomes = [(0 if letter == '0' else 1) for letter in key]
             effect = _ComputationalBasisPOVMEffect(outcomes, 'pp', self._evotype, self.state_space)
-            effect.set_gpindices(slice(0, 0, None), self.parent)  # computational vecs have no params
+            assert(effect.allocate_gpindices(0, self.parent) == 0)  # functional! computational vecs have no params
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect
         else: raise KeyError("%s is not an outcome label of this StabilizerZPOVM" % key)
@@ -153,12 +163,45 @@ class ComputationalBasisPOVM(_POVM):
         -------
         OrderedDict of POVMEffects
         """
-        # Create "simplified" effect vectors, which infer their parent and
-        # gpindices from the set of "factor-POVMs" they're constructed with.
         if prefix: prefix += "_"
         simplified = _collections.OrderedDict(
             [(prefix + k, self[k]) for k in self.keys()])
         return simplified
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        mm_dict['nqubits'] = self.nqubits
+        mm_dict['qubit_filter'] = self.qubit_filter
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        return cls(mm_dict['nqubits'], mm_dict['evotype'], mm_dict['qubit_filter'], state_space)
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (self.nqubits == other.nqubits and self.qubit_filter == other.qubit_filter)
 
     def __str__(self):
         s = "Computational(Z)-basis POVM on %d qubits and filter %s\n" \

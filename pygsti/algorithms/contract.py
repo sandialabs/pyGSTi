@@ -79,7 +79,7 @@ def contract(model, to_what, dataset=None, maxiter=1000000, tol=0.01, use_direct
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
-    if to_what == 'CPTP':
+    if to_what in ('CPTP', 'CPTPLND'):
         if use_direct_cp:
             _, contractedModel = _contract_to_cp_direct(model, printer, tp_also=True, maxiter=maxiter)
         else:
@@ -287,7 +287,7 @@ def _contract_to_cp_direct(model, verbosity, tp_also=False, maxiter=100000, tol=
             it += 1
             if it > maxiter: break
 
-        mdl.operations[opLabel] = _op.FullArbitraryOp(new_op, mdl.evotype, mdl.state_space)
+        mdl.operations[opLabel] = _op.FullArbitraryOp(new_op, evotype=mdl.evotype, state_space=mdl.state_space)
 
         if it > maxiter:
             printer.warning("Max iterations exceeded in contract_to_cp_direct")

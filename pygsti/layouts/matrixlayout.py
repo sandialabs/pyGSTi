@@ -92,7 +92,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
 
                         #Now add these outcomes to `expanded_nospam_circuit_outcomes` - note that multiple "unique_i"'s
                         # may exist for the same expanded & without-spam circuit (exp_nospam_c) and so we need to
-                        # keep track of a list if unique_i indices for each circut and spam tuple below.
+                        # keep track of a list of unique_i indices for each circut and spam tuple below.
                         if exp_nospam_c not in _expanded_nospam_circuit_outcomes:
                             _expanded_nospam_circuit_outcomes[exp_nospam_c] = _collections.OrderedDict(
                                 [(st, (outcome, [unique_i])) for st, outcome in zip(spam_tuples, outcomes)])

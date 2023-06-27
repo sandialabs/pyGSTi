@@ -146,13 +146,12 @@ class OpRepEmbedded(OpRep):
         # assert that all state space labels == qubits, since we only know
         # how to embed cliffords on qubits...
         state_space = _StateSpace.cast(state_space)
-        assert(state_space.num_tensor_product_blocks == 1
-               and all([state_space.label_udimension(l) == 2 for l in state_space.tensor_product_block_labels(0)])), \
+        assert(all([state_space.label_udimension(l) == 2 for l in state_space.sole_tensor_product_block_labels])), \
             "All state space labels must correspond to *qubits*"
 
         #Cache info to speedup representation's acton(...) methods:
         # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
-        qubitLabels = state_space.tensor_product_block_labels(0)
+        qubitLabels = state_space.sole_tensor_product_block_labels
         qubit_indices = _np.array([qubitLabels.index(targetLbl)
                                    for targetLbl in target_labels], _np.int64)
 
@@ -210,13 +209,13 @@ class OpRepRepeated(OpRep):
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
         for i in range(self.num_repetitions):
-            state = self.repated_rep.adjoint_acton(state)
+            state = self.repeated_rep.adjoint_acton(state)
         return state
 
 
 class OpRepLindbladErrorgen(OpRep):
-    def __init__(self, lindblad_term_dict, basis, state_space):
+    def __init__(self, lindblad_coefficient_blocks, state_space):
         super(OpRepLindbladErrorgen, self).__init__(state_space)
         self.Lterms = None
         self.Lterm_coeffs = None
-        self.LtermdictAndBasis = (lindblad_term_dict, basis)
+        self.lindblad_coefficient_blocks = lindblad_coefficient_blocks

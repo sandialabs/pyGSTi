@@ -20,6 +20,7 @@ from pygsti.optimize import arraysinterface as _ari
 from pygsti.optimize.customsolve import custom_solve as _custom_solve
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 # from scipy.optimize import OptimizeResult as _optResult
 
@@ -75,7 +76,7 @@ class OptimizerResult(object):
         self.chi2_k_distributed_qty = chi2_k_distributed_qty
 
 
-class Optimizer(object):
+class Optimizer(_NicelySerializable):
     """
     An optimizer.  Optimizes an objective function.
     """
@@ -102,6 +103,9 @@ class Optimizer(object):
             return obj
         else:
             return cls(**obj) if obj else cls()
+
+    def __init__(self):
+        super().__init__()
 
 
 class CustomLMOptimizer(Optimizer):
@@ -192,18 +196,25 @@ class CustomLMOptimizer(Optimizer):
         If 1 then the optimization is halted only when a would-be *accepted* step
         is out of bounds.
 
-    serial_solve_proc_threshold : int optional
+    serial_solve_proc_threshold : int, optional
         When there are fewer than this many processors, the optimizer will solve linear
         systems serially, using SciPy on a single processor, rather than using a parallelized
         Gaussian Elimination (with partial pivoting) algorithm coded in Python. Since SciPy's
         implementation is more efficient, it's not worth using the parallel version until there
         are many processors to spread the work among.
+
+    lsvec_mode : {'normal', 'percircuit'}
+        Whether the terms used in the least-squares optimization are the "elements" as computed
+        by the objective function's `.terms()` and `.lsvec()` methods (`'normal'` mode) or the
+        "per-circuit quantities" computed by the objective function's `.percircuit()` and
+        `.lsvec_percircuit()` methods (`'percircuit'` mode).
     """
     def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0, damping_mode="identity",
                  damping_basis="diagonal_values", damping_clip=None, use_acceleration=False,
                  uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0,
-                 oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100):
+                 oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal"):
 
+        super().__init__()
         if isinstance(tol, float): tol = {'relx': 1e-8, 'relf': tol, 'f': 1.0, 'jac': tol, 'maxdx': 1.0}
         self.maxiter = maxiter
         self.maxfev = maxfev
@@ -222,6 +233,50 @@ class CustomLMOptimizer(Optimizer):
         self.array_types = 3 * ('p',) + ('e', 'ep')  # see custom_leastsq fn "-type"s  -need to add 'jtj' type
         self.called_objective_methods = ('lsvec', 'dlsvec')  # the objective function methods we use (for mem estimate)
         self.serial_solve_proc_threshold = serial_solve_proc_threshold
+        self.lsvec_mode = lsvec_mode
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({
+            'maximum_iterations': self.maxiter,
+            'maximum_function_evaluations': self.maxfev,
+            'tolerance': self.tol,
+            'number_of_finite_difference_iterations': self.fditer,
+            'number_of_first_stage_finite_difference_iterations': self.first_fditer,
+            'damping_mode': self.damping_mode,
+            'damping_basis': self.damping_basis,
+            'damping_clip': self.damping_clip,
+            'use_acceleration': self.use_acceleration,
+            'uphill_step_threshold': self.uphill_step_threshold,
+            'initial_mu_and_nu': self.init_munu,
+            'out_of_bounds_check_interval': self.oob_check_interval,
+            'out_of_bounds_action': self.oob_action,
+            'out_of_bounds_check_mode': self.oob_check_mode,
+            'array_types': self.array_types,
+            'called_objective_function_methods': self.called_objective_methods,
+            'serial_solve_number_of_processors_threshold': self.serial_solve_proc_threshold,
+            'lsvec_mode': self.lsvec_mode
+        })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        return cls(maxiter=state['maximum_iterations'],
+                   maxfev=state['maximum_function_evaluations'],
+                   tol=state['tolerance'],
+                   fditer=state['number_of_finite_difference_iterations'],
+                   first_fditer=state['number_of_first_stage_finite_difference_iterations'],
+                   damping_mode=state['damping_mode'],
+                   damping_basis=state['damping_basis'],
+                   damping_clip=state['damping_clip'],
+                   use_acceleration=state['use_acceleration'],
+                   uphill_step_threshold=state['uphill_step_threshold'],
+                   init_munu=state['initial_mu_and_nu'],
+                   oob_check_interval=state['out_of_bounds_check_interval'],
+                   oob_action=state['out_of_bounds_action'],
+                   oob_check_mode=state['out_of_bounds_check_mode'],
+                   serial_solve_proc_threshold=state['serial_solve_number_of_processors_threshold'],
+                   lsvec_mode=state.get('lsvec_mode', 'normal'))
 
     def run(self, objective, profiler, printer):
 
@@ -239,20 +294,30 @@ class CustomLMOptimizer(Optimizer):
         printer : VerbosityPrinter
             printer to use for sending output to stdout.
         """
-        objective_func = objective.lsvec
-        jacobian = objective.dlsvec
+        nExtra = objective.ex  # number of additional "extra" elements
+
+        if self.lsvec_mode == 'normal':
+            objective_func = objective.lsvec
+            jacobian = objective.dlsvec
+            nEls = objective.layout.num_elements + nExtra  # 'e' for array types
+        elif self.lsvec_mode == 'percircuit':
+            objective_func = objective.lsvec_percircuit
+            jacobian = objective.dlsvec_percircuit
+            nEls = objective.layout.num_circuits + nExtra  # 'e' for array types
+        else:
+            raise ValueError("Invalid `lsvec_mode`: %s" % str(self.lsvec_mode))
+
         x0 = objective.model.to_vector()
         x_limits = objective.model.parameter_bounds
         # x_limits should be a (num_params, 2)-shaped array, holding on each row the (min, max) values for the
         #  corresponding parameter (element of the "x" vector) or `None`.  If `None`, then no limits are imposed.
 
         # Check memory limit can handle what custom_leastsq will "allocate"
-        nExtra = objective.ex  # number of additional "extra" elements
-        nEls = objective.layout.num_elements + nExtra; nP = len(x0)  # 'e' and 'p' for array types
+        nP = len(x0)  # 'p' for array types
         objective.resource_alloc.check_can_allocate_memory(3 * nP + nEls + nEls * nP + nP * nP)  # see array_types above
 
         from ..layouts.distlayout import DistributableCOPALayout as _DL
-        ari = _ari.DistributedArraysInterface(objective.layout, nExtra) \
+        ari = _ari.DistributedArraysInterface(objective.layout, self.lsvec_mode, nExtra) \
             if isinstance(objective.layout, _DL) else _ari.UndistributedArraysInterface(nEls, nP)
 
         opt_x, converged, msg, mu, nu, norm_f, f, opt_jtj = custom_leastsq(

@@ -70,12 +70,13 @@ class CPTPState(_DenseState):
         self._set_params_from_vector(vector, truncate)
 
         #parameter labels (parameter encode the Cholesky Lmx)
-        labels = []
-        for i, ilbl in enumerate(basis.labels[1:]):
-            for j, jlbl in enumerate(basis.labels[1:]):
-                if i == j: labels.append("%s diagonal element of density matrix Cholesky decomp" % ilbl)
-                elif j < i: labels.append("Re[(%s,%s) element of density matrix Cholesky decomp]" % (ilbl, jlbl))
-                else: labels.append("Im[(%s,%s) element of density matrix Cholesky decomp]" % (ilbl, jlbl))
+        labels = {}; dmDim = self.dmDim
+        for i in range(dmDim):
+            labels[i * dmDim + i] = "(%d, %d) element of density matrix Cholesky deomp" % (i, i)
+            for j in range(i):
+                labels[i * dmDim + j] = "Re[(%d, %d) element of density matrix Cholesky deomp]" % (i, j)
+                labels[j * dmDim + i] = "Im[(%d, %d) element of density matrix Cholesky deomp]" % (i, j)
+        labels = [lbl for indx, lbl in sorted(list(labels.items()), key=lambda x: x[0])]
 
         #scratch space
         self.Lmx = _np.zeros((self.dmDim, self.dmDim), 'complex')
@@ -84,8 +85,39 @@ class CPTPState(_DenseState):
             else _statespace.StateSpace.cast(state_space)
 
         evotype = _Evotype.cast(evotype)
-        _DenseState.__init__(self, vector, evotype, state_space)
+        _DenseState.__init__(self, vector, basis, evotype, state_space)
         self._paramlbls = _np.array(labels, dtype=object)
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)  # contains 'dense_state_vector' via DenseState base class
+        mm_dict['basis'] = self.basis.to_nice_serialization()
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        vec = _np.array(mm_dict['dense_state_vector'])
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        basis = _Basis.from_nice_serialization(mm_dict['basis'])
+        truncate = False  # shouldn't need to since we're loading a valid object
+        return cls(vec, basis, truncate, mm_dict['evotype'], state_space)
 
     def _set_params_from_vector(self, vector, truncate):
         density_mx = _np.dot(self.basis_mxs, vector)

@@ -13,7 +13,9 @@ Defines the OplessModel class
 import numpy as _np
 
 from pygsti.models.model import Model as _Model
+from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.opcalc import float_product as prod
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.forwardsims.successfailfwdsim import SuccessFailForwardSimulator as _SuccessFailForwardSimulator
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
@@ -30,29 +32,12 @@ class OplessModel(_Model):
 
     Parameters
     ----------
-    state_space_labels : StateSpaceLabels or list or tuple
-        The decomposition (with labels) of (pure) state-space this model
-        acts upon.  Regardless of whether the model contains operators or
-        superoperators, this argument describes the Hilbert space dimension
-        and imposed structure.  If a list or tuple is given, it must be
-        of a from that can be passed to `StateSpaceLabels.__init__`.
+    state_space : StateSpace
+        The state space of this model.
     """
 
-    def __init__(self, state_space_labels):
-        """
-        Creates a new Model.  Rarely used except from derived classes
-        `__init__` functions.
-
-        Parameters
-        ----------
-        state_space_labels : StateSpaceLabels or list or tuple
-            The decomposition (with labels) of (pure) state-space this model
-            acts upon.  Regardless of whether the model contains operators or
-            superoperators, this argument describes the Hilbert space dimension
-            and imposed structure.  If a list or tuple is given, it must be
-            of a from that can be passed to `StateSpaceLabels.__init__`.
-        """
-        _Model.__init__(self, state_space_labels)
+    def __init__(self, state_space):
+        _Model.__init__(self, state_space)
 
         #Setting things the rest of pyGSTi expects but probably shouldn't...
         self.basis = None
@@ -162,20 +147,27 @@ class SuccessFailModel(OplessModel):
 
     Parameters
     ----------
-    state_space_labels : StateSpaceLabels or list or tuple
-        The decomposition (with labels) of (pure) state-space this model
-        acts upon.  Regardless of whether the model contains operators or
-        superoperators, this argument describes the Hilbert space dimension
-        and imposed structure.  If a list or tuple is given, it must be
-        of a from that can be passed to `StateSpaceLabels.__init__`.
+    state_space : StateSpace
+        The state space of this model.
 
     use_cache : bool, optional
         Whether a cache should be used to increase performance.
     """
-    def __init__(self, state_space_labels, use_cache=False):
-        OplessModel.__init__(self, state_space_labels)
+    def __init__(self, state_space, use_cache=False):
+        OplessModel.__init__(self, state_space)
         self.use_cache = use_cache
         self._sim = _SuccessFailForwardSimulator(self)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'use_cache': self.use_cache
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        state_space = _StateSpace.from_nice_serialization(state['state_space'])
+        return cls(state_space, state['use_cache'])
 
     @property
     def sim(self):
@@ -396,7 +388,7 @@ class ErrorRatesModel(SuccessFailModel):
         #             if q not in usedQs:
         #                 inds_to_mult.append(g_inds[q])
 
-        #         inds_to_mult_by_layer.append(_np.array(inds_to_mult, int))
+        #         inds_to_mult_by_layer.append(_np.array(inds_to_mult, _np.int64))
 
         # else:
 
@@ -406,6 +398,9 @@ class ErrorRatesModel(SuccessFailModel):
                 return [g_inds[self._alias_dict.get(lbl, lbl)]]
             elif self._alias_dict.get(lbl.name, lbl.name) in g_inds:  # allow, e.g. "Gx" to work for Gx:0, Gx:1, etc.
                 return [g_inds[self._alias_dict.get(lbl.name, lbl.name)]]
+            elif self._alias_dict.get(_Label(lbl.name, lbl.sslbls), _Label(lbl.name, lbl.sslbls)) in g_inds:
+                # Allow time/arg stripped labels to match
+                return [g_inds[self._alias_dict.get(_Label(lbl.name, lbl.sslbls), _Label(lbl.name, lbl.sslbls))]]
             else:
                 indices = []
                 assert(not lbl.is_simple()), "Cannot find error rate for label: %s" % str(lbl)
@@ -415,13 +410,14 @@ class ErrorRatesModel(SuccessFailModel):
 
         if self._idlename is not None:
             layers_with_idles = [circuit.layer_label_with_idles(i, idle_gate_name=self._idlename) for i in range(depth)]
-            inds_to_mult_by_layer = [_np.array(indices_for_label(layer), int) for layer in layers_with_idles]
+            inds_to_mult_by_layer = [_np.array(indices_for_label(layer), _np.int64) for layer in layers_with_idles]
         else:
-            inds_to_mult_by_layer = [_np.array(indices_for_label(circuit.layer_label(i)), int) for i in range(depth)]
+            inds_to_mult_by_layer = [_np.array(indices_for_label(circuit.layer_label(i)), _np.int64)
+                                     for i in range(depth)]
 
         # Bit-flip readout error as a pre-measurement depolarizing channel.
         inds_to_mult = [r_inds[q] for q in circuit.line_labels]
-        inds_to_mult_by_layer.append(_np.array(inds_to_mult, int))
+        inds_to_mult_by_layer.append(_np.array(inds_to_mult, _np.int64))
 
         # The scaling constant such that lambda = 1 - alpha * epsilon where lambda is the diagonal of a depolarizing
         # channel with entanglement infidelity of epsilon.
@@ -579,7 +575,7 @@ class TwirledGatesModel(ErrorRatesModel):
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
         all_inds_to_mult = _np.concatenate(inds_to_mult_by_layer[:-1])
         readout_inds_to_mult = inds_to_mult_by_layer[-1]
-        all_inds_to_mult_cnt = _np.zeros(self.num_params, int)
+        all_inds_to_mult_cnt = _np.zeros(self.num_params, _np.int64)
         for i in all_inds_to_mult:
             all_inds_to_mult_cnt[i] += 1
         return width, depth, alpha, one_over_2_width, all_inds_to_mult, readout_inds_to_mult, all_inds_to_mult_cnt
@@ -685,7 +681,7 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
     def _circuit_cache(self, circuit):
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
         all_inds_to_mult = _np.concatenate(inds_to_mult_by_layer)
-        all_inds_to_mult_cnt = _np.zeros(self.num_params, int)
+        all_inds_to_mult_cnt = _np.zeros(self.num_params, _np.int64)
         for i in all_inds_to_mult:
             all_inds_to_mult_cnt[i] += 1
         return all_inds_to_mult, all_inds_to_mult_cnt
@@ -767,7 +763,7 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
     def _circuit_cache(self, circuit):
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
         all_inds_to_mult = _np.concatenate(inds_to_mult_by_layer)
-        all_inds_to_mult_cnt = _np.zeros(self.num_params, int)
+        all_inds_to_mult_cnt = _np.zeros(self.num_params, _np.int64)
         for i in all_inds_to_mult:
             all_inds_to_mult_cnt[i] += 1
         return one_over_2_width, all_inds_to_mult, all_inds_to_mult_cnt

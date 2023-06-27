@@ -43,9 +43,15 @@ from pygsti.processors import CliffordCompilationRules as _CliffordCompilationRu
 from pygsti.models import oplessmodel as _oplessmodel, modelconstruction as _mconst
 from pygsti.modelmembers.povms import povm as _povm
 from pygsti.tools import rbtools as _anl
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 
-
+@_deprecated_fn('basic_device_information')
 def get_device_specs(devname):
+    return basic_device_information(devname)
+
+
+def basic_device_information(devname):
     return _get_dev_specs(devname)
 
 
@@ -84,7 +90,7 @@ def _get_dev_specs(devname):
     return dev
 
 
-def get_edgelist(device):
+def edgelist(device):
 
     specs = _get_dev_specs(device)
 
@@ -149,9 +155,14 @@ def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges
 
     for edge in removeedges: del edgelist[edgelist.index(edge)]
 
-    availability = {two_qubit_gate: edgelist}
-    #print(availability)
-    return _QubitProcessorSpec(total_qubits, gate_names, availability=availability, qubit_labels=qubits)
+    # Replaced availability with a QubitGraph due to a bug(?) in how an availability is propogated
+    # into a QubitProcessorSpec's QubitGraph (whereas the `geometry` input is directly stored as 
+    # the provided QubitGraph).
+    #availability = {two_qubit_gate: edgelist}
+
+    qubit_graph = _QubitGraph(qubits, initial_edges=edgelist)
+
+    return _QubitProcessorSpec(total_qubits, gate_names, geometry=qubit_graph, qubit_labels=qubits)
 
 
 def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native={}, calformat=None,
@@ -225,13 +236,15 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
         # we set the error rate of a gate to the 'u3' gate error rate.
         oneQgatekeys = []
         for oneQgate in one_qubit_gates:
-            try:
-                nativekey = one_qubit_gates_to_native[oneQgate]
-            except:
-                one_qubit_gates_to_native[oneQgate] = 'u3'
-                nativekey = 'u3'
-            assert(nativekey in ('id', 'u1', 'u2', 'u3')
-                   ), "{} is not a gate specified in the IBM Q calibration data".format(nativekey)
+            # TIM UPDATED THIS BECAUSE THE ASSERT FAILS WITH THE LATEST IBM Q SPEC FORMAT. NOT SURE IF THIS TRY/EXCEPT
+            # DID ANYTHING IMPORTANT.
+            #try:
+            nativekey = one_qubit_gates_to_native[oneQgate]
+            #except:
+            #    one_qubit_gates_to_native[oneQgate] = 'u3'
+            #    nativekey = 'u3'
+            #assert(nativekey in ('id', 'u1', 'u2', 'u3')
+            #       ), "{} is not a gate specified in the IBM Q calibration data".format(nativekey)
             if nativekey not in oneQgatekeys:
                 oneQgatekeys.append(nativekey)
 
@@ -356,7 +369,7 @@ def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_
     with non-independent error rates model.
     """
 
-    def get_local_depolarization_channel(rate, num_qubits):
+    def _get_local_depolarization_channel(rate, num_qubits):
 
         if num_qubits == 1:
 
@@ -377,7 +390,7 @@ def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_
 
             return _np.kron(channel, channel)
 
-    def get_local_povm(rate):
+    def _get_local_povm(rate):
 
         # Increase the error rate of X,Y,Z, as rate correpsonds to bit-flip rate.
         deprate = 3 * rate / 2
@@ -393,7 +406,7 @@ def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_
 
     error_rates = tempdict['error_rates']
     alias_dict = tempdict['alias_dict']
-    devspecs = get_device_specs(device)
+    devspecs = basic_device_information(device)
 
     if qubits is None:
         qubits = devspecs.qubits
@@ -415,14 +428,14 @@ def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_
         gatestr = str(lbl)
 
         if len(lbl.qubits) == 1:
-            errormap = get_local_depolarization_channel(error_rates['gates'][alias_dict.get(gatestr, gatestr)], 1)
+            errormap = _get_local_depolarization_channel(error_rates['gates'][alias_dict.get(gatestr, gatestr)], 1)
             model.operation_blks['gates'][lbl] = _np.dot(errormap, model.operation_blks['gates'][lbl])
 
         if len(lbl.qubits) == 2:
-            errormap = get_local_depolarization_channel(error_rates['gates'][alias_dict.get(gatestr, gatestr)], 2)
+            errormap = _get_local_depolarization_channel(error_rates['gates'][alias_dict.get(gatestr, gatestr)], 2)
             model.operation_blks['gates'][lbl] = _np.dot(errormap, model.operation_blks['gates'][lbl])
 
-    povms = [get_local_povm(error_rates['readout'][q]) for q in model.qubit_labels]
+    povms = [_get_local_povm(error_rates['readout'][q]) for q in model.qubit_labels]
     model.povm_blks['layers']['Mdefault'] = _povm.TensorProdPOVM(povms)
 
     return model

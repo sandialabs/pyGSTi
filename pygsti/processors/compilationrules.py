@@ -46,7 +46,14 @@ class CompilationRules(object):
     ----------
     compilation_rules_dict : dict
         A dictionary of initial rules, which can be specified in multiple formats.
-        NOTE: currently this argument isn't wired up, and must be left as `None`.
+        Keys can be either gate names as strings or gate labels as a Label object.
+        Values are 2-tuples of (gate unitary, gate template). The gate unitary
+        can either be a unitary matrix, function returning a matrix, or None if the
+        gate name is a standard PyGSTi unitary. The gate template is either a Circuit
+        with local state space labels (i.e. 0..k-1 for k qubits) or a function that takes
+        the target gate label and returns the proper Circuit. If the key is a gate label,
+        the gate template (second entry of the value tuple) MUST be a Circuit with
+        absolute state space labels.
     """
     @classmethod
     def cast(cls, obj):
@@ -68,10 +75,29 @@ class CompilationRules(object):
     def __init__(self, compilation_rules_dict=None):
         self.gate_unitaries = _collections.OrderedDict()  # gate_name => unitary mx, fn, or None
         self.local_templates = _collections.OrderedDict()  # gate_name => Circuit on gate's #qubits
-        self.function_templates = _collections.OrderedDict()  # gate_name => fn(sslbls)
+        self.function_templates = _collections.OrderedDict()  # gate_name => fn(sslbls, args=None, time=None)
+        # that returns a Circuit on absolute qubits
         self.specific_compilations = _collections.OrderedDict()  # gate_label => Circuit on absolute qubits
+
+        self._compiled_cache = _collections.OrderedDict()  # compiled gate_label => Circuit on absolute qubits
+
         if compilation_rules_dict is not None:
-            raise NotImplementedError("Need to convert compilation_rules_dict into info")
+            for gate_key, (gate_unitary, gate_template) in compilation_rules_dict.items():
+                if isinstance(gate_key, str):
+                    self.gate_unitaries[gate_key] = gate_unitary
+
+                    if callable(gate_template):
+                        self.function_templates[gate_key] = gate_template
+                    else:
+                        assert isinstance(gate_template, _Circuit), \
+                            "Values to gate name template must be functions or Circuits, not %s" % type(gate_template)
+                        self.local_templates[gate_key] = gate_template
+                else:
+                    assert isinstance(gate_key, _Label), \
+                        "Keys to compilation_rules_dict must be str or Labels, not %s" % type(gate_key)
+                    assert isinstance(gate_template, _Circuit), \
+                        "Values to specific compilations must be Circuits, not %s" % type(gate_template)
+                    self.specific_compilations[gate_key] = gate_template
 
     def add_compilation_rule(self, gate_name, template_circuit_or_fn, unitary=None):
         """
@@ -153,7 +179,47 @@ class CompilationRules(object):
         """
         return {}
 
-    def apply_to_processorspec(self, processor_spec):
+    def retrieve_compilation_of(self, oplabel, force=False):
+        """
+        Get a compilation of `oplabel`, computing one from local templates if necessary.
+
+        Parameters
+        ----------
+        oplabel : Label
+            The label of the gate to compile.
+
+        force : bool, optional
+            If True, then an attempt is made to recompute a compilation
+            even if `oplabel` already exists in this `CompilationLibrary`.
+            Otherwise compilations are only computed when they are *not* present.
+
+        Returns
+        -------
+        Circuit or None, if failed to retrieve compilation
+        """
+        # First look up in cache
+        if not force and oplabel in self._compiled_cache:
+            return self._compiled_cache[oplabel]
+
+        if oplabel in self.specific_compilations:  # Second, look up in specific compilations
+            self._compiled_cache[oplabel] = self.specific_compilations[oplabel]
+        elif oplabel.name in self.local_templates:  # Third, construct from local template
+            template_to_use = self.local_templates[oplabel.name]
+
+            # Template compilations always use integer qubit labels: 0 to N
+            to_real_label = {i: oplabel.sslbls[i] for i in template_to_use.line_labels}
+
+            self._compiled_cache[oplabel] = template_to_use.map_state_space_labels(to_real_label)
+        elif oplabel.name in self.function_templates:  # Fourth, construct from local function template
+            template_fn_to_use = self.function_templates[oplabel.name]
+            self._compiled_cache[oplabel] = _Circuit(template_fn_to_use(oplabel.sslbls, oplabel.args, oplabel.time))
+        else:
+            # Failed to compile
+            return None
+
+        return self._compiled_cache[oplabel]
+
+    def apply_to_processorspec(self, processor_spec, action="replace", gates_to_skip=None):
         """
         Use these compilation rules to convert one processor specification into another one.
 
@@ -163,21 +229,33 @@ class CompilationRules(object):
             The initial processor specification, which should contain the gates present within the
             circuits/functions of this compilation rules object.
 
+        action : {"replace", "add"}
+            Whether the existing gates in `processor_spec` are conveyed to the the returned
+            processor spec.  If `"replace"`, then they are not conveyed, if `"add"` they are.
+
+        gates_to_skip : list
+            Gate names or labels to skip during processor specification construction.
+
         Returns
         -------
         QubitProcessorSpec
         """
         gate_names = tuple(self.gate_unitaries.keys())
         gate_unitaries = self.gate_unitaries.copy()  # can contain `None` entries we deal with below
+        if gates_to_skip is None:
+            gates_to_skip = []
 
         availability = {}
         for gn in gate_names:
+            if gn in gates_to_skip:
+                continue
+
             if gn in self.local_templates:
                 # merge availabilities from gates in local template
                 compilation_circuit = self.local_templates[gn]
                 all_sslbls = compilation_circuit.line_labels
                 gn_nqubits = len(all_sslbls)
-                assert (all_sslbls == tuple(range(0, len(gn_nqubits)))), \
+                assert (all_sslbls == tuple(range(0, gn_nqubits))), \
                     "Template circuits *must* have line labels == 0...(gate's #qubits-1), not %s!" % (
                         str(all_sslbls))
 
@@ -199,13 +277,13 @@ class CompilationRules(object):
                         assert (len(set(layer_availability_sslbls).intersection(gate_sslbls)) == 0), \
                             "Duplicate state space labels in layer: %s" % str(layer)
                         layer_availability_sslbls.extend(gate_sslbls)  # integers
-                    layer_availability = _itertools.product(*layer_availability_factors)
+                    layer_availability = tuple(_itertools.product(*layer_availability_factors))
                     if tuple(layer_availability_sslbls) != all_sslbls:  # then need to permute availability elements
                         p = {to: frm for frm, to in enumerate(layer_availability_sslbls)}  # use sslbls as *indices*
                         new_order = [p[i] for i in range(gn_nqubits)]
                         layer_availability = tuple(map(lambda el: tuple([el[i] for i in new_order]),
                                                        layer_availability))
-                    circuit_availability = layer_availability if (circuit_availability is None) else \
+                    circuit_availability = set(layer_availability) if (circuit_availability is None) else \
                         circuit_availability.intersection(layer_availability)
                 assert (circuit_availability is not None), "Local template circuit cannot be empty!"
                 availability[gn] = tuple(sorted(circuit_availability))
@@ -223,7 +301,7 @@ class CompilationRules(object):
                 # create boolean oracle function for availability
                 def _fn(sslbls):
                     try:
-                        self.function_templates[gn](sslbls)  # (returns a circuit)
+                        self.function_templates[gn](sslbls, None, None)  # (returns a circuit)
                         return True
                     except CompilationError:
                         return False
@@ -237,11 +315,23 @@ class CompilationRules(object):
 
         # specific compilations add specific availability for their gate names:
         for gate_lbl in self.specific_compilations.keys():
+            if gate_lbl in gates_to_skip:
+                continue
+
             assert (gate_lbl.name in gate_names), \
                 "gate name '%s' missing from CompilationRules gate unitaries!" % gate_lbl.name
             assert (isinstance(availability[gate_lbl.name], tuple)), \
                 "Cannot add specific values to non-explicit availabilities (e.g. given by functions)"
             availability[gate_lbl.name] += (gate_lbl.sslbls,)
+
+        if action == "add":
+            gate_names = tuple(processor_spec.gate_names) + gate_names
+            gate_unitaries.update(processor_spec.gate_unitaries)
+            availability.update(processor_spec.availability)
+        elif action == "replace":
+            pass
+        else:
+            raise ValueError("Invalid `action` argument: %s" % str(action))
 
         aux_info = processor_spec.aux_info.copy()
         aux_info.update(self.create_aux_info())
@@ -249,6 +339,31 @@ class CompilationRules(object):
                                   processor_spec.qubit_graph, processor_spec.qubit_labels, aux_info=aux_info)
         ret.compiled_from = (processor_spec, self)
         return ret
+
+    def apply_to_circuits(self, circuits, **kwargs):
+        """
+        Use these compilation rules to convert one list of circuits into another one.
+
+        Additional kwargs are passed through to Circuit.change_gate_library during translation.
+        Common kwargs include `depth_compression=False` or `allow_unchanged_gates=True`.
+
+        Parameters
+        ----------
+        circuits : list of Circuits
+            The initial circuits, which should contain the gates present within the
+            circuits/functions of this compilation rules object.
+
+        Returns
+        -------
+        list of Circuits
+        """
+        compiled_circuits = [c.copy(editable=True) for c in circuits]
+
+        for circ in compiled_circuits:
+            circ.change_gate_library(self, **kwargs)
+            circ.done_editing()
+
+        return compiled_circuits
 
 
 class CliffordCompilationRules(CompilationRules):
@@ -1185,7 +1300,7 @@ class CliffordCompilationRules(CompilationRules):
 
             self.add_specific_compilation_rule(key, circuit, unitary=None)  # Need to take unitary as arg?
 
-    def get_compilation_of(self, oplabel, force=False, allowed_filter=None, verbosity=1, check=True):
+    def retrieve_compilation_of(self, oplabel, force=False, allowed_filter=None, verbosity=1, check=True):
         """
         Get a compilation of `oplabel` in the context of `allowed_filter`, if any.
 

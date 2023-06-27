@@ -18,7 +18,7 @@ from ..circuits.circuit import Circuit as _Circuit
 from ..protocols import rpe as _rpe
 
 
-def get_rpe_experiment_design(max_max_length, qubit_labels=None, req_counts=None):
+def create_rpe_experiment_design(max_max_length, qubit_labels=None, req_counts=None):
     """
     Create a RPE experiment design based on this model-pack's gate set.
 

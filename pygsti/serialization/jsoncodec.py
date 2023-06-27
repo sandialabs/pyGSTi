@@ -473,13 +473,13 @@ def _decode_std_obj(json_obj, binary):
     elif B('__ndarray__') in json_obj:
         # Check if 'kind' is in json_obj to enable decoding of data
         # serialized with older versions:
-        if json_obj[B('kind')] == 'V':
+        if json_obj[B('kind')] == B('V'):
             descr = [tuple(_tostr(t) if isinstance(t, bytes) else t for t in d)
                      for d in json_obj[B('dtype')]]
         else:
             descr = json_obj[B('dtype')]
 
-        if json_obj[B('kind')] == 'O':  # special decoding for object-type arrays
+        if json_obj[B('kind')] == B('O'):  # special decoding for object-type arrays
             data = [decode_obj(el, binary) for el in json_obj[B('__ndarray__')]]
             flat_ar = _np.empty(len(data), dtype=_np.dtype(descr))
             for i, el in enumerate(data):

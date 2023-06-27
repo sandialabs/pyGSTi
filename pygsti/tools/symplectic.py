@@ -13,7 +13,6 @@ Symplectic representation utility functions
 import numpy as _np
 import copy as _copy
 
-from scipy.sparse.construct import rand
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.smartcache import smart_cached
 from pygsti.tools import matrixmod2 as _mtx
@@ -54,13 +53,13 @@ def symplectic_form(n, convention='standard'):
         The specified symplectic form.
     """
     nn = 2 * n
-    sym_form = _np.zeros((nn, nn), int)
+    sym_form = _np.zeros((nn, nn), _np.int64)
 
     assert(convention == 'standard' or convention == 'directsum')
 
     if convention == 'standard':
-        sym_form[n:nn, 0:n] = _np.identity(n, int)
-        sym_form[0:n, n:nn] = _np.identity(n, int)
+        sym_form[n:nn, 0:n] = _np.identity(n, _np.int64)
+        sym_form[0:n, n:nn] = _np.identity(n, _np.int64)
 
     if convention == 'directsum':
         # This current construction method is pretty stupid.
@@ -104,7 +103,7 @@ def change_symplectic_form_convention(s, outconvention='standard'):
     if n == 1:
         return _np.copy(s)
 
-    permutation_matrix = _np.zeros((2 * n, 2 * n), int)
+    permutation_matrix = _np.zeros((2 * n, 2 * n), _np.int64)
     for i in range(0, n):
         permutation_matrix[2 * i, i] = 1
         permutation_matrix[2 * i + 1, n + i] = 1
@@ -165,7 +164,7 @@ def inverse_symplectic(s):
     s_inverse = _mtx.dot_mod2(_np.dot(s_form, _np.transpose(s)), s_form)
 
     assert(check_symplectic(s_inverse)), "The inverse is not symplectic. Function has failed"
-    assert(_np.array_equal(_mtx.dot_mod2(s_inverse, s), _np.identity(2 * n, int))
+    assert(_np.array_equal(_mtx.dot_mod2(s_inverse, s), _np.identity(2 * n, _np.int64))
            ), "The found matrix is not the inverse of the input. Function has failed"
 
     return s_inverse
@@ -201,8 +200,8 @@ def inverse_clifford(s, p):
 
     # The formula used below for the inverse p vector comes from Hostens
     # and De Moor PRA 71, 042315 (2005).
-    u = _np.zeros((2 * n, 2 * n), int)
-    u[n:2 * n, 0:n] = _np.identity(n, int)
+    u = _np.zeros((2 * n, 2 * n), _np.int64)
+    u[n:2 * n, 0:n] = _np.identity(n, _np.int64)
 
     vec1 = -1 * _np.dot(_np.transpose(sinverse), p)
     inner = _np.dot(_np.dot(_np.transpose(sinverse), u), sinverse)
@@ -217,15 +216,15 @@ def inverse_clifford(s, p):
     assert(check_valid_clifford(sinverse, pinverse)), "The output does not define a valid Clifford. Function has failed"
 
     s_check, p_check = compose_cliffords(s, p, sinverse, pinverse)
-    assert(_np.array_equal(s_check, _np.identity(2 * n, int))
+    assert(_np.array_equal(s_check, _np.identity(2 * n, _np.int64))
            ), "The output is not the inverse of the input. Function has failed"
-    assert(_np.array_equal(p_check, _np.zeros(2 * n, int))
+    assert(_np.array_equal(p_check, _np.zeros(2 * n, _np.int64))
            ), "The output is not the inverse of the input. Function has failed"
 
     s_check, p_check = compose_cliffords(sinverse, pinverse, s, p)
-    assert(_np.array_equal(s_check, _np.identity(2 * n, int))
+    assert(_np.array_equal(s_check, _np.identity(2 * n, _np.int64))
            ), "The output is not the inverse of the input. Function has failed"
-    assert(_np.array_equal(p_check, _np.zeros(2 * n, int))
+    assert(_np.array_equal(p_check, _np.zeros(2 * n, _np.int64))
            ), "The output is not the inverse of the input. Function has failed"
 
     return sinverse, pinverse
@@ -257,12 +256,12 @@ def check_valid_clifford(s, p):
     # that p is a vector over [0,1,2,3]. Perhaps it should. The constraint
     # that we check is satisfied comes from Hostens and De Moor PRA 71, 042315 (2005).
     n = _np.shape(s)[0] // 2
-    u = _np.zeros((2 * n, 2 * n), int)
-    u[n:2 * n, 0:n] = _np.identity(n, int)
+    u = _np.zeros((2 * n, 2 * n), _np.int64)
+    u[n:2 * n, 0:n] = _np.identity(n, _np.int64)
     vec = p + _mtx.diagonal_as_vec(_np.dot(_np.dot(_np.transpose(s), u), s))
     vec = vec % 2
 
-    is_valid_phase_vector = _np.array_equal(vec, _np.zeros(len(p), int))
+    is_valid_phase_vector = _np.array_equal(vec, _np.zeros(len(p), _np.int64))
     assert(is_valid_phase_vector)
 
     return (is_symplectic_matrix and is_valid_phase_vector)
@@ -295,8 +294,8 @@ def construct_valid_phase_vector(s, pseed):
 
     assert(check_symplectic(s)), "The input matrix is not symplectic!"
 
-    u = _np.zeros((2 * n, 2 * n), int)
-    u[n:2 * n, 0:n] = _np.identity(n, int)
+    u = _np.zeros((2 * n, 2 * n), _np.int64)
+    u[n:2 * n, 0:n] = _np.identity(n, _np.int64)
 
     # Each element of this vector should be 0 (mod 2) if this is a valid phase vector.
     # This comes from the formulas in Hostens and De Moor PRA 71, 042315 (2005).
@@ -489,8 +488,8 @@ def compose_cliffords(s1, p1, s2, p2, do_checks=True):
     # Hostens and De Moor PRA 71, 042315 (2005).
     s = _mtx.dot_mod2(s2, s1)
 
-    u = _np.zeros((2 * n, 2 * n), int)
-    u[n:2 * n, 0:n] = _np.identity(n, int)
+    u = _np.zeros((2 * n, 2 * n), _np.int64)
+    u[n:2 * n, 0:n] = _np.identity(n, _np.int64)
 
     vec1 = _np.dot(_np.transpose(s1), p2)
     inner = _np.dot(_np.dot(_np.transpose(s2), u), s2)
@@ -535,8 +534,8 @@ def symplectic_kronecker(sp_factors):
     nlist = [len(p) // 2 for s, p in sp_factors]  # number of qubits per factor
     n = sum(nlist)  # total number of qubits
 
-    sout = _np.zeros((2 * n, 2 * n), int)
-    pout = _np.zeros(2 * n, int)
+    sout = _np.zeros((2 * n, 2 * n), _np.int64)
+    pout = _np.zeros(2 * n, _np.int64)
     k = 0  # current qubit index
     for (s, p), nq in zip(sp_factors, nlist):
         assert(s.shape == (2 * nq, 2 * nq))
@@ -574,8 +573,8 @@ def prep_stabilizer_state(nqubits, zvals=None):
         has shape 2n, where n equals `nqubits`.
     """
     n = nqubits
-    s = _np.fliplr(_np.identity(2 * n, int))  # flip b/c stab cols are *first*
-    p = _np.zeros(2 * n, int)
+    s = _np.fliplr(_np.identity(2 * n, _np.int64))  # flip b/c stab cols are *first*
+    p = _np.zeros(2 * n, _np.int64)
     if zvals:
         for i, z in enumerate(zvals):
             p[i] = p[i + n] = 2 if bool(z) else 0  # EGN TODO: check this is right -- (how to update the destabilizers?)
@@ -619,8 +618,8 @@ def apply_clifford_to_stabilizer_state(s, p, state_s, state_p):
     # Hostens and De Moor PRA 71, 042315 (2005).
     out_s = _mtx.dot_mod2(s, state_s)
 
-    u = _np.zeros((2 * n, 2 * n), int)
-    u[n:2 * n, 0:n] = _np.identity(n, int)
+    u = _np.zeros((2 * n, 2 * n), _np.int64)
+    u[n:2 * n, 0:n] = _np.identity(n, _np.int64)
 
     inner = _np.dot(_np.dot(_np.transpose(s), u), s)
     vec1 = _np.dot(_np.transpose(state_s), p - _mtx.diagonal_as_vec(inner))
@@ -631,7 +630,7 @@ def apply_clifford_to_stabilizer_state(s, p, state_s, state_p):
     out_p = out_p % 4
 
     ##More explicitly operates on stabilizer and antistabilizer separately, but same as above
-    #out_p = _np.zeros(2*n,int)
+    #out_p = _np.zeros(2*n, _np.int64)
     #for slc in (slice(0,n),slice(n,2*n)):
     #    ss = state_s[:,slc]
     #    inner = _np.dot(_np.dot(_np.transpose(s),u),s)
@@ -720,7 +719,7 @@ def pauli_z_measurement(state_s, state_p, qubit_index):
     # no break ==> all commute, so outcome is deterministic, so no
     # state update; just determine whether Z_a or -Z_a is in the stabilizer,
     # which we do using the "anti-stabilizer" cleverness of PRA 70, 052328
-    acc_s = _np.zeros(two_n, int); acc_p = _np.zeros(1, int)
+    acc_s = _np.zeros(two_n, _np.int64); acc_p = _np.zeros(1, _np.int64)
     for i in range(n, two_n):  # loop over anti-stabilizer
         if state_s[a, i] == 1:  # for elements that anti-commute w/Z_a
             colsum_acc(acc_s, acc_p, i - n, state_s, state_p, n)  # act w/corresponding *stabilizer* el
@@ -775,8 +774,8 @@ def colsum(i, j, s, p, n):
     #assert(test in (0,2)) # test should never be congruent to 1 or 3 (mod 4)
     #p[i] = 0 if (test == 0) else 2 # ( = 10 = 1 in high bit)
 
-    u = _np.zeros((2 * n, 2 * n), int)  # CACHE!
-    u[n:2 * n, 0:n] = _np.identity(n, int)
+    u = _np.zeros((2 * n, 2 * n), _np.int64)  # CACHE!
+    u[n:2 * n, 0:n] = _np.identity(n, _np.int64)
 
     p[i] += p[j] + 2 * float(_np.dot(s[:, i].T, _np.dot(u, s[:, j])))
     for k in range(n):
@@ -829,8 +828,8 @@ def colsum_acc(acc_s, acc_p, j, s, p, n):
     #assert(test in (0,2)) # test should never be congruent to 1 or 3 (mod 4)
     #acc_p[0] = 0 if (test == 0) else 2 # ( = 10 = 1 in high bit)
 
-    u = _np.zeros((2 * n, 2 * n), int)  # CACHE!
-    u[n:2 * n, 0:n] = _np.identity(n, int)
+    u = _np.zeros((2 * n, 2 * n), _np.int64)  # CACHE!
+    u[n:2 * n, 0:n] = _np.identity(n, _np.int64)
 
     acc_p[0] += p[j] + 2 * float(_np.dot(acc_s.T, _np.dot(u, s[:, j])))
 
@@ -919,8 +918,8 @@ def embed_clifford(s, p, qubit_inds, n):
         The 'phase vector' over the integers mod 4 representing the embedded Clifford
     """
     ne = len(qubit_inds)  # nQubits for embedded_op
-    s_out = _np.identity(2 * n, int)
-    p_out = _np.zeros(2 * n, int)
+    s_out = _np.identity(2 * n, _np.int64)
+    p_out = _np.zeros(2 * n, _np.int64)
 
     for i, di in enumerate(qubit_inds):  # di = "destination index"
         p_out[di] = p[i]
@@ -966,85 +965,85 @@ def compute_internal_gate_symplectic_representations(gllist=None):
     complete_p_dict = {}
 
     # The Pauli gates
-    complete_s_dict['I'] = _np.array([[1, 0], [0, 1]], int)
-    complete_s_dict['X'] = _np.array([[1, 0], [0, 1]], int)
-    complete_s_dict['Y'] = _np.array([[1, 0], [0, 1]], int)
-    complete_s_dict['Z'] = _np.array([[1, 0], [0, 1]], int)
+    complete_s_dict['I'] = _np.array([[1, 0], [0, 1]], _np.int64)
+    complete_s_dict['X'] = _np.array([[1, 0], [0, 1]], _np.int64)
+    complete_s_dict['Y'] = _np.array([[1, 0], [0, 1]], _np.int64)
+    complete_s_dict['Z'] = _np.array([[1, 0], [0, 1]], _np.int64)
 
-    complete_p_dict['I'] = _np.array([0, 0], int)
-    complete_p_dict['X'] = _np.array([0, 2], int)
-    complete_p_dict['Y'] = _np.array([2, 2], int)
-    complete_p_dict['Z'] = _np.array([2, 0], int)
+    complete_p_dict['I'] = _np.array([0, 0], _np.int64)
+    complete_p_dict['X'] = _np.array([0, 2], _np.int64)
+    complete_p_dict['Y'] = _np.array([2, 2], _np.int64)
+    complete_p_dict['Z'] = _np.array([2, 0], _np.int64)
 
     # Five single qubit gates that each represent one of five classes of Cliffords
     # that equivalent up to Pauli gates and are not equivalent to idle (that class
     # is covered by any one of the Pauli gates above).
-    complete_s_dict['H'] = _np.array([[0, 1], [1, 0]], int)
-    complete_s_dict['P'] = _np.array([[1, 0], [1, 1]], int)
-    complete_s_dict['PH'] = _np.array([[0, 1], [1, 1]], int)
-    complete_s_dict['HP'] = _np.array([[1, 1], [1, 0]], int)
-    complete_s_dict['HPH'] = _np.array([[1, 1], [0, 1]], int)
-    complete_p_dict['H'] = _np.array([0, 0], int)
-    complete_p_dict['P'] = _np.array([1, 0], int)
-    complete_p_dict['PH'] = _np.array([0, 1], int)
-    complete_p_dict['HP'] = _np.array([3, 0], int)
-    complete_p_dict['HPH'] = _np.array([0, 3], int)
+    complete_s_dict['H'] = _np.array([[0, 1], [1, 0]], _np.int64)
+    complete_s_dict['P'] = _np.array([[1, 0], [1, 1]], _np.int64)
+    complete_s_dict['PH'] = _np.array([[0, 1], [1, 1]], _np.int64)
+    complete_s_dict['HP'] = _np.array([[1, 1], [1, 0]], _np.int64)
+    complete_s_dict['HPH'] = _np.array([[1, 1], [0, 1]], _np.int64)
+    complete_p_dict['H'] = _np.array([0, 0], _np.int64)
+    complete_p_dict['P'] = _np.array([1, 0], _np.int64)
+    complete_p_dict['PH'] = _np.array([0, 1], _np.int64)
+    complete_p_dict['HP'] = _np.array([3, 0], _np.int64)
+    complete_p_dict['HPH'] = _np.array([0, 3], _np.int64)
     # The full 1-qubit Cliffor group, using the same labelling as in extras.rb.group
-    complete_s_dict['C0'] = _np.array([[1, 0], [0, 1]], int)
-    complete_p_dict['C0'] = _np.array([0, 0], int)
-    complete_s_dict['C1'] = _np.array([[1, 1], [1, 0]], int)
-    complete_p_dict['C1'] = _np.array([1, 0], int)
-    complete_s_dict['C2'] = _np.array([[0, 1], [1, 1]], int)
-    complete_p_dict['C2'] = _np.array([0, 1], int)
-    complete_s_dict['C3'] = _np.array([[1, 0], [0, 1]], int)
-    complete_p_dict['C3'] = _np.array([0, 2], int)
-    complete_s_dict['C4'] = _np.array([[1, 1], [1, 0]], int)
-    complete_p_dict['C4'] = _np.array([1, 2], int)
-    complete_s_dict['C5'] = _np.array([[0, 1], [1, 1]], int)
-    complete_p_dict['C5'] = _np.array([0, 3], int)
-    complete_s_dict['C6'] = _np.array([[1, 0], [0, 1]], int)
-    complete_p_dict['C6'] = _np.array([2, 2], int)
-    complete_s_dict['C7'] = _np.array([[1, 1], [1, 0]], int)
-    complete_p_dict['C7'] = _np.array([3, 2], int)
-    complete_s_dict['C8'] = _np.array([[0, 1], [1, 1]], int)
-    complete_p_dict['C8'] = _np.array([2, 3], int)
-    complete_s_dict['C9'] = _np.array([[1, 0], [0, 1]], int)
-    complete_p_dict['C9'] = _np.array([2, 0], int)
-    complete_s_dict['C10'] = _np.array([[1, 1], [1, 0]], int)
-    complete_p_dict['C10'] = _np.array([3, 0], int)
-    complete_s_dict['C11'] = _np.array([[0, 1], [1, 1]], int)
-    complete_p_dict['C11'] = _np.array([2, 1], int)
-    complete_s_dict['C12'] = _np.array([[0, 1], [1, 0]], int)
-    complete_p_dict['C12'] = _np.array([0, 0], int)
-    complete_s_dict['C13'] = _np.array([[1, 1], [0, 1]], int)
-    complete_p_dict['C13'] = _np.array([0, 1], int)
-    complete_s_dict['C14'] = _np.array([[1, 0], [1, 1]], int)
-    complete_p_dict['C14'] = _np.array([1, 0], int)
-    complete_s_dict['C15'] = _np.array([[0, 1], [1, 0]], int)
-    complete_p_dict['C15'] = _np.array([0, 2], int)
-    complete_s_dict['C16'] = _np.array([[1, 1], [0, 1]], int)
-    complete_p_dict['C16'] = _np.array([0, 3], int)
-    complete_s_dict['C17'] = _np.array([[1, 0], [1, 1]], int)
-    complete_p_dict['C17'] = _np.array([1, 2], int)
-    complete_s_dict['C18'] = _np.array([[0, 1], [1, 0]], int)
-    complete_p_dict['C18'] = _np.array([2, 2], int)
-    complete_s_dict['C19'] = _np.array([[1, 1], [0, 1]], int)
-    complete_p_dict['C19'] = _np.array([2, 3], int)
-    complete_s_dict['C20'] = _np.array([[1, 0], [1, 1]], int)
-    complete_p_dict['C20'] = _np.array([3, 2], int)
-    complete_s_dict['C21'] = _np.array([[0, 1], [1, 0]], int)
-    complete_p_dict['C21'] = _np.array([2, 0], int)
-    complete_s_dict['C22'] = _np.array([[1, 1], [0, 1]], int)
-    complete_p_dict['C22'] = _np.array([2, 1], int)
-    complete_s_dict['C23'] = _np.array([[1, 0], [1, 1]], int)
-    complete_p_dict['C23'] = _np.array([3, 0], int)
+    complete_s_dict['C0'] = _np.array([[1, 0], [0, 1]], _np.int64)
+    complete_p_dict['C0'] = _np.array([0, 0], _np.int64)
+    complete_s_dict['C1'] = _np.array([[1, 1], [1, 0]], _np.int64)
+    complete_p_dict['C1'] = _np.array([1, 0], _np.int64)
+    complete_s_dict['C2'] = _np.array([[0, 1], [1, 1]], _np.int64)
+    complete_p_dict['C2'] = _np.array([0, 1], _np.int64)
+    complete_s_dict['C3'] = _np.array([[1, 0], [0, 1]], _np.int64)
+    complete_p_dict['C3'] = _np.array([0, 2], _np.int64)
+    complete_s_dict['C4'] = _np.array([[1, 1], [1, 0]], _np.int64)
+    complete_p_dict['C4'] = _np.array([1, 2], _np.int64)
+    complete_s_dict['C5'] = _np.array([[0, 1], [1, 1]], _np.int64)
+    complete_p_dict['C5'] = _np.array([0, 3], _np.int64)
+    complete_s_dict['C6'] = _np.array([[1, 0], [0, 1]], _np.int64)
+    complete_p_dict['C6'] = _np.array([2, 2], _np.int64)
+    complete_s_dict['C7'] = _np.array([[1, 1], [1, 0]], _np.int64)
+    complete_p_dict['C7'] = _np.array([3, 2], _np.int64)
+    complete_s_dict['C8'] = _np.array([[0, 1], [1, 1]], _np.int64)
+    complete_p_dict['C8'] = _np.array([2, 3], _np.int64)
+    complete_s_dict['C9'] = _np.array([[1, 0], [0, 1]], _np.int64)
+    complete_p_dict['C9'] = _np.array([2, 0], _np.int64)
+    complete_s_dict['C10'] = _np.array([[1, 1], [1, 0]], _np.int64)
+    complete_p_dict['C10'] = _np.array([3, 0], _np.int64)
+    complete_s_dict['C11'] = _np.array([[0, 1], [1, 1]], _np.int64)
+    complete_p_dict['C11'] = _np.array([2, 1], _np.int64)
+    complete_s_dict['C12'] = _np.array([[0, 1], [1, 0]], _np.int64)
+    complete_p_dict['C12'] = _np.array([0, 0], _np.int64)
+    complete_s_dict['C13'] = _np.array([[1, 1], [0, 1]], _np.int64)
+    complete_p_dict['C13'] = _np.array([0, 1], _np.int64)
+    complete_s_dict['C14'] = _np.array([[1, 0], [1, 1]], _np.int64)
+    complete_p_dict['C14'] = _np.array([1, 0], _np.int64)
+    complete_s_dict['C15'] = _np.array([[0, 1], [1, 0]], _np.int64)
+    complete_p_dict['C15'] = _np.array([0, 2], _np.int64)
+    complete_s_dict['C16'] = _np.array([[1, 1], [0, 1]], _np.int64)
+    complete_p_dict['C16'] = _np.array([0, 3], _np.int64)
+    complete_s_dict['C17'] = _np.array([[1, 0], [1, 1]], _np.int64)
+    complete_p_dict['C17'] = _np.array([1, 2], _np.int64)
+    complete_s_dict['C18'] = _np.array([[0, 1], [1, 0]], _np.int64)
+    complete_p_dict['C18'] = _np.array([2, 2], _np.int64)
+    complete_s_dict['C19'] = _np.array([[1, 1], [0, 1]], _np.int64)
+    complete_p_dict['C19'] = _np.array([2, 3], _np.int64)
+    complete_s_dict['C20'] = _np.array([[1, 0], [1, 1]], _np.int64)
+    complete_p_dict['C20'] = _np.array([3, 2], _np.int64)
+    complete_s_dict['C21'] = _np.array([[0, 1], [1, 0]], _np.int64)
+    complete_p_dict['C21'] = _np.array([2, 0], _np.int64)
+    complete_s_dict['C22'] = _np.array([[1, 1], [0, 1]], _np.int64)
+    complete_p_dict['C22'] = _np.array([2, 1], _np.int64)
+    complete_s_dict['C23'] = _np.array([[1, 0], [1, 1]], _np.int64)
+    complete_p_dict['C23'] = _np.array([3, 0], _np.int64)
     # The CNOT gate, CPHASE gate, and SWAP gate.
-    complete_s_dict['CNOT'] = _np.array([[1, 0, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1], [0, 0, 0, 1]], int)
+    complete_s_dict['CNOT'] = _np.array([[1, 0, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1], [0, 0, 0, 1]], _np.int64)
     complete_s_dict['CPHASE'] = _np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 1, 1, 0], [1, 0, 0, 1]])
     complete_s_dict['SWAP'] = _np.array([[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 0, 1], [0, 0, 1, 0]])
-    complete_p_dict['CNOT'] = _np.array([0, 0, 0, 0], int)
-    complete_p_dict['CPHASE'] = _np.array([0, 0, 0, 0], int)
-    complete_p_dict['SWAP'] = _np.array([0, 0, 0, 0], int)
+    complete_p_dict['CNOT'] = _np.array([0, 0, 0, 0], _np.int64)
+    complete_p_dict['CPHASE'] = _np.array([0, 0, 0, 0], _np.int64)
+    complete_p_dict['SWAP'] = _np.array([0, 0, 0, 0], _np.int64)
 
     if gllist is None:
         keys = list(complete_s_dict.keys())
@@ -1100,8 +1099,8 @@ def symplectic_rep_of_clifford_circuit(circuit, srep_dict=None, pspec=None):
         srep_dict.update(pspec.compute_clifford_symplectic_reps())
 
     # The initial action of the circuit before any layers are applied.
-    s = _np.identity(2 * n, int)
-    p = _np.zeros(2 * n, int)
+    s = _np.identity(2 * n, _np.int64)
+    p = _np.zeros(2 * n, _np.int64)
 
     for i in range(0, depth):
         # This relies on the circuit having a valid self.identity identifier -- as those gates are
@@ -1179,8 +1178,8 @@ def symplectic_rep_of_clifford_layer(layer, n=None, q_labels=None, srep_dict=Non
     else:
         assert(len(q_labels) == n), "`n` and `q_labels` are inconsistent!"
 
-    s = _np.identity(2 * n, int)
-    p = _np.zeros(2 * n, int)
+    s = _np.identity(2 * n, _np.int64)
+    p = _np.zeros(2 * n, _np.int64)
 
     if not isinstance(layer, _Label):
         layer = _Label(layer)
@@ -1325,8 +1324,8 @@ def _unitary_to_symplectic_1q(u, flagnonclifford=True):
     z = _np.array([[1., 0], [0, -1.]])
     fund_paulis = [x, z]
 
-    s = _np.zeros((2, 2), int)
-    p = _np.zeros(2, int)
+    s = _np.zeros((2, 2), _np.int64)
+    p = _np.zeros(2, _np.int64)
 
     for pauli_label in range(0, 2):
 
@@ -1401,8 +1400,8 @@ def _unitary_to_symplectic_2q(u, flagnonclifford=True):
 
     fund_paulis = [xi, ix, zi, iz]
 
-    s = _np.zeros((4, 4), int)
-    p = _np.zeros(4, int)
+    s = _np.zeros((4, 4), _np.int64)
+    p = _np.zeros(4, _np.int64)
 
     for pauli_label in range(0, 4):
 
@@ -1575,21 +1574,21 @@ def random_phase_vector(s, n, rand_state=None):
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
-    p = _np.zeros(2 * n, int)
+    p = _np.zeros(2 * n, _np.int64)
 
     # A matrix to hold all possible phase vectors -- half of which do not, when
     # combined with the sampled symplectic matrix -- represent Cliffords.
-    all_values = _np.zeros((2 * n, 4), int)
+    all_values = _np.zeros((2 * n, 4), _np.int64)
     for i in range(0, 2 * n):
         all_values[i, :] = _np.array([0, 1, 2, 3])
 
     # We now work out which of these are valid choices for the phase vector.
     possible = _np.zeros((2 * n, 4), bool)
 
-    u = _np.zeros((2 * n, 2 * n), int)
-    u[n:2 * n, 0:n] = _np.identity(n, int)
+    u = _np.zeros((2 * n, 2 * n), _np.int64)
+    u[n:2 * n, 0:n] = _np.identity(n, _np.int64)
     v = _mtx.diagonal_as_vec(_np.dot(_np.dot(_np.transpose(s), u), s))
-    v_matrix = _np.zeros((2 * n, 4), int)
+    v_matrix = _np.zeros((2 * n, 4), _np.int64)
 
     for i in range(0, 4):
         v_matrix[:, i] = v
@@ -1601,7 +1600,7 @@ def random_phase_vector(s, n, rand_state=None):
     allowed_values = _np.reshape(all_values[possible], (2 * n, 2))
 
     # Sample a uniformly random valid phase vector.
-    index = rand_state.randint(2, size=2 * n)
+    index = rand_state.randint(2, size=2 * n, dtype=_np.int64)
     for i in range(0, 2 * n):
         p[i] = allowed_values[i, index[i]]
 
@@ -2142,7 +2141,7 @@ def random_symplectic_index(n, rand_state=None):
         return zeros_str
 
     if cardinality <= max_integer:
-        index = rand_state.randint(cardinality)
+        index = rand_state.randint(cardinality, dtype=_np.int64)
 
     else:
         digits1 = len(str(cardinality))

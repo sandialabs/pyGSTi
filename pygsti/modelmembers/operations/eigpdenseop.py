@@ -15,6 +15,7 @@ import functools as _functools
 import numpy as _np
 
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.tools import matrixtools as _mt
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
@@ -35,22 +36,28 @@ class EigenvalueParamDenseOp(_DenseOperator):
         paramterize.  The shape of this array sets the dimension
         of the operation.
 
-    include_off_diags_in_degen_2_blocks : bool
+    include_off_diags_in_degen_blocks : bool or int
         If True, include as parameters the (initially zero)
-        off-diagonal elements in degenerate 2x2 blocks of the
-        the diagonalized operation matrix (no off-diagonals are
-        included in blocks larger than 2x2).  This is an option
-        specifically used in the intelligent fiducial pair
-        reduction (IFPR) algorithm.
+        off-diagonal elements in degenerate blocks of the
+        the diagonalized operation matrix.  If an integer, no
+        off-diagonals are included in blocks larger than n x n, where
+        `n == include_off_diags_in_degen_blocks`.  This is an option
+        specifically used in the per-germ-power fiducial pair
+        reduction (FPR) algorithm.
 
     tp_constrained_and_unital : bool
         If True, assume the top row of the operation matrix is fixed
         to [1, 0, ... 0] and should not be parameterized, and verify
         that the matrix is unital.  In this case, "1" is always a
-        fixed (not-paramterized0 eigenvalue with eigenvector
-        [1,0,...0] and if include_off_diags_in_degen_2_blocks is True
+        fixed (not-paramterized) eigenvalue with eigenvector
+        [1,0,...0] and if include_off_diags_in_degen_blocks is True
         any off diagonal elements lying on the top row are *not*
         parameterized as implied by the TP constraint.
+
+    basis : Basis or {'pp','gm','std'} or None
+        The basis used to construct the Hilbert-Schmidt space representation
+        of this state as a super-operator.  If None, certain functionality,
+        such as access to Kraus operators, will be unavailable.
 
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
@@ -61,8 +68,8 @@ class EigenvalueParamDenseOp(_DenseOperator):
         with the appropriate number of qubits is used.
     """
 
-    def __init__(self, matrix, include_off_diags_in_degen_2_blocks=False,
-                 tp_constrained_and_unital=False, evotype="default", state_space=None):
+    def __init__(self, matrix, include_off_diags_in_degen_blocks=False,
+                 tp_constrained_and_unital=False, basis=None, evotype="default", state_space=None):
 
         def cmplx_compare(ia, ib):
             return _mt.complex_compare(evals[ia], evals[ib])
@@ -110,6 +117,7 @@ class EigenvalueParamDenseOp(_DenseOperator):
             for i, ui in enumerate(unitInds):
                 if i == iClose: continue
                 B[0, ui] = 0.0; B[:, ui] /= _np.linalg.norm(B[:, ui])
+            assert(_np.allclose(matrix, B @ _np.diag(evals) @ _np.linalg.inv(B)))
 
         realInds = sorted(realInds, key=lambda i: -abs(evals[i]))
         complexInds = sorted(complexInds, key=cmplx_compare_key)
@@ -127,7 +135,7 @@ class EigenvalueParamDenseOp(_DenseOperator):
         self.B = sorted_B
         self.Bi = _np.linalg.inv(sorted_B)
 
-        self.options = {'includeOffDiags': include_off_diags_in_degen_2_blocks,
+        self.options = {'includeOffDiags': include_off_diags_in_degen_blocks,
                         'TPandUnital': tp_constrained_and_unital}
 
         #Check that nothing has gone horribly wrong
@@ -228,23 +236,24 @@ class EigenvalueParamDenseOp(_DenseOperator):
                         raise ValueError("Could not find conjugate pair "
                                          + " for %s" % self.evals[k])  # pragma: no cover
 
-            if include_off_diags_in_degen_2_blocks and blkSize == 2:
-                #Note: could remove blkSize == 2 condition or make this a
-                # separate option.  This is useful currently so that we don't
-                # add lots of off-diag elements in accidentally-degenerate
-                # cases, but there's probabaly a better heuristic for this, such
-                # as only including off-diag els for unit-eigenvalue blocks
-                # of size 2 (?)
+            if include_off_diags_in_degen_blocks is True \
+               or (isinstance(include_off_diags_in_degen_blocks, int)
+                   and 1 < blkSize < include_off_diags_in_degen_blocks):
+                #Note: we removed " and blkSize == 2" part of above condition, as
+                # the purpose was just to avoid adding lots of off-diag elements
+                # in accidentally-degenerate cases, BUT we need to handle blkSize>2
+                # appropriately to do FPR on idle gates.  There may be a better
+                # heuristic for avoiding accidental degeneracies (FUTURE work).
                 for k1 in range(i, j - 1):
                     for k2 in range(k1 + 1, j):
                         if isreal(ev):
                             # k1,k2 element
-                            if not tp_constrained_and_unital or k1 != 0:
+                            if not tp_constrained_and_unital or k1 != 0:  # (k2 can never be 0)
                                 self.params.append([(1.0, (k1, k2))])
                                 paramlbls.append("Off-diag (%d,%d) of real eigval block" % (k1, k2))
 
                             # k2,k1 element
-                            if not tp_constrained_and_unital or k2 != 0:
+                            if not tp_constrained_and_unital or k1 != 0:  # (k2 can never be 0)
                                 self.params.append([(1.0, (k2, k1))])
                                 paramlbls.append("Off-diag (%d,%d) of real eigval block" % (k2, k1))
                         else:
@@ -281,7 +290,7 @@ class EigenvalueParamDenseOp(_DenseOperator):
 
         #Finish LinearOperator construction
         mx = _np.empty(matrix.shape, "d")
-        _DenseOperator.__init__(self, mx, evotype, state_space)
+        _DenseOperator.__init__(self, mx, basis, evotype, state_space)
         self._ptr.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
 
@@ -302,6 +311,41 @@ class EigenvalueParamDenseOp(_DenseOperator):
         self._ptr.flags.writeable = True
         self._ptr[:, :] = matrix.real
         self._ptr.flags.writeable = False
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
+        mm_dict['include_off_diags_in_degen_blocks'] = self.options['includeOffDiags']
+        mm_dict['tp_constrained_and_unital'] = self.options['TPandUnital']
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        matrix = cls._decodemx(mm_dict['dense_matrix'])
+        state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
+        return cls(matrix, mm_dict['include_off_diags_in_degen_blocks'],
+                   mm_dict['tp_constrained_and_unital'], mm_dict['evotype'], state_space)
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return all([self.options[k] == other.options[k] for k in self.options])
 
     @property
     def num_params(self):

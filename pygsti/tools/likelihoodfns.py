@@ -410,8 +410,9 @@ def logl_hessian(model, dataset, circuits=None,
 
     Returns
     -------
-    numpy array
-        array of shape (M,M), where M is the length of the vectorized model.
+    numpy array or None
+        On the root processor, the Hessian matrix of shape (nModelParams, nModelParams),
+        where nModelParams = `model.num_params`.  `None` on non-root processors.
     """
     from ..objectivefns import objectivefns as _objfns
     regularization = {'min_prob_clip': min_prob_clip, 'radius': radius} if poisson_picture \
@@ -419,9 +420,10 @@ def logl_hessian(model, dataset, circuits=None,
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
     obj = _objfns._objfn(obj_cls, model, dataset, circuits,
                          regularization, {'prob_clip_interval': prob_clip_interval},
-                         op_label_aliases, comm, mem_limit, ('hessian',), ('EPP',), mdc_store, verbosity)
-    local = -obj.hessian()  # negative b/c objective is deltaLogL = max_logl - logL
-    return obj.layout.allgather_local_array('epp', local)
+                         op_label_aliases, comm, mem_limit, ('hessian',), (), mdc_store, verbosity)
+    hessian = obj.hessian()  # Note: hessian is only assembled on root processor
+    return -hessian if (comm is None or comm.rank == 0) else None
+    # negative b/c objective is deltaLogL = max_logl - logL
 
 
 def logl_approximate_hessian(model, dataset, circuits=None,
@@ -497,8 +499,9 @@ def logl_approximate_hessian(model, dataset, circuits=None,
 
     Returns
     -------
-    numpy array
-        array of shape (M,M), where M is the length of the vectorized model.
+    numpy array or None
+        On the root processor, the approximate Hessian matrix of shape (nModelParams, nModelParams),
+        where nModelParams = `model.num_params`.  `None` on non-root processors.
     """
     from ..objectivefns import objectivefns as _objfns
     obj_cls = _objfns.PoissonPicDeltaLogLFunction if poisson_picture else _objfns.DeltaLogLFunction
@@ -507,8 +510,9 @@ def logl_approximate_hessian(model, dataset, circuits=None,
                           'radius': radius},
                          {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, mem_limit, ('approximate_hessian',), (), mdc_store, verbosity)
-    local = -obj.approximate_hessian()  # negative b/c objective is deltaLogL = max_logl - logL
-    return obj.layout.allgather_local_array('epp', local)
+    hessian = obj.approximate_hessian()  # Note: hessian is only assembled on root processor
+    return -hessian if (comm is None or comm.rank == 0) else None
+    # negative b/c objective is deltaLogL = max_logl - logL
 
 
 def logl_max(model, dataset, circuits=None, poisson_picture=True,
@@ -604,7 +608,7 @@ def logl_max_per_circuit(model, dataset, circuits=None,
 def two_delta_logl_nsigma(model, dataset, circuits=None,
                           min_prob_clip=1e-6, prob_clip_interval=(-1e6, 1e6), radius=1e-4,
                           poisson_picture=True, op_label_aliases=None,
-                          dof_calc_method='nongauge', wildcard=None):
+                          dof_calc_method='modeltest', wildcard=None):
     """
     See docstring for :function:`pygsti.tools.two_delta_logl`
 
@@ -645,11 +649,13 @@ def two_delta_logl_nsigma(model, dataset, circuits=None,
         the dataset. Defaults to the empty dictionary (no aliases defined)
         e.g. op_label_aliases['Gx^3'] = ('Gx','Gx','Gx')
 
-    dof_calc_method : {"all", "nongauge"}
+    dof_calc_method : {"all", "modeltest"}
         How `model`'s number of degrees of freedom (parameters) are obtained
         when computing the number of standard deviations and p-value relative to
         a chi2_k distribution, where `k` is additional degrees of freedom
-        possessed by the maximal model.
+        possessed by the maximal model.  `"all"` uses `model.num_params` whereas
+        `"modeltest"` uses `model.num_modeltest_params` (the number of non-gauge
+        parameters by default).
 
     wildcard : WildcardBudget
         A wildcard budget to apply to this log-likelihood computation.
@@ -666,7 +672,7 @@ def two_delta_logl_nsigma(model, dataset, circuits=None,
     return two_delta_logl(model, dataset, circuits,
                           min_prob_clip, prob_clip_interval, radius,
                           poisson_picture, op_label_aliases,
-                          None, None, dof_calc_method, wildcard)[1]
+                          dof_calc_method, wildcard, None, None)[1]
 
 
 def two_delta_logl(model, dataset, circuits=None,
@@ -899,145 +905,6 @@ def two_delta_logl_per_circuit(model, dataset, circuits=None,
     nsigma = (two_dlogl_percircuit - k) / _np.sqrt(2 * k)
     pvalue = _np.array([1.0 - _stats.chi2.cdf(x, k) for x in two_dlogl_percircuit], 'd')
     return two_dlogl_percircuit, nsigma, pvalue
-
-
-#UNUSED (REMOVE?)
-# def forbidden_prob(model, dataset):
-#     """
-#     Compute the sum of the out-of-range probabilities generated by model, using only circuits in `dataset`.
-#
-#     A non-zero value indicates that model is not in XP for the supplied dataset.
-#
-#     Parameters
-#     ----------
-#     model : Model
-#         model to generate probabilities.
-#
-#     dataset : DataSet
-#         data set to obtain circuits.  Dataset counts are
-#         used to check for zero or all counts being under a
-#         single spam label, in which case out-of-bounds probabilities
-#         are ignored because they contribute zero to the logl sum.
-#
-#     Returns
-#     -------
-#     float
-#         sum of the out-of-range probabilities.
-#     """
-#     forbidden_prob = 0
-#
-#     for mdl, dsrow in dataset.items():
-#         probs = model.probabilities(mdl)
-#         for (spamlabel, p) in probs.items():
-#             if p < TOL:
-#                 if round(dsrow[spamlabel]) == 0: continue  # contributes zero to the sum
-#                 else: forbidden_prob += abs(TOL - p) + TOL
-#             elif p > 1 - TOL:
-#                 if round(dsrow[spamlabel]) == dsrow.total: continue  # contributes zero to the sum
-#                 else: forbidden_prob += abs(p - (1 - TOL)) + TOL
-#
-#     return forbidden_prob
-#
-#
-# #UNUSED (REMOVE?)
-# def prep_penalty(rho_vec, basis):
-#     """
-#     Penalty assigned to a state preparation (rho) vector rho_vec.
-#
-#     State preparation density matrices must be positive semidefinite
-#     and trace == 1.  A positive return value indicates an these
-#     criteria are not met and the rho-vector is invalid.
-#
-#     Parameters
-#     ----------
-#     rho_vec : numpy array
-#         rho vector array of shape (N,1) for some N.
-#
-#     basis : {"std", "gm", "pp", "qt"}
-#         The abbreviation for the basis used to interpret rho_vec
-#         ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
-#          "qt" = qutrit, or standard).
-#
-#     Returns
-#     -------
-#     float
-#     """
-#     # rho_vec must be positive semidefinite and trace = 1
-#     rho_mx = _bt.vec_to_stdmx(_np.asarray(rho_vec), basis)
-#     evals = _np.linalg.eigvals(rho_mx)  # could use eigvalsh, but wary of this since eigh can be wrong...
-#     sum_of_neg = sum([-ev.real for ev in evals if ev.real < 0])
-#     trace_penalty = abs(rho_vec[0] - (1.0 / _np.sqrt(rho_mx.shape[0])))
-#     # 0th el is coeff of I(dxd)/sqrt(d) which has trace sqrt(d)
-#     #print "Sum of neg = ",sumOfNeg  #DEBUG
-#     #print "Trace Penalty = ",tracePenalty  #DEBUG
-#     return sum_of_neg + trace_penalty
-#
-#
-# #UNUSED (REMOVE?)
-# def effect_penalty(effect_vec, basis):
-#     """
-#     Penalty assigned to a POVM effect vector effect_vec.
-#
-#     Effects must have eigenvalues between 0 and 1.  A positive return
-#     value indicates this criterion is not met and the E-vector is
-#     invalid.
-#
-#     Parameters
-#     ----------
-#     effect_vec : numpy array
-#         effect vector array of shape (N,1) for some N.
-#
-#     basis : {"std", "gm", "pp", "qt"}
-#         The abbreviation for the basis used to interpret effect_vec
-#         ("gm" = Gell-Mann, "pp" = Pauli-product, "std" = matrix unit,
-#          "qt" = qutrit, or standard).
-#
-#     Returns
-#     -------
-#     float
-#     """
-#     # effect_vec must have eigenvalues between 0 and 1
-#     effect_mx = _bt.vec_to_stdmx(_np.asarray(effect_vec), basis)
-#     evals = _np.linalg.eigvals(effect_mx)  # could use eigvalsh, but wary of this since eigh can be wrong...
-#     sum_of_penalties = 0
-#     for ev in evals:
-#         if ev.real < 0: sum_of_penalties += -ev.real
-#         if ev.real > 1: sum_of_penalties += ev.real - 1.0
-#     return sum_of_penalties
-#
-#
-# #UNUSED (REMOVE?)
-# def cptp_penalty(model, include_spam_penalty=True):
-#     """
-#     The sum of all negative Choi matrix eigenvalues.
-#
-#     If `include_spam_penalty` is True, also add the rho-vector
-#     and E-vector penalties of model.  A non-zero value indicates
-#     that the model is not CPTP.
-#
-#     Parameters
-#     ----------
-#     model : Model
-#         the model to compute CPTP penalty for.
-#
-#     include_spam_penalty : bool, optional
-#         if True, also test model for invalid SPAM
-#         operation(s) and return sum of CPTP penalty
-#         with rhoVecPenlaty(...) and effect_penalty(...)
-#         for each rho and E vector.
-#
-#     Returns
-#     -------
-#     float
-#         CPTP penalty (possibly with added spam penalty).
-#     """
-#     ret = _jam.sum_of_negative_choi_eigenvalues(model)
-#     if include_spam_penalty:
-#         b = model.basis
-#         ret += sum([prep_penalty(r.to_dense(on_space='minimal'), b) for r in model.preps.values()])
-#         ret += sum([effect_penalty(e.to_dense(on_space='minimal'), b) for povm in model.povms.values()
-#                     for e in povm.values()])
-#     return ret
 
 
 def two_delta_logl_term(n, p, f, min_prob_clip=1e-6, poisson_picture=True):

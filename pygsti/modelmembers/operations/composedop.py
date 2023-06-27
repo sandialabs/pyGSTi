@@ -16,10 +16,13 @@ import itertools as _itertools
 import numpy as _np
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.operations.experrorgenop import ExpErrorgenOp as _ExpErrorgenOp
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import ExplicitBasis as _ExplicitBasis
+from pygsti.baseobjs.errorgenlabel import GlobalElementaryErrorgenLabel as _GlobalElementaryErrorgenLabel
+from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import listtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import slicetools as _slct
@@ -50,7 +53,7 @@ class ComposedOp(_LinearOperator):
         error generator being composed.
     """
 
-    def __init__(self, ops_to_compose, evotype="auto", state_space="auto"):
+    def __init__(self, ops_to_compose, evotype="auto", state_space="auto", allocated_to_parent=None):
         assert(len(ops_to_compose) > 0 or state_space != "auto"), \
             "Must compose at least one operation when state_space='auto'!"
         self.factorops = list(ops_to_compose)
@@ -60,7 +63,7 @@ class ComposedOp(_LinearOperator):
         else:
             state_space = _statespace.StateSpace.cast(state_space)
         assert(all([state_space.is_compatible_with(operation.state_space) for operation in ops_to_compose])), \
-            "All operations must have compatible state spaces (%d expected)!" % str(state_space)
+            "All operations must have compatible state spaces (%s expected)!" % str(state_space)
 
         if evotype == "auto":
             evotype = ops_to_compose[0]._evotype
@@ -77,7 +80,10 @@ class ComposedOp(_LinearOperator):
                     factor_op_reps = [op._rep for op in self.factorops]
                     rep = evotype.create_composed_rep(factor_op_reps, state_space)
                 elif rep_type == 'dense':
-                    rep = evotype.create_dense_superop_rep(None, state_space)
+                    # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+                    #  and should be replaced with the basis of contained ops (if any) once we establish
+                    #  a common .basis or ._basis attribute of representations (which could still be None)
+                    rep = evotype.create_dense_superop_rep(None, None, state_space)
                 else:
                     assert(False), "Logic error!"
 
@@ -95,6 +101,7 @@ class ComposedOp(_LinearOperator):
         self.local_term_poly_coeffs = {}
 
         _LinearOperator.__init__(self, rep, evotype)
+        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
         if self._rep_type == 'dense': self._update_denserep()  # update dense rep if needed
 
     def _update_denserep(self):
@@ -109,6 +116,14 @@ class ComposedOp(_LinearOperator):
         self._rep.base.flags.writeable = True
         self._rep.base[:, :] = mx
         self._rep.base.flags.writeable = False
+
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        ops_to_compose = [serial_memo[i] for i in mm_dict['submembers']]
+        return cls(ops_to_compose, mm_dict['evotype'], state_space)
 
     def submembers(self):
         """
@@ -184,6 +199,7 @@ class ComposedOp(_LinearOperator):
             self._rep.reinit_factor_op_reps([op._rep for op in self.factorops])
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # if our params may have changed
+            self._parent = None  # mark this object for re-allocation
 
     def insert(self, insert_at, *factorops_to_insert):
         """
@@ -209,6 +225,7 @@ class ComposedOp(_LinearOperator):
             self._rep.reinit_factor_op_reps([op._rep for op in self.factorops])
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # if our params may have changed
+            self._parent = None  # mark this object for re-allocation
 
     def remove(self, *factorop_indices):
         """
@@ -231,27 +248,7 @@ class ComposedOp(_LinearOperator):
             self._rep.reinit_factor_op_reps([op._rep for op in self.factorops])
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # of our params may have changed
-
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that factor operations have their
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls([g.copy(parent, memo) for g in self.factorops], self._evotype, self.state_space)
-        return self._copy_gpindices(copyOfMe, parent, memo)
+            self._parent = None  # mark this object for re-allocation
 
     def to_sparse(self, on_space='minimal'):
         """
@@ -474,10 +471,16 @@ class ComposedOp(_LinearOperator):
 
     def _compute_taylor_order_terms(self, order, max_polynomial_vars, gpindices_array):  # separated for profiling
         terms = []
-        for p in _lt.partition_into(order, len(self.factorops)):
-            factor_lists = [self.factorops[i].taylor_order_terms(pi, max_polynomial_vars) for i, pi in enumerate(p)]
-            for factors in _itertools.product(*factor_lists):
-                terms.append(_term.compose_terms(factors))
+        if len(self.factorops) > 0:
+            for p in _lt.partition_into(order, len(self.factorops)):
+                factor_lists = [self.factorops[i].taylor_order_terms(pi, max_polynomial_vars) for i, pi in enumerate(p)]
+                for factors in _itertools.product(*factor_lists):
+                    terms.append(_term.compose_terms(factors))
+        elif order == 0:  # special case: ComposedOp with no factors == identity
+            identityTerm = _term.RankOnePolynomialOpTerm.create_from(_Polynomial({(): 1.0}, max_polynomial_vars),
+                                                                     None, None, self._evotype, self.state_space)
+            terms.append(identityTerm)
+
         self.terms[order] = terms
 
         #def _decompose_indices(x):
@@ -642,6 +645,16 @@ class ComposedOp(_LinearOperator):
         -------
         None
         """
+        if (len(self.factorops) == 2 and self.factorops[0].num_params == 0
+           and isinstance(self.factorops[1], _ExpErrorgenOp)) and self.state_space.dim <= 16:
+            #SPECIAL CASE / HACK: for 1 & 2Q, when holding e^L * T, where T is a static gate
+            # then try to gauge transform by setting e^L directly and leaving T alone:
+            Smx = s.transform_matrix; Si = s.transform_matrix_inverse
+            Tinv = _np.linalg.inv(self.factorops[0].to_dense(on_space='minimal'))
+            trans_eLT = _np.dot(Si, _np.dot(self.to_dense(on_space='minimal'), Smx))
+            self.factorops[1].set_dense(_np.dot(trans_eLT, Tinv))  # set_dense(trans_eL)
+            return
+
         for operation in self.factorops:
             operation.transform_inplace(s)
 
@@ -738,6 +751,18 @@ class ComposedOp(_LinearOperator):
         else:
             return Ltermdict
 
+    def errorgen_coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        return tuple(_itertools.chain(*[op.errorgen_coefficient_labels() for op in self.factorops]))
+
     def errorgen_coefficients_array(self):
         """
         The weighted coefficients of this operation's error generator in terms of "standard" error generators.
@@ -752,6 +777,8 @@ class ComposedOp(_LinearOperator):
             A 1D array of length equal to the number of coefficients in the linear combination
             of standard error generators that is this operation's error generator.
         """
+        #Note: so far, we do not combine errorgen coefficients when, for instance, multiple
+        # factors have errorgen coefficients with the same label.
         return _np.concatenate([op.errorgen_coefficients_array() for op in self.factorops])
 
     def errorgen_coefficients_array_deriv_wrt_params(self):
@@ -765,7 +792,12 @@ class ComposedOp(_LinearOperator):
             coefficients of this operation's error generator and `num_params` is this operation's
             number of parameters.
         """
-        return _np.concatenate([op.errorgen_coefficients_array_deriv_wrt_params() for op in self.factorops], axis=0)
+        deriv_mxs = [op.errorgen_coefficients_array_deriv_wrt_params() for op in self.factorops]
+        ret = _np.zeros((sum([mx.shape[0] for mx in deriv_mxs]), self.num_params), 'd'); off = 0
+        for mx, subm_rpinds in zip(deriv_mxs, self._submember_rpindices):
+            ret[off:off + mx.shape[0], subm_rpinds] = mx
+            off += mx.shape[0]
+        return ret
 
     def error_rates(self):
         """
@@ -804,7 +836,7 @@ class ComposedOp(_LinearOperator):
         """
         return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """
         Sets the coefficients of terms in the error generator of this operation.
 
@@ -836,11 +868,18 @@ class ComposedOp(_LinearOperator):
             the corresponding value given in `lindblad_term_dict`.  This is what is
             performed by the function :method:`set_error_rates`.
 
+        truncate : bool, optional
+            Whether to allow adjustment of the errogen coefficients in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given coefficients
+            cannot be set as specified.
+
         Returns
         -------
         None
         """
-        values_to_set = lindblad_term_dict.copy()  # so we can remove elements as we set them
+        sslbls = self.state_space.sole_tensor_product_block_labels
+        values_to_set = {_GlobalElementaryErrorgenLabel.cast(k, sslbls): v for k, v in lindblad_term_dict.items()}
 
         for op in self.factorops:
             try:
@@ -850,7 +889,7 @@ class ComposedOp(_LinearOperator):
 
             Ltermdict_local = _collections.OrderedDict([(k, v) for k, v in values_to_set.items()
                                                         if k in available_factor_coeffs])
-            op.set_errorgen_coefficients(Ltermdict_local, action, logscale_nonham)
+            op.set_errorgen_coefficients(Ltermdict_local, action, logscale_nonham, truncate)
             for k in Ltermdict_local:
                 del values_to_set[k]  # remove the values that we just set
 
@@ -890,6 +929,10 @@ class ComposedOp(_LinearOperator):
         None
         """
         self.set_errorgen_coefficients(lindblad_term_dict, action, logscale_nonham=True)
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return "composed of %d factors" % len(self.factorops)
 
     def __str__(self):
         """ Return string representation """

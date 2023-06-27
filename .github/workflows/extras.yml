@@ -5,7 +5,7 @@ name: Build and run test extras
 
 on:
   push:
-    branches: [ "master", "beta" ]
+    branches: [ "beta", "master" ]
   #pull_requests
   #  branches: [ "master", "develop", "beta" ]
   # Allow running manually from Actions tab
@@ -13,36 +13,27 @@ on:
 
 env:
   SKIP_DEAP: 1
-  NOSE_VERBOSE: 2
-  NOSE_WITH_TIMER: 1
-  NOSE_WITH_ID: 1
-  NOSE_REDNOSE: 1
-  NOSE_WITH_COVERAGE: 1
-  NOSE_COVER_PACKAGE: "pygsti"
-  NOSE_PROCESSES: -1
-  NOSE_NOPATH: ""
-  NOSE_PROCESS_TIMEOUT: 2400
-  NOSE_WHERE: "test/test_packages/"
 
 jobs:
   test_extras: # On stable branches, run extended tests
 
-    runs-on: ubuntu-18.04
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false # Finish all tests even if one fails
       matrix:
-        python-version: [3.6, 3.7, 3.8, 3.9]
-        nose-tests:
-        - "algorithms algorithmsb"
-        - "report reportb"
-        - "drivers objects tools iotest optimize construction extras"
-        # - "mpi" # Fails in GitHub Actions, passes locally but doesn't terminate threads properly
-
+        os: [ubuntu-20.04, windows-2019, macos-11]
+        python-version: [3.7, 3.8, 3.9, '3.10']
+        
     steps:
     - uses: actions/checkout@v2
-    - name: Set up installation environment
+    - name: Set up installation environment (Ubuntu or Windows)
+      if: ${{matrix.os == 'ubuntu-20.04' || matrix.os == 'windows-2019'}}
       run: |
         ./.github/ci-scripts/before_install.sh
+    - name: Set up installation environment (MacOS)
+      if: ${{matrix.os == 'macos-11'}}
+      run: |
+        ./.github/ci-scripts/before_install_macos.sh
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
@@ -55,22 +46,26 @@ jobs:
     - name: Install package
       run: |
         python -m pip install --upgrade pip
-        # see https://github.com/cvxgrp/cvxpy/issues/968 for numpy version
-        python -m pip install "numpy>=1.16.0"
-        # Cython must be pre-installed to build native extensions on pyGSTi install
-        python -m pip install cython
-        python -m pip install wheel
         # Installing with -e to keep installation local (for NOSE_NOPATH)
         # but still compile Cython extensions
         python -m pip install -e .[testing]
-        python -m pip freeze
-    - name: Run test_packages ${{ matrix.nose-tests }}
-      env:
-        NOSETESTS: ${{ matrix.nose-tests }}
+        python setup.py build_ext --inplace
+    - name: Run test_packages Ubuntu
+      if: ${{matrix.os == 'ubuntu-20.04'}}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        echo "nosetests: $NOSETESTS"
-        nosetests $NOSETESTS
+        python -m pytest -v -n auto --ignore=test/test_packages/mpi --ignore=test/test_packages/mpi.old --ignore=test/test_packages/notebooks test/test_packages
+    - name: Run test_packages Windows
+      if: ${{matrix.os == 'windows-2019'}}
+      run: |
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        python -m pytest -v -n auto --ignore=test/test_packages/mpi --ignore=test/test_packages/mpi.old --ignore=test/test_packages/notebooks test/test_packages
+    - name: Run test_packages MacOS
+      if: ${{matrix.os == 'macos-11'}}
+
+      run: |
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        python -m pytest -v -n auto --ignore=test/test_packages/mpi --ignore=test/test_packages/mpi.old --ignore=test/test_packages/notebooks test/test_packages
 
 
 

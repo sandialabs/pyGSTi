@@ -12,9 +12,10 @@ Defines the LayerLizard class and supporting functionality.
 
 
 from pygsti.modelmembers import operations as _op
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
-class LayerRules(object):
+class LayerRules(_NicelySerializable):
     """
     Rules for composing a layer operation from the elements stored within a model.
 
@@ -24,6 +25,9 @@ class LayerRules(object):
     model.  Since different models hold different operation blocks, layer rules are usually
     tailored to a specific models.
     """
+
+    def __init__(self):
+        super().__init__()
 
     def _create_op_for_circuitlabel(self, model, circuitlbl):
         """

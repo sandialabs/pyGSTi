@@ -13,6 +13,7 @@ import itertools as _itertools
 import numbers as _numbers
 import numpy as _np
 import scipy.sparse as _sps
+from functools import partial as _partial
 
 ## Pauli basis matrices
 sqrt2 = _np.sqrt(2)
@@ -94,7 +95,7 @@ class MatrixBasisConstructor(object):
         real components.
     """
 
-    def __init__(self, longname, matrixgen_fn, labelgen_fn, real):
+    def __init__(self, longname, matrixgen_fn, labelgen_fn, real, first_element_is_identity):
         """
         Create a new MatrixBasisConstructor:
 
@@ -121,6 +122,7 @@ class MatrixBasisConstructor(object):
         self.labelgen_fn = labelgen_fn
         self.longname = longname
         self.real = real
+        self.first_element_is_identity = first_element_is_identity
 
     def matrix_dim(self, dim):
         """
@@ -362,6 +364,7 @@ class VectorBasisConstructor(object):
         self.labelgen_fn = labelgen_fn
         self.longname = longname
         self.real = real
+        self.first_element_is_identity = False  # only applies to matrix bases
 
     def labeler(self, dim, sparse):
         """
@@ -798,7 +801,7 @@ def qsim_labels(matrix_dim):
     return lblList
 
 
-def pp_matrices(matrix_dim, max_weight=None):
+def pp_matrices(matrix_dim, max_weight=None, normalize=True):
     """
     Get the elements of the Pauil-product basis with matrix dimension `matrix_dim`.
 
@@ -808,9 +811,9 @@ def pp_matrices(matrix_dim, max_weight=None):
     The returned matrices are given in the standard basis of the
     density matrix space, and are thus kronecker products of
     the standard representation of the Pauli matrices, (i.e. where
-    sigma_y == [[ 0, -i ], [i, 0]] ) normalized so that the
-    resulting basis is orthonormal under the trace inner product,
-    i.e. Tr( dot(Mi,Mj) ) == delta_ij.  In the returned list,
+    sigma_y == [[ 0, -i ], [i, 0]] ) normalized (when `normalize=True`
+    so that the resulting basis is orthonormal under the trace inner
+    product, i.e. Tr( dot(Mi,Mj) ) == delta_ij.  In the returned list,
     the right-most factor of the kronecker product varies the
     fastest, so, for example, when matrix_dim == 4 the returned list
     is [ II,IX,IY,IZ,XI,XX,XY,XY,YI,YX,YY,YZ,ZI,ZX,ZY,ZZ ].
@@ -827,6 +830,9 @@ def pp_matrices(matrix_dim, max_weight=None):
         factors of which it is comprised.  For example, if `matrix_dim == 4` and
         `max_weight == 1` then the returned list is [II, IX, IY, IZ, XI, YI, ZI].
 
+    normalize : bool, optional
+        Whether the Pauli matrices are normalized (see above) or not.
+
     Returns
     -------
     list
@@ -840,7 +846,10 @@ def pp_matrices(matrix_dim, max_weight=None):
     e.g., for 2 qubits: II, IX, IY, IZ, XI, XX, XY, XZ, YI, ... ZZ
     """
     _check_dim(matrix_dim)
-    sigmaVec = (id2x2 / sqrt2, sigmax / sqrt2, sigmay / sqrt2, sigmaz / sqrt2)
+    sigmaVec = (id2x2, sigmax, sigmay, sigmaz)
+    if normalize:
+        sigmaVec = tuple((s / sqrt2 for s in sigmaVec))
+
     if matrix_dim == 0: return []
 
     def _is_integer(x):
@@ -867,6 +876,9 @@ def pp_matrices(matrix_dim, max_weight=None):
         matrices.append(M)
 
     return matrices
+
+
+PP_matrices = _partial(pp_matrices, normalize=False)
 
 
 def pp_labels(matrix_dim):
@@ -1248,23 +1260,25 @@ def unknown_labels(dim):
 
 
 _basis_constructor_dict = dict()  # global dict holding all builtin basis constructors (used by Basis objects)
-_basis_constructor_dict['std'] = MatrixBasisConstructor('Matrix-unit basis', std_matrices, std_labels, False)
+_basis_constructor_dict['std'] = MatrixBasisConstructor('Matrix-unit basis', std_matrices, std_labels, False, False)
 _basis_constructor_dict['col'] = MatrixBasisConstructor('Column-stacked matrix-unit basis', col_matrices,
-                                                        col_labels, False)
+                                                        col_labels, False, False)
 _basis_constructor_dict['gm_unnormalized'] = MatrixBasisConstructor(
-    'Unnormalized Gell-Mann basis', gm_matrices_unnormalized, gm_labels, True)
-_basis_constructor_dict['gm'] = MatrixBasisConstructor('Gell-Mann basis', gm_matrices, gm_labels, True)
-_basis_constructor_dict['pp'] = MatrixBasisConstructor('Pauli-Product basis', pp_matrices, pp_labels, True)
-_basis_constructor_dict['qsim'] = MatrixBasisConstructor('QuantumSim basis', qsim_matrices, qsim_labels, True)
-_basis_constructor_dict['qt'] = MatrixBasisConstructor('Qutrit basis', qt_matrices, qt_labels, True)
+    'Unnormalized Gell-Mann basis', gm_matrices_unnormalized, gm_labels, True, True)
+_basis_constructor_dict['gm'] = MatrixBasisConstructor('Gell-Mann basis', gm_matrices, gm_labels, True, True)
+_basis_constructor_dict['pp'] = MatrixBasisConstructor('Normalized Pauli-Product basis', pp_matrices, pp_labels, True,
+                                                       True)
+_basis_constructor_dict['PP'] = MatrixBasisConstructor('Pauli-Product basis', PP_matrices, pp_labels, True, True)
+_basis_constructor_dict['qsim'] = MatrixBasisConstructor('QuantumSim basis', qsim_matrices, qsim_labels, True, False)
+_basis_constructor_dict['qt'] = MatrixBasisConstructor('Qutrit basis', qt_matrices, qt_labels, True, True)
 _basis_constructor_dict['id'] = SingleElementMatrixBasisConstructor('Identity-only subbasis', identity_matrices,
-                                                                    identity_labels, True)
+                                                                    identity_labels, True, True)
 _basis_constructor_dict['clmx'] = DiagonalMatrixBasisConstructor('Diagonal Matrix-unit basis', cl_vectors,
-                                                                 cl_labels, True)
+                                                                 cl_labels, True, False)
 _basis_constructor_dict['clgmmx'] = DiagonalMatrixBasisConstructor('Diagonal Gell-Mann basis', clgm_vectors,
-                                                                   clgm_labels, True)
+                                                                   clgm_labels, True, True)
 _basis_constructor_dict['clppmx'] = DiagonalMatrixBasisConstructor('Diagonal Pauli-Product basis', clpp_vectors,
-                                                                   clpp_labels, True)
+                                                                   clpp_labels, True, True)
 _basis_constructor_dict['cl'] = VectorBasisConstructor('Classical basis', cl_vectors, cl_labels, True)
 _basis_constructor_dict['clgm'] = VectorBasisConstructor('Classical Gell-Mann basis', clgm_vectors, clgm_labels, True)
 _basis_constructor_dict['clpp'] = VectorBasisConstructor('Classical Pauli-Product basis', clpp_vectors,

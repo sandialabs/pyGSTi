@@ -10,13 +10,22 @@ Serialization routines to/from a meta.json based directory
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
+import scipy.sparse as _sps
 import importlib as _importlib
 import json as _json
 import pathlib as _pathlib
 import pickle as _pickle
+import warnings as _warnings
 
-from pygsti.io import loaders as _load
+try:
+    from bson.objectid import ObjectId as _ObjectId
+except ImportError:
+    _ObjectId = None
+
+from pygsti.io import readers as _load
 from pygsti.io import writers as _write
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 
 QUICK_LOAD_MAX_SIZE = 10 * 1024  # 10 kilobytes
@@ -66,16 +75,23 @@ def _class_for_name(module_and_class_name):
 def _get_auxfile_ext(typ):
     #get expected extension
     if typ == 'text-circuit-list': ext = '.txt'
-    elif typ == 'text-circuit-lists': ext = '.txt'
-    elif typ == 'list-of-protocolobjs': ext = ''
-    elif typ == 'dict-of-protocolobjs': ext = ''
-    elif typ == 'dict-of-resultsobjs': ext = ''
-    elif typ == 'protocolobj': ext = ''
+    elif typ == 'dir-serialized-object': ext = ''  # a directory
+    elif typ == 'partialdir-serialized-object': ext = ''  # a directory
+    elif typ == 'serialized-object': ext = '.json'
+    elif typ == 'circuit-str-json': ext = '.json'
+    elif typ == 'numpy-array': ext = '.npy'
     elif typ == 'json': ext = '.json'
     elif typ == 'pickle': ext = '.pkl'
     elif typ == 'none': ext = '.NA'
     elif typ == 'reset': ext = '.NA'
-    else: raise ValueError("Invalid aux-file type: %s" % typ)
+    else:
+        #DEPRECATED formats! REMOVE LATER
+        if typ == 'text-circuit-lists': ext = '.txt'
+        elif typ == 'list-of-protocolobjs': ext = ''
+        elif typ == 'dict-of-protocolobjs': ext = ''
+        elif typ == 'dict-of-resultsobjs': ext = ''
+        else:
+            raise ValueError("Invalid aux-file type: %s" % typ)
     return ext
 
 
@@ -128,10 +144,6 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
     """
     root_dir = _pathlib.Path(root_dir)
     ret = {}
-    max_size = quick_load if isinstance(quick_load, int) else QUICK_LOAD_MAX_SIZE
-
-    def should_skip_loading(path):
-        return quick_load and (path.stat().st_size >= max_size)
 
     with open(str(root_dir / 'meta.json'), 'r') as f:
         meta = _json.load(f)
@@ -143,19 +155,92 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
 
     for key, val in meta.items():
         if key in ignore_meta: continue
+        if key == 'dbcoordinates':  # special case of database coordinates
+            ret['_dbcoordinates'] = (val[0], _ObjectId(val[1]))  # convert back str -> ObjectId
+            continue
         ret[key] = val
 
-    for key, typ in meta[auxfile_types_member].items():
-        if key in ignore_meta: continue  # don't load -> members items in ignore_meta
-        ext = _get_auxfile_ext(typ)
+    if auxfile_types_member is not None:
+        for key, typ in meta[auxfile_types_member].items():
+            if key in ignore_meta: continue  # don't load -> members items in ignore_meta
 
-        #Process cases with non-standard expected path(s)
-        if typ == 'none':  # member is serialized separatey and shouldn't be touched
-            continue
-        elif typ == 'reset':  # 'reset' doesn't write and loads in as None
-            val = None  # no file exists for this member
+            bLoaded, val = _load_auxfile_member(root_dir, key, typ, meta.get(key, None), quick_load)
+            if bLoaded:
+                ret[key] = val
+            elif val is True:  # val is value of whether to set value to None
+                ret[key] = None  # Note: could just have bLoaded be True in this case and val=None
 
-        elif typ == 'text-circuit-lists':
+    if separate_auxfiletypes:
+        if auxfile_types_member is not None:
+            del ret[auxfile_types_member]
+            return ret, meta[auxfile_types_member]
+        else:
+            return ret, None
+    else:
+        return ret
+
+
+def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
+    subtypes = typ.split(':')
+    cur_typ = subtypes[0]
+    next_typ = ':'.join(subtypes[1:])
+
+    max_size = quick_load if isinstance(quick_load, int) else QUICK_LOAD_MAX_SIZE
+
+    def should_skip_loading(path):
+        return quick_load and (path.stat().st_size >= max_size)
+
+    if cur_typ == 'list':
+        if metadata is None:  # signals that value is None, otherwise would at least be an empty list
+            val = None
+        else:
+            val = []
+            for i, meta in enumerate(metadata):
+                filenm_so_far = filenm + str(i)
+                bLoaded, el = _load_auxfile_member(root_dir, filenm_so_far, next_typ, meta, quick_load)
+                if bLoaded:
+                    val.append(el)
+                else:
+                    break
+
+    elif cur_typ == 'dict':
+        if metadata is None:  # signals that value is None, otherwise would at least be an empty list
+            val = None
+        else:
+            keys = list(metadata.keys())  # sort?
+            val = {}
+            for k in keys:
+                filenm_so_far = filenm + "_" + k
+                meta = metadata.get(k, None)
+                bLoaded, v = _load_auxfile_member(root_dir, filenm_so_far, next_typ, meta, quick_load)
+                if bLoaded:
+                    val[k] = v
+                else:
+                    raise ValueError("Failed to load dictionary key " + str(k))
+
+    elif cur_typ == 'fancykeydict':
+        if metadata is None:  # signals that value is None, otherwise would at least be an empty list
+            val = None
+        else:
+            keymeta_pairs = list(metadata)  # should be a list of (key, metadata_for_value) pairs
+            val = {}
+            for i, (k, meta) in enumerate(keymeta_pairs):
+                filenm_so_far = filenm + "_kvpair" + str(i)
+                bLoaded, el = _load_auxfile_member(root_dir, filenm_so_far, next_typ, meta, quick_load)
+                if bLoaded:
+                    if isinstance(k, list): k = tuple(k)  # convert list-type keys -> tuples
+                    val[k] = el
+                else:
+                    raise ValueError("Failed to load %d-th dictionary key: %s" % (i, str(k)))
+
+    elif cur_typ in ('text-circuit-lists', 'protocolobj', 'list-of-protocolobjs', 'dict-of-resultsobjs'):
+        # TODO LATER -- REMOVE this entire block - this is for backward compatibility only.
+        _warnings.warn(("Loading in an old and deprecated aux-file format - "
+                        "you should re-save this data to update the format!"))
+        ext = _get_auxfile_ext(cur_typ)
+        key = filenm
+
+        if cur_typ == 'text-circuit-lists':
             i = 0; val = []
             while True:
                 pth = root_dir / (key + str(i) + ext)
@@ -166,51 +251,65 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
                     val.append(_load.load_circuit_list(pth))
                 i += 1
 
-        elif typ == 'protocolobj':
+        elif cur_typ == 'protocolobj':
             protocol_dir = root_dir / (key + ext)
             val = _cls_from_meta_json(protocol_dir).from_dir(protocol_dir, quick_load=quick_load)
 
-        elif typ == 'list-of-protocolobjs':
+        elif cur_typ == 'list-of-protocolobjs':
             i = 0; val = []
             while True:
                 pth = root_dir / (key + str(i) + ext)
                 if not pth.exists(): break
                 val.append(_cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load)); i += 1
 
-        elif typ == 'dict-of-protocolobjs':
+        elif cur_typ == 'dict-of-protocolobjs':
             keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
             val = {k: _cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load) for k, pth in zip(keys, paths)}
 
-        elif typ == 'dict-of-resultsobjs':
+        elif cur_typ == 'dict-of-resultsobjs':
             keys = meta[key]; paths = [root_dir / (key + "_" + k + ext) for k in keys]
             val = {k: _cls_from_meta_json(pth)._from_dir_partial(pth, quick_load=quick_load)
                    for k, pth in zip(keys, paths)}
+        else:
+            assert(False), "Should not get here!"
 
-        else:  # cases with 'standard' expected path
-
-            pth = root_dir / (key + ext)
-            if pth.is_dir():
-                raise ValueError("Expected path: %s is a dir!" % pth)
-            elif not pth.exists() or should_skip_loading(pth):
-                val = None  # missing files => None values
-            elif typ == 'text-circuit-list':
-                val = _load.load_circuit_list(pth)
-            elif typ == 'json':
-                with open(str(pth), 'r') as f:
-                    val = _json.load(f)
-            elif typ == 'pickle':
-                with open(str(pth), 'rb') as f:
-                    val = _pickle.load(f)
-            else:
-                raise ValueError("Invalid aux-file type: %s" % typ)
-
-        ret[key] = val
-
-    if separate_auxfiletypes:
-        del ret[auxfile_types_member]
-        return ret, meta[auxfile_types_member]
     else:
-        return ret
+        #Simple types that just load the given file
+        ext = _get_auxfile_ext(cur_typ)
+        pth = root_dir / (filenm + ext)
+        if not pth.exists():
+            return False, True  # failure to load, but not explicitly skipped, so set_to_None=True
+            # Note: this behavior is needed when, for instance, a member that could be a
+            # serializable object is None instead - in which case we just write nothing and load in None here.
+        if cur_typ == 'none':  # member is serialized separatey and shouldn't be touched
+            return False, False  # explicitly don't load or set value (so set_to_None=False)
+
+        if should_skip_loading(pth):
+            val = None  # load 'None' instead of actual data (skip loading this file)
+        elif cur_typ == 'reset':  # 'reset' doesn't write and loads in as None
+            val = None  # no file exists for this member
+        elif cur_typ == 'text-circuit-list':
+            val = _load.read_circuit_list(pth)
+        elif cur_typ == 'dir-serialized-object':
+            val = _cls_from_meta_json(pth).from_dir(pth, quick_load=quick_load)
+        elif cur_typ == 'partialdir-serialized-object':
+            val = _cls_from_meta_json(pth)._from_dir_partial(pth, quick_load=quick_load)
+        elif cur_typ == 'serialized-object':
+            val = _NicelySerializable.read(pth)
+        elif cur_typ == 'circuit-str-json':
+            val = _load.read_circuit_strings(pth)
+        elif typ == 'numpy-array':
+            val = _np.load(pth)
+        elif typ == 'json':
+            with open(str(pth), 'r') as f:
+                val = _json.load(f)
+        elif typ == 'pickle':
+            with open(str(pth), 'rb') as f:
+                val = _pickle.load(f)
+        else:
+            raise ValueError("Invalid aux-file type: %s" % typ)
+
+    return True, val  # loading successful - 2nd element is value loaded
 
 
 def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None):
@@ -262,60 +361,104 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
     for key, val in valuedict.items():
         if key in auxfile_types: continue  # member is serialized to a separate file
         if isinstance(val, _VerbosityPrinter): val = val.verbosity  # HACK!!
+        if key == '_dbcoordinates':  # special case: store _dbcoordinates in 'dbcoordinates' key
+            if val is not None:
+                assert len(val) == 2  # should be a (collection_name, ObjectId) pair
+                meta['dbcoordinates'] = (val[0], str(val[1]))  # convert ObjectId -> str for json storage
+            continue
         meta[key] = val
     #Wait to write meta.json until the end, since
     # aux-types may utilize it too.
 
     for auxnm, typ in auxfile_types.items():
+        if typ in ('none', 'reset'):  # these types aren't written at all
+            continue
         val = valuedict[auxnm]
-        ext = _get_auxfile_ext(typ)
 
-        if typ == 'text-circuit-lists':
-            for i, circuit_list in enumerate(val):
-                pth = root_dir / (auxnm + str(i) + ext)
-                _write.write_circuit_list(pth, circuit_list)
+        try:
+            auxmeta = _write_auxfile_member(root_dir, auxnm, typ, val)
+        except Exception as e:
+            _warnings.warn("FAILED to write aux file member %s w/format %s:" % (auxnm, typ))
+            raise e
 
-        elif typ == 'protocolobj':
-            val.write(root_dir / (auxnm + ext))
-
-        elif typ == 'list-of-protocolobjs':
-            for i, obj in enumerate(val):
-                pth = root_dir / (auxnm + str(i) + ext)
-                obj.write(pth)
-
-        elif typ == 'dict-of-protocolobjs':
-            meta[auxnm] = list(val.keys())  # just save a list of the keys in the metadata
-            for k, obj in val.items():
-                obj_dirname = auxnm + "_" + k + ext  # keys must be strings
-                obj.write(root_dir / obj_dirname)
-
-        elif typ == 'dict-of-resultsobjs':
-            meta[auxnm] = list(val.keys())  # just save a list of the keys in the metadata
-            for k, obj in val.items():
-                obj_dirname = auxnm + "_" + k + ext  # keys must be strings
-                obj._write_partial(root_dir / obj_dirname)
-
-        else:
-            # standard path cases
-            pth = root_dir / (auxnm + ext)
-
-            if val is None:   # None values don't get written
-                pass
-            elif typ == 'text-circuit-list':
-                _write.write_circuit_list(pth, val)
-            elif typ == 'json':
-                with open(str(pth), 'w') as f:
-                    _json.dump(val, f)
-            elif typ == 'pickle':
-                with open(str(pth), 'wb') as f:
-                    _pickle.dump(val, f)
-            elif typ in ('none', 'reset'):
-                pass
-            else:
-                raise ValueError("Invalid aux-file type: %s" % typ)
+        if auxmeta is not None:
+            meta[auxnm] = auxmeta  # metadata about auxfile(s) for this auxnm
 
     with open(str(root_dir / 'meta.json'), 'w') as f:
+        _check_jsonable(meta)
         _json.dump(meta, f)
+
+
+def _write_auxfile_member(root_dir, filenm, typ, val):
+    subtypes = typ.split(':')
+    cur_typ = subtypes[0]
+    next_typ = ':'.join(subtypes[1:])
+
+    if cur_typ == 'list':
+        if val is not None:
+            metadata = []
+            for i, el in enumerate(val):
+                filenm_so_far = filenm + str(i)
+                meta = _write_auxfile_member(root_dir, filenm_so_far, next_typ, el)
+                metadata.append(meta)
+        else:
+            metadata = None
+
+    elif cur_typ == 'dict':
+        if val is not None:
+            metadata = {}
+            for k, v in val.items():
+                filenm_so_far = filenm + "_" + k
+                meta = _write_auxfile_member(root_dir, filenm_so_far, next_typ, v)
+                metadata[k] = meta
+        else:
+            metadata = None
+
+    elif cur_typ == 'fancykeydict':
+        if val is not None:
+            metadata = []
+            for i, (k, v) in enumerate(val.items()):
+                filenm_so_far = filenm + "_kvpair" + str(i)
+                meta = _write_auxfile_member(root_dir, filenm_so_far, next_typ, v)
+                metadata.append((k, meta))
+        else:
+            metadata = None
+
+    else:
+        #Simple types that just write the given file
+        metadata = None
+        ext = _get_auxfile_ext(cur_typ)
+        pth = root_dir / (filenm + ext)
+
+        if val is None:   # None values don't get written
+            pass
+        elif cur_typ in ('none', 'reset'):  # explicitly don't get written
+            pass  # and really we shouldn't ever get here since we short circuit in auxmember loop
+        elif cur_typ == 'text-circuit-list':
+            _write.write_circuit_list(pth, val)
+        elif cur_typ == 'dir-serialized-object':
+            val.write(pth)
+        elif cur_typ == 'partialdir-serialized-object':
+            val._write_partial(pth)
+        elif cur_typ == 'serialized-object':
+            assert(isinstance(val, _NicelySerializable)), \
+                "Non-nicely-serializable '%s' object given for a 'serialized-object' auxfile type!" % (str(type(val)))
+            val.write(pth)
+        elif cur_typ == 'circuit-str-json':
+            _write.write_circuit_strings(pth, val)
+        elif cur_typ == 'numpy-array':
+            _np.save(pth, val)
+        elif typ == 'json':
+            with open(str(pth), 'w') as f:
+                _check_jsonable(val)
+                _json.dump(val, f, indent=4)
+        elif typ == 'pickle':
+            with open(str(pth), 'wb') as f:
+                _pickle.dump(val, f)
+        else:
+            raise ValueError("Invalid aux-file type: %s" % typ)
+
+    return metadata
 
 
 def _cls_from_meta_json(dirname):
@@ -357,10 +500,12 @@ def _obj_to_meta_json(obj, dirname):
     """
     meta = {'type': _full_class_name(obj)}
     with open(str(_pathlib.Path(dirname) / 'meta.json'), 'w') as f:
+        _check_jsonable(meta)
         _json.dump(meta, f)
 
 
-def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attributes=()):
+def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attributes=(),
+                                include_attributes=None, additional_meta=None):
     """
     Write the contents of `obj` to `dirname` using a 'meta.json' file and an auxfile-types dictionary.
 
@@ -376,7 +521,7 @@ def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attribu
     dirname : str
         the directory name
 
-    auxfile_types_member : str
+    auxfile_types_member : str or None
         the name of the attribute within `obj` that holds the dictionary
         mapping of attributes to auxiliary-file types.  Usually this is
         `"auxfile_types"`.
@@ -385,13 +530,36 @@ def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attribu
         List of (string-valued) names of attributes to omit when serializing
         this object.  Usually you should just leave this empty.
 
+    include_attributes : list or tuple or None
+        A list of (string-valued) names of attributs to specifically include
+        when serializing this object.  If `None`, then *all* attributes are
+        included except those specifically omitted via `omit_attributes`.
+        If `include_attributes` is not `None` then `omit_attributes` is
+        ignored.
+
+    additional_meta : dict, optional
+        A dictionary of additional meta-data to be included in the 'meta.json' file
+        (but that isn't an attribute of `obj`).
+
+
     Returns
     -------
     None
     """
     meta = {'type': _full_class_name(obj)}
+    if additional_meta is not None: meta.update(additional_meta)
 
-    if len(omit_attributes) > 0:
+    if include_attributes is not None:  # include_attributes takes precedence over omit_attributes
+        vals = {}
+        auxtypes = {}
+        potential_auxtypes = obj.__dict__[auxfile_types_member].copy() if (auxfile_types_member is not None) else {}
+        for attr_name in include_attributes:
+            if attr_name in obj.__dict__:
+                vals[attr_name] = obj.__dict__[attr_name]
+                if attr_name in potential_auxtypes:
+                    auxtypes[attr_name] = potential_auxtypes[attr_name]
+
+    elif len(omit_attributes) > 0:
         vals = obj.__dict__.copy()
         auxtypes = obj.__dict__[auxfile_types_member].copy()
         for o in omit_attributes:
@@ -425,7 +593,8 @@ def _read_json_or_pkl_files_to_dict(dirname):
     for pth in dirname.iterdir():
         if pth.suffix == '.json':
             with open(str(pth), 'r') as f:
-                val = _json.load(f)
+                json_val = _json.load(f)
+            val = _from_jsonable(json_val)
         elif pth.suffix == '.pkl':
             with open(str(pth), 'rb') as f:
                 val = _pickle.load(f)
@@ -458,13 +627,67 @@ def write_dict_to_json_or_pkl_files(d, dirname):
     """
     dirname = _pathlib.Path(dirname)
     dirname.mkdir(exist_ok=True)
+
     for key, val in d.items():
-        #TODO: fix this - as we can write some things to json that don't get read back correctly,
-        # e.g. dicts with integer keys
-        #try:
-        #    with open(dirname / (key + '.json'), 'w') as f:
-        #        _json.dump(val, f)
-        #except:
-        #try to remove partial json file??
-        with open(str(dirname / (key + '.pkl')), 'wb') as f:
-            _pickle.dump(val, f)
+        try:
+            jsonable = _to_jsonable(val)
+            _check_jsonable(jsonable)
+            with open(dirname / (key + '.json'), 'w') as f:
+                _json.dump(jsonable, f)
+        except Exception as e:
+            fn = str(dirname / (key + '.json'))
+            _warnings.warn("Could not write %s (falling back on pickle format):\n" % fn + str(e))
+            #try to remove partial json file??
+            with open(str(dirname / (key + '.pkl')), 'wb') as f:
+                _pickle.dump(val, f)
+
+
+def _to_jsonable(val):
+    if isinstance(val, _NicelySerializable):
+        return val.to_nice_serialization()
+    elif type(val) == list:  # don't use isinstance here
+        return [_to_jsonable(v) for v in val]
+    elif type(val) == dict:  # don't use isinstance here
+        return {k: _to_jsonable(v) for k, v in val.items()}
+    else:
+        return val
+
+
+def _from_jsonable(x):
+    if x is None or isinstance(x, (float, int, str)):
+        return x
+    elif isinstance(x, dict):
+        if 'module' in x and 'class' in x:
+            return _NicelySerializable.from_nice_serialization(x)
+        else:  # assume a normal dictionary
+            return {k: _from_jsonable(v) for k, v in x.items()}
+    elif isinstance(x, list):
+        return [_from_jsonable(v) for v in x]
+    else:
+        raise ValueError("Cannot decode object of type '%s' within JSON'd values!" % str(type(x)))
+
+
+def _check_jsonable(x):
+    """ Checks that `x` can be properly converted to JSON, detecting
+        errors that the json modules doesn't pick up. E.g. ensures that `x`
+        doesn't contain dicts with non-string-valued keys """
+    if x is None or isinstance(x, (float, int, str)):
+        pass  # no problem
+    elif isinstance(x, (tuple, list)):
+        for i, v in enumerate(x):
+            try:
+                _check_jsonable(v)  # no problem as long as we don't mind tuples -> lists
+            except ValueError as e:
+                raise ValueError(("%d-th element : " % i) + str(e))
+    elif isinstance(x, dict):
+        if any([(not isinstance(k, str)) for k in x.keys()]):
+            nonstr_keys = [k for k in x.keys() if not isinstance(k, str)]
+            raise ValueError("Cannot convert a dictionary with non-string keys to JSON! (it won't decode properly):\n"
+                             + '\n'.join(map(str, nonstr_keys)))
+        for k, v in x.items():
+            try:
+                _check_jsonable(v)
+            except ValueError as e:
+                raise ValueError(("%s key : " % k) + str(e))
+    else:
+        raise ValueError("Cannot serialize object of type '%s' to JSON!" % str(type(x)))

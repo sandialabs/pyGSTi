@@ -302,7 +302,7 @@ class Report:
             mdl           = models[gopt]  # final, gauge-optimized estimate
             mdl_final     = models['final iteration estimate'] # final estimate before gauge-opt
             target_model  = models['target']
-            mdl_per_iter  = models['iteration estimates']
+            mdl_per_iter  = [models['iteration %d estimate' % k] for k in range(estimate.num_iterations)]
 
             mdl_eigenspace_projected = pygsti.tools.project_to_target_eigenspace(mdl, target_model)
 

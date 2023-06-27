@@ -67,7 +67,7 @@ def _create_display_progress_fn(show_progress):
 
             def _display_progress(i, n, filename):
                 _time.sleep(0.001); clear_output()
-                print("Loading %s: %.0f%%" % (filename, 100.0 * float(i) / float(n)))
+                print("Reading %s: %.0f%%" % (filename, 100.0 * float(i) / float(n)))
                 _sys.stdout.flush()
         except:
             def _display_progress(i, n, f): pass
@@ -418,6 +418,7 @@ class StdInputParser(object):
         orig_cwd = _os.getcwd()
         outcomeLabels = None
         outcome_labels_specified_in_preamble = False
+        dbID = None
         if len(_os.path.dirname(filename)) > 0: _os.chdir(
             _os.path.dirname(filename))  # allow paths relative to datafile path
         try:
@@ -443,14 +444,28 @@ class StdInputParser(object):
                 outcomeLabels = [l.strip().split(':') for l in preamble_directives['Outcomes'].split(",")]
                 outcome_labels_specified_in_preamble = True
             if 'StdOutcomeQubits' in preamble_directives:
-                outcomeLabels = int(preamble_directives['Outcomes'])
+                outcomeLabels = int(preamble_directives['StdOutcomeQubits'])
                 outcome_labels_specified_in_preamble = True
+            if not outcome_labels_specified_in_preamble and 'Columns' in preamble_directives:
+                outcomeLabels = sorted(fixed_column_outcome_labels)
+                outcome_labels_specified_in_preamble = True
+            if 'DatabaseID' in preamble_directives:
+                try:
+                    from bson.objectid import ObjectId as _ObjectId
+                    dbID = _ObjectId(preamble_directives['DatabaseID'])
+                except ImportError:
+                    _warnings.warn("Could not import DataSet's database ID because `bson` package is missing.")
+                    dbID = None
+
         finally:
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
         dataset = _DataSet(outcome_labels=outcomeLabels, collision_action=collision_action,
                            comment="\n".join(preamble_comments))
+
+        if dbID is not None:
+            dataset._dbcoordinates = (_DataSet.collection_name, dbID)
 
         if outcome_labels_specified_in_preamble and (fixed_column_outcome_labels is not None):
             fixed_column_outcome_indices = [dataset.olIndex[ol] for ol in fixed_column_outcome_labels]
@@ -485,6 +500,11 @@ class StdInputParser(object):
             return commentDict
 
         last_circuit = last_commentDict = None
+
+        #REMOVE DEBUG
+        #from mpi4py import MPI
+        #comm = MPI.COMM_WORLD
+        #debug_circuit_elements = 0; debug_test_simple_dict = {}; circuit_bytes = 0; sizeof_bytes = 0
 
         with open(filename, 'r') as inputfile:
             for (iLine, line) in enumerate(inputfile):
@@ -544,11 +564,19 @@ class StdInputParser(object):
                                               if v != '--'])  # drop "empty" sentinels
                                     dataset.add_outcome_labels(outcome_labels, update_ol=False)
                                     outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
+
                             else:  # assume valueList is a list of (outcomeLabel, count) tuples -- see parse_dataline
                                 outcome_labels, count_values = zip(*valueList) if len(valueList) else ([], [])
                                 if not outcome_labels_specified_in_preamble:
                                     dataset.add_outcome_labels(outcome_labels, update_ol=False)
                                 outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
+
+                            # When reading in time-independent data (all at a single time), order (sort)
+                            # the counts according to outcome index to make it easier to compare datarows.
+                            assert len(set(outcome_indices)) == len(outcome_indices), "Duplicate fixed column!"
+                            if len(outcome_indices) > 0:  # sort count values by outcome index unless there aren't any
+                                outcome_indices, count_values = zip(*sorted(zip(outcome_indices, count_values)))
+
                             oliArray = _np.array(outcome_indices, dataset.oliType)
                             countArray = _np.array(count_values, dataset.repType)
 
@@ -605,6 +633,7 @@ class StdInputParser(object):
                         else:
                             raise ValueError("Invalid circuit data-line prefix: '%s'" % parts[0])
 
+        #REMOVE print("Rank %d DONE load loop.  circuit bytes = %g" % (comm.rank, circuit_bytes))
         if looking_for in ("circuit_data", "circuit_data_or_line") and current_item:
             #add final circuit info (no blank line at end of file)
             dataset.add_raw_series_data(current_item['circuit'], current_item.get('outcomes', []),
@@ -1121,7 +1150,7 @@ def parse_model(filename):
     if cur_group_obj is not None:
         top_level_objs.append(cur_group_obj)
 
-    def get_liouville_mx(obj, prefix=""):
+    def _get_liouville_mx(obj, prefix=""):
         """ Process properties of `obj` to extract a single liouville representation """
         props = obj['properties']; lmx = None
         if prefix + "StateVec" in props:
@@ -1142,11 +1171,11 @@ def parse_model(filename):
 
         elif prefix + "UnitaryMx" in props:
             ar = _eval_row_list(props[prefix + "UnitaryMx"], b_complex=True)
-            lmx = _tools.change_basis(_tools.unitary_to_process_mx(ar), 'std', basis)
+            lmx = _tools.unitary_to_superop(ar, basis)
 
         elif prefix + "UnitaryMxExp" in props:
             ar = _eval_row_list(props[prefix + "UnitaryMxExp"], b_complex=True)
-            lmx = _tools.change_basis(_tools.unitary_to_process_mx(_expm(-1j * ar)), 'std', basis)
+            lmx = _tools.unitary_to_superop(_expm(-1j * ar), basis)
 
         elif prefix + "LiouvilleMx" in props:
             lmx = _eval_row_list(props[prefix + "LiouvilleMx"], b_complex=False)
@@ -1164,10 +1193,9 @@ def parse_model(filename):
         #Preps
         if cur_typ == "PREP":
             mdl.preps[cur_label] = _state.FullState(
-                get_liouville_mx(obj))
+                _get_liouville_mx(obj), basis)
         elif cur_typ == "TP-PREP":
-            mdl.preps[cur_label] = _state.TPState(
-                get_liouville_mx(obj))
+            mdl.preps[cur_label] = _state.TPState(_get_liouville_mx(obj), basis)
         elif cur_typ == "CPTP-PREP":
             props = obj['properties']
             assert("PureVec" in props and "ErrgenMx" in props)  # must always be Liouville reps!
@@ -1178,10 +1206,10 @@ def parse_model(filename):
             errorgen = _op.LinbladErrorgen.from_operation_matrix(
                 qty, proj_basis, proj_basis, truncate=False, mx_basis=basis)
             errorMap = _op.ExpErrorgenOp(errorgen)
-            pureVec = _state.StaticState(_np.transpose(_eval_row_list(props["PureVec"], b_complex=False)))
+            pureVec = _state.StaticState(_np.transpose(_eval_row_list(props["PureVec"], b_complex=False)), basis)
             mdl.preps[cur_label] = _state.ComposedState(pureVec, errorMap)
         elif cur_typ == "STATIC-PREP":
-            mdl.preps[cur_label] = _state.StaticState(get_liouville_mx(obj))
+            mdl.preps[cur_label] = _state.StaticState(_get_liouville_mx(obj), basis)
 
         #POVMs
         elif cur_typ in ("POVM", "TP-POVM", "CPTP-POVM"):
@@ -1189,9 +1217,9 @@ def parse_model(filename):
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
                 if sub_typ == "EFFECT":
-                    Evec = _povm.FullPOVMEffect(get_liouville_mx(sub_obj))
+                    Evec = _povm.FullPOVMEffect(_get_liouville_mx(sub_obj), basis)
                 elif sub_typ == "STATIC-EFFECT":
-                    Evec = _povm.StaticPOVMEffect(get_liouville_mx(sub_obj))
+                    Evec = _povm.StaticPOVMEffect(_get_liouville_mx(sub_obj), basis)
                 #elif sub_typ == "CPTP-EFFECT":
                 #    Evec = _objs.LindbladSPAMVec.from_spam_vector(qty,qty,"effect")
                 effects.append((sub_obj['label'], Evec))
@@ -1216,16 +1244,14 @@ def parse_model(filename):
             else: assert(False), "Logic error!"
 
         elif cur_typ == "GATE":
-            mdl.operations[cur_label] = _op.FullArbitraryOp(
-                get_liouville_mx(obj))
+            mdl.operations[cur_label] = _op.FullArbitraryOp(_get_liouville_mx(obj))
         elif cur_typ == "TP-GATE":
-            mdl.operations[cur_label] = _op.FullTPOp(
-                get_liouville_mx(obj))
+            mdl.operations[cur_label] = _op.FullTPOp(_get_liouville_mx(obj))
         elif cur_typ == "COMPOSED-GATE":
             i = 0; qtys = []
             while True:
                 try:
-                    qtys.append(get_liouville_mx(obj, '%d' % i))
+                    qtys.append(_get_liouville_mx(obj, '%d' % i))
                 except Exception:
                     break
                 i += 1
@@ -1241,13 +1267,13 @@ def parse_model(filename):
             #qty, proj_basis, proj_basis, truncate=False, mx_basis=basis))
 
         elif cur_typ == "STATIC-GATE":
-            mdl.operations[cur_label] = _op.StaticArbitraryOp(get_liouville_mx(obj))
+            mdl.operations[cur_label] = _op.StaticArbitraryOp(_get_liouville_mx(obj))
 
         elif cur_typ in ("Instrument", "TP-Instrument"):
             matrices = []
             for sub_obj in obj['objects']:
                 sub_typ = sub_obj['type']
-                qty = get_liouville_mx(sub_obj)
+                qty = _get_liouville_mx(sub_obj)
                 mxOrOp = _op.StaticArbitraryOp(qty) if cur_typ == "STATIC-IGATE" \
                     else qty  # just add numpy array `qty` to matrices list
                 # and it will be made into a fully-param gate.
@@ -1264,9 +1290,9 @@ def parse_model(filename):
     #Add default gauge group -- the full group because
     # we add FullyParameterizedGates above.
     if gaugegroup_name == "Full":
-        mdl.default_gauge_group = _gaugegroup.FullGaugeGroup(mdl.state_space, mdl.evotype)
+        mdl.default_gauge_group = _gaugegroup.FullGaugeGroup(mdl.state_space, mdl.basis, mdl.evotype)
     elif gaugegroup_name == "TP":
-        mdl.default_gauge_group = _gaugegroup.TPGaugeGroup(mdl.state_space, mdl.evotype)
+        mdl.default_gauge_group = _gaugegroup.TPGaugeGroup(mdl.state_space, mdl.basis, mdl.evotype)
     elif gaugegroup_name == "Unitary":
         mdl.default_gauge_group = _gaugegroup.UnitaryGaugeGroup(mdl.state_space, mdl.basis, mdl.evotype)
     else:

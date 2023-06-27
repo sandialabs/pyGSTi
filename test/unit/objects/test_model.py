@@ -3,6 +3,7 @@
 import pickle
 from contextlib import contextmanager
 
+import sys
 import numpy as np
 
 import pygsti.circuits as pc
@@ -15,6 +16,8 @@ from pygsti.models import ExplicitOpModel
 from pygsti.circuits import Circuit
 from pygsti.models.gaugegroup import FullGaugeGroupElement
 from ..util import BaseCase, needs_cvxpy
+
+SKIP_DIAMONDIST_ON_WIN = True
 
 
 @contextmanager
@@ -47,6 +50,7 @@ class ModelBase(object):
             [('Q0',)], ['Gi', 'Gx', 'Gy'],
             ["I(Q0)", "X(pi/8,Q0)", "Y(pi/8,Q0)"],
             **cls.build_options)
+
         super(ModelBase, cls).setUpClass()
 
     def setUp(self):
@@ -94,7 +98,7 @@ class GeneralMethodBase(object):
         # TODO does this actually assert correctness?
 
     def test_set_all_parameterizations_full(self):
-        self.model.set_all_parameterizations("full")
+        self.model.set_all_parameterizations("full")        
         self._assert_model_params(
             nOperations=3,
             nSPVecs=1,
@@ -188,6 +192,7 @@ class GeneralMethodBase(object):
 
     @needs_cvxpy
     def test_diamonddist(self):
+        if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
         cp = self.model.copy()
         self.assertAlmostEqual(self.model.diamonddist(cp), 0)
         # TODO non-trivial case

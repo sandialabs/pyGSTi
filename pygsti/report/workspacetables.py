@@ -31,6 +31,7 @@ from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits.circuit import Circuit as _Circuit
+from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
 
 
 class BlankTable(WorkspaceTable):
@@ -712,7 +713,7 @@ class GaugeRobustModelTable(WorkspaceTable):
         formatters = [None] * len(colHeadings)
         confidence_region_info = None  # Don't deal with CIs yet...
 
-        def get_gig_decomp(mx, tmx):  # "Gauge invariant gateset" decomposition
+        def _get_gig_decomp(mx, tmx):  # "Gauge invariant gateset" decomposition
             G0, G = tmx, mx
             #ev0, U0 = _tools.sorted_eig(G0)
             #ev, U = _tools.sorted_eig(G)
@@ -745,8 +746,8 @@ class GaugeRobustModelTable(WorkspaceTable):
         op_decomps = {}
         for gl in opLabels:
             try:
-                op_decomps[gl] = get_gig_decomp(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
-                                                target_model.operations[gl].to_dense(on_space='HilbertSchmidt'))
+                op_decomps[gl] = _get_gig_decomp(model.operations[gl].to_dense(on_space='HilbertSchmidt'),
+                                                 target_model.operations[gl].to_dense(on_space='HilbertSchmidt'))
                 M = max(M, max(_np.abs((op_decomps[gl][1] - I).flat)))  # update max
             except Exception as e:
                 _warnings.warn("Failed gauge-robust decomposition of %s op:\n%s" % (gl, str(e)))
@@ -1389,7 +1390,7 @@ class ErrgenTable(WorkspaceTable):
     """
 
     def __init__(self, ws, model, target_model, confidence_region_info=None,
-                 display=("errgen", "H", "S", "A"), display_as="boxes",
+                 display=("errgen", "H", "S", "CA"), display_as="boxes",
                  gen_type="logGTi"):
         """
         Create a table listing the error generators obtained by
@@ -1403,7 +1404,7 @@ class ErrgenTable(WorkspaceTable):
         display : tuple of {"errgen","H","S","A"}
             Specifes which columns to include: the error generator itself
             and the projections of the generator onto Hamiltoian-type error
-            (generators), Stochastic-type errors, and Affine-type errors.
+            (generators), Stochastic-type errors, and Active&Correlation-type errors.
 
         display_as : {"numbers", "boxes"}, optional
             How to display the requested matrices, as either numerical
@@ -1449,8 +1450,8 @@ class ErrgenTable(WorkspaceTable):
                 colHeadings.append('%sHamiltonian Projections' % basisPrefix)
             elif disp == "S":
                 colHeadings.append('%sStochastic Projections' % basisPrefix)
-            elif disp == "A":
-                colHeadings.append('%sAffine Projections' % basisPrefix)
+            elif disp == "CA":
+                colHeadings.append('%sActive\\Correlation Projections' % basisPrefix)
             else: raise ValueError("Invalid display element: %s" % disp)
 
         assert(display_as == "boxes" or display_as == "numbers")
@@ -1461,9 +1462,9 @@ class ErrgenTable(WorkspaceTable):
         errgensM = []
         hamProjsM = []
         stoProjsM = []
-        affProjsM = []
+        caProjsM = []
 
-        def get_min_max(max_lst, m):
+        def _get_min_max(max_lst, m):
             """return a [min,max] already in list if there's one within an
                order of magnitude"""
             m = max(m, ABS_THRESHOLD)
@@ -1478,7 +1479,7 @@ class ErrgenTable(WorkspaceTable):
             """add `m` to a list of maximas if it's different enough from
                existing elements"""
             m = max(m, ABS_THRESHOLD)
-            if not get_min_max(max_lst, m):
+            if not _get_min_max(max_lst, m):
                 max_lst.append(m)
 
         #Do computation, so shared color scales can be computed
@@ -1500,16 +1501,16 @@ class ErrgenTable(WorkspaceTable):
             add_max(errgensM, absMax)
 
             if "H" in display:
-                absMax = _np.max(_np.abs(info['hamiltonian projections'].value))
+                absMax = _np.max(_np.abs(info['H projections'].value))
                 add_max(hamProjsM, absMax)
 
             if "S" in display:
-                absMax = _np.max(_np.abs(info['stochastic projections'].value))
+                absMax = _np.max(_np.abs(info['S projections'].value))
                 add_max(stoProjsM, absMax)
 
-            if "A" in display:
-                absMax = _np.max(_np.abs(info['affine projections'].value))
-                add_max(affProjsM, absMax)
+            if "CA" in display:
+                absMax = _np.max(_np.abs(info['CA projections'].value))
+                add_max(caProjsM, absMax)
 
         #Do plotting
         for gl in opLabels:
@@ -1521,7 +1522,7 @@ class ErrgenTable(WorkspaceTable):
                 if disp == "errgen":
                     if display_as == "boxes":
                         errgen, EB = info['error generator'].value_and_errorbar
-                        m, M = get_min_max(errgensM, _np.max(_np.abs(errgen)))
+                        m, M = _get_min_max(errgensM, _np.max(_np.abs(errgen)))
                         errgen_fig = _wp.GateMatrixPlot(self.ws, errgen, m, M,
                                                         basis, eb_matrix=EB)
                         row_data.append(errgen_fig)
@@ -1532,44 +1533,44 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "H":
                     if display_as == "boxes":
-                        T = "Power %.2g" % info['hamiltonian projection power'].value
-                        hamProjs, EB = info['hamiltonian projections'].value_and_errorbar
-                        m, M = get_min_max(hamProjsM, _np.max(_np.abs(hamProjs)))
+                        T = "Captures %.1f%% of E.G." % (100 * info['H projection power'].value)
+                        hamProjs, EB = info['H projections'].value_and_errorbar
+                        m, M = _get_min_max(hamProjsM, _np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, hamProjs, basis, m, M,
                             box_labels=True, eb_matrix=EB, title=T)
                         row_data.append(hamdecomp_fig)
                         row_formatters.append('Figure')
                     else:
-                        row_data.append(info['hamiltonian projections'])
+                        row_data.append(info['H projections'])
                         row_formatters.append('Brackets')
 
                 elif disp == "S":
                     if display_as == "boxes":
-                        T = "Power %.2g" % info['stochastic projection power'].value
-                        stoProjs, EB = info['stochastic projections'].value_and_errorbar
-                        m, M = get_min_max(stoProjsM, _np.max(_np.abs(stoProjs)))
+                        T = "Captures %.1f%% of E.G." % (100 * info['S projection power'].value)
+                        stoProjs, EB = info['S projections'].value_and_errorbar
+                        m, M = _get_min_max(stoProjsM, _np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, stoProjs, basis, m, M,
                             box_labels=True, eb_matrix=EB, title=T)
                         row_data.append(stodecomp_fig)
                         row_formatters.append('Figure')
                     else:
-                        row_data.append(info['stochastic projections'])
+                        row_data.append(info['S projections'])
                         row_formatters.append('Brackets')
 
-                elif disp == "A":
+                elif disp == "CA":
                     if display_as == "boxes":
-                        T = "Power %.2g" % info['affine projection power'].value
-                        affProjs, EB = info['affine projections'].value_and_errorbar
-                        m, M = get_min_max(affProjsM, _np.max(_np.abs(affProjs)))
+                        T = "Captures %.1f%% of E.G." % (100 * info['CA projection power'].value)
+                        caProjs, EB = info['CA projections'].value_and_errorbar
+                        m, M = _get_min_max(caProjsM, _np.max(_np.abs(caProjs)))
                         affdecomp_fig = _wp.ProjectionsBoxPlot(
-                            self.ws, affProjs, basis, m, M,
+                            self.ws, caProjs, basis, m, M,
                             box_labels=True, eb_matrix=EB, title=T)
                         row_data.append(affdecomp_fig)
                         row_formatters.append('Figure')
                     else:
-                        row_data.append(info['affine projections'])
+                        row_data.append(info['CA projections'])
                         row_formatters.append('Brackets')
 
             table.add_row(row_data, row_formatters)
@@ -1778,7 +1779,7 @@ class NQubitErrgenTable(WorkspaceTable):
         table = _ReportTable(colHeadings, (None,) * len(colHeadings),
                              confidence_region_info=confidence_region_info)
 
-        def get_min_max(max_lst, m):
+        def _get_min_max(max_lst, m):
             """return a [min,max] already in list if there's one within an
                order of magnitude"""
             m = max(m, ABS_THRESHOLD)
@@ -1793,7 +1794,7 @@ class NQubitErrgenTable(WorkspaceTable):
             """add `m` to a list of maximas if it's different enough from
                existing elements"""
             m = max(m, ABS_THRESHOLD)
-            if not get_min_max(max_lst, m):
+            if not _get_min_max(max_lst, m):
                 max_lst.append(m)
 
         pre_rows = []; displayed_params = set()
@@ -1832,7 +1833,7 @@ class NQubitErrgenTable(WorkspaceTable):
             else:
                 raise ValueError("Unknown gate type for NQubitErrgenTable: %s" % str(type(gate)))
 
-        def get_plot_info(lindblad_dict, basis_lbls, typ):
+        def _get_plot_info(lindblad_dict, basis_lbls, typ):
             # for now just make a 1D plot - can get fancy later...
             ylabels = [""]
             xlabels = []
@@ -1875,9 +1876,9 @@ class NQubitErrgenTable(WorkspaceTable):
 
             for disp in display:
                 if disp == "H":
-                    hamCoeffs, xlabels, ylabels = get_plot_info(Ldict, basisLbls, "hamiltonian")
+                    hamCoeffs, xlabels, ylabels = _get_plot_info(Ldict, basisLbls, "hamiltonian")
                     if display_as == "boxes":
-                        #m,M = get_min_max(coeffsM,_np.max(_np.abs(hamCoeffs)))
+                        #m,M = _get_min_max(coeffsM,_np.max(_np.abs(hamCoeffs)))
                         # May need to add EB code and/or title to MatrixPlot in FUTURE
                         hamCoeffs_fig = _wp.MatrixPlot(
                             self.ws, hamCoeffs, m, M, xlabels, ylabels,
@@ -1889,9 +1890,9 @@ class NQubitErrgenTable(WorkspaceTable):
                         row_formatters.append('Brackets')
 
                 if disp == "S":
-                    stoCoeffs, xlabels, ylabels = get_plot_info(Ldict, basisLbls, "stochastic")
+                    stoCoeffs, xlabels, ylabels = _get_plot_info(Ldict, basisLbls, "stochastic")
                     if display_as == "boxes":
-                        #m,M = get_min_max(coeffsM,_np.max(_np.abs(stoCoeffs)))
+                        #m,M = _get_min_max(coeffsM,_np.max(_np.abs(stoCoeffs)))
                         # May need to add EB code and/or title to MatrixPlot in FUTURE
                         stoCoeffs_fig = _wp.MatrixPlot(
                             self.ws, stoCoeffs, m, M, xlabels, ylabels,
@@ -1903,9 +1904,9 @@ class NQubitErrgenTable(WorkspaceTable):
                         row_formatters.append('Brackets')
 
                 if disp == "A":
-                    affCoeffs, xlabels, ylabels = get_plot_info(Ldict, basisLbls, "affine")
+                    affCoeffs, xlabels, ylabels = _get_plot_info(Ldict, basisLbls, "affine")
                     if display_as == "boxes":
-                        #m,M = get_min_max(coeffsM,_np.max(_np.abs(effCoeffs)))
+                        #m,M = _get_min_max(coeffsM,_np.max(_np.abs(effCoeffs)))
                         # May need to add EB code and/or title to MatrixPlot in FUTURE
                         affCoeffs_fig = _wp.MatrixPlot(
                             self.ws, affCoeffs, m, M, xlabels, ylabels,
@@ -3253,60 +3254,41 @@ class StandardErrgenTable(WorkspaceTable):
             ws, self._create, model_dim, projection_type,
             projection_basis)
 
-    def _create(self, model_dim, projection_type,
-                projection_basis):
+    def _create(self, model_dim, elementary_errorgen_type,
+                elementary_errorgen_basis):
 
         d2 = model_dim  # number of projections == dim of gate
         d = int(_np.sqrt(d2))  # dim of density matrix
-        nQubits = _np.log2(d)
 
-        #Get a list of the d2 generators (in corresspondence with the
-        #  given basis matrices)
-        lindbladMxs = _tools.std_error_generators(d2, projection_type,
-                                                  projection_basis)  # in std basis
+        #Get a list of elementary generators (in 'std' basis)
+        elementary_errorgen_basis = _baseobjs.Basis.cast(elementary_errorgen_basis, d2)
+        eegs = _tools.elementary_errorgens(d2, elementary_errorgen_type, elementary_errorgen_basis)
+        mx_basis = elementary_errorgen_basis  # for now -- make an argument in FUTURE?
 
-        if not _np.isclose(round(nQubits), nQubits):
-            #Non-integral # of qubits, so just show as a single row
-            yd, xd = 1, d
-            xlabel = ""; ylabel = ""
-        elif nQubits == 1:
-            yd, xd = 1, 2  # y and x pauli-prod *basis* dimensions
-            xlabel = "Q1"; ylabel = ""
-        elif nQubits == 2:
-            yd, xd = 2, 2
-            xlabel = "Q2"; ylabel = "Q1"
-        else:
-            assert(d % 2 == 0)
-            yd, xd = 2, d // 2
-            xlabel = "Q*"; ylabel = "Q1"
+        if elementary_errorgen_type in ('H', 'S'):
+            table = _ReportTable(['Label', 'Elementary error generator'], [None, None])
+            for lbl in elementary_errorgen_basis.labels[1:]:  # skip identity
+                eeg = _tools.change_basis(eegs[_LEEL(elementary_errorgen_type, (lbl,))], "std", mx_basis)
+                m, M = -_np.max(_np.abs(eeg)), _np.max(_np.abs(eeg))
+                fig = _wp.GateMatrixPlot(self.ws, eeg, m, M, mx_basis, d)
+                rowData = [str(lbl), fig]
+                rowFormatters = [None, 'Figure']
+                table.add_row(rowData, rowFormatters)
 
-        topright = "%s \\ %s" % (ylabel, xlabel) if (len(ylabel) > 0) else ""
-        colHeadings = [topright] + \
-            [("%s" % x) if len(x) else ""
-             for x in _tools.basis_element_labels(projection_basis, xd**2)]
-        rowLabels = [("%s" % x) if len(x) else ""
-                     for x in _tools.basis_element_labels(projection_basis, yd**2)]
-
-        xLabels = _tools.basis_element_labels(projection_basis, xd**2)
-        yLabels = _tools.basis_element_labels(projection_basis, yd**2)
-
-        table = _ReportTable(colHeadings, ["Conversion"] + [None] * (len(colHeadings) - 1))
-
-        iCur = 0
-        for i, ylabel in enumerate(yLabels):
-            rowData = [rowLabels[i]]
-            rowFormatters = [None]
-
-            for xlabel in xLabels:
-                projector = lindbladMxs[iCur]; iCur += 1
-                projector = _tools.change_basis(projector, "std", projection_basis)
-                m, M = -_np.max(_np.abs(projector)), _np.max(_np.abs(projector))
-                fig = _wp.GateMatrixPlot(self.ws, projector, m, M,
-                                         projection_basis, d)
-                rowData.append(fig)
-                rowFormatters.append('Figure')
-
-            table.add_row(rowData, rowFormatters)
+        elif elementary_errorgen_type in ('C', 'A'):
+            lbls = elementary_errorgen_basis.labels[1:]
+            colHeadings = [""] + [str(bel) for bel in lbls]
+            table = _ReportTable(colHeadings, [None] * len(colHeadings))
+            for ylbl in lbls:
+                rowData = [str(ylbl)]
+                rowFormatters = [None]
+                for xlbl in lbls:
+                    eeg = _tools.change_basis(eegs[_LEEL(elementary_errorgen_type, (ylbl, xlbl))], "std", mx_basis)
+                    m, M = -_np.max(_np.abs(eeg)), _np.max(_np.abs(eeg))
+                    fig = _wp.GateMatrixPlot(self.ws, eeg, m, M, mx_basis, d)
+                    rowData.append(fig)
+                    rowFormatters.append('Figure')
+                table.add_row(rowData, rowFormatters)
 
         table.finish()
         return table
@@ -3508,7 +3490,7 @@ class SoftwareEnvTable(WorkspaceTable):
 
         import platform
 
-        def get_version(module_name):
+        def _get_package_version(module_name):
             """ Extract the current version of a python module """
             if module_name == "cvxopt":
                 #special case b/c cvxopt can be weird...
@@ -3537,13 +3519,13 @@ class SoftwareEnvTable(WorkspaceTable):
                              custom_header={'latex': latex_head})
 
         #Python package information
-        from .._version import __version__ as pygsti_version
+        from .._version import version as pygsti_version
         table.add_row(("pyGSTi version", str(pygsti_version)), (None, 'Verbatim'))
 
         packages = ['numpy', 'scipy', 'matplotlib', 'ply', 'cvxopt', 'cvxpy',
                     'nose', 'PIL', 'psutil']
         for pkg in packages:
-            table.add_row((pkg, get_version(pkg)), (None, 'Verbatim'))
+            table.add_row((pkg, _get_package_version(pkg)), (None, 'Verbatim'))
 
         #Python information
         table.add_row(("Python version", str(platform.python_version())), (None, 'Verbatim'))

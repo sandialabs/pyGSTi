@@ -26,7 +26,8 @@ from pygsti.tools import matrixtools as _mt
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
-SPAM_TRANSFORM_TRUNCATE = 1e-4
+TODENSE_TRUNCATE = 3e-10  # was 1e-11 and this gave some borderline test failures
+
 
 class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
     """
@@ -58,7 +59,10 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
                     # "sparse mode" => don't ever compute matrix-exponential explicitly
                     rep = evotype.create_experrorgen_rep(self.errorgen._rep)
                 elif rep_type == 'dense':
-                    rep = evotype.create_dense_superop_rep(None, state_space)
+                    # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+                    #  and should be replaced with the basis of contained ops (if any) once we establish
+                    #  a common .basis or ._basis attribute of representations (which could still be None)
+                    rep = evotype.create_dense_superop_rep(None, None, state_space)
 
                     # Cache values - for later work with dense rep
                     self.exp_err_gen = None   # used for dense_rep=True mode to cache qty needed in deriv_wrt_params
@@ -80,13 +84,19 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         self.terms = {}
         self.exp_terms_cache = {}  # used for repeated calls to the exponentiate_terms function
         self.local_term_poly_coeffs = {}
-        # TODO REMOVE self.direct_terms = {}
-        # TODO REMOVE self.direct_term_poly_coeffs = {}
 
         _LinearOperator.__init__(self, rep, evotype)
         _ErrorGeneratorContainer.__init__(self, self.errorgen)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
         self._update_rep()  # updates self._rep
         #Done with __init__(...)
+
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        errorgen = serial_memo[mm_dict['submembers'][0]]
+        return cls(errorgen)
 
     def submembers(self):
         """
@@ -97,27 +107,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         list
         """
         return [self.errorgen]
-
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that error map has its
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.errorgen.copy(parent, memo))
-        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def _update_rep(self, close=False):
         """
@@ -179,8 +168,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         self.terms = {}  # clear terms cache since param indices have changed now
         self.exp_terms_cache = {}
         self.local_term_poly_coeffs = {}
-        #TODO REMOVE self.direct_terms = {}
-        #TODO REMOVE self.direct_term_poly_coeffs = {}
 
     def to_dense(self, on_space='minimal'):
         """
@@ -242,7 +229,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         """
         if not self._rep_type == 'dense':
             #raise NotImplementedError("deriv_wrt_params(...) can only be used when a dense representation is used!")
-            _warnings.warn("Using finite differencing to compute ExpErrogenOp derivative!")
+            #_warnings.warn("Using finite differencing to compute ExpErrogenOp derivative!")
             return super(ExpErrorgenOp, self).deriv_wrt_params(wrt_filter)
 
         if self.base_deriv is None:
@@ -312,7 +299,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         """
         if not self._rep_type == 'dense':
             #raise NotImplementedError("hessian_wrt_params is only implemented for *dense-rep* LindbladOps")
-            _warnings.warn("Using finite differencing to compute ExpErrogenOp Hessian!")
+            #_warnings.warn("Using finite differencing to compute ExpErrogenOp Hessian!")
             return super(ExpErrorgenOp, self).hessian_wrt_params(wrt_filter1, wrt_filter2)
 
         if self.base_hessian is None:
@@ -411,41 +398,6 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         self.errorgen.from_vector(v, close, dirty_value)
         self._update_rep(close)
         self.dirty = dirty_value
-
-    #REMOVE or revive this later - it doesn't seem like something that's really needed
-    #def set_dense(self, m):
-    #    """
-    #    Set the dense-matrix value of this operation.
-    #
-    #    Attempts to modify operation parameters so that the specified raw
-    #    operation matrix becomes mx.  Will raise ValueError if this operation
-    #    is not possible.
-    #
-    #    Parameters
-    #    ----------
-    #    m : array_like or LinearOperator
-    #        An array of shape (dim, dim) or LinearOperator representing the operation action.
-    #
-    #    Returns
-    #    -------
-    #    None
-    #    """
-    #
-    #    #TODO: move this function to errorgen?
-    #    if not isinstance(self.errorgen, ExpErrorgenOp):
-    #        raise NotImplementedError(("Can only set the value of a LindbladDenseOp that "
-    #                                   "contains a single LindbladErrorgen error generator"))
-    #
-    #    tOp = ExpErrorgenOp.from_operation_matrix(
-    #        m, self.unitary_postfactor,
-    #        self.errorgen.ham_basis, self.errorgen.other_basis,
-    #        self.errorgen.param_mode, self.errorgen.nonham_mode,
-    #        True, self.errorgen.matrix_basis, self._evotype)
-    #
-    #    #Note: truncate=True to be safe
-    #    self.errorgen.from_vector(tOp.errorgen.to_vector())
-    #    self._update_rep()
-    #    self.dirty = True
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
@@ -656,6 +608,35 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         """
         return _np.exp(self.errorgen.total_term_magnitude) * self.errorgen.total_term_magnitude_deriv
 
+    def set_dense(self, m):
+        """
+        Set the dense-matrix value of this operation.
+
+        Attempts to modify operation parameters so that the specified raw
+        operation matrix becomes mx.  Will raise ValueError if this operation
+        is not possible.
+
+        Parameters
+        ----------
+        m : array_like or LinearOperator
+            An array of shape (dim, dim) or LinearOperator representing the operation action.
+
+        Returns
+        -------
+        None
+        """
+        mx = _LinearOperator.convert_to_matrix(m)
+        errgen_cls = self.errorgen.__class__
+
+        #Note: this only really works for LindbladErrorGen objects now... make more general in FUTURE?
+        truncate = TODENSE_TRUNCATE  # can't just be 'True' since we need to throw errors when appropriate
+        new_errgen = errgen_cls.from_operation_matrix_and_blocks(
+            mx, self.errorgen.coefficient_blocks, 'auto', self.errorgen.matrix_basis,
+            truncate, self.errorgen.evotype, self.errorgen.state_space)
+        self.errorgen.from_vector(new_errgen.to_vector())
+        self._update_rep()  # needed to rebuild exponentiated error gen
+        self.dirty = True
+
     def transform_inplace(self, s):
         """
         Update operation matrix `O` with `inv(s) * O * s`.
@@ -686,11 +667,10 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         Update operation matrix `O` with `inv(s) * O` OR `O * s`, depending on the value of `typ`.
 
         This functions as `transform_inplace(...)` but is used when this
-        Lindblad-parameterized operation is used as a part of a SPAM
-        vector.  When `typ == "prep"`, the spam vector is assumed
-        to be `rho = dot(self, <spamvec>)`, which transforms as
-        `rho -> inv(s) * rho`, so `self -> inv(s) * self`. When
-        `typ == "effect"`, `e.dag = dot(e.dag, self)` (not that
+        operation is used as a part of a SPAM vector.  When `typ == "prep"`,
+        the spam vector is assumed to be `rho = dot(self, <spamvec>)`,
+        which transforms as `rho -> inv(s) * rho`, so `self -> inv(s) * self`.
+        When `typ == "effect"`, `e.dag = dot(e.dag, self)` (note that
         `self` is NOT `self.dag` here), and `e.dag -> e.dag * s`
         so that `self -> self * s`.
 
@@ -721,24 +701,16 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
                 mx = _mt.safe_dot(Uinv, mx)
             else:
                 mx = _mt.safe_dot(mx, U)
-
-            errgen_cls = self.errorgen.__class__
-            #Note: this only really works for LindbladErrorGen objects now... make more general in FUTURE?
-            truncate = SPAM_TRANSFORM_TRUNCATE  # can't just be 'True' since we need to throw errors when appropriate
-            param = _LindbladParameterization(self.errorgen.nonham_mode, self.errorgen.param_mode,
-                                              len(self.errorgen.ham_basis) > 0, len(self.errorgen.other_basis) > 0)
-            transformed_errgen = errgen_cls.from_operation_matrix(mx, param, self.errorgen.lindblad_basis,
-                                                                  self.errorgen.matrix_basis, truncate,
-                                                                  self.errorgen.evotype)
-            self.errorgen.from_vector(transformed_errgen.to_vector())
-
-        self._update_rep()  # needed to rebuild exponentiated error gen
-        self.dirty = True
+            self.set_dense(mx)  # calls _update_rep() and sets dirty flag
 
     def __str__(self):
-        s = "Lindblad Parameterized operation map with dim = %d, num params = %d\n" % \
+        s = "Exponentiated operation map with dim = %d, num params = %d\n" % \
             (self.dim, self.num_params)
         return s
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return "exponentiates"
 
 
 def _d_exp_series(x, dx):

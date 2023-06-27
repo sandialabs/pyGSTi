@@ -2,7 +2,6 @@
 mpi4py
 deap
 psutil
-pandas
 matplotlib
 ipython
 notebook
@@ -12,5 +11,5 @@ cvxopt
 cvxpy
 nose
 seaborn
-pcalg
-
+qibo
+packaging

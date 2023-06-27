@@ -22,6 +22,7 @@ from ...tools import basistools as _bt
 from ...tools import optools as _ot
 
 from scipy.sparse.linalg import LinearOperator
+from numpy.random import RandomState as _RandomState
 
 
 cdef class OpRep(_basereps_cython.OpRep):
@@ -48,24 +49,36 @@ cdef class OpRep(_basereps_cython.OpRep):
 
     def acton(self, StateRep state not None):
         cdef StateRep out_state = StateRepDensePure(_np.empty(self.c_rep._dim, dtype=_np.complex128),
-                                                    state.basis, self.state_space)
+                                                    self.state_space, state.basis)
         self.c_rep.acton(state.c_state, out_state.c_state)
         return out_state
 
     def adjoint_acton(self, StateRep state not None):
         cdef StateRep out_state = StateRepDensePure(_np.empty(self.c_rep._dim, dtype=_np.complex128),
-                                                    state.basis, self.state_space)
+                                                    self.state_space, state.basis)
         self.c_rep.adjoint_acton(state.c_state, out_state.c_state)
+        return out_state
+
+    def acton_random(self, StateRep state not None, rand_state):
+        cdef StateRep out_state = StateRepDensePure(_np.empty(self.c_rep._dim, dtype=_np.complex128),
+                                                    self.state_space, state.basis)
+        self.c_rep.acton_random(state.c_state, out_state.c_state, rand_state)
+        return out_state
+
+    def adjoint_acton_random(self, StateRep state not None, rand_state):
+        cdef StateRep out_state = StateRepDensePure(_np.empty(self.c_rep._dim, dtype=_np.complex128),
+                                                    self.state_space, state.basis)
+        self.c_rep.adjoint_acton_random(state.c_state, out_state.c_state, rand_state)
         return out_state
 
     def aslinearoperator(self):
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRepDensePure(_np.ascontiguousarray(v, _np.complex128), None, self.state_space)
+            in_state = StateRepDensePure(_np.ascontiguousarray(v, _np.complex128), self.state_space, None)
             return self.acton(in_state).to_dense('Hilbert')
         def rmv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:,0]
-            in_state = StateRepDensePure(_np.ascontiguousarray(v, _np.complex128), None, self.state_space)
+            in_state = StateRepDensePure(_np.ascontiguousarray(v, _np.complex128), self.state_space, None)
             return self.adjoint_acton(in_state).to_dense('Hilbert')
         dim = self.c_rep._dim
         return LinearOperator((dim,dim), matvec=mv, rmatvec=rmv, dtype=_np.complex128)
@@ -95,7 +108,7 @@ cdef class OpRepDenseUnitary(OpRep):
         if on_space in ('minimal', 'Hilbert'):
             return self.base
         elif on_space == 'HilbertSchmidt':
-            return _bt.change_basis(_ot.unitary_to_process_mx(self.base), 'std', self.basis)
+            return _ot.unitary_to_superop(self.base, self.basis)
         else:
             raise ValueError("Invalid `on_space` argument: %s" % str(on_space))
 
@@ -381,12 +394,12 @@ cdef class OpRepExpErrorgen(OpRep):
 cdef class OpRepLindbladErrorgen(OpRep):
     cdef public object Lterms
     cdef public object Lterm_coeffs
-    cdef public object LtermdictAndBasis
+    cdef public object lindblad_coefficient_blocks
 
-    def __cinit__(self, lindblad_term_dict, basis, state_space):
+    def __cinit__(self, lindblad_coefficient_blocks, state_space):
         self.Lterms = None
         self.Lterm_coeffs = None
-        self.LtermdictAndBasis = (lindblad_term_dict, basis)
+        self.lindblad_coefficient_blocks = lindblad_coefficient_blocks
         self.state_space = state_space
 
     def acton(self, StateRep state not None):
@@ -396,4 +409,66 @@ cdef class OpRepLindbladErrorgen(OpRep):
         raise AttributeError("Cannot currently act with statevec.OpRepLindbladErrorgen - for terms only!")
 
     def __reduce__(self):
-        return (OpRepLindbladErrorgen, (self.LtermdictAndBasis[0], self.LtermdictAndBasis[1], self.state_space))
+        return (OpRepLindbladErrorgen, (self.lindblad_coefficient_blocks, self.state_space))
+
+cdef class OpRepRandomUnitary(OpRep):
+    cdef public object basis
+    cdef public object unitary_reps
+    cdef public _np.ndarray unitary_rates
+    cdef public object rand_state
+
+    def __init__(self, basis, _np.ndarray[double, ndim=1] unitary_rates,
+                 unitary_reps, seed_or_state, state_space):
+
+        cdef INT nrates = len(unitary_rates)
+        cdef vector[OpCRep*] unitary_creps = vector[OpCRep_ptr](nrates)
+
+        self.basis = basis
+        self.unitary_rates = _np.ascontiguousarray(unitary_rates)
+        self.unitary_reps = unitary_reps
+        for i in range(nrates):
+            unitary_creps[i] = (<OpRep?>unitary_reps[i]).c_rep
+
+        if isinstance(seed_or_state, _RandomState):
+            self.rand_state = seed_or_state
+        else:
+            self.rand_state = _RandomState(seed_or_state)
+
+        self.state_space = _StateSpace.cast(state_space)
+        assert(self.basis.dim == self.state_space.dim)
+        self.c_rep = new OpCRep_RandomUnitary(unitary_rates, unitary_creps, self.rand_state,
+                                              self.state_space.udim)
+
+    def __str__(self):
+        return "OpRepRandomUnitary:\n" + " rates: " + str(self.unitary_rates)  # maybe show ops too?
+
+    def copy(self):
+        return OpRepRandomUnitary(self.basis, self.unitary_rates, list(self.unitary_reps),
+                                  self.rand_state, self.state_space)
+
+    def update_unitary_rates(self, rates):
+        self.unitary_rates[:] = rates
+
+    def to_dense(self, on_space):
+        assert(on_space == 'HilbertSchmidt')  # below code only works in this case
+        return sum([rate * rep.to_dense(on_space) for rate, rep in zip(self.unitary_rates, self.unitary_reps)])
+
+
+cdef class OpRepStochastic(OpRepRandomUnitary):
+
+    def __init__(self, stochastic_basis, basis, initial_rates, seed_or_state, state_space):
+        #self.rates = initial_rates
+        #self.stochastic_basis = stochastic_basis
+        rates = [1 - sum(initial_rates)] + list(initial_rates)
+        reps = [OpRepDenseUnitary(bel, basis, state_space) for bel in stochastic_basis.elements]
+        assert(len(reps) == len(rates))
+
+        state_space = _StateSpace.cast(state_space)
+        assert(basis.dim == state_space.dim)
+
+        super(OpRepStochastic, self).__init__(basis, _np.array(rates, 'd'), reps, seed_or_state, state_space)
+
+    def update_rates(self, rates):
+        unitary_rates = [1 - sum(rates)] + list(rates)
+        #self.rates[:] = rates
+        self.update_unitary_rates(unitary_rates)

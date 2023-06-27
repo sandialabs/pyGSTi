@@ -35,17 +35,29 @@ def sample_haar_random_one_qubit_unitary_parameters():
     psi = psi - _np.pi
     chi = chi - _np.pi
     phi = _np.arcsin(_np.sqrt(_np.random.rand(1)))[0]
-    #U = _np.exp(1j*alpha)*_np.array([[_np.exp(1j*psi)*_np.cos(phi), _np.exp(1j*chi)*_np.sin(phi)],[-1*_np.exp(-1j*chi)*_np.sin(phi), _np.exp(-1j*psi)*_np.cos(phi)]])
+    #U = _np.exp(1j*alpha)*_np.array([[_np.exp(1j*psi)*_np.cos(phi), _np.exp(1j*chi)*_np.sin(phi)],[-1*_np.exp(-1j*chi)
+    # *_np.sin(phi), _np.exp(-1j*psi)*_np.cos(phi)]])
     #this needs to be decomposed in the form Zrot(theta3) Xpi/2 Zrot(theta2) Xpi/2 Zrot(theta1)
     theta1 = _comp.mod_2pi(psi - chi + _np.pi)
     theta2 = _comp.mod_2pi(_np.pi - 2 * phi)
     theta3 = _comp.mod_2pi(psi + chi)
     return (theta1, theta2, theta3)
- 
+
+
+def sample_random_clifford_one_qubit_unitary_parameters():
+    """
+    TODO: docstring
+    """
+    theta1 = _comp.mod_2pi(_np.random.randint(4) * _np.pi / 2)
+    theta2 = _comp.mod_2pi(_np.random.randint(4) * _np.pi / 2)
+    theta3 = _comp.mod_2pi(_np.random.randint(4) * _np.pi / 2)
+    return (theta1, theta2, theta3)
+
 
 def sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr', xname='Gxpi2', qubit_labels=None):
     """
-    TODO: docstring  #generate layer of random unitaries and make a series of circuit layers with the compiled versions of these
+    TODO: docstring  #generate layer of random unitaries and make a series of circuit layers with the compiled versions
+     of these
     """
     if qubit_labels is not None:
         n = len(qubit_labels)
@@ -53,16 +65,45 @@ def sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr'
     else:
         n = pspec.num_qubits
         qubits = pspec.qubit_labels[:]  # copy this list
-    
+
     Xpi2layer = _cir.Circuit(layer_labels=[[(xname, qubits[t]) for t in range(n)], ])
-    
+
     # samples random rotation angles.
     rot_angles = [sample_haar_random_one_qubit_unitary_parameters() for q in qubits]
- 
+
     circ = _cir.Circuit(layer_labels=[[_lbl.Label(zname, qubits[t], args=(str(rot_angles[t][0]),))
                                        for t in range(n)], ], editable=True)
     circ.append_circuit_inplace(Xpi2layer)
-    circ.append_circuit_inplace(_cir.Circuit(layer_labels=[[_lbl.Label(zname, qubits[t], args=(str(rot_angles[t][1]),)) 
+    circ.append_circuit_inplace(_cir.Circuit(layer_labels=[[_lbl.Label(zname, qubits[t], args=(str(rot_angles[t][1]),))
+                                                           for t in range(n)], ]))
+    circ.append_circuit_inplace(Xpi2layer)
+    circ.append_circuit_inplace(_cir.Circuit(layer_labels=[[_lbl.Label(zname, qubits[t], args=(str(rot_angles[t][2]),))
+                                                            for t in range(n)], ]))
+    circ.done_editing()
+    return circ
+
+
+def sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr', xname='Gxpi2', qubit_labels=None):
+    """
+    TODO: docstring  #generate layer of random unitaries and make a series of circuit layers with the compiled versions
+     of these
+    """
+    if qubit_labels is not None:
+        n = len(qubit_labels)
+        qubits = qubit_labels[:]  # copy this list
+    else:
+        n = pspec.num_qubits
+        qubits = pspec.qubit_labels[:]  # copy this list
+
+    Xpi2layer = _cir.Circuit(layer_labels=[[(xname, qubits[t]) for t in range(n)], ])
+
+    # samples random rotation angles.
+    rot_angles = [sample_random_clifford_one_qubit_unitary_parameters() for q in qubits]
+
+    circ = _cir.Circuit(layer_labels=[[_lbl.Label(zname, qubits[t], args=(str(rot_angles[t][0]),))
+                                       for t in range(n)], ], editable=True)
+    circ.append_circuit_inplace(Xpi2layer)
+    circ.append_circuit_inplace(_cir.Circuit(layer_labels=[[_lbl.Label(zname, qubits[t], args=(str(rot_angles[t][1]),))
                                                            for t in range(n)], ]))
     circ.append_circuit_inplace(Xpi2layer)
     circ.append_circuit_inplace(_cir.Circuit(layer_labels=[[_lbl.Label(zname, qubits[t], args=(str(rot_angles[t][2]),))
@@ -72,28 +113,40 @@ def sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr'
 
 
 def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, two_q_gate_density=0.25,
-                                      two_q_gate_args_lists={'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}):
+                                   one_q_gate_type='haar',
+                                   two_q_gate_args_lists={'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}):
     '''
     TODO: docstring
-    Generates a forward circuits with benchmark depth d for non-clifford mirror randomized benchmarking. 
+    Generates a forward circuits with benchmark depth d for non-clifford mirror randomized benchmarking.
     The circuits alternate Haar-random 1q unitaries and layers of Gczr gates
     '''
     #choose length to be the number of (2Q layer, 1Q layer) blocks
     circuit = _cir.Circuit(layer_labels=[], line_labels=qubit_labels, editable=True)
     for a in range(length):
         #generate random 1q unitary layer
-        new_layer = sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
+        if one_q_gate_type == 'haar':
+            new_layer = sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
+        elif one_q_gate_type == 'clifford':
+            new_layer = sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
+        else:
+            raise ValueError("Unknown value {} for `one_q_gate_type`!".format(one_q_gate_type))
         #append new layer to circuit
         circuit.append_circuit_inplace(new_layer)
         #generate 2q gate layer
-        sampled_layer = sample_circuit_layer_by_edgegrab(pspec, qubit_labels=qubit_labels, two_q_gate_density=two_q_gate_density,
+        sampled_layer = sample_circuit_layer_by_edgegrab(pspec, qubit_labels=qubit_labels,
+                                                         two_q_gate_density=two_q_gate_density,
                                                          one_q_gate_names=[], gate_args_lists=two_q_gate_args_lists)
         if sampled_layer == []: new_layer = _cir.Circuit(layer_labels=[[]], line_labels=qubit_labels)
         else: new_layer = _cir.Circuit([sampled_layer])
         #append new layer to circuit
         circuit.append_circuit_inplace(new_layer)
     #add one more layer of Haar-random 1Q unitaries
-    new_layer = sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
+    if one_q_gate_type == 'haar':
+        new_layer = sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
+    elif one_q_gate_type == 'clifford':
+        new_layer = sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, qubit_labels=qubit_labels)
+    else:
+        raise ValueError("Unknown value {} for `one_q_gate_type`!".format(one_q_gate_type))
     circuit.append_circuit_inplace(new_layer)
     circuit.done_editing()
     return circuit
@@ -205,7 +258,8 @@ def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslab
 
 #     if qubit_labels is None: n = pspec.num_qubits
 #     else:
-#         assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
+#         assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), \
+#             "SubsetQs must be a list or a tuple!"
 #         n = len(qubit_labels)
 
 #     # If the one qubit and/or two qubit gate names are only specified as 'all', construct them.
@@ -272,7 +326,7 @@ def find_all_sets_of_compatible_two_q_gates(edgelist, n, gatename='Gcnot', aslab
 #     return sampled_layer
 
 
-def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_density=0.25, one_q_gate_names=None, 
+def sample_circuit_layer_by_edgegrab(pspec, qubit_labels=None, two_q_gate_density=0.25, one_q_gate_names=None,
                                      gate_args_lists=None, rand_state=None):
     """
     TODO: docstring
@@ -461,8 +515,8 @@ def sample_circuit_layer_by_q_elimination(pspec, qubit_labels=None, two_q_prob=0
             if other_qubit == q:
                 other_qubit = lbl.qubits[1]
 
-            del remaining_qubits[remaining_qubits.index(other_qubit)] 
-            num_qubits_used += 2  
+            del remaining_qubits[remaining_qubits.index(other_qubit)]
+            num_qubits_used += 2
 
     return sampled_layer
 
@@ -587,7 +641,7 @@ def sample_circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_
         assert(isinstance(qubit_labels, list) or isinstance(qubit_labels, tuple)), "SubsetQs must be a list or a tuple!"
         remaining_qubits = list(qubit_labels[:])  # copy this list
     else:
-        remaining_qubits = list(pspec.qubit_labels[:]) # copy this list
+        remaining_qubits = list(pspec.qubit_labels[:])  # copy this list
 
     # Go through the 2-qubit gates in the sector, and apply each one with probability two_q_prob
     for i in range(0, len(twoqubitgates)):
@@ -930,7 +984,7 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
 #     p_rc_dict = {}
 #     circuit_dict = {}
 
-#     if isinstance(length, int):
+#     if isinstance(length, _np.int64):
 #         length_per_subset = [length for i in range(len(structure))]
 #     else:
 #         length_per_subset = length
@@ -1173,7 +1227,8 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
 #     return experiment_dict
 
 
-# def create_exhaustive_independent_random_circuits_experiment(pspec, allowed_depths, circuits_per_subset, structure='1Q',
+# def create_exhaustive_independent_random_circuits_experiment(pspec, allowed_depths, circuits_per_subset,
+#                                                              structure='1Q',
 #                                                              sampler='Qelimination', samplerargs=[], descriptor='',
 #                                                              verbosity=1, seed=None):
 #     """
@@ -1439,11 +1494,12 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
                                                              qubit_labels, citerations,
                                                              *compilerargs, rand_state=rand_state)
         # If not conditionaltwirl, we do a full random Clifford.
-        else: initial_circuit = _cmpl.compile_clifford(s_initial, p_initial, pspec,
-                                                       clifford_compilations.get('absolute', None),
-                                                       clifford_compilations.get('paulieq', None),
-                                                       qubit_labels, citerations,
-                                                       *compilerargs, rand_state=rand_state)
+        else:
+            initial_circuit = _cmpl.compile_clifford(s_initial, p_initial, pspec,
+                                                     clifford_compilations.get('absolute', None),
+                                                     clifford_compilations.get('paulieq', None),
+                                                     qubit_labels, citerations,
+                                                     *compilerargs, rand_state=rand_state)
     # If we are not Clifford twirling, we just copy the effect of the random circuit as the effect
     # of the "composite" prep + random circuit (as here the prep circuit is the null circuit).
     else:
@@ -1486,8 +1542,8 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
     # Find the expected outcome of the circuit.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit, pspec=pspec)
     if conditionaltwirl:  # s_out is not always the identity with a conditional twirl, only conditional on prep/measure.
-        assert(_np.array_equal(s_out[:n, n:], _np.zeros((n, n), int))), "Compiler has failed!"
-    else: assert(_np.array_equal(s_out, _np.identity(2 * n, int))), "Compiler has failed!"
+        assert(_np.array_equal(s_out[:n, n:], _np.zeros((n, n), _np.int64))), "Compiler has failed!"
+    else: assert(_np.array_equal(s_out, _np.identity(2 * n, _np.int64))), "Compiler has failed!"
 
     # Find the ideal output of the circuit.
     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
@@ -1501,7 +1557,6 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
             assert(bit == 0), "Ideal output is not the all 0s computational basis state!"
         idealout.append(int(measurement_out[1]))
     idealout = tuple(idealout)
-    full_circuit.done_editing()
 
     if not partitioned: outcircuit = full_circuit
     else:
@@ -1512,7 +1567,8 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
 
 #### Commented out as all of this functionality should be reproducable using simulataneous experiment designs applied
 #### to DirectRB experiment designs.
-# def sample_simultaneous_direct_rb_circuit(pspec, clifford_compilations, length, structure='1Q', sampler='Qelimination',
+# def sample_simultaneous_direct_rb_circuit(pspec, clifford_compilations, length, structure='1Q',
+#                                           sampler='Qelimination',
 #                                           samplerargs=[], addlocal=False, lsargs=[], randomizeout=True,
 #                                           cliffordtwirl=True, conditionaltwirl=True, citerations=20, compilerargs=[],
 #                                           partitioned=False, seed=1234):
@@ -1730,13 +1786,15 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
 #             # If we want to randomize the expected output then randomize the p vector, otherwise
 #             # it is left as p. Note that, unlike with compile_clifford, we don't invert (s,p)
 #             # before handing it to the stabilizer measurement function.
-#             if randomizeout: p_for_measurement = _symp.random_phase_vector(s_composite, subset_n, rand_state=rand_state)
+#             if randomizeout: p_for_measurement = _symp.random_phase_vector(s_composite, subset_n,
+#                                                                            rand_state=rand_state)
 #             else: p_for_measurement = p_composite
-#             subset_inversion_circuit = _cmpl.compile_stabilizer_measurement(s_composite, p_for_measurement, pspec,
-#                                                                             clifford_compilations.get('absolute', None),
-#                                                                             clifford_compilations.get('paulieq', None),
-#                                                                             qubit_labels, citerations, *compilerargs,
-#                                                                             rand_state=rand_state)
+#             subset_inversion_circuit = _cmpl.compile_stabilizer_measurement(
+#                 s_composite, p_for_measurement, pspec,
+#                 clifford_compilations.get('absolute', None),
+#                 clifford_compilations.get('paulieq', None),
+#                 qubit_labels, citerations, *compilerargs,
+#                 rand_state=rand_state)
 #         else:
 #             # Find the Clifford that inverts the circuit so far. We
 #             s_inverse, p_inverse = _symp.inverse_clifford(s_composite, p_composite)
@@ -1767,9 +1825,10 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
 
 #     # Find the expected outcome of the circuit.
 #     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit, pspec=pspec)
-#     if conditionaltwirl:  # s_out is not always the identity with a conditional twirl, only conditional on prep/measure.
-#         assert(_np.array_equal(s_out[:n, n:], _np.zeros((n, n), int))), "Compiler has failed!"
-#     else: assert(_np.array_equal(s_out, _np.identity(2 * n, int))), "Compiler has failed!"
+#     if conditionaltwirl:  # s_out is not always the identity with a conditional twirl,
+#         # only conditional on prep/measure.
+#         assert(_np.array_equal(s_out[:n, n:], _np.zeros((n, n), _np.int64))), "Compiler has failed!"
+#     else: assert(_np.array_equal(s_out, _np.identity(2 * n, _np.int64))), "Compiler has failed!"
 
 #     # Find the ideal output of the circuit.
 #     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
@@ -1796,9 +1855,11 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
 #     return outcircuit, idealout
 
 
-# def create_simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length, structure='1Q', sampler='Qelimination',
+# def create_simultaneous_direct_rb_experiment(pspec, depths, circuits_per_length, structure='1Q',
+#                                              sampler='Qelimination',
 #                                              samplerargs=[], addlocal=False, lsargs=[], randomizeout=False,
-#                                              cliffordtwirl=True, conditionaltwirl=True, citerations=20, compilerargs=[],
+#                                              cliffordtwirl=True, conditionaltwirl=True, citerations=20,
+#                                              compilerargs=[],
 #                                              partitioned=False, set_isolated=True, setcomplement_isolated=False,
 #                                              descriptor='A set of simultaneous DRB experiments', verbosity=1,
 #                                              seed=1234):
@@ -2165,8 +2226,8 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
     rand_state = _np.random.RandomState(seed)  # OK if seed is None
 
     # Initialize the identity circuit rep.
-    s_composite = _np.identity(2 * n, int)
-    p_composite = _np.zeros((2 * n), int)
+    s_composite = _np.identity(2 * n, _np.int64)
+    p_composite = _np.zeros((2 * n), _np.int64)
     # Initialize an empty circuit
     full_circuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
 
@@ -2207,7 +2268,7 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
     # Find the expected outcome of the circuit.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(full_circuit, pspec=pspec)
     # Check the output is the identity up to Paulis.
-    assert(_np.array_equal(s_out[:n, n:], _np.zeros((n, n), int)))
+    assert(_np.array_equal(s_out[:n, n:], _np.zeros((n, n), _np.int64)))
     # Find the ideal-out of the circuit, as a bit-string.
     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
     s_outstate, p_outstate = _symp.apply_clifford_to_stabilizer_state(s_out, p_out, s_inputstate, p_inputstate)
@@ -2513,7 +2574,7 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
 
     # The full circuit should be, up to a Pauli, the identity.
     s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
-    assert(_np.array_equal(s_out, _np.identity(2 * n, int)))
+    assert(_np.array_equal(s_out, _np.identity(2 * n, _np.int64)))
 
     # Find the error-free output.
     s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)
@@ -2635,7 +2696,7 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
 #         rndm_indices = rndm.randint(0, len(group), m)
 #         if interleaved:
 #             interleaved_index = group.label_indices[interleaved]
-#             interleaved_indices = interleaved_index * _np.ones((m, 2), int)
+#             interleaved_indices = interleaved_index * _np.ones((m, 2), _np.int64)
 #             interleaved_indices[:, 0] = rndm_indices
 #             rndm_indices = interleaved_indices.flatten()
 
@@ -2665,7 +2726,7 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
 #         rndm_indices = rndm.randint(0, len(opLabels), m)
 #         if interleaved:
 #             interleaved_index = opLabels.index(interleaved)
-#             interleaved_indices = interleaved_index * _np.ones((m, 2), int)
+#             interleaved_indices = interleaved_index * _np.ones((m, 2), _np.int64)
 #             interleaved_indices[:, 0] = rndm_indices
 #             rndm_indices = interleaved_indices.flatten()
 
@@ -2704,7 +2765,7 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
 #             rndm_indices = rndm.randint(0, len(opLabels), m)
 #             if interleaved:
 #                 interleaved_index = opLabels.index(interleaved)
-#                 interleaved_indices = interleaved_index * _np.ones((m, 2), int)
+#                 interleaved_indices = interleaved_index * _np.ones((m, 2), _np.int64)
 #                 interleaved_indices[:, 0] = rndm_indices
 #                 rndm_indices = interleaved_indices.flatten()
 #             random_string = [opLabels[i] for i in rndm_indices]
@@ -2713,7 +2774,7 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
 #             rndm_indices = rndm.randint(0, len(group), m)
 #             if interleaved:
 #                 interleaved_index = group.label_indices[interleaved]
-#                 interleaved_indices = interleaved_index * _np.ones((m, 2), int)
+#                 interleaved_indices = interleaved_index * _np.ones((m, 2), _np.int64)
 #                 interleaved_indices[:, 0] = rndm_indices
 #                 rndm_indices = interleaved_indices.flatten()
 #             random_string = [group.labels[i] for i in rndm_indices]
@@ -2757,7 +2818,7 @@ def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels, rand
 
     width = len(qubits)
 
-    if width == 1: 
+    if width == 1:
         interacting_qs_density = 0
 
     germcircuit = _cir.Circuit(layer_labels=[], line_labels=qubits, editable=True)
@@ -2995,7 +3056,8 @@ def create_random_germpower_mirror_circuits(pspec, absolute_compilation, depths,
 
     if localclifford:
         # Sample a compiled 1Q Cliffords layer
-        oneQclifford_circuit_out = sample_one_q_clifford_layer_as_compiled_circuit(pspec, absolute_compilation, qubit_labels=qubit_labels,
+        oneQclifford_circuit_out = sample_one_q_clifford_layer_as_compiled_circuit(pspec, absolute_compilation,
+                                                                                   qubit_labels=qubit_labels,
                                                                                    rand_state=rand_state)
         # Generate the inverse in the same way as before (note that this will not be the same in some
         # circumstances as finding the inverse Cliffords and using the compilations for those. It doesn't
@@ -3047,7 +3109,7 @@ def create_random_germpower_mirror_circuits(pspec, absolute_compilation, depths,
 
         # The full circuit should be, up to a Pauli, the identity.
         s_out, p_out = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
-        assert(_np.array_equal(s_out, _np.identity(2 * n, int)))
+        assert(_np.array_equal(s_out, _np.identity(2 * n, _np.int64)))
 
         # Find the error-free output.
         s_inputstate, p_inputstate = _symp.prep_stabilizer_state(n, zvals=None)

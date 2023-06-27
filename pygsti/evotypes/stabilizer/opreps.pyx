@@ -88,10 +88,10 @@ cdef class OpRepClifford(OpRep):
         self.basis = basis
 
         #Make sure all arrays are contiguous
-        self.smatrix = _np.ascontiguousarray(self.smatrix)
-        self.svector = _np.ascontiguousarray(self.svector)
-        self.smatrix_inv = _np.ascontiguousarray(self.smatrix_inv)
-        self.svector_inv = _np.ascontiguousarray(self.svector_inv)
+        self.smatrix = _np.ascontiguousarray(self.smatrix, dtype=_np.int64)
+        self.svector = _np.ascontiguousarray(self.svector, dtype=_np.int64)
+        self.smatrix_inv = _np.ascontiguousarray(self.smatrix_inv, dtype=_np.int64)
+        self.svector_inv = _np.ascontiguousarray(self.svector_inv, dtype=_np.int64)
 
         self.state_space = _StateSpace.cast(state_space)
         assert(self.state_space.num_qubits == self.smatrix.shape[0] // 2)
@@ -104,7 +104,7 @@ cdef class OpRepClifford(OpRep):
         if on_space in ('minimal', 'Hilbert'):
             return self.unitary
         elif on_space == 'HilbertSchmidt':
-            return _bt.change_basis(_ot.unitary_to_process_mx(self.unitary), 'std', self.basis)
+            return _ot.unitary_to_superop(self.unitary, self.basis)
         else:
             raise ValueError("Invalid `on_space` argument: %s" % str(on_space))
 
@@ -180,8 +180,7 @@ cdef class OpRepEmbedded(OpRep):
         # assert that all state space labels == qubits, since we only know
         # how to embed cliffords on qubits...
         state_space = _StateSpace.cast(state_space)
-        assert(state_space.num_tensor_product_blocks == 1
-               and all([state_space.label_udimension(l) == 2 for l in state_space.tensor_product_block_labels(0)])), \
+        assert(all([state_space.label_udimension(l) == 2 for l in state_space.sole_tensor_product_block_labels])), \
             "All state space labels must correspond to *qubits*"
         if isinstance(embedded_rep, OpRepClifford):
             assert(len(target_labels) == len(embedded_rep.svector) // 2), \
@@ -189,7 +188,7 @@ cdef class OpRepEmbedded(OpRep):
 
         #Cache info to speedup representation's acton(...) methods:
         # Note: ...labels[0] is the *only* tensor-prod-block, asserted above
-        qubitLabels = state_space.tensor_product_block_labels(0)
+        qubitLabels = state_space.sole_tensor_product_block_labels
         cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] qubit_indices = \
             _np.array([qubitLabels.index(targetLbl) for targetLbl in target_labels], _np.int64)
 
@@ -201,10 +200,10 @@ cdef class OpRepEmbedded(OpRep):
         self.state_space = state_space
 
     def __reduce__(self):
-        return (OpRepEmbedded, (self.embedded_rep, self.state_space, self.target_labels))
+        return (OpRepEmbedded, (self.state_space, self.target_labels, self.embedded_rep))
 
     def copy(self):
-        return OpRepEmbedded(self.embedded_rep.copy(), self.state_space, self.target_labels)
+        return OpRepEmbedded(self.state_space, self.target_labels, self.embedded_rep.copy())
 
 
 cdef class OpRepRepeated(OpRep):
@@ -253,13 +252,13 @@ cdef class OpRepExpErrorgen(OpRep):
 cdef class OpRepLindbladErrorgen(OpRep):
     cdef public object Lterms
     cdef public object Lterm_coeffs
-    cdef public object LtermdictAndBasis
+    cdef public object lindblad_coefficient_blocks
 
-    def __init__(self, lindblad_term_dict, basis, state_space):
+    def __init__(self, lindblad_coefficient_blocks, state_space):
         self.state_space = _StateSpace.cast(state_space)
         self.Lterms = None
         self.Lterm_coeffs = None
-        self.LtermdictAndBasis = (lindblad_term_dict, basis)
+        self.lindblad_coefficient_blocks = lindblad_coefficient_blocks
 
     def acton(self, StateRep state not None):
         raise AttributeError("Cannot currently act with statevec.OpRepLindbladErrorgen - for terms only!")
@@ -268,4 +267,4 @@ cdef class OpRepLindbladErrorgen(OpRep):
         raise AttributeError("Cannot currently act with statevec.OpRepLindbladErrorgen - for terms only!")
 
     def __reduce__(self):
-        return (OpRepLindbladErrorgen, (self.LtermdictAndBasis[0], self.LtermdictAndBasis[1], self.state_space))
+        return (OpRepLindbladErrorgen, (self.lindblad_coefficient_blocks, self.state_space))

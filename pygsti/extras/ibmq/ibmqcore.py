@@ -111,7 +111,7 @@ class IBMQExperiment(dict):
         IBMQExperiment
             An object containing jobs to be submitted to IBM Q, which can then be submitted
             using the methods .submit() and whose results can be grabbed from IBM Q using
-            the method .get_results(). This object has dictionary-like access for all of
+            the method .retrieve_results(). This object has dictionary-like access for all of
             the objects it contains (e.g., ['qobj'] is a list of the objects to be submitted to
             IBM Q).
 
@@ -126,7 +126,7 @@ class IBMQExperiment(dict):
         # Populated when submitting to IBM Q with .submit()
         self['qjob'] = None
         self['job_ids'] = None
-        # Populated when grabbing results from IBM Q with .get_results()
+        # Populated when grabbing results from IBM Q with .retrieve_results()
         self['batch_result_object'] = None
         self['data'] = None
 
@@ -174,7 +174,8 @@ class IBMQExperiment(dict):
 
             self['qobj'].append(_qiskit.compiler.assemble(self['qiskit_QuantumCircuits'][batch_idx], shots=num_shots))
 
-    def submit(self, ibmq_backend):
+    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True,
+               wait_time=1, wait_steps=10):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
         used to create this object.
@@ -185,17 +186,70 @@ class IBMQExperiment(dict):
             The IBM Q backend to submit the jobs to. Should be the backend corresponding to the
             processor that this experiment has been designed for.
 
+        start: int, optional
+            Batch index to start submission (inclusive). Defaults to None,
+            which will start submission on the first unsubmitted job.
+            Jobs can be resubmitted by manually specifying this,
+            i.e. start=0 will start resubmitting jobs from the beginning.
+
+        stop: int, optional
+            Batch index to stop submission (exclusive). Defaults to None,
+            which will submit as many jobs as possible given the backend's
+            maximum job limit.
+
+        ignore_job_limit: bool, optional
+            If True, then stop is set to submit all remaining jobs. This is set
+            as True to maintain backwards compatibility. Note that is more jobs
+            are needed than the max limit, this will enter a wait loop until all
+            jobs have been successfully submitted.
+
+        wait_time: int
+            Number of seconds for each waiting step.
+
+        wait_steps: int
+            Number of steps to take before retrying job submission.
+
         Returns
         -------
         None
         """
-        wait_time = 1
-        wait_steps = 10
+        
+        #Get the backend version
+        backend_version = ibmq_backend.version
+        
         total_waits = 0
-        self['qjob'] = []
-        self['job_ids'] = []
+        self['qjob'] = [] if self['qjob'] is None else self['qjob']
+        self['job_ids'] = [] if self['job_ids'] is None else self['job_ids']
 
-        for batch_idx, qobj in enumerate(self['qobj']):
+        # Set start and stop to submit the next unsubmitted jobs if not specified
+        if start is None:
+            start = len(self['qjob'])
+
+        if stop is not None:
+            stop = min(stop, len(self['qobj']))
+        elif ignore_job_limit:
+            stop = len(self['qobj'])
+        else:
+            job_limit = ibmq_backend.job_limit()
+            allowed_jobs = job_limit.maximum_jobs - job_limit.active_jobs
+            if start + allowed_jobs < len(self['qobj']):
+                print(f'Given job limit and active jobs, only {allowed_jobs} can be submitted')
+
+            stop = min(start + allowed_jobs, len(self['qobj']))
+        
+        #if the backend version is 1 I believe this should correspond to the use of the legacy
+        #qiskit-ibmq-provider API which supports passing in Qobj objects for specifying experiments
+        #if the backend version is 2 I believe this should correspond to the new API in qiskit-ibm-provider.
+        #This new API doesn't support passing in Qobjs into the run method for backends, so we need
+        #to pass in the list of QuantumCircuit objects directly.
+        if backend_version == 1:
+            batch_iterator = enumerate(self['qobj'])
+        elif backend_version >= 2:
+            batch_iterator = enumerate(self['qiskit_QuantumCircuits'])
+        
+        for batch_idx, batch in batch_iterator:
+            if batch_idx < start or batch_idx >= stop:
+                continue
 
             print("Submitting batch {}".format(batch_idx + 1))
             submit_status = False
@@ -203,8 +257,15 @@ class IBMQExperiment(dict):
             while not submit_status:
                 try:
                     backend_properties = ibmq_backend.properties()
-                    self['submit_time_calibration_data'].append(backend_properties.to_dict())
-                    self['qjob'].append(ibmq_backend.run(qobj))
+                    #If using a simulator backend then backend_properties is None
+                    if not ibmq_backend.simulator:
+                        self['submit_time_calibration_data'].append(backend_properties.to_dict())
+                    #if using the new API we need to pass in the number of shots.
+                    if backend_version == 1:
+                        self['qjob'].append(ibmq_backend.run(batch))
+                    else:
+                        self['qjob'].append(ibmq_backend.run(batch, shots = self['num_shots']))
+                        
                     status = self['qjob'][-1].status()
                     initializing = True
                     initializing_steps = 0
@@ -229,7 +290,7 @@ class IBMQExperiment(dict):
                     try:
                         print('  - Queue position is {}'.format(self['qjob'][-1].queue_position()))
                     except:
-                        print('  - Failed to get queue position {}'.format(batch_idx))
+                        print('  - Failed to get queue position {}'.format(batch_idx + 1))
                     submit_status = True
                 except Exception as ex:
                     template = "An exception of type {0} occurred. Arguments:\n{1!r}"
@@ -258,11 +319,15 @@ class IBMQExperiment(dict):
         """
         for counter, qjob in enumerate(self['qjob']):
             status = qjob.status()
-            print("Batch {}: {}".format(counter, status))
-            if status.name == 'QUEUED:':
+            print("Batch {}: {}".format(counter + 1, status))
+            if status.name == 'QUEUED':
                 print('  - Queue position is {}'.format(qjob.queue_position()))
 
-    def get_results(self):
+        # Print unsubmitted for any entries in qobj but not qjob
+        for counter in range(len(self['qjob']), len(self['qobj'])):
+            print("Batch {}: NOT SUBMITTED".format(counter + 1))
+
+    def retrieve_results(self):
         """
         Gets the results of the completed jobs from IBM Q, and processes
         them into a pyGSTi DataProtocol object (stored as the key 'data'),
@@ -344,5 +409,10 @@ class IBMQExperiment(dict):
                 except:
                     _warnings.warn("Couldn't unpickle {}, so skipping this attribute.".format(atr))
                     ret[atr] = None
+
+        try:
+            ret['data'] = _ProtocolData.from_dir(dirname)
+        except:
+            pass
 
         return ret

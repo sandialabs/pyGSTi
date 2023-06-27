@@ -47,6 +47,26 @@ class ByDepthDesign(_proto.CircuitListsDesign):
         super().__init__(circuit_lists, qubit_labels=qubit_labels, remove_duplicates=remove_duplicates)
         self.depths = depths
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        ByDepthDesign
+        """
+        mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
+                                for circuit_list in self.circuit_lists]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return ByDepthDesign(self.depths, mapped_circuit_lists, mapped_qubit_labels, remove_duplicates=False)
+
 
 class BenchmarkingDesign(ByDepthDesign):
     """
@@ -84,6 +104,35 @@ class BenchmarkingDesign(ByDepthDesign):
         super().__init__(depths, circuit_lists, qubit_labels, remove_duplicates)
         self.idealout_lists = ideal_outs
         self.auxfile_types['idealout_lists'] = 'json'
+
+    def _mapped_circuits_and_idealouts_by_depth(self, mapper):
+        """ Used in derived classes """
+        mapped_circuits_and_idealouts_by_depth = {}
+        for depth, circuit_list, idealout_list in zip(self.depths, self.circuit_lists, self.idealout_lists):
+            mapped_circuits_and_idealouts_by_depth[depth] = \
+                [(c.map_state_space_labels(mapper), iout) for c, iout in zip(circuit_list, idealout_list)]
+        return mapped_circuits_and_idealouts_by_depth
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        ByDepthDesign
+        """
+        mapped_circuit_lists = [[c.map_state_space_labels(mapper) for c in circuit_list]
+                                for circuit_list in self.circuit_lists]
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return BenchmarkingDesign(self.depths, mapped_circuit_lists, list(self.idealout_lists),
+                                  mapped_qubit_labels, remove_duplicates=False)
 
 
 class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
@@ -243,7 +292,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
     def __init__(self, pspec, depths, circuits_per_depth, qubit_labels=None, clifford_compilations=None,
                  sampler='edgegrab', samplerargs=(0.125,),
                  localclifford=True, paulirandomize=True, fixed_versus_depth=False,
-                 descriptor='A random germ mirror circuit experiment'):
+                 descriptor='A random germ mirror circuit experiment', seed=None):
 
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = [[] for d in depths]
@@ -252,20 +301,25 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         assert(clifford_compilations is not None)
         abs_clifford_compilations = clifford_compilations['absolute']
 
+        if seed is None:
+            self.seed = _np.random.randint(1, 1e6)  # Pick a random seed
+        else:
+            self.seed = seed
+
         for j in range(circuits_per_depth):
             circtemp, outtemp, junk = _rc.create_random_germpower_mirror_circuits(
                 pspec, abs_clifford_compilations, depths, qubit_labels=qubit_labels, localclifford=localclifford,
                 paulirandomize=paulirandomize, interacting_qs_density=samplerargs[0],
-                fixed_versus_depth=fixed_versus_depth)
+                fixed_versus_depth=fixed_versus_depth, seed=seed)
             for ind in range(len(depths)):
                 circuit_lists[ind].append(circtemp[ind])
                 ideal_outs[ind].append((''.join(map(str, outtemp[ind])),))
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                              sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor)
+                              sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor, seed=seed)
 
     def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
-                         sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor):
+                         sampler, samplerargs, localclifford, paulirandomize, fixed_versus_depth, descriptor, seed=None):
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.descriptor = descriptor
@@ -274,6 +328,30 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         self.localclifford = localclifford
         self.paulirandomize = paulirandomize
         self.fixed_versus_depth = fixed_versus_depth
+        self.seed = seed
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        PeriodicMirrorCircuitDesign
+        """
+        mapped_circuits_and_idealouts_by_depth = self._mapped_circuits_and_idealouts_by_depth(mapper)
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return PeriodicMirrorCircuitDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
+                                                                  mapped_qubit_labels,
+                                                                  self.sampler, self.samplerargs, self.localclifford,
+                                                                  self.paulirandomize, self.fixed_versus_depth,
+                                                                  self.descriptor)
 
 
 class SummaryStatistics(_proto.Protocol):
@@ -340,7 +418,7 @@ class SummaryStatistics(_proto.Protocol):
                 adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
                 return adjSP
 
-        def get_summary_values(icirc, circ, dsrow, idealout):
+        def _get_summary_values(icirc, circ, dsrow, idealout):
             sc = success_counts(dsrow, circ, idealout)
             tc = dsrow.total
             hdc = hamming_distance_counts(dsrow, circ, idealout)
@@ -356,7 +434,7 @@ class SummaryStatistics(_proto.Protocol):
             return ret
 
         return self._compute_dict(data, self.summary_statistics,
-                                  get_summary_values, for_passes='all')
+                                  _get_summary_values, for_passes='all')
 
     def _compute_circuit_statistics(self, data):
         """
@@ -371,7 +449,7 @@ class SummaryStatistics(_proto.Protocol):
         -------
         NamedDict
         """
-        def get_circuit_values(icirc, circ, dsrow, idealout):
+        def _get_circuit_values(icirc, circ, dsrow, idealout):
             ret = {'two_q_gate_count': circ.two_q_gate_count(),
                    'depth': circ.depth,
                    'idealout': idealout,
@@ -380,7 +458,7 @@ class SummaryStatistics(_proto.Protocol):
             ret.update(dsrow.aux)  # note: will only get aux data from *first* pass in multi-pass data
             return ret
 
-        return self._compute_dict(data, self.circuit_statistics, get_circuit_values, for_passes="first")
+        return self._compute_dict(data, self.circuit_statistics, _get_circuit_values, for_passes="first")
 
     # def compute_dscmp_data(self, data, dscomparator):
 
@@ -409,7 +487,7 @@ class SummaryStatistics(_proto.Protocol):
         -------
         NamedDict
         """
-        def get_success_prob(icirc, circ, dsrow, idealout):
+        def _get_success_prob(icirc, circ, dsrow, idealout):
             #if set(circ.line_labels) != set(qubits):
             #    trimmedcirc = circ.copy(editable=True)
             #    for q in circ.line_labels:
@@ -420,7 +498,7 @@ class SummaryStatistics(_proto.Protocol):
             return {'success_probabilities': model.probabilities(circ)[('success',)]}
 
         return self._compute_dict(data, ('success_probabilities',),
-                                  get_success_prob, for_passes="none")
+                                  _get_success_prob, for_passes="none")
 
     def _compute_dict(self, data, component_names, compute_fn, for_passes="all"):
         """
@@ -625,7 +703,7 @@ class ByDepthSummaryStatistics(SummaryStatistics):
         self.names_to_compute = statistics_to_compute if (names_to_compute is None) else names_to_compute
         self.custom_data_src = custom_data_src
         # because this *could* be a model or a qty dict (or just a string?)
-        self.auxfile_types['custom_data_src'] = 'pickle'
+        self.auxfile_types['custom_data_src'] = 'serialized-object'
 
     def _get_statistic_per_depth(self, statistic, data):
         design = data.edesign
@@ -755,7 +833,7 @@ class SummaryStatisticsResults(_proto.ProtocolResults):
         """
         super().__init__(data, protocol_instance)
         self.statistics = {}
-        self.auxfile_types['statistics'] = 'pickle'  # b/c NamedDicts don't json
+        self.auxfile_types['statistics'] = 'dict:serialized-object'  # dict of NamedDicts
 
     def _my_attributes_as_nameddict(self):
         """Overrides base class behavior so elements of self.statistics form top-level NamedDict"""

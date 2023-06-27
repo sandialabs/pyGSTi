@@ -12,6 +12,7 @@ Defines the DistributableForwardSimulator calculator class
 import numpy as _np
 
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
+from pygsti.forwardsims.forwardsim import _array_type_parameter_dimension_letters
 from pygsti.tools import mpitools as _mpit
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import sharedmemtools as _smt
@@ -63,7 +64,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
     def _array_types_for_method(cls, method_name):
         # give array types for this method because it's currently used publically in objective function's hessian
         if method_name == '_iter_atom_hprobs_by_rectangle':
-            return ('epp', 'epp') + cls._array_types_for_method('_bulk_fill_hprobs_dprobs_atom')
+            return ('abb', 'abb') + cls._array_types_for_method('_bulk_fill_hprobs_dprobs_atom')
         if method_name == '_bulk_fill_hprobs_dprobs_atom':
             return cls._array_types_for_method('_bulk_fill_probs_block') \
                 + cls._array_types_for_method('_bulk_fill_dprobs_block') \
@@ -121,6 +122,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
         for atom in layout.atoms:
             #assert(_slct.length(atom.element_slice) == atom.num_elements)  # for debugging
+            #print("DEBUG: Atom %d of %d slice=%s" % (iDB, len(layout.atoms), str(atom.element_slice)))
 
             if pr_array_to_fill is not None:
                 self._bulk_fill_probs_atom(pr_array_to_fill[atom.element_slice], atom, atom_resource_alloc)
@@ -442,8 +444,12 @@ class DistributableForwardSimulator(_ForwardSimulator):
 
     def _compute_processor_distribution(self, array_types, nprocs, num_params, num_circuits, default_natoms):
         """ Computes commonly needed processor-grid info for distributed layout creation (a helper function)"""
-        bNp1Matters = bool("EP" in array_types or "EPP" in array_types or "ep" in array_types or "epp" in array_types)
-        bNp2Matters = bool("EPP" in array_types or "epp" in array_types)
+        parameter_dim_letters = _array_type_parameter_dimension_letters()
+        param_dim_cnts = [sum([array_type.count(l) for l in parameter_dim_letters]) for array_type in array_types]
+        max_param_dims = max(param_dim_cnts) if len(param_dim_cnts) > 0 else 0
+
+        bNp1Matters = bool(max_param_dims > 0)
+        bNp2Matters = bool(max_param_dims > 1)
 
         param_dimensions = (num_params,) * (int(bNp1Matters) + int(bNp2Matters))
         param_blk_sizes = (None,) * len(param_dimensions) if (self._pblk_sizes is None) \

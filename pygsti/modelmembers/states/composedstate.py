@@ -367,7 +367,8 @@ class ComposedState(_State):  # , _ErrorMapContainer
         #    "Invalid evotype: %s for %s" % (evotype, self.__class__.__name__)
 
         if not isinstance(static_state, _State):
-            static_state = _StaticState(static_state, evotype)  # assume spamvec is just a vector
+            # UNSPECIFIED BASIS - change None to static_state.basis once we have a std attribute
+            static_state = _StaticState(static_state, None, evotype)  # assume spamvec is just a vector
 
         assert(static_state._evotype == evotype), \
             "`static_state` evotype must match `errormap` ('%s' != '%s')" % (static_state._evotype, evotype)
@@ -378,18 +379,19 @@ class ComposedState(_State):  # , _ErrorMapContainer
         self.error_map = errormap
         self.terms = {}
         self.local_term_poly_coeffs = {}
-        # TODO REMOVE self.direct_terms = {} if evotype in ("svterm","cterm") else None
-        # TODO REMOVE self.direct_term_poly_coeffs = {} if evotype in ("svterm","cterm") else None
 
         #Create representation
         rep = evotype.create_composed_state_rep(self.state_vec._rep, self.error_map._rep, static_state.state_space)
-        #stateRep =
-        #errmapRep =
-        #rep = errmapRep.acton(stateRep)  # FUTURE: do this acton in place somehow? (like C-reps do)
-        #maybe make a special _Errgen *state* rep?
 
         _State.__init__(self, rep, evotype)
         _ErrorMapContainer.__init__(self, self.error_map)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        error_map = serial_memo[mm_dict['submembers'][0]]
+        static_state = serial_memo[mm_dict['submembers'][1]]
+        return cls(static_state, error_map)
 
     def _update_rep(self):
         self._rep.reps_have_changed()
@@ -405,28 +407,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         -------
         list
         """
-        return [self.error_map]
-
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that embedded gate has its
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.state_vec, self.error_map.copy(parent))
-        return self._copy_gpindices(copyOfMe, parent, memo)
+        return [self.error_map, self.state_vec]
 
     def set_gpindices(self, gpindices, parent, memo=None):
         """
@@ -449,9 +430,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         """
         self.terms = {}  # clear terms cache since param indices have changed now
         self.local_term_poly_coeffs = {}
-        # TODO REMOVE self.direct_terms = {}
-        # TODO REMOVE self.direct_term_poly_coeffs = {}
-        _modelmember.ModelMember.set_gpindices(self, gpindices, parent, memo)
+        super().set_gpindices(gpindices, parent, memo)
 
     def to_dense(self, on_space='minimal', scratch=None):
         """
@@ -783,3 +762,132 @@ class ComposedState(_State):  # , _ErrorMapContainer
         """
         self.error_map.depolarize(amount)
         self._update_rep()
+
+    def errorgen_coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        return self.error_map.errorgen_coefficient_labels()
+
+    def errorgen_coefficients_array(self):
+        """
+        The weighted coefficients of this state prep's error generator in terms of "standard" error generators.
+
+        Constructs a 1D array of all the coefficients returned by :method:`errorgen_coefficients`,
+        weighted so that different error generators can be weighted differently when a
+        `errorgen_penalty_factor` is used in an objective function.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 1D array of length equal to the number of coefficients in the linear combination
+            of standard error generators that is this state preparation's error generator.
+        """
+        return self.error_map.errorgen_coefficients_array()
+
+    def errorgen_coefficients(self, return_basis=False, logscale_nonham=False):
+        """
+        Constructs a dictionary of the Lindblad-error-generator coefficients of this state.
+
+        Note that these are not necessarily the parameter values, as these
+        coefficients are generally functions of the parameters (so as to keep
+        the coefficients positive, for instance).
+
+        Parameters
+        ----------
+        return_basis : bool, optional
+            Whether to also return a :class:`Basis` containing the elements
+            with which the error generator terms were constructed.
+
+        logscale_nonham : bool, optional
+            Whether or not the non-hamiltonian error generator coefficients
+            should be scaled so that the returned dict contains:
+            `(1 - exp(-d^2 * coeff)) / d^2` instead of `coeff`.  This
+            essentially converts the coefficient into a rate that is
+            the contribution this term would have within a depolarizing
+            channel where all stochastic generators had this same coefficient.
+            This is the value returned by :method:`error_rates`.
+
+        Returns
+        -------
+        lindblad_term_dict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Basis labels are integers starting at 0.  Values are complex
+            coefficients.
+        basis : Basis
+            A Basis mapping the basis labels used in the
+            keys of `lindblad_term_dict` to basis matrices.
+        """
+        return self.error_map.errorgen_coefficients(return_basis, logscale_nonham)
+
+    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
+        """
+        Sets the coefficients of terms in the error generator of this state.
+
+        The dictionary `lindblad_term_dict` has tuple-keys describing the type of term and the basis
+        elements used to construct it, e.g. `('H','X')`.
+
+        Parameters
+        ----------
+        lindblad_term_dict : dict
+            Keys are `(termType, basisLabel1, <basisLabel2>)`
+            tuples, where `termType` is `"H"` (Hamiltonian), `"S"` (Stochastic),
+            or `"A"` (Affine).  Hamiltonian and Affine terms always have a
+            single basis label (so key is a 2-tuple) whereas Stochastic tuples
+            have 1 basis label to indicate a *diagonal* term and otherwise have
+            2 basis labels to specify off-diagonal non-Hamiltonian Lindblad
+            terms.  Values are the coefficients of these error generators,
+            and should be real except for the 2-basis-label case.
+
+        action : {"update","add","reset"}
+            How the values in `lindblad_term_dict` should be combined with existing
+            error-generator coefficients.
+
+        logscale_nonham : bool, optional
+            Whether or not the values in `lindblad_term_dict` for non-hamiltonian
+            error generators should be interpreted as error *rates* (of an
+            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
+            instead of raw coefficients.  If True, then the non-hamiltonian
+            coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
+            the corresponding value given in `lindblad_term_dict`.  This is what is
+            performed by the function :method:`set_error_rates`.
+
+        truncate : bool, optional
+            Whether to allow adjustment of the errogen coefficients in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given coefficients
+            cannot be set as specified.
+
+        Returns
+        -------
+        None
+        """
+        self.error_map.set_errorgen_coefficients(lindblad_term_dict, action, logscale_nonham, truncate)
+        self._update_rep()
+        self.dirty = True
+
+    def errorgen_coefficients_array_deriv_wrt_params(self):
+        """
+        The jacobian of :method:`errogen_coefficients_array` with respect to this state's parameters.
+
+        Returns
+        -------
+        numpy.ndarray
+            A 2D array of shape `(num_coeffs, num_params)` where `num_coeffs` is the number of
+            coefficients of this operation's error generator and `num_params` is this operation's
+            number of parameters.
+        """
+        return self.error_map.errorgen_coefficients_array_deriv_wrt_params()
+
+    #TODO - add more errorgen coefficient related methods as in ComposedOp

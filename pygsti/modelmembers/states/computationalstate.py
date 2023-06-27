@@ -17,6 +17,7 @@ import numpy as _np
 
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.modelmembers import term as _term
+from pygsti.modelmembers.errorgencontainer import NoErrorGeneratorInterface as _NoErrorGeneratorInterface
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.baseobjs.basis import Basis as _Basis
@@ -28,7 +29,7 @@ except ImportError:
     _fastcalc = None
 
 
-class ComputationalBasisState(_State):
+class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
     """
     A static state vector that is tensor product of 1-qubit Z-eigenstates.
 
@@ -137,11 +138,11 @@ class ComputationalBasisState(_State):
 
         state_space = _statespace.default_space_for_num_qubits(len(self._zvals)) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
-        basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
+        basis = _Basis.cast(basis, state_space)  # basis for Hilbert-Schmidt (superop) space
 
         evotype = _Evotype.cast(evotype)
         self._evotype = evotype  # set this before call to _State.__init__ so self.to_dense() can work...
-        rep = evotype.create_computational_state_rep(zvals, basis, state_space)
+        rep = evotype.create_computational_state_rep(self._zvals, basis, state_space)
         _State.__init__(self, rep, evotype)
 
     def to_dense(self, on_space='minimal', scratch=None):
@@ -292,6 +293,43 @@ class ComputationalBasisState(_State):
         None
         """
         assert(len(v) == 0)  # should be no parameters, and nothing to do
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        mm_dict['zvals'] = self._zvals.tolist()
+        mm_dict['basis'] = self._rep.basis.to_nice_serialization()
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        basis = _Basis.from_nice_serialization(mm_dict['basis'])
+        return cls(mm_dict['zvals'], basis, mm_dict['evotype'], state_space)
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (_np.array_equal(self._zvals, other._zvals)  # must compare values too, since now parameters
+                and self._rep.basis == other._rep.basis)
 
     def __str__(self):
         nQubits = len(self._zvals)

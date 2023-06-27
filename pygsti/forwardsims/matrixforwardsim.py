@@ -173,21 +173,39 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         """
         dim = self.model.evotype.minimal_dim(self.model.state_space)
         gate = self.model.circuit_layer_operator(op_label, 'op')
-        op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
 
         # Allocate memory for the final result
         num_deriv_cols = self.model.num_params if (wrt_filter is None) else len(wrt_filter)
-        flattened_dprod = _np.zeros((dim**2, num_deriv_cols), 'd')
+        #num_op_params = self.model._param_interposer.num_op_params \
+        #    if (self.model._param_interposer is not None) else self.model.num_params
 
-        _fas(flattened_dprod, [None, gpindices],
-             gate.deriv_wrt_params(op_wrtFilter))  # (dim**2, n_params[op_label])
+        #Note: deriv_wrt_params is more accurately deriv wrt *op* params when there is an interposer
+        # d(op)/d(params) = d(op)/d(op_params) * d(op_params)/d(params)
+        if self.model._param_interposer is not None:
+            #When there is an interposer, we compute derivs wrt *all* the ops params (inefficient?),
+            # then apply interposer, then take desired wrt_filter columns:
+            assert(self.model._param_interposer.num_params == self.model.num_params)
+            num_op_params = self.model._param_interposer.num_op_params
+            deriv_wrt_op_params = _np.zeros((dim**2, num_op_params), 'd')
+            deriv_wrt_op_params[:, gate.gpindices] = gate.deriv_wrt_params()  # *don't* apply wrt filter here
+            deriv_wrt_params = _np.dot(deriv_wrt_op_params,
+                                       self.model._param_interposer.deriv_op_params_wrt_model_params())
 
-        if _slct.length(gpindices) > 0:  # works for arrays too
-            # Compute the derivative of the entire circuit with respect to the
-            # gate's parameters and fill appropriate columns of flattened_dprod.
-            #gate = self.model.operation[op_label] UNNEEDED (I think)
-            _fas(flattened_dprod, [None, gpindices],
-                 gate.deriv_wrt_params(op_wrtFilter))  # (dim**2, n_params in wrt_filter for op_label)
+            # deriv_wrt_params is a derivative matrix with respect to *all* the model's parameters, so
+            # now just take requested subset:
+            flattened_dprod = deriv_wrt_params[:, wrt_filter] if (wrt_filter is not None) else deriv_wrt_params
+        else:
+            #Simpler case of no interposer: use _process_wrt_filter to "convert" from op params to model params
+            # (the desired op params are just some subset, given by gpindices and op_wrtFilter, of the model parameters)
+            flattened_dprod = _np.zeros((dim**2, num_deriv_cols), 'd')
+            op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
+
+            if _slct.length(gpindices) > 0:  # works for arrays too
+                # Compute the derivative of the entire circuit with respect to the
+                # gate's parameters and fill appropriate columns of flattened_dprod.
+                #gate = self.model.operation[op_label] UNNEEDED (I think)
+                _fas(flattened_dprod, [None, gpindices],
+                     gate.deriv_wrt_params(op_wrtFilter))  # (dim**2, n_params in wrt_filter for op_label)
 
         if flat:
             return flattened_dprod
@@ -199,22 +217,49 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         """
         Return the hessian of a length-1 (single-gate) sequence
         """
+        if isinstance(wrt_filter1, slice): wrt_filter1 = _slct.indices(wrt_filter1)
+        if isinstance(wrt_filter2, slice): wrt_filter2 = _slct.indices(wrt_filter2)
+
         dim = self.model.evotype.minimal_dim(self.model.state_space)
-
         gate = self.model.circuit_layer_operator(op_label, 'op')
-        op_wrtFilter1, gpindices1 = self._process_wrt_filter(wrt_filter1, gate)
-        op_wrtFilter2, gpindices2 = self._process_wrt_filter(wrt_filter2, gate)
 
-        # Allocate memory for the final result
-        num_deriv_cols1 = self.model.num_params if (wrt_filter1 is None) else len(wrt_filter1)
-        num_deriv_cols2 = self.model.num_params if (wrt_filter2 is None) else len(wrt_filter2)
+        # Get operation parameters corresponding to model parameters in wrt filters if needed
+        interposer = self.model._param_interposer
+        ops_wrt_filter1 = interposer.ops_params_dependent_on_model_params(wrt_filter1) \
+            if (interposer is not None and wrt_filter1 is not None) else wrt_filter1
+        ops_wrt_filter2 = interposer.ops_params_dependent_on_model_params(wrt_filter2) \
+            if (interposer is not None and wrt_filter2 is not None) else wrt_filter2
+
+        # Allocate memory for the op-param Hessian (possibly the final result)
+        num_op_params = self.model._param_interposer.num_op_params \
+            if (self.model._param_interposer is not None) else self.model.num_params
+        num_deriv_cols1 = num_op_params if (ops_wrt_filter1 is None) else len(ops_wrt_filter1)
+        num_deriv_cols2 = num_op_params if (ops_wrt_filter2 is None) else len(ops_wrt_filter2)
         flattened_hprod = _np.zeros((dim**2, num_deriv_cols1, num_deriv_cols2), 'd')
+
+        op_wrtFilter1, gpindices1 = self._process_wrt_filter(ops_wrt_filter1, gate)
+        op_wrtFilter2, gpindices2 = self._process_wrt_filter(ops_wrt_filter2, gate)
 
         if _slct.length(gpindices1) > 0 and _slct.length(gpindices2) > 0:  # works for arrays too
             # Compute the derivative of the entire circuit with respect to the
             # gate's parameters and fill appropriate columns of flattened_dprod.
             _fas(flattened_hprod, [None, gpindices1, gpindices2],
                  gate.hessian_wrt_params(op_wrtFilter1, op_wrtFilter2))
+
+        #Note: deriv_wrt_params is more accurately derive wrt *op* params when there is an interposer
+        # d2(op)/d(p1)d(p2) = d2(op)/d(op_p1)d(op_p2) * d(op_p1)/d(p1) d(op_p2)/d(p2)
+        if self.model._param_interposer is not None:
+            def smx(mx, rows, cols):  # extract sub-matrix, as you might like mx[rows, cols] to work...
+                rows = _np.array(rows).reshape(-1, 1); cols = _np.array(cols).reshape(1, -1)
+                return mx[rows, cols]  # row index is m x 1, cols index is 1 x n so numpy broadcast works
+            d_opp_wrt_p = self.model._param_interposer.deriv_op_params_wrt_model_params()
+            d_opp_wrt_p1 = d_opp_wrt_p if (wrt_filter1 is None) else smx(d_opp_wrt_p, ops_wrt_filter1, wrt_filter1)
+            d_opp_wrt_p2 = d_opp_wrt_p if (wrt_filter2 is None) else smx(d_opp_wrt_p, ops_wrt_filter2, wrt_filter2)
+            flattened_hprod = _np.einsum('ijk,jl,km->ilm', flattened_hprod, d_opp_wrt_p1, d_opp_wrt_p2)
+
+            #Update num_deriv_cols variabls (currently = # of op-params) to # of model params in each dimension
+            num_deriv_cols1 = self.model._param_interposer.num_params if (wrt_filter1 is None) else len(wrt_filter1)
+            num_deriv_cols2 = self.model._param_interposer.num_params if (wrt_filter2 is None) else len(wrt_filter2)
 
         if flat:
             return flattened_hprod
@@ -306,15 +351,18 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         #  columns of flattened_dprod.
         uniqueOpLabels = sorted(list(set(revOpLabelList)))
         for opLabel in uniqueOpLabels:
-            gate = self.model.circuit_layer_operator(opLabel, 'op')
-            op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
-            dop_dopLabel = gate.deriv_wrt_params(op_wrtFilter)
+            #REMOVE gate = self.model.circuit_layer_operator(opLabel, 'op')
+            #REMOVE op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
+            #REMOVE dop_dopLabel = gate.deriv_wrt_params(op_wrtFilter)
+            dop_dopLabel = self._doperation(opLabel, flat=True, wrt_filter=wrt_filter)  # (dim**2, num_deriv_cols)
 
             for (i, gl) in enumerate(revOpLabelList):
                 if gl != opLabel: continue  # loop over locations of opLabel
                 LRproduct = _np.kron(leftProds[i], rightProdsT[N - 1 - i])  # (dim**2, dim**2)
-                _fas(flattened_dprod, [None, gpindices],
-                     _np.dot(LRproduct, dop_dopLabel), add=True)  # (dim**2, n_params[opLabel])
+                flattened_dprod += _np.dot(LRproduct, dop_dopLabel)  # (dim**2, num_deriv_cols)
+                #REMOVE _fas(flattened_dprod, [None, gpindices],
+                #REMOVE      _np.dot(LRproduct, dop_dopLabel), add=True)  # (dim**2, n_params[opLabel])
+
 
         if flat:
             return flattened_dprod
@@ -570,260 +618,6 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
                     ps = _np.real(_np.dot(Es, _np.dot(G, rho)))
             array_to_fill[indices] = ps.flat
 
-    #REMOVE - but MOVE somewhere
-    #TODO: move _dpr and _hpr into a unit test?  They're not really needed here, as
-    # using the default finite differencing should be fine, and it's rare that we want
-    # the derivative of a single circuit anyway, so this is rarely used.
-    #def _dpr(self, spam_tuple, circuit, return_pr, clip_to):
-    #    """
-    #    Compute the derivative of the probability corresponding to `circuit` and `spam_tuple`.
-    #
-    #    Parameters
-    #    ----------
-    #    spam_tuple : (rho_label, simplified_effect_label)
-    #        Specifies the prep and POVM effect used to compute the probability.
-    #
-    #    circuit : Circuit or tuple
-    #        A tuple-like object of *simplified* gates (e.g. may include
-    #        instrument elements like 'Imyinst_0')
-    #
-    #    return_pr : bool
-    #        when set to True, additionally return the probability itself.
-    #
-    #    clip_to : 2-tuple
-    #        (min,max) to clip returned probability to if not None.
-    #        Only relevant when pr_mx_to_fill is not None.
-    #
-    #    Returns
-    #    -------
-    #    derivative : numpy array
-    #        a 1 x M numpy array of derivatives of the probability w.r.t.
-    #        each model parameter (M is the number of model parameters).
-    #
-    #    probability : float
-    #        only returned if return_pr == True.
-    #    """
-    #    if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
-    #    # To support unitary evolution we need to:
-    #    # - alter product, dproduct, etc. to allow for *complex* derivatives, since matrices can be complex
-    #    # - update probability-deriv. computations: dpr/dx -> d|pr|^2/dx = d(pr*pr.C)/dx = dpr/dx*pr.C + pr*dpr/dx.C
-    #    #    = 2 Re(dpr/dx*pr.C) , where dpr/dx is the usual density-matrix-mode probability
-    #    # (TODO in FUTURE)
-    #
-    #    #  pr = Tr( |rho><E| * prod ) = sum E_k prod_kl rho_l
-    #    #  dpr/d(op_label)_ij = sum E_k [dprod/d(op_label)_ij]_kl rho_l
-    #    #  dpr/d(rho)_i = sum E_k prod_ki
-    #    #  dpr/d(E)_i   = sum prod_il rho_l
-    #
-    #    rholabel, elabel = spam_tuple  # can't deal w/"custom" spam label...
-    #    rho, E = self._rho_e_from_spam_tuple(spam_tuple)
-    #    rhoVec = self.model.prep(rholabel)  # distinct from rho,E b/c rho,E are
-    #    EVec = self.model.effect(elabel)   # arrays, these are SPAMVecs
-    #
-    #    #Derivs wrt Gates
-    #    old_err = _np.seterr(over='ignore')
-    #    prod, scale = self.product(circuit, True)
-    #    dprod_dOps = self.dproduct(circuit)
-    #    dpr_dOps = _np.empty((1, self.model.num_params))
-    #    for i in range(self.model.num_params):
-    #        dpr_dOps[0, i] = float(_np.dot(E, _np.dot(dprod_dOps[i], rho)))
-    #
-    #    if return_pr:
-    #        p = _np.dot(E, _np.dot(prod, rho)) * scale  # may generate overflow, but OK
-    #        if clip_to is not None: p = _np.clip(p, clip_to[0], clip_to[1])
-    #
-    #    #Derivs wrt SPAM
-    #    derivWrtAnyRhovec = scale * _np.dot(E, prod)
-    #    dpr_drhos = _np.zeros((1, self.model.num_params))
-    #    _fas(dpr_drhos, [0, self.model.prep(rholabel).gpindices],
-    #         _np.dot(derivWrtAnyRhovec, rhoVec.deriv_wrt_params()))  # may overflow, but OK
-    #
-    #    dpr_dEs = _np.zeros((1, self.model.num_params))
-    #    derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod, rho))  # may overflow, but OK
-    #    # (** doesn't depend on eIndex **) -- TODO: should also conjugate() here if complex?
-    #    _fas(dpr_dEs, [0, EVec.gpindices],
-    #         _np.dot(derivWrtAnyEvec, EVec.deriv_wrt_params()))
-    #
-    #    _np.seterr(**old_err)
-    #
-    #    if return_pr:
-    #        return dpr_drhos + dpr_dEs + dpr_dOps, p
-    #    else: return dpr_drhos + dpr_dEs + dpr_dOps
-    #
-    #def _hpr(self, spam_tuple, circuit, return_pr, return_deriv, clip_to):
-    #    """
-    #    Compute the Hessian of the probability given by `circuit` and `spam_tuple`.
-    #
-    #    Parameters
-    #    ----------
-    #    spam_tuple : (rho_label, simplified_effect_label)
-    #        Specifies the prep and POVM effect used to compute the probability.
-    #
-    #    circuit : Circuit or tuple
-    #        A tuple-like object of *simplified* gates (e.g. may include
-    #        instrument elements like 'Imyinst_0')
-    #
-    #    return_pr : bool
-    #        when set to True, additionally return the probability itself.
-    #
-    #    return_deriv : bool
-    #        when set to True, additionally return the derivative of the
-    #        probability.
-    #
-    #    clip_to : 2-tuple
-    #        (min,max) to clip returned probability to if not None.
-    #        Only relevant when pr_mx_to_fill is not None.
-    #
-    #    Returns
-    #    -------
-    #    hessian : numpy array
-    #        a 1 x M x M array, where M is the number of model parameters.
-    #        hessian[0,j,k] is the derivative of the probability w.r.t. the
-    #        k-th then the j-th model parameter.
-    #
-    #    derivative : numpy array
-    #        only returned if return_deriv == True. A 1 x M numpy array of
-    #        derivatives of the probability w.r.t. each model parameter.
-    #
-    #    probability : float
-    #        only returned if return_pr == True.
-    #    """
-    #    if self.evotype == "statevec": raise NotImplementedError("Unitary evolution not fully supported yet!")
-    #
-    #    #  pr = Tr( |rho><E| * prod ) = sum E_k prod_kl rho_l
-    #    #  d2pr/d(opLabel1)_mn d(opLabel2)_ij = sum E_k [dprod/d(opLabel1)_mn d(opLabel2)_ij]_kl rho_l
-    #    #  d2pr/d(rho)_i d(op_label)_mn = sum E_k [dprod/d(op_label)_mn]_ki     (and same for other diff order)
-    #    #  d2pr/d(E)_i d(op_label)_mn   = sum [dprod/d(op_label)_mn]_il rho_l   (and same for other diff order)
-    #    #  d2pr/d(E)_i d(rho)_j          = prod_ij                                (and same for other diff order)
-    #    #  d2pr/d(E)_i d(E)_j            = 0
-    #    #  d2pr/d(rho)_i d(rho)_j        = 0
-    #
-    #    rholabel, elabel = spam_tuple
-    #    rho, E = self._rho_e_from_spam_tuple(spam_tuple)
-    #    rhoVec = self.model.prep(rholabel)  # distinct from rho,E b/c rho,E are
-    #    EVec = self.model.effect(elabel)   # arrays, these are SPAMVecs
-    #
-    #    d2prod_dGates = self.hproduct(circuit)
-    #    assert(d2prod_dGates.shape[0] == d2prod_dGates.shape[1])
-    #
-    #    d2pr_dOps2 = _np.empty((1, self.model.num_params, self.model.num_params))
-    #    for i in range(self.model.num_params):
-    #        for j in range(self.model.num_params):
-    #            d2pr_dOps2[0, i, j] = float(_np.dot(E, _np.dot(d2prod_dGates[i, j], rho)))
-    #
-    #    old_err = _np.seterr(over='ignore')
-    #
-    #    prod, scale = self.product(circuit, True)
-    #    if return_pr:
-    #        p = _np.dot(E, _np.dot(prod, rho)) * scale  # may generate overflow, but OK
-    #        if clip_to is not None: p = _np.clip(p, clip_to[0], clip_to[1])
-    #
-    #    dprod_dOps = self.dproduct(circuit)
-    #    assert(dprod_dOps.shape[0] == self.model.num_params)
-    #    if return_deriv:  # same as in dpr(...)
-    #        dpr_dOps = _np.empty((1, self.model.num_params))
-    #        for i in range(self.model.num_params):
-    #            dpr_dOps[0, i] = float(_np.dot(E, _np.dot(dprod_dOps[i], rho)))
-    #
-    #    #Derivs wrt SPAM
-    #    if return_deriv:  # same as in dpr(...)
-    #        dpr_drhos = _np.zeros((1, self.model.num_params))
-    #        derivWrtAnyRhovec = scale * _np.dot(E, prod)
-    #        _fas(dpr_drhos, [0, self.model.prep(rholabel).gpindices],
-    #             _np.dot(derivWrtAnyRhovec, rhoVec.deriv_wrt_params()))  # may overflow, but OK
-    #
-    #        dpr_dEs = _np.zeros((1, self.model.num_params))
-    #        derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod, rho))  # may overflow, but OK
-    #        _fas(dpr_dEs, [0, EVec.gpindices],
-    #             _np.dot(derivWrtAnyEvec, EVec.deriv_wrt_params()))
-    #
-    #        dpr = dpr_drhos + dpr_dEs + dpr_dOps
-    #
-    #    d2pr_drhos = _np.zeros((1, self.model.num_params, self.model.num_params))
-    #    _fas(d2pr_drhos, [0, None, self.model.prep(rholabel).gpindices],
-    #         _np.dot(_np.dot(E, dprod_dOps), rhoVec.deriv_wrt_params())[0])  # (= [0,:,:])
-    #
-    #    d2pr_dEs = _np.zeros((1, self.model.num_params, self.model.num_params))
-    #    derivWrtAnyEvec = _np.squeeze(_np.dot(dprod_dOps, rho), axis=(2,))
-    #    _fas(d2pr_dEs, [0, None, EVec.gpindices],
-    #         _np.dot(derivWrtAnyEvec, EVec.deriv_wrt_params()))
-    #
-    #    d2pr_dErhos = _np.zeros((1, self.model.num_params, self.model.num_params))
-    #    derivWrtAnyEvec = scale * _np.dot(prod, rhoVec.deriv_wrt_params())  # may generate overflow, but OK
-    #    _fas(d2pr_dErhos, [0, EVec.gpindices, self.model.prep(rholabel).gpindices],
-    #         _np.dot(_np.transpose(EVec.deriv_wrt_params()), derivWrtAnyEvec))
-    #
-    #    #Note: these 2nd derivatives are non-zero when the spam vectors have
-    #    # a more than linear dependence on their parameters.
-    #    if self.model.prep(rholabel).has_nonzero_hessian():
-    #        derivWrtAnyRhovec = scale * _np.dot(E, prod)  # may overflow, but OK
-    #        d2pr_d2rhos = _np.zeros((1, self.model.num_params, self.model.num_params))
-    #        _fas(d2pr_d2rhos, [0, self.model.prep(rholabel).gpindices, self.model.prep(rholabel).gpindices],
-    #             _np.tensordot(derivWrtAnyRhovec, self.model.prep(rholabel).hessian_wrt_params(), (1, 0)))
-    #        # _np.einsum('ij,jkl->ikl', derivWrtAnyRhovec, self.model.prep(rholabel).hessian_wrt_params())
-    #    else:
-    #        d2pr_d2rhos = 0
-    #
-    #    if self.model.effect(elabel).has_nonzero_hessian():
-    #        derivWrtAnyEvec = scale * _np.transpose(_np.dot(prod, rho))  # may overflow, but OK
-    #        d2pr_d2Es = _np.zeros((1, self.model.num_params, self.model.num_params))
-    #        _fas(d2pr_d2Es, [0, self.model.effect(elabel).gpindices, self.model.effect(elabel).gpindices],
-    #             _np.tensordot(derivWrtAnyEvec, self.model.effect(elabel).hessian_wrt_params(), (1, 0)))
-    #        # _np.einsum('ij,jkl->ikl',derivWrtAnyEvec,self.model.effect(elabel).hessian_wrt_params())
-    #    else:
-    #        d2pr_d2Es = 0
-    #
-    #    ret = d2pr_dErhos + _np.transpose(d2pr_dErhos, (0, 2, 1)) + \
-    #        d2pr_drhos + _np.transpose(d2pr_drhos, (0, 2, 1)) + \
-    #        d2pr_dEs + _np.transpose(d2pr_dEs, (0, 2, 1)) + \
-    #        d2pr_d2rhos + d2pr_d2Es + d2pr_dOps2
-    #    # Note: add transposes b/c spam terms only compute one triangle of hessian
-    #    # Note: d2pr_d2rhos and d2pr_d2Es terms are always zero
-    #
-    #    _np.seterr(**old_err)
-    #
-    #    if return_deriv:
-    #        if return_pr: return ret, dpr, p
-    #        else: return ret, dpr
-    #    else:
-    #        if return_pr: return ret, p
-    #        else: return ret
-    #def _check(self, eval_tree, pr_mx_to_fill=None, d_pr_mx_to_fill=None, h_pr_mx_to_fill=None, clip_to=None):
-    #    # compare with older slower version that should do the same thing (for debugging)
-    #    master_circuit_list = eval_tree.compute_circuits(permute=False)  # raw circuits
-    #
-    #    for spamTuple, (fInds, gInds) in eval_tree.spamtuple_indices.items():
-    #        circuit_list = master_circuit_list[gInds]
-    #
-    #        if pr_mx_to_fill is not None:
-    #            check_vp = _np.array([self._prs(spamTuple[0], [spamTuple[1]], circuit, clip_to, False)[0]
-    #                                  for circuit in circuit_list])
-    #            if _nla.norm(pr_mx_to_fill[fInds] - check_vp) > 1e-6:
-    #                _warnings.warn("norm(vp-check_vp) = %g - %g = %g" %
-    #                               (_nla.norm(pr_mx_to_fill[fInds]),
-    #                                _nla.norm(check_vp),
-    #                                _nla.norm(pr_mx_to_fill[fInds] - check_vp)))  # pragma: no cover
-    #
-    #        if d_pr_mx_to_fill is not None:
-    #            check_vdp = _np.concatenate(
-    #                [self._dpr(spamTuple, circuit, False, clip_to)
-    #                 for circuit in circuit_list], axis=0)
-    #            if _nla.norm(d_pr_mx_to_fill[fInds] - check_vdp) > 1e-6:
-    #                _warnings.warn("norm(vdp-check_vdp) = %g - %g = %g" %
-    #                               (_nla.norm(d_pr_mx_to_fill[fInds]),
-    #                                _nla.norm(check_vdp),
-    #                                _nla.norm(d_pr_mx_to_fill[fInds] - check_vdp)))  # pragma: no cover
-    #
-    #        if h_pr_mx_to_fill is not None:
-    #            check_vhp = _np.concatenate(
-    #                [self._hpr(spamTuple, circuit, False, False, clip_to)
-    #                 for circuit in circuit_list], axis=0)
-    #            if _nla.norm(h_pr_mx_to_fill[fInds][0] - check_vhp[0]) > 1e-6:
-    #                _warnings.warn("norm(vhp-check_vhp) = %g - %g = %g" %
-    #                               (_nla.norm(h_pr_mx_to_fill[fInds]),
-    #                                _nla.norm(check_vhp),
-    #                                _nla.norm(h_pr_mx_to_fill[fInds] - check_vhp)))  # pragma: no cover
-
 
 class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForwardSimulator):
     """
@@ -896,6 +690,18 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                  param_blk_sizes=None):
         super().__init__(model, num_atoms, processor_grid, param_blk_sizes)
         self._mode = "distribute_by_timestamp" if distribute_by_timestamp else "time_independent"
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'mode': self._mode,
+                      # (don't serialize parent model or processor distribution info)
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        #Note: resets processor-distribution information
+        return cls(None, state['mode'] == "distribute_by_timestamp")
 
     def copy(self):
         """
@@ -1277,8 +1083,6 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                 raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
             printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
 
-        if not hasattr(self, '_mode'): self._mode = 'time_independent'  # HACK for backward compatibility (REMOVE?)
-
         natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
             array_types, nprocs, num_params, len(circuits), default_natoms=1)
 
@@ -1328,10 +1132,12 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             #                                  (num_params, num_params), (num_params / np1, num_params / np2),
             #                                  approx_cachesize, self.model.state_space.dim)
 
+            GB = 1.0 / 1024.0**3
             if mem_estimate > mem_limit:
-                GB = 1.0 / 1024.0**3
-                raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB" % (
+                raise MemoryError("Not enough memory for desired layout! (limit=%.1fGB, required=%.1fGB)" % (
                     mem_limit * GB, mem_estimate * GB))
+            else:
+                printer.log("   Esimated memory required = %.1fGB" % (mem_estimate * GB))
 
         return layout
 
@@ -1368,10 +1174,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         rhoVec = self.model.circuit_layer_operator(rholabel, 'prep')  # distinct from rho,e b/c rho,e are
         EVec = self.model.circuit_layer_operator(elabel, 'povm')   # arrays, these are State/POVMEffect objects
         nCircuits = gs.shape[0]
-        rho_wrtFilter, rho_gpindices = self._process_wrt_filter(
-            wrt_slice, self.model.circuit_layer_operator(rholabel, 'prep'))
-        E_wrtFilter, E_gpindices = self._process_wrt_filter(
-            wrt_slice, self.model.circuit_layer_operator(elabel, 'povm'))
+
         nDerivCols = self.model.num_params if wrt_slice is None else _slct.length(wrt_slice)
 
         # GATE DERIVS (assume d_gs is already sized/filtered) -------------------
@@ -1393,28 +1196,55 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         #SPAM -------------
 
-        # Get: dp_drhos[i, rho_gpindices] = dot(e,gs[i],drho/drhoP)
-        # dp_drhos[i,J0+J] = sum_kl e[0,k] gs[i,k,l] drhoP[l,J]
-        # dp_drhos[i,J0+J] = dot(e, gs, drhoP)[0,i,J]
-        # dp_drhos[:,J0+J] = squeeze(dot(e, gs, drhoP),axis=(0,))[:,J]
+        if self.model._param_interposer is not None:
+            #When there is an interposer, we compute derivs wrt *all* the ops params (inefficient?),
+            # then apply interposer, then take desired wrt_filter columns:
+            nOpDerivCols = self.model._param_interposer.num_op_params
 
-        dp_drhos = _np.zeros((nCircuits, nDerivCols))
-        _fas(dp_drhos, [None, rho_gpindices],
-             _np.squeeze(_np.dot(_np.dot(e, gs),
-                                 rhoVec.deriv_wrt_params(rho_wrtFilter)),
-                         axis=(0,)) * scale_vals[:, None])  # may overflow, but OK
+            dp_drhos = _np.zeros((nCircuits, nOpDerivCols))
+            _fas(dp_drhos, [None, rhoVec.gpindices],
+                 _np.squeeze(_np.dot(_np.dot(e, gs), rhoVec.deriv_wrt_params()),  # *don't* apply wrt filter here
+                             axis=(0,)) * scale_vals[:, None])  # may overflow, but OK
+            dp_drhos = _np.dot(dp_drhos, self.model._param_interposer.deriv_op_params_wrt_model_params())
+            if wrt_slice is not None: dp_drhos = dp_drhos[:, wrt_slice]
 
-        # Get: dp_dEs[i, E_gpindices] = dot(transpose(dE/dEP),gs[i],rho))
-        # dp_dEs[i,J0+J] = sum_lj dEPT[J,j] gs[i,j,l] rho[l,0]
-        # dp_dEs[i,J0+J] = sum_j dEP[j,J] dot(gs, rho)[i,j]
-        # dp_dEs[i,J0+J] = sum_j dot(gs, rho)[i,j,0] dEP[j,J]
-        # dp_dEs[i,J0+J] = dot(squeeze(dot(gs, rho),2), dEP)[i,J]
-        # dp_dEs[:,J0+J] = dot(squeeze(dot(gs, rho),axis=(2,)), dEP)[:,J]
-        dp_dEs = _np.zeros((nCircuits, nDerivCols))
-        # may overflow, but OK (deriv w.r.t any of self.effects - independent of which)
-        dp_dAnyE = _np.squeeze(_np.dot(gs, rho), axis=(2,)) * scale_vals[:, None]
-        _fas(dp_dEs, [None, E_gpindices],
-             _np.dot(dp_dAnyE, EVec.deriv_wrt_params(E_wrtFilter)))
+            dp_dEs = _np.zeros((nCircuits, nOpDerivCols))
+            dp_dAnyE = _np.squeeze(_np.dot(gs, rho), axis=(2,)) * scale_vals[:, None]
+            _fas(dp_dEs, [None, EVec.gpindices], _np.dot(dp_dAnyE, EVec.deriv_wrt_params()))
+            dp_dEs = _np.dot(dp_dEs, self.model._param_interposer.deriv_op_params_wrt_model_params())
+            if wrt_slice is not None: dp_dEs = dp_dEs[:, wrt_slice]
+
+        else:
+            #Simpler case of no interposer
+            nOpDerivCols = nDerivCols
+
+            rho_wrtFilter, rho_gpindices = self._process_wrt_filter(
+                wrt_slice, self.model.circuit_layer_operator(rholabel, 'prep'))
+            E_wrtFilter, E_gpindices = self._process_wrt_filter(
+                wrt_slice, self.model.circuit_layer_operator(elabel, 'povm'))
+
+            # Get: dp_drhos[i, rho_gpindices] = dot(e,gs[i],drho/drhoP)
+            # dp_drhos[i,J0+J] = sum_kl e[0,k] gs[i,k,l] drhoP[l,J]
+            # dp_drhos[i,J0+J] = dot(e, gs, drhoP)[0,i,J]
+            # dp_drhos[:,J0+J] = squeeze(dot(e, gs, drhoP),axis=(0,))[:,J]
+
+            dp_drhos = _np.zeros((nCircuits, nOpDerivCols))
+            _fas(dp_drhos, [None, rho_gpindices],
+                 _np.squeeze(_np.dot(_np.dot(e, gs),
+                                     rhoVec.deriv_wrt_params(rho_wrtFilter)),
+                             axis=(0,)) * scale_vals[:, None])  # may overflow, but OK
+
+            # Get: dp_dEs[i, E_gpindices] = dot(transpose(dE/dEP),gs[i],rho))
+            # dp_dEs[i,J0+J] = sum_lj dEPT[J,j] gs[i,j,l] rho[l,0]
+            # dp_dEs[i,J0+J] = sum_j dEP[j,J] dot(gs, rho)[i,j]
+            # dp_dEs[i,J0+J] = sum_j dot(gs, rho)[i,j,0] dEP[j,J]
+            # dp_dEs[i,J0+J] = dot(squeeze(dot(gs, rho),2), dEP)[i,J]
+            # dp_dEs[:,J0+J] = dot(squeeze(dot(gs, rho),axis=(2,)), dEP)[:,J]
+            dp_dEs = _np.zeros((nCircuits, nOpDerivCols))
+            # may overflow, but OK (deriv w.r.t any of self.effects - independent of which)
+            dp_dAnyE = _np.squeeze(_np.dot(gs, rho), axis=(2,)) * scale_vals[:, None]
+            _fas(dp_dEs, [None, E_gpindices],
+                 _np.dot(dp_dAnyE, EVec.deriv_wrt_params(E_wrtFilter)))
 
         sub_vdp = dp_drhos + dp_dEs + dp_dOps
         return sub_vdp

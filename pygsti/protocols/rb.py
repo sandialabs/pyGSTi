@@ -245,6 +245,31 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
                 defaultfit = 'full'
             self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
 
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        CliffordRBDesign
+        """
+        mapped_circuits_and_idealouts_by_depth = self._mapped_circuits_and_idealouts_by_depth(mapper)
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        if self.interleaved_circuit is not None:
+            raise NotImplementedError("TODO: figure out whether `interleaved_circuit` needs to be mapped!")
+        return CliffordRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
+                                                       mapped_qubit_labels,
+                                                       self.randomizeout, self.citerations, self.compilerargs,
+                                                       self.interleaved_circuit, self.descriptor,
+                                                       add_default_protocol=False)
+
 
 class DirectRBDesign(_vb.BenchmarkingDesign):
     """
@@ -518,6 +543,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
                                 citerations=citerations, compilerargs=compilerargs,
                                 partitioned=partitioned,
                                 seed=lseed + i) for i in range(circuits_per_depth)]
+            #results = [_rc.create_direct_rb_circuit(*(args_list[0]), **(kwargs_list[0]))]  # num_processes == 1 case
             results = _tools.mptools.starmap_with_kwargs(_rc.create_direct_rb_circuit, circuits_per_depth,
                                                          num_processes, args_list, kwargs_list)
 
@@ -562,6 +588,30 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
             else:
                 defaultfit = 'full'
             self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        DirectRBDesign
+        """
+        mapped_circuits_and_idealouts_by_depth = self._mapped_circuits_and_idealouts_by_depth(mapper)
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return DirectRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
+                                                     mapped_qubit_labels,
+                                                     self.sampler, self.samplerargs, self.addlocal,
+                                                     self.lsargs, self.randomizeout, self.cliffordtwirl,
+                                                     self.conditionaltwirl, self.citerations, self.compilerargs,
+                                                     self.partitioned, self.descriptor, add_default_protocol=False)
 
 
 class MirrorRBDesign(_vb.BenchmarkingDesign):
@@ -674,7 +724,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
             of `(circuit, ideal_outcome)` 2-tuples giving each RB circuit and its
             ideal (correct) outcome.
 
-        
+
         See init docstring for details on all other parameters.
 
         Returns
@@ -713,7 +763,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
 
             # future: port the starmap functionality to the non-clifford case and merge the two methods
-            # by just callling `create_mirror_rb_circuit` but with a different argument.   
+            # by just callling `create_mirror_rb_circuit` but with a different argument.
             if circuit_type == 'clifford':
                 args_list = [(pspec, clifford_compilations['absolute'], l)] * circuits_per_depth
                 kwargs_list = [dict(qubit_labels=qubit_labels, sampler=sampler,
@@ -723,7 +773,8 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                 results = _tools.mptools.starmap_with_kwargs(_rc.create_mirror_rb_circuit, circuits_per_depth,
                                                              num_processes, args_list, kwargs_list)
 
-            elif circuit_type in ('cz+zxzxz-clifford', 'clifford+zxzxz-haar', 'cz(theta)+zxzxz-haar'):
+            elif circuit_type in ('cz+zxzxz-clifford', 'clifford+zxzxz-haar', 'clifford+zxzxz-clifford',
+                                  'cz(theta)+zxzxz-haar'):
                 assert(sampler == 'edgegrab'), "Unless circuit_type = 'clifford' the only valid sampler is 'edgegrab'."
                 two_q_gate_density = samplerargs[0]
                 if len(samplerargs) >= 2:
@@ -732,11 +783,19 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
                     # Default sampler arguments.
                     two_q_gate_args_lists = {'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}
 
-                circs = [_rc.sample_random_cz_zxzxz_circuit(pspec, l // 2, qubit_labels=qubit_labels, two_q_gate_density=two_q_gate_density,
-                                                            two_q_gate_args_lists=two_q_gate_args_lists) for _ in range(circuits_per_depth)]
+                one_q_gate_type = circuit_type.split('-')[-1]
+
+                circs = [_rc.sample_random_cz_zxzxz_circuit(pspec, l // 2, qubit_labels=qubit_labels,
+                                                            two_q_gate_density=two_q_gate_density,
+                                                            one_q_gate_type=one_q_gate_type,
+                                                            two_q_gate_args_lists=two_q_gate_args_lists)
+                         for _ in range(circuits_per_depth)]
 
                 mirroring_type = circuit_type.split('-')[0]
-                results = [(a, [b]) for a, b in [_mirroring.create_mirror_circuit(c, pspec, circ_type=mirroring_type) for c in circs]]
+                if mirroring_type == 'cz+zxzxz':
+                    mirroring_type = 'clifford+zxzxz'
+                results = [(a, [b]) for a, b in [_mirroring.create_mirror_circuit(c, pspec, circ_type=mirroring_type)
+                                                 for c in circs]]
 
             else:
                 raise ValueError('Invalid option for `circuit_type`!')
@@ -752,11 +811,11 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                               circuit_type, sampler, samplerargs, localclifford, paulirandomize, descriptor,
-                              add_default_protocol)
+                              add_default_protocol, seed=seed)
 
     def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                          circuit_type, sampler, samplerargs, localclifford, paulirandomize, descriptor,
-                         add_default_protocol):
+                         add_default_protocol, seed=None):
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.descriptor = descriptor
@@ -765,9 +824,34 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         self.samplerargs = samplerargs
         self.localclifford = localclifford
         self.paulirandomize = paulirandomize
+        self.seed = seed
 
         if add_default_protocol:
             self.add_default_protocol(RB(name='RB', datatype='adjusted_success_probabilities', defaultfit='A-fixed'))
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        MirrorRBDesign
+        """
+        mapped_circuits_and_idealouts_by_depth = self._mapped_circuits_and_idealouts_by_depth(mapper)
+        mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        return DirectRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
+                                                     mapped_qubit_labels,
+                                                     self.circuit_type, self.sampler,
+                                                     self.samplerargs, self.localclifford,
+                                                     self.paulirandomize, self.descriptor,
+                                                     add_default_protocol=False)
 
 
 class RandomizedBenchmarking(_vb.SummaryStatistics):
@@ -929,7 +1013,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             else:
                 raise ValueError("No 'std' asymptote for %s datatype!" % self.asymptote)
 
-        def get_rb_fits(circuitdata_per_depth):
+        def _get_rb_fits(circuitdata_per_depth):
             adj_sps = []
             for depth in depths:
                 percircuitdata = circuitdata_per_depth[depth]
@@ -950,7 +1034,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             return full_fit_results, fixed_asym_fit_results
 
         #do RB fit on actual data
-        ff_results, faf_results = get_rb_fits(data_per_depth)
+        ff_results, faf_results = _get_rb_fits(data_per_depth)
 
         if self.bootstrap_samples > 0:
 
@@ -967,7 +1051,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             bootstrap_caches = data.cache['bootstraps']  # if finitecounts else 'infbootstraps'
 
             for bootstrap_cache in bootstrap_caches:
-                bs_ff_results, bs_faf_results = get_rb_fits(bootstrap_cache[self.datatype])
+                bs_ff_results, bs_faf_results = _get_rb_fits(bootstrap_cache[self.datatype])
 
                 if bs_ff_results['success']:
                     for p in parameters:
@@ -1042,7 +1126,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         self.rtype = protocol_instance.rtype  # replicated for convenience?
         self.fits = fits
         self.defaultfit = defaultfit
-        self.auxfile_types['fits'] = 'pickle'  # b/c NamedDict don't json
+        self.auxfile_types['fits'] = 'dict:serialized-object'  # b/c NamedDict don't json
 
     def plot(self, fitkey=None, decay=True, success_probabilities=True, size=(8, 5), ylim=None, xlim=None,
              legend=True, title=None, figpath=None):
@@ -1140,6 +1224,19 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         else: _plt.show()
 
         return
+
+    def copy(self):
+        """
+        Creates a copy of this :class:`RandomizedBenchmarkingResults` object.
+
+        Returns
+        -------
+        RandomizedBenchmarkingResults
+        """
+        #TODO: check whether this deep copies (if we want it to...) - I expect it doesn't currently
+        data = _proto.ProtocolData(self.data.edesign, self.data.dataset)
+        cpy = RandomizedBenchmarkingResults(data, self.protocol, self.fits, self.depths, self.defaultfit)
+        return cpy
 
 
 RB = RandomizedBenchmarking

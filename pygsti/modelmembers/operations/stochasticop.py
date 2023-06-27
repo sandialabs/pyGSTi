@@ -13,6 +13,7 @@ The StochasticNoiseOp class and supporting functionality.
 import numpy as _np
 
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.modelmembers.operations.krausop import KrausOperatorInterface as _KrausOperatorInterface
 from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.baseobjs import statespace as _statespace
@@ -20,7 +21,7 @@ from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 
 
-class StochasticNoiseOp(_LinearOperator):
+class StochasticNoiseOp(_LinearOperator, _KrausOperatorInterface):
     """
     A stochastic noise operation.
 
@@ -58,7 +59,8 @@ class StochasticNoiseOp(_LinearOperator):
     # Difficult to parameterize and maintain the p_i conditions - Initially just store positive p_i's
     # and don't bother restricting their sum to be < 1?
 
-    def __init__(self, state_space, basis="pp", evotype="default", initial_rates=None, seed_or_state=None):
+    def __init__(self, state_space, stochastic_basis='PP', basis="pp", evotype="default",
+                 initial_rates=None, seed_or_state=None):
         state_space = _statespace.StateSpace.cast(state_space)
         self.basis = _Basis.cast(basis, state_space.dim, sparse=False)
         assert(state_space.dim == self.basis.dim), "Dimension of `basis` must match the dimension (`dim`) of this op."
@@ -75,7 +77,9 @@ class StochasticNoiseOp(_LinearOperator):
         else:
             rates = _np.zeros(len(self.params), 'd')
 
-        rep = evotype.create_stochastic_rep(self.basis, self._get_rate_poly_dicts(), rates, seed_or_state, state_space)
+        #self._get_rate_poly_dicts()
+        self.stochastic_basis = _Basis.cast(stochastic_basis, state_space.dim, sparse=False)
+        rep = evotype.create_stochastic_rep(self.stochastic_basis, self.basis, rates, seed_or_state, state_space)
         _LinearOperator.__init__(self, rep, evotype)
         self._update_rep()  # initialize self._rep
         self._paramlbls = _np.array(['sqrt(%s error rate)' % bl for bl in self.basis.labels[1:]], dtype=object)
@@ -96,26 +100,6 @@ class StochasticNoiseOp(_LinearOperator):
             keys of dicts <=> poly terms, e.g. (1,1) <=> x1^2) """
         return [{(i, i): 1.0} for i in range(self.basis.size - 1)]  # rates are just parameters squared
 
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        StochasticNoiseOp
-            A copy of this object.
-        """
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        copyOfMe = StochasticNoiseOp(self.state_space, self.basis, self._evotype,
-                                     self._params_to_rates(self.to_vector()))
-        return self._copy_gpindices(copyOfMe, parent, memo)
-
-    #to_dense / to_sparse?
     def to_dense(self, on_space='minimal'):
         """
         Return this operation as a dense matrix.
@@ -303,8 +287,74 @@ class StochasticNoiseOp(_LinearOperator):
 
     #Transform functions? (for gauge opt)
 
+    @property
+    def kraus_operators(self):
+        """A list of this operation's Kraus operators as numpy arrays."""
+        kraus_ops = [_np.sqrt(urate) * urep.to_dense('Hilbert')
+                     for urate, urep in zip(self._rep.unitary_rates, self._rep.unitary_reps)]
+        return kraus_ops
+
+    def set_kraus_operators(self, kraus_operators):
+        """
+        Set the parameters of this operation by specifying its Kraus operators.
+
+        Parameters
+        ----------
+        kraus_operators : list
+            A list of numpy arrays, each of which specifies a Kraus operator.
+
+        Returns
+        -------
+        None
+        """
+        raise ValueError(("The Kraus operators are set and fixed at the construction of a StochasticNoiseOp.  "
+                          "You cannot change them now."))
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+
+        mm_dict['basis'] = self.basis.to_nice_serialization()
+        mm_dict['stochastic_basis'] = self.stochastic_basis.to_nice_serialization()
+        mm_dict['rates'] = self._params_to_rates(self.to_vector()).tolist()
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        basis = _Basis.from_nice_serialization(mm_dict['basis'])
+        stochastic_basis = _Basis.from_nice_serialization(mm_dict['stochastic_basis'])
+        return cls(state_space, stochastic_basis, basis, mm_dict['evotype'], mm_dict['rates'], seed_or_state=None)
+        # Note: we currently don't serialize random seed/state - that gets reset w/serialization
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (self.basis == other.basis and self.state_space == other.state_space)
+
     def __str__(self):
         s = "Stochastic noise operation map with state space = %s, num params = %d\n" % \
             (self.state_space, self.num_params)
         s += 'Rates: %s\n' % self._params_to_rates(self.to_vector())
         return s
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return 'rates: %s' % self._params_to_rates(self.to_vector())

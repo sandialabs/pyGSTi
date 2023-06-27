@@ -11,6 +11,8 @@ Defines the UnconstrainedPOVM class
 #***************************************************************************************************
 
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
+from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
 class UnconstrainedPOVM(_BasePOVM):
@@ -33,11 +35,13 @@ class UnconstrainedPOVM(_BasePOVM):
         an error is raised.
     """
 
-    def __init__(self, effects, evotype=None, state_space=None):
-        super(UnconstrainedPOVM, self).__init__(effects, evotype, state_space, preserve_sum=False)
+    def __init__(self, effects, evotype=None, state_space=None, called_from_reduce=False):
+        super(UnconstrainedPOVM, self).__init__(effects, evotype, state_space, preserve_sum=False,
+                                                called_from_reduce=called_from_reduce)
 
     def __reduce__(self):
         """ Needed for OrderedDict-derived classes (to set dict items) """
         assert(self.complement_label is None)
         effects = [(lbl, effect.copy()) for lbl, effect in self.items()]
-        return (UnconstrainedPOVM, (effects, self.evotype, self.state_space), {'_gpindices': self._gpindices})
+        return (UnconstrainedPOVM, (effects, self.evotype, self.state_space, True),
+                {'_gpindices': self._gpindices, '_submember_rpindices': self._submember_rpindices})

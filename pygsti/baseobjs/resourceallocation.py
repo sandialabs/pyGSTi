@@ -318,15 +318,32 @@ class ResourceAllocation(object):
             result[slice_of_global] = local
         else:
             if all_gather:
+                #OLD: gathered_data = gather_comm.allgather(local)  # could change this to Allgatherv (?)
                 slices = gather_comm.allgather(slice_of_global if participating else None)
-                gathered_data = gather_comm.allgather(local)  # could change this to Allgather (?)
+                shapes = gather_comm.allgather(local.shape if participating else (0,))
+                sizes = [_np.product(shape) for shape in shapes]
+                gathered_data = _np.empty(sum(sizes), dtype=local.dtype)
+                gather_comm.Allgatherv(local.flatten() if participating
+                                       else _np.empty(0, dtype=local.dtype), (gathered_data, sizes))
             else:
+                #OLD: gathered_data = gather_comm.gather(local, root=0)  # could change this to Gatherv (?)
+                shapes = gather_comm.gather(local.shape if participating else (0,), root=0)
                 slices = gather_comm.gather(slice_of_global if participating else None, root=0)
-                gathered_data = gather_comm.gather(local, root=0)  # could change this to Gather (?)
+
+                if gather_comm.rank == 0:
+                    sizes = [_np.product(shape) for shape in shapes]
+                    gathered_data = _np.empty(sum(sizes), dtype=local.dtype)
+                    recvbuf = (gathered_data, sizes)
+                else:
+                    sizes = gathered_data = recvbuf = None
+                gather_comm.Gatherv(local.flatten() if participating
+                                    else _np.empty(0, dtype=local.dtype), recvbuf, root=0)
 
             if gather_comm.rank == 0 or all_gather:
-                for slc_or_indx_array, data in zip(slices, gathered_data):
+                offset = 0
+                for slc_or_indx_array, shape, size in zip(slices, shapes, sizes):
                     if slc_or_indx_array is None: continue  # signals a non-unit-leader proc that shouldn't do anything
+                    data = gathered_data[offset:offset + size]; offset += size; data.shape = shape
                     result[slc_or_indx_array] = data
 
         self.comm.barrier()  # make sure result is completely filled before returniing
@@ -458,7 +475,8 @@ class ResourceAllocation(object):
         -------
         None
         """
-        from mpi4py import MPI
+        if self.comm is not None:
+            from mpi4py import MPI
         participating_local = local if (unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0) \
             else _np.zeros(local.shape, local.dtype)
         if self.host_comm is not None and self.host_comm.size > 1:
@@ -512,8 +530,10 @@ class ResourceAllocation(object):
         float or int
             The sum of all `local` quantities, returned on all the processors.
         """
-        from mpi4py import MPI
-        if self.comm is None: return local
+        if self.comm is None:
+            return local
+        else:
+            from mpi4py import MPI
 
         participating = bool(unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0)
         if hasattr(local, 'shape'):
@@ -558,7 +578,8 @@ class ResourceAllocation(object):
         -------
         None
         """
-        from mpi4py import MPI
+        if self.comm is not None:
+            from mpi4py import MPI
         participating = unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0
 
         if self.host_comm is not None:
@@ -615,7 +636,8 @@ class ResourceAllocation(object):
         -------
         None
         """
-        from mpi4py import MPI
+        if self.comm is not None:
+            from mpi4py import MPI
         participating = unit_ralloc is None or unit_ralloc.comm is None or unit_ralloc.comm.rank == 0
 
         if self.host_comm is not None:

@@ -2,6 +2,6 @@
 numpy
 scipy
 plotly
-ply
+pandas
 numpydoc
 sphinx>=2.1

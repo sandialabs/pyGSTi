@@ -19,6 +19,7 @@ from pygsti.models.stencillabel import StencilLabel as _StencilLabel
 from pygsti.tools import listtools as _lt
 from pygsti.tools import optools as _ot
 from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
 from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis
 from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
@@ -90,8 +91,8 @@ class OpModelNoise(ModelNoise):
         Create an "error generator stencil" for the noise corresponding to an operation label.
 
         A stencil is one or more operator objects that have yet to be embedded on their
-        final qubits and then composed.  The embedding and composing step is done later
-        so that, if desired, the same errors can be used on multiple sets of target qubits
+        final qudits and then composed.  The embedding and composing step is done later
+        so that, if desired, the same errors can be used on multiple sets of target qudits
         (often this is done when a "independent" argument to a model-creation function is
         `False`).  An "error generator stencil" is a stencil whose operators are error
         generators, rather than error maps.
@@ -129,7 +130,7 @@ class OpModelNoise(ModelNoise):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def apply_errorgen_stencil(self, stencil, evotype, state_space, target_labels=None, qubit_graph=None, copy=False):
+    def apply_errorgen_stencil(self, stencil, evotype, state_space, target_labels=None, qudit_graph=None, copy=False):
         """
         Apply an error-generator stencil created by this object to a specific set of target labels.
 
@@ -151,13 +152,13 @@ class OpModelNoise(ModelNoise):
             be the total state space of the model that these noise operations will be inserted into.
 
         target_labels : tuple or None, optional
-            The target labels that determine where on the qubit graph this stencil will be placed.  When a
+            The target labels that determine where on the qudit graph this stencil will be placed.  When a
             tuple, it should have length equal to the `num_target_labels` argument passed to
             :method:`create_errorgen_stencil`.  `None` indicates that the entire space is the "target"
             space of the stencil (e.g. a global idle, preparation, or measurement).
 
-        qubit_graph : QubitGraph, optional
-            The relevant qubit graph, usually from a processor specification, that contains adjacency and
+        qudit_graph : QubitGraph, optional
+            The relevant qudit graph, usually from a processor specification, that contains adjacency and
             direction information used to resolve stencil state space labels into absolute labels within
             `state_space`.  If `None`, then an error will be raised if any direction or connectivity information
             is needed to resolve the state space labels.
@@ -173,7 +174,7 @@ class OpModelNoise(ModelNoise):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def create_errorgen(self, opkey, evotype, state_space, target_labels=None, qubit_graph=None):
+    def create_errorgen(self, opkey, evotype, state_space, target_labels=None, qudit_graph=None):
         """
         Create an error generator object to implement the noise on a given model operation.
 
@@ -193,8 +194,8 @@ class OpModelNoise(ModelNoise):
             is also contained in `opkey`, but not always, so it must be supplied
             as a separate argument.
 
-        qubit_graph : QubitGraph, optional
-            The relevant qubit graph, usually from a processor specification, that contains adjacency and
+        qudit_graph : QubitGraph, optional
+            The relevant qudit graph, usually from a processor specification, that contains adjacency and
             direction information used to create more complex types of errors.  If `None`, then an error
             will be raised if graph information is needed.
 
@@ -204,15 +205,15 @@ class OpModelNoise(ModelNoise):
         """
         stencil = self.create_errorgen_stencil(opkey, evotype, state_space,
                                                len(target_labels) if (target_labels is not None) else None)
-        return self.apply_errorgen_stencil(stencil, evotype, state_space, target_labels, qubit_graph)
+        return self.apply_errorgen_stencil(stencil, evotype, state_space, target_labels, qudit_graph)
 
     def create_errormap_stencil(self, opkey, evotype, state_space, num_target_labels=None):
         """
         Create an "error map stencil" for the noise corresponding to an operation label.
 
         A stencil is one or more operator objects that have yet to be embedded on their
-        final qubits and then composed.  The embedding and composing step is done later
-        so that, if desired, the same errors can be used on multiple sets of target qubits
+        final qudits and then composed.  The embedding and composing step is done later
+        so that, if desired, the same errors can be used on multiple sets of target qudits
         (often this is done when a "independent" argument to a model-creation function is
         `False`).  An "error map stencil" is a stencil whose operators are error maps
          rather than error generators.
@@ -250,7 +251,7 @@ class OpModelNoise(ModelNoise):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def apply_errormap_stencil(self, stencil, evotype, state_space, target_labels=None, qubit_graph=None, copy=False):
+    def apply_errormap_stencil(self, stencil, evotype, state_space, target_labels=None, qudit_graph=None, copy=False):
         """
         Apply an error-map stencil created by this object to a specific set of target labels.
 
@@ -272,13 +273,13 @@ class OpModelNoise(ModelNoise):
             be the total state space of the model that these noise operations will be inserted into.
 
         target_labels : tuple or None, optional
-            The target labels that determine where on the qubit graph this stencil will be placed.  When a
+            The target labels that determine where on the qudit graph this stencil will be placed.  When a
             tuple, it should have length equal to the `num_target_labels` argument passed to
             :method:`create_errormap_stencil`.  `None` indicates that the entire space is the "target"
             space of the stencil (e.g. a global idle, preparation, or measurement).
 
-        qubit_graph : QubitGraph, optional
-            The relevant qubit graph, usually from a processor specification, that contains adjacency and
+        qudit_graph : QubitGraph, optional
+            The relevant qudit graph, usually from a processor specification, that contains adjacency and
             direction information used to resolve stencil state space labels into absolute labels within
             `state_space`.  If `None`, then an error will be raised if any direction or connectivity information
             is needed to resolve the state space labels.
@@ -294,7 +295,7 @@ class OpModelNoise(ModelNoise):
         """
         raise NotImplementedError("Derived classes should implement this!")
 
-    def create_errormap(self, opkey, evotype, state_space, target_labels=None, qubit_graph=None):
+    def create_errormap(self, opkey, evotype, state_space, target_labels=None, qudit_graph=None, copy=False):
         """
         Create an error map object to implement the noise on a given model operation.
 
@@ -314,10 +315,15 @@ class OpModelNoise(ModelNoise):
             is also contained in `opkey`, but not always, so it must be supplied
             as a separate argument.
 
-        qubit_graph : QubitGraph, optional
-            The relevant qubit graph, usually from a processor specification, that contains adjacency and
+        qudit_graph : QubitGraph, optional
+            The relevant qudit graph, usually from a processor specification, that contains adjacency and
             direction information used to create more complex types of errors.  If `None`, then an error
             will be raised if graph information is needed.
+
+        copy : bool, optional
+            Whether the operations arising from the same stencil should be copied before embedding and
+            composing them to apply the stencil.  `True` can be used to make different applications of
+            the stencil independent operations.
 
         Returns
         -------
@@ -325,7 +331,7 @@ class OpModelNoise(ModelNoise):
         """
         stencil = self.create_errormap_stencil(opkey, evotype, state_space,
                                                len(target_labels) if (target_labels is not None) else None)
-        return self.apply_errormap_stencil(stencil, evotype, state_space, target_labels, qubit_graph)
+        return self.apply_errormap_stencil(stencil, evotype, state_space, target_labels, qudit_graph, copy)
 
     def reset_access_counters(self):
         """
@@ -361,7 +367,7 @@ class OpModelNoise(ModelNoise):
             _warnings.warn(("The following model-noise entries were unused: %s.  You may want to double check"
                             " that you've entered a valid noise specification.") % ", ".join(map(str, untouched_keys)))
 
-    def compute_stencil_absolute_sslbls(self, stencil, state_space, target_labels=None, qubit_graph=None):
+    def compute_stencil_absolute_sslbls(self, stencil, state_space, target_labels=None, qudit_graph=None):
         """
         Computes the set of state space labels that would be utilized when applying a stencil.
 
@@ -379,11 +385,11 @@ class OpModelNoise(ModelNoise):
             be the total state space of the model that the applied stencil would be inserted into.
 
         target_labels : tuple or None, optional
-            The target labels that determine where on the qubit graph `stencil` will be placed.  `None`
+            The target labels that determine where on the qudit graph `stencil` will be placed.  `None`
             indicates that the entire space is the "target" space of the stencil.
 
-        qubit_graph : QubitGraph, optional
-            The relevant qubit graph that contains adjacency and direction information used to resolve stencil
+        qudit_graph : QubitGraph, optional
+            The relevant qudit graph that contains adjacency and direction information used to resolve stencil
             state space labels into absolute labels within `state_space`.  If `None`, then an error will be raised
             if any direction or connectivity information is needed to resolve the state space labels.
 
@@ -466,13 +472,13 @@ class OpModelPerOpNoise(OpModelNoise):
         self._increment_touch_count(opkey)
         return errgens_to_embed_then_compose
 
-    def apply_errorgen_stencil(self, stencil, evotype, state_space, target_labels=None, qubit_graph=None, copy=False):
+    def apply_errorgen_stencil(self, stencil, evotype, state_space, target_labels=None, qudit_graph=None, copy=False):
         """
         See :method:`OpModelNoise.apply_errorgen_stencil`.
         """
         embedded_errgens = []
         for stencil_sslbls, local_errorgen in stencil.items():
-            sslbls_list = self._map_stencil_sslbls(stencil_sslbls, qubit_graph, state_space, target_labels)
+            sslbls_list = self._map_stencil_sslbls(stencil_sslbls, qudit_graph, state_space, target_labels)
             if None in sslbls_list and stencil_sslbls is not None:
                 # `None` in list signals a non-present direction => skip these terms
                 sslbls_list = list(filter(lambda x: x is not None, sslbls_list))
@@ -511,20 +517,22 @@ class OpModelPerOpNoise(OpModelNoise):
                         [errmaps_to_embed_then_compose[sslbls], local_errormap])
 
         else:  # assume opnoise is an OpNoise object
-            local_errormap = opnoise.create_errormap(evotype, state_space)
             all_target_labels = None if (num_target_labels is None) else \
                 tuple(['@{}'.format(i) for i in range(num_target_labels)])
+            local_state_space = _StencilLabel.cast(all_target_labels).create_local_state_space(state_space) \
+                if (all_target_labels is not None) else state_space
+            local_errormap = opnoise.create_errormap(evotype, local_state_space)
             errmaps_to_embed_then_compose[all_target_labels] = local_errormap
         self._increment_touch_count(opkey)
         return errmaps_to_embed_then_compose
 
-    def apply_errormap_stencil(self, stencil, evotype, state_space, target_labels=None, qubit_graph=None, copy=False):
+    def apply_errormap_stencil(self, stencil, evotype, state_space, target_labels=None, qudit_graph=None, copy=False):
         """
         See :method:`OpModelNoise.apply_errormap_stencil`.
         """
         embedded_errmaps = []
         for stencil_sslbls, local_errormap in stencil.items():
-            sslbls_list = self._map_stencil_sslbls(stencil_sslbls, qubit_graph, state_space, target_labels)
+            sslbls_list = self._map_stencil_sslbls(stencil_sslbls, qudit_graph, state_space, target_labels)
             if None in sslbls_list and stencil_sslbls is not None:
                 # `None` in list signals a non-present direction => skip these terms
                 sslbls_list = list(filter(lambda x: x is not None, sslbls_list))
@@ -539,11 +547,11 @@ class OpModelPerOpNoise(OpModelNoise):
             return _op.ComposedOp(embedded_errmaps, evotype, state_space) \
                 if len(embedded_errmaps) > 1 else embedded_errmaps[0]
 
-    def _map_stencil_sslbls(self, stencil_sslbls, qubit_graph, state_space, target_lbls):  # deals with graph directions
+    def _map_stencil_sslbls(self, stencil_sslbls, qudit_graph, state_space, target_lbls):  # deals with graph directions
         stencil_sslbls = _StencilLabel.cast(stencil_sslbls)
-        return stencil_sslbls.compute_absolute_sslbls(qubit_graph, state_space, target_lbls)
+        return stencil_sslbls.compute_absolute_sslbls(qudit_graph, state_space, target_lbls)
 
-    def compute_stencil_absolute_sslbls(self, stencil, state_space, target_labels=None, qubit_graph=None):
+    def compute_stencil_absolute_sslbls(self, stencil, state_space, target_labels=None, qudit_graph=None):
         """
         Computes the set of state space labels that would be utilized when applying a stencil.
 
@@ -561,11 +569,11 @@ class OpModelPerOpNoise(OpModelNoise):
             be the total state space of the model that the applied stencil would be inserted into.
 
         target_labels : tuple or None, optional
-            The target labels that determine where on the qubit graph `stencil` will be placed.  `None`
+            The target labels that determine where on the qudit graph `stencil` will be placed.  `None`
             indicates that the entire space is the "target" space of the stencil.
 
-        qubit_graph : QubitGraph, optional
-            The relevant qubit graph that contains adjacency and direction information used to resolve stencil
+        qudit_graph : QubitGraph, optional
+            The relevant qudit graph that contains adjacency and direction information used to resolve stencil
             state space labels into absolute labels within `state_space`.  If `None`, then an error will be raised
             if any direction or connectivity information is needed to resolve the state space labels.
 
@@ -577,7 +585,7 @@ class OpModelPerOpNoise(OpModelNoise):
         stencil_lbls = set()
         for stencil_sslbls, local_errorgen in stencil.items():
             sslbls_list = _StencilLabel.cast(stencil_sslbls).compute_absolute_sslbls(
-                qubit_graph, state_space, target_labels)
+                qudit_graph, state_space, target_labels)
             for sslbls in sslbls_list:
                 stencil_lbls.update(sslbls if (sslbls is not None) else {})
         return stencil_lbls
@@ -647,14 +655,15 @@ class ComposedOpModelNoise(OpModelNoise):
         return tuple([modelnoise.create_errorgen_stencil(opkey, evotype, state_space, num_target_labels)
                       for modelnoise in self.opmodelnoises])
 
-    def apply_errorgen_stencil(self, stencil, evotype, state_space, target_labels=None, qubit_graph=None, copy=False):
+    def apply_errorgen_stencil(self, stencil, evotype, state_space, target_labels=None, qudit_graph=None, copy=False):
         """
         See :method:`OpModelNoise.apply_errorgen_stencil`.
         """
-        noise_errgens = [modelnoise.apply_errorgen_stencil(s, evotype, state_space, target_labels, qubit_graph, copy)
+        noise_errgens = [modelnoise.apply_errorgen_stencil(s, evotype, state_space, target_labels, qudit_graph, copy)
                          for s, modelnoise in zip(stencil, self.opmodelnoises)]
         noise_errgens = list(filter(lambda x: x is not None, noise_errgens))
-        return _op.ComposedErrorgen(noise_errgens) if len(noise_errgens) > 0 else None
+        return _op.ComposedErrorgen(noise_errgens) if len(noise_errgens) > 1 \
+            else (noise_errgens[0] if len(noise_errgens) == 1 else None)
 
     def create_errormap_stencil(self, opkey, evotype, state_space, num_target_labels=None):
         """
@@ -664,16 +673,17 @@ class ComposedOpModelNoise(OpModelNoise):
         return tuple([modelnoise.create_errormap_stencil(opkey, evotype, state_space, num_target_labels)
                       for modelnoise in self.opmodelnoises])
 
-    def apply_errormap_stencil(self, stencil, evotype, state_space, target_labels=None, qubit_graph=None, copy=False):
+    def apply_errormap_stencil(self, stencil, evotype, state_space, target_labels=None, qudit_graph=None, copy=False):
         """
         See :method:`OpModelNoise.apply_errormap_stencil`.
         """
-        noise_ops = [modelnoise.apply_errormap_stencil(s, evotype, state_space, target_labels, qubit_graph, copy)
+        noise_ops = [modelnoise.apply_errormap_stencil(s, evotype, state_space, target_labels, qudit_graph, copy)
                      for s, modelnoise in zip(stencil, self.opmodelnoises)]
         noise_ops = list(filter(lambda x: x is not None, noise_ops))
-        return _op.ComposedOp(noise_ops) if len(noise_ops) > 0 else None
+        return _op.ComposedOp(noise_ops) if len(noise_ops) > 1 \
+            else (noise_ops[0] if len(noise_ops) == 1 else None)
 
-    def compute_stencil_absolute_sslbls(self, stencil, state_space, target_labels=None, qubit_graph=None):
+    def compute_stencil_absolute_sslbls(self, stencil, state_space, target_labels=None, qudit_graph=None):
         """
         Computes the set of state space labels that would be utilized when applying a stencil.
 
@@ -691,11 +701,11 @@ class ComposedOpModelNoise(OpModelNoise):
             be the total state space of the model that the applied stencil would be inserted into.
 
         target_labels : tuple or None, optional
-            The target labels that determine where on the qubit graph `stencil` will be placed.  `None`
+            The target labels that determine where on the qudit graph `stencil` will be placed.  `None`
             indicates that the entire space is the "target" space of the stencil.
 
-        qubit_graph : QubitGraph, optional
-            The relevant qubit graph that contains adjacency and direction information used to resolve stencil
+        qudit_graph : QubitGraph, optional
+            The relevant qudit graph that contains adjacency and direction information used to resolve stencil
             state space labels into absolute labels within `state_space`.  If `None`, then an error will be raised
             if any direction or connectivity information is needed to resolve the state space labels.
 
@@ -707,7 +717,7 @@ class ComposedOpModelNoise(OpModelNoise):
         stencil_lbls = set()
         for sub_stencil, modelnoise in zip(stencil, self.opmodelnoises):  # stencil is a tuple of compontent stencils
             stencil_lbls.update(modelnoise.compute_stencil_absolute_sslbls(sub_stencil, state_space,
-                                                                           target_labels, qubit_graph))
+                                                                           target_labels, qudit_graph))
         return stencil_lbls
 
     def _key_to_str(self, key, prefix=''):
@@ -749,7 +759,7 @@ class DepolarizationNoise(OpNoise):
     depolarization_rate : float
         The uniform depolarization strength.
 
-    parameterization : {"depolarize", "stochastic", or "lindblad"}
+    parameterization : {"depolarize", "stochastic", "lindblad", "exp(lindblad)", "1+lindblad"}
         Determines whether a :class:`DepolarizeOp`, :class:`StochasticNoiseOp`, or
         :class:`LindbladErrorgen` is used to represent the depolarization noise, respectively.
         When "depolarize" (the default), a DepolarizeOp is created with the strength given
@@ -762,7 +772,7 @@ class DepolarizationNoise(OpNoise):
         self.depolarization_rate = depolarization_rate
         self.parameterization = parameterization
 
-        valid_depol_params = ['depolarize', 'stochastic', 'lindblad']
+        valid_depol_params = ['depolarize', 'stochastic', 'lindblad', 'exp(lindblad)', '1+lindblad']
         assert (self.parameterization in valid_depol_params), \
             "The depolarization parameterization must be one of %s, not %s" \
             % (valid_depol_params, self.parameterization)
@@ -783,16 +793,18 @@ class DepolarizationNoise(OpNoise):
         -------
         LinearOperator
         """
-        if self.parameterization != 'lindblad':
-            raise ValueError("Can only construct error generators for 'lindblad' parameterization")
+        allowed_values = ('lindblad', 'exp(lindblad)', '1+lindblad')
+        if self.parameterization not in allowed_values:
+            raise ValueError("Depolarizing noise parameterization must be one of %s" % str(allowed_values))
 
         # LindbladErrorgen with "depol" or "diagonal" param
         basis_size = state_space.dim  # e.g. 4 for a single qubit
         basis = _BuiltinBasis('pp', basis_size)
         rate_per_pauli = self.depolarization_rate / (basis_size - 1)
         errdict = {('S', bl): rate_per_pauli for bl in basis.labels[1:]}
-        return _op.LindbladErrorgen(errdict, "D", basis, mx_basis='pp',
-                                    truncate=False, evotype=evotype, state_space=state_space)
+        return _op.LindbladErrorgen.from_elementary_errorgens(
+            errdict, "D", basis, mx_basis='pp',
+            truncate=False, evotype=evotype, state_space=state_space)
 
     def create_errormap(self, evotype, state_space):
         """
@@ -821,9 +833,13 @@ class DepolarizationNoise(OpNoise):
             rates = [rate_per_pauli] * (basis_size - 1)
             return _op.StochasticNoiseOp(state_space, basis="pp", evotype=evotype, initial_rates=rates)
 
-        elif self.parameterization == "lindblad":
+        elif self.parameterization in ("lindblad", "exp(lindblad)"):
             errgen = self.create_errorgen(evotype, state_space)
             return _op.ExpErrorgenOp(errgen)
+
+        elif self.parameterization == "1+lindblad":
+            errgen = self.create_errorgen(evotype, state_space)
+            return _op.IdentityPlusErrorgenOp(errgen)
 
         else:
             raise ValueError("Unknown parameterization %s for depolarizing error specification"
@@ -852,7 +868,7 @@ class StochasticNoise(OpNoise):
         self.error_probs = error_probs
         self.parameterization = parameterization
 
-        valid_sto_params = ['stochastic', 'lindblad']
+        valid_sto_params = ['stochastic', 'lindblad', 'exp(lindblad)', '1+lindblad']
         assert (self.parameterization in valid_sto_params), \
             "The stochastic parameterization must be one of %s, not %s" \
             % (valid_sto_params, self.parameterization)
@@ -875,14 +891,16 @@ class StochasticNoise(OpNoise):
         """
         sto_rates = self.error_probs
 
-        if self.parameterization != 'lindblad':
-            raise ValueError("Cannot only construct error generators for 'lindblad' parameterization")
+        allowed_values = ('lindblad', 'exp(lindblad)', '1+lindblad')
+        if self.parameterization not in allowed_values:
+            raise ValueError("Stochastic noise parameterization must be one of %s" % str(allowed_values))
 
         basis_size = state_space.dim  # e.g. 4 for a single qubit
         basis = _BuiltinBasis('pp', basis_size)
         errdict = {('S', bl): rate for bl, rate in zip(basis.labels[1:], sto_rates)}
-        return _op.LindbladErrorgen(errdict, "S", basis, mx_basis='pp',
-                                    truncate=False, evotype=evotype, state_space=state_space)
+        return _op.LindbladErrorgen.from_elementary_errorgens(
+            errdict, "S", basis, mx_basis='pp',
+            truncate=False, evotype=evotype, state_space=state_space)
 
     def create_errormap(self, evotype, state_space):
         """
@@ -905,9 +923,14 @@ class StochasticNoise(OpNoise):
         if self.parameterization == "stochastic":  # StochasticNoiseOp
             return _op.StochasticNoiseOp(state_space, basis="pp", evotype=evotype, initial_rates=sto_rates)
 
-        elif self.parameterization == "lindblad":  # LindbladErrorgen with "cptp", "diagonal" parameterization
+        elif self.parameterization in ("lindblad", "exp(lindblad)"):  # LindbladErrorgen with "cptp", "diagonal" param
             errgen = self.create_errorgen(evotype, state_space)
             return _op.ExpErrorgenOp(errgen)
+
+        elif self.parameterization == "1+lindblad":  # LindbladErrorgen with "cptp", "diagonal" parameterization
+            errgen = self.create_errorgen(evotype, state_space)
+            return _op.IdentityPlusErrorgenOp(errgen)
+
         else:
             raise ValueError("Unknown parameterization %s for stochastic error specification"
                              % self.parameterization)
@@ -983,29 +1006,23 @@ class LindbladNoise(OpNoise):
         LindbladNoise
         """
         lindblad_basis = _Basis.cast(lindblad_basis, state_space)
-
         parameterization = _op.LindbladParameterization.cast(parameterization)
-        ham_basis = lindblad_basis if parameterization.ham_params_allowed else None
-        nonham_basis = lindblad_basis if parameterization.nonham_params_allowed else None
 
-        if ham_coefficients is None and ham_basis is not None:
-            ham_coefficients = _np.zeros(len(ham_basis) - 1, 'd')
-        if nonham_coefficients is None and nonham_basis is not None:
-            d = len(nonham_basis) - 1
-            if parameterization.nonham_mode == 'all':
-                nonham_coefficients = _np.zeros((d, d), complex)
-            elif parameterization.nonham_mode == 'diag_affine':
-                nonham_coefficients = _np.zeros((2, d), 'd')
-            else:
-                nonham_coefficients = _np.zeros(d, 'd')
+        assert(len(parameterization.block_types) <= 2
+               and len(parameterization.block_types) == len(set(parameterization.block_types))), \
+            "Parameterization must have distinct block types and at most 2!"
 
-        # coeffs + bases => Ltermdict, basis
-        Ltermdict, _ = _ot.projections_to_lindblad_terms(
-            ham_coefficients, nonham_coefficients, ham_basis, nonham_basis, parameterization.nonham_mode)
-        return cls(Ltermdict, parameterization)
+        # coeffs + bases => elementary errorgen dict
+        elementary_errorgens = {}
+        for blk_type, blk_param in zip(parameterization.block_types, parameterization.param_modes):
+            initial_data = ham_coefficients if blk_type == 'ham' else nonham_coefficients
+            blk = _LindbladCoefficientBlock(blk_type, lindblad_basis, initial_block_data=initial_data)
+            elementary_errorgens.update(blk.elementary_errorgens)
+
+        return cls(elementary_errorgens, parameterization)
 
     def __init__(self, error_coeffs, parameterization='auto'):
-        self.error_coeffs = error_coeffs
+        self.error_coeffs = error_coeffs  # keys are LocalElementaryErrorgenLabel objects
         self.parameterization = parameterization
 
     def create_errorgen(self, evotype, state_space):
@@ -1026,9 +1043,10 @@ class LindbladNoise(OpNoise):
         """
         # Build LindbladErrorgen directly to have control over which parameters are set (leads to lower param counts)
         basis_size = state_space.dim  # e.g. 4 for a single qubit
-        basis = _BuiltinBasis('pp', basis_size)
-        return _op.LindbladErrorgen(self.error_coeffs, self.parameterization, basis, mx_basis='pp',
-                                    truncate=False, evotype=evotype, state_space=state_space)
+        basis = _BuiltinBasis('PP', basis_size)
+        return _op.LindbladErrorgen.from_elementary_errorgens(
+            self.error_coeffs, self.parameterization, basis, mx_basis='pp',
+            truncate=False, evotype=evotype, state_space=state_space)
 
     def create_errormap(self, evotype, state_space):
         """
@@ -1047,4 +1065,7 @@ class LindbladNoise(OpNoise):
         LinearOperator
         """
         errgen = self.create_errorgen(evotype, state_space)
-        return _op.ExpErrorgenOp(errgen)
+        if isinstance(self.parameterization, _op.LindbladParameterization) and self.parameterization.meta == "1+":
+            return _op.IdentityPlusErrorgenOp(errgen)
+        else:  # meta == 'exp' or None
+            return _op.ExpErrorgenOp(errgen)

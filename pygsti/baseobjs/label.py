@@ -12,6 +12,7 @@ Defines the Label class
 
 import itertools as _itertools
 import numbers as _numbers
+import sys as _sys
 
 _debug_record = {}
 
@@ -240,12 +241,12 @@ class LabelTup(Label, tuple):
         integerized_sslbls = []
         for ssl in state_space_labels:
             try: integerized_sslbls.append(int(ssl))
-            except: integerized_sslbls.append(ssl)
+            except: integerized_sslbls.append(_sys.intern(ssl))
 
         # Regardless of whether the input is a list, tuple, or int, the state space labels
         # (qubits) that the item/gate acts on are stored as a tuple (because tuples are immutable).
         sslbls = tuple(integerized_sslbls)
-        tup = (name,) + sslbls
+        tup = (_sys.intern(name),) + sslbls
         return tuple.__new__(cls, tup)
 
     __new__ = tuple.__new__
@@ -511,12 +512,12 @@ class LabelTupWithTime(Label, tuple):
         integerized_sslbls = []
         for ssl in state_space_labels:
             try: integerized_sslbls.append(int(ssl))
-            except: integerized_sslbls.append(ssl)
+            except: integerized_sslbls.append(_sys.intern(ssl))
 
         # Regardless of whether the input is a list, tuple, or int, the state space labels
         # (qubits) that the item/gate acts on are stored as a tuple (because tuples are immutable).
         sslbls = tuple(integerized_sslbls)
-        tup = (name,) + sslbls
+        tup = (_sys.intern(name),) + sslbls
         return cls.__new__(cls, tup, time)
 
     def __new__(cls, tup, time=0.0):
@@ -1790,13 +1791,13 @@ class LabelTupWithArgs(Label, tuple):
         integerized_sslbls = []
         for ssl in state_space_labels:
             try: integerized_sslbls.append(int(ssl))
-            except: integerized_sslbls.append(ssl)
+            except: integerized_sslbls.append(_sys.intern(ssl))
 
         # Regardless of whether the input is a list, tuple, or int, the state space labels
         # (qubits) that the item/gate acts on are stored as a tuple (because tuples are immutable).
         sslbls = tuple(integerized_sslbls)
         args = tuple(args)
-        tup = (name, 2 + len(args)) + args + sslbls  # stores: (name, K, args, sslbls)
+        tup = (_sys.intern(name), 2 + len(args)) + args + sslbls  # stores: (name, K, args, sslbls)
         # where K is the index of the start of the sslbls (or 1 more than the last arg index)
 
         return cls.__new__(cls, tup, time)
@@ -1900,7 +1901,10 @@ class LabelTupWithArgs(Label, tuple):
         # FUTURE: use LabelTupWithArgs here instead of Label?
 
     def strip_args(self):
-        return LabelTup.__new__(LabelTup, (self[0],) + self[self[1]:])  # make a new LabelTup (no args)
+        if self.sslbls is not None:
+            return LabelTup.__new__(LabelTup, (self[0],) + self[self[1]:])  # make a new LabelTup (no args)
+        else:  # special case of sslbls == None, which is just a string label without its args
+            return LabelStr.__new__(LabelStr, self[0])
 
     def __str__(self):
         """
@@ -1948,10 +1952,16 @@ class LabelTupWithArgs(Label, tuple):
         #OLD return self.name == other.name and self.sslbls == other.sslbls # ok to compare None
 
     def __lt__(self, x):
-        return tuple.__lt__(self, tuple(x))
+        try:
+            return tuple.__lt__(self, tuple(x))
+        except:
+            tuple.__lt__(tuple(map(str, self)), tuple(map(str, x)))
 
     def __gt__(self, x):
-        return tuple.__gt__(self, tuple(x))
+        try:
+            return tuple.__gt__(self, tuple(x))
+        except:
+            tuple.__gt__(tuple(map(str, self)), tuple(map(str, x)))
 
     def __pygsti_reduce__(self):
         return self.__reduce__()

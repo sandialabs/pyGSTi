@@ -24,6 +24,7 @@ import numpy as _np
 
 from pygsti.circuits import circuit as _cir
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
+from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
 from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
@@ -277,7 +278,7 @@ class _DataSetRow(object):
         """
         Row data in a time-series format.
 
-        This can be a much less succinct format than returned by `get_timeseries`.
+        This can be a much less succinct format than returned by `counts_as_timeseries`.
         E.g., it is highly inefficient for many-qubit data.
 
         Returns
@@ -300,7 +301,7 @@ class _DataSetRow(object):
         #        seriesDict[outcome_label] = []
 
         if self.reps is None:
-            reps = _np.ones(len(self.time), int)
+            reps = _np.ones(len(self.time), _np.int64)
         else: reps = self.reps
 
         # An alternate implementation that appears to be (surprisingly?) slower...
@@ -314,7 +315,7 @@ class _DataSetRow(object):
         #time_bins_borders.append(len(self.time))
         #nTimes = len(time_bins_borders) - 1
         #
-        #seriesDict = {self.dataset.olIndex[ol]: _np.zeros(nTimes, int) for ol in self.dataset.outcome_labels}
+        #seriesDict = {self.dataset.olIndex[ol]: _np.zeros(nTimes, _np.int64) for ol in self.dataset.outcome_labels}
         #
         #for i in range(nTimes):
         #    slc = slice(time_bins_borders[i],time_bins_borders[i+1])
@@ -336,7 +337,7 @@ class _DataSetRow(object):
 
         return times, {ol: seriesDict[oli] for ol, oli in self.dataset.olIndex.items()}
 
-    def get_timeseries(self):
+    def counts_as_timeseries(self):
         """
         Returns data in a time-series format.
 
@@ -353,7 +354,7 @@ class _DataSetRow(object):
         last_time = None
 
         if self.reps is None:
-            reps = list(_np.ones(len(self.time), int))
+            reps = list(_np.ones(len(self.time), _np.int64))
         else: reps = self.reps
 
         for t, outcome_label, rep in zip(self.time, self.outcomes, reps):
@@ -389,7 +390,7 @@ class _DataSetRow(object):
         last_time = None
 
         if self.reps is None:
-            return list(self.time), list(_np.ones(len(self.time), int))
+            return list(self.time), list(_np.ones(len(self.time), _np.int64))
 
         else:
             for t, rep in zip(self.time, self.reps):
@@ -821,7 +822,7 @@ def _round_int_repcnt(nreps):
         return int(round(nreps))
 
 
-class DataSet(object):
+class DataSet(_MongoSerializable):
     """
     An association between Circuits and outcome counts, serving as the input data for many QCVV protocols.
 
@@ -909,6 +910,7 @@ class DataSet(object):
         Keys should be the circuits in this DataSet and value should
         be Python dictionaries.
     """
+    collection_name = "pygsti_datasets"
 
     def __init__(self, oli_data=None, time_data=None, rep_data=None,
                  circuits=None, circuit_indices=None,
@@ -955,7 +957,7 @@ class DataSet(object):
             the outcome labels should be those for a standard set of this many qubits.
 
         outcome_label_indices : ordered dictionary
-            An OrderedDict with keys equal to spam labels (strings) and value equal to
+            An OrderedDict with keys equal to outcome labels and values equal to
             integer indices associating a spam label with given index.  Only
             specify this argument OR outcome_labels, not both.
 
@@ -992,6 +994,8 @@ class DataSet(object):
         DataSet
            a new data set object.
         """
+        super().__init__()
+
         # uuid for efficient hashing (set when done adding data or loading from file)
         self.uuid = None
 
@@ -1000,7 +1004,7 @@ class DataSet(object):
             assert(oli_data is None and time_data is None and rep_data is None
                    and circuits is None and circuit_indices is None
                    and outcome_labels is None and outcome_label_indices is None)
-            self.load(file_to_load_from)
+            self.read_binary(file_to_load_from)
             return
 
         # self.cirIndex  :  Ordered dictionary where keys = Circuit objects,
@@ -1027,7 +1031,7 @@ class DataSet(object):
             self.olIndex = outcome_label_indices
             self.olIndex_max = max(self.olIndex.values()) if len(self.olIndex) > 0 else -1
         elif outcome_labels is not None:
-            if isinstance(outcome_labels, int):
+            if isinstance(outcome_labels, _np.int64):
                 nqubits = outcome_labels
                 tup_outcomeLabels = [("".join(x),) for x in _itertools.product(*([('0', '1')] * nqubits))]
             else:
@@ -2799,7 +2803,8 @@ class DataSet(object):
                     'collisionAction': self.collisionAction,
                     'uuid': self.uuid,
                     'auxInfo': self.auxInfo,
-                    'comment': self.comment}
+                    'comment': self.comment,
+                    'dbcoordinates': self._dbcoordinates}
         return toPickle
 
     def __setstate__(self, state_dict):
@@ -2851,6 +2856,7 @@ class DataSet(object):
             self.timeType = _np.dtype(state_dict['timeType'])
             self.repType = _np.dtype(state_dict['repType'])
             self.comment = state_dict.get('comment', '')
+            self._dbcoordinates = state_dict.get('dbcoordinates', None)
             if bStatic:  # always empty - don't save this, just init
                 self.cnt_cache = {opstr: _ld.OutcomeLabelDict() for opstr in self.cirIndex}
             else: self.cnt_cache = None
@@ -2864,9 +2870,13 @@ class DataSet(object):
         self.collisionAction = state_dict.get('collisionAction', 'aggregate')
         self.uuid = state_dict.get('uuid', None)
 
+    @_deprecated_fn('write_binary')
     def save(self, file_or_filename):
+        return self.write_binary(file_or_filename)
+
+    def write_binary(self, file_or_filename):
         """
-        Save this DataSet to a file.
+        Write this data set to a binary-format file.
 
         Parameters
         ----------
@@ -2918,9 +2928,15 @@ class DataSet(object):
                 for row in self.repData: _np.save(f, row)
         if bOpen: f.close()
 
+    @_deprecated_fn('read_binary')
     def load(self, file_or_filename):
+        return self.read_binary(file_or_filename)
+
+    def read_binary(self, file_or_filename):
         """
-        Load DataSet from a file, clearing any data is contained previously.
+        Read a DataSet from a binary file, clearing any data is contained previously.
+
+        The file should have been created with :method:`DataSet.write_binary`
 
         Parameters
         ----------
@@ -3124,3 +3140,107 @@ class DataSet(object):
 
         df = cdict.to_dataframe()
         return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns)
+
+    @classmethod
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, collision_action="aggregate",
+                                         record_zero_counts=True, with_times="auto",
+                                         circuit_parse_cache=None, verbosity=1):
+        from pymongo import ASCENDING, DESCENDING
+        from pygsti.io import stdinput as _stdinput
+        datarow_collection_name = doc['datarow_collection_name']
+        outcomeLabels = doc['outcomes']
+
+        dataset = DataSet(outcome_labels=outcomeLabels, collision_action=collision_action,
+                          comment=doc['comment'])
+        parser = _stdinput.StdInputParser()
+
+        datarow_collection = mongodb[datarow_collection_name]
+        for i, datarow_doc in enumerate(datarow_collection.find({'parent': doc['_id']}).sort('index', ASCENDING)):
+            if i != datarow_doc['index']:
+                _warnings.warn("Data set's row data is incomplete! There seem to be missing rows.")
+
+            circuit = parser.parse_circuit(datarow_doc['circuit'], lookup={},  # allow a lookup to be passed?
+                                           create_subcircuits=not _cir.Circuit.default_expand_subcircuits)
+
+            oliArray = _np.array(datarow_doc['outcome_indices'], dataset.oliType)
+            countArray = _np.array(datarow_doc['repetitions'], dataset.repType)
+            if 'times' not in datarow_doc:  # with_times can be False or 'auto'
+                if with_times is True:
+                    raise ValueError("Circuit %d does not contain time information and 'with_times=True'" % i)
+                timeArray = _np.zeros(countArray.shape[0], dataset.timeType)
+            else:
+                if with_times is False:
+                    raise ValueError("Circuit %d contains time information and 'with_times=False'" % i)
+                timeArray = _np.array(datarow_doc['time'], dataset.timeType)
+
+            dataset._add_raw_arrays(circuit, oliArray, timeArray, countArray,
+                                    overwrite_existing=True,
+                                    record_zero_counts=record_zero_counts,
+                                    aux=datarow_doc.get('aux', {}))
+
+        dataset.done_adding_data()
+        return dataset
+
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing,
+                                                circuits=None, outcome_label_order=None, with_times="auto",
+                                                datarow_collection_name='pygsti_datarows'):
+        if circuits is not None:
+            if len(circuits) > 0 and not isinstance(circuits[0], _cir.Circuit):
+                raise ValueError("Argument circuits must be a list of Circuit objects!")
+        else:
+            circuits = list(self.keys())
+
+        if outcome_label_order is not None:  # convert to tuples if needed
+            outcome_label_order = [(ol,) if isinstance(ol, str) else ol
+                                   for ol in outcome_label_order]
+
+        outcomeLabels = self.outcome_labels
+        if outcome_label_order is not None:
+            assert(len(outcome_label_order) == len(outcomeLabels))
+            assert(all([ol in outcomeLabels for ol in outcome_label_order]))
+            assert(all([ol in outcome_label_order for ol in outcomeLabels]))
+            outcomeLabels = outcome_label_order
+            oli_map_data = {self.olIndex[ol]: i for i, ol in enumerate(outcomeLabels)}  # dataset -> stored indices
+
+            def oli_map(outcome_label_indices):
+                return [oli_map_data[i] for i in outcome_label_indices]
+        else:
+            def oli_map(outcome_label_indices):
+                return [i.item() for i in outcome_label_indices]  # converts numpy types -> native python types
+
+        doc['outcomes'] = outcomeLabels
+        doc['comment'] = self.comment if hasattr(self, 'comment') else None
+        doc['datarow_collection_name'] = datarow_collection_name
+
+        if with_times == "auto":
+            trivial_times = self.has_trivial_timedependence
+        else:
+            trivial_times = not with_times
+
+        dataset_id = doc['_id']
+
+        for i, circuit in enumerate(circuits):  # circuit should be a Circuit object here
+            dataRow = self[circuit]
+            datarow_doc = {'index': i,
+                           'circuit': circuit.str,
+                           'parent': dataset_id,
+                           'outcome_indices': oli_map(dataRow.oli),
+                           'repetitions': [r.item() for r in dataRow.reps]  # converts numpy -> Python native types
+                           }
+
+            if trivial_times:  # ensure that "repetitions" are just "counts" in trivial-time case
+                assert(len(dataRow.oli) == len(set(dataRow.oli))), "Duplicate value in trivial-time data set row!"
+            else:
+                datarow_doc['times'] = list(dataRow.time)
+
+            if dataRow.aux:
+                datarow_doc['aux'] = dataRow.aux  # needs to be JSON-able!
+
+            write_ops.add_one_op(datarow_collection_name, {'circuit': circuit.str, 'parent': dataset_id},
+                                 datarow_doc, overwrite_existing, mongodb)
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        dataset_doc = mongodb[collection_name].find_one_and_delete({'_id': doc_id}, session=session)
+        datarow_collection_name = dataset_doc['datarow_collection_name']
+        mongodb[datarow_collection_name].delete_many({'parent': dataset_doc['_id']}, session=session)

@@ -537,7 +537,7 @@ def R_matrix(model, group, group_to_model=None, weights=None):  # noqa N802
 #                    ), "Some group elements not in `model`, so `compilation must be specified."
 
 #     i_max = _np.floor((m_max - m_min) / m_step).astype('int')
-#     m = _np.zeros(1 + i_max, int)
+#     m = _np.zeros(1 + i_max, _np.int64)
 #     P_m = _np.zeros(1 + i_max, float)
 #     group_dim = len(group)
 #     R = R_matrix(model, group, group_to_model=group_to_model, weights=weights)
@@ -680,7 +680,7 @@ def R_matrix(model, group, group_to_model=None, weights=None):  # noqa N802
 #         E_eff = _np.dot(model_go.povms['Mdefault'][success_effectLabel].T, emaps.operations['Gavg'])
 
 #     i_max = _np.floor((m_max - m_min) / m_step).astype('int')
-#     m = _np.zeros(1 + i_max, int)
+#     m = _np.zeros(1 + i_max, _np.int64)
 #     P_m = _np.zeros(1 + i_max, float)
 #     upper_bound = _np.zeros(1 + i_max, float)
 #     lower_bound = _np.zeros(1 + i_max, float)
@@ -822,7 +822,7 @@ def gate_dependence_of_errormaps(model, target_model, norm='diamond', mx_basis=N
 #    error_gs.operations['GR'] = _np.mean(_np.array([ i for i in R_list]),axis=0)
 #    error_gs.operations['GQ'] = _np.mean(_np.array([ i for i in Q_list]),axis=0)
 #    error_gs.operations['GQ2'] = _np.dot(error_gs.operations['GQ'],error_gs.operations['Gavg'])
-#    error_gs.preps['rhoc_mixed'] = 1./d*_cnst._basis_create_identity_vec(error_gs.basis)#
+#    error_gs.preps['rhoc_mixed'] = 1./d*_cnst.create_identity_vec(error_gs.basis)#
 #
 #    #Assumes standard POVM labels
 #    povm = _objs.UnconstrainedPOVM( [('0_cm', target_model.povms['Mdefault']['0']),

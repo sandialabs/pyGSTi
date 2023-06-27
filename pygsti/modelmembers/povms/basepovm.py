@@ -21,12 +21,13 @@ from pygsti.modelmembers.povms.fulleffect import FullPOVMEffect as _FullPOVMEffe
 from pygsti.modelmembers.povms.povm import POVM as _POVM
 from pygsti.modelmembers import modelmember as _mm
 from pygsti.evotypes import Evotype as _Evotype
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
 class _BasePOVM(_POVM):
     """ The base behavior for both UnconstrainedPOVM and TPPOVM """
 
-    def __init__(self, effects, evotype=None, state_space=None, preserve_sum=False):
+    def __init__(self, effects, evotype=None, state_space=None, preserve_sum=False, called_from_reduce=False):
         """
         Creates a new BasePOVM object.
 
@@ -50,8 +51,6 @@ class _BasePOVM(_POVM):
             and so the final effect vector is made into a
             :class:`ComplementPOVMEffect`.
         """
-        self.Np = 0
-
         if isinstance(effects, dict):
             items = [(k, v) for k, v in effects.items()]  # gives definite ordering of effects
         elif isinstance(effects, list):
@@ -62,7 +61,8 @@ class _BasePOVM(_POVM):
         if preserve_sum:
             assert(len(items) > 1), "Cannot create a TP-POVM with < 2 effects!"
             self.complement_label = items[-1][0]
-            comp_val = _np.array(items[-1][1])  # current value of complement vec
+            comp_obj = items[-1][1]  # current object & then value of complement vec
+            comp_val = comp_obj.to_dense() if isinstance(comp_obj, _POVMEffect) else _np.array(comp_obj)
         else:
             self.complement_label = None
 
@@ -76,10 +76,14 @@ class _BasePOVM(_POVM):
         for k, v in items:
             if k == self.complement_label: continue
             if isinstance(v, _POVMEffect):
-                effect = v
+                effect = v if (not preserve_sum) else v.copy()  # .copy() just to de-allocate parameters
             else:
                 assert(evotype is not None), "Must specify `evotype` when effect vectors are not POVMEffect objects!"
-                effect = _FullPOVMEffect(v, evotype, state_space)
+                # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+                #  and should be replaced with the basis of other effects once we establish
+                #  a common .basis or ._basis attribute of representations (which could still be None)
+                # or maybe need to add 'basis' __init__ argument?
+                effect = _FullPOVMEffect(v, None, evotype, state_space)
 
             if evotype is None: evotype = effect.evotype
             else: assert(evotype == effect.evotype), \
@@ -89,8 +93,6 @@ class _BasePOVM(_POVM):
             assert(state_space.is_compatible_with(effect.state_space)), \
                 "All effect vectors must have compatible state spaces!"
 
-            N = effect.num_params
-            effect.set_gpindices(slice(self.Np, self.Np + N), self); self.Np += N
             paramlbls.extend(effect.parameter_labels)
             copied_items.append((k, effect))
         items = copied_items
@@ -103,61 +105,111 @@ class _BasePOVM(_POVM):
         #Add a complement effect if desired
         if self.complement_label is not None:  # len(items) > 0 by assert
             non_comp_effects = [v for k, v in items]
-            identity_for_complement = _np.array(sum([v.reshape(comp_val.shape) for v in non_comp_effects])
+            identity_for_complement = _np.array(sum([v.to_dense().reshape(comp_val.shape) for v in non_comp_effects])
                                                 + comp_val, 'd')  # ensure shapes match before summing
             complement_effect = _ComplementPOVMEffect(
                 identity_for_complement, non_comp_effects)
-            complement_effect.set_gpindices(slice(0, self.Np), self)  # all parameters
             items.append((self.complement_label, complement_effect))
 
-        super(_BasePOVM, self).__init__(state_space, evotype, items)
+        super(_BasePOVM, self).__init__(state_space, evotype, None, items)
+        if not called_from_reduce: self.init_gpindices()  # initialize our gpindices based on sub-members
         self._paramlbls = _np.array(paramlbls, dtype=object)
 
-    def _reset_member_gpindices(self):
+    def submembers(self):
         """
-        Sets gpindices for all non-complement items.  Assumes all non-complement
-        vectors have *independent* parameters (for now).
+        Returns a sequence of any sub-ModelMember objects contained in this one.
+
+        Sub-members are processed by other :class:`ModelMember` methods
+        (e.g. `unlink_parent` and `set_gpindices`) as though the parent
+        object is *just* a container for these sub-members and has no
+        parameters of its own.  Member objects that contain other members
+        *and* possess their own independent parameters should implement
+        the appropriate `ModelMember` functions (usually just
+        `allocate_gpindices`, using the base implementation as a reference).
+
+        Returns
+        -------
+        list or tuple
         """
-        Np = 0
-        for k, effect in self.items():
-            if k == self.complement_label: continue
-            N = effect.num_params
-            pslc = slice(Np, Np + N)
-            if effect.gpindices != pslc:
-                effect.set_gpindices(pslc, self)
-            Np += N
-        self.Np = Np
+        return tuple(self.values())  # what about complement effect?
 
-    def _rebuild_complement(self, identity_for_complement=None):
-        """ Rebuild complement vector (in case other vectors have changed) """
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
 
-        if self.complement_label is not None and self.complement_label in self:
-            non_comp_effects = [v for k, v in self.items()
-                                if k != self.complement_label]
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
 
-            if identity_for_complement is None:
-                identity_for_complement = self[self.complement_label].identity
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
 
-            complement_effect = _ComplementPOVMEffect(
-                identity_for_complement, non_comp_effects)
-            complement_effect.set_gpindices(slice(0, self.Np), self)  # all parameters
+        mm_dict['effect_labels'] = list(self.keys())  # labels of the submember effects
 
-            #Assign new complement effect without calling our __setitem__
-            old_ro = self._readonly; self._readonly = False
-            _POVM.__setitem__(self, self.complement_label, complement_effect)
-            self._readonly = old_ro
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
+        effects = {lbl: serial_memo[subm_serial_id]
+                   for lbl, subm_serial_id in zip(mm_dict['effect_labels'], mm_dict['submembers'])}
+        return cls(effects, mm_dict['evotype'], state_space)  # Note: __init__ call signature of derived classes
+
+    #def _reset_member_gpindices(self):
+    #    """
+    #    Sets gpindices for all non-complement items.  Assumes all non-complement
+    #    vectors have *independent* parameters (for now).
+    #    """
+    #    Np = 0
+    #    for k, effect in self.items():
+    #        if k == self.complement_label: continue
+    #        N = effect.num_params
+    #        pslc = slice(Np, Np + N)
+    #        if effect.gpindices != pslc:
+    #            effect.set_gpindices(pslc, self)
+    #        Np += N
+    #    self.Np = Np
+    #
+    #def _rebuild_complement(self, identity_for_complement=None):
+    #    """ Rebuild complement vector (in case other vectors have changed) """
+    #
+    #    if self.complement_label is not None and self.complement_label in self:
+    #        non_comp_effects = [v for k, v in self.items()
+    #                            if k != self.complement_label]
+    #
+    #        if identity_for_complement is None:
+    #            identity_for_complement = self[self.complement_label].identity
+    #
+    #        complement_effect = _ComplementPOVMEffect(
+    #            identity_for_complement, non_comp_effects)
+    #        complement_effect.set_gpindices(slice(0, self.Np), self)  # all parameters
+    #
+    #        #Assign new complement effect without calling our __setitem__
+    #        old_ro = self._readonly; self._readonly = False
+    #        _POVM.__setitem__(self, self.complement_label, complement_effect)
+    #        self._readonly = old_ro
 
     def __setitem__(self, key, value):
         if not self._readonly:  # when readonly == False, we're initializing
             return super(_BasePOVM, self).__setitem__(key, value)
 
-        if key == self.complement_label:
-            raise KeyError("Cannot directly assign the complement effect vector!")
-        value = value.copy() if isinstance(value, _POVMEffect) else \
-            _FullPOVMEffect(value)   # EVOTYPE -----------------------------------------???????????????????????????????
-        _collections.OrderedDict.__setitem__(self, key, value)
-        self._reset_member_gpindices()
-        self._rebuild_complement()
+        raise NotImplementedError("TODO: fix ability to set POVM effects after initialization")
+        #if key == self.complement_label:
+        #    raise KeyError("Cannot directly assign the complement effect vector!")
+        #value = value.copy() if isinstance(value, _POVMEffect) else \
+        #    _FullPOVMEffect(value)   # EVOTYPE -----------------------------------------???????????????????????????????
+        #_collections.OrderedDict.__setitem__(self, key, value)
+        #self._reset_member_gpindices()
+        #self._rebuild_complement()
 
     def simplify_effects(self, prefix=""):
         """
@@ -181,18 +233,8 @@ class _BasePOVM(_POVM):
         if prefix: prefix = prefix + "_"
         simplified = _collections.OrderedDict()
         for lbl, effect in self.items():
-            if lbl == self.complement_label: continue
-            simplified[prefix + lbl] = effect.copy()
-            simplified[prefix + lbl].set_gpindices(
-                _mm._compose_gpindices(self.gpindices, effect.gpindices),
-                self.parent)
+            simplified[prefix + lbl] = effect
 
-        if self.complement_label:
-            lbl = self.complement_label
-            simplified[prefix + lbl] = _ComplementPOVMEffect(
-                self[lbl].identity, [v for k, v in simplified.items()])
-            self._copy_gpindices(simplified[prefix + lbl], self.parent, memo=None)  # set gpindices
-            # of complement vector to the same as POVM (it uses *all* params)
         return simplified
 
     @property
@@ -205,7 +247,7 @@ class _BasePOVM(_POVM):
         int
            the number of independent parameters.
         """
-        return self.Np
+        return len(self.gpindices_as_array())
 
     def to_vector(self):
         """
@@ -217,9 +259,9 @@ class _BasePOVM(_POVM):
             a 1D numpy array with length == num_params().
         """
         v = _np.empty(self.num_params, 'd')
-        for lbl, effect in self.items():
+        for (lbl, effect), effect_local_inds in zip(self.items(), self._submember_rpindices):
             if lbl == self.complement_label: continue
-            v[effect.gpindices] = effect.to_vector()
+            v[effect_local_inds] = effect.to_vector()
         return v
 
     def from_vector(self, v, close=False, dirty_value=True):
@@ -246,9 +288,9 @@ class _BasePOVM(_POVM):
         -------
         None
         """
-        for lbl, effect in self.items():
+        for (lbl, effect), effect_local_inds in zip(self.items(), self._submember_rpindices):
             if lbl == self.complement_label: continue
-            effect.from_vector(v[effect.gpindices], close, dirty_value)
+            effect.from_vector(v[effect_local_inds], close, dirty_value)
         if self.complement_label:  # re-init Ec
             self[self.complement_label]._construct_vector()
 

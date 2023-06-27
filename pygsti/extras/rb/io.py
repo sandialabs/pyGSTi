@@ -43,7 +43,7 @@ def load_benchmarker(directory, load_datasets=True, verbosity=1):
         for dskey in dskeys:
             for passnum in range(numpasses):
                 dsfn = directory + '/data/{}/ds{}.txt'.format(dskey, passnum)
-                ds = _io.load_dataset(dsfn, collision_action='keepseparate', record_zero_counts=False,
+                ds = _io.read_dataset(dsfn, collision_action='keepseparate', record_zero_counts=False,
                                       ignore_zero_count_lines=False, verbosity=verbosity)
                 multidsdict[dskey].add_dataset(passnum, ds)
     else:
@@ -227,7 +227,7 @@ def load_data_into_benchmarker(dsfilenames=None, summarydatasets_filenames=None,
 
             if dsfn[-4:] == '.txt':
                 print(dsfn)
-                mds.add_dataset(dsfn_ind, _io.load_dataset(dsfn,
+                mds.add_dataset(dsfn_ind, _io.read_dataset(dsfn,
                                                            collision_action='keepseparate',
                                                            record_zero_counts=False,
                                                            ignore_zero_count_lines=False,

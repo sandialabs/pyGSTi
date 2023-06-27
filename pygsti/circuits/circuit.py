@@ -75,7 +75,7 @@ def _np_to_quil_def_str(name, input_array):
 def _num_to_rqc_str(num):
     """Convert float to string to be included in RQC quil DEFGATE block
     (as written by _np_to_quil_def_str)."""
-    num = _np.complex(_np.real_if_close(num))
+    num = _np.complex_(_np.real_if_close(num))
     if _np.imag(num) == 0:
         output = str(_np.real(num))
         return output
@@ -1237,7 +1237,8 @@ class Circuit(object):
 
     def insert_idling_layers(self, insert_before, num_to_insert, lines=None):
         """
-        Inserts into this circuit one or more idling (blank) layers.
+        Inserts into this circuit one or more idling (blank) layers,
+        returning a copy.
 
         By default, complete layer(s) are inserted.  The `lines` argument
         allows you to insert partial layers (on only a subset of the lines).
@@ -1265,7 +1266,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.insert_idling_layers_inplace(insert_before, num_to_insert, lines)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def insert_idling_layers_inplace(self, insert_before, num_to_insert, lines=None):
@@ -1355,7 +1356,8 @@ class Circuit(object):
 
     def insert_labels_into_layers(self, lbls, layer_to_insert_before, lines=None):
         """
-        Inserts into this circuit the contents of `lbls` into new full or partial layers.
+        Inserts into this circuit the contents of `lbls` into new full or partial layers,
+        returning a copy.
 
         By default, complete layer(s) are inserted.  The `lines` argument
         allows you to insert partial layers (on only a subset of the lines).
@@ -1385,7 +1387,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.insert_labels_into_layers_inplace(lbls, layer_to_insert_before, lines)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def insert_labels_into_layers_inplace(self, lbls, layer_to_insert_before, lines=None):
@@ -1428,7 +1430,7 @@ class Circuit(object):
 
     def insert_idling_lines(self, insert_before, line_labels):
         """
-        Insert one or more idling (blank) lines into this circuit.
+        Insert one or more idling (blank) lines into this circuit, returning a copy.
 
         Parameters
         ----------
@@ -1446,7 +1448,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.insert_idling_lines_inplace(insert_before, line_labels)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def insert_idling_lines_inplace(self, insert_before, line_labels):
@@ -1551,7 +1553,7 @@ class Circuit(object):
 
     def insert_labels_as_lines(self, lbls, layer_to_insert_before=None, line_to_insert_before=None, line_labels="auto"):
         """
-        Inserts into this circuit the contents of `lbls` into new lines.
+        Inserts into this circuit the contents of `lbls` into new lines, returning a copy.
 
         By default, `lbls` is inserted at the beginning of the new lines(s). The
         `layer_to_insert_before` argument allows you to insert `lbls` beginning at
@@ -1585,7 +1587,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.insert_labels_as_lines_inplace(lbls, layer_to_insert_before, line_to_insert_before, line_labels)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def _append_labels_as_lines(self, lbls, layer_to_insert_before=None, line_labels="auto"):
@@ -1806,7 +1808,7 @@ class Circuit(object):
             c = chr(ord(c) + 1)
         return cls(tuple([translateDict[cc] for cc in python_string]))
 
-    def serialize(self):
+    def serialize(self, expand_subcircuits=False):
         """
         Serialize the parallel gate operations of this Circuit.
 
@@ -1815,16 +1817,26 @@ class Circuit(object):
         elementary gate operation into its own layer.  Ordering is dictated by
         the ordering of the compound layer labels.
 
+        Parameters
+        ----------
+        expand_subcircuits : bool
+            Whether subcircuits should be expanded before performing the serialization.
+            If `False`, the circuit may contain :class:`CircuitLabel` layers.
+
         Returns
         -------
         Circuit
         """
+        if expand_subcircuits:
+            layertup = self.expand_subcircuits().layertup
+        else:
+            layertup = self.layertup
+
         serial_lbls = []
-        for lbl in self.layertup:
+        for lbl in layertup:
             if len(lbl.components) == 0:  # special case of an empty-layer label,
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
-            for c in lbl.components:
-                serial_lbls.append(c)
+            serial_lbls.extend(list(lbl.components) * lbl.reps)
         return Circuit._fastinit(tuple(serial_lbls), self.line_labels, editable=False, occurrence=self.occurrence)
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
@@ -1954,7 +1966,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.expand_subcircuits_inplace()
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def factorize_repetitions_inplace(self):
@@ -2000,7 +2012,7 @@ class Circuit(object):
 
     def insert_layer(self, circuit_layer, j):
         """
-        Inserts a single layer into a circuit.
+        Inserts a single layer into a circuit, returning a copy.
 
         The input layer does not need to contain a gate that acts on
         every qubit, but it should not contain more than one gate on
@@ -2022,7 +2034,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.insert_layer_inplace(circuit_layer, j)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def insert_layer_inplace(self, circuit_layer, j):
@@ -2057,7 +2069,7 @@ class Circuit(object):
 
     def insert_circuit(self, circuit, j):
         """
-        Inserts a circuit into this circuit.
+        Inserts a circuit into this circuit, returning a copy.
 
         The circuit to insert can be over more qubits than this circuit, as long
         as all qubits that are not part of this circuit are idling. In this
@@ -2080,7 +2092,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.insert_circuit_inplace(circuit, j)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def insert_circuit_inplace(self, circuit, j):
@@ -2120,7 +2132,7 @@ class Circuit(object):
 
     def append_circuit(self, circuit):
         """
-        Append a circuit to the end of this circuit.
+        Append a circuit to the end of this circuit, returning a copy.
 
         This circuit must satisfy the requirements of
         :method:`insert_circuit()`. See that method for more details.
@@ -2134,7 +2146,7 @@ class Circuit(object):
         -------
         Circuit
         """
-        self.insert_circuit(circuit, self.num_layers)
+        return self.insert_circuit(circuit, self.num_layers)
 
     def append_circuit_inplace(self, circuit):
         """
@@ -2156,7 +2168,7 @@ class Circuit(object):
 
     def prefix_circuit(self, circuit):
         """
-        Prefix a circuit to the beginning of this circuit.
+        Prefix a circuit to the beginning of this circuit, returning a copy.
 
         This circuit must satisfy the requirements of the
         :method:`insert_circuit()`. See that method for more details.
@@ -2170,7 +2182,7 @@ class Circuit(object):
         -------
         Circuit
         """
-        self.insert_circuit(circuit, 0)
+        return self.insert_circuit(circuit, 0)
 
     def prefix_circuit_inplace(self, circuit):
         """
@@ -2246,7 +2258,7 @@ class Circuit(object):
 
     def tensor_circuit(self, circuit, line_order=None):
         """
-        The tensor product of this circuit and `circuit`.
+        The tensor product of this circuit and `circuit`, returning a copy.
 
         That is, it adds `circuit` to this circuit as new lines.  The line
         labels of `circuit` must be disjoint from the line labels of this
@@ -2269,7 +2281,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.tensor_circuit_inplace(circuit, line_order)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def replace_layer_with_circuit_inplace(self, circuit, j):
@@ -2293,7 +2305,8 @@ class Circuit(object):
 
     def replace_layer_with_circuit(self, circuit, j):
         """
-        Replaces the `j`-th layer of this circuit with `circuit`.
+        Replaces the `j`-th layer of this circuit with `circuit`,
+        returning a copy.
 
         Parameters
         ----------
@@ -2309,7 +2322,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.replace_layer_with_circuit_inplace(circuit, j)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def replace_gatename_inplace(self, old_gatename, new_gatename):
@@ -2371,7 +2384,7 @@ class Circuit(object):
             #Could to this in both cases, but is slow for large static circuits
             cpy = self.copy(editable=True)
             cpy.replace_gatename_inplace(old_gatename, new_gatename)
-            cpy.done_editing()
+            if self._static: cpy.done_editing()
             return cpy
         else:  # static case: so self._labels is a tuple of Labels
             return Circuit([lbl.replace_name(old_gatename, new_gatename)
@@ -2426,7 +2439,7 @@ class Circuit(object):
         # Slow for large static circuits - maybe make a faster case?
         cpy = self.copy(editable=True)
         cpy.replace_gatename_with_idle_inplace(gatename)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def replace_layer(self, old_layer, new_layer):
@@ -2527,7 +2540,7 @@ class Circuit(object):
             gate, unless `allow_unchanged_gates` is False. In that case, gate that aren't a key in this dictionary are
             left unchanged.
 
-            If a CompilationLibrary, this will be queried via the get_compilation_of() method to find compilations
+            If a CompilationLibrary, this will be queried via the retrieve_compilation_of() method to find compilations
             for all of the gates in the circuit. So this CompilationLibrary must contain or be able to auto-generate
             compilations for the requested gates, except when `allow_unchanged_gates` is True. In that case, gates
             that a compilation is not returned for are left unchanged.
@@ -2565,11 +2578,11 @@ class Circuit(object):
         from pygsti.processors import CliffordCompilationRules as _CliffordCompilationRules
         if isinstance(compilation, _CliffordCompilationRules):
             # The function we query to find compilations
-            def get_compilation(gate):
+            def _get_compilation(gate):
                 # Use try, because it will fail if it cannot construct a compilation, and this is fine under some
                 # circumstances
                 try:
-                    circuit = compilation.get_compilation_of(gate, allowed_filter=allowed_filter, verbosity=0)
+                    circuit = compilation.retrieve_compilation_of(gate, allowed_filter=allowed_filter, verbosity=0)
                     return circuit
                 except:
                     return None
@@ -2578,33 +2591,40 @@ class Circuit(object):
             assert(allowed_filter is None), \
                 "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
 
-            def get_compilation(gate):
-                return compilation.specific_compilations.get(gate, None)
+            def _get_compilation(gate):
+                return compilation.retrieve_compilation_of(gate)
 
         else:  # Otherwise, we assume it's a dict.
             assert(allowed_filter is None), \
                 "`allowed_filter` can only been not None if the compilation is a CliffordCompilationRules object!"
 
-            def get_compilation(gate):
+            def _get_compilation(gate):
                 return compilation.get(gate, None)
 
         for ilayer in range(self.num_layers - 1, -1, -1):
-            icomps_to_remove = []
-            for icomp, l in enumerate(self._layer_components(ilayer)):  # loop over labels in this layer
-                replacement_circuit = get_compilation(l)
-                if replacement_circuit is not None:
-                    # Replace the gate with a circuit: remove the gate and add insert
-                    # the replacement circuit as the following layers.
-                    icomps_to_remove.append(icomp)
-                    self.insert_labels_into_layers_inplace(replacement_circuit, ilayer + 1)
-                else:
-                    # We never consider not having a compilation for the identity to be a failure.
-                    if not allow_unchanged_gates:
-                        raise ValueError(
-                            "`compilation` does not contain, or cannot generate a compilation for {}!".format(l))
+            if len(self._layer_components(ilayer)):
+                icomps_to_remove = []
+                for icomp, l in enumerate(self._layer_components(ilayer)):  # loop over labels in this layer
+                    replacement_circuit = _get_compilation(l)
+                    if replacement_circuit is not None:
+                        # Replace the gate with a circuit: remove the gate and add insert
+                        # the replacement circuit as the following layers.
+                        icomps_to_remove.append(icomp)
+                        self.insert_labels_into_layers_inplace(replacement_circuit, ilayer + 1)
+                    else:
+                        # We never consider not having a compilation for the identity to be a failure.
+                        if not allow_unchanged_gates:
+                            raise ValueError(
+                                "`compilation` does not contain, or cannot generate a compilation for {}!".format(l))
 
-            for icomp in reversed(icomps_to_remove):
-                self._remove_layer_component(ilayer, icomp)
+                for icomp in reversed(icomps_to_remove):
+                    self._remove_layer_component(ilayer, icomp)
+            else:
+                # Also allow replacement of empty layers
+                replacement_circuit = _get_compilation(_Label(()))
+                if replacement_circuit is not None:
+                    # This is not a layer insertion, we want to overwrite the empty layer
+                    self.replace_layer_with_circuit_inplace(replacement_circuit, ilayer)
 
         # If specified, perform the depth compression.
         # It is better to do this *after* the identity name has been changed.
@@ -2721,7 +2741,7 @@ class Circuit(object):
 
     def reorder_lines(self, order):
         """
-        Reorders the lines (wires/qubits) of the circuit.
+        Reorders the lines (wires/qubits) of the circuit, returning a copy.
 
         Note that the ordering of the lines is unimportant for most purposes.
 
@@ -2737,7 +2757,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.reorder_lines_inplace(order)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def _is_line_idling(self, line_label, idle_layer_labels=None):
@@ -2842,7 +2862,8 @@ class Circuit(object):
 
     def delete_idling_lines(self, idle_layer_labels=None):
         """
-        Removes from this circuit all lines that are idling at every layer.
+        Removes from this circuit all lines that are idling at every layer,
+        returning a copy.
 
         Parameters
         ----------
@@ -2858,7 +2879,7 @@ class Circuit(object):
         """
         cpy = self.copy(editable=True)
         cpy.delete_idling_lines_inplace(idle_layer_labels)
-        cpy.done_editing()
+        if self._static: cpy.done_editing()
         return cpy
 
     def replace_with_idling_line_inplace(self, line_label, clear_straddlers=True):
@@ -3580,15 +3601,15 @@ class Circuit(object):
         d = self.num_layers
 
         f = open(filename, 'w')
-        f.write("\documentclass{article}\n")
+        f.write("\\documentclass{article}\n")
         f.write("\\usepackage{mathtools}\n")
         f.write("\\usepackage{xcolor}\n")
         f.write("\\usepackage[paperwidth=" + str(5. + d * .3)
                 + "in, paperheight=" + str(2 + n * 0.2) + "in,margin=0.5in]{geometry}")
-        f.write("\input{Qcircuit}\n")
+        f.write("\\input{Qcircuit}\n")
         f.write("\\begin{document}\n")
         f.write("\\begin{equation*}\n")
-        f.write("\Qcircuit @C=1.0em @R=0.5em {\n")
+        f.write("\\Qcircuit @C=1.0em @R=0.5em {\n")
 
         for q in range(0, n):
             qstring = '&'
@@ -3598,26 +3619,26 @@ class Circuit(object):
                 gate_qubits = gate.qubits if (gate.qubits is not None) else self.line_labels
                 nqubits = len(gate_qubits)
                 if gate.name == self.identity:
-                    qstring += ' \qw &'
+                    qstring += r' \qw &'
                 elif gate.name in ('CNOT', 'Gcnot') and nqubits == 2:
                     if gate_qubits[0] == q:
-                        qstring += ' \ctrl{' + str(gate_qubits[1] - q) + '} &'
+                        qstring += r' \ctrl{' + str(gate_qubits[1] - q) + '} &'
                     else:
-                        qstring += ' \\targ &'
+                        qstring += r' \targ &'
                 elif gate.name in ('CPHASE', 'Gcphase') and nqubits == 2:
                     if gate_qubits[0] == q:
-                        qstring += ' \ctrl{' + str(gate_qubits[1] - q) + '} &'
+                        qstring += r' \ctrl{' + str(gate_qubits[1] - q) + '} &'
                     else:
-                        qstring += ' \control \qw &'
+                        qstring += r' \control \qw &'
 
                 else:
-                    qstring += ' \gate{' + str(gate.name) + '} &'
+                    qstring += r' \gate{' + str(gate.name) + '} &'
 
-            qstring += ' \qw & \\' + '\\ \n'
+            qstring += r' \qw & \\' + '\\ \n'
             f.write(qstring)
 
-        f.write("}\end{equation*}\n")
-        f.write("\end{document}")
+        f.write("}\\end{equation*}\n")
+        f.write("\\end{document}")
         f.close()
 
     def convert_to_cirq(self,
@@ -3946,9 +3967,6 @@ class Circuit(object):
 
         depth = self.num_layers
 
-        def trivial_arg_map(gatearg):
-            return ''
-
         # Go through the layers, and add the openqasm for each layer in turn.
         for l in range(depth):
 
@@ -3964,13 +3982,13 @@ class Circuit(object):
 
                 # Find the openqasm for the gate.
                 if gate.name.__str__() != 'Iz':
-                    openqasmlist_for_gate = gatename_conversion[gate.name]  # + gatearg_str
+                    openqasmlist_for_gate = gatename_conversion.get(gate.name, None)
 
-                    if isinstance(openqasmlist_for_gate, str):
-                        gatearg_str = gateargs_map.get(gate.name, trivial_arg_map)(gate.args)
-                        openqasmlist_for_gate = [openqasmlist_for_gate + gatearg_str, ]
-                    else:
-                        assert(gate.name not in gateargs_map.keys())
+                    if openqasmlist_for_gate is None:
+                        # Try to look up the operation in mapping dict instead
+                        openqasmfn_for_gate = gateargs_map.get(gate.name, None)
+                        assert openqasmfn_for_gate is not None, "Could not look up {} as qasm list or func" % gate.name
+                        openqasmlist_for_gate = openqasmfn_for_gate(gate.args)
 
                     openqasm_for_gate = ''
                     for subopenqasm_for_gate in openqasmlist_for_gate:
@@ -4048,8 +4066,7 @@ class Circuit(object):
 
         The order of the outcome strings (e.g., '0100') is w.r.t. to the
         ordering of the qubits in the circuit. That is, the ith element of the
-        outcome string corresponds to the qubit with label
-        `self.qubit_labels[i]`.
+        outcome string corresponds to the qubit with label `self.line_labels[i]`.
 
         Parameters
         ----------
@@ -4057,10 +4074,10 @@ class Circuit(object):
             A description of the gate and SPAM operations corresponding to the
             labels stored in this Circuit. If this model is over more qubits
             than the circuit, the output will be the probabilities for the qubits
-            in the circuit marginalized over the other qubits. But, the simulation
-            is over the full set of qubits in the model, and so the time taken for
-            the simulation scales with the number of qubits in the model. For
-            models whereby "spectator" qubits do not affect the qubits in this
+            in the circuit marginalized, if possible over the other qubits. But, the
+            simulation is over the full set of qubits in the model, and so the time
+            taken for the simulation scales with the number of qubits in the model.
+            For models where "spectator" qubits do not affect the qubits in this
             circuit (such as with perfect gates), more efficient simulations will
             be obtained by first creating a model only over the qubits in this
             circuit.
@@ -4079,41 +4096,18 @@ class Circuit(object):
         """
         # These results is a dict with strings of outcomes (normally bits) ordered according to the
         # state space ordering in the model.
+
+        # A dict with outcomes (normally bits) ordered according to the POVM, which is ordered
+        # according to the circuit's line labels when a default POVM label is generated (because
+        # the default POVM will have the line labels of the circuit, and this will prompt generation
+        # of a MarginalizedPOVM when possible, or an error when not).
         results = model.probabilities(self)
 
-        # Mapping from the state-space labels of the model to their indices.
-        # (e.g. if model.state_space is [('Qa','Qb')] then sslInds['Qb'] = 1
-        # (and 'Qb' may be a circuit line label)
-        #sslInds = {sslbl: i for i, sslbl in enumerate(model.state_space.tensor_product_block_labels(0))}
-        # Note: we ignore all but the first tensor product block of the state space.
-
-        assert(model.state_space.num_tensor_product_blocks == 1), "Only supports single-TPB state spaces currently"
-        ssls = model.state_space.tensor_product_block_labels(0)
-        reduced_ssls = [ssl for ssl in ssls if ssl in self.line_labels]
-        ll_to_sslInds = {ll: reduced_ssls.index(ll) for ll in self.line_labels}
-
-        def process_outcome(outcome):
-            """Relabels an outcome tuple and drops state space labels not in the circuit."""
-            processed_outcome = []
-            for lbl in outcome:  # lbl is a string - an instrument element or POVM effect label, e.g. '010'
-                relbl = ''.join([lbl[ll_to_sslInds[ll]] for ll in self.line_labels])
-                processed_outcome.append(relbl)
-                #Note: above code *assumes* that each state-space label (and so circuit line label)
-                # corresponds to a *single* letter of the instrument/POVM label `lbl`.  This is almost
-                # always the case, as state space labels are usually qubits and so effect labels are
-                # composed of '0's and '1's.
-            return tuple(processed_outcome)
-
-        processed_results = _ld.OutcomeLabelDict()
-        for outcome, pr in results.items():
-            if return_all_outcomes or pr > 1e-12:  # then process & accumulate pr
-                p_outcome = process_outcome(outcome)  # rearranges and drops parts of `outcome`
-                if p_outcome in processed_results:  # (may occur b/c processing can map many-to-one)
-                    processed_results[p_outcome] += pr  # adding marginalizes the results.
-                else:
-                    processed_results[p_outcome] = pr
-
-        return processed_results
+        # cull out zero probs when return_all_outcomes is False
+        if return_all_outcomes is False:
+            return _ld.OutcomeLabelDict([(outcome, pr) for outcome, pr in results.items() if abs(pr) > 1e-12])
+        else:
+            return results
 
     def done_editing(self):
         """

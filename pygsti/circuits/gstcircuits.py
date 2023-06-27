@@ -21,6 +21,7 @@ from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitstructure import FiducialPairPlaquette as _FiducialPairPlaquette
 from pygsti.circuits.circuitstructure import GermFiducialPairPlaquette as _GermFiducialPairPlaquette
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
+from pygsti.circuits.circuitconstruction import manipulate_circuits as _manipulate_circuits
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
@@ -155,9 +156,9 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
     [c.str for c in prep_strs]
     [c.str for c in effect_strs]
 
-    from pygsti.processors.processorspec import QubitProcessorSpec as _QubitProcessorSpec
+    from pygsti.processors.processorspec import QubitProcessorSpec as _QuditProcessorSpec
     from pygsti.models.model import OpModel as _OpModel
-    if isinstance(op_label_src, _QubitProcessorSpec):
+    if isinstance(op_label_src, _QuditProcessorSpec):
         opLabels = op_label_src.primitive_op_labels
     elif isinstance(op_label_src, _OpModel):
         opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
@@ -408,6 +409,8 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
     [c.str for c in prep_fiducials]
     [c.str for c in meas_fiducials]
 
+    #print('Germs: ', germs)
+
     def filter_ds(circuits, ds, missing_lgst):
         if ds is None: return circuits[:]
         filtered_circuits = []
@@ -443,10 +446,10 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
             pkey_dict[base_circuit] = (maxlen, germ)
             if power is None:  # no well-defined power, so just make a fiducial-pair plaquette
                 plaq = _FiducialPairPlaquette(base_circuit, fidpairs, len(meas_fiducials), len(prep_fiducials),
-                                              op_label_aliases)
+                                              op_label_aliases, circuit_rules)
             else:
                 plaq = _GermFiducialPairPlaquette(germ, power, fidpairs, len(meas_fiducials), len(prep_fiducials),
-                                                  op_label_aliases)
+                                                  op_label_aliases, circuit_rules)
             plaquette_dict[base_circuit] = plaq
         else:
             #Add to existing plaquette (assume we don't need to change number of rows/cols of plaquette)
@@ -458,11 +461,12 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                     new_fidpairs[(j, i)] = (prep, meas)
             if power is None:  # no well-defined power, so just make a fiducial-pair plaquette
                 plaquette_dict[base_circuit] = _FiducialPairPlaquette(base_circuit, new_fidpairs, len(meas_fiducials),
-                                                                      len(prep_fiducials), op_label_aliases)
+                                                                      len(prep_fiducials), op_label_aliases,
+                                                                      circuit_rules)
             else:
                 plaquette_dict[base_circuit] = _GermFiducialPairPlaquette(germ, power, new_fidpairs,
                                                                           len(meas_fiducials), len(prep_fiducials),
-                                                                          op_label_aliases)
+                                                                          op_label_aliases, circuit_rules)
 
     printer = _VerbosityPrinter.create_printer(verbosity)
     if germ_length_limits is None: germ_length_limits = {}
@@ -476,15 +480,17 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                        + " max-length list at 1 now."
                        + "")
 
-    from pygsti.processors.processorspec import QubitProcessorSpec as _QubitProcessorSpec
+    from pygsti.processors.processorspec import QuditProcessorSpec as _QuditProcessorSpec
     from pygsti.models.model import OpModel as _OpModel
-    if isinstance(op_label_src, _QubitProcessorSpec):
+    if isinstance(op_label_src, _QuditProcessorSpec):
         opLabels = op_label_src.primitive_op_labels
     elif isinstance(op_label_src, _OpModel):
         opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels
     else: opLabels = op_label_src
 
     lgst_list = _gsc.create_lgst_circuits(prep_fiducials, meas_fiducials, opLabels)
+    if circuit_rules is not None:
+        lgst_list = _manipulate_circuits(lgst_list, circuit_rules)
 
     allPossiblePairs = list(_itertools.product(range(len(prep_fiducials)),
                                                range(len(meas_fiducials))))
@@ -495,8 +501,11 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
         nPairsToKeep = int(round(float(keep_fraction) * nPairs))
     else: rndm = None
 
+    fidpair_germ_power_keys = False
     if isinstance(fid_pairs, dict) or hasattr(fid_pairs, "keys"):
         fidPairDict = fid_pairs  # assume a dict of per-germ pairs
+        if isinstance(list(fidPairDict.keys())[0], tuple):
+            fidpair_germ_power_keys = True
     else:
         if fid_pairs is not None:  # assume fid_pairs is a list
             fidPairDict = {germ: fid_pairs for germ in germs}
@@ -554,22 +563,32 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                 add_to_plaquettes(pkey, plaquettes, empty_germ, maxLen, empty_germ, 1,
                                   allPossiblePairs, dscheck, missing_list)
                 unindexed.extend(filter_ds(lgst_list, dscheck, missing_lgst))  # overlap w/plaquettes ok (removed later)
-
             #Typical case of germs repeated to maxLen using r_fn
             for ii, germ in enumerate(germs):
                 if germ == empty_germ: continue  # handled specially above
                 if maxLen > germ_length_limits.get(germ, 1e100): continue
+
                 germ_power = truncFn(germ, maxLen)
                 power = len(germ_power) // len(germ)  # this *could* be the germ power
                 if germ_power != germ * power:
                     power = None  # Signals there is no well-defined power
 
-                if rndm is None:
-                    fiducialPairsThisIter = fidPairDict.get(germ, allPossiblePairs) \
-                        if fidPairDict is not None else allPossiblePairs
+                if power == 0 and len(germ) != 0:
+                    continue
 
+                # Switch on fidpair dicts with germ or (germ, L) keys
+                key = germ
+                if fidpair_germ_power_keys:
+                    key = (germ, maxLen)
+
+                if rndm is None:
+                    fiducialPairsThisIter = fidPairDict.get(key, allPossiblePairs) \
+                        if fidPairDict is not None else allPossiblePairs
+                    #if fiducialPairsThisIter==allPossiblePairs:
+                    #    print('Couldn\'t find ', key, ' using allPossiblePairs')
+                    #print('FiducialPairsThisIter: ', fiducialPairsThisIter)
                 elif fidPairDict is not None:
-                    pair_indx_tups = fidPairDict.get(germ, allPossiblePairs)
+                    pair_indx_tups = fidPairDict.get(key, allPossiblePairs)
                     remainingPairs = [(i, j)
                                       for i in range(len(prep_fiducials))
                                       for j in range(len(meas_fiducials))
@@ -580,7 +599,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                     assert(0 <= nPairsToChoose <= nPairsRemaining)
                     # FUTURE: issue warnings when clipping nPairsToChoose?
 
-                    fiducialPairsThisIter = fidPairDict[germ] + \
+                    fiducialPairsThisIter = fidPairDict[key] + \
                         [remainingPairs[k] for k in
                          sorted(rndm.choice(nPairsRemaining, nPairsToChoose,
                                             replace=False))]
@@ -612,9 +631,11 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
 
     printer.log("--- Circuit Creation ---", 1)
     printer.log(" %d circuits created" % tot_circuits, 2)
+    #print("Total Number of Circuits: ", tot_circuits)
     if dscheck:
         printer.log(" Dataset has %d entries: %d utilized, %d requested circuits were missing"
                     % (len(dscheck), tot_circuits, len(missing_list)), 2)
+    #print(len(missing_lgst))
     if len(missing_list) > 0 or len(missing_lgst) > 0:
         MAX = 10  # Maximum missing-seq messages to display
         missing_msgs = [("Prep: %s, Germ: %s, L: %d, Meas: %s, Circuit: %s" % tup) for tup in missing_list[0:MAX + 1]] \
@@ -799,9 +820,9 @@ def create_elgst_lists(op_label_src, germ_list, max_length_list,
         Note that a "0" maximum-length corresponds to the gate
         label strings.
     """
-    from pygsti.processors.processorspec import QubitProcessorSpec as _QubitProcessorSpec
+    from pygsti.processors.processorspec import QubitProcessorSpec as _QuditProcessorSpec
     from pygsti.models.model import OpModel as _OpModel
-    if isinstance(op_label_src, _QubitProcessorSpec):
+    if isinstance(op_label_src, _QuditProcessorSpec):
         opLabels = op_label_src.primitive_op_labels
     elif isinstance(op_label_src, _OpModel):
         opLabels = op_label_src.primitive_op_labels + op_label_src.primitive_instrument_labels

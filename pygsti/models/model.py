@@ -15,25 +15,30 @@ import copy as _copy
 import itertools as _itertools
 import uuid as _uuid
 import warnings as _warnings
+import collections as _collections
 
 import numpy as _np
 
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.models.layerrules import LayerRules as _LayerRules
+from pygsti.models.modelparaminterposer import LinearInterposer as _LinearInterposer
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims import forwardsim as _fwdsim
 from pygsti.forwardsims import mapforwardsim as _mapfwdsim
 from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
 from pygsti.modelmembers import modelmember as _gm
-from pygsti.baseobjs.basis import Basis as _Basis
+from pygsti.modelmembers import operations as _op
+from pygsti.baseobjs.basis import Basis as _Basis, TensorProdBasis as _TensorProdBasis
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.tools import slicetools as _slct
+from pygsti.tools import matrixtools as _mt
 
 MEMLIMIT_FOR_NONGAUGE_PARAMS = None
 
 
-class Model(object):
+class Model(_NicelySerializable):
     """
     A predictive model for a Quantum Information Processor (QIP).
 
@@ -41,7 +46,7 @@ class Model(object):
     probabilities of :class:`Circuit` objects based on the action of the
     model's ideal operations plus (potentially) noise which makes the
     outcome probabilities deviate from the perfect ones.
-v
+
     Parameters
     ----------
     state_space : StateSpace
@@ -49,6 +54,7 @@ v
     """
 
     def __init__(self, state_space):
+        super().__init__()
         self._state_space = _statespace.StateSpace.cast(state_space)
         self._num_modeltest_params = None
         self._hyperparams = {}
@@ -56,6 +62,14 @@ v
         self._paramlbls = _np.empty(0, dtype=object)
         self._param_bounds = None
         self.uuid = _uuid.uuid4()  # a Model's uuid is like a persistent id(), useful for hashing
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'state_space': self.state_space.to_nice_serialization(),
+                      'parameter_labels': list(self._paramlbls) if len(self._paramlbls) > 0 else None,
+                      'parameter_bounds': (self._encodemx(self._param_bounds)
+                                           if (self._param_bounds is not None) else None)})
+        return state
 
     @property
     def state_space(self):
@@ -446,6 +460,9 @@ class OpModel(Model):
     #Whether to perform extra parameter-vector integrity checks
     _pcheck = False
 
+    #Experimental: whether to call .from_vector on operation *cache* elements as part of model.from_vector call
+    _call_fromvector_on_cache = True
+
     def __init__(self, state_space, basis, evotype, layer_rules, simulator="auto"):
         """
         Creates a new OpModel.  Rarely used except from derived classes `__init__` functions.
@@ -461,7 +478,9 @@ class OpModel(Model):
         self._need_to_rebuild = True  # whether we call _rebuild_paramvec() in to_vector() or num_params()
         self.dirty = False  # indicates when objects and _paramvec may be out of sync
         self.sim = simulator  # property setter does nontrivial initialization (do this *last*)
+        self._param_interposer = None
         self._reinit_opcaches()
+        self.fogi_store = None
 
     def __setstate__(self, state_dict):
         self.__dict__.update(state_dict)
@@ -475,6 +494,8 @@ class OpModel(Model):
     def sim(self):
         """ Forward simulator for this model """
         self._clean_paramvec()  # clear opcache and rebuild paramvec when needed
+        if hasattr(self._sim, 'model'):
+            assert(self._sim.model is self), "Simulator out of sync with model!!"
         return self._sim
 
     @sim.setter
@@ -637,16 +658,17 @@ class OpModel(Model):
 
         if self.dirty:  # if any member object is dirty (ModelMember.dirty setter should set this value)
             TOL = 1e-8
+            ops_paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
 
             #Note: lbl args used *just* for potential debugging - could strip out once
             # we're confident this code always works.
             def clean_single_obj(obj, lbl):  # sync an object's to_vector result w/_paramvec
                 if obj.dirty:
                     w = obj.to_vector()
-                    chk_norm = _np.linalg.norm(self._paramvec[obj.gpindices] - w)
+                    chk_norm = _np.linalg.norm(ops_paramvec[obj.gpindices] - w)
                     #print(lbl, " is dirty! vec = ", w, "  chk_norm = ",chk_norm)
                     if (not _np.isfinite(chk_norm)) or chk_norm > TOL:
-                        self._paramvec[obj.gpindices] = w
+                        ops_paramvec[obj.gpindices] = w
                     obj.dirty = False
 
             def clean_obj(obj, lbl):  # recursive so works with objects that have sub-members
@@ -660,21 +682,43 @@ class OpModel(Model):
             #re-update everything to ensure consistency ~ self.from_vector(self._paramvec)
             #print("DEBUG: non-trivially CLEANED paramvec due to dirty elements")
             for _, obj in self._iter_parameterized_objs():
-                obj.from_vector(self._paramvec[obj.gpindices], dirty_value=False)
+                obj.from_vector(ops_paramvec[obj.gpindices], dirty_value=False)
                 #object is known to be consistent with _paramvec
 
+            # Call from_vector on elements of the cache
+            if self._call_fromvector_on_cache:
+                for opcache in self._opcaches.values():
+                    for obj in opcache.values():
+                        obj.from_vector(ops_paramvec[obj.gpindices], dirty_value=False)
+
             self.dirty = False
-            self._reinit_opcaches()  # changes to parameter vector structure invalidate cached ops
+            self._paramvec[:] = self._ops_paramvec_to_model_paramvec(ops_paramvec)
+            #self._reinit_opcaches()  # this shouldn't be necessary
 
         if OpModel._pcheck: self._check_paramvec()
 
     def _mark_for_rebuild(self, modified_obj=None):
         #re-initialze any members that also depend on the updated parameters
         self._need_to_rebuild = True
-        for _, o in self._iter_parameterized_objs():
-            if o._obj_refcount(modified_obj) > 0:
-                o.clear_gpindices()  # ~ o.gpindices = None but works w/submembers
-                # (so params for this obj will be rebuilt)
+
+        # Specifically, we need to re-allocate indices for every object that
+        # contains a reference to the modified one.  Previously all modelmembers
+        # of a model needed to have their self.parent *always* point to the
+        # parent model, and so we would clear the members' .gpindices to indicate
+        # allocation was needed.  Now, that constraint has been loosened, and
+        # we instead set a member's .parent=None to indicate it needs reallocation
+        # (this allows the .gpindices to be used, e.g., for parameter counting
+        # within the object).  Because _rebuild_paramvec determines whether an
+        # object needs allocation by calling its .gpindices_are_allocated method,
+        # which checks submembers too, there's no longer any need to clear (set
+        # to None) the .gpindinces any objects here.
+
+        #OLD
+        #for _, o in self._iter_parameterized_objs():
+        #    if o._obj_refcount(modified_obj) > 0:
+        #        o.clear_gpindices()  # ~ o.gpindices = None but works w/submembers
+        #        # (so params for this obj will be rebuilt)
+
         self.dirty = True
         #since it's likely we'll set at least one of our object's .dirty flags
         # to True (and said object may have parent=None and so won't
@@ -841,117 +885,152 @@ class OpModel(Model):
         """ Resizes self._paramvec and updates gpindices & parent members as needed,
             and will initialize new elements of _paramvec, but does NOT change
             existing elements of _paramvec (use _update_paramvec for this)"""
-        v = self._paramvec; Np = len(self._paramvec)  # NOT self.num_params since the latter calls us!
-        vl = self._paramlbls
-        vb = self._param_bounds if (self._param_bounds is not None) else _default_param_bounds(Np)
-        off = 0; shift = 0
-        #print("DEBUG: rebuilding...")
+        w = self._model_paramvec_to_ops_paramvec(self._paramvec)
+        Np = len(w)  # NOT self.num_params since the latter calls us!
+        wl = self._paramlbls
+        wb = self._param_bounds if (self._param_bounds is not None) else _default_param_bounds(Np)
+        #NOTE: interposer doesn't quite work with parameter bounds yet, as we need to convert "model"
+        # bounds to "ops" bounds like we do the parameter vector.  Need something like:
+        #wb = self._model_parambouds_to_ops_parambounds(self._param_bounds) \
+        #    if (self._param_bounds is not None) else _default_param_bounds(Np)
+        debug = False
+        if debug: print("DEBUG: rebuilding model %s..." % str(id(self)))
 
-        #Step 1: remove any unused indices from paramvec and shift accordingly
-        used_gpindices = set()
-        for _, obj in self._iter_parameterized_objs():
-            if obj.gpindices is not None:
-                assert(obj.parent is self), "Member's parent is not set correctly (%s)!" % str(obj.parent)
-                used_gpindices.update(obj.gpindices_as_array())
-            else:
-                assert(obj.parent is self or obj.parent is None)
-                #Note: ok for objects to have parent == None if their gpindices is also None
-
-        indices_to_remove = sorted(set(range(Np)) - used_gpindices)
-
-        if len(indices_to_remove) > 0:
-            #print("DEBUG: Removing %d params:"  % len(indices_to_remove), indices_to_remove)
-            v = _np.delete(v, indices_to_remove)
-            vl = _np.delete(vl, indices_to_remove)
-            vb = _np.delete(vb, indices_to_remove, axis=0)
-            def get_shift(j): return _bisect.bisect_left(indices_to_remove, j)
-            memo = set()  # keep track of which object's gpindices have been set
-            for _, obj in self._iter_parameterized_objs():
-                if obj.gpindices is not None:
-                    if id(obj) in memo: continue  # already processed
-                    if isinstance(obj.gpindices, slice):
-                        new_inds = _slct.shift(obj.gpindices,
-                                               -get_shift(obj.gpindices.start))
-                    else:
-                        new_inds = []
-                        for i in obj.gpindices:
-                            new_inds.append(i - get_shift(i))
-                        new_inds = _np.array(new_inds, _np.int64)
-                    obj.set_gpindices(new_inds, self, memo)
-
-        # Step 2: add parameters that don't exist yet
+        # Step 1: add parameters that don't exist yet
         #  Note that iteration order (that of _iter_parameterized_objs) determines
         #  parameter index ordering, so "normally" an object that occurs before
         #  another in the iteration order will have gpindices which are lower - and
         #  when new indices are allocated we try to maintain this normal order by
         #  inserting them at an appropriate place in the parameter vector.
-        #  off : holds the current point where new params should be inserted
-        #  shift : holds the amount existing parameters that are > offset (not in `memo`) should be shifted
-        # Note: Adding more explicit "> offset" logic may obviate the need for the memo arg?
-        memo = set()  # keep track of which object's gpindices have been set
+
+        #Get a record up-front, before any allocations are made, of which objects will need to be reallocated.
+        is_allocated = {lbl: obj.gpindices_are_allocated(self) for lbl, obj in self._iter_parameterized_objs()}
+        max_index_processed_so_far = -1
+
         for lbl, obj in self._iter_parameterized_objs():
 
-            if shift > 0 and obj.gpindices is not None:
-                #print("DEBUG: %s: shifting indices by %d.  Initially %s" % (str(lbl), shift, str(obj.gpindices)))
-                if isinstance(obj.gpindices, slice):
-                    obj.set_gpindices(_slct.shift(obj.gpindices, shift), self, memo)
-                else:
-                    obj.set_gpindices(obj.gpindices + shift, self, memo)  # works for integer arrays
+            completely_allocated = is_allocated[lbl]
+            if debug: print("Processing: ", lbl, " gpindices=", obj.gpindices, " allocated = ", completely_allocated)
 
-            if obj.gpindices is None or obj.parent is not self:
-                #Assume all parameters of obj are new independent parameters
-                num_new_params = obj.allocate_gpindices(off, self, memo)
-                objvec = obj.to_vector()  # may include more than "new" indices
-                objlbls = _np.empty(obj.num_params, dtype=object)
-                objlbls[:] = [(lbl, obj_plbl) for obj_plbl in obj.parameter_labels]
-                objbounds = obj.parameter_bounds if (obj.parameter_bounds is not None) \
-                    else _default_param_bounds(len(objvec))
+            if not completely_allocated:  # obj.gpindices_are_allocated(self):
+                # We need to [re-]allocate obj's indices to this model
+                num_new_params, max_existing_index = obj.preallocate_gpindices(self)  # any new indices need allocation?
+                max_index_processed_so_far = max(max_index_processed_so_far, max_existing_index)
+                insertion_point = max_index_processed_so_far + 1
                 if num_new_params > 0:
-                    new_local_inds = _gm._decompose_gpindices(obj.gpindices, slice(off, off + num_new_params))
-                    assert(len(objvec[new_local_inds]) == num_new_params)
-                    v = _np.insert(v, off, objvec[new_local_inds])
-                    vl = _np.insert(vl, off, objlbls[new_local_inds])
-                    vb = _np.insert(vb, off, objbounds[new_local_inds, :], axis=0)
-                # print("objvec len = ",len(objvec), "num_new_params=",num_new_params,
-                #       " gpinds=",obj.gpindices) #," loc=",new_local_inds)
+                    # If so, before allocating anything, make the necessary space in the parameter arrays:
+                    for _, o in self._iter_parameterized_objs():
+                        o.shift_gpindices(insertion_point, num_new_params, self)
+                    w = _np.insert(w, insertion_point, _np.empty(num_new_params, 'd'))
+                    wl = _np.insert(wl, insertion_point, _np.empty(num_new_params, dtype=object))
+                    wb = _np.insert(wb, insertion_point, _default_param_bounds(num_new_params), axis=0)
 
-                #obj.set_gpindices( slice(off, off+obj.num_params), self )
-                #shift += obj.num_params
-                #off += obj.num_params
+                # Now allocate (actually updates obj's gpindices).  May be necessary even if
+                # num_new_params == 0 (e.g. a composed op needs to have it's gpindices updated bc
+                # a sub-member's # of params was updated, but this submember was already allocated
+                # on an earlier iteration - this is why we compute is_allocated as outset).
+                num_added_params = obj.allocate_gpindices(insertion_point, self)
+                assert(num_added_params == num_new_params), \
+                    "Inconsistency between preallocate_gpindices and allocate_gpindices!"
+                if debug:
+                    print("DEBUG: allocated %d new params starting at %d, resulting gpindices = %s"
+                          % (num_new_params, insertion_point, str(obj.gpindices)))
 
-                shift += num_new_params
-                off += num_new_params
-                #print("DEBUG: %s: alloc'd & inserted %d new params.  indices = " \
-                #      % (str(lbl),obj.num_params), obj.gpindices, " off=",off)
+                newly_added_indices = slice(insertion_point, insertion_point + num_added_params) \
+                    if num_added_params > 0 else None  # for updating parameter labels below
+
             else:
                 inds = obj.gpindices_as_array()
-                M = max(inds) if len(inds) > 0 else -1; L = len(v)
-                #print("DEBUG: %s: existing indices = " % (str(lbl)), obj.gpindices, " M=",M," L=",L)
+                M = max(inds) if len(inds) > 0 else -1; L = len(w)
+                if debug: print("DEBUG: %s: existing indices = " % (str(lbl)), obj.gpindices, " M=", M, " L=", L)
                 if M >= L:
                     #Some indices specified by obj are absent, and must be created.
-                    w = obj.to_vector()
-                    wl = _np.empty(obj.num_params, dtype=object)
-                    wl[:] = [(lbl, obj_plbl) for obj_plbl in obj.parameter_labels]
-                    wb = obj.parameter_bounds if (obj.parameter_bounds is not None) \
-                        else _default_param_bounds(len(w))
 
-                    v = _np.concatenate((v, _np.empty(M + 1 - L, 'd')), axis=0)  # [v.resize(M+1) doesn't work]
-                    vl = _np.concatenate((vl, _np.empty(M + 1 - L, dtype=object)), axis=0)
-                    vb = _np.concatenate((vb, _np.empty((M + 1 - L, 2), 'd')), axis=0)
-                    #shift += M + 1 - L  # OLD EGN doesn't think we want to shift anything here
-                    for ii, i in enumerate(inds):
-                        if i >= L:
-                            v[i] = w[ii]
-                            vl[i] = wl[ii]
-                            vb[i, :] = wb[ii, :]
-                    #print("DEBUG:    --> added %d new params" % (M+1-L))
-                if M >= 0:  # M == -1 signifies this object has no parameters, so we'll just leave `off` alone
-                    off = M + 1
+                    #set newly_added_indices to the indices for *obj* that have just been added
+                    added_indices = slice(len(w), len(w) + (M + 1 - L))
+                    if isinstance(obj.gpindices, slice):
+                        newly_added_indices = _slct.intersect(added_indices, obj.gpindices)
+                    else:
+                        newly_added_indices = inds[_np.logical_and(inds >= added_indices.start,
+                                                                   inds < added_indices.stop)]
 
-        self._paramvec = v
-        self._paramlbls = vl
-        self._param_bounds = vb if _param_bounds_are_nontrivial(vb) else None
-        #print("DEBUG: Done rebuild: %d params" % len(v))
+                    w = _np.concatenate((w, _np.empty(M + 1 - L, 'd')), axis=0)  # [v.resize(M+1) doesn't work]
+                    wl = _np.concatenate((wl, _np.empty(M + 1 - L, dtype=object)), axis=0)
+                    wb = _np.concatenate((wb, _np.empty((M + 1 - L, 2), 'd')), axis=0)
+                    if debug: print("DEBUG:    --> added %d new params" % (M + 1 - L))
+                else:
+                    newly_added_indices = None
+                #if M >= 0:  # M == -1 signifies this object has no parameters, so we'll just leave `off` alone
+                #    off = M + 1
+
+            #Update max_index_processed_so_far
+            max_gpindex = (obj.gpindices.stop - 1) if isinstance(obj.gpindices, slice) else max(obj.gpindices)
+            max_index_processed_so_far = max(max_index_processed_so_far, max_gpindex)
+
+            # Update parameter values / labels / bounds.
+            # - updating the labels is not strictly necessary since we usually *clean* the param vector next
+            # - we *always* sync object parameter bounds in case any have changed (when bounds on members are
+            #   set/modified, model should be marked for rebuilding)
+            # - we only update *new* parameter labels, since we want any modified labels in the model to "stick"
+            w[obj.gpindices] = obj.to_vector()
+            wb[obj.gpindices, :] = obj.parameter_bounds if (obj.parameter_bounds is not None) \
+                else _default_param_bounds(obj.num_params)
+            if newly_added_indices is not None:
+                obj_paramlbls = _np.empty(obj.num_params, dtype=object)
+                obj_paramlbls[:] = [(lbl, obj_plbl) for obj_plbl in obj.parameter_labels]
+                wl[newly_added_indices] = obj_paramlbls[_gm._decompose_gpindices(obj.gpindices, newly_added_indices)]
+
+        #Step 2: remove any unused indices from paramvec and shift accordingly
+        used_gpindices = set()
+        for lbl, obj in self._iter_parameterized_objs():
+            #print("Removal: ",lbl,str(type(obj)),(id(obj.parent) if obj.parent is not None else None),obj.gpindices)
+            assert(obj.parent is self and obj.gpindices is not None)
+            used_gpindices.update(obj.gpindices_as_array())
+
+            #OLD: from when this was step 1:
+            #if obj.gpindices is not None:
+            #    if obj.parent is self:  # then obj.gpindices lays claim to our parameters
+            #        used_gpindices.update(obj.gpindices_as_array())
+            #    else:
+            #        # ok for objects to have parent=None (before their params are allocated), in which case non-None
+            #        # gpindices can enable the object to function without a parent model, but not parent=other_model,
+            #        # as this indicates the objects parameters are allocated to another model (and should have been
+            #        # cleared in the OrderedMemberDict.__setitem__ method used to add the model member.
+            #        assert(obj.parent is None), \
+            #            "Member's parent (%s) is not set correctly! (must be this model or None)" % repr(obj.parent)
+            #else:
+            #    assert(obj.parent is self or obj.parent is None)
+            #    #Note: ok for objects to have parent == None and gpindices == None
+
+        Np = len(w)  # reset Np from possible new params (NOT self.num_params since the latter calls us!)
+        indices_to_remove = sorted(set(range(Np)) - used_gpindices)
+        if debug: print("Indices to remove = ", indices_to_remove, " of ", Np)
+
+        if len(indices_to_remove) > 0:
+            #if debug: print("DEBUG: Removing %d params:"  % len(indices_to_remove), indices_to_remove)
+            w = _np.delete(w, indices_to_remove)
+            wl = _np.delete(wl, indices_to_remove)
+            wb = _np.delete(wb, indices_to_remove, axis=0)
+            def _get_shift(j): return _bisect.bisect_left(indices_to_remove, j)
+            memo = set()  # keep track of which object's gpindices have been set
+            for _, obj in self._iter_parameterized_objs():
+                # ensure object is allocated to this model and thus should be shifted:
+                assert(obj.gpindices is not None and obj.parent is self)
+                if id(obj) in memo: continue  # already processed
+                if isinstance(obj.gpindices, slice):
+                    new_inds = _slct.shift(obj.gpindices,
+                                           -_get_shift(obj.gpindices.start))
+                else:
+                    new_inds = []
+                    for i in obj.gpindices:
+                        new_inds.append(i - _get_shift(i))
+                    new_inds = _np.array(new_inds, _np.int64)
+                obj.set_gpindices(new_inds, self, memo)
+
+        self._paramvec = self._ops_paramvec_to_model_paramvec(w)
+        self._paramlbls = self._ops_paramlbls_to_model_paramlbls(wl)
+        self._param_bounds = wb if _param_bounds_are_nontrivial(wb) else None
+        if debug: print("DEBUG: Done rebuild: %d op params" % len(w))
 
     def _init_virtual_obj(self, obj):
         """
@@ -965,7 +1044,7 @@ class OpModel(Model):
         real (non-virtual) gates/spamvecs/etc. to accomplish this.
         """
         if obj.gpindices is not None:
-            assert(obj.parent is self), "Virtual obj has incorrect parent already set!"
+            assert(obj.parent is self or obj.parent is None), "Virtual obj has incorrect parent already set!"
             return  # if parent is already set we assume obj has already been init
 
         #Assume all parameters of obj are new independent parameters
@@ -1013,16 +1092,43 @@ class OpModel(Model):
         assert(len(v) == self.num_params)
 
         self._paramvec = v.copy()
+        w = self._model_paramvec_to_ops_paramvec(v)
         for _, obj in self._iter_parameterized_objs():
-            obj.from_vector(v[obj.gpindices], close, dirty_value=False)
+            obj.from_vector(w[obj.gpindices], close, dirty_value=False)
             # dirty_value=False => obj.dirty = False b/c object is known to be consistent with _paramvec
 
         # Call from_vector on elements of the cache
-        for opcache in self._opcaches.values():
-            for obj in opcache.values():
-                obj.from_vector(v[obj.gpindices], close, dirty_value=False)
+        if self._call_fromvector_on_cache:
+            for opcache in self._opcaches.values():
+                for obj in opcache.values():
+                    obj.from_vector(w[obj.gpindices], close, dirty_value=False)
 
         if OpModel._pcheck: self._check_paramvec()
+
+    @property
+    def param_interposer(self):
+        return self._param_interposer
+
+    @param_interposer.setter
+    def param_interposer(self, interposer):
+        if self._param_interposer is not None:  # remove existing interposer
+            self._paramvec = self._model_paramvec_to_ops_paramvec(self._paramvec)
+        self._param_interposer = interposer
+        if interposer is not None:  # add new interposer
+            self._clean_paramvec()
+            self._paramvec = self._ops_paramvec_to_model_paramvec(self._paramvec)
+
+    def _model_paramvec_to_ops_paramvec(self, v):
+        return self.param_interposer.model_paramvec_to_ops_paramvec(v) \
+            if (self.param_interposer is not None) else v
+
+    def _ops_paramvec_to_model_paramvec(self, w):
+        return self.param_interposer.ops_paramvec_to_model_paramvec(w) \
+            if (self.param_interposer is not None) else w
+
+    def _ops_paramlbls_to_model_paramlbls(self, w):
+        return self.param_interposer.ops_paramlbls_to_model_paramlbls(w) \
+            if (self.param_interposer is not None) else w
 
     def circuit_outcomes(self, circuit):
         """
@@ -1167,15 +1273,15 @@ class OpModel(Model):
         raise NotImplementedError("Derived classes must implement this!")
 
     @property
-    def _primitive_povm_labels_dict(self):
+    def _primitive_povm_label_dict(self):
         raise NotImplementedError("Derived classes must implement this!")
 
     @property
-    def _primitive_op_labels_dict(self):
+    def _primitive_op_label_dict(self):
         raise NotImplementedError("Derived classes must implement this!")
 
     @property
-    def _primitive_instrument_labels_dict(self):
+    def _primitive_instrument_label_dict(self):
         raise NotImplementedError("Derived classes must implement this!")
 
     # These are the public properties that return tuples
@@ -1507,8 +1613,638 @@ class OpModel(Model):
         self._clean_paramvec()  # ensure _paramvec is rebuilt if needed
         if OpModel._pcheck: self._check_paramvec()
         ret = Model.copy(self)
+        if self._param_bounds is not None and self.parameter_labels is not None:
+            ret._clean_paramvec()  # will *always* rebuild paramvec; do now so we can preserve param bounds
+            assert _np.all(self.parameter_labels == ret.parameter_labels)  # ensure ordering is the same
+            ret._param_bounds = self._param_bounds.copy()
         if OpModel._pcheck: ret._check_paramvec()
         return ret
+
+    def create_modelmember_graph(self):
+        """
+        Generate a ModelMemberGraph for the model.
+
+        Returns
+        -------
+        ModelMemberGraph
+            A directed graph capturing dependencies among model members
+        """
+        raise NotImplementedError("Derived classes must implement this")
+
+    def print_modelmembers(self):
+        """
+        Print a summary of all the members within this model.
+        """
+        mmg = self.create_modelmember_graph()
+        mmg.print_graph()
+
+    def is_similar(self, other_model, rtol=1e-5, atol=1e-8):
+        """Whether or not two Models have the same structure.
+
+        If `True`, then the two models are the same except for, perhaps, being
+        at different parameter-space points (i.e. having different parameter vectors).
+        Similar models, A and B, can be made equivalent (see :method:`is_equivalent`) by
+        calling `modelA.from_vector(modelB.to_vector())`.
+
+        Parameters
+        ----------
+        other_model: Model
+            The model to compare against
+
+        rtol : float, optional
+            Relative tolerance used to check if floating point values are "equal", as passed to
+            `numpy.allclose`.
+
+        atol: float, optional
+            Absolute tolerance used to check if floating point values are "equal", as passed to
+            `numpy.allclose`.
+
+        Returns
+        -------
+        bool
+        """
+        mmg = self.create_modelmember_graph()
+        other_mmg = other_model.create_modelmember_graph()
+        return mmg.is_similar(other_mmg, rtol, atol)
+
+    def is_equivalent(self, other_model, rtol=1e-5, atol=1e-8):
+        """Whether or not two Models are equivalent to each other.
+
+        If `True`, then the two models have the same structure *and* the same
+        parameters, so they are in all ways alike and will compute the same probabilities.
+
+        Parameters
+        ----------
+        other_model: Model
+            The model to compare against
+
+        rtol : float, optional
+            Relative tolerance used to check if floating point (including parameter) values
+            are "equal", as passed to `numpy.allclose`.
+
+        atol: float, optional
+            Absolute tolerance used to check if floating point (including parameter) values
+            are "equal", as passed to `numpy.allclose`.
+
+        Returns
+        -------
+        bool
+        """
+        mmg = self.create_modelmember_graph()
+        other_mmg = other_model.create_modelmember_graph()
+        return mmg.is_equivalent(other_mmg, rtol, atol)
+
+    def _format_gauge_action_matrix(self, mx, op, reduce_to_model_space, row_basis, op_gauge_basis,
+                                    create_complete_basis_fn):
+
+        from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
+        from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
+        from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
+        import scipy.sparse as _sps
+
+        #Next:
+        # - make linear combos of basis els so that all (nonzero) disallowed rows become zero, i.e.,
+        #    find nullspace of the matrix formed from the (nonzero) disallowed rows of mx.
+        # - promote op_gauge_basis => op_gauge_space (linear combos of the same elementary basis - op_gauge_basis)
+        all_sslbls = self.state_space.sole_tensor_product_block_labels
+
+        if reduce_to_model_space:
+            allowed_lbls = op.errorgen_coefficient_labels()
+            allowed_lbls_set = set(allowed_lbls)
+            allowed_row_basis = _ExplicitElementaryErrorgenBasis(self.state_space, allowed_lbls, basis1q=None)
+            disallowed_indices = [i for i, lbl in enumerate(row_basis.labels) if lbl not in allowed_lbls_set]
+
+            if len(disallowed_indices) > 0:
+                disallowed_rows = mx[disallowed_indices, :]  # a sparse (lil) matrix
+                allowed_gauge_linear_combos = _mt.nice_nullspace(disallowed_rows.toarray(), tol=1e-4)  # DENSE for now
+                mx = _sps.csr_matrix(mx.dot(allowed_gauge_linear_combos))  # dot sometimes/always returns dense array
+                op_gauge_space = _ErrorgenSpace(allowed_gauge_linear_combos, op_gauge_basis)  # DENSE mxs in eg-spaces
+                #FOGI DEBUG: print("DEBUG => mx reduced to ", mx.shape)
+            else:
+                op_gauge_space = _ErrorgenSpace(_np.identity(len(op_gauge_basis), 'd'), op_gauge_basis)
+        else:
+            allowed_row_basis = create_complete_basis_fn(all_sslbls)
+            op_gauge_space = _ErrorgenSpace(_np.identity(len(op_gauge_basis), 'd'),
+                                            op_gauge_basis)
+            # Note: above, do we need to store identity? could we just use the basis as a space here? or 'None'?
+
+        # "reshape" mx so rows correspond to allowed_row_basis (the op's allowed labels)
+        # (maybe make this into a subroutine?)
+        assert(_sps.isspmatrix_csr(mx))
+        data = []; col_indices = []; rowptr = [0]  # build up a CSR matrix manually
+        allowed_lbls_set = set(allowed_row_basis.labels)
+        allowed_row_indices = [(i, allowed_row_basis.label_index(lbl))
+                               for i, lbl in enumerate(row_basis.labels) if lbl in allowed_lbls_set]
+
+        for i, new_i in sorted(allowed_row_indices, key=lambda x: x[1]):
+            # transfer i-th row of mx (whose rose are in row_basis) to new_i-th row of new mx
+
+            # - first increment rowptr as needed
+            while len(rowptr) <= new_i:
+                rowptr.append(len(data))
+
+            # - then add data
+            col_indices.extend(mx.indices[mx.indptr[i]:mx.indptr[i + 1]])
+            data.extend(mx.data[mx.indptr[i]:mx.indptr[i + 1]])
+            rowptr.append(len(data))
+        while len(rowptr) <= len(allowed_row_basis):  # fill in rowptr for any (empty) ending rows
+            rowptr.append(len(data))
+        allowed_rowspace_mx = _sps.csr_matrix((data, col_indices, rowptr),
+                                              shape=(len(allowed_row_basis), mx.shape[1]), dtype=mx.dtype)
+
+        return allowed_rowspace_mx, allowed_row_basis, op_gauge_space
+
+    def _add_reparameterization(self, primitive_op_labels, fogi_dirs, errgenset_space_labels):
+        # Create re-parameterization map from "fogi" parameters to old/existing model parameters
+        # Note: fogi_coeffs = dot(ham_fogi_dirs.T, errorgen_vec)
+        #       errorgen_vec = dot(pinv(ham_fogi_dirs.T), fogi_coeffs)
+        # Ingredients:
+        #  MX : fogi_coeffs -> op_coeffs  e.g. pinv(ham_fogi_dirs.T)
+        #  deriv =  op_params -> op_coeffs  e.g. d(op_coeffs)/d(op_params) implemented by ops
+        #  fogi_deriv = d(fogi_coeffs)/d(fogi_params) : fogi_params -> fogi_coeffs  - near I (these are
+        #                                                    nearly identical apart from some squaring?)
+        #
+        #  so:    d(op_params) = inv(Deriv) * MX * fogi_deriv * d(fogi_params)
+        #         d(op_params)/d(fogi_params) = inv(Deriv) * MX * fogi_deriv
+        #  To first order: op_params = (inv(Deriv) * MX * fogi_deriv) * fogi_params := F * fogi_params
+        # (fogi_params == "model params")
+
+        # To compute F,
+        # -let fogi_deriv == I   (shape nFogi,nFogi)
+        # -MX is shape (nFullSpace, nFogi) == pinv(fogi_dirs.T)
+        # -deriv is shape (nOpCoeffs, nOpParams), inv(deriv) = (nOpParams, nOpCoeffs)
+        #    - need Deriv of shape (nOpParams, nFullSpace) - build by placing deriv mxs in gpindices rows and
+        #      correct cols).  We'll require that deriv be square (op has same #params as coeffs) and is *invertible*
+        #      (raise error otherwise).  Then we can construct inv(Deriv) by placing inv(deriv) into inv(Deriv) by
+        #      rows->gpindices and cols->elem_label-match.
+
+        nOpParams = self.num_params  # the number of parameters *before* any reparameterization.  TODO: better way?
+        errgenset_space_labels_indx = _collections.OrderedDict(
+            [(lbl, i) for i, lbl in enumerate(errgenset_space_labels)])
+
+        invDeriv = _np.zeros((nOpParams, fogi_dirs.shape[0]), 'd')
+
+        used_param_indices = set()
+        for op_label in primitive_op_labels:
+
+            op = self._circuit_layer_operator(op_label, 'auto')  # works for preps, povms, & ops
+            lbls = op.errorgen_coefficient_labels()  # length num_coeffs
+            param_indices = op.gpindices_as_array()  # length num_params
+            deriv = op.errorgen_coefficients_array_deriv_wrt_params()  # shape == (num_coeffs, num_params)
+            inv_deriv = _np.linalg.inv(deriv)  # cols for given op errorgen coefficient, rows = op params
+            used_param_indices.update(param_indices)
+
+            for i, lbl in enumerate(lbls):
+                invDeriv[param_indices, errgenset_space_labels_indx[(op_label, lbl)]] = inv_deriv[:, i]
+
+        unused_param_indices = sorted(list(set(range(nOpParams)) - used_param_indices))
+        prefix_mx = _np.zeros((nOpParams, len(unused_param_indices)), 'd')
+        for j, indx in enumerate(unused_param_indices):
+            prefix_mx[indx, j] = 1.0
+
+        fogi_vecs = _np.linalg.pinv(fogi_dirs.T)
+
+        #DEBUG REMOVE - debugging locality of fogi_vecs not matching that of fogi_dirs...
+        #assert(_np.allclose(fogi_dirs.T @ fogi_vecs, _np.identity(fogi_vecs.shape[1], 'd')))
+        #import bpdb; bpdb.set_trace()
+
+        F = _np.dot(invDeriv, fogi_vecs)
+        F = _np.concatenate((prefix_mx, F), axis=1)
+
+        #Not sure if these are needed: "coefficients" have names, but maybe "parameters" shoudn't?
+        #fogi_param_names = ["P%d" % i for i in range(len(unused_param_indices))] \
+        #    + ham_fogi_vec_names + other_fogi_vec_names
+
+        return _LinearInterposer(F)
+
+    def setup_fogi(self, initial_gauge_basis, create_complete_basis_fn=None,
+                   op_label_abbrevs=None, reparameterize=False, reduce_to_model_space=True,
+                   dependent_fogi_action='drop', include_spam=True, primitive_op_labels=None):
+
+        from pygsti.baseobjs.errorgenbasis import CompleteElementaryErrorgenBasis as _CompleteElementaryErrorgenBasis
+        from pygsti.baseobjs.errorgenbasis import ExplicitElementaryErrorgenBasis as _ExplicitElementaryErrorgenBasis
+        from pygsti.baseobjs.errorgenspace import ErrorgenSpace as _ErrorgenSpace
+
+        from pygsti.tools import basistools as _bt
+        from pygsti.tools import fogitools as _fogit
+        from pygsti.models.fogistore import FirstOrderGaugeInvariantStore as _FOGIStore
+
+        if primitive_op_labels is None:
+            primitive_op_labels = self.primitive_op_labels
+
+        primitive_prep_labels = self.primitive_prep_labels if include_spam else ()
+        primitive_povm_labels = self.primitive_povm_labels if include_spam else ()
+
+        # "initial" gauge space is the space of error generators initially considered as
+        # gauge transformations.  It can be reduced by the errors allowed on operations (by
+        # their type and support).
+
+        def extract_std_target_mx(op, op_basis):
+            # TODO: more general decomposition of op - here it must be Composed(UnitaryOp, ExpErrorGen)
+            #       or just ExpErrorGen
+            if isinstance(op, _op.EmbeddedOp):
+                all_sslbls = op.state_space.sole_tensor_product_block_labels
+                if len(all_sslbls) == 1 and all_sslbls == op.target_labels:  # then basis may not have components
+                    op_component_bases = [op_basis]
+                else:
+                    op_component_bases = [op_basis.component_bases[all_sslbls.index(lbl)] for lbl in op.target_labels]
+                embedded_op_basis = _TensorProdBasis(op_component_bases)
+                return extract_std_target_mx(op.embedded_op, embedded_op_basis)
+            elif isinstance(op, _op.ExpErrorgenOp):  # assume just an identity op
+                U = _np.identity(op.state_space.dim, 'd')
+            elif isinstance(op, _op.ComposedOp):  # ASSUMES first element gives unitary
+                op_mx = op.factorops[0].to_dense()  # ASSUMES first factor is ideal gate
+                nQubits = int(round(_np.log(op_mx.shape[0]) / _np.log(4))); assert(op_mx.shape[0] == 4**nQubits)
+                tensorprod_std_basis = _Basis.cast('std', [(4,) * nQubits])
+                U = _bt.change_basis(op_mx, op_basis, tensorprod_std_basis)  # 'std' is incorrect
+            elif isinstance(op, _op.StaticStandardOp):
+                op_mx = op.to_dense()
+                nQubits = int(round(_np.log(op_mx.shape[0]) / _np.log(4))); assert(op_mx.shape[0] == 4**nQubits)
+                tensorprod_std_basis = _Basis.cast('std', [(4,) * nQubits])
+                U = _bt.change_basis(op_mx, op_basis, tensorprod_std_basis)  # 'std' is incorrect
+            else:
+                raise ValueError("Could not extract target matrix from %s op!" % str(type(op)))
+            return U
+
+        def extract_std_target_vec(v):
+            #TODO - make more sophisticated...
+            dim = v.state_space.dim
+            nQubits = int(round(_np.log(dim) / _np.log(4))); assert(dim == 4**nQubits)
+            tensorprod_std_basis = _Basis.cast('std', [(4,) * nQubits])
+            v = _bt.change_basis(v.to_dense(), self.basis, tensorprod_std_basis)  # 'std' is incorrect
+            return v
+
+        if create_complete_basis_fn is None:
+            assert(isinstance(initial_gauge_basis, _CompleteElementaryErrorgenBasis)), \
+                ("Must supply a custom `create_complete_basis_fn` if initial gauge basis is not a complete basis!")
+
+            def create_complete_basis_fn(target_sslbls):
+                return initial_gauge_basis.create_subbasis(target_sslbls, retain_max_weights=False)
+
+        # get gauge action matrices on the initial space
+        gauge_action_matrices = _collections.OrderedDict()
+        gauge_action_gauge_spaces = _collections.OrderedDict()
+        errorgen_coefficient_labels = _collections.OrderedDict()  # by operation
+        for op_label in primitive_op_labels:  # Note: "ga" stands for "gauge action" in variable names below
+            #print("DB FOGI: ",op_label)  #REMOVE
+            op, op_with_errorgen = self._op_decomposition(op_label)  # gives target_op, op_error
+            U = extract_std_target_mx(op, self.basis)
+            all_sslbls = self.state_space.sole_tensor_product_block_labels
+
+            if op_label.sslbls is None:
+                target_sslbls = all_sslbls
+            elif U.shape[0] == self.state_space.dim and len(op_label.sslbls) < len(all_sslbls):  # don't "trust" sslbls
+                target_sslbls = all_sslbls  # e.g., for 2Q explicit models with 2Q gate matched with Gx:0 label
+            else:
+                target_sslbls = op_label.sslbls
+
+            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
+            # Note: can assume gauge action is zero (U acts as identity) on all basis elements not in op_gauge_basis
+
+            initial_row_basis = create_complete_basis_fn(all_sslbls)  # Not just target_sslbls, but prune? (FUTURE)
+
+            #support_sslbls, gauge_errgen_basis = get_overlapping_labels(gauge_errgen_space_labels, target_sslbls)
+            mx, row_basis = _fogit.first_order_gauge_action_matrix(U, target_sslbls, self.state_space,
+                                                                   op_gauge_basis, initial_row_basis)
+            #print("DB FOGI: action mx: ", mx.shape) #REMOVE
+            #FOGI DEBUG print("DEBUG => mx is ", mx.shape)
+
+            # Note: mx is a sparse lil matrix
+            # mx cols => op_gauge_basis, mx rows => row_basis, as zero rows have already been removed
+            # (DONE: - remove all all-zero rows from mx (and corresponding basis labels) )
+            # Note: row_basis is a simple subset of initial_row_basis
+
+            allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
+                self._format_gauge_action_matrix(mx, op_with_errorgen, reduce_to_model_space, row_basis, op_gauge_basis,
+                                                 create_complete_basis_fn)
+            #DEBUG
+            #print("DB FOGI: action matrix formatting done:")
+            #if allowed_rowspace_mx.shape[0] < 10:
+            #    print(_np.round(allowed_rowspace_mx.toarray(), 4))
+            #else:
+            #    print(repr(allowed_rowspace_mx))
+            #print(" on ", allowed_row_basis.labels)
+
+            errorgen_coefficient_labels[op_label] = allowed_row_basis.labels
+            gauge_action_matrices[op_label] = allowed_rowspace_mx
+            gauge_action_gauge_spaces[op_label] = op_gauge_space
+            #FOGI DEBUG print("DEBUG => final allowed_rowspace_mx shape =", allowed_rowspace_mx.shape)
+
+        # Similar for SPAM
+        for prep_label in primitive_prep_labels:
+            prep = self._circuit_layer_operator(prep_label, 'prep')
+            v = extract_std_target_vec(prep)
+            target_sslbls = prep_label.sslbls if (prep_label.sslbls is not None and v.shape[0] < self.state_space.dim) \
+                else self.state_space.sole_tensor_product_block_labels
+            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
+            initial_row_basis = create_complete_basis_fn(target_sslbls)
+
+            mx, row_basis = _fogit.first_order_gauge_action_matrix_for_prep(v, target_sslbls, self.state_space,
+                                                                            op_gauge_basis, initial_row_basis)
+
+            allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
+                self._format_gauge_action_matrix(mx, prep, reduce_to_model_space, row_basis, op_gauge_basis,
+                                                 create_complete_basis_fn)
+
+            errorgen_coefficient_labels[prep_label] = allowed_row_basis.labels
+            gauge_action_matrices[prep_label] = allowed_rowspace_mx
+            gauge_action_gauge_spaces[prep_label] = op_gauge_space
+
+        for povm_label in primitive_povm_labels:
+            povm = self._circuit_layer_operator(povm_label, 'povm')
+            vecs = [extract_std_target_vec(effect) for effect in povm.values()]
+            target_sslbls = povm_label.sslbls if (povm_label.sslbls is not None
+                                                  and vecs[0].shape[0] < self.state_space.dim) \
+                else self.state_space.sole_tensor_product_block_labels
+            op_gauge_basis = initial_gauge_basis.create_subbasis(target_sslbls)  # gauge space lbls that overlap target
+            initial_row_basis = create_complete_basis_fn(target_sslbls)
+
+            mx, row_basis = _fogit.first_order_gauge_action_matrix_for_povm(vecs, target_sslbls, self.state_space,
+                                                                            op_gauge_basis, initial_row_basis)
+
+            allowed_rowspace_mx, allowed_row_basis, op_gauge_space = \
+                self._format_gauge_action_matrix(mx, povm, reduce_to_model_space, row_basis, op_gauge_basis,
+                                                 create_complete_basis_fn)
+
+            errorgen_coefficient_labels[povm_label] = allowed_row_basis.labels
+            gauge_action_matrices[povm_label] = allowed_rowspace_mx
+            gauge_action_gauge_spaces[povm_label] = op_gauge_space
+
+        norm_order = "auto"  # NOTE - should be 1 for normalizing 'S' quantities and 2 for 'H',
+        # so 'auto' utilizes intelligence within FOGIStore
+        self.fogi_store = _FOGIStore(gauge_action_matrices, gauge_action_gauge_spaces,
+                                     errorgen_coefficient_labels,  # gauge_errgen_space_labels,
+                                     op_label_abbrevs, reduce_to_model_space, dependent_fogi_action,
+                                     norm_order=norm_order)
+
+        if reparameterize:
+            self.param_interposer = self._add_reparameterization(
+                primitive_op_labels + primitive_prep_labels + primitive_povm_labels,
+                self.fogi_store.fogi_directions.toarray(),  # DENSE now (leave sparse in FUTURE?)
+                self.fogi_store.errorgen_space_op_elem_labels)
+
+    def fogi_errorgen_component_labels(self, include_fogv=False, typ='normal'):
+        labels = self.fogi_store.fogi_errorgen_direction_labels(typ)
+        if include_fogv:
+            labels += self.fogi_store.fogv_errorgen_direction_labels(typ)
+        return labels
+
+    def fogi_errorgen_components_array(self, include_fogv=False, normalized_elem_gens=True):
+        op_coeffs = self.errorgen_coefficients(normalized_elem_gens)
+
+        if include_fogv:
+            fogi_coeffs, fogv_coeffs = self.fogi_store.opcoeffs_to_fogiv_components_array(op_coeffs)
+            return _np.concatenate((fogi_coeffs, fogv_coeffs))
+        else:
+            return self.fogi_store.opcoeffs_to_fogi_components_array(op_coeffs)
+
+    def set_fogi_errorgen_components_array(self, components, include_fogv=False, normalized_elem_gens=True,
+                                           truncate=False):
+        fogi, fogv = self.fogi_store.num_fogi_directions, self.fogi_store.num_fogv_directions
+
+        if include_fogv:
+            n = fogi
+            fogi_coeffs, fogv_coeffs = components[0:fogi], components[n: n + fogv]
+            op_coeffs = self.fogi_store.fogiv_components_array_to_opcoeffs(fogi_coeffs, fogv_coeffs)
+        else:
+            fogi_coeffs = components[0:fogi]
+            op_coeffs = self.fogi_store.fogi_components_array_to_opcoeffs(fogi_coeffs)
+
+        if not normalized_elem_gens:
+            def inv_rescale(coeffs):  # the inverse of the rescaling applied in fogi_errorgen_components_array
+                d2 = _np.sqrt(self.dim); d = _np.sqrt(d2)
+                return {lbl: (val * d if lbl.errorgen_type == 'H' else val) for lbl, val in coeffs.items()}
+        else:
+            def inv_rescale(coeffs): return coeffs
+
+        for op_label, coeff_dict in op_coeffs.items():
+            op = self._circuit_layer_operator(op_label, 'auto')  # works for preps, povms, & ops
+            op.set_errorgen_coefficients(inv_rescale(coeff_dict), truncate=truncate)
+
+    def fogi_errorgen_vector(self, normalized_elem_gens=False):
+        """
+        Constructs a vector from all the error generator coefficients involved in the FOGI analysis of this model.
+
+        Parameters
+        ----------
+        normalized_elem_gens : bool, optional
+            Whether or not coefficients correspond to elementary error generators
+            constructed from *normalized* Pauli matrices or not.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        d = self.errorgen_coefficients(normalized_elem_gens=normalized_elem_gens)
+        errvec = _np.zeros(self.fogi_store.fogi_directions.shape[0], 'd')
+        for op_lbl in self.fogi_store.primitive_op_labels:
+            errdict = d[op_lbl]
+            elem_errgen_lbls = self.fogi_store.elem_errorgen_labels_by_op[op_lbl]
+            elem_errgen_indices = _slct.indices(self.fogi_store.op_errorgen_indices[op_lbl])
+            for elemgen_lbl, i in zip(elem_errgen_lbls, elem_errgen_indices):
+                errvec[i] = errdict.get(elemgen_lbl, 0.0)
+        return errvec
+
+    def _fogi_errorgen_vector_projection(self, space, normalized_elem_gens=False):
+        """ A helper function that projects self.errorgen_vector onto the space spanned by the columns of `space` """
+        errvec = self.fogi_errorgen_vector(normalized_elem_gens)
+        Pspace = space @ _np.linalg.pinv(space)  # construct projector
+        return Pspace @ errvec  # projected errvec
+
+    # create map parameter indices <=> fogi_vector_indices (for each fogi store)
+    def _create_model_parameter_to_fogi_errorgen_space_map(self):
+        fogi_store = self.fogi_store
+        num_elem_errgens, num_fogi_vecs = fogi_store.fogi_directions.shape
+        param_to_fogi_errgen_space_mx = _np.zeros((num_elem_errgens, self.num_params), 'd')
+        for op_label in fogi_store.primitive_op_labels:
+            elem_errgen_lbls = fogi_store.elem_errorgen_labels_by_op[op_label]
+            fogi_errgen_indices = _slct.indices(fogi_store.op_errorgen_indices[op_label])
+            assert(len(fogi_errgen_indices) == len(elem_errgen_lbls))
+
+            op = self._circuit_layer_operator(op_label, 'auto')  # works for preps, povms, & ops
+            coeff_index_lookup = {elem_lbl: i for i, elem_lbl in enumerate(op.errorgen_coefficient_labels())}
+            coeff_indices = [coeff_index_lookup.get(elem_lbl, None) for elem_lbl in elem_errgen_lbls]
+
+            # For our particularly simple parameterization (H+s) op parameter indices == coeff indices:
+            assert(_np.allclose(op.errorgen_coefficients_array_deriv_wrt_params(), _np.identity(op.num_params))), \
+                "Currently only supported for simple parameterizations where op parameter indices == coeff indices"
+            op_param_indices = coeff_indices
+
+            gpindices = _slct.indices(op.gpindices)
+            mdl_param_indices = [(gpindices[i] if (i is not None) else None)
+                                 for i in op_param_indices]
+            for i_errgen, i_param in zip(fogi_errgen_indices, mdl_param_indices):
+                if i_param is not None:
+                    param_to_fogi_errgen_space_mx[i_errgen, i_param] = 1.0
+        return param_to_fogi_errgen_space_mx
+
+    def fogi_contribution(self, op_label, error_type='H', intrinsic_or_relational='intrinsic',
+                          target='all', hessian_for_errorbars=None):
+        """
+        Computes a contribution to the FOGI error on a single gate.
+
+        This method is used when partitioning the (FOGI) error on a gate in
+        various ways, based on the error type, whether the error is intrinsic
+        or relational, and the upon the error support.
+
+        Parameters
+        ----------
+        op_label : Label
+            The operation to compute a contribution for.
+
+        error_type : {'H', 'S', 'fogi_total_error', 'fogi_infidelity'}
+            The type of errors to include in the partition.  `'H'` means Hamiltonian
+            and `'S'` means Pauli stochastic.  There are two options for including
+            *both* H and S errors: `'fogi_total_error'` adds the Hamiltonian errors
+            linearly with the Pauli tochastic errors, similar to the diamond distance;
+            `'fogi_infidelity'` adds the Hamiltonian errors in quadrature to the linear
+            sum of Pauli stochastic errors, similar to the entanglement or average gate
+            infidelity.
+
+        intrinsic_or_relational : {"intrinsic", "relational", "all"}
+            Restrict to intrinsic or relational errors (or not, using `"all"`).
+
+        target : tuple or "all"
+            A tuple of state space (qubit) labels to restrict to, e.g., `('Q0','Q1')`.
+            Note that including multiple labels selects only those quantities that
+            target *all* the labels. The special `"all"` value includes quantities
+            on all targets (no restriction).
+
+        hessian_for_errorbars : numpy.ndarray, optional
+            If not `None`, a hessian matrix for this model (with shape `(Np, Np)`
+            where `Np == self.num_params`, the number of model paramters) that is
+            used to compute and return 1-sigma error bars.
+
+        Returns
+        -------
+        value : float
+            The value of the requested contribution.
+        errorbar : float
+            The 1-sigma error bar, returned *only* if `hessian_for_errorbars` is given.
+        """
+        if error_type in ('H', 'S'):
+            space = self.fogi_store.create_fogi_aggregate_single_op_space(op_label, error_type,
+                                                                          intrinsic_or_relational, target)
+            return self._fogi_contribution_single_type(error_type, space, hessian_for_errorbars)
+
+        elif error_type in ('fogi_total_error', 'fogi_infidelity'):
+            Hspace = self.fogi_store.create_fogi_aggregate_single_op_space(
+                op_label, 'H', intrinsic_or_relational, target)
+            Sspace = self.fogi_store.create_fogi_aggregate_single_op_space(
+                op_label, 'S', intrinsic_or_relational, target)
+            values = self._fogi_contribution_combined_HS_types(Hspace, Sspace, hessian_for_errorbars)
+            # (total, infidelity) if hessian is None otherwise (total, total_eb, infidelity, infidelity_eb)
+
+            if error_type == 'fogi_total_error':
+                return values[0] if (hessian_for_errorbars is None) else (values[0], values[1])
+            else:  # error_type == 'fogi_infidelity'
+                return values[1] if (hessian_for_errorbars is None) else (values[2], values[3])
+
+        else:
+            raise ValueError("Invalid error type: '%s'" % str(error_type))
+
+    def _fogi_contribution_single_type(self, errorgen_type, space, hessian=None):
+        """
+        Helper function to compute fogi contribution for a single error generator type,
+        where aggregation method is unambiguous.
+        Note: `space` should be a fogi-errgen-space subspace.
+        """
+        fogi_store = self.fogi_store
+        proj_errvec = self._fogi_errorgen_vector_projection(space, normalized_elem_gens=False)
+        if errorgen_type == 'H':
+            val = _np.linalg.norm(proj_errvec)
+        elif errorgen_type == 'S':
+            val = sum(proj_errvec)
+        else:
+            raise ValueError("Invalid `errorgen_type` '%s' - must be 'H' or 'S'!" % str(errorgen_type))
+
+        val = _np.real_if_close(val)
+        if abs(val) < 1e-10: val = 0.0
+
+        if hessian is not None:
+            if space.size == 0:  # special case
+                errbar = 0.0
+            else:
+                T = self._create_model_parameter_to_fogi_errorgen_space_map()
+                H_errgen_space = T @ hessian @ T.T
+
+                errgen_space_to_fogi = fogi_store.fogi_directions.toarray().T
+                pinv_espace_to_fogi = _np.linalg.pinv(errgen_space_to_fogi)
+                H_fogi = errgen_space_to_fogi @ H_errgen_space @ pinv_espace_to_fogi
+
+                inv_H_fogi = _np.linalg.pinv(H_fogi)  # hessian in fogi space
+
+                #convert fogi space back to errgen_space
+                inv_H_errgen_space = pinv_espace_to_fogi @ inv_H_fogi @ errgen_space_to_fogi
+
+                Pspace = space @ _np.linalg.pinv(space)
+                proj_inv_H_errgen_space = Pspace @ inv_H_errgen_space @ Pspace.T  # np.linalg.pinv(Pspace) #.T
+
+                if errorgen_type == 'H':
+                    # elements added in quadrature, val = sqrt( sum(element^2) ) = dot(proj_errvec_hat, proj_errvec)
+                    proj_errvec_hat = proj_errvec / _np.linalg.norm(proj_errvec)
+                    errbar = proj_errvec_hat.T @ proj_inv_H_errgen_space @ proj_errvec_hat
+                elif errorgen_type == "S":
+                    # elements added, val = sum(element) = dot(ones, proj_errvec)
+                    ones = _np.ones((proj_inv_H_errgen_space.shape[0], 1), 'd')
+                    errbar = ones.T @ proj_inv_H_errgen_space @ ones
+                else:
+                    raise ValueError("Invalid `errorgen_type`!")
+
+                if abs(errbar) < 1e-10: errbar = 0.0
+                errbar = _np.sqrt(float(_np.real_if_close(errbar)))
+
+        return val if (hessian is None) else (val, errbar)
+
+    def _fogi_contribution_combined_HS_types(self, Hspace, Sspace, hessian=None):
+        """
+        Helper function to compute fogi contribution for that combined multiple
+        (so far only works for H+S) error generator types, where there are multiple
+        aggregation methods (and all are computed).
+        Note: `space` should be a fogi-errgen-space subspace.
+        """
+        #TODO: maybe can combine with function above?
+        errvec = self.fogi_errorgen_vector(normalized_elem_gens=False)
+
+        Hvec = self._fogi_errorgen_vector_projection(Hspace, normalized_elem_gens=False)
+        Hhat = Hvec / _np.linalg.norm(Hvec)
+        Svec = _np.sum(Sspace, axis=1)  # should be all 1s and zeros
+        assert(all([(_np.isclose(el, 0) or _np.isclose(el, 1.0)) for el in Svec]))
+
+        total_error_vec = Hhat + Svec  # ~ concatenate((Hhat, Svec))
+        total_error_val = _np.dot(total_error_vec, errvec)
+
+        infidelity_vec = Hvec + Svec  # ~ concatenate((Hvec, Svec))
+        infidelity_val = _np.dot(infidelity_vec, errvec)
+
+        if hessian is not None:
+            T = self._create_model_parameter_to_fogi_errorgen_space_map()
+
+            hessian_errgen_space = T @ hessian @ T.T
+
+            errgen_space_to_fogi = self.fogi_store.fogi_directions.toarray().T
+            pinv_espace_to_fogi = _np.linalg.pinv(errgen_space_to_fogi)
+            H_fogi = errgen_space_to_fogi @ hessian_errgen_space @ pinv_espace_to_fogi
+
+            inv_H_fogi = _np.linalg.pinv(H_fogi)  # hessian in fogi space
+
+            #convert fogi space back to errgen_space
+            inv_H_errgen_space = pinv_espace_to_fogi @ inv_H_fogi @ errgen_space_to_fogi
+
+            total_error_eb = total_error_vec[None, :] @ inv_H_errgen_space @ total_error_vec[:, None]
+
+            infidelity_eb_vec = 2 * Hvec + Svec  # ~ concatenate((2 * Hvec, Svec))
+            infidelity_eb = infidelity_eb_vec[None, :] @ inv_H_errgen_space @ infidelity_eb_vec[:, None]
+
+            if abs(total_error_eb) < 1e-10: total_error_eb = 0.0
+            total_error_eb = _np.sqrt(float(_np.real_if_close(total_error_eb)))
+
+            if abs(infidelity_eb) < 1e-10: infidelity_eb = 0.0
+            infidelity_eb = _np.sqrt(float(_np.real_if_close(infidelity_eb)))
+
+            return total_error_val, total_error_eb, infidelity_val, infidelity_eb
+        else:
+            return total_error_val, infidelity_val
 
 
 def _default_param_bounds(num_params):

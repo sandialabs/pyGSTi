@@ -213,8 +213,8 @@ G1(G2G3)^2
 {}            100 0
 """)
     def test_parse_datafile_no_header(self, tmp_path):
-        ds = self.std.parse_datafile(tmp_path)
-        # TODO assert correctness
+        with self.assertRaises(AssertionError):
+            ds = self.std.parse_datafile(tmp_path)
 
     @with_temp_file("""#Data File with bad syntax
 ## Columns = 0 count, 1 count
@@ -229,7 +229,7 @@ G3            20  80
 
     @with_temp_file("""#Data File with bad syntax
 ## Columns = 0 count, 1 count
-{xx}            10  90
+{xx            10  90
 """)
     def test_parse_datafile_raises_on_syntax_error(self, tmp_path):
         with self.assertRaises(ValueError):
@@ -368,8 +368,10 @@ BASIS: pp 4
 """)
     def test_read_model(self, tmp_path):
         gs1 = stdin.parse_model(tmp_path)
-        rotXPiOv2 = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        sslbls = pygsti.baseobjs.statespace.ExplicitStateSpace("Q0")
+
+        rotXPiOv2 = pygsti.models.modelconstruction.create_operation("X(pi/2,Q0)", sslbls, "pp")
+        rotYPiOv2 = pygsti.models.modelconstruction.create_operation("Y(pi/2,Q0)", sslbls, "pp")
 
         self.assertArraysAlmostEqual(gs1.operations['G1'], rotXPiOv2)
         self.assertArraysAlmostEqual(gs1.operations['G2'], rotYPiOv2)
@@ -419,9 +421,10 @@ GAUGEGROUP: Full
 """)
     def test_read_model_non_liouville(self, tmp_path):
         gs2 = stdin.parse_model(tmp_path)
-        rotXPi = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi,Q0)")
-        rotXPiOv2 = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "X(pi/2,Q0)")
-        rotYPiOv2 = pygsti.models.modelconstruction._create_operation([(4,)], [('Q0',)], "Y(pi/2,Q0)")
+        sslbls = pygsti.baseobjs.statespace.ExplicitStateSpace("Q0")
+        rotXPi = pygsti.models.modelconstruction.create_operation("X(pi,Q0)", sslbls, "pp")
+        rotXPiOv2 = pygsti.models.modelconstruction.create_operation("X(pi/2,Q0)", sslbls, "pp")
+        rotYPiOv2 = pygsti.models.modelconstruction.create_operation("Y(pi/2,Q0)", sslbls, "pp")
         self.assertArraysAlmostEqual(gs2.operations['G1'], rotXPiOv2)
         self.assertArraysAlmostEqual(gs2.operations['G2'], rotYPiOv2)
         self.assertArraysAlmostEqual(gs2.operations['G3'], rotXPi)
@@ -580,7 +583,7 @@ UnitaryMxExp
 BASIS: pp 4
 """)
     def test_read_model_raises_on_bad_unitarymxexp(self, tmp_path):
-        with self.assertRaises(ValueError):
+        with self.assertRaises((ValueError, np.linalg.LinAlgError)):
             stdin.parse_model(tmp_path)
 
     @with_temp_file("""#My Model file with bad format spec

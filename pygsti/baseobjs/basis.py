@@ -21,6 +21,8 @@ import scipy.sparse.linalg as _spsl
 from numpy.linalg import inv as _inv
 
 from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
 #Helper functions
@@ -48,7 +50,7 @@ def _sparse_equal(a, b, atol=1e-8):
     return _np.allclose(V1, V2, atol=atol)
 
 
-class Basis(object):
+class Basis(_NicelySerializable):
     """
     An ordered set of labeled matrices/vectors.
 
@@ -247,7 +249,11 @@ class Basis(object):
                             TensorProdBasis([BuiltinBasis(name, factorDim, sparse) for factorDim in tpbDim]))
                     else:
                         tpbBases.append(BuiltinBasis(name, tpbDim, sparse))
-                return DirectSumBasis(tpbBases)
+
+                if len(tpbBases) == 1:
+                    return tpbBases[0]
+                else:
+                    return DirectSumBasis(tpbBases)
             else:
                 return BuiltinBasis(name, dim, sparse)
         elif isinstance(name_or_basis_or_matrices, (list, tuple, _np.ndarray)):
@@ -270,6 +276,7 @@ class Basis(object):
             raise ValueError("Can't cast %s to be a basis!" % str(type(name_or_basis_or_matrices)))
 
     def __init__(self, name, longname, real, sparse):
+        super().__init__()
         self.name = name
         self.longname = longname
         self.real = real  # whether coefficients must be real (*not* whether elements are real - they're always complex)
@@ -327,6 +334,15 @@ class Basis(object):
         """
         if self.elshape is None: return 0
         return int(_np.product(self.elshape))
+
+    @property
+    def first_element_is_identity(self):
+        """
+        True if the first element of this basis is *proportional* to the identity matrix, False otherwise.
+        """
+        if self.elndim != 2 or self.elshape[0] != self.elshape[1]: return False
+        d = self.elshape[0]
+        return _np.allclose(self.elements[0], _np.identity(d) * (_np.linalg.norm(self.elements[0]) / _np.sqrt(d)))
 
     def is_simple(self):
         """
@@ -421,10 +437,29 @@ class Basis(object):
         return self.size
 
     def __eq__(self, other):
+        return self.is_equivalent(other, sparseness_must_match=True)
+
+    def is_equivalent(self, other, sparseness_must_match=True):
+        """
+        Tests whether this basis is equal to another basis, optionally ignoring sparseness.
+
+        Parameters
+        -----------
+        other : Basis or str
+            The basis to compare with.
+
+        sparseness_must_match : bool, optional
+            If `False` then comparison ignores differing sparseness, and this function
+            returns `True` when the two bases are equal except for their `.sparse` values.
+
+        Returns
+        -------
+        bool
+        """
         otherIsBasis = isinstance(other, Basis)
 
-        if otherIsBasis and (self.sparse != other.sparse):  # sparseness mismatch => not equal
-            return False
+        if otherIsBasis and sparseness_must_match and (self.sparse != other.sparse):
+            return False  # sparseness mismatch => not equal when sparseness_must_match == True
 
         if self.sparse:
             if self.dim > 256:
@@ -814,8 +849,8 @@ class ExplicitBasis(Basis):
     """
     A `Basis` whose elements are specified directly.
 
-    All explicit bases are simple: their vector space is always taken to be that
-    of the the flattened elements.
+    All explicit bases are simple: their vector space is taken to be that
+    of the the flattened elements unless separate `vector_elements` are given.
 
     Parameters
     ----------
@@ -843,6 +878,10 @@ class ExplicitBasis(Basis):
         type of the initial object: `elements[0]` (`sparse=False` is used
         when `len(elements) == 0`).
 
+    vector_elements : numpy.ndarray, optional
+        A list or array of the 1D *vectors* corresponding to each element.
+        If `None`, then the flattened elements are used as vectors.  The size
+        of these vectors sets the dimension of the basis.
 
     Attributes
     ----------
@@ -851,7 +890,7 @@ class ExplicitBasis(Basis):
     """
     Count = 0  # The number of custom bases, used for serialized naming
 
-    def __init__(self, elements, labels=None, name=None, longname=None, real=False, sparse=None):
+    def __init__(self, elements, labels=None, name=None, longname=None, real=False, sparse=None, vector_elements=None):
         '''
         Create a new ExplicitBasis.
 
@@ -881,6 +920,11 @@ class ExplicitBasis(Basis):
             vectors.  If `None`, then this is automatically determined by the
             type of the initial object: `elements[0]` (`sparse=False` is used
             when `len(elements) == 0`).
+
+        vector_elements : numpy.ndarray, optional
+            A list or array of the 1D *vectors* corresponding to each element.
+            If `None`, then the flattened elements are used as vectors.  The size
+            of these vectors sets the dimension of the basis.
         '''
         if name is None:
             name = 'ExplicitBasis_{}'.format(ExplicitBasis.Count)
@@ -892,9 +936,10 @@ class ExplicitBasis(Basis):
         if (len(labels) != len(elements)):
             raise ValueError("Expected a list of %d labels but got: %s" % (len(elements), str(labels)))
 
-        self.labels = labels
+        self.labels = tuple(labels)  # so hashable - see __hash__
         self.elements = []
         size = len(elements)
+
         if size == 0:
             elshape = (); dim = 0; sparse = False
         else:
@@ -903,7 +948,7 @@ class ExplicitBasis(Basis):
             elshape = None
             for el in elements:
                 if sparse:
-                    if not _sps.issparse(el):
+                    if not _sps.issparse(el) or not _sps.isspmatrix_csr(el):  # needs to be CSR type for __hash__
                         el = _sps.csr_matrix(el)  # try to convert to a sparse matrix
                 else:
                     if not isinstance(el, _np.ndarray):
@@ -914,11 +959,43 @@ class ExplicitBasis(Basis):
                 self.elements.append(el)
             dim = int(_np.product(elshape))
         self.ellookup = {lbl: el for lbl, el in zip(self.labels, self.elements)}  # fast by-label element lookup
+
+        if vector_elements is not None:
+            assert(len(vector_elements) == size), "Must have the same number of `elements` and `vector_elements`"
+            if sparse:
+                self._vector_elements = [(el if _sps.issparse(el) else _sps.lil_matrix(el)) for el in vector_elements]
+            else:
+                self._vector_elements = _np.array(vector_elements)  # rows are *vectors*
+            dim = self._vector_elements.shape[1]
+        else:
+            self._vector_elements = None
+
         self._dim = dim
         self._size = size
         self._elshape = elshape
 
         super(ExplicitBasis, self).__init__(name, longname, real, sparse)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'longname': self.longname,
+                      'real': self.real,
+                      'sparse': self.sparse,
+                      'labels': self.labels,
+                      'elements': [self._encodemx(el) for el in self.elements],
+                      'vector_elements': ([self._encodemx(vel) for vel in self._vector_elements]
+                                          if (self._vector_elements is not None) else None)
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        vels = [cls._decodemx(vel) for vel in state['vector_elements']] \
+            if (state.get('vector_elements', None) is not None) else None
+        return cls([cls._decodemx(el) for el in state['elements']],
+                   state['labels'], state['name'], state['longname'], state['real'],
+                   state['sparse'], vels)
 
     @property
     def dim(self):
@@ -949,11 +1026,33 @@ class ExplicitBasis(Basis):
         # shape of "natural" elements - size may be > self.dim (to display naturally)
         return self._elshape
 
+    @property
+    def vector_elements(self):
+        """
+        The "vectors" of this basis, always 1D (sparse or dense) arrays.
+
+        Returns
+        -------
+        list
+            A list of 1D arrays.
+        """
+        if self._vector_elements is not None:
+            return self._vector_elements
+        else:
+            return Basis.vector_elements.fget(self)  # call base class get-property fn
+
     def _copy_with_toggled_sparsity(self):
-        return ExplicitBasis(self.elements, self.labels, self.name, self.longname, self.real, not self.sparse)
+        return ExplicitBasis(self.elements, self.labels, self.name, self.longname, self.real, not self.sparse,
+                             self._vector_elements)
 
     def __hash__(self):
-        return hash((self.name, self.dim, self.elshape, self.sparse))  # better?
+        if self.sparse:
+            els_to_hash = tuple(((_np.round(el.data, 6).tobytes(), el.indices.tobytes(), el.indptr.tobytes())
+                                 for el in self.elements))   # hash sparse matrices
+        else:
+            els_to_hash = tuple((_np.round(el, 6).tobytes() for el in self.elements))
+        return hash((self.dim, self.elshape, self.sparse, self.labels, els_to_hash))  # TODO: hash vector els?
+        # OLD return hash((self.name, self.dim, self.elshape, self.sparse))  # better?
 
 
 class BuiltinBasis(LazyBasis):
@@ -995,8 +1094,22 @@ class BuiltinBasis(LazyBasis):
 
         longname = _basis_constructor_dict[name].longname
         real = _basis_constructor_dict[name].real
+        self._first_element_is_identity = _basis_constructor_dict[name].first_element_is_identity
 
         super(BuiltinBasis, self).__init__(name, longname, real, sparse)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'sparse': self.sparse,
+                      'state_space': self.state_space.to_nice_serialization()
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        statespace = _StateSpace.from_nice_serialization(state['state_space'])
+        return cls(state['name'], statespace, state['sparse'])
 
     @property
     def dim(self):
@@ -1031,6 +1144,13 @@ class BuiltinBasis(LazyBasis):
 
         return elshape
 
+    @property
+    def first_element_is_identity(self):
+        """
+        True if the first element of this basis is *proportional* to the identity matrix, False otherwise.
+        """
+        return self._first_element_is_identity
+
     def __hash__(self):
         return hash((self.name, self.state_space, self.sparse))
 
@@ -1048,14 +1168,31 @@ class BuiltinBasis(LazyBasis):
     def _copy_with_toggled_sparsity(self):
         return BuiltinBasis(self.name, self.state_space, not self.sparse)
 
-    def __eq__(self, other):
+    def is_equivalent(self, other, sparseness_must_match=True):
+        """
+        Tests whether this basis is equal to another basis, optionally ignoring sparseness.
+
+        Parameters
+        -----------
+        other : Basis or str
+            The basis to compare with.
+
+        sparseness_must_match : bool, optional
+            If `False` then comparison ignores differing sparseness, and this function
+            returns `True` when the two bases are equal except for their `.sparse` values.
+
+        Returns
+        -------
+        bool
+        """
         if isinstance(other, BuiltinBasis):  # then can compare quickly
-            return ((self.name == other.name) and (self.state_space == other.state_space)
-                    and (self.sparse == other.sparse))
+            return ((self.name == other.name)
+                    and (self.state_space == other.state_space)
+                    and (not sparseness_must_match or (self.sparse == other.sparse)))
         elif isinstance(other, str):
             return self.name == other  # see if other is a string equal to our name
         else:
-            return LazyBasis.__eq__(self, other)
+            return LazyBasis.is_equivalent(self, other)
 
 
 class DirectSumBasis(LazyBasis):
@@ -1135,6 +1272,19 @@ class DirectSumBasis(LazyBasis):
 
         #Init everything but elements and labels & their number/size
         super(DirectSumBasis, self).__init__(name, longname, real, sparse)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'longname': self.longname,
+                      'component_bases': [b.to_nice_serialization() for b in self.component_bases]
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        component_bases = [Basis.from_nice_serialization(b) for b in state['component_bases']]
+        return cls(component_bases, state['name'], state['longname'])
 
     @property
     def dim(self):
@@ -1229,11 +1379,28 @@ class DirectSumBasis(LazyBasis):
         return DirectSumBasis([cb._copy_with_toggled_sparsity() for cb in self.component_bases],
                               self.name, self.longname)
 
-    def __eq__(self, other):
+    def is_equivalent(self, other, sparseness_must_match=True):
+        """
+        Tests whether this basis is equal to another basis, optionally ignoring sparseness.
+
+        Parameters
+        -----------
+        other : Basis or str
+            The basis to compare with.
+
+        sparseness_must_match : bool, optional
+            If `False` then comparison ignores differing sparseness, and this function
+            returns `True` when the two bases are equal except for their `.sparse` values.
+
+        Returns
+        -------
+        bool
+        """
         otherIsBasis = isinstance(other, DirectSumBasis)
         if not otherIsBasis: return False  # can't be equal to a non-DirectSumBasis
         if len(self.component_bases) != len(other.component_bases): return False
-        return all([c1 == c2 for (c1, c2) in zip(self.component_bases, other.component_bases)])
+        return all([c1.is_equivalent(c2, sparseness_must_match)
+                    for (c1, c2) in zip(self.component_bases, other.component_bases)])
 
     @property
     def vector_elements(self):
@@ -1430,6 +1597,19 @@ class TensorProdBasis(LazyBasis):
 
         super(TensorProdBasis, self).__init__(name, longname, real, sparse)
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'longname': self.longname,
+                      'component_bases': [b.to_nice_serialization() for b in self.component_bases]
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        component_bases = [Basis.from_nice_serialization(b) for b in state['component_bases']]
+        return cls(component_bases, state['name'], state['longname'])
+
     @property
     def dim(self):
         """
@@ -1510,12 +1690,29 @@ class TensorProdBasis(LazyBasis):
         return TensorProdBasis([cb._copy_with_toggled_sparsity() for cb in self.component_bases],
                                self.name, self.longname)
 
-    def __eq__(self, other):
+    def is_equivalent(self, other, sparseness_must_match=True):
+        """
+        Tests whether this basis is equal to another basis, optionally ignoring sparseness.
+
+        Parameters
+        -----------
+        other : Basis or str
+            The basis to compare with.
+
+        sparseness_must_match : bool, optional
+            If `False` then comparison ignores differing sparseness, and this function
+            returns `True` when the two bases are equal except for their `.sparse` values.
+
+        Returns
+        -------
+        bool
+        """
         otherIsBasis = isinstance(other, TensorProdBasis)
         if not otherIsBasis: return False  # can't be equal to a non-DirectSumBasis
         if len(self.component_bases) != len(other.component_bases): return False
         if self.sparse != other.sparse: return False
-        return all([c1 == c2 for (c1, c2) in zip(self.component_bases, other.component_bases)])
+        return all([c1.is_equivalent(c2, sparseness_must_match)
+                    for (c1, c2) in zip(self.component_bases, other.component_bases)])
 
     def create_equivalent(self, builtin_basis_name):
         """
@@ -1705,6 +1902,21 @@ class EmbeddedBasis(LazyBasis):
 
         super(EmbeddedBasis, self).__init__(name, longname, real, sparse)
 
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'name': self.name,
+                      'longname': self.longname,
+                      'state_space': self.state_space.to_nice_serialization(),
+                      'embedded_basis': self.embedded_basis.to_nice_serialization()
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        basis_to_embed = Basis.from_nice_serialization(state['embedded_basis'])
+        state_space = _StateSpace.from_nice_serialization(state['state_space'])
+        return cls(basis_to_embed, state_space, state['target_labels'], state['name'], state['longname'])
+
     @property
     def dim(self):
         """
@@ -1780,12 +1992,28 @@ class EmbeddedBasis(LazyBasis):
                              self.target_labels,
                              self.name, self.longname)
 
-    def __eq__(self, other):
+    def is_equivalent(self, other, sparseness_must_match=True):
+        """
+        Tests whether this basis is equal to another basis, optionally ignoring sparseness.
+
+        Parameters
+        -----------
+        other : Basis or str
+            The basis to compare with.
+
+        sparseness_must_match : bool, optional
+            If `False` then comparison ignores differing sparseness, and this function
+            returns `True` when the two bases are equal except for their `.sparse` values.
+
+        Returns
+        -------
+        bool
+        """
         otherIsBasis = isinstance(other, EmbeddedBasis)
         if not otherIsBasis: return False  # can't be equal to a non-EmbeddedBasis
         if self.target_labels != other.target_labels or self.state_space != other.state_space:
             return False
-        return self.embedded_basis == other.embedded_basis
+        return self.embedded_basis.is_equivalent(other.embedded_basis, sparseness_must_match)
 
     def create_equivalent(self, builtin_basis_name):
         """

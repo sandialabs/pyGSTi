@@ -65,6 +65,18 @@ def parse_circuit(code, create_subcircuits=True, integerize_sslbls=True):
     return tuple(result), labels, occurrence_id, compilable_indices
 
 
+def parse_label(code, integerize_sslbls=True):
+    create_subcircuits = False
+    segment = 0  # segment for gates/instruments vs. preps vs. povms: 0 = *any*
+    interlayer_marker = u''  # matches nothing - no interlayer markerg
+
+    lbls_list, _, _, _ = _get_next_lbls(code, 0, len(code), create_subcircuits, integerize_sslbls,
+                                        segment, interlayer_marker)
+    if len(lbls_list) != 1:
+        raise ValueError("Invalid label, could not parse: '%s'" % str(code))
+    return lbls_list[0]
+
+
 def _get_next_lbls(s, start, end, create_subcircuits, integerize_sslbls, segment, interlayer_marker):
     if s[start] == "(":
         i = start + 1
@@ -139,22 +151,30 @@ def _get_next_simple_lbl(s, start, end, integerize_sslbls, segment):
             i += 1; segment = 2  # marks end - no more labels allowed
         elif c == '{':
             i += 1
-            if i < end and s[i] == '}':
+            if i < end and s[i] == '}':  # empty-label special case
                 i += 1
                 return [], i, segment
-            else:
-                raise ValueError("Invalid '{' at: %s..." % s[i - 1:i + 4])
         else:
             raise ValueError("Invalid prefix at: %s..." % s[i:i + 5])
     else:
         raise ValueError("Invalid prefix at: %s..." % s[i:i + 5])
 
-    while i < end:
-        c = s[i]
-        if 'a' <= c <= 'z' or '0' <= c <= '9' or c == '_':
+    if s[start] == '{':
+        while i < end and s[i] != '}':
+            c = s[i]
+            if not ('a' <= c <= 'z' or '0' <= c <= '9' or c == '_' or c == '(' or c == ')'):
+                raise ValueError("Invalid character '%s' in gate name: %s..." % (c, s[start - 1:start + 4]))
             i += 1
-        else:
-            break
+        if s[i] != '}' or start + 1 >= i - 1:
+            raise ValueError("Invalid '{' at: %s..." % s[start - 1:start + 4])
+        i += 1
+    else:
+        while i < end:
+            c = s[i]
+            if 'a' <= c <= 'z' or '0' <= c <= '9' or c == '_':
+                i += 1
+            else:
+                break
     name = s[start:i]; last = i
 
     args = []
@@ -167,7 +187,11 @@ def _get_next_simple_lbl(s, start, end, integerize_sslbls, segment):
                 i += 1
             else:
                 break
-        args.append(s[last:i]); last = i
+        try:
+            arg = float(s[last:i])
+        except:
+            arg = s[last:i]
+        args.append(arg); last = i
 
     sslbls = []
     while i < end and s[i] == ':':

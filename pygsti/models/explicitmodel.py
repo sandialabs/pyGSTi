@@ -22,12 +22,17 @@ from pygsti.models import explicitcalc as _explicitcalc
 from pygsti.models import model as _mdl, gaugegroup as _gg
 from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.models.layerrules import LayerRules as _LayerRules
+from pygsti.models.modelparaminterposer import ModelParamsInterposer as _ModelParamsInterposer
+from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup
+from pygsti.forwardsims.forwardsim import ForwardSimulator as _FSim
 from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
 from pygsti.modelmembers import instruments as _instrument
 from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
+from pygsti.modelmembers.modelmembergraph import ModelMemberGraph as _MMGraph
 from pygsti.modelmembers.operations import opfactory as _opfactory
+from pygsti.baseobjs.basis import Basis as _Basis
 from pygsti.baseobjs.basis import BuiltinBasis as _BuiltinBasis, DirectSumBasis as _DirectSumBasis
 from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
 from pygsti.baseobjs import statespace as _statespace
@@ -35,6 +40,10 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti.tools import fogitools as _fogit
+from pygsti.tools import slicetools as _slct
+from pygsti.tools import listtools as _lt
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
 class ExplicitOpModel(_mdl.OpModel):
@@ -114,11 +123,11 @@ class ExplicitOpModel(_mdl.OpModel):
                                  'match_parent_evotype': True, 'cast_to_type': typ}
 
         if default_prep_type == "auto":
-            default_prep_type = _state.get_state_type_from_op_type(default_gate_type)
+            default_prep_type = _state.state_type_from_op_type(default_gate_type)
         if default_povm_type == "auto":
-            default_povm_type = _povm.get_povm_type_from_op_type(default_gate_type)
+            default_povm_type = _povm.povm_type_from_op_type(default_gate_type)
         if default_instrument_type == "auto":
-            default_instrument_type = _instrument.get_instrument_type_from_op_type(default_gate_type)
+            default_instrument_type = _instrument.instrument_type_from_op_type(default_gate_type)
 
         self.preps = _OrderedMemberDict(self, default_prep_type, prep_prefix, flagfn("state"))
         self.povms = _OrderedMemberDict(self, default_povm_type, povm_prefix, flagfn("povm"))
@@ -142,7 +151,7 @@ class ExplicitOpModel(_mdl.OpModel):
     def _primitive_op_label_dict(self):
         # don't include 'implied' ops as primitive ops -- FUTURE - maybe should include empty layer ([])?
         return _collections.OrderedDict([(k, None) for k in self.operations
-                                         if not (k.name.startswith('(') and k.name.endswith(')'))])
+                                         if not (k.name.startswith('{') and k.name.endswith('}'))])
 
     @property
     def _primitive_instrument_label_dict(self):
@@ -175,7 +184,7 @@ class ExplicitOpModel(_mdl.OpModel):
         simplified_preps = self.preps
 
         return _explicitcalc.ExplicitOpModelCalc(self.state_space.dim, simplified_preps, simplified_ops,
-                                                 simplified_effects, self.num_params)
+                                                 simplified_effects, self.num_params, self._param_interposer)
 
     #Unneeded - just use string processing & rely on effect labels *not* having underscores in them
     #def simplify_spamtuple_to_outcome_label(self, simplified_spamTuple):
@@ -330,8 +339,50 @@ class ExplicitOpModel(_mdl.OpModel):
         else:
             raise KeyError("Key %s has an invalid prefix" % label)
 
+    def convert_members_inplace(self, to_type, categories_to_convert='all', labels_to_convert='all',
+                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False):
+        """
+        TODO: docstring -- like set_all_parameterizations but doesn't set default gauge group by default
+        """
+        if isinstance(categories_to_convert, str): categories_to_convert = (categories_to_convert,)
+        if any([c in categories_to_convert for c in ('all', 'ops', 'operations')]):
+            for lbl, gate in self.operations.items():
+                if labels_to_convert == 'all' or lbl in labels_to_convert:
+                    ideal = ideal_model.operations.get(lbl, None) if (ideal_model is not None) else None
+                    self.operations[lbl] = _op.convert(gate, to_type, self.basis, ideal, flatten_structure)
+        if any([c in categories_to_convert for c in ('all', 'instruments')]):
+            for lbl, inst in self.instruments.items():
+                if labels_to_convert == 'all' or lbl in labels_to_convert:
+                    ideal = ideal_model.instruments.get(lbl, None) if (ideal_model is not None) else None
+                    self.instruments[lbl] = _instrument.convert(inst, to_type, self.basis, ideal, flatten_structure)
+        if any([c in categories_to_convert for c in ('all', 'preps')]):
+            for lbl, prep in self.preps.items():
+                if labels_to_convert == 'all' or lbl in labels_to_convert:
+                    ideal = ideal_model.preps.get(lbl, None) if (ideal_model is not None) else None
+                    self.preps[lbl] = _state.convert(prep, to_type, self.basis, ideal, flatten_structure)
+        if any([c in categories_to_convert for c in ('all', 'povms')]):
+            for lbl, povm in self.povms.items():
+                if labels_to_convert == 'all' or lbl in labels_to_convert:
+                    ideal = ideal_model.povms.get(lbl, None) if (ideal_model is not None) else None
+                    self.povms[lbl] = _povm.convert(povm, to_type, self.basis, ideal, flatten_structure)
+
+        self._clean_paramvec()  # param indices were probabaly updated
+        if set_default_gauge_group:
+            self.set_default_gauge_group_for_member_type(to_type)
+
+    def set_default_gauge_group_for_member_type(self, member_type):
+        """ TODO: docstring """
+        if member_type == 'full':
+            self.default_gauge_group = _gg.FullGaugeGroup(self.state_space, self.basis, self.evotype)
+        elif member_type in ['full TP', 'TP']:  # TODO: get from verbose_conversion dictionary of modelmembers?
+            self.default_gauge_group = _gg.TPGaugeGroup(self.state_space, self.basis, self.evotype)
+        elif member_type == 'CPTP':
+            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, self.basis, self.evotype)
+        else:  # typ in ('static','H+S','S', 'H+S terms', ...)
+            self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
+
     def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
-                                  instrument_type="auto", extra=None):
+                                  instrument_type="auto", ideal_model=None):
         """
         Convert all gates, states, and POVMs to a specific parameterization type.
 
@@ -361,10 +412,10 @@ class ExplicitOpModel(_mdl.OpModel):
               "d". This removes the CPTP constraint on the gates and SPAM
               operations (and as such is seldom used).
 
-        extra : dict, optional
-            For `"H+S terms"` type, this may specify a dictionary
-            of unitary gates and pure state vectors to be used
-            as the *ideal* operation of each gate/SPAM operation.
+        ideal_model : Model, optional
+            This may specify an ideal model of unitary gates and pure state vectors
+            to be used as the *ideal* operation of each gate/SPAM operation, which
+            is particularly useful as target for CPTP-based conversions.
 
         Returns
         -------
@@ -372,37 +423,26 @@ class ExplicitOpModel(_mdl.OpModel):
         """
         typ = gate_type
 
-        basis = self.basis
-        if extra is None: extra = {}
+        # Set ideal model to static when used as targets (specifically needed for CPTP prep/povms)
+        static_model = None
+        if ideal_model is not None:
+            static_model = ideal_model.copy()
+            static_model.set_all_parameterizations('static')
 
-        rtyp = _state.get_state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
-        povmtyp = _povm.get_povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
-        ityp = _instrument.get_instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
+        rtyp = _state.state_type_from_op_type(gate_type) if prep_type == "auto" else prep_type
+        povmtyp = _povm.povm_type_from_op_type(gate_type) if povm_type == "auto" else povm_type
+        ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
 
-        for lbl, gate in self.operations.items():
-            self.operations[lbl] = _op.convert(gate, typ, basis,
-                                               extra.get(lbl, None))
-
-        for lbl, inst in self.instruments.items():
-            self.instruments[lbl] = _instrument.convert(inst, ityp, basis,
-                                                        extra.get(lbl, None))
-
-        for lbl, vec in self.preps.items():
-            self.preps[lbl] = _state.convert(vec, rtyp, basis,
-                                             extra.get(lbl, None))
-
-        for lbl, povm in self.povms.items():
-            self.povms[lbl] = _povm.convert(povm, povmtyp, basis,
-                                            extra.get(lbl, None))
-
-        if typ == 'full':
-            self.default_gauge_group = _gg.FullGaugeGroup(self.state_space, self.evotype)
-        elif typ == 'full TP':
-            self.default_gauge_group = _gg.TPGaugeGroup(self.state_space, self.evotype)
-        elif typ == 'CPTP':
-            self.default_gauge_group = _gg.UnitaryGaugeGroup(self.state_space, basis, self.evotype)
-        else:  # typ in ('static','H+S','S', 'H+S terms', ...)
-            self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
+        try:
+            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model)
+            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model)
+            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model)
+        except ValueError as e:
+            raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
+                "try providing an ideal_model to avoid possible branch cuts.") from e
+        
+        self.set_default_gauge_group_for_member_type(typ)
 
     def __setstate__(self, state_dict):
 
@@ -467,9 +507,9 @@ class ExplicitOpModel(_mdl.OpModel):
         int
             the number of model elements.
         """
-        rhoSize = [rho.size for rho in self.preps.values()]
+        rhoSize = [rho.hilbert_schmidt_size for rho in self.preps.values()]
         povmSize = [povm.num_elements for povm in self.povms.values()]
-        opSize = [gate.size for gate in self.operations.values()]
+        opSize = [gate.hilbert_schmidt_size for gate in self.operations.values()]
         instSize = [i.num_elements for i in self.instruments.values()]
         #Don't count self.factories?
         return sum(rhoSize) + sum(povmSize) + sum(opSize) + sum(instSize)
@@ -496,9 +536,7 @@ class ExplicitOpModel(_mdl.OpModel):
         int
             the number of gauge model parameters.
         """
-        #REMOVE - but maybe we need some way for some evotypes to punt here? (TODO)
-        #if self._evotype not in ("densitymx", "statevec"):
-        #    return 0  # punt on computing number of gauge parameters for other evotypes
+        #Note maybe we need some way for some evotypes to punt here? (and just return 0?)
         if self.num_params == 0:
             return 0  # save the trouble of getting gauge params when there are no params to begin with
         dPG = self._excalc()._buildup_dpg()
@@ -527,6 +565,12 @@ class ExplicitOpModel(_mdl.OpModel):
             2D array of derivatives.
         """
         return self._excalc().deriv_wrt_params()
+
+    def compute_nongauge_and_gauge_spaces(self, item_weights=None, non_gauge_mix_mx=None):
+        """
+        TODO: docstring
+        """
+        return self._excalc().nongauge_and_gauge_spaces(item_weights, non_gauge_mix_mx)
 
     def compute_nongauge_projector(self, item_weights=None, non_gauge_mix_mx=None):
         """
@@ -1098,11 +1142,9 @@ class ExplicitOpModel(_mdl.OpModel):
             # make randMat Hermetian: (A_dag + A)^dag = (A_dag + A)
             randUnitary = _scipy.linalg.expm(-1j * randMat)
 
-            randOp = _ot.unitary_to_process_mx(randUnitary)  # in std basis
-            randOp = _bt.change_basis(randOp, "std", self.basis)
+            randOp = _ot.unitary_to_superop(randUnitary, self.basis)
 
-            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(
-                _np.dot(randOp, gate))
+            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(_np.dot(randOp, gate))
 
         #Note: this function does NOT randomize instruments
 
@@ -1159,7 +1201,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, rhoVec in self.preps.items():
             assert(len(rhoVec) == curDim)
             new_model.preps[lbl] = \
-                _state.FullState(_np.concatenate((rhoVec, vec_zeroPad)), evotype, state_space)
+                _state.FullState(_np.concatenate((rhoVec, vec_zeroPad)), dumb_basis, evotype, state_space)
 
         for lbl, povm in self.povms.items():
             assert(povm.state_space.dim == curDim)
@@ -1177,7 +1219,7 @@ class ExplicitOpModel(_mdl.OpModel):
             newOp = _np.zeros((new_dimension, new_dimension))
             newOp[0:curDim, 0:curDim] = gate[:, :]
             for i in range(curDim, new_dimension): newOp[i, i] = 1.0
-            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp, evotype, state_space)
+            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp, dumb_basis, evotype, state_space)
 
         for instLabel, inst in self.instruments.items():
             inst_ops = []
@@ -1185,7 +1227,7 @@ class ExplicitOpModel(_mdl.OpModel):
                 newOp = _np.zeros((new_dimension, new_dimension))
                 newOp[0:curDim, 0:curDim] = gate[:, :]
                 for i in range(curDim, new_dimension): newOp[i, i] = 1.0
-                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp, evotype, state_space)))
+                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp, dumb_basis, evotype, state_space)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops, evotype, state_space)
 
         if len(self.factories) > 0:
@@ -1237,7 +1279,7 @@ class ExplicitOpModel(_mdl.OpModel):
         for lbl, rhoVec in self.preps.items():
             assert(len(rhoVec) == curDim)
             new_model.preps[lbl] = \
-                _state.FullState(rhoVec[0:new_dimension, :], self.evotype, state_space)
+                _state.FullState(rhoVec[0:new_dimension, :], dumb_basis, self.evotype, state_space)
 
         for lbl, povm in self.povms.items():
             assert(povm.state_space.dim == curDim)
@@ -1253,14 +1295,14 @@ class ExplicitOpModel(_mdl.OpModel):
             assert(gate.shape == (curDim, curDim))
             newOp = _np.zeros((new_dimension, new_dimension))
             newOp[:, :] = gate[0:new_dimension, 0:new_dimension]
-            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp, self.evotype, state_space)
+            new_model.operations[opLabel] = _op.FullArbitraryOp(newOp, evotype=self.evotype, state_space=state_space)
 
         for instLabel, inst in self.instruments.items():
             inst_ops = []
             for outcomeLbl, gate in inst.items():
                 newOp = _np.zeros((new_dimension, new_dimension))
                 newOp[:, :] = gate[0:new_dimension, 0:new_dimension]
-                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp, self.evotype, state_space)))
+                inst_ops.append((outcomeLbl, _op.FullArbitraryOp(newOp, evotype=self.evotype, state_space=state_space)))
             new_model.instruments[instLabel] = _instrument.Instrument(inst_ops, self.evotype, state_space)
 
         if len(self.factories) > 0:
@@ -1297,8 +1339,7 @@ class ExplicitOpModel(_mdl.OpModel):
         rndm = _np.random.RandomState(seed)
         for opLabel, gate in self.operations.items():
             delta = absmag * 2.0 * (rndm.random_sample(gate.shape) - 0.5) + bias
-            kicked_gs.operations[opLabel] = _op.FullArbitraryOp(
-                kicked_gs.operations[opLabel] + delta)
+            kicked_gs.operations[opLabel] = _op.FullArbitraryOp(kicked_gs.operations[opLabel] + delta)
 
         #Note: does not alter intruments!
         return kicked_gs
@@ -1352,6 +1393,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return srep_dict
 
+    @_deprecated_fn
     def print_info(self):
         """
         Print to stdout relevant information about this model.
@@ -1423,33 +1465,57 @@ class ExplicitOpModel(_mdl.OpModel):
         self._opcaches['povm-layers'] = simplified_effects
         self._opcaches['op-layers'] = simplified_ops
 
-    def create_processor_spec(self, qubit_labels='auto'):
+    def create_processor_spec(self, qudit_labels='auto'):
         """
-        Create a processor specification from this model with the given qubit labels.
+        Create a processor specification from this model with the given qudit labels.
 
-        Currently this only works for models on qubits.
+        Currently this only works for models on qudits.
 
         Parameters
         ----------
-        qubit_labels : tuple or `"auto"`, optional
-            A tuple of qubit labels, e.g. ('Q0', 'Q1') or (0, 1).  `"auto"`
+        qudit_labels : tuple or `"auto"`, optional
+            A tuple of qudit labels, e.g. ('Q0', 'Q1') or (0, 1).  `"auto"`
             uses the labels in this model's state space labels.
 
         Returns
         -------
-        QubitProcessorSpec
+        QuditProcessorSpec or QubitProcessorSpec
         """
         from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
+        from pygsti.processors import QuditProcessorSpec as _QuditProcessorSpec
         #go through ops, building up availability and unitaries, then create procesor spec...
 
-        nqubits = self.state_space.num_qubits
+        nqudits = self.state_space.num_qudits
         gate_unitaries = _collections.OrderedDict()
+        all_sslbls = self.state_space.sole_tensor_product_block_labels
+        all_udims = [self.state_space.label_udimension(lbl) for lbl in all_sslbls]
         availability = {}
+
+        def extract_unitary(Umx, U_sslbls, extracted_sslbls):
+            if extracted_sslbls is None: return Umx  # no extraction to be done
+            extracted_sslbls = list(extracted_sslbls)
+            extracted_indices = [U_sslbls.index(lbl) for lbl in extracted_sslbls]
+            extracted_udims = [self.state_space.label_udimension(lbl) for lbl in extracted_sslbls]
+
+            # can assume all lbls are qudits, so increment associated with qudit k is (2^(N-1-k) for qubits):
+            all_inc = _np.flip(_np.cumprod(list(reversed(all_udims[1:] + [1]))))
+            extracted_inc = all_inc[extracted_indices]
+
+            # assume this is a kronecker product (check this in FUTURE?), so just fill extracted
+            # unitary by fixing all non-extracted qudits (assumed identity-action on these) to 0
+            # and looping over extracted ones:
+            U_extracted = _np.zeros((_np.product(extracted_udims), _np.product(extracted_udims)), complex)
+            for ii, itup in enumerate(_itertools.product(*[range(ud) for ud in extracted_udims])):
+                i = _np.dot(extracted_inc, itup)
+                for jj, jtup in enumerate(_itertools.product(*[range(ud) for ud in extracted_udims])):
+                    j = _np.dot(extracted_inc, jtup)
+                    U_extracted[ii, jj] = Umx[i, j]
+            return U_extracted
 
         def add_availability(opkey, op):
             if opkey == _Label(()) or opkey.is_simple():
-                if opkey == _Label(()):  # special case: turn empty tuple labels into "(idle)" gate in processor spec
-                    gn = "(idle)"
+                if opkey == _Label(()):  # special case: turn empty tuple labels into "{idle}" gate in processor spec
+                    gn = "{idle}"
                     sslbls = None
                 elif opkey.is_simple():
                     gn = opkey.name
@@ -1458,10 +1524,11 @@ class ExplicitOpModel(_mdl.OpModel):
                     #    observed_sslbls.update(sslbls)
 
                 if gn not in gate_unitaries or gate_unitaries[gn] is None:
-                    U = _ot.process_mx_to_unitary(_bt.change_basis(
-                        op.to_dense('HilbertSchmidt'), self.basis, 'std')) \
+                    U = _ot.superop_to_unitary(op.to_dense('HilbertSchmidt'), self.basis) \
                         if (op is not None) else None  # U == None indicates "unknown, up until this point"
-                    gate_unitaries[gn] = U
+
+                    Ulocal = extract_unitary(U, all_sslbls, sslbls)
+                    gate_unitaries[gn] = Ulocal
 
                     if gn in availability:
                         if sslbls not in availability[gn]:
@@ -1475,25 +1542,138 @@ class ExplicitOpModel(_mdl.OpModel):
                 for component in opkey.components:
                     add_availability(component, None)  # recursive call - the reason we need this to be a function!
 
+        #observed_sslbls = set()
+        for opkey, op in self.operations.items():  # TODO: need to deal with special () idle label
+            add_availability(opkey, op)
+
         #Check that there aren't any undetermined unitaries
         unknown_unitaries = [k for k, v in gate_unitaries.items() if v is None]
         if len(unknown_unitaries) > 0:
             raise ValueError("Unitary not specfied for %s gate(s)!" % str(unknown_unitaries))
 
-        #observed_sslbls = set()
-        for opkey, op in self.operations.items():  # TODO: need to deal with special () idle label
-            add_availability(opkey, op)
-
-        if qubit_labels == 'auto':
-            qubit_labels = self.state_space.tensor_product_block_labels(0)
-            #OR: qubit_labels = self.state_space.qubit_labels  # only works for a QubitSpace
+        if qudit_labels == 'auto':
+            qudit_labels = self.state_space.sole_tensor_product_block_labels
+            #OR: qudit_labels = self.state_space.qudit_labels  # only works for a QuditSpace
+            #OR: qudit_labels = self.state_space.qubit_labels  # only works for a QubitSpace
             #OR: qubit_labels = tuple(sorted(observed_sslbls))
 
-        if qubit_labels is None:  # special case of legacy explicit models where all gates have availability [None]
-            qubit_labels = tuple(range(nqubits))
+        if qudit_labels is None:  # special case of legacy explicit models where all gates have availability [None]
+            qudit_labels = tuple(range(nqudits))
 
-        return _QubitProcessorSpec(nqubits, list(gate_unitaries.keys()), gate_unitaries, availability,
-                                   qubit_labels=qubit_labels)
+        assert(len(qudit_labels) == nqudits), \
+            "Length of `qudit_labels` must equal %d (not %d)!" % (nqudits, len(qudit_labels))
+
+        if all([udim == 2 for udim in all_udims]):
+            return _QubitProcessorSpec(nqudits, list(gate_unitaries.keys()), gate_unitaries, availability,
+                                       qubit_labels=qudit_labels)
+        else:
+            return _QuditProcessorSpec(qudit_labels, all_udims, list(gate_unitaries.keys()), gate_unitaries,
+                                       availability)
+
+    def create_modelmember_graph(self):
+        return _MMGraph({
+            'preps': self.preps,
+            'povms': self.povms,
+            'operations': self.operations,
+            'instruments': self.instruments,
+            'factories': self.factories,
+        })
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'basis': self.basis.to_nice_serialization(),
+                      'default_gate_type': self.operations.default_param,
+                      'default_prep_type': self.preps.default_param,
+                      'default_povm_type': self.povms.default_param,
+                      'default_instrument_type': self.instruments.default_param,
+                      'prep_prefix': self.preps._prefix,
+                      'effect_prefix': self.effects_prefix,
+                      'gate_prefix': self.operations._prefix,
+                      'povm_prefix': self.povms._prefix,
+                      'instrument_prefix': self.instruments._prefix,
+                      'evotype': str(self.evotype),  # TODO or serialize?
+                      'simulator': self.sim.to_nice_serialization(),
+                      'default_gauge_group': (self.default_gauge_group.to_nice_serialization()
+                                              if (self.default_gauge_group is not None) else None),
+                      'parameter_interposer': (self._param_interposer.to_nice_serialization()
+                                               if (self._param_interposer is not None) else None)
+                      })
+
+        mmgraph = self.create_modelmember_graph()
+        state['modelmembers'] = mmgraph.create_serialization_dict()
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        state_space = _statespace.StateSpace.from_nice_serialization(state['state_space'])
+        basis = _Basis.from_nice_serialization(state['basis'])
+        simulator = _FSim.from_nice_serialization(state['simulator'])
+        default_gauge_group = _GaugeGroup.from_nice_serialization(state['default_gauge_group']) \
+            if (state['default_gauge_group'] is not None) else None
+        param_interposer = _ModelParamsInterposer.from_nice_serialization(state['parameter_interposer']) \
+            if (state['parameter_interposer'] is not None) else None
+        param_labels = state.get('parameter_labels', None)
+        param_bounds = state.get('parameter_bounds', None)
+
+        mdl = cls(state_space, basis, state['default_gate_type'],
+                  state['default_prep_type'], state['default_povm_type'],
+                  state['default_instrument_type'], state['prep_prefix'], state['effect_prefix'],
+                  state['gate_prefix'], state['povm_prefix'], state['instrument_prefix'],
+                  simulator, state['evotype'])
+
+        modelmembers = _MMGraph.load_modelmembers_from_serialization_dict(state['modelmembers'], mdl)
+        mdl.preps.update(modelmembers.get('preps', {}))
+        mdl.povms.update(modelmembers.get('povms', {}))
+        mdl.operations.update(modelmembers.get('operations', {}))
+        mdl.instruments.update(modelmembers.get('instruments', {}))
+        mdl.factories.update(modelmembers.get('factories', {}))
+        mdl._clean_paramvec()
+        mdl.default_gauge_group = default_gauge_group
+        mdl.param_interposer = param_interposer
+
+        Np = len(mdl._paramlbls)  # _clean_paramvec sets up ._paramlbls so its length == # of params
+        if param_labels and len(param_labels) == Np:
+            mdl._paramlbls[:] = [_lt.lists_to_tuples(lbl) for lbl in param_labels]
+        if param_bounds is not None:
+            param_bounds = cls._decodemx(param_bounds)
+            if param_bounds.shape == (Np, 2):
+                mdl._param_bounds
+
+        return mdl
+
+    def errorgen_coefficients(self, normalized_elem_gens=True):
+        """TODO: docstring - returns a nested dict containing all the error generator coefficients for all
+           the operations in this model. """
+        if not normalized_elem_gens:
+            def rescale(coeffs):
+                """ HACK: rescales errorgen coefficients for normalized-Pauli-basis elementary error gens
+                         to be coefficients for the usual un-normalied-Pauli-basis elementary gens.  This
+                         is only needed in the Hamiltonian case, as the non-ham "elementary" gen has a
+                         factor of d2 baked into it.
+                """
+                d2 = _np.sqrt(self.dim); d = _np.sqrt(d2)
+                return {lbl: (val / d if lbl.errorgen_type == 'H' else val) for lbl, val in coeffs.items()}
+
+            op_coeffs = {op_label: rescale(self.operations[op_label].errorgen_coefficients())
+                         for op_label in self.operations}
+            op_coeffs.update({prep_label: rescale(self.preps[prep_label].errorgen_coefficients())
+                              for prep_label in self.preps})
+            op_coeffs.update({povm_label: rescale(self.povms[povm_label].errorgen_coefficients())
+                              for povm_label in self.povms})
+
+        else:
+            op_coeffs = {op_label: self.operations[op_label].errorgen_coefficients()
+                         for op_label in self.operations}
+            op_coeffs.update({prep_label: self.preps[prep_label].errorgen_coefficients()
+                              for prep_label in self.preps})
+            op_coeffs.update({povm_label: self.povms[povm_label].errorgen_coefficients()
+                              for povm_label in self.povms})
+
+        return op_coeffs
+
+    def _op_decomposition(self, op_label):
+        """Returns the target and error-generator-containing error map parts of the operation for `op_label` """
+        return self.operations[op_label], self.operations[op_label]
 
 
 class ExplicitLayerRules(_LayerRules):

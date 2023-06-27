@@ -14,6 +14,7 @@ import numpy as _np
 
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.tools import matrixtools as _mt
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
@@ -48,16 +49,6 @@ class LinearlyParameterizedElementTerm(object):
         """
         self.coeff = coeff
         self.paramIndices = param_indices
-
-    def copy(self):
-        """
-        Copy this term.
-
-        Returns
-        -------
-        LinearlyParameterizedElementTerm
-        """
-        return LinearlyParameterizedElementTerm(self.coeff, self.paramIndices[:])
 
 
 class LinearlyParamArbitraryOp(_DenseOperator):
@@ -99,6 +90,11 @@ class LinearlyParamArbitraryOp(_DenseOperator):
         be raised if the matrix contains any complex or imaginary
         elements.
 
+    basis : Basis or {'pp','gm','std'} or None
+        The basis used to construct the Hilbert-Schmidt space representation
+        of this state as a super-operator.  If None, certain functionality,
+        such as access to Kraus operators, will be unavailable.
+
     evotype : Evotype or str, optional
         The evolution type.  The special value `"default"` is equivalent
         to specifying the value of `pygsti.evotypes.Evotype.default_evotype`.
@@ -108,14 +104,14 @@ class LinearlyParamArbitraryOp(_DenseOperator):
         with the appropriate number of qubits is used.
     """
 
-    def __init__(self, base_matrix, parameter_array, parameter_to_base_indices_map,
-                 left_transform=None, right_transform=None, real=False, evotype="default", state_space=None):
+    def __init__(self, base_matrix, parameter_array, parameter_to_base_indices_map, left_transform=None,
+                 right_transform=None, real=False, basis=None, evotype="default", state_space=None):
 
         base_matrix = _np.array(_LinearOperator.convert_to_matrix(base_matrix), 'complex')
         #complex, even if passed all real base matrix
 
         elementExpressions = {}
-        for p, ij_tuples in list(parameter_to_base_indices_map.items()):
+        for p, ij_tuples in parameter_to_base_indices_map.items():
             for i, j in ij_tuples:
                 assert((i, j) not in elementExpressions)  # only one parameter allowed per base index pair
                 elementExpressions[(i, j)] = [LinearlyParameterizedElementTerm(1.0, [p])]
@@ -134,7 +130,7 @@ class LinearlyParamArbitraryOp(_DenseOperator):
         self.enforceReal = real
 
         #Note: dense op reps *always* own their own data so setting writeable flag is OK
-        _DenseOperator.__init__(self, mx, evotype, state_space)
+        _DenseOperator.__init__(self, mx, basis, evotype, state_space)
         self._ptr.flags.writeable = False  # only _construct_matrix can change array
         self._construct_matrix()  # construct base from the parameters
 
@@ -160,6 +156,68 @@ class LinearlyParamArbitraryOp(_DenseOperator):
         self._ptr.flags.writeable = True
         self._ptr[:, :] = matrix
         self._ptr.flags.writeable = False
+
+    def _construct_param_to_base_indices_map(self):
+        # build mapping for constructor, which has integer keys so ok for serialization
+        param_to_base_indices_map = {}
+        for (i, j), term in self.elementExpressions:
+            assert(len(term.paramIndices) == 1)
+            p = term.paramIndices[0]
+            if p not in param_to_base_indices_map:
+                param_to_base_indices_map[p] = []
+            param_to_base_indices_map[p].append((i, j))
+        return param_to_base_indices_map
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        param_to_base_indices_map = self._construct_param_to_base_indices_map()
+
+        mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
+        mm_dict['base_matrix'] = self._encodemx(self.baseMatrix)
+        mm_dict['parameter_array'] = self._encodemx(self.parameterArray)
+        mm_dict['parameter_to_base_indices_map'] = param_to_base_indices_map
+        mm_dict['left_transform'] = self._encodemx(self.leftTrans)
+        mm_dict['right_transform'] = self._encodemx(self.rightTrans)
+        mm_dict['enforce_real'] = self.enforceReal
+
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        base_matrix = cls._decodemx(mm_dict['base_matrix'])
+        parameter_array = cls._decodemx(mm_dict['parameter_array'])
+        left_transform = cls._decodemx(mm_dict['left_transform'])
+        right_transform = cls._decodemx(mm_dict['right_transform'])
+        state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
+
+        return cls(base_matrix, parameter_array, mm_dict['parameter_to_base_indices_map'],
+                   left_transform, right_transform, mm_dict['enforce_real'], mm_dict['evotype'], state_space)
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return ((self.baseMatrix.shape == other.baseMatrix.shape)
+                and _np.allclose(self.baseMatrix, other.baseMatrix, rtol=rtol, atol=atol)
+                and _np.allclose(self.leftTrans, other.leftTrans, rtol=rtol, atol=atol)
+                and _np.allclose(self.rightTrans, other.rightTrans, rtol=rtol, atol=atol)
+                and (self._construct_param_to_base_indices_map() == other._construct_param_to_base_indices_map())
+                and (self.enforceReal == other.enforceReal))
 
     @property
     def num_params(self):

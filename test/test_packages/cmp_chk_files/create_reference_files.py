@@ -23,8 +23,7 @@ listOfExperiments = pygsti.circuits.create_lsgst_circuits(
 ds = pygsti.data.simulate_data(mdl_datagen, listOfExperiments, num_samples=1000,
                                        sample_error="binomial", seed=1234)
 
-results = pygsti.run_stdpractice_gst(ds, target_model, prep_fiducials, meas_fiducials,
-                                     germs, maxLengths, verbosity=3)
+results = pygsti.run_stdpractice_gst(ds, target_model, prep_fiducials, meas_fiducials, germs, maxLengths, verbosity=3)
 
 
 def outname(typ):

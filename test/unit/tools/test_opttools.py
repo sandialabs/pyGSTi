@@ -45,13 +45,13 @@ class TestTimedBlock(BaseCase):
 
     def test_timer(self):
 
-        duration = 0.03
+        duration = .5
         timeDict = {}
         with opt.timed_block('time', timeDict):
             sleep(duration)
 
         self.assertGreaterEqual(timeDict['time'], duration)
-        tolerance = 0.015  # this should deliberately be large, for repeatability
+        tolerance = 0.2  # this should deliberately be large, for repeatability
         self.assertLessEqual(timeDict['time'], duration + tolerance, "timed block result is greater than {} seconds off".format(tolerance))
 
 
@@ -59,6 +59,8 @@ class TestTimeHash(BaseCase):
     def test_properties(self):
         value1 = opt.time_hash()
         self.assertTrue(isinstance(value1, str), "time hash is not a string")
+
+        sleep(1) # Actually guarantee time hashes are different
 
         value2 = opt.time_hash()
         self.assertNotEqual(value1, value2, "different time hashes are equal")

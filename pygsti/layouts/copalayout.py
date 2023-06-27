@@ -16,13 +16,15 @@ import itertools as _it
 
 import numpy as _np
 
+from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import listtools as _lt
 from pygsti.tools import slicetools as _slct
 
 
-class CircuitOutcomeProbabilityArrayLayout(object):
+class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
     """
     The arrangement of circuit outcome probabilities into a 1D array.
 
@@ -97,7 +99,6 @@ class CircuitOutcomeProbabilityArrayLayout(object):
 
     @classmethod
     def _compute_unique_circuits(cls, circuits):
-        from ..circuits.circuit import Circuit as _Circuit
         first_copy = _collections.OrderedDict(); to_unique = {}
         nUnique = 0
         for i, c in enumerate(circuits):
@@ -184,6 +185,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         # elindex_outcome_tuples : dict w/keys == indices into `unique_circuits` (which is why `unique_circuits`
         #                          is needed) and values == lists of (element_index, outcome) pairs.
 
+        super().__init__()
         self.circuits = circuits if isinstance(circuits, _CircuitList) else _CircuitList(circuits)
         if unique_circuits is None and to_unique is None:
             unique_circuits, to_unique = self._compute_unique_circuits(circuits)
@@ -209,6 +211,48 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             elindices, outcomes = zip(*sorted_tuples)  # sorted by elindex so we make slices whenever possible
             self._outcomes[i_unique] = tuple(outcomes)
             self._element_indices[i_unique] = _slct.list_to_slice(elindices, array_ok=True)
+
+#    def hotswap_circuits(self, circuits, unique_complete_circuits=None):
+#        self.circuits = circuits if isinstance(circuits, _CircuitList) else _CircuitList(circuits)
+#        unique_circuits_dict = {}
+#        for orig_i, unique_i in self._to_unique.items():
+#            unique_circuits_dict[unique_i] = self.circuits[orig_i]
+#        self._unique_circuits = [unique_circuits_dict[i] for i in range(len(unique_circuits_dict))]
+#        self._unique_circuit_index = _collections.OrderedDict(
+#            [(c, i) for i, c in enumerate(self._unique_circuits)])  # original circuits => unique circuit indices
+#        self._unique_complete_circuits = unique_complete_circuits  # Note: can be None
+
+    def _to_nice_serialization(self):
+        elindex_outcome_tuples = []
+        for i_unique, outcomes in self._outcomes.items():
+            elindices = _slct.to_array(self._element_indices[i_unique])
+            assert(len(outcomes) == len(elindices))
+            elindex_outcome_tuples.append((i_unique, list(zip(map(int, elindices), outcomes))))
+            # Note: map to int above to avoid int64 integers which aren't JSON-able
+
+        state = super()._to_nice_serialization()
+        state.update({'circuits': self.circuits.to_nice_serialization(),  # a CircuitList
+                      'unique_circuits': [c.str for c in self._unique_circuits],
+                      'to_unique': [(k, v) for k, v in self._to_unique.items()],  # just a dict mapping ints -> ints
+                      'elindex_outcome_tuples': elindex_outcome_tuples,
+                      'parameter_dimensions': self._param_dimensions,
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):
+        from pygsti.io import stdinput as _stdinput
+        std = _stdinput.StdInputParser()
+
+        circuits = _CircuitList.from_nice_serialization(state['circuits'])
+        unique_circuits = [std.parse_circuit(s, create_subcircuits=_Circuit.default_expand_subcircuits)
+                           for s in state['unique_circuits']]
+        to_unique = {k: v for k, v in state['to_unique']}
+        elindex_outcome_tuples = _collections.OrderedDict(state['elindex_outcome_tuples'])
+
+        return cls(circuits, unique_circuits, to_unique, elindex_outcome_tuples,
+                   unique_complete_circuits=None, param_dimensions=state['parameter_dimensions'],
+                   resource_alloc=None)
 
     def __len__(self):
         return self._size  # the number of computed *elements* (!= number of circuits)
@@ -249,7 +293,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
 
         Parameters
         ----------
-        array_type : {"e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c"}
+        array_type : {"e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c", "cp", "cp2", "cpp"}
             The type of array to allocate, often corresponding to the array shape.  Let
             `nE` be the layout's number of elements, `nP1` and `nP2` be the number of
             parameters we differentiate with respect to (for first and second derivatives),
@@ -263,6 +307,9 @@ class CircuitOutcomeProbabilityArrayLayout(object):
             - `"jtj"`: (nP1, nP2)
             - `"jtf"`: (nP1,)
             - `"c"`: (nC,)
+            - `"cp"`: (nC, nP1)
+            - `"cp2"`: (nC, nP2)
+            - `"cpp"`: (nC, nP1, nP2)
             Note that, even though the `"p"` and `"jtf"` types are the same shape
             they are used for different purposes and are distributed differently
             when there are multiple processors.  The `"p"` type is for use with
@@ -291,6 +338,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         """
         # type can be "p", "dp" or "hp"
         nelements = self._size + extra_elements
+        ncircuits = self.num_circuits + extra_elements
         alloc_fn = _np.zeros if zero_out else _np.empty
         if array_type == 'e': shape = (nelements,)
         elif array_type == 'ep': shape = (nelements, self._param_dimensions[0])
@@ -300,7 +348,11 @@ class CircuitOutcomeProbabilityArrayLayout(object):
         elif array_type == 'p': shape = (self._param_dimensions[0],)
         elif array_type == 'jtj': shape = (self._param_dimensions[0], self._param_dimensions[0])
         elif array_type == 'jtf': shape = (self._param_dimensions[0],)
-        elif array_type == 'c': shape = (self.num_circuits,)
+        elif array_type == 'c': shape = (ncircuits,)
+        elif array_type == 'cp': shape = (ncircuits, self._param_dimensions[0])
+        elif array_type == 'cp2': shape = (ncircuits, self._param_dimensions[1])
+        elif array_type == 'cpp':
+            shape = (ncircuits, self._param_dimensions[0], self._param_dimensions[1])
         else:
             raise ValueError("Invalid `array_type`: %s" % array_type)
 
@@ -343,7 +395,7 @@ class CircuitOutcomeProbabilityArrayLayout(object):
 
         Parameters
         ----------
-        array_type : ("e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c")
+        array_type : ("e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c", "cp", "cp2", "cpp")
             The type of array to allocate, often corresponding to the array shape.  See
             :method:`allocate_local_array` for a more detailed description.
 

@@ -935,12 +935,18 @@ def _opmatrix_color_boxplot(op_matrix, color_min, color_max, mx_basis=None, mx_b
         mx_basis_y = _baseobjs.BuiltinBasis(mx_basis_y, op_matrix.shape[0])
 
     if mx_basis is not None:
-        xlabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis.labels]
+        if len(mx_basis.labels) - 1 == op_matrix.shape[1]:
+            xlabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis.labels[1:]]
+        else:
+            xlabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis.labels]
     else:
         xlabels = [""] * op_matrix.shape[1]
 
     if mx_basis_y is not None:
-        ylabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis_y.labels]
+        if len(mx_basis_y.labels) - 1 == op_matrix.shape[0]:
+            ylabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis_y.labels[1:]]
+        else:
+            ylabels = [("<i>%s</i>" % x) if len(x) else "" for x in mx_basis_y.labels]
     else:
         ylabels = [""] * op_matrix.shape[0]
 
@@ -1729,7 +1735,7 @@ class ColorBoxPlot(WorkspacePlot):
 
                 colormapType = "manuallinlog"
                 linlog_color = "green"
-                pvaluethreshold, junk = stabilityanalyzer.get_pvalue_threshold(test, detectorkey=detectorkey)
+                pvaluethreshold, junk = stabilityanalyzer.pvalue_threshold(test, detectorkey=detectorkey)
                 linlog_trans = -1 * _np.log10(pvaluethreshold)
                 ytitle = "Evidence for instability as quantified by -log10(pvalue)"
                 mx_fn = _mx_fn_driftpv  # use a *global* function so cache can tell it's the same
@@ -1950,7 +1956,7 @@ def _outcome_to_str(x):  # same function as in writers.py
 
 
 def _addl_mx_fn_outcomes(plaq, x, y, layout):
-    slmx = _np.empty((plaq.num_rows, plaq.num_cols), dtype=_np.object)
+    slmx = _np.empty((plaq.num_rows, plaq.num_cols), dtype=_np.object_)
     for i, j, opstr in plaq:
         slmx[i, j] = ", ".join([_outcome_to_str(ol) for ol in layout.outcomes(opstr)])
     return slmx
@@ -2315,9 +2321,9 @@ class PolarEigenvaluePlot(WorkspacePlot):
         data = []
         for i, evals in enumerate(evals_list):
             color = colors[i] if (colors is not None) else "black"
-            trace = go.Scatter(
+            trace = go.Scatterpolar(
                 r=list(_np.absolute(evals).flat),
-                t=list(_np.angle(evals).flatten() * (180.0 / _np.pi)),
+                theta=list(_np.angle(evals).flatten() * (180.0 / _np.pi)),
                 mode='markers',
                 marker=dict(
                     color=color,
@@ -2336,9 +2342,9 @@ class PolarEigenvaluePlot(WorkspacePlot):
             #Add amplified eigenvalues
             if amp is not None:
                 amp_evals = evals**amp
-                trace = go.Scatter(
+                trace = go.Scatterpolar(
                     r=list(_np.absolute(amp_evals).flat),
-                    t=list(_np.angle(amp_evals).flatten() * (180.0 / _np.pi)),
+                    theta=list(_np.angle(amp_evals).flatten() * (180.0 / _np.pi)),
                     showlegend=False,
                     mode='markers',
                     marker=dict(
@@ -2359,15 +2365,17 @@ class PolarEigenvaluePlot(WorkspacePlot):
             #title='Test Polar',
             #font=dict(size=10),
             plot_bgcolor='rgb(240, 240, 240)',
-            radialaxis=dict(
-                range=[0, 1.25]),
-            angularaxis=dict(
-                tickcolor='rgb(180,180,180)',
-                #range=[0,2]
-                #ticktext=['A','B','C','D']
+            polar=dict(
+                radialaxis=dict(
+                    range=[0, 1.25]),
+                angularaxis=dict(
+                    tickcolor='rgb(180,180,180)',
+                    #range=[0,2]
+                    #ticktext=['A','B','C','D']
+                    direction="counterclockwise",
+                    rotation=-90,
+                ),
             ),
-            direction="counterclockwise",
-            orientation=-90
         )
 
         #HACK around plotly bug: Plotly somehow holds residual polar plot data
@@ -2381,9 +2389,9 @@ class PolarEigenvaluePlot(WorkspacePlot):
                 trace['r'] += [1e3] * extra  # pragma: no cover
                 trace['t'] += [0.0] * extra  # pragma: no cover
         while len(data) < 3:
-            data.append(go.Scatter(
+            data.append(go.Scatterpolar(
                 r=[1e3] * 4,
-                t=[0.0] * 4,
+                theta=[0.0] * 4,
                 name="Dummy",
                 mode='markers',
                 showlegend=False,
@@ -2393,7 +2401,7 @@ class PolarEigenvaluePlot(WorkspacePlot):
         pythonVal = {}
         for i, tr in enumerate(data):
             key = tr['name'] if ("name" in tr) else "trace%d" % i
-            pythonVal[key] = {'r': tr['r'], 't': tr['t']}
+            pythonVal[key] = {'r': tr['r'], 'theta': tr['theta']}
 
         return ReportFigure(go.Figure(data=data, layout=layout),
                             None, pythonVal)
@@ -2524,29 +2532,47 @@ class ProjectionsBoxPlot(WorkspacePlot):
         if color_min is None: color_min = -absMax
         if color_max is None: color_max = absMax
 
-        d2 = len(projections)  # number of projections == dim of gate
+        d2 = len(projections) + 1  # number of projections == dim of gate  (+1 b/c identity is not included)
         d = _np.sqrt(d2)  # dim of density matrix
-        nQubits = _np.log2(d)
+        nQubits = _np.log2(d)  # note: 4^nQ = d2
 
-        if not _np.isclose(round(nQubits), nQubits):
-            #Non-integral # of qubits, so just show as a single row
+        if not _np.isclose(round(nQubits), nQubits) and projections.size == d2 - 1:
+            #Non-integral # of qubits, and a single projection axis (H or S, not CA), so just show as a single row
             projections = projections.reshape((1, projections.size))
             xlabel = ""; ylabel = ""
+            yd, xd = projections.shape
         elif nQubits == 1:
-            projections = projections.reshape((1, 4))
-            xlabel = "Q1"; ylabel = ""
+            if projections.size == 3:
+                projections = projections.reshape((1, 3))
+                xlabel = "Q1"; ylabel = ""
+                xd, yd = 4, 1  # include identity in basis dimensions
+            else:  # projections.size == 3*3 = 9
+                projections = projections.reshape((3, 3))
+                xlabel = ""; ylabel = ""
+                xd = yd = 4
         elif nQubits == 2:
-            projections = projections.reshape((4, 4))
-            xlabel = "Q2"; ylabel = "Q1"
+            if projections.size == 15:
+                projections = _np.concatenate(([0.0], projections)).reshape((4, 4))
+                eb_matrix = _np.concatenate(([0.0], eb_matrix)) if (eb_matrix is not None) else None
+                xlabel = "Q2"; ylabel = "Q1"
+                yd, xd = projections.shape
+            else:  # projections.size == 15*15
+                projections = projections.reshape((15, 15))
+                xlabel = ""; ylabel = ""
+                xd = yd = 16  # include identity in basis dimensions
         else:
-            projections = projections.reshape((4, projections.size // 4))
-            xlabel = "Q*"; ylabel = "Q1"
+            if projections.size == d2 - 1:  # == 4**nQubits - 1
+                projections = _np.concatenate(([0.0], projections)).reshape((4, projections.size // 4))
+                eb_matrix = _np.concatenate(([0.0], eb_matrix)) if (eb_matrix is not None) else None
+                xlabel = "Q*"; ylabel = "Q1"
+                yd, xd = projections.shape
+            else:  # projections.size == (d2-1)**2 == (4**nQ-1)**2  (CA-size square, works for non-integral nQubits too)
+                projections = projections.reshape((d2 - 1, d2 - 1))
+                xlabel = ""; ylabel = ""
+                xd = yd = d2  # 4**nQubits
 
         if eb_matrix is not None:
             eb_matrix = eb_matrix.reshape(projections.shape)
-
-        xd = projections.shape[1]  # x-basis-dim
-        yd = projections.shape[0]  # y-basis-dim
 
         if isinstance(projection_basis, _baseobjs.Basis):
             if isinstance(projection_basis, _baseobjs.TensorProdBasis) and len(projection_basis.component_bases) == 2 \
@@ -3444,6 +3470,45 @@ class DatasetComparisonHistogramPlot(WorkspacePlot):
             pythonVal['noChangeTrace'] = {'x': noChangeTrace['x'], 'y': noChangeTrace['y']}
         return ReportFigure(go.Figure(data=data, layout=layout),
                             None, pythonVal)
+
+
+class WildcardSingleScaleBarPlot(WorkspacePlot):
+    """
+    Stacked bar plot showing per-gate reference values and wildcard budgets.
+
+    Typically these reference values are a gate metric comparable to wildcard
+    budget such as diamond distance, and the bars show the relative modeled vs.
+    unmodeled error.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    budget : PrimitiveOpsSingleScaleWildcardBudget
+        Wildcard budget to be plotted.
+    """
+
+    def __init__(self, ws, budget, scale=1.0, reference_name='Reference Value'):
+        super(WildcardSingleScaleBarPlot, self).__init__(ws, self._create, budget, scale, reference_name)
+
+    def _create(self, budget, scale, reference_name):
+
+        per_op_wildcard_values = budget.per_op_wildcard_vector
+        ref_values = budget.reference_values
+        gate_labels = budget.primitive_op_labels
+
+        x_axis = go.layout.XAxis(dtick=1, tickmode='array', tickvals=list(range(len(gate_labels))),
+                                 ticktext=[str(label) for label in gate_labels])
+        y_axis = go.layout.YAxis(tickformat='.1e')
+
+        layout = go.Layout(barmode='stack', xaxis=x_axis, yaxis=y_axis,
+                           width=650 * scale, height=350 * scale)
+
+        ref_bar = go.Bar(y=ref_values, name=reference_name, width=.5)
+        wildcard_bar = go.Bar(y=per_op_wildcard_values, name='Wildcard', width=.5)
+
+        return ReportFigure(go.Figure(data=[ref_bar, wildcard_bar], layout=layout))
 
 
 class RandomizedBenchmarkingPlot(WorkspacePlot):

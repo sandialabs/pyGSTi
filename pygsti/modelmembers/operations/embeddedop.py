@@ -44,13 +44,17 @@ class EmbeddedOp(_LinearOperator):
         that specifies the only non-trivial action of the EmbeddedOp.
     """
 
-    def __init__(self, state_space, target_labels, operation_to_embed):
-        self.target_labels = target_labels
+    def __init__(self, state_space, target_labels, operation_to_embed, allocated_to_parent=None):
+        self.target_labels = tuple(target_labels) if (target_labels is not None) else None
         self.embedded_op = operation_to_embed
         self._iter_elements_cache = {"Hilbert": None, "HilbertSchmidt": None}  # speeds up _iter_matrix_elements
 
         assert(_StateSpace.cast(state_space).contains_labels(target_labels)), \
             "`target_labels` (%s) not found in `state_space` (%s)" % (str(target_labels), str(state_space))
+        assert(self.embedded_op.state_space.num_tensor_product_blocks == 1), \
+            "EmbeddedOp objects can only embed operations whose state spaces contain just a single tensor product block"
+        assert(len(self.embedded_op.state_space.sole_tensor_product_block_labels) == len(target_labels)), \
+            "Embedded operation's state space has a different number of components than the number of target labels!"
 
         evotype = operation_to_embed._evotype
 
@@ -63,7 +67,10 @@ class EmbeddedOp(_LinearOperator):
                 if rep_type == 'embedded':
                     rep = evotype.create_embedded_rep(state_space, self.target_labels, self.embedded_op._rep)
                 elif rep_type == 'dense':
-                    rep = evotype.create_dense_superop_rep(None, state_space)
+                    # UNSPECIFIED BASIS -- we set basis=None below, which may not work with all evotypes,
+                    #  and should be replaced with the basis of contained ops (if any) once we establish
+                    #  a common .basis or ._basis attribute of representations (which could still be None)
+                    rep = evotype.create_dense_superop_rep(None, None, state_space)
                 else:
                     assert(False), "Logic error!"
 
@@ -77,6 +84,7 @@ class EmbeddedOp(_LinearOperator):
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
 
         _LinearOperator.__init__(self, rep, evotype)
+        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
         if self._rep_type == 'dense': self._update_denserep()
 
     def _update_denserep(self):
@@ -120,28 +128,6 @@ class EmbeddedOp(_LinearOperator):
         None
         """
         self.embedded_op.set_time(t)
-
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that embedded operation has its
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls(self.state_space, self.target_labels,
-                       self.embedded_op.copy(parent, memo))
-        return self._copy_gpindices(copyOfMe, parent, memo)
 
     def _iter_matrix_elements_precalc(self, on_space):
         divisor = 1; divisors = []
@@ -290,7 +276,7 @@ class EmbeddedOp(_LinearOperator):
         #def tosymplectic(self):
         #    #Embed operation's symplectic rep in larger "full" symplectic rep
         #    #Note: (qubit) labels are in first (and only) tensor-product-block
-        #    qubitLabels = self.state_space.tensor_product_block_labels(0)
+        #    qubitLabels = self.state_space.sole_tensor_product_block_labels
         #    smatrix, svector = _symp.embed_clifford(self.embedded_op.smatrix,
         #                                            self.embedded_op.svector,
         #                                            self.qubit_indices,len(qubitLabels))
@@ -598,28 +584,30 @@ class EmbeddedOp(_LinearOperator):
             A Basis mapping the basis labels used in the
             keys of `lindblad_term_dict` to basis matrices.
         """
-        #*** Note: this function is nearly identitcal to EmbeddedErrorgen.coefficients() ***
+        #*** Note: this function is nearly identical to EmbeddedErrorgen.coefficients() ***
         embedded_coeffs = self.embedded_op.errorgen_coefficients(return_basis, logscale_nonham)
-        embedded_Ltermdict = _collections.OrderedDict()
+        if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
+            mapdict = {loc: tgt for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
+                                                    self.target_labels)}
+            embedded_coeffs = {k.map_state_space_labels(mapdict): v for k, v in embedded_coeffs.items()}
+        return embedded_coeffs
 
-        if return_basis:
-            # embed basis
-            Ltermdict, basis = embedded_coeffs
-            embedded_basis = _EmbeddedBasis(basis, self.state_space, self.target_labels)
-            bel_map = {lbl: embedded_lbl for lbl, embedded_lbl in zip(basis.labels, embedded_basis.labels)}
+    def errorgen_coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
 
-            #go through and embed Ltermdict labels
-            for k, val in Ltermdict.items():
-                embedded_key = (k[0],) + tuple([bel_map[x] for x in k[1:]])
-                embedded_Ltermdict[embedded_key] = val
-            return embedded_Ltermdict, embedded_basis
-        else:
-            #go through and embed Ltermdict labels
-            Ltermdict = embedded_coeffs
-            for k, val in Ltermdict.items():
-                embedded_key = (k[0],) + tuple([_EmbeddedBasis.embed_label(x, self.target_labels) for x in k[1:]])
-                embedded_Ltermdict[embedded_key] = val
-            return embedded_Ltermdict
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        embedded_labels = self.embedded_op.errorgen_coefficient_labels()
+        if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
+            mapdict = {loc: tgt for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
+                                                    self.target_labels)}
+            embedded_labels = [k.map_state_space_labels(mapdict) for k in embedded_labels]
+        return embedded_labels
 
     def errorgen_coefficients_array(self):
         """
@@ -687,7 +675,7 @@ class EmbeddedOp(_LinearOperator):
         """
         return self.errorgen_coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_errorgen_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """
         Sets the coefficients of terms in the error generator of this operation.
 
@@ -719,17 +707,24 @@ class EmbeddedOp(_LinearOperator):
             the corresponding value given in `lindblad_term_dict`.  This is what is
             performed by the function :method:`set_error_rates`.
 
+        truncate : bool, optional
+            Whether to allow adjustment of the errogen coefficients in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given coefficients
+            cannot be set as specified.
+
         Returns
         -------
         None
         """
-        #go through and um-embed Ltermdict labels
-        unembedded_Ltermdict = _collections.OrderedDict()
-        for k, val in lindblad_term_dict.items():
-            unembedded_key = (k[0],) + tuple([_EmbeddedBasis.unembed_label(x, self.target_labels) for x in k[1:]])
-            unembedded_Ltermdict[unembedded_key] = val
-        self.embedded_op.set_errorgen_coefficients(unembedded_Ltermdict, action, logscale_nonham)
+        if self.target_labels != self.embedded_op.state_space.sole_tensor_product_block_labels:
+            mapdict = {tgt: loc for loc, tgt in zip(self.embedded_op.state_space.sole_tensor_product_block_labels,
+                                                    self.target_labels)}
+            unembedded_coeffs = {k.map_state_space_labels(mapdict): v for k, v in lindblad_term_dict.items()}
+        else:
+            unembedded_coeffs = lindblad_term_dict
 
+        self.embedded_op.set_errorgen_coefficients(unembedded_coeffs, action, logscale_nonham, truncate)
         if self._rep_type == 'dense': self._update_denserep()
         self.dirty = True
 
@@ -833,6 +828,42 @@ class EmbeddedOp(_LinearOperator):
         bool
         """
         return self.embedded_op.has_nonzero_hessian()
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)
+        mm_dict['target_labels'] = self.target_labels
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _StateSpace.from_nice_serialization(mm_dict['state_space'])
+        return cls(state_space, mm_dict['target_labels'], serial_memo[mm_dict['submembers'][0]])
+
+    def _is_similar(self, other, rtol, atol):
+        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
+            the same local structure, i.e., not considering parameter values or submembers """
+        return (self.target_labels == other.target_labels) and (self.state_space == other.state_space)
+
+    def _oneline_contents(self):
+        """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
+        return "embeds %s into %s" % (str(self.target_labels), str(self.state_space))
 
     def __str__(self):
         """ Return string representation """

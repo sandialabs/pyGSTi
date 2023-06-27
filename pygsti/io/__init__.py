@@ -14,7 +14,8 @@ pyGSTi Input/Output Python Package
 # the package namespace
 #from .legacyio import enable_no_cython_unpickling
 #from .legacyio import enable_old_object_unpickling  # , disable_old_object_unpickling
-from .loaders import *
+from .readers import *
 from .metadir import *
 from .stdinput import *
 from .writers import *
+from .mongodb import *

@@ -1,6 +1,8 @@
 import numpy as np
 import scipy
 
+import pytest
+
 import pygsti.models.modelconstruction as mc
 import pygsti.circuits.cloudcircuitconstruction as cc
 import pygsti.modelpacks.stdtarget as stdtarget
@@ -11,12 +13,14 @@ from pygsti.processors import QubitProcessorSpec as _QubitProcessorSpec
 from ..util import BaseCase
 
 
+
+
 class KCoverageTester(BaseCase):
     def test_kcoverage(self):
         # TODO optimize
         n = 10  # nqubits
         k = 4  # number of "labels" needing distribution
-        rows = cc.get_kcoverage_template(n, k, verbosity=2)
+        rows = cc.create_kcoverage_template(n, k, verbosity=2)
         cc._check_kcoverage_template(rows, n, k, verbosity=1)
 
 
@@ -36,14 +40,15 @@ class StdModuleBase(object):
                     self.assertGreater(len(gl.sslbls), 0)
 
 
+@pytest.mark.filterwarnings("ignore:The function stdmodule_to_smqmodule is deprecated") #Explicitly testing this
 class Std1Q_XYITester(StdModuleBase, BaseCase):
     std = std1Q_XYI
 
-
+@pytest.mark.filterwarnings("ignore:The function stdmodule_to_smqmodule is deprecated") #Explicitly testing this
 class Std2Q_XXYYIITester(StdModuleBase, BaseCase):
     std = std2Q_XXYYII
 
-
+@pytest.mark.filterwarnings("ignore:The function stdmodule_to_smqmodule is deprecated") #Explicitly testing this
 class Std2Q_XYICNOTTester(StdModuleBase, BaseCase):
     std = std2Q_XYICNOT
 
@@ -70,14 +75,14 @@ class Std2Q_XYICNOTTester(StdModuleBase, BaseCase):
 class NQNoiseConstructionTester(BaseCase):
     def test_build_cloud_crosstalk_model(self):
         nQubits = 2
-        pspec = _QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', '(idle)'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)], geometry='line')
-        pspec2 = _QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', '(idle)'), geometry='line')  # just integer qubit labels
+        pspec = _QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', '{idle}'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)], geometry='line')
+        pspec2 = _QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', '{idle}'), geometry='line')  # just integer qubit labels
 
         ccmdl1 = mc.create_cloud_crosstalk_model(
             pspec,
             lindblad_error_coeffs={('Gx', 'qb0'): {('H', 'X'): 0.01, ('S', 'XY:qb0,qb1'): 0.01},
              ('Gcnot', 'qb0', 'qb1'): {('H', 'ZZ'): 0.02, ('S', 'XX:qb0,qb1'): 0.02},
-             '(idle)': {('S', 'XX:qb0,qb1'): 0.01},
+             '{idle}': {('S', 'XX:qb0,qb1'): 0.01},
              'prep': {('S', 'XX:qb0,qb1'): 0.01},
              'povm': {('S', 'XX:qb0,qb1'): 0.01}
              })        
@@ -88,7 +93,7 @@ class NQNoiseConstructionTester(BaseCase):
             pspec,
             lindblad_error_coeffs={('Gx', 'qb0'): {('H', 'X'): 0.01, ('S', 'XY:qb0,qb1'): 0.01},
              ('Gcnot', 'qb0', 'qb1'): {('H', 'ZZ'): 0.02, ('S', 'XX:qb0,qb1'): 0.02},
-             '(idle)': {('S', 'XX:qb0,qb1'): 0.01},
+             '{idle}': {('S', 'XX:qb0,qb1'): 0.01},
              'prep': {('S', 'XX:qb0,qb1'): 0.01},
              'povm': {('S', 'XX:qb0,qb1'): 0.01}
              },
@@ -101,7 +106,7 @@ class NQNoiseConstructionTester(BaseCase):
             pspec2,
             lindblad_error_coeffs={'Gx:0': {('HX'): 0.01, 'SXY:0,1': 0.01},
              'Gcnot:0:1': {'HZZ': 0.02, 'SXX:0,1': 0.02},
-             '(idle)': {'SXX:0,1': 0.01},
+             '{idle}': {'SXX:0,1': 0.01},
              'prep': {'SXX:0,1': 0.01},
              'povm': {'SXX:0,1': 0.01}
              })
@@ -112,7 +117,7 @@ class NQNoiseConstructionTester(BaseCase):
             pspec,
             lindblad_error_coeffs={'Gx:qb0': {('HX'): 0.01, 'SXY:qb0,qb1': 0.01},
              'Gcnot:qb0:qb1': {'HZZ': 0.02, 'SXX:qb0,qb1': 0.02},
-             '(idle)': {'SXX:qb0,qb1': 0.01},
+             '{idle}': {'SXX:qb0,qb1': 0.01},
              'prep': {'SXX:qb0,qb1': 0.01},
              'povm': {'SXX:qb0,qb1': 0.01}
              })
@@ -131,14 +136,14 @@ class NQNoiseConstructionTester(BaseCase):
 
     def test_build_cloud_crosstalk_model_stencils(self):
         nQubits = 2
-        pspec = _QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'idle'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
+        pspec = _QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Gidle'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
                                     geometry='line')
 
         ccmdl1 = mc.create_cloud_crosstalk_model(
             pspec,
             lindblad_error_coeffs={'Gx': {('H', 'X'): 0.01, ('S', 'X:@0+left'): 0.01},  # ('S','XX:@1+right,@0+left'): 0.02
              'Gcnot': {('H', 'ZZ'): 0.02, ('S', 'XX:@1+right,@0+left'): 0.02},
-             'idle': {('S', 'XX:qb0,qb1'): 0.01}
+             'Gidle': {('S', 'XX:qb0,qb1'): 0.01}
              })
         self.assertEqual(ccmdl1.num_params, 5)
 
@@ -147,21 +152,21 @@ class NQNoiseConstructionTester(BaseCase):
             pspec,
             lindblad_error_coeffs={'Gx': {'HX': 0.01, 'SX:@0+left': 0.01},  # ('S','XX:@1+right,@0+left'): 0.02
              'Gcnot': {'HZZ': 0.02, 'SXX:@1+right,@0+left': 0.02},
-             'idle': {'SXX:qb0,qb1': 0.01}
+             'Gidle': {'SXX:qb0,qb1': 0.01}
              })
         self.assertEqual(ccmdl2.num_params, 5)
 
     def test_build_cloud_crosstalk_model_indepgates(self):
         #Same as test_cloud_crosstalk_stencils case but set independent_gates=True
         nQubits = 2
-        pspec = _QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'idle'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
+        pspec = _QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Gidle'), qubit_labels=['qb{}'.format(i) for i in range(nQubits)],
                                     geometry='line')
 
         ccmdl1 = mc.create_cloud_crosstalk_model(
             pspec,
             lindblad_error_coeffs={'Gx': {('H', 'X'): 0.01, ('S', 'X:@0+left'): 0.01},  # ('S','XX:@1+right,@0+left'): 0.02
              'Gcnot': {('H', 'ZZ'): 0.02, ('S', 'XX:@1+right,@0+left'): 0.02},
-             'idle': {('S', 'XX:qb0,qb1'): 0.01}
+             'Gidle': {('S', 'XX:qb0,qb1'): 0.01}
              }, independent_gates=True)
         self.assertEqual(ccmdl1.num_params, 7)
 
@@ -174,6 +179,7 @@ class NQNoiseConstructionTester(BaseCase):
             sigmaZ = np.array([[1, 0], [0, -1]], 'd')
             return scipy.linalg.expm(1j * float(a) * sigmaZ)
         fn.udim = 2
+        fn.shape = (2,2)
 
         pspec = _QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Ga'), nonstd_gate_unitaries={'Ga': fn}, geometry='line')
         ccmdl = mc.create_cloud_crosstalk_model(pspec)

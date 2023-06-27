@@ -17,6 +17,7 @@ import numpy as _np
 from pygsti.tools import listtools as _lt
 
 SMALL = 1e-5
+LOGSMALL = -5
 # a number which is used in place of zero within the
 # product of term magnitudes to keep a running path
 # magnitude from being zero (and losing memory of terms).
@@ -352,7 +353,7 @@ def circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, 
          for elbl in elabels], 'd')
 
     mag = _np.zeros(len(elabels), 'd')
-    nPaths = _np.zeros(len(elabels), int)
+    nPaths = _np.zeros(len(elabels), _np.int64)
 
     def count_path(b, mg, incd):
         mag[E_indices[b[-1]]] += mg
@@ -1050,9 +1051,10 @@ def traverse_paths_upto_threshold(oprep_lists, pathmag_threshold, num_elabels, f
                 nzeros = current_nzeros
 
                 if denom == 0:
-                    denom = SMALL; nzeros -= 1
+                    # Note: adjust logmag because when term's mag == 0, it's logmag == 0 also (convention)
+                    denom = SMALL; nzeros -= 1; logmag -= LOGSMALL
                 if numerator == 0:
-                    numerator = SMALL; nzeros += 1
+                    numerator = SMALL; nzeros += 1; logmag += LOGSMALL
 
                 mag = current_mag * (numerator / denom)
                 actual_mag = mag if (nzeros == 0) else 0.0  # magnitude is actually zero if nzeros > 0
@@ -1185,23 +1187,11 @@ def pathmagnitude_threshold(oprep_lists, e_indices, num_elabels, target_sum_of_p
         mag[e_indices[b[-1]]] += mg
         nPaths[e_indices[b[-1]]] += 1
 
-        # REMOVE?
-        # #Instead of magnitude, accumulate actual current path contribution that we can test for convergence
-        # factors = [oprep_lists[i][factorInd] for i, factorInd in enumerate(b)]
-        # res = _np.product([f.evaluated_coeff for f in factors])
-        # pLeft = _unitary_sim_pre(factors, comm, mem_limit)
-        # pRight = _unitary_sim_post(factors, comm, mem_limit)
-        # res *= (pLeft * pRight)
-        #
-        # final_factor_indx = b[-1]
-        # Ei = e_indices[final_factor_indx]  # final "factor" index == E-vector index
-        # integrals[Ei] += res
-
         return (nPaths[e_indices[b[-1]]] == max_npaths)  # trigger immediate return if hit max_npaths
 
     while nIters < 100:  # TODO: allow setting max_nIters as an arg?
         mag = _np.zeros(num_elabels, 'd')
-        nPaths = _np.zeros(num_elabels, int)
+        nPaths = _np.zeros(num_elabels, _np.int64)
 
         traverse_paths_upto_threshold(oprep_lists, threshold, num_elabels,
                                       foat_indices_per_op, count_path)  # sets mag and nPaths
@@ -1236,7 +1226,7 @@ def pathmagnitude_threshold(oprep_lists, e_indices, num_elabels, target_sum_of_p
         nPaths[e_indices[b[-1]]] += 1
 
     mag = _np.zeros(num_elabels, 'd')
-    nPaths = _np.zeros(num_elabels, int)
+    nPaths = _np.zeros(num_elabels, _np.int64)
     traverse_paths_upto_threshold(oprep_lists, threshold_lower_bound, num_elabels,
                                   foat_indices_per_op, count_path_nomax)  # sets mag and nPaths
 

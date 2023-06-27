@@ -268,17 +268,17 @@ class Workspace(object):
     def _makefactory(self, cls, autodisplay):  # , printer=_objs.VerbosityPrinter(1)):
         # XXX this indirection is so wild -- can we please rewrite directly?
         #Manipulate argument list of cls.__init__
-        argspec = _inspect.getargspec(cls.__init__)
-        argnames = argspec[0]
+        argspec = _inspect.getfullargspec(cls.__init__)
+        argsig = _inspect.signature(cls.__init__)
+        argnames = argspec.args
         assert(argnames[0] == 'self' and argnames[1] == 'ws'), \
             "__init__ must begin with (self, ws, ...)"
 
-        factoryfn_argnames = argnames[2:]  # strip off self & ws args
-        newargspec = (factoryfn_argnames,) + argspec[1:]
+        # Strip default values out of parameters so that we don't override the true incoming values with defaults
+        newargparams = [p.replace(default=_inspect.Parameter.empty) for p in argsig.parameters.values()][2:]
+        newargsig = _inspect.Signature(newargparams)
 
-        #Define a new factory function with appropriate signature
-        signature = _inspect.formatargspec(
-            formatvalue=lambda val: "", *newargspec)
+        signature = str(newargsig)
         signature = signature[1:-1]  # strip off parenthesis from ends of "(signature)"
 
         if autodisplay:
@@ -349,6 +349,7 @@ class Workspace(object):
         # goodness of fit
         self.FitComparisonTable = makefactory(_wt.FitComparisonTable)
         self.WildcardBudgetTable = makefactory(_wt.WildcardBudgetTable)
+        self.WildcardSingleScaleBarPlot = makefactory(_wp.WildcardSingleScaleBarPlot)
 
         #Specifically designed for reports
         self.BlankTable = makefactory(_wt.BlankTable)
@@ -1150,7 +1151,7 @@ class Switchboard(_collections.OrderedDict):
 
         return {'html': html, 'js': js}
 
-    def get_switch_change_handlerjs(self, switch_index):
+    def create_switch_change_handlerjs(self, switch_index):
         """
         Returns the Javascript needed to begin an on-change handler for a particular switch.
 
@@ -1177,7 +1178,7 @@ class Switchboard(_collections.OrderedDict):
         else:
             raise ValueError("Unknown switch type: %s" % typ)
 
-    def get_switch_valuejs(self, switch_index):
+    def create_switch_valuejs(self, switch_index):
         """
         Returns the Javascript needed to get the value of a particular switch.
 
@@ -1425,7 +1426,7 @@ class SwitchValue(object):
         self.dependencies = dependencies
 
         shape = [len(self.parent.positionLabels[i]) for i in dependencies]
-        self.base = _np.empty(shape, dtype=_np.object)
+        self.base = _np.empty(shape, dtype=_np.object_)
         index_all = (slice(None, None),) * len(shape)
         self.base[index_all] = NotApplicable(self.ws)
 
@@ -1874,7 +1875,7 @@ class WorkspaceOutput(object):
         handler_js += "  var curSwitchPos = new Array();\n"
         for sb, switchInds in zip(switchboards, switch_indices):
             for switchIndex in switchInds:
-                handler_js += "  curSwitchPos.push(%s);\n" % sb.get_switch_valuejs(switchIndex)
+                handler_js += "  curSwitchPos.push(%s);\n" % sb.create_switch_valuejs(switchIndex)
         handler_js += "  var idToShow = switchmap_%s[ curSwitchPos ];\n" % id
         handler_js += "  $( '#%s' ).children().hide();\n" % id
         handler_js += "  divToShow = $( '#' + idToShow );\n"
@@ -1917,7 +1918,7 @@ class WorkspaceOutput(object):
             # switchInds is a tuple containing the "used" switch indices of sb
             for switchIndex in switchInds:
                 # part of if-block ensuring switches are ready (i.e. created)
-                js += "    " + sb.get_switch_change_handlerjs(switchIndex) + \
+                js += "    " + sb.create_switch_change_handlerjs(switchIndex) + \
                     "%s(); });\n" % onchange_name
 
         #bind onchange call to custom 'tabchange' event that we trigger when tab changes

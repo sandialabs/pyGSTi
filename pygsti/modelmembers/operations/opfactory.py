@@ -19,8 +19,11 @@ from pygsti.modelmembers import modelmember as _gm
 from pygsti.modelmembers import instruments as _instrument
 from pygsti.modelmembers import povms as _povm
 from pygsti.baseobjs.label import Label as _Lbl
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.baseobjs import basis as _basis
 from pygsti.evotypes import Evotype as _Evotype
+from pygsti.tools import optools as _ot
 
 
 def op_from_factories(factory_dict, lbl):
@@ -52,11 +55,10 @@ def op_from_factories(factory_dict, lbl):
     """
     lbl_args = lbl.collect_args()
 
-    if lbl_args:
-        lbl_without_args = lbl.strip_args()
-        if lbl_without_args in factory_dict:
-            return factory_dict[lbl_without_args].create_simplified_op(args=lbl_args)
-            # E.g. an EmbeddedOpFactory
+    lbl_without_args = lbl.strip_args() if lbl_args else lbl
+    if lbl_without_args in factory_dict:
+        return factory_dict[lbl_without_args].create_simplified_op(args=lbl_args)
+        # E.g. an EmbeddedOpFactory or any factory labeled by a Label with sslbls
 
     lbl_name = _Lbl(lbl.name)
     if lbl_name in factory_dict:
@@ -162,7 +164,7 @@ class OpFactory(_gm.ModelMember):
         # assign the created operation the same indices as we have.
         # (so we don't call model._init_virtual_obj as there's no need)
         obj.set_gpindices(self.gpindices, self.parent)
-        obj.from_vector(self.to_vector())
+        obj.from_vector(self.to_vector(), dirty_value=False)
         return obj
 
     def create_simplified_op(self, args=None, sslbls=None, item_lbl=None):
@@ -232,7 +234,7 @@ class OpFactory(_gm.ModelMember):
 
     def __str__(self):
         s = "%s object with dimension %d and %d params" % (
-            self.__class__.__name__, self.dim, self.num_params)
+            self.__class__.__name__, self.state_space.dim, self.num_params)
         return s
 
     #Note: to_vector, from_vector, and num_params are inherited from
@@ -265,12 +267,40 @@ class EmbeddedOpFactory(OpFactory):
         self.embedded_factory = factory_to_embed
         self.target_labels = target_labels
         super(EmbeddedOpFactory, self).__init__(state_space, factory_to_embed._evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
 
         #FUTURE: somehow do all the difficult embedded op computation once at construction so we
         # don't need to keep reconstructing an Embedded op in each create_op call.
         #Embedded = _op.EmbeddedDenseOp if dense else _op.EmbeddedOp
         #dummyOp = _op.ComposedOp([], dim=factory_to_embed.dim, evotype=factor_to_embed._evotype)
         #self.embedded_op = Embedded(stateSpaceLabels, target_labels, dummyOp)
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
+        mm_dict['target_labels'] = self.target_labels
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        return cls(state_space, mm_dict['target_labels'], serial_memo[mm_dict['submembers'][0]])
 
     def create_op(self, args=None, sslbls=None):
         """
@@ -298,8 +328,12 @@ class EmbeddedOpFactory(OpFactory):
                                  "operations with given `sslbls` (these are already fixed!)")
 
         op = self.embedded_factory.create_op(args, sslbls)  # Note: will have its gpindices set already
-        embedded_op = _EmbeddedOp(self.state_space, self.target_labels, op)
-        embedded_op.set_gpindices(self.gpindices, self.parent)  # Overkill, since embedded op already has indices set?
+        embedded_op = _EmbeddedOp(self.state_space, self.target_labels, op, allocated_to_parent=self.parent)
+        #embedded_op.set_gpindices(self.gpindices, self.parent)  # Overkill, since embedded op already has indices set?
+        # Note - adding allocated_to_parent above and commenting out set_gpindices should be fine b/c
+        # 1) other factories always produce allocated ops_only_circuit, and
+        # 2) when this factory is allocated (maybe assert(self.parent is not None)?), it ensures submembers are
+
         return embedded_op
 
     def submembers(self):
@@ -405,6 +439,39 @@ class EmbeddingOpFactory(OpFactory):
         self.num_target_labels = num_target_labels
         self.allowed_sslbls_fn = allowed_sslbls_fn
         super(EmbeddingOpFactory, self).__init__(state_space, factory_or_op_to_embed._evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
+        mm_dict['num_target_labels'] = self.num_target_labels
+        mm_dict['allowed_sslbls_fn'] = self.allowed_sslbls_fn.to_nice_serialization() \
+            if (self.allowed_sslbls_fn is not None) else None
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        allowed_sslbls_fn = _NicelySerializable.from_nice_serialization(mm_dict['allowed_sslbls_fn']) \
+            if (mm_dict['allowed_sslbls_fn'] is not None) else None
+        return cls(state_space, serial_memo[mm_dict['submembers'][0]],
+                   mm_dict['num_target_labels'], allowed_sslbls_fn)
 
     def create_op(self, args=None, sslbls=None):
         """
@@ -428,7 +495,7 @@ class EmbeddingOpFactory(OpFactory):
             Can be any type of operation, e.g. a LinearOperator, State,
             Instrument, or POVM, depending on the label requested.
         """
-        assert(sslbls is not None), ("EmbeddedOpFactory objects should be asked to create "
+        assert(sslbls is not None), ("EmbeddingOpFactory objects should be asked to create "
                                      "operations with specific `sslbls`")
         assert(self.num_target_labels is None or len(sslbls) == self.num_target_labels), \
             ("EmbeddingFactory.create_op called with the wrong number (%s) of target labels!"
@@ -534,7 +601,8 @@ class ComposedOpFactory(OpFactory):
         at least one factory or operator being composed.
 
     dense : bool, optional
-        Whether dense composed operations (ops which hold their entire
+        Whether dense composed operations (ops which hold their entire superoperator)
+        should be created.  (Currently UNUSED - leave as default).
     """
 
     def __init__(self, factories_or_ops_to_compose, state_space="auto", evotype="auto", dense=False):
@@ -555,6 +623,7 @@ class ComposedOpFactory(OpFactory):
         self.dense = dense
         self.is_factory = [isinstance(f, OpFactory) for f in factories_or_ops_to_compose]
         super(ComposedOpFactory, self).__init__(state_space, evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
 
     def create_op(self, args=None, sslbls=None):
         """
@@ -579,8 +648,11 @@ class ComposedOpFactory(OpFactory):
             Instrument, or POVM, depending on the label requested.
         """
         ops_to_compose = [f.create_op(args, sslbls) if is_f else f for is_f, f in zip(self.is_factory, self.factors)]
-        op = _ComposedOp(ops_to_compose, self.evotype, self.state_space)
-        op.set_gpindices(self.gpindices, self.parent)  # Overkill, since composed ops already have indices set?
+        op = _ComposedOp(ops_to_compose, self.evotype, self.state_space, allocated_to_parent=self.parent)
+        #op.set_gpindices(self.gpindices, self.parent)  # Overkill, since composed ops already have indices set?
+        # Note - adding allocated_to_parent above and commenting out set_gpindices should be fine b/c
+        # 1) other factories always produce allocated ops_only_circuit, and
+        # 2) when this factory is allocated (maybe assert(self.parent is not None)?), it ensures submembers are
         return op
 
     def submembers(self):
@@ -653,6 +725,34 @@ class ComposedOpFactory(OpFactory):
             gate.from_vector(v[factor_local_inds], close, dirty_value)
         self.dirty = dirty_value
 
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
+        mm_dict['dense'] = self.dense
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        factories_or_ops_to_compose = [serial_memo[i] for i in mm_dict['submembers']]
+        return cls(factories_or_ops_to_compose, state_space, mm_dict['evotype'], mm_dict['dense'])
+
 
 #Note: to pickle these Factories we'll probably need to some work
 # because they include functions.
@@ -688,9 +788,14 @@ class UnitaryOpFactory(OpFactory):
     """
 
     def __init__(self, fn, state_space, superop_basis="pp", evotype="densitymx"):
-        self.basis = superop_basis
-        self.fn = fn
         state_space = _statespace.StateSpace.cast(state_space)
+        self.basis = _basis.Basis.cast(superop_basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
+
+        # Compute transform matrices once and for all here, to speed up create_object calls
+        std_basis = _basis.BuiltinBasis('std', state_space.dim, sparse=self.basis.sparse)
+        self.transform_std_to_basis = std_basis.create_transform_matrix(self.basis)
+        self.transform_basis_to_std = self.basis.create_transform_matrix(std_basis)
+        self.fn = fn
         super(UnitaryOpFactory, self).__init__(state_space, evotype)
 
     def create_object(self, args=None, sslbls=None):
@@ -717,4 +822,45 @@ class UnitaryOpFactory(OpFactory):
         """
         assert(sslbls is None), "UnitaryOpFactory.create_object must be called with `sslbls=None`!"
         U = self.fn(args)
-        return _StaticUnitaryOp(U, self.basis, self.evotype, self.state_space)
+
+        # Expanded call to _bt.change_basis(_ot.unitary_to_std_process_mx(U), 'std', self.basis) for speed
+        std_superop = _ot.unitary_to_std_process_mx(U)
+        superop_mx = _np.dot(self.transform_std_to_basis, _np.dot(std_superop, self.transform_basis_to_std))
+        if self.basis.real:
+            assert(_np.linalg.norm(superop_mx.imag) < 1e-8)
+            superop_mx = superop_mx.real
+        return _StaticUnitaryOp.quick_init(U, superop_mx, self.basis, self.evotype, self.state_space)
+
+    def to_memoized_dict(self, mmg_memo):
+        """Create a serializable dict with references to other objects in the memo.
+
+        Parameters
+        ----------
+        mmg_memo: dict
+            Memo dict from a ModelMemberGraph, i.e. keys are object ids and values
+            are ModelMemberGraphNodes (which contain the serialize_id). This is NOT
+            the same as other memos in ModelMember (e.g. copy, allocate_gpindices, etc.).
+
+        Returns
+        -------
+        mm_dict: dict
+            A dict representation of this ModelMember ready for serialization
+            This must have at least the following fields:
+                module, class, submembers, params, state_space, evotype
+            Additional fields may be added by derived classes.
+        """
+        mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
+        mm_dict['unitary_function'] = self.fn.to_nice_serialization()
+        mm_dict['superop_basis'] = self.basis if isinstance(self.basis, str) \
+            else self.basis.to_nice_serialization()
+        return mm_dict
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        superop_basis = mm_dict['superop_basis']
+        if isinstance(superop_basis, dict):
+            superop_basis = _basis.Basis.from_nice_serialization(superop_basis)
+        fn = _UnitaryGateFunction.from_nice_serialization(mm_dict['unitary_function'])
+        return cls(fn, state_space, superop_basis, mm_dict['evotype'])

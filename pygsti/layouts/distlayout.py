@@ -251,11 +251,11 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                  create_atom_fn, create_atom_args, num_atom_processors,
                  num_param_dimension_processors=(), param_dimensions=(), param_dimension_blk_sizes=(),
                  resource_alloc=None, verbosity=0):
-        from mpi4py import MPI
-
         resource_alloc = _ResourceAllocation.cast(resource_alloc)
         printer = _VerbosityPrinter.create_printer(verbosity, resource_alloc)
         comm = resource_alloc.comm
+        if comm is not None:
+            from mpi4py import MPI
 
         rank = resource_alloc.comm_rank
         nprocs = resource_alloc.comm_size
@@ -904,7 +904,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
         Parameters
         ----------
-        array_type : ("e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c")
+        array_type : ("e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c", "cp", "cp2", "cpp")
             The type of array to allocate, often corresponding to the array shape.  Let
             `nE` be the layout's number of elements, `nP1` and `nP2` be the number of
             parameters we differentiate with respect to (for first and second derivatives),
@@ -918,6 +918,9 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             - `"jtj"`: (nP1, nP2)
             - `"jtf"`: (nP1,)
             - `"c"`: (nC,)
+            - `"cp"`: (nC, nP1)
+            - `"cp2"`: (nC, nP2)
+            - `"cpp"`: (nC, nP1, nP2)
             Note that, even though the `"p"` and `"jtf"` types are the same shape
             they are used for different purposes and are distributed differently
             when there are multiple processors.  The `"p"` type is for use with
@@ -975,9 +978,17 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             my_slices = (self.host_param_fine_slice,)
             array_shape = (self.host_num_params_fine,)
             allocating_ralloc = resource_alloc  # self.resource_alloc('param-interatom')
-        elif array_type == 'c':
-            my_slices = (self.host_circuit_slice,)
-            array_shape = (self.host_num_circuits,)
+        elif array_type in ('c', 'cp', 'cp2', 'cpp'):
+            my_slices = (slice(self.host_circuit_slice.start, self.host_circuit_slice.stop + extra_elements),) \
+                if self.part_of_final_atom_processor else (self.host_circuit_slice,)
+            array_shape = (self.host_num_circuits + extra_elements,) if self.part_of_final_atom_processor \
+                else (self.host_num_circuits,)
+            if array_type in ('cp', 'cpp'):
+                my_slices += (self.host_param_slice,)
+                array_shape += (self.host_num_params,)
+            if array_type in ('cp2', 'cpp'):
+                my_slices += (self.host_param2_slice,)
+                array_shape += (self.host_num_params2,)
             allocating_ralloc = resource_alloc  # share mem between these processors
         else:
             raise ValueError("Invalid array_type: %s" % str(array_type))
@@ -1046,7 +1057,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
         Parameters
         ----------
-        array_type : ("e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c")
+        array_type : ("e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c", "cp", "cp2", "cpp")
             The type of array to allocate, often corresponding to the array shape.  See
             :method:`allocate_local_array` for a more detailed description.
 
@@ -1089,10 +1100,17 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         # Gather the "extra_elements" when they are present,
         # by enlarging the element slice of all the procs in the final atom processor.
         global_num_els = self.global_num_elements + extra_elements
+        global_num_circuits = self.global_num_circuits + extra_elements
         if extra_elements > 0 and self.part_of_final_atom_processor:
             global_el_slice = slice(self.global_element_slice.start, self.global_element_slice.stop + extra_elements)
+            global_circuit_indices = _np.concatenate([self.global_circuit_indices,
+                                                      _np.arange(self.global_num_circuits,
+                                                                 self.global_num_circuits + extra_elements)])
+            #NOTE: I'm not sure that the concatenation above is correct - we've never tested "lsvec_mode='percircuit'"
+            # with penalty terms (extra_elements > 0)
         else:
             global_el_slice = self.global_element_slice
+            global_circuit_indices = self.global_circuit_indices
 
         # Set two resource allocs based on the array_type:
         # gather_ralloc.comm groups the processors that we gather data over.
@@ -1137,8 +1155,23 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         elif array_type == 'c':
             gather_ralloc = resource_alloc
             unit_ralloc = self.resource_alloc('atom-processing')
-            global_shape = (self.global_num_circuits,)
-            slice_of_global = self.global_circuit_indices  # NOTE: this is not a slice!! (but works as an index, so ok)
+            global_shape = (global_num_circuits,)
+            slice_of_global = global_circuit_indices  # NOTE: this is not a slice!! (but works as an index, so ok)
+        elif array_type == 'cp':
+            gather_ralloc = resource_alloc
+            unit_ralloc = self.resource_alloc('param-processing')
+            global_shape = (global_num_circuits, self.global_num_params)
+            slice_of_global = (global_circuit_indices, self.global_param_slice)
+        elif array_type == 'cp2':
+            gather_ralloc = resource_alloc
+            unit_ralloc = self.resource_alloc('param2-processing')  # this may not be right...
+            global_shape = (global_num_circuits, self.global_num_params2)
+            slice_of_global = (global_circuit_indices, self.global_param2_slice)
+        elif array_type == 'cpp':
+            gather_ralloc = resource_alloc
+            unit_ralloc = self.resource_alloc('param2-processing')
+            global_shape = (global_num_circuits, self.global_num_params, self.global_num_params2)
+            slice_of_global = (global_circuit_indices, self.global_param_slice, self.global_param2_slice)
         else:
             raise ValueError("Invalid array type: %s" % str(array_type))
 
@@ -1328,11 +1361,13 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         else:
             jT = j.T
             for i, param_slice in enumerate(self.param_slices):  # for each parameter slice <=> param "processor"
+                ncols = _slct.length(param_slice)
                 if i == self.my_owned_paramproc_index:
                     assert(param_slice == self.global_param_slice)
                     if atom_ralloc.comm is not None:
                         assert(self.param_slice_owners[i] == atom_ralloc.comm.rank)
-                        atom_ralloc.comm.Bcast(jT, root=atom_ralloc.comm.rank)  # *transpose* so receiving buf is cont.
+                        buf[0:ncols, :] = jT[:, :]  # broadcast *transpose* so buf slice is contiguous
+                        atom_ralloc.comm.Bcast(buf[0:ncols, :], root=atom_ralloc.comm.rank)
                         #Note: we only really need to broadcast this to other param_ralloc.comm.rank == 0
                         # procs as these are the only atom_jtj's that contribute in the allreduce_sum below.
                     else:
@@ -1340,7 +1375,6 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
                     atom_jtj[:, param_slice] = jT @ j  # _np.dot(jT, j)
                 else:
-                    ncols = _slct.length(param_slice)
                     atom_ralloc.comm.Bcast(buf[0:ncols, :], root=self.param_slice_owners[i])
                     other_j = buf[0:ncols, :].T
                     atom_jtj[:, param_slice] = jT @ other_j  # _np.dot(jT, other_j)

@@ -251,16 +251,16 @@ def chi2_hessian(model, dataset, circuits=None,
 
     Returns
     -------
-    numpy array
-        The Hessian matrix of shape (nModelParams, nModelParams), where
-        nModelParams = `model.num_params`.
+    numpy array or None
+        On the root processor, the Hessian matrix of shape (nModelParams, nModelParams),
+        where nModelParams = `model.num_params`.  `None` on non-root processors.
     """
     from ..objectivefns import objectivefns as _objfns
     obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                          {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, mem_limit, ('hessian',), (), mdc_store)
-    return obj.layout.allgather_local_array('epp', obj.hessian())
+    return obj.hessian()  # Note: hessian gathers itself on root proc only
 
 
 def chi2_approximate_hessian(model, dataset, circuits=None,
@@ -315,16 +315,16 @@ def chi2_approximate_hessian(model, dataset, circuits=None,
 
     Returns
     -------
-    numpy array
-        The Hessian matrix of shape (nModelParams, nModelParams), where
-        nModelParams = `model.num_params`.
+    numpy array or None
+        On the root processor, the approximate Hessian matrix of shape (nModelParams, nModelParams),
+        where nModelParams = `model.num_params`.  `None` on non-root processors.
     """
     from ..objectivefns import objectivefns as _objfns
     obj = _objfns._objfn(_objfns.Chi2Function, model, dataset, circuits,
                          {'min_prob_clip_for_weighting': min_prob_clip_for_weighting},
                          {'prob_clip_interval': prob_clip_interval},
                          op_label_aliases, comm, mem_limit, ('approximate_hessian',), (), mdc_store)
-    return obj.layout.allgather_local_array('epp', obj.approximate_hessian())
+    return obj.approximate_hessian()
 
 
 def chialpha(alpha, model, dataset, circuits=None,

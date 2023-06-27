@@ -10,7 +10,7 @@ The ComposedErrorgen class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-
+import itertools as _itertools
 import collections as _collections
 
 import numpy as _np
@@ -76,14 +76,24 @@ class ComposedErrorgen(_LinearOperator):
 
         self.matrix_basis = errgens_to_compose[0].matrix_basis \
             if len(errgens_to_compose) > 0 else None
-        assert(all([self.matrix_basis == eg.matrix_basis for eg in errgens_to_compose])), \
-            "All error generators must have the same matrix basis (%s expected)!" % self.matrix_basis
+        assert(all([self.matrix_basis.is_equivalent(eg.matrix_basis, sparseness_must_match=False)
+                    for eg in errgens_to_compose])), \
+            "All error generators must have the same matrix basis (%s expected)!" % str(self.matrix_basis)
 
         #Create representation object
         factor_reps = [op._rep for op in self.factors]
         rep = evotype.create_sum_rep(factor_reps, state_space)
 
         _LinearOperator.__init__(self, rep, evotype)
+        self.init_gpindices()  # initialize our gpindices based on sub-members
+
+    #Note: no to_memoized_dict needed, as ModelMember version does all we need.
+
+    @classmethod
+    def _from_memoized_dict(cls, mm_dict, serial_memo):
+        state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
+        errgens_to_compose = [serial_memo[i] for i in mm_dict['submembers']]
+        return cls(errgens_to_compose, mm_dict['evotype'], state_space)
 
     def coefficients(self, return_basis=False, logscale_nonham=False):
         """
@@ -174,6 +184,18 @@ class ComposedErrorgen(_LinearOperator):
         else:
             return Ltermdict
 
+    def coefficient_labels(self):
+        """
+        The elementary error-generator labels corresponding to the elements of :method:`coefficients_array`.
+
+        Returns
+        -------
+        tuple
+            A tuple of (<type>, <basisEl1> [,<basisEl2]) elements identifying the elementary error
+            generators of this gate.
+        """
+        return tuple(_itertools.chain(*[eg.coefficient_labels() for eg in self.factors]))
+
     def coefficients_array(self):
         """
         The weighted coefficients of this error generator in terms of "standard" error generators.
@@ -242,7 +264,7 @@ class ComposedErrorgen(_LinearOperator):
         """
         return self.coefficients(return_basis=False, logscale_nonham=True)
 
-    def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False):
+    def set_coefficients(self, lindblad_term_dict, action="update", logscale_nonham=False, truncate=True):
         """
         Sets the coefficients of terms in this error generator.
 
@@ -274,6 +296,12 @@ class ComposedErrorgen(_LinearOperator):
             the corresponding value given in `lindblad_term_dict`.  This is what is
             performed by the function :method:`set_error_rates`.
 
+        truncate : bool, optional
+            Whether to truncate the projections onto the Lindblad terms in
+            order to meet constraints (e.g. to preserve CPTP) when necessary.
+            If False, then an error is thrown when the given coefficients
+            cannot be parameterized as specified.
+
         Returns
         -------
         None
@@ -296,7 +324,7 @@ class ComposedErrorgen(_LinearOperator):
 
         #Set the L-term coefficients of each factor separately
         for d, eg in zip(perfactor_Ltermdicts, self.factors):
-            eg.set_coefficients(d, action, logscale_nonham)
+            eg.set_coefficients(d, action, logscale_nonham, truncate)
 
     def set_error_rates(self, lindblad_term_dict, action="update"):
         """
@@ -442,6 +470,7 @@ class ComposedErrorgen(_LinearOperator):
             self._rep.reinit_factor_reps([op._rep for op in self.factors])
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # of our params may have changed
+            self._parent = None  # mark this object for re-allocation
 
     def insert(self, insert_at, *factors_to_insert):
         """
@@ -465,6 +494,7 @@ class ComposedErrorgen(_LinearOperator):
             self._rep.reinit_factor_reps([op._rep for op in self.factors])
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # of our params may have changed
+            self._parent = None  # mark this object for re-allocation
 
     def remove(self, *factor_indices):
         """
@@ -485,27 +515,7 @@ class ComposedErrorgen(_LinearOperator):
             self._rep.reinit_factor_reps([op._rep for op in self.factors])
         if self.parent:  # need to alert parent that *number* (not just value)
             self.parent._mark_for_rebuild(self)  # of our params may have changed
-
-    def copy(self, parent=None, memo=None):
-        """
-        Copy this object.
-
-        Parameters
-        ----------
-        parent : Model, optional
-            The parent model to set for the copy.
-
-        Returns
-        -------
-        LinearOperator
-            A copy of this object.
-        """
-        # We need to override this method so that factors have their
-        # parent reset correctly.
-        if memo is not None and id(self) in memo: return memo[id(self)]
-        cls = self.__class__  # so that this method works for derived classes too
-        copyOfMe = cls([f.copy(parent, memo) for f in self.factors], self._evotype, self.state_space)
-        return self._copy_gpindices(copyOfMe, parent, memo)
+            self._parent = None  # mark this object for re-allocation
 
     def to_sparse(self, on_space='minimal'):
         """
@@ -659,7 +669,7 @@ class ComposedErrorgen(_LinearOperator):
         for eg in self.factors:
             eg_terms = [t.copy() for t in eg.taylor_order_terms(order, max_polynomial_vars, return_coeff_polys)]
             mapvec = _np.ascontiguousarray(_modelmember._decompose_gpindices(
-                self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.arange(eg.num_params))))
+                self.gpindices, _modelmember._compose_gpindices(eg.gpindices, _np.arange(eg.num_params))), _np.int64)
             for t in eg_terms:
                 # t.map_indices_inplace(lambda x: tuple(_modelmember._decompose_gpindices(
                 #     # map global to *local* indices

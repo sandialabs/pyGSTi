@@ -35,7 +35,7 @@ class LocalNoiseModelInstanceTester(BaseCase):
 
     def test_dep_localnoise(self):
         mdl_local = create_crosstalk_free_model(self.pspec_2Q,
-                                                ideal_gate_type='H+S', ideal_spam_type='lindblad H+S', independent_gates=False,
+                                                ideal_gate_type='H+S', ideal_spam_type='exp(H+S)', independent_gates=False,
                                                 ensure_composed_gates=False)
 
         assert(set(mdl_local.operation_blks['gates'].keys()) == set(["Gx", "Gy", "Gcnot"]))
@@ -51,17 +51,17 @@ class LocalNoiseModelInstanceTester(BaseCase):
                                                  [0, 0.9, 0, 0],
                                                  [0, 0, 0.9, 0],
                                                  [0, 0, 0, 0.9]], 'd'))
-        pspec_2Q = QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'idle'), geometry="line",
-                                      availability={'idle': [('qb0',), ('qb1',)]},
+        pspec_2Q = QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Gidle'), geometry="line",
+                                      availability={'Gidle': [('qb0',), ('qb1',)]},
                                       qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
 
-        mdl_local = create_crosstalk_free_model(pspec_2Q, {'idle': noisy_idle},
+        mdl_local = create_crosstalk_free_model(pspec_2Q, {'Gidle': noisy_idle},
                                                 ideal_gate_type='static', independent_gates=False,
-                                                ensure_composed_gates=False)
+                                                ensure_composed_gates=False, implicit_idle_mode='add_global')
 
-        assert(set(mdl_local.operation_blks['gates'].keys()) == set(["Gx", "Gy", "Gcnot", "idle"]))
+        assert(set(mdl_local.operation_blks['gates'].keys()) == set(["Gx", "Gy", "Gcnot", "Gidle"]))
         assert(set(mdl_local.operation_blks['layers'].keys()) == set(
-            [('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'), ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0'), ('idle', 'qb0'), ('idle', 'qb1'), '(auto_global_idle)']))
+            [('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'), ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0'), ('Gidle', 'qb0'), ('Gidle', 'qb1'), '{auto_global_idle}']))
         test_circuit = (('Gx', 'qb0'), ('Gcnot', 'qb0', 'qb1'), [], [('Gx', 'qb1'), ('Gy', 'qb0')])
         self.assertAlmostEqual(sum(mdl_local.probabilities(test_circuit).values()), 1.0)
         self.assertAlmostEqual(mdl_local.probabilities(test_circuit)['00'], 0.3576168)
@@ -70,13 +70,13 @@ class LocalNoiseModelInstanceTester(BaseCase):
         op = mdl_local.circuit_layer_operator(Label('Gx', 'qb1'))
         ref_op = ComposedOp([
             ComposedOp([
-                EmbeddedOp(mdl_local.state_space, ('qb0',), mdl_local.operation_blks['gates']['idle']),
-                EmbeddedOp(mdl_local.state_space, ('qb1',), mdl_local.operation_blks['gates']['idle']),
+                EmbeddedOp(mdl_local.state_space, ('qb0',), mdl_local.operation_blks['gates']['Gidle']),
+                EmbeddedOp(mdl_local.state_space, ('qb1',), mdl_local.operation_blks['gates']['Gidle']),
             ]), # Global idle
             EmbeddedOp(mdl_local.state_space, ('qb1',), mdl_local.operation_blks['gates']['Gx']) # Gx operation
         ])
         ref_op2 = ComposedOp([
-            mdl_local.operation_blks['layers']['(auto_global_idle)'], # Global idle
+            mdl_local.operation_blks['layers']['{auto_global_idle}'], # Global idle
             EmbeddedOp(mdl_local.state_space, ('qb1',), mdl_local.operation_blks['gates']['Gx']) # Gx operation
         ])
         self.assertEqual(str(op), str(ref_op))
@@ -86,26 +86,27 @@ class LocalNoiseModelInstanceTester(BaseCase):
         nQubits = 2
         noisy_idle = 0.9 * np.identity(4**nQubits, 'd')
         noisy_idle[0, 0] = 1.0
-        noisy_idle = ExpErrorgenOp(LindbladErrorgen.from_operation_matrix(noisy_idle, "H+S+A"))
+        noisy_idle = ExpErrorgenOp(LindbladErrorgen.from_operation_matrix(noisy_idle, "H+S"))
 
-        pspec_2Q = QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'idle'), geometry="line",
+        pspec_2Q = QubitProcessorSpec(nQubits, ('Gx', 'Gy', 'Gcnot', 'Gidle'), geometry="line",
                                       qubit_labels=['qb{}'.format(i) for i in range(nQubits)])
 
-        mdl_local = create_crosstalk_free_model(pspec_2Q, {'idle': noisy_idle},
-                                                ideal_gate_type='H+S+A', ideal_spam_type="lindblad H+S+A",
-                                                independent_gates=False, ensure_composed_gates=False)
+        mdl_local = create_crosstalk_free_model(pspec_2Q, {'Gidle': noisy_idle},
+                                                ideal_gate_type='H+S', ideal_spam_type="exp(H+S)",
+                                                independent_gates=False, ensure_composed_gates=False,
+                                                implicit_idle_mode='add_global')
 
-        self.assertEqual(set(mdl_local.operation_blks['gates'].keys()), set(["Gx", "Gy", "Gcnot", "idle"]))
+        self.assertEqual(set(mdl_local.operation_blks['gates'].keys()), set(["Gx", "Gy", "Gcnot", "Gidle"]))
         assert(set(mdl_local.operation_blks['layers'].keys()) == set(
-            [('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'), ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0'), 'idle']))
+            [('Gx', 'qb0'), ('Gx', 'qb1'), ('Gy', 'qb0'), ('Gy', 'qb1'), ('Gcnot', 'qb0', 'qb1'), ('Gcnot', 'qb1', 'qb0'), 'Gidle']))
         test_circuit = (('Gx', 'qb0'), ('Gcnot', 'qb0', 'qb1'), [], [('Gx', 'qb1'), ('Gy', 'qb0')])
         self.assertAlmostEqual(sum(mdl_local.probabilities(test_circuit).values()), 1.0)
         self.assertAlmostEqual(mdl_local.probabilities(test_circuit)['00'], 0.414025)
-        self.assertEqual(mdl_local.num_params, 144)
+        self.assertEqual(mdl_local.num_params, 96)  # was 144 when used old H+S+A param mode (now removed)
 
         op = mdl_local.circuit_layer_operator(Label('Gx', 'qb1'))
         ref_op = ComposedOp([
-            mdl_local.operation_blks['layers'][Label('idle')], # Global idle
+            mdl_local.operation_blks['layers'][Label('Gidle')], # Global idle
             EmbeddedOp(mdl_local.state_space, ('qb1',), mdl_local.operation_blks['gates']['Gx']) # Gx operation
         ])
         self.assertEqual(str(op), str(ref_op))

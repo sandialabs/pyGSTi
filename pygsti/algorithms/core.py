@@ -13,6 +13,7 @@ Core GST algorithms
 
 import collections as _collections
 import time as _time
+import copy as _copy
 
 import numpy as _np
 import scipy.optimize as _spo
@@ -204,6 +205,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         lgstModel = _models.ExplicitOpModel([('L%d' % i,) for i in range(svd_truncate_to)], dumb_basis)
 
     for opLabel in op_labelsToEstimate:
+        #print("LGST ",opLabel)
         Xs = _construct_x_matrix(prep_fiducials, effect_fiducials, target_model, (opLabel,),
                                  dataset, op_label_aliases)  # shape (nVariants, nESpecs, nRhoSpecs)
 
@@ -430,6 +432,8 @@ def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple,
                 X[k, eoff:eoff + povmLen, j] = [dsRow_fractions.get(ol, 0) for ol in outcomes]
         eoff += povmLen
 
+    #print("DEBUG LGST on instrument, X = ")
+    #print(_np.round(X, 4))
     return X
 
 
@@ -794,8 +798,12 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()
-                optimizer.fditer = optimizer.first_fditer if (i == 0 and j == 0) else 0
-                opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
+                if i == 0 and j == 0:  # special case: in first optimization run, use "first_fditer"
+                    first_iter_optimizer = _copy.deepcopy(optimizer)  # use a separate copy of optimizer, as it
+                    first_iter_optimizer.fditer = optimizer.first_fditer  # is a persistent object (so don't modify!)
+                    opt_result, mdc_store = run_gst_fit(mdc_store, first_iter_optimizer, obj_fn_builder, printer - 1)
+                else:
+                    opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
                 profiler.add_time('run_iterative_gst: iter %d %s-opt' % (i + 1, obj_fn_builder.name), tNxt)
 
             tNxt = _time.time()

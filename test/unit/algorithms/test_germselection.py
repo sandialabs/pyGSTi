@@ -4,6 +4,7 @@ import pygsti.circuits as pc
 from pygsti.algorithms import germselection as germsel
 from pygsti.modelmembers.operations import StaticArbitraryOp
 from . import fixtures
+from pygsti.modelpacks.legacy import std1Q_XYI as std
 from ..util import BaseCase
 
 _SEED = 2019
@@ -331,3 +332,38 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
                 self.neighbors, self.germ_set, mem_limit=1024,
                 **self.options
             )
+    
+    def test_greedy_low_rank_update(self):
+        # TODO assert correctness
+        germs = germsel.find_germs(std.target_model(), seed=2017, 
+                                   candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
+                                   randomize=False, algorithm='greedy', mode='compactEVD',
+                                   assume_real=True, float_type=np.double,  verbosity=1)
+                                   
+    def test_forced_germs_none(self):
+        # TODO assert correctness
+        #make sure that the germ selection doesn't die with force is None
+        germs_compactEVD = germsel.find_germs(std.target_model(), seed=2017, 
+                                   candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
+                                   randomize=False, algorithm='greedy', mode='compactEVD',
+                                   assume_real=True, float_type=np.double,  verbosity=1, force=None)
+        germs_allJac = germsel.find_germs(std.target_model(), seed=2017, 
+                                   candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
+                                   randomize=False, algorithm='greedy', mode='all-Jac',
+                                   assume_real=True, float_type=np.double,  verbosity=1, force=None)
+        germs_singleJac = germsel.find_germs(std.target_model(), seed=2017, 
+                                   candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
+                                   randomize=False, algorithm='greedy', mode='single-Jac',
+                                   assume_real=True, float_type=np.double,  verbosity=1, force=None)
+    
+    def test_force_germs_outside_candidate_set(self):
+        #TODO assert correctness
+        #make sure that the germ selection doesn't die when the list of forced germs includes circuits
+        #outside the initially specified candidate set.
+        germs = germsel.find_germs(std.target_model(), seed=2017, 
+                                   candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
+                                   randomize=False, algorithm='greedy', mode='compactEVD',
+                                   assume_real=True, float_type=np.double,  verbosity=1, 
+                                   force=pc.list_random_circuits_onelen(fixtures.opLabels, length=7, count=2, seed=_SEED))
+                                   
+        

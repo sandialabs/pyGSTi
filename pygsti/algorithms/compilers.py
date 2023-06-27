@@ -578,7 +578,8 @@ def _compile_symplectic_using_rogge_algorithm(s, pspec=None, paulieq_compilation
         # Call the re-ordered global Gaussian elimination, which is wrap-around for the GE algorithms to deal
         # with qubit relabeling. Check is False avoids multiple checks of success, when only the last check matters.
         circuit = _compile_symplectic_using_ogge_algorithm(
-            s, eliminationorder, pspec=pspec, paulieq_compilation=paulieq_compilation, qubit_labels=qubit_labels, ctype=ctype, check=False)
+            s, eliminationorder, pspec=pspec, paulieq_compilation=paulieq_compilation, qubit_labels=qubit_labels,
+            ctype=ctype, check=False)
         # Find the cost of the circuit, and keep it if this circuit is the lowest-cost circuit so far.
         circuit_cost = costfunction(circuit, pspec)
         if circuit_cost < lowestcost:
@@ -658,10 +659,10 @@ def _compile_symplectic_using_ogge_algorithm(s, eliminationorder, pspec=None, pa
     # Re-order the s matrix to reflect the order we want to eliminate the qubits in,
     # because we hand the symp. matrix to a function that eliminates them in a fixed order.
     n = _np.shape(s)[0] // 2
-    P = _np.zeros((n, n), int)
+    P = _np.zeros((n, n), _np.int64)
     for j in range(0, n):
         P[j, eliminationorder[j]] = 1
-    P2n = _np.zeros((2 * n, 2 * n), int)
+    P2n = _np.zeros((2 * n, 2 * n), _np.int64)
     P2n[0:n, 0:n] = P
     P2n[n:2 * n, n:2 * n] = P
     permuted_s = _mtx.dot_mod2(_mtx.dot_mod2(P2n, s), _np.transpose(P2n))
@@ -910,10 +911,10 @@ def _compile_symplectic_using_gge_core(s, check=True):
         _symp.apply_internal_gate_to_symplectic(sout, 'H', [j], optype='row')
 
         # If the matrix has been mapped to the identity, quit the loop as we are done.
-        if _np.array_equal(sout, _np.identity(2 * n, int)):
+        if _np.array_equal(sout, _np.identity(2 * n, _np.int64)):
             break
 
-    assert(_np.array_equal(sout, _np.identity(2 * n, int))), "Compilation has failed!"
+    assert(_np.array_equal(sout, _np.identity(2 * n, _np.int64))), "Compilation has failed!"
     # Operations that are the same next to each other cancel, and this algorithm can have these. So
     # we go through and delete them.
     j = 1
@@ -1187,7 +1188,7 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
     sout, LHS2_Psome_layer = _make_submatrix_invertable_using_phases_and_idsubmatrix(sout, 'row', 'LR', qubit_labels)
     assert(_symp.check_symplectic(sout))
     # Stage 4: CNOT circuit from the LHS to map the UR and LR submatrices of s to the same invertible matrix M
-    sout, LHS3_CNOTs = find_albert_factorization_transform_using_cnots(sout, 'row', 'LR', qubit_labels)
+    sout, LHS3_CNOTs = find_albert_factorization_transform_using_cnots(sout, 'row', 'LR', qubit_labels, rand_state)
     assert(_symp.check_symplectic(sout))
     # Stage 5: A CNOT circuit from the RHS to map the URH and LRH submatrices of s from M to I.
     sout, RHS1B_CNOTs, success = _submatrix_gaussian_elimination_using_cnots(sout, 'column', 'UR', qubit_labels)
@@ -1205,7 +1206,7 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
     sout, LHS6_Psome_layer = _make_submatrix_invertable_using_phases_and_idsubmatrix(sout, 'row', 'LL', qubit_labels)
     assert(_symp.check_symplectic(sout))
     # Stage 9: CNOT circuit from the RHS to map the UR and LR submatrices of s to the same invertible matrix M
-    sout, RHS1C_CNOTs = find_albert_factorization_transform_using_cnots(sout, 'column', 'LL', qubit_labels)
+    sout, RHS1C_CNOTs = find_albert_factorization_transform_using_cnots(sout, 'column', 'LL', qubit_labels, rand_state)
     assert(_symp.check_symplectic(sout))
     # Stage 10: Phase gates on all qubits acting from the RHS to map the LL submatrix of s to 0.
     sout, RHS2_Pall_layer = _apply_phase_to_all_qubits(sout, 'column', qubit_labels)
@@ -1213,7 +1214,7 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
     # Stage 11: A CNOT circuit from the LHS to map the to I. (can do the GE on either UL or LR)
     sout, LHS7_CNOTs, success = _submatrix_gaussian_elimination_using_cnots(sout, 'row', 'UL', qubit_labels)
     assert(_symp.check_symplectic(sout))
-    assert(_np.array_equal(sout, _np.identity(2 * n, int))), "Algorithm has failed!"
+    assert(_np.array_equal(sout, _np.identity(2 * n, _np.int64))), "Algorithm has failed!"
 
     RHS1A_CNOTs.reverse()
     RHS1B_CNOTs.reverse()
@@ -1345,9 +1346,9 @@ def compile_cnot_circuit(s, pspec, compilation, qubit_labels=None, algorithm='CO
     else: qubits = list(pspec.qubit_labels)
     n = len(qubits)
     assert(n == _np.shape(s)[0] // 2), "The CNOT circuit is over the wrong number of qubits!"
-    assert(_np.array_equal(s[:n, n:2 * n], _np.zeros((n, n), int))
+    assert(_np.array_equal(s[:n, n:2 * n], _np.zeros((n, n), _np.int64))
            ), "`s` is not block-diagonal and so does not rep. a valid CNOT circuit!"
-    assert(_np.array_equal(s[n:2 * n, :n], _np.zeros((n, n), int))
+    assert(_np.array_equal(s[n:2 * n, :n], _np.zeros((n, n), _np.int64))
            ), "`s` is not block-diagonal and so does not rep. a valid CNOT circuit!"
     assert(_symp.check_symplectic(s)), "`s` is not symplectic, so it does not rep. a valid CNOT circuit!"
 
@@ -1478,7 +1479,7 @@ def _compile_cnot_circuit_using_bge_algorithm(s, pspec, qubit_labels=None, compi
     assert(len(qubit_labels) == n), "The CNOT circuit is over the wrong number of qubits!"
     # We can just use this more general function for this task.
     sout, instructions, success = _submatrix_gaussian_elimination_using_cnots(s, 'row', 'UL', qubit_labels)
-    assert(_np.array_equal(sout, _np.identity(2 * n, int))
+    assert(_np.array_equal(sout, _np.identity(2 * n, _np.int64))
            ), "Algorithm has failed! Perhaps the input wasn't a CNOT circuit."
     # The instructions returned are for mapping s -> I, so we need to reverse them.
     instructions.reverse()
@@ -2132,8 +2133,7 @@ def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilat
     failcount, i = 0, 0
 
     # Repeatedly find compilations for the symplectic, and pick the best one.
-    while i < iterations:
-
+    while i < iterations and failcount <= 5 * iterations:
         try:
             tc, tcc = compile_conditional_symplectic(
                 s, pspec, qubit_labels=qubit_labels, calg=algorithm, cargs=aargs, check=False, rand_state=rand_state)
@@ -2148,7 +2148,7 @@ def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilat
                 circuit = tc.copy()
                 check_circuit = tcc.copy(editable=True)
                 mincost = cost
-        except:
+        except AssertionError:
             failcount += 1
 
     assert(failcount <= 5 * iterations), \
@@ -2171,7 +2171,7 @@ def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilat
     # Add CNOT into the dictionary, because the gates in check_circuit are 'CNOT'.
     sreps = pspec.compute_clifford_symplectic_reps()
     sreps['CNOT'] = (_np.array([[1, 0, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1],
-                                [0, 0, 0, 1]], int), _np.array([0, 0, 0, 0], int))
+                                [0, 0, 0, 1]], _np.int64), _np.array([0, 0, 0, 0], _np.int64))
     implemented_scheck, implemented_pcheck = _symp.symplectic_rep_of_clifford_circuit(check_circuit, srep_dict=sreps)
 
     # We should have a circuit with the same RHS as `s`. This is only true when we have prefixed the additional
@@ -2321,6 +2321,7 @@ def compile_stabilizer_measurement(s, p, pspec, absolute_compilation, paulieq_co
             # self-inverse up to Paulis in CNOT, H, and P).
             tc, tcc = compile_conditional_symplectic(
                 s, pspec, qubit_labels=qubit_labels, calg=algorithm, cargs=aargs, check=False, rand_state=rand_state)
+
             tc = tc.copy(editable=True)
             tc.reverse_inplace()
             # Do the depth-compression *after* the circuit is reversed (after this, reversing circuit doesn't implement
@@ -2359,7 +2360,7 @@ def compile_stabilizer_measurement(s, p, pspec, absolute_compilation, paulieq_co
 
     sreps = pspec.compute_clifford_symplectic_reps()
     sreps['CNOT'] = (_np.array([[1, 0, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1],
-                                [0, 0, 0, 1]], int), _np.array([0, 0, 0, 0], int))
+                                [0, 0, 0, 1]], _np.int64), _np.array([0, 0, 0, 0], _np.int64))
     #implemented_s, implemented_p = _symp.symplectic_rep_of_clifford_circuit(circuit, srep_dict=sreps)
 
     # Find the (s,p) implemented by the circuit when the additional CNOT circuit is at the end.
@@ -2761,7 +2762,7 @@ def _make_submatrix_invertable_using_phases_and_idsubmatrix(s, optype, position,
     return sout, instructions
 
 
-def find_albert_factorization_transform_using_cnots(s, optype, position, qubit_labels):
+def find_albert_factorization_transform_using_cnots(s, optype, position, qubit_labels, rand_state=None):
     """
     Performs an Albert factorization transform on `s`.
 
@@ -2805,6 +2806,9 @@ def find_albert_factorization_transform_using_cnots(s, optype, position, qubit_l
         it is ambigious as to what the 'name' of a qubit associated with each indices is, so it
         is not possible to return a suitable list of CNOTs.
 
+    rand_state : np.random.RandomState, optional
+        Random number generator to allow for determinism.
+
     Returns
     -------
     np.array
@@ -2823,7 +2827,7 @@ def find_albert_factorization_transform_using_cnots(s, optype, position, qubit_l
     D = s[rs:rs + n, cs:cs + n].copy()
     assert(_np.array_equal(D, D.T)), "The matrix D to find an albert factorization of is not invertable!"
     # Return an invertable matrix M such that D = M M.T
-    M = _mtx.albert_factor(D)
+    M = _mtx.albert_factor(D, rand_state=rand_state)
 
     # Temp reset the submatrix quadrant at 'position' to M.T or M: so the GE maps that quadrant to I.
     # If it's a row-action (from the LHS) we're mapping D = M M.T -> M.T
@@ -3026,7 +3030,7 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
 
     if n > 1:
         # Stage 4: CNOT circuit from the LHS to map the UR and LR submatrices of s to the same invertible matrix M
-        sout, CNOTs = find_albert_factorization_transform_using_cnots(sout, 'row', 'LR', qubit_labels)
+        sout, CNOTs = find_albert_factorization_transform_using_cnots(sout, 'row', 'LR', qubit_labels, rand_state)
         # We reverse the list, because its a list doing the GE on s, and we want to do the inverse of that on I.
         CNOTs.reverse()
 

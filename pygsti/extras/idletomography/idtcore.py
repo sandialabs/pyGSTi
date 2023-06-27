@@ -578,7 +578,7 @@ def determine_paulidicts(model):
         if any([abs(v) > 1e-6 for v in prep.to_vector()]): return None
     else:
         nqubits = int(round(_np.log2(model.dim) / 2))
-        cmp = _state.ComputationalBasisState([0] * nqubits, model._evotype).to_dense()
+        cmp = _state.ComputationalBasisState([0] * nqubits, 'pp', model._evotype).to_dense()
         if _np.linalg.norm(prep.to_dense() - cmp) > 1e-6: return None
 
     def extract_action(g, cur_sslbls, ql):
@@ -592,7 +592,7 @@ def determine_paulidicts(model):
 
         if isinstance(g, _op.EmbeddedOp):
             #Note: an embedded gate need not use the *same* state space labels as the model
-            g_sslbls = g.state_space.tensor_product_block_labels(0)
+            g_sslbls = g.state_space.sole_tensor_product_block_labels
             lbls = [cur_sslbls[g_sslbls.index(locLbl)] for locLbl in g.target_labels]
             # TODO: add to StateSpaceLabels functionality to make sure two are compatible, and to translate between
             # them, & make sub-labels?
@@ -613,12 +613,10 @@ def determine_paulidicts(model):
 
     #Get several standard 1-qubit pi/2 rotations in Pauli basis:
     pp = _baseobjs.BuiltinBasis('pp', 4)
-    Gx = _modelconstruction._basis_create_operation(
-        [('Q0',)], "X(pi/2,Q0)", basis=pp, parameterization="static"
-    ).to_dense()
-    Gy = _modelconstruction._basis_create_operation(
-        [('Q0',)], "Y(pi/2,Q0)", basis=pp, parameterization="static"
-    ).to_dense()
+    Gx = _modelconstruction.create_operation("X(pi/2,Q0)", [('Q0',)], basis=pp,
+                                             parameterization="static").to_dense()
+    Gy = _modelconstruction.create_operation("Y(pi/2,Q0)", [('Q0',)], basis=pp,
+                                             parameterization="static").to_dense()
 
     #try to find 1-qubit pi/2 rotations
     found = {}
@@ -634,7 +632,7 @@ def determine_paulidicts(model):
         try:
             assert(model.state_space.num_tensor_product_blocks == 1), "Assumes a single state space sector"
             action_on_qubit = extract_action(gate,
-                                             model.state_space.tensor_product_block_labels(0),
+                                             model.state_space.sole_tensor_product_block_labels,
                                              qubit_label)
         except ValueError:
             continue  # skip gates that we can't extract action from
@@ -658,7 +656,7 @@ def determine_paulidicts(model):
     return None
 
 
-def make_idle_tomography_list(nqubits, max_lenghts, pauli_basis_dicts, maxweight=2,
+def make_idle_tomography_list(nqubits, max_lengths, pauli_basis_dicts, maxweight=2,
                               idle_string=((),), include_hamiltonian=True,
                               include_stochastic=True, include_affine=True,
                               ham_tmpl="auto", preferred_prep_basis_signs="auto",
@@ -671,7 +669,7 @@ def make_idle_tomography_list(nqubits, max_lenghts, pauli_basis_dicts, maxweight
     nqubits : int
         The number of qubits.
 
-    max_lenghts : list
+    max_lengths : list
         A list of maximum germ-power lengths. Each specifies a number many times
         to repeat the idle gate, and typically this is a list of the powers of
         2 preceded by zero, e.g. `[0,1,2,4,16]`.  The largest value in this
@@ -735,13 +733,13 @@ def make_idle_tomography_list(nqubits, max_lenghts, pauli_basis_dicts, maxweight
 
     listOfExperiments = []
     for prepFid, measFid in fidpairs:  # list of fidpairs / configs (a prep/meas that gets I^L placed btwn it)
-        for L in max_lenghts:
+        for L in max_lengths:
             listOfExperiments.append(prepFid + GiStr * L + measFid)
 
     return listOfExperiments
 
 
-def make_idle_tomography_lists(nqubits, max_lenghts, pauli_basis_dicts, maxweight=2,
+def make_idle_tomography_lists(nqubits, max_lengths, pauli_basis_dicts, maxweight=2,
                                idle_string=((),), include_hamiltonian=True,
                                include_stochastic=True, include_affine=True,
                                ham_tmpl="auto", preferred_prep_basis_signs="auto",
@@ -756,7 +754,7 @@ def make_idle_tomography_lists(nqubits, max_lenghts, pauli_basis_dicts, maxweigh
     nqubits : int
         The number of qubits.
 
-    max_lenghts : list
+    max_lengths : list
         A list of maximum germ-power lengths. Each specifies a number many times
         to repeat the idle gate, and typically this is a list of the powers of
         2 preceded by zero, e.g. `[0,1,2,4,16]`.  The largest value in this
@@ -819,7 +817,7 @@ def make_idle_tomography_lists(nqubits, max_lenghts, pauli_basis_dicts, maxweigh
                 for x, y in pauli_fidpairs]  # e.g. convert ("XY","ZX") to tuple of Circuits
 
     listOfListsOfExperiments = []
-    for L in max_lenghts:
+    for L in max_lengths:
         expsForThisL = []
         for prepFid, measFid in fidpairs:  # list of fidpairs / configs (a prep/meas that gets I^L placed btwn it)
             expsForThisL.append(prepFid + GiStr * L + measFid)
@@ -832,8 +830,8 @@ def make_idle_tomography_lists(nqubits, max_lenghts, pauli_basis_dicts, maxweigh
 # Running idle tomography
 # -----------------------------------------------------------------------------
 
-def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, idle_string,
-                               outcome, max_lenghts, fit_order=1):
+def compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, idle_string,
+                                        outcome, max_lengths, fit_order=1):
     """
     Extract the observed error rate from a series of experiments which prepares
     and measures in the *same* Pauli basis and tracks a particular `outcome`.
@@ -859,10 +857,10 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, idle_s
     outcome : NQOutcome
         The outcome being tracked.
 
-    max_lenghts : list
+    max_lengths : list
         A list of maximum germ-power lengths.  The seriese of sequences
         considered is `prepFiducial + idle_string^L + measFiducial`, where
-        `L` ranges over the values in `max_lenghts`.
+        `L` ranges over the values in `max_lengths`.
 
     fit_order : int, optional
         The polynomial order used to fit the observed data probabilities.
@@ -895,7 +893,7 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, idle_s
 
     #Get data to fit and weights to use in fitting
     data_to_fit = []; wts = []; errbars = []
-    for L in max_lenghts:
+    for L in max_lengths:
         opstr = prepFid + idle_string * L + measFid
         f, wt, err = freq_and_weight(opstr, outcome)
         data_to_fit.append(f)
@@ -903,7 +901,7 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, idle_s
         errbars.append(err)
 
     #curvefit -> slope
-    coeffs = _np.polyfit(max_lenghts, data_to_fit, fit_order, w=wts)  # when fit_order = 1 = line
+    coeffs = _np.polyfit(max_lengths, data_to_fit, fit_order, w=wts)  # when fit_order = 1 = line
     if fit_order == 1:
         slope = coeffs[0]
     elif fit_order == 2:
@@ -920,8 +918,8 @@ def get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, idle_s
             'weights': wts}
 
 
-def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts,
-                               idle_string, observable, max_lenghts, fit_order=1):
+def compute_observed_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts,
+                                        idle_string, observable, max_lengths, fit_order=1):
     """
     Extract the observed error rate from a series of experiments which prepares
     and measures in *different* Pauli basis and tracks the expectation value of
@@ -948,10 +946,10 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts,
     observable : NQPauliOp
         The observable whose expectation value is being tracked.
 
-    max_lenghts : list
+    max_lengths : list
         A list of maximum germ-power lengths.  The seriese of sequences
         considered is `prepFiducial + idle_string^L + measFiducial`, where
-        `L` ranges over the values in `max_lenghts`.
+        `L` ranges over the values in `max_lengths`.
 
     fit_order : int, optional
         The polynomial order used to fit the observed data probabilities.
@@ -1010,7 +1008,7 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts,
 
     #Get data to fit and weights to use in fitting
     data_to_fit = []; wts = []; errbars = []
-    for L in max_lenghts:
+    for L in max_lengths:
         opstr = prepFid + idle_string * L + measFid
         exptn, wt, err = unsigned_exptn_and_weight(opstr, obs_indices)
         data_to_fit.append(minus_sign * exptn)
@@ -1018,7 +1016,7 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts,
         errbars.append(err)
 
     #curvefit -> slope
-    coeffs = _np.polyfit(max_lenghts, data_to_fit, fit_order, w=wts)  # when fit_order = 1 = line
+    coeffs = _np.polyfit(max_lengths, data_to_fit, fit_order, w=wts)  # when fit_order = 1 = line
     if fit_order == 1:
         slope = coeffs[0]
     elif fit_order == 2:
@@ -1038,7 +1036,7 @@ def get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts,
             'weights': wts}
 
 
-def do_idle_tomography(nqubits, dataset, max_lenghts, pauli_basis_dicts, maxweight=2,
+def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweight=2,
                        idle_string=((),), include_hamiltonian="auto",
                        include_stochastic="auto", include_affine="auto",
                        advanced_options=None, verbosity=0, comm=None):
@@ -1054,7 +1052,7 @@ def do_idle_tomography(nqubits, dataset, max_lenghts, pauli_basis_dicts, maxweig
     dataset : DataSet
         The set of data counts (observations) to use.
 
-    max_lenghts : list
+    max_lengths : list
         A list of maximum germ-power lengths. Each specifies a number many times
         to repeat the idle gate, and typically this is a list of the powers of
         2 preceded by zero, e.g. `[0,1,2,4,16]`.  The largest value in this
@@ -1186,8 +1184,8 @@ def do_idle_tomography(nqubits, dataset, max_lenghts, pauli_basis_dicts, maxweig
                                  for err in errors])
                 my_J.append(Jrow)
 
-                info = get_obs_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, GiStr,
-                                                  out, max_lenghts, fit_order)
+                info = compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, GiStr,
+                                                           out, max_lengths, fit_order)
                 info['jacobian row'] = _np.array(Jrow)
                 infos_for_this_fidpair[out] = info
 
@@ -1296,8 +1294,8 @@ def do_idle_tomography(nqubits, dataset, max_lenghts, pauli_basis_dicts, maxweig
                                 for err in errors]
                     my_Jaff.append(Jaff_row)
 
-                info = get_obs_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, GiStr, obs,
-                                                  max_lenghts, fit_order)
+                info = compute_observed_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, GiStr, obs,
+                                                           max_lengths, fit_order)
                 info['jacobian row'] = _np.array(Jrow)
                 if include_affine: info['affine jacobian row'] = _np.array(Jaff_row)
                 infos_for_this_fidpair[obs] = info
@@ -1420,7 +1418,7 @@ def do_idle_tomography(nqubits, dataset, max_lenghts, pauli_basis_dicts, maxweig
             if include_affine:
                 intrinsic_rates['affine'] = all_intrinsic_rates[off:off + len(errors)]
 
-        return _IdleTomographyResults(dataset, max_lenghts, maxweight, fit_order, pauli_basis_dicts, GiStr,
+        return _IdleTomographyResults(dataset, max_lengths, maxweight, fit_order, pauli_basis_dicts, GiStr,
                                       errors, intrinsic_rates, pauli_fidpair_dict, observed_rate_infos)
     else:  # no results on other ranks...
         return None

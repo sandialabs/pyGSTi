@@ -65,8 +65,8 @@ class StateRepComputational(StateRep):
     def __init__(self, zvals, basis, state_space):
 
         nqubits = len(zvals)
-        state_s = _np.fliplr(_np.identity(2 * nqubits, int))  # flip b/c stab cols are *first*
-        state_ps = _np.zeros(2 * nqubits, int)
+        state_s = _np.fliplr(_np.identity(2 * nqubits, _np.int64))  # flip b/c stab cols are *first*
+        state_ps = _np.zeros(2 * nqubits, _np.int64)
         for i, z in enumerate(zvals):
             state_ps[i] = state_ps[i + nqubits] = 2 if bool(z) else 0
             # TODO: check this is right -- (how/need to update the destabilizers?)
@@ -74,6 +74,7 @@ class StateRepComputational(StateRep):
         ps = state_ps.reshape(1, 2 * nqubits)
         a = _np.ones(1, complex)  # all == 1.0 by default
 
+        self.zvals = zvals
         self.basis = basis
         super(StateRepComputational, self).__init__(state_s, ps, a, state_space)
 
@@ -105,8 +106,8 @@ class StateRepTensorProduct(StateRep):
         n = sum([sf.nqubits for sf in self.factor_reps])  # total number of qubits
         np = int(_np.product([len(sf.pvectors) for sf in self.factor_reps]))
 
-        super(StateRepTensorProduct, self).__init__(_np.zeros((2 * n, 2 * n), int),
-                                                    _np.zeros((np, 2 * n), int),
+        super(StateRepTensorProduct, self).__init__(_np.zeros((2 * n, 2 * n), _np.int64),
+                                                    _np.zeros((np, 2 * n), _np.int64),
                                                     _np.ones(np, complex),
                                                     state_space)
         self.reps_have_changed()

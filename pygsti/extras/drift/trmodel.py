@@ -20,7 +20,7 @@ class TimeResolvedModel(object):
     """
     Encapsulates a basic form of time-resolved model, for implementing simple types of time-resolved characterization,
     e.g., time-resolved Ramsey spectroscopy. This object is a container for specifying a particular time-resolved
-    model, which is achieved by defining the method `get_probabilities`. See the docstring of that method for further
+    model, which is achieved by defining the method `probabilities`. See the docstring of that method for further
     details.
 
     This object is *not* intended to be used to encapsulate a time-resolved model that requires any intensive
@@ -59,13 +59,13 @@ class TimeResolvedModel(object):
         """
         self.parameters = _copy.deepcopy(parameters)
 
-    def get_parameters(self):
+    def parameters_copy(self):
         """
         Returns the parameters of the model.
         """
         return _copy.deepcopy(self.parameters)
 
-    def get_probabilities(self, circuit, times):
+    def probabilities(self, circuit, times):
         """
         *** Specified in each derive class ***
 
@@ -119,7 +119,7 @@ def negloglikelihood(trmodel, ds, minp=0, maxp=1):
     negll = 0.
     for circuit in ds.keys():
         times, clickstreams = ds[circuit].timeseries_for_outcomes
-        probs = trmodel.get_probabilities(circuit, times)
+        probs = trmodel.probabilities(circuit, times)
         negll += _ptraj.probsdict_negloglikelihood(probs, clickstreams, minp, maxp)
 
     return negll
@@ -164,11 +164,11 @@ def maxlikelihood(trmodel, ds, minp=1e-4, maxp=1 - 1e-6, bounds=None, returnopto
         return negloglikelihood(maxlmodel, ds, minp, maxp)
 
     if verbosity > 0:
-        print("- Performing MLE over {} parameters...".format(len(maxlmodel.get_parameters())), end='')
+        print("- Performing MLE over {} parameters...".format(len(maxlmodel.parameters_copy())), end='')
     if verbosity > 1:
         print("")
 
-    seed = maxlmodel.get_parameters()
+    seed = maxlmodel.parameters_copy()
     start = _tm.time()
     optout = _minimize(objfunc, seed, options=optoptions, bounds=bounds)
     maxlparameters = optout.x

@@ -46,7 +46,7 @@ def load_pygsti_dataset(filename):
     # 	file.writelines(lines)
     # 	file.close()
 
-    data = _pygio.load_dataset(filename)
+    data = _pygio.read_dataset(filename)
 
     return data
 
@@ -937,7 +937,7 @@ def pairwise_indep_expts(q):
     for i in range(q):
         for a in range(q):
             for b in range(q):
-                vals[a*q+b,i] = _np.int(_np.mod(a*i+b,q))
+                vals[a*q+b,i] = _np.int_(_np.mod(a*i+b,q))
 
     length = _np.shape(vals)[0]
     return length, vals

@@ -65,7 +65,7 @@ class StateRep(_basereps.StateRep):
 
 
 class StateRepDensePure(StateRep):
-    def __init__(self, purevec, basis, state_space):
+    def __init__(self, purevec, state_space, basis):
         super(StateRepDensePure, self).__init__(purevec, state_space, basis)
 
     @property
@@ -90,9 +90,9 @@ class StateRepComputational(StateRep):
         else:
             typ = complex
             fast_kron_array = _np.ascontiguousarray(
-                _np.empty((len(self._zvals), factor_dim), typ))
+                _np.empty((len(zvals), factor_dim), typ))
             fast_kron_factordims = _np.ascontiguousarray(_np.array([factor_dim] * len(zvals), _np.int64))
-            for i, zi in enumerate(self._zvals):
+            for i, zi in enumerate(zvals):
                 fast_kron_array[i, :] = v[zi]
             vec = _np.ascontiguousarray(_np.empty(factor_dim**len(zvals), typ))
             _fastcalc.fast_kron_complex(vec, fast_kron_array, fast_kron_factordims)

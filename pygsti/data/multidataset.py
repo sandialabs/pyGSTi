@@ -20,6 +20,7 @@ import numpy as _np
 from pygsti.circuits import circuit as _cir
 from pygsti.baseobjs import outcomelabeldict as _ld
 from pygsti.data.dataset import DataSet as _DataSet
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
 
 
 class _MultiDataSetKVIterator(object):
@@ -238,7 +239,7 @@ class MultiDataSet(object):
         if file_to_load_from is not None:
             assert(oli_dict is None and time_dict is None and rep_dict is None
                    and circuit_indices is None and outcome_labels is None and outcome_label_indices is None)
-            self.load(file_to_load_from)
+            self.read_binary(file_to_load_from)
             return
 
         # self.cirIndex  :  Ordered dictionary where keys = circuits (tuples), values = integer indices into counts
@@ -669,9 +670,13 @@ class MultiDataSet(object):
             # some types of serialization (e.g. JSON) just save a *normal* dict
             # so promote to a defaultdict if needed..
 
+    @_deprecated_fn('write_binary')
     def save(self, file_or_filename):
+        return self.write_binary(file_or_filename)
+
+    def write_binary(self, file_or_filename):
         """
-        Save this MultiDataSet to a file.
+        Write this MultiDataSet to a binary-format file.
 
         Parameters
         ----------
@@ -719,9 +724,15 @@ class MultiDataSet(object):
 
         if bOpen: f.close()
 
+    @_deprecated_fn('read_binary')
     def load(self, file_or_filename):
+        return self.read_binary(file_or_filename)
+
+    def read_binary(self, file_or_filename):
         """
-        Load MultiDataSet from a file, clearing any data is contained previously.
+        Read a MultiDataSet from a file, clearing any data is contained previously.
+
+        The file should have been created with :method:`MultiDataSet.write_binary`
 
         Parameters
         ----------

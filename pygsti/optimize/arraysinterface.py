@@ -594,12 +594,13 @@ class DistributedArraysInterface(ArraysInterface):
         specified by `dist_layout`.  These are often used for penalty terms.
     """
 
-    def __init__(self, dist_layout, extra_elements=0):
+    def __init__(self, dist_layout, lsvec_mode, extra_elements=0):
         from ..layouts.distlayout import DistributableCOPALayout as _DL
         assert(isinstance(dist_layout, _DL))
         self.layout = dist_layout
         self.resource_alloc = self.layout.resource_alloc()
         self.extra_elements = extra_elements
+        self.lsvec_mode = lsvec_mode  # e.g. 'normal' or 'circuits'
 
     def allocate_jtf(self):
         """
@@ -629,7 +630,12 @@ class DistributedArraysInterface(ArraysInterface):
         -------
         numpy.ndarray or LocalNumpyArray
         """
-        return self.layout.allocate_local_array('ep', 'd', extra_elements=self.extra_elements)
+        if self.lsvec_mode == 'normal':
+            return self.layout.allocate_local_array('ep', 'd', extra_elements=self.extra_elements)
+        elif self.lsvec_mode == 'percircuit':
+            return self.layout.allocate_local_array('cp', 'd', extra_elements=self.extra_elements)
+        else:
+            raise ValueError("Invlid lsvec_mode: %s" % str(self.lsvec_mode))
 
     def deallocate_jtf(self, jtf):
         """
@@ -671,7 +677,12 @@ class DistributedArraysInterface(ArraysInterface):
         -------
         int
         """
-        return self.layout.global_num_elements + self.extra_elements
+        if self.lsvec_mode == "normal":
+            return self.layout.global_num_elements + self.extra_elements
+        elif self.lsvec_mode == "percircuit":
+            return self.layout.global_num_circuits + self.extra_elements
+        else:
+            raise ValueError("Invalid lsvec_mode: %s" % str(self.lsvec_mode))
 
     def jac_param_slice(self, only_if_leader=False):
         """
@@ -804,7 +815,8 @@ class DistributedArraysInterface(ArraysInterface):
         None
         """
         #TODO: do this more efficiently in future:
-        global_f_on_root = self.layout.gather_local_array('e', f, extra_elements=self.extra_elements)
+        artype = 'c' if self.lsvec_mode == 'percircuit' else 'e'
+        global_f_on_root = self.layout.gather_local_array(artype, f, extra_elements=self.extra_elements)
         if self.resource_alloc.comm is not None:
             global_f[:] = self.resource_alloc.comm.bcast(
                 global_f_on_root if self.resource_alloc.comm.rank == 0 else None, root=0)

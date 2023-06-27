@@ -186,7 +186,7 @@ def nullspace(m, tol=1e-7):
     """
     _, s, vh = _np.linalg.svd(m)
     rank = (s > tol).sum()
-    return vh[rank:].T.copy()
+    return vh[rank:].T.conjugate().copy()
 
 
 def nullspace_qr(m, tol=1e-7):
@@ -220,6 +220,269 @@ def nullspace_qr(m, tol=1e-7):
     #print("Ret = ", q[:,rank:].shape, " Q = ",q.shape, " R = ",r.shape)
 
     return q[:, rank:]
+
+
+def nice_nullspace(m, tol=1e-7, orthogonalize=False):
+    """
+    Computes the nullspace of a matrix, and tries to return a "nice" basis for it.
+
+    Columns of the returned value (a basis for the nullspace) each have a maximum
+    absolute value of 1.0 and are chosen so as to align with the the original
+    matrix's basis as much as possible (the basis is found by projecting each
+    original basis vector onto an arbitrariliy-found nullspace and keeping only
+    a set of linearly independent projections).
+
+    Parameters
+    ----------
+    m : numpy array
+        An matrix of shape (M,N) whose nullspace to compute.
+
+    tol : float , optional
+        Nullspace tolerance, used when comparing diagonal values of R with zero.
+
+    orthogonalize : bool, optional
+        If `True`, the nullspace vectors are additionally orthogonalized.
+
+    Returns
+    -------
+    An matrix of shape (M,K) whose columns contain nullspace basis vectors.
+    """
+    nullsp = nullspace(m, tol)
+    nullsp_projector = _np.dot(nullsp, nullsp.conj().T)
+    keepers = []; current_rank = 0
+    for i in range(nullsp_projector.shape[1]):  # same as mx.shape[1]
+        rank = _np.linalg.matrix_rank(nullsp_projector[:, 0:i + 1], tol=tol)
+        if rank > current_rank:
+            keepers.append(i)
+            current_rank = rank
+    ret = _np.take(nullsp_projector, keepers, axis=1)
+
+    if orthogonalize:  # and not columns_are_orthogonal(ret):
+        ret, _ = _np.linalg.qr(ret)  # Gram-Schmidt orthogonalization
+
+    for j in range(ret.shape[1]):  # normalize columns so largest element is +1.0
+        imax = _np.argmax(_np.abs(ret[:, j]))
+        if abs(ret[imax, j]) > 1e-6: ret[:, j] /= ret[imax, j]
+
+    return ret
+
+
+def normalize_columns(m, return_norms=False, ord=None):
+    """
+    Normalizes the columns of a matrix.
+
+    Parameters
+    ----------
+    m : numpy.ndarray or scipy sparse matrix
+        The matrix.
+
+    return_norms : bool, optional
+        If `True`, also return a 1D array containing the norms
+        of the columns (before they were normalized).
+
+    ord : int or list of ints, optional
+        The order of the norm.  See :function:`numpy.linalg.norm`.  An
+        array of orders can be given to specify the norm on a per-column
+        basis.
+
+    Returns
+    -------
+    normalized_m : numpy.ndarray
+        The matrix after columns are normalized
+
+    column_norms : numpy.ndarray
+        Only returned when `return_norms=True`, a 1-dimensional array
+        of the pre-normalization norm of each column.
+    """
+    norms = column_norms(m, ord)
+    norms[norms == 0.0] = 1.0  # avoid division of zero-column by zero
+    normalized_m = scale_columns(m, 1 / norms)
+    return (normalized_m, norms) if return_norms else normalized_m
+
+
+def column_norms(m, ord=None):
+    """
+    Compute the norms of the columns of a matrix.
+
+    Parameters
+    ----------
+    m : numpy.ndarray or scipy sparse matrix
+        The matrix.
+
+    ord : int or list of ints, optional
+        The order of the norm.  See :function:`numpy.linalg.norm`.  An
+        array of orders can be given to specify the norm on a per-column
+        basis.
+
+    Returns
+    -------
+    numpy.ndarray
+        A 1-dimensional array of the column norms (length is number of columns of `m`).
+    """
+    ord_list = [ord] * m.shape[1] if (ord is None or isinstance(ord, int)) else ord
+    assert(len(ord_list) == m.shape[1])
+
+    if _sps.issparse(m):
+        #this could be done more efficiently, e.g. by converting to csc and taking column norms directly
+        norms = _np.array([_np.linalg.norm(m[:, j].toarray(), ord=o) for j, o in enumerate(ord_list)])
+    else:
+        norms = _np.array([_np.linalg.norm(m[:, j], ord=o) for j, o in enumerate(ord_list)])
+    return norms
+
+
+def scale_columns(m, scale_values):
+    """
+    Scale each column of a matrix by a given value.
+
+    Usually used for normalization purposes, when the
+    matrix columns represent vectors.
+
+    Parameters
+    ----------
+    m : numpy.ndarray or scipy sparse matrix
+        The matrix.
+
+    scale_values : numpy.ndarray
+        A 1-dimensional array of scale values, one per
+        column of `m`.
+
+    Returns
+    -------
+    numpy.ndarray or scipy sparse matrix
+        A copy of `m` with scaled columns, possibly with different sparsity structure.
+    """
+    if _sps.issparse(m):
+        assert(len(scale_values) == m.shape[1])
+
+        m_csc = _sps.csc_matrix(m)
+        for j, scale in enumerate(scale_values):
+            m_csc.data[m_csc.indptr[j]:m_csc.indptr[j + 1]] *= scale
+        return m_csc
+    else:
+        return m * scale_values[None, :]
+
+
+def columns_are_orthogonal(m, tol=1e-7):
+    """
+    Checks whether a matrix contains orthogonal columns.
+
+    The columns do not need to be normalized.  In the
+    complex case, two vectors v and w are considered orthogonal
+    if `dot(v.conj(), w) == 0`.
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+        The matrix to check.
+
+    tol : float, optional
+        Tolerance for checking whether dot products are zero.
+
+    Returns
+    -------
+    bool
+    """
+    if m.size == 0: return True  # boundary case
+    check = _np.dot(m.conj().T, m)
+    check[_np.diag_indices_from(check)] = 0.0
+    return bool(_np.linalg.norm(check) / check.size < tol)
+
+
+def columns_are_orthonormal(m, tol=1e-7):
+    """
+    Checks whether a matrix contains orthogonal columns.
+
+    The columns do not need to be normalized.  In the
+    complex case, two vectors v and w are considered orthogonal
+    if `dot(v.conj(), w) == 0`.
+
+    Parameters
+    ----------
+    m : numpy.ndarray
+        The matrix to check.
+
+    tol : float, optional
+        Tolerance for checking whether dot products are zero.
+
+    Returns
+    -------
+    bool
+    """
+    if m.size == 0: return True  # boundary case
+    check = _np.dot(m.conj().T, m)
+    return bool(_np.allclose(check, _np.identity(check.shape[0], 'd'), atol=tol))
+
+
+def independent_columns(m, initial_independent_cols=None, tol=1e-7):
+    """
+    Computes the indices of the linearly-independent columns in a matrix.
+
+    Optionally starts with a "base" matrix of independent columns, so that
+    the returned indices indicate the columns of `m` that are independent
+    of all the base columns and the other independent columns of `m`.
+
+    Parameters
+    ----------
+    m : numpy.ndarray or scipy sparse matrix
+        The matrix.
+
+    initial_independent_cols : numpy.ndarray or scipy sparse matrix, optional
+        If not `None`, a matrix of known-to-be independent columns so to test the
+        columns of `m` with respect to (in addition to the already chosen independent
+        columns of `m`.
+
+    tol : float, optional
+        Tolerance threshold used to decide whether a singular value is nonzero
+        (it is if it's is greater than `tol`).
+
+    Returns
+    -------
+    list
+        A list of the independent-column indices of `m`.
+    """
+    indep_cols = []
+
+    if not _sps.issparse(m):
+        running_indep_cols = initial_independent_cols.copy() \
+            if (initial_independent_cols is not None) else _np.empty((m.shape[0], 0), m.dtype)
+        num_indep_cols = running_indep_cols.shape[0]
+
+        for j in range(m.shape[1]):
+            trial = _np.concatenate((running_indep_cols, m[:, j]), axis=1)
+            if _np.linalg.matrix_rank(trial, tol=tol) == num_indep_cols + 1:
+                running_indep_cols = trial
+                indep_cols.append(j)
+                num_indep_cols += 1
+
+    else:  # sparse case
+
+        from scipy.sparse.linalg import ArpackNoConvergence as _ArpackNoConvergence
+        from scipy.sparse.linalg import ArpackError as _ArpackError
+        running_indep_cols = initial_independent_cols.copy() \
+            if (initial_independent_cols is not None) else _sps.csc_matrix((m.shape[0], 0), dtype=m.dtype)
+        num_indep_cols = running_indep_cols.shape[0]
+
+        for j in range(m.shape[1]):
+            trial = _sps.hstack((running_indep_cols, m[:, j]))
+
+            try:
+                lowest_sval = _spsl.svds(trial, k=1, which="SM", return_singular_vectors=False)
+            except (_ArpackNoConvergence, _ArpackError):
+                lowest_sval = 0  # assume lack of convergence means smallest singular value was too small (?)
+
+            if lowest_sval > tol:  # trial fogi dirs still linearly independent (full rank)
+                running_indep_cols = trial
+                indep_cols.append(j)
+            # else trial column made fogi dirs linearly dependent and so don't tally indep column
+
+    return indep_cols
+
+
+def pinv_of_matrix_with_orthogonal_columns(m):
+    """ TODO: docstring """
+    col_scaling = _np.sum(_np.abs(m)**2, axis=0)
+    m_with_scaled_cols = m.conj() * col_scaling[None, :]
+    return m_with_scaled_cols.T
 
 
 def matrix_sign(m):
@@ -327,6 +590,7 @@ def mx_to_string(m, width=9, prec=4, withbrackets=False):
     string
         matrix m as a pretty formated string.
     """
+    if m.size == 0: return ""
     s = ""; tol = 10**(-prec)
     if _np.max(abs(_np.imag(m))) > tol:
         return mx_to_string_complex(m, width, width, prec)
@@ -412,10 +676,10 @@ def unitary_superoperator_matrix_log(m, mx_basis):
     evals = _np.linalg.eigvals(M_std)
     assert(_np.allclose(_np.abs(evals), 1.0))  # simple but technically incomplete check for a unitary superop
     # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
-    U = _ot.process_mx_to_unitary(M_std)
+    U = _ot.std_process_mx_to_unitary(M_std)
     H = _spl.logm(U) / -1j  # U = exp(-iH)
-    logM_std = _lt.hamiltonian_to_lindbladian(H)  # rho --> -i[H, rho] * sqrt(d)/2
-    logM = change_basis(logM_std * (2.0 / _np.sqrt(H.shape[0])), "std", mx_basis)
+    logM_std = _lt.create_elementary_errorgen('H', H)  # rho --> -i[H, rho]
+    logM = change_basis(logM_std, "std", mx_basis)
     assert(_np.linalg.norm(_spl.expm(logM) - m) < 1e-8)  # expensive b/c of expm - could comment for performance
     return logM
 
@@ -872,10 +1136,10 @@ def minweight_match(a, b, metricfn=None, return_pairs=True,
 
     if pass_indices_to_metricfn:
         for i, x in enumerate(a):
-            weightMx[i, :] = [metricfn(i, j) for j, y in enumerate(b)]
+            weightMx[i, :] = _np.ravel(_np.array([metricfn(i, j) for j, y in enumerate(b)]))
     else:
         for i, x in enumerate(a):
-            weightMx[i, :] = [metricfn(x, y) for j, y in enumerate(b)]
+            weightMx[i, :] = _np.ravel(_np.array([metricfn(x, y) for j, y in enumerate(b)]))
 
     a_inds, b_inds = _spo.linear_sum_assignment(weightMx)
     assert(_np.allclose(a_inds, range(D))), "linear_sum_assignment returned unexpected row indices!"
@@ -1347,7 +1611,7 @@ def csr_sum_indices(csr_matrices):
         The dimension of the destination matrix (and of each member of
         `csr_matrices`)
     """
-    if len(csr_matrices) == 0: return [], _np.empty(0, int), _np.empty(0, int), 0
+    if len(csr_matrices) == 0: return [], _np.empty(0, _np.int64), _np.empty(0, _np.int64), 0
 
     N = csr_matrices[0].shape[0]
     for mx in csr_matrices:
@@ -1454,11 +1718,11 @@ def csr_sum_flat_indices(csr_matrices):
     """
     csr_sum_array, indptr, indices, N = csr_sum_indices(csr_matrices)
     if len(csr_sum_array) == 0:
-        return (_np.empty(0, int), _np.empty(0, 'd'), _np.zeros(1, int), indptr, indices, N)
+        return (_np.empty(0, _np.int64), _np.empty(0, 'd'), _np.zeros(1, _np.int64), indptr, indices, N)
 
-    flat_dest_index_array = _np.ascontiguousarray(_np.concatenate(csr_sum_array, axis=0), dtype=int)
+    flat_dest_index_array = _np.ascontiguousarray(_np.concatenate(csr_sum_array, axis=0), dtype=_np.int64)
     flat_csr_mx_data = _np.ascontiguousarray(_np.concatenate([mx.data for mx in csr_matrices], axis=0), dtype=complex)
-    mx_nnz_indptr = _np.cumsum([0] + [mx.nnz for mx in csr_matrices], dtype=int)
+    mx_nnz_indptr = _np.cumsum([0] + [mx.nnz for mx in csr_matrices], dtype=_np.int64)
 
     return flat_dest_index_array, flat_csr_mx_data, mx_nnz_indptr, indptr, indices, N
 
@@ -1551,7 +1815,7 @@ def expm_multiply_prep(a, tol=EXPM_DEFAULT_TOL):
     Parameters
     ----------
     a : numpy.ndarray
-        the matrix that will belater exponentiated.
+        the matrix that will be later exponentiated.
 
     tol : float, optional
         Tolerance used to within matrix exponentiation routines.
@@ -1652,8 +1916,9 @@ else:
         """
         #Note: copy v for now since it's modified by simple_core fn
         A, mu, m_star, s, eta = prep_a
-        indices = _np.array(A.indices, dtype=int)  # convert to 64-bit ints if needed
-        indptr = _np.array(A.indptr, dtype=int)
+
+        indices = _np.array(A.indices, dtype=_np.int64)  # convert to 64-bit ints if needed
+        indptr = _np.array(A.indptr, dtype=_np.int64)
         return _fastcalc.custom_expm_multiply_simple_core(A.data, indptr, indices,
                                                           v.copy(), mu, m_star, s, tol, eta)
 
@@ -1803,6 +2068,7 @@ def sparse_onenorm(a):
     float
     """
     return max(abs(a).sum(axis=0).flat)
+    # also == return _spsl.norm(a, ord=1) (comparable speed)
 
 
 def ndarray_base(a, verbosity=0):
@@ -2044,6 +2310,77 @@ def project_onto_antikite(mx, kite):
     return mx
 
 
+def remove_dependent_cols(mx, tol=1e-7):
+    """
+    Removes the linearly dependent columns of a matrix.
+
+    Parameters
+    ----------
+    mx : numpy.ndarray
+        The input matrix
+
+    Returns
+    -------
+        A linearly independent subset of the columns of `mx`.
+    """
+    last_rank = 0; cols_to_remove = []
+    for j in range(mx.shape[1]):
+        rnk = _np.linalg.matrix_rank(mx[:, 0:j + 1], tol)
+        if rnk == last_rank:
+            cols_to_remove.append(j)
+        else:
+            last_rank = rnk
+    #print("Removing %d cols" % len(cols_to_remove))
+    return _np.delete(mx, cols_to_remove, axis=1)
+
+
+def intersection_space(space1, space2, tol=1e-7, use_nice_nullspace=False):
+    """
+    TODO: docstring
+    """
+    VW = _np.concatenate((space1, -space2), axis=1)
+    nullsp = nice_nullspace(VW, tol) if use_nice_nullspace else nullspace(VW, tol)
+    #nullsp = _spl.null_space(VW, rcond=1e-3)  # alternative
+    return _np.dot(space1, nullsp[0:space1.shape[1], :])
+
+
+def union_space(space1, space2, tol=1e-7):
+    """
+    TODO: docstring
+    """
+    VW = _np.concatenate((space1, space2), axis=1)
+    return remove_dependent_cols(VW, tol)
+
+
+#UNUSED
+#def spectral_radius(x):
+#    if hasattr(x, 'ndim') and x.ndim == 2:  # then interpret as a numpy array and take norm
+#        evals = _np.sort(_np.linalg.eigvals(x))
+#        return abs(evals[-1] - evals[0])
+#    else:
+#        return x
+
+
+def jamiolkowski_angle(hamiltonian_mx):
+    """
+    TODO: docstring
+    """
+    Hmx = hamiltonian_mx
+    d = Hmx.shape[0]
+    I = _np.identity(d)
+    errmap = _np.kron(I, _spl.expm(1j * Hmx))
+    psi = _np.zeros(d**2)  # will be a maximally entangled state
+    for i in range(d):
+        x = _np.zeros(d); x[i] = 1.0
+        xx = _np.kron(x, x)
+        psi += xx / _np.sqrt(d)
+    assert(_np.isclose(_np.dot(psi, psi), 1.0))
+    cos_theta = abs(_np.dot(psi.conj(), _np.dot(errmap, psi)))
+    return _np.real_if_close(_np.arccos(cos_theta))
+    #cos_squared_theta = entanglement_infidelity(expm(1j * Hmx), identity)
+    #return _np.arccos(_np.sqrt(cos_squared_theta))
+
+
 def zvals_to_dense(self, zvals, superket=True):
     """
     Construct the dense operator or superoperator representation of a computational basis state.
@@ -2184,3 +2521,38 @@ def zvals_int64_to_dense(zvals_int, nqubits, outvec=None, trust_outvec_sparsity=
         outvec[finalIndx] = -abs_elval if minus_sign else abs_elval
 
     return outvec
+
+
+def sign_fix_qr(q, r, tol=1e-6):
+    """
+    Change the signs of the columns of Q and rows of R to follow a convention.
+
+    Flips the signs of Q-columns and R-rows from a QR decomposition so that the
+    largest absolute element in each Q-column is positive.  This is an arbitrary
+    but consisten convention that resolves sign-ambiguity in the output of a QR
+    decomposition.
+
+    Parameters
+    ----------
+    q, r : numpy.ndarray
+        Input Q and R matrices from QR decomposition.
+
+    tol : float, optional
+        Tolerance for computing the maximum element, i.e., anything
+        within `tol` of the true max is counted as a maximal element,
+        the *first* of which is set positive by the convention.
+
+    Returns
+    -------
+    qq, rr : numpy.ndarray
+        Updated versions of `q` and `r`.
+    """
+    qq = q.copy()
+    rr = r.copy()
+    for i in range(q.shape[1]):
+        max_abs = max(_np.abs(q[:, i]))
+        k = _np.argmax(_np.abs(q[:, i]) > (max_abs - tol))
+        if q[k, i] < 0.0:
+            qq[:, i] = -q[:, i]
+            rr[i, :] = -r[i, :]
+    return qq, rr
