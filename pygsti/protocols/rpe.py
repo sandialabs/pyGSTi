@@ -30,25 +30,25 @@ class RobustPhaseEstimationDesign(_proto.CircuitListsDesign):
     outcomes_neg determine which of those computational basis states count
     towards each of the probabilities
 
-    P^{γ'γ}_{Ns} = |<γ' y| U^N |γ x>|² = |<γ' x| U^N |-γ y>|² = (1 ± sin(θ))/2
-    P^{γ'γ}_{Nc} = |<γ' x| U^N |γ x>|² = |<γ' y| U^N | γ y>|² = (1 ± cos(θ))/2
+    `P^{γ'γ}_{Ns} = |<γ' y| U^N |γ x>|² = |<γ' x| U^N |-γ y>|² = (1 ± sin(θ))/2`
+    `P^{γ'γ}_{Nc} = |<γ' x| U^N |γ x>|² = |<γ' y| U^N | γ y>|² = (1 ± cos(θ))/2`
 
     (Computational basis state measurements in neither of these sets are
     silently dropped.)
 
-    In the above, the +x refers to the |E_0> + |E_1> combination of eigenstates
+    In the above, the +x refers to the `|E_0> + |E_1>` combination of eigenstates
     of U, *not* of computational basis states.  For instance, if U is rotation
     in the X basis, then cos_prep and cos_meas could be simply the identity:
 
-    |± U> = |0> ± |1>
+    `|± U> = |0> ± |1>`
 
-    where |±U> are the eigenstates of U, so that, in the notation of the above,
+    where `|±U>` are the eigenstates of U, so that, in the notation of the above,
 
-    |+x> = |+U> + |-U> = |0>
+    `|+x> = |+U> + |-U> = |0>`
 
     The circuit would then calculate
 
-    P^+_{Nc} = |<+x| U^N | +x>|²
+    `P^+_{Nc} = |<+x| U^N | +x>|²`
 
     provided that cos_outcomes_pos = [0] and cos_outcomes_neg = [1].
 
@@ -83,6 +83,7 @@ class RobustPhaseEstimationDesign(_proto.CircuitListsDesign):
 
     cos_outcomes_neg : <TODO typ>
         <TODO description>
+        
     """
 
     def __init__(
@@ -109,25 +110,25 @@ class RobustPhaseEstimationDesign(_proto.CircuitListsDesign):
         outcomes_neg determine which of those computational basis states count
         towards each of the probabilities
 
-        P^{γ'γ}_{Ns} = |<γ' y| U^N |γ x>|² = |<γ' x| U^N |-γ y>|² = (1 ± sin(θ))/2
-        P^{γ'γ}_{Nc} = |<γ' x| U^N |γ x>|² = |<γ' y| U^N | γ y>|² = (1 ± cos(θ))/2
+        `P^{γ'γ}_{Ns} = |<γ' y| U^N |γ x>|² = |<γ' x| U^N |-γ y>|² = (1 ± sin(θ))/2`
+        `P^{γ'γ}_{Nc} = |<γ' x| U^N |γ x>|² = |<γ' y| U^N | γ y>|² = (1 ± cos(θ))/2`
 
         (Computational basis state measurements in neither of these sets are
         silently dropped.)
 
-        In the above, the +x refers to the |E_0> + |E_1> combination of eigenstates
+        In the above, the +x refers to the `|E_0> + |E_1>` combination of eigenstates
         of U, *not* of computational basis states.  For instance, if U is rotation
         in the X basis, then cos_prep and cos_meas could be simply the identity:
 
-        |± U> = |0> ± |1>
+        `|± U> = |0> ± |1>`
 
-        where |±U> are the eigenstates of U, so that, in the notation of the above,
+        where `|±U>` are the eigenstates of U, so that, in the notation of the above,
 
-        |+x> = |+U> + |-U> = |0>
+        `|+x> = |+U> + |-U> = |0>`
 
         The circuit would then calculate
 
-        P^+_{Nc} = |<+x| U^N | +x>|²
+        `P^+_{Nc} = |<+x| U^N | +x>|²`
 
         provided that cos_outcomes_pos = [0] and cos_outcomes_neg = [1].
         """
@@ -188,6 +189,7 @@ class RobustPhaseEstimation(_proto.Protocol):
 
         dataset : <TODO typ>
             <TODO description>
+            
         """
         measured = _collections.OrderedDict()
         for n, sin_circ, cos_circ in zip(design.req_lengths, *design.circuit_lists):
@@ -204,7 +206,7 @@ class RobustPhaseEstimation(_proto.Protocol):
         """
         Determine the raw angles from the count data.
 
-        This corresponds to the angle of U^N, i.e., it is N times the phase of U.
+        This corresponds to the angle of `U^N`, i.e., it is N times the phase of U.
 
         Parameters
         ----------
@@ -214,6 +216,7 @@ class RobustPhaseEstimation(_proto.Protocol):
         Returns
         -------
         <TODO typ>
+        
         """
 
         angles = _collections.OrderedDict()

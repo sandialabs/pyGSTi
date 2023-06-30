@@ -34,9 +34,9 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
     error generator `L` on an input density matrix `rho` is given by:
 
     Hamiltonian:  `L(rho) = -1j/(2d^2) * [ p, rho ]`
-    Stochastic:   `L(rho) = 1/(d^2) p * rho * p
-    Correlation:  `L(rho) = 1/(2d^2) ( p * rho * q + q * rho * p)
-    Active:       `L(rho) = 1j/(2d^2) ( p * rho * q - q * rho * p)
+    Stochastic:   `L(rho) = 1/(d^2) p * rho * p`
+    Correlation:  `L(rho) = 1/(2d^2) ( p * rho * q + q * rho * p)`
+    Active:       `L(rho) = 1j/(2d^2) ( p * rho * q - q * rho * p)`
 
     where `d` is the dimension of the Hilbert space, e.g. 2 for a single qubit.  Square
     brackets denotes the commutator and curly brackets the anticommutator.
@@ -109,9 +109,9 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
     error generator `L` on an input density matrix `rho` is given by:
 
     Hamiltonian:  `L(rho) = -1j * [ p, rho ]`
-    Stochastic:   `L(rho) = p * rho * p - rho
-    Correlation:  `L(rho) = p * rho * q + q * rho * p - 0.5 {{p,q}, rho}
-    Active:       `L(rho) = 1j( p * rho * q - q * rho * p + 0.5 {[p,q], rho} )
+    Stochastic:   `L(rho) = p * rho * p - rho`
+    Correlation:  `L(rho) = p * rho * q + q * rho * p - 0.5 {{p,q}, rho}`
+    Active:       `L(rho) = 1j( p * rho * q - q * rho * p + 0.5 {[p,q], rho} )`
 
     Square brackets denotes the commutator and curly brackets the anticommutator.
     `L` is returned as a superoperator matrix that acts on vectorized density matrices.
@@ -177,11 +177,11 @@ def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N8
     constructs the d^2-dimension Lindbladian matrix L whose action is
     given by:
 
-    L(rho) = -i [Lm, rho]     (when `typ == 'H'`)
+    `L(rho) = -i [Lm, rho] `    (when `typ == 'H'`)
 
     or
 
-    L(rho) = Ln*rho*Lm^dag - 1/2(rho*Lm^dag*Ln + Lm^dag*Ln*rho)    (`typ == 'O'`)
+    `L(rho) = Ln*rho*Lm^dag - 1/2(rho*Lm^dag*Ln + Lm^dag*Ln*rho)`    (`typ == 'O'`)
 
     where rho is a density matrix.  L is returned as a superoperator
     matrix that acts on a vectorized density matrices.

@@ -1386,8 +1386,7 @@ class ColorBoxPlot(WorkspacePlot):
 
     plottype : {"chi2","logl","tvd","blank","errorrate","dscmp",
                 "driftdetector", "driftsize"}
-        Specifies the type of plot. "errorate" requires that
-        `direct_gst_models` be set.
+        Specifies the type of plot. "errorate" requires that `direct_gst_models` be set.
 
     circuits : CircuitList or list of Circuits
         Specifies the set of circuits, usually along with their structure, e.g.
@@ -1498,8 +1497,7 @@ class ColorBoxPlot(WorkspacePlot):
         ----------
         plottype : {"chi2","logl","tvd","blank","errorrate","dscmp",
                     "driftdetector", "driftsize"}
-            Specifies the type of plot. "errorate" requires that
-            `direct_gst_models` be set.
+            Specifies the type of plot. "errorate" requires that `direct_gst_models` be set.
 
         circuits : CircuitList or list of Circuits
             Specifies the set of circuits, usually along with their structure, e.g.
@@ -2850,7 +2848,7 @@ class FitComparisonBarPlot(WorkspacePlot):
         Specifies the set of circuits used at each x-value.
 
     model_by_x : list of Models
-        `Model`s corresponding to each x-value.
+        `Model` corresponding to each x-value.
 
     dataset_by_x : DataSet or list of DataSets
         The data sets to compare each model against.  If a single
@@ -2901,7 +2899,7 @@ class FitComparisonBarPlot(WorkspacePlot):
             Specifies the set of circuits used at each x-value.
 
         model_by_x : list of Models
-            `Model`s corresponding to each x-value.
+            `Model` corresponding to each x-value.
 
         dataset_by_x : DataSet or list of DataSets
             The data sets to compare each model against.  If a single
@@ -3049,10 +3047,10 @@ class FitComparisonBoxPlot(WorkspacePlot):
         are X and Y indices, respectively.
 
     model_by_y_then_x : list of lists of Models
-        `Model`s corresponding to each X and Y value.
+        `Model` corresponding to each X and Y value.
 
     dataset_by_y_then_x : list of lists of DataSets
-        `DataSet`s corresponding to each X and Y value.
+        `DataSet` corresponding to each X and Y value.
 
     objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
         The objective function to use, or one of the given strings
@@ -3099,10 +3097,10 @@ class FitComparisonBoxPlot(WorkspacePlot):
             are X and Y indices, respectively.
 
         model_by_y_then_x : list of lists of Models
-            `Model`s corresponding to each X and Y value.
+            `Model` corresponding to each X and Y value.
 
         dataset_by_y_then_x : list of lists of DataSets
-            `DataSet`s corresponding to each X and Y value.
+            `DataSet` corresponding to each X and Y value.
 
         objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
             The objective function to use, or one of the given strings
@@ -3172,7 +3170,7 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
     A grid of grayscale boxes comparing data sets pair-wise.
 
     This class creates a plot showing the total 2*deltaLogL values for each
-    pair of :class:`DataSet`s out of some number of total `DataSet`s.
+    pair of :class:`DataSet` out of some number of total `DataSets`.
 
     Background: For every pair of data sets, the likelihood is computed for
     two different models: 1) the model in which a single set of

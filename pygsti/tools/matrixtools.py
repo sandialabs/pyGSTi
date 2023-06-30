@@ -2109,6 +2109,7 @@ def to_unitary(scaled_unitary):
     Returns
     -------
     scale : float
+    
     unitary : ndarray
         Such that `scale * unitary == scaled_unitary`.
     """
@@ -2134,6 +2135,7 @@ def sorted_eig(mx):
     Returns
     -------
     eigenvalues : numpy.ndarray
+    
     eigenvectors : numpy.ndarray
     """
     ev, U = _np.linalg.eig(mx)

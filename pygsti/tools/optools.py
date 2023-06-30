@@ -733,8 +733,8 @@ def unitarity(a, mx_basis="gm"):
     """
     Returns the "unitarity" of a channel.
 
-    Unitarity is defined as in Wallman et al, ``Estimating the Coherence of
-    noise'' NJP 17 113020 (2015). The unitarity is given by (Prop 1 in Wallman
+    Unitarity is defined as in Wallman et al, "Estimating the Coherence of
+    noise" NJP 17 113020 (2015). The unitarity is given by (Prop 1 in Wallman
     et al):
 
     `u(a) = Tr( A_u^{\dagger} A_u ) / (d^2  - 1)`,
@@ -1130,7 +1130,7 @@ def state_to_dmvec(psi):
     """
     Compute the vectorized density matrix which acts as the state `psi`.
 
-    This is just the outer product map |psi> => |psi><psi| with the
+    This is just the outer product map `|psi> => |psi><psi|` with the
     output flattened, i.e. `dot(psi, conjugate(psi).T)`.
 
     Parameters
@@ -1675,10 +1675,10 @@ def project_errorgen(errorgen, elementary_errorgen_type, elementary_errorgen_bas
     projection_type : {"hamiltonian", "stochastic", "affine"}
         The type of error generators to project the gate error generator onto.
         If "hamiltonian", then use the Hamiltonian generators which take a density
-        matrix rho -> -i*[ H, rho ] for Pauli-product matrix H.  If "stochastic",
-        then use the Stochastic error generators which take rho -> P*rho*P for
+        matrix `rho -> -i*[ H, rho ]` for Pauli-product matrix H.  If "stochastic",
+        then use the Stochastic error generators which take `rho -> P*rho*P` for
         Pauli-product matrix P (recall P is self adjoint).  If "affine", then
-        use the affine error generators which take rho -> P (superop is |P>><<1|).
+        use the affine error generators which take `rho -> P` (superop is `|P>><<1|`).
 
     projection_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The source and destination basis, respectively.  Allowed
