@@ -31,7 +31,7 @@ build:
 
 sphinx:
 
-   configuration: docs/conf.py
+   configuration: doc/conf.py
 
 
 # Optionally build your docs in additional formats such as PDF and ePub
