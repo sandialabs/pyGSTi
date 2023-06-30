@@ -20,6 +20,7 @@ hooks/etc/permissions.yml
 .ropeproject
 .vscode
 doc/_autosummary
+doc/autoapi
 doc/build
 .venv*
 
