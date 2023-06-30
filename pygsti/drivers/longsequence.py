@@ -179,12 +179,12 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
     """
     Perform Linear Gate Set Tomography (LGST).
 
-    This function differs from the lower level :function:`run_lgst` function
+    This function differs from the lower level :func:`run_lgst` function
     in that it may perform a post-LGST gauge optimization and this routine
     returns a :class:`Results` object containing the LGST estimate.
 
     Overall, this is a high-level driver routine which can be used similarly
-    to :function:`run_long_sequence_gst`  whereas `run_lgst` is a low-level
+    to :func:`run_long_sequence_gst`  whereas `run_lgst` is a low-level
     routine used when building your own algorithms.
 
     Parameters
@@ -220,7 +220,7 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
     advanced_options : dict, optional
         Specifies advanced options most of which deal with numerical details of
         the objective function or expert-level functionality.  See
-        :function:`run_long_sequence_gst`.
+        :func:`run_long_sequence_gst`.
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation

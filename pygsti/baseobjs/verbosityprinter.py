@@ -580,7 +580,7 @@ class VerbosityPrinter(object):
         Begins recording the output (to memory).
 
         Begins recording (in memory) a list of `(type, verbosityLevel, message)`
-        tuples that is returned by the next call to :method:`stop_recording`.
+        tuples that is returned by the next call to :meth:`stop_recording`.
 
         Returns
         -------
@@ -602,7 +602,7 @@ class VerbosityPrinter(object):
         """
         Stops recording and returns recorded output.
 
-        Stops a "recording" started by :method:`start_recording` and returns the
+        Stops a "recording" started by :meth:`start_recording` and returns the
         list of `(type, verbosityLevel, message)` tuples that have been recorded
         since then.
 

@@ -1178,7 +1178,7 @@ class CliffordCompilationRules(CompilationRules):
         Get a potentially non-local compilation of `oplabel`.
 
         This function does *not* add this compilation to the library, it merely
-        returns it. To add it, use :method:`add_nonlocal_compilation_of`.
+        returns it. To add it, use :meth:`add_nonlocal_compilation_of`.
 
         This method currently only generates a compilation for a non-local CNOT,
         up to arbitrary Pauli gates, between a pair of unconnected qubits. It

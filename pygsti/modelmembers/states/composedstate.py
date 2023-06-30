@@ -494,7 +494,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         if order not in self.terms:
             assert(self.gpindices is not None), "ComposedSstate must be added to a Model before use!"
@@ -519,7 +519,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
-        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
+        It calls :meth:`taylor_order_terms` internally, so that all the terms at order `order`
         are typically cached for future calls.
 
         Parameters
@@ -765,7 +765,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
     def errorgen_coefficient_labels(self):
         """
-        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+        The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
 
         Returns
         -------
@@ -779,7 +779,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         """
         The weighted coefficients of this state prep's error generator in terms of "standard" error generators.
 
-        Constructs a 1D array of all the coefficients returned by :method:`errorgen_coefficients`,
+        Constructs a 1D array of all the coefficients returned by :meth:`errorgen_coefficients`,
         weighted so that different error generators can be weighted differently when a
         `errorgen_penalty_factor` is used in an objective function.
 
@@ -812,7 +812,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
             essentially converts the coefficient into a rate that is
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
-            This is the value returned by :method:`error_rates`.
+            This is the value returned by :meth:`error_rates`.
 
         Returns
         -------
@@ -857,11 +857,11 @@ class ComposedState(_State):  # , _ErrorMapContainer
         logscale_nonham : bool, optional
             Whether or not the values in `lindblad_term_dict` for non-hamiltonian
             error generators should be interpreted as error *rates* (of an
-            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
+            "equivalent" depolarizing channel, see :meth:`errorgen_coefficients`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
             the corresponding value given in `lindblad_term_dict`.  This is what is
-            performed by the function :method:`set_error_rates`.
+            performed by the function :meth:`set_error_rates`.
 
         truncate : bool, optional
             Whether to allow adjustment of the errogen coefficients in
@@ -879,7 +879,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
     def errorgen_coefficients_array_deriv_wrt_params(self):
         """
-        The jacobian of :method:`errogen_coefficients_array` with respect to this state's parameters.
+        The jacobian of :meth:`errogen_coefficients_array` with respect to this state's parameters.
 
         Returns
         -------

@@ -685,7 +685,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         2. The sub-members are all allocated to the *same* parent model.
 
         This method computes an "anticipated parent" model as the common parent of all
-        the submembers (if one exists) or `None`, and calls :method:`allocate_gpindices`
+        the submembers (if one exists) or `None`, and calls :meth:`allocate_gpindices`
         using this parent model and a starting index of 0.  This has the desired behavior
         in the two cases above.  In case 1, parameter indices are set (allocated) but the
         parent is set to `None`, so that the to-be parent model will see this member as
@@ -942,7 +942,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         """
         For subclasses to implement.  Submember-existence checks are performed,
         and the gpindices of the return value is set, by the non-underscored
-        :method:`from_memoized_dict` implemented in this class.
+        :meth:`from_memoized_dict` implemented in this class.
         """
         #E.g.:
         # assert len(mm_dict['submembers']) == 0, 'ModelMember base class has no submembers'

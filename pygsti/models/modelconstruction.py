@@ -1659,7 +1659,7 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     """
     Create a n-qudit "crosstalk-free" model.
 
-    Similar to :method:`create_crosstalk_free_model` but the noise is input more generally,
+    Similar to :meth:`create_crosstalk_free_model` but the noise is input more generally,
     as a :class:`ModelNoise` object.  Arguments are the same as this function except that
     `modelnoise` is given instead of several more specific noise-describing arguments.
 
@@ -1849,7 +1849,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
     """
     Create a n-qudit "cloud-crosstalk" model.
 
-    Similar to :method:`create_cloud_crosstalk_model` but the noise is input more generally,
+    Similar to :meth:`create_cloud_crosstalk_model` but the noise is input more generally,
     as a :class:`ModelNoise` object.  Arguments are the same as this function except that
     `modelnoise` is given instead of several more specific noise-describing arguments.
 
@@ -2019,8 +2019,8 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The circuit simulator used to compute any
-        requested probabilities, e.g. from :method:`probs` or
-        :method:`bulk_probs`.  Using `"auto"` selects `"matrix"` when there
+        requested probabilities, e.g. from :meth:`probs` or
+        :meth:`bulk_probs`.  Using `"auto"` selects `"matrix"` when there
         are 2 qudits or less, and otherwise selects `"map"`.
 
     evotype : Evotype or str, optional

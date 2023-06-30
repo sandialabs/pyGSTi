@@ -22,10 +22,10 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
     Construct a "dual" elementary error generator matrix in the "standard" (matrix-unit) basis.
 
     The elementary error generator that is dual to the one computed by calling
-    :function:`create_elementary_errorgen` with the same argument.  This dual element
+    :func:`create_elementary_errorgen` with the same argument.  This dual element
     can be used to find the coefficient of the original, or "primal" elementary generator.
     For example, if `A = sum(c_i * E_i)`, where `E_i` are the elementary error generators given
-    by :function:`create_elementary_errorgen`), then `c_i = dot(D_i.conj(), A)` where `D_i`
+    by :func:`create_elementary_errorgen`), then `c_i = dot(D_i.conj(), A)` where `D_i`
     is the dual to `E_i`.
 
     There are four different types of dual elementary error generators: 'H' (Hamiltonian),

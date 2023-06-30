@@ -126,7 +126,7 @@ def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, memory_t
     shm : multiprocessing.shared_memory.SharedMemory
         A shared memory object needed to cleanup the shared memory.  If
         a normal array is created, this is `None`.  Provide this to
-        :function:`cleanup_shared_ndarray` to ensure `ar` is deallocated properly.
+        :func:`cleanup_shared_ndarray` to ensure `ar` is deallocated properly.
     """
     hostcomm = resource_alloc.host_comm if shared_mem_is_enabled() else None
     nelements = _np.product(shape)
@@ -156,7 +156,7 @@ def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, memory_t
 
 def cleanup_shared_ndarray(shm):
     """
-    De-allocates a (potentially) shared numpy array, created by :function:`create_shared_ndarray`.
+    De-allocates a (potentially) shared numpy array, created by :func:`create_shared_ndarray`.
 
     Parameters
     ----------

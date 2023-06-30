@@ -151,7 +151,7 @@ class _DataSetRow(object):
     ----------
     outcomes : list
         Returns this row's sequence of outcome labels, one per "bin" of repetition
-        counts (returned by :method:`get_counts`).
+        counts (returned by :meth:`get_counts`).
 
     counts : dict
         a dictionary of per-outcome counts.
@@ -1839,7 +1839,7 @@ class DataSet(_MongoSerializable):
             if a two-qubit DataSet has outcome labels "00", "01", "10", and "11", and
             we want to ''aggregate out'' the second qubit, we could use label_merge_dict =
             {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
-            to use :function:`filter_qubits` which also updates the circuits.
+            to use :func:`filter_qubits` which also updates the circuits.
 
         record_zero_counts : bool, optional
             Whether zero-counts are actually recorded (stored) in the returned
@@ -2936,7 +2936,7 @@ class DataSet(_MongoSerializable):
         """
         Read a DataSet from a binary file, clearing any data is contained previously.
 
-        The file should have been created with :method:`DataSet.write_binary`
+        The file should have been created with :meth:`DataSet.write_binary`
 
         Parameters
         ----------

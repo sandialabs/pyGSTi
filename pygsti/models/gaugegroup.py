@@ -67,7 +67,7 @@ class GaugeGroup(_NicelySerializable):
         Parameters
         ----------
         param_vec : numpy.ndarray
-            A 1D array of length :method:`num_params`.
+            A 1D array of length :meth:`num_params`.
 
         Returns
         -------
@@ -83,7 +83,7 @@ class GaugeGroup(_NicelySerializable):
         Returns
         -------
         numpy.ndarray
-            A 1D array of length :method:`num_params`.
+            A 1D array of length :meth:`num_params`.
         """
         return _np.array([], 'd')
 
@@ -155,7 +155,7 @@ class GaugeGroupElement(_NicelySerializable):
         Parameters
         ----------
         v : numpy.ndarray
-            A 1D array of length :method:`num_params`
+            A 1D array of length :meth:`num_params`
 
         Returns
         -------
@@ -267,7 +267,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         Parameters
         ----------
         v : numpy.ndarray
-            A 1D array of length :method:`num_params`
+            A 1D array of length :meth:`num_params`
 
         Returns
         -------
@@ -360,7 +360,7 @@ class OpGaugeGroup(GaugeGroup):
         Parameters
         ----------
         param_vec : numpy.ndarray
-            A 1D array of length :method:`num_params`.
+            A 1D array of length :meth:`num_params`.
 
         Returns
         -------
@@ -378,7 +378,7 @@ class OpGaugeGroup(GaugeGroup):
         Returns
         -------
         numpy.ndarray
-            A 1D array of length :method:`num_params`.
+            A 1D array of length :meth:`num_params`.
         """
         return self._operation.to_vector()
 
@@ -501,7 +501,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         Parameters
         ----------
         v : numpy.ndarray
-            A 1D array of length :method:`num_params`
+            A 1D array of length :meth:`num_params`
 
         Returns
         -------
@@ -959,7 +959,7 @@ class TrivialGaugeGroup(GaugeGroup):
         Parameters
         ----------
         param_vec : numpy.ndarray
-            A 1D array of length :method:`num_params`.
+            A 1D array of length :meth:`num_params`.
 
         Returns
         -------
@@ -976,7 +976,7 @@ class TrivialGaugeGroup(GaugeGroup):
         Returns
         -------
         numpy.ndarray
-            A 1D array of length :method:`num_params`.
+            A 1D array of length :meth:`num_params`.
         """
         return _np.empty(0, 'd')
 
@@ -1067,7 +1067,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         Parameters
         ----------
         v : numpy.ndarray
-            A 1D array of length :method:`num_params`
+            A 1D array of length :meth:`num_params`
 
         Returns
         -------

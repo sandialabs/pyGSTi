@@ -434,7 +434,7 @@ def compute_germ_set_score(germs, target_model=None, neighborhood=None,
         Number of randomized models to construct around `target_model`.
 
     randomization_strength : float, optional
-        Strength of unitary randomizations, as passed to :method:`target_model.randomize_with_unitary`.
+        Strength of unitary randomizations, as passed to :meth:`target_model.randomize_with_unitary`.
 
     score_func : {'all', 'worst'}
         Sets the objective function for scoring the eigenvalues. If 'all',
@@ -892,7 +892,7 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
         A list of Model objects.
 
     randomization_strength : float, optional
-        Strength of unitary randomizations, as passed to :method:`Model.randomize_with_unitary`.
+        Strength of unitary randomizations, as passed to :meth:`Model.randomize_with_unitary`.
 
     num_copies : int
         The number of random perturbations of `model_list[0]` to generate when

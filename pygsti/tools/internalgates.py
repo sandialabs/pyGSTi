@@ -309,7 +309,7 @@ def unitary_to_standard_gatename(unitary):
     -------
     str or None
         If `gate_unitary` matches a standard gate, the standard name of this gate (a
-        key in the dictionary given by :function:`standard_gatename_unitaries`).  `None` otherwise.
+        key in the dictionary given by :func:`standard_gatename_unitaries`).  `None` otherwise.
     """
     for std_name, U in standard_gatename_unitaries().items():
         if not callable(U) and not callable(unitary) and U.shape == unitary.shape and _np.allclose(unitary, U):
@@ -321,7 +321,7 @@ def standard_gatenames_cirq_conversions():
     """
     A dictionary converting the gates with standard names to the cirq names for these gates.
 
-    See :function:`standard_gatename_unitaries`.
+    See :func:`standard_gatename_unitaries`.
 
     By default, an idle operation will not be converted to a gate.
     If you want an idle to be converted to a `cirq.WaitGate`, you will have
@@ -373,7 +373,7 @@ def standard_gatenames_quil_conversions():
     """
     A dictionary converting the gates with standard names to the QUIL names for these gates.
 
-    See :function:`standard_gatename_unitaries`.
+    See :func:`standard_gatename_unitaries`.
 
     Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
     are not enforced to correspond to the expected unitaries. So, if the user
@@ -437,7 +437,7 @@ def standard_gatenames_chp_conversions():
     """
     A dictionary converting the gates with standard names to CHP native operations.
 
-    See :function:`standard_gatename_unitaries`.
+    See :func:`standard_gatename_unitaries`.
 
     Note that the native operations are assumed to act on qubit 0 or qubits 0 and 1,
     depending on whether it is a one-qubit or two-qubit operation. It is recommended
@@ -521,7 +521,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
     """
     A dictionary converting the gates with standard names to the QASM names for these gates.
 
-    See :function:`standard_gatename_unitaries`.
+    See :func:`standard_gatename_unitaries`.
 
     Note that throughout pyGSTi the standard gatenames (e.g., 'Gh' for Hadamard)
     are not enforced to correspond to the expected unitaries. So, if the user

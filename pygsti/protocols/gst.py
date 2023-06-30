@@ -734,7 +734,7 @@ class GSTObjFnBuilders(_NicelySerializable):
         ----------
         obj : object
             Object to cast.  Can be a `GSTObjFnBuilders` (naturally), a
-            dictionary of :method:`create_from` arguments (or None), or a
+            dictionary of :meth:`create_from` arguments (or None), or a
             list or tuple of the `(iteration_builders, final_builders)` constructor arguments.
 
         Returns
@@ -899,7 +899,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
 
         This essentially renders the gauge-optimization directives within this object
         in an "expanded" form for either running gauge optimization (e.g. within
-        a :method:`GateSetTomography.run` call) or for constructing the would-be gauge
+        a :meth:`GateSetTomography.run` call) or for constructing the would-be gauge
         optimization call arguments so they can be slightly modeified before passing
         them in as the actual gauge-optimization suite used in an analysis (the
         resulting dictionary can be used to initialize a new `GSTGaugeOptSuite` object
@@ -2551,7 +2551,7 @@ def _reoptimize_with_weights(mdc_objfn, circuit_weights_dict, optimizer, verbosi
 
     circuit_weights_dict : dict
         A dictionary of circuit weights, such as that returned by
-        :function:`_compute_robust_scaling`, giving the data-count scaling factors.
+        :func:`_compute_robust_scaling`, giving the data-count scaling factors.
 
     objfn_builder : ObjectiveFunctionBuilder
         The objective function (builder) that represents the final stage of

@@ -372,7 +372,7 @@ class ComposedPOVM(_POVM):
 
     def errorgen_coefficient_labels(self):
         """
-        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+        The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
 
         Returns
         -------
@@ -386,7 +386,7 @@ class ComposedPOVM(_POVM):
         """
         The weighted coefficients of this POVM's error generator in terms of "standard" error generators.
 
-        Constructs a 1D array of all the coefficients returned by :method:`errorgen_coefficients`,
+        Constructs a 1D array of all the coefficients returned by :meth:`errorgen_coefficients`,
         weighted so that different error generators can be weighted differently when a
         `errorgen_penalty_factor` is used in an objective function.
 
@@ -419,7 +419,7 @@ class ComposedPOVM(_POVM):
             essentially converts the coefficient into a rate that is
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
-            This is the value returned by :method:`error_rates`.
+            This is the value returned by :meth:`error_rates`.
 
         Returns
         -------
@@ -464,11 +464,11 @@ class ComposedPOVM(_POVM):
         logscale_nonham : bool, optional
             Whether or not the values in `lindblad_term_dict` for non-hamiltonian
             error generators should be interpreted as error *rates* (of an
-            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
+            "equivalent" depolarizing channel, see :meth:`errorgen_coefficients`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
             the corresponding value given in `lindblad_term_dict`.  This is what is
-            performed by the function :method:`set_error_rates`.
+            performed by the function :meth:`set_error_rates`.
 
         truncate : bool, optional
             Whether to allow adjustment of the errogen coefficients in
@@ -485,7 +485,7 @@ class ComposedPOVM(_POVM):
 
     def errorgen_coefficients_array_deriv_wrt_params(self):
         """
-        The jacobian of :method:`errogen_coefficients_array` with respect to this POVM's parameters.
+        The jacobian of :meth:`errogen_coefficients_array` with respect to this POVM's parameters.
 
         Returns
         -------

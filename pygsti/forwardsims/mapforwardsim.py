@@ -121,7 +121,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     num_atoms : int, optional
         The number of atoms (sub-prefix-tables) to use when creating the layout (i.e. when calling
-        :method:`create_layout`).  This determines how many units the element (circuit outcome
+        :meth:`create_layout`).  This determines how many units the element (circuit outcome
         probability) dimension is divided into, and doesn't have to correclate with the number of
         processors.  When multiple processors are used, if `num_atoms` is less than the number of
         processors then `num_atoms` should divide the number of processors evenly, so that
@@ -210,7 +210,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             the layout (evaluation strategy) is constructed.
 
         array_types : tuple, optional
-            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+            A tuple of string-valued array types.  See :meth:`ForwardSimulator.create_layout`.
 
         derivative_dimension : int, optional
             Optionally, the parameter-space dimension used when taking first
@@ -385,7 +385,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -437,7 +437,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         """
         Compute the chi2 jacobian contributions for an entire tree of circuits, allowing for time dependent operations.
 
-        Similar to :method:`bulk_fill_timedep_chi2` but compute the *jacobian*
+        Similar to :meth:`bulk_fill_timedep_chi2` but compute the *jacobian*
         of the summed chi2 contributions for each circuit with respect to the
         model's parameters.
 
@@ -450,7 +450,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -516,7 +516,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
        layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -574,7 +574,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         """
         Compute the ("poisson picture")log-likelihood jacobian contributions for an entire tree of circuits.
 
-        Similar to :method:`bulk_fill_timedep_loglpp` but compute the *jacobian*
+        Similar to :meth:`bulk_fill_timedep_loglpp` but compute the *jacobian*
         of the summed logl (in posison picture) contributions for each circuit
         with respect to the model's parameters.
 
@@ -587,7 +587,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see

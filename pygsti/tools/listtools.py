@@ -263,7 +263,7 @@ def partition_into(n, nbins):
     """
     Iterate over all partitions of integer `n` into `nbins` bins.
 
-    Here, unlike in :function:`partition`, a "partition" is allowed to contain
+    Here, unlike in :func:`partition`, a "partition" is allowed to contain
     zeros.  For example, (4,1,0) is a valid partition of 5 using 3 bins.  This
     function fixes the number of bins and iterates over all possible length-
     `nbins` partitions while allowing zeros.  This is equivalent to iterating

@@ -749,7 +749,7 @@ class _HasPolynomialCoefficient(object):
         """
         Performs a bulk find & replace on this polynomial's variable indices.
 
-        This function is similar to :method:`map_indices` but uses a *vector*
+        This function is similar to :meth:`map_indices` but uses a *vector*
         to describe *individual* index updates instead of a function for
         increased performance.
 
@@ -761,7 +761,7 @@ class _HasPolynomialCoefficient(object):
         mapvec : numpy.ndarray
             An array whose i-th element gives the updated "new" index for
             the i-th variable.  Note that this vector maps *individual*
-            variable indices old->new, whereas `mapfn` in :method:`map_indices`
+            variable indices old->new, whereas `mapfn` in :meth:`map_indices`
             maps between *tuples* of indices.
 
         Returns

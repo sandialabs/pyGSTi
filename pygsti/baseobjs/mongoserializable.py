@@ -163,12 +163,12 @@ class MongoSerializable(object):
         """
         Accumulate write and update operations for writing this object to a MongoDB database.
 
-        Similar to :method:`write_to_mongodb` but collects write operations instead of actually
+        Similar to :meth:`write_to_mongodb` but collects write operations instead of actually
         executing any write operations on the database.  This function may be preferred to
-        :method:`write_to_mongodb` when this object is being written as a part of a larger entity
+        :meth:`write_to_mongodb` when this object is being written as a part of a larger entity
         and executing write operations is saved until the end.
 
-        As in :method:`write_to_mongodb`, `self.collection_name` is the collection name and `_id` is either:
+        As in :meth:`write_to_mongodb`, `self.collection_name` is the collection name and `_id` is either:
         1) the ID used by a previous write or initial read-in, if one exists, OR
         2) a new random `bson.objectid.ObjectId`
 
@@ -414,7 +414,7 @@ class WriteOpsByCollection(dict):
         Add a GridFS put operation to this dictionary of write operations.
 
         This is a special type of operation for placing large chunks of binary data into a MongoDB.
-        Arguments are similar to :method:`add_one_op`.
+        Arguments are similar to :meth:`add_one_op`.
         """
         import gridfs as _gridfs
         fs = _gridfs.GridFS(mongodb, collection=collection_name)
@@ -432,8 +432,8 @@ class WriteOpsByCollection(dict):
         """
         Execute all of the "queued" operations within this dictionary on a MongoDB instance.
 
-        Note that `mongodb` should be the same as the `mongodb` given to any :method:`add_one_op` and
-        :method:`add_gridfs_put_op` method calls.  The session given at the initialization of
+        Note that `mongodb` should be the same as the `mongodb` given to any :meth:`add_one_op` and
+        :meth:`add_gridfs_put_op` method calls.  The session given at the initialization of
         this object is used for these write operations.  On exit, this dictionary is empty, indicating
         there are no more queued operations.
 

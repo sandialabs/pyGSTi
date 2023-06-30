@@ -1113,7 +1113,7 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         of the RB fit curve.
 
     defaultfit : str
-        The default key within `fits` to plot when calling :method:`plot`.
+        The default key within `fits` to plot when calling :meth:`plot`.
     """
 
     def __init__(self, data, protocol_instance, fits, depths, defaultfit):

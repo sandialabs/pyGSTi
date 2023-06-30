@@ -174,7 +174,7 @@ class TensorProductPOVMEffect(_POVMEffect):
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         terms = []
         fnq = [int(round(_np.log2(f.dim))) // 2 for f in self.factors]  # num of qubits per factor

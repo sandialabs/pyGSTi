@@ -732,7 +732,7 @@ class MultiDataSet(object):
         """
         Read a MultiDataSet from a file, clearing any data is contained previously.
 
-        The file should have been created with :method:`MultiDataSet.write_binary`
+        The file should have been created with :meth:`MultiDataSet.write_binary`
 
         Parameters
         ----------

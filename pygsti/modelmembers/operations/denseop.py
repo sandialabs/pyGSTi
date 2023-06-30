@@ -149,7 +149,7 @@ class DenseOperatorInterface(object):
         Return the array used to identify this operation within its range of possible values.
 
         For instance, if the operation is a unitary operation, this returns a
-        unitary matrix regardless of the evolution type.  The related :method:`to_dense`
+        unitary matrix regardless of the evolution type.  The related :meth:`to_dense`
         method, in contrast, returns the dense representation of the operation, which
         varies by evolution type.
 

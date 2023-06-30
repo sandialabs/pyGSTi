@@ -510,7 +510,7 @@ class ResourceAllocation(object):
         """
         A simplified sum over quantities on different processors that doesn't use shared memory.
 
-        The shared memory usage of :method:`allreduce_sum` can be overkill when just summing a single
+        The shared memory usage of :meth:`allreduce_sum` can be overkill when just summing a single
         scalar quantity.  This method provides a way to easily sum a quantity across all the processors
         in this :class:`ResourceAllocation` object using a unit resource allocation.
 

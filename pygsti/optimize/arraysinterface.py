@@ -261,7 +261,7 @@ class UndistributedArraysInterface(ArraysInterface):
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
             the caller assumes responsibilty for freeing the memory via
-            :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
+            :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
         -------
@@ -306,7 +306,7 @@ class UndistributedArraysInterface(ArraysInterface):
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
             the caller assumes responsibilty for freeing the memory via
-            :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
+            :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
         -------
@@ -525,7 +525,7 @@ class UndistributedArraysInterface(ArraysInterface):
 
         shared_mem_buf : tuple or None
             Scratch space of shared memory used to speed up repeated calls to `fill_jtj`.
-            If not none, the value returned from :method:`allocate_jtj_shared_mem_buf`.
+            If not none, the value returned from :meth:`allocate_jtj_shared_mem_buf`.
 
         Returns
         -------
@@ -535,7 +535,7 @@ class UndistributedArraysInterface(ArraysInterface):
 
     def allocate_jtj_shared_mem_buf(self):
         """
-        Allocate scratch space to be used for repeated calls to :method:`fill_jtj`.
+        Allocate scratch space to be used for repeated calls to :meth:`fill_jtj`.
 
         Returns
         -------
@@ -549,12 +549,12 @@ class UndistributedArraysInterface(ArraysInterface):
 
     def deallocate_jtj_shared_mem_buf(self, jtj_buf):
         """
-        Frees the scratch memory allocated by :method:`allocate_jtj_shared_mem_buf`.
+        Frees the scratch memory allocated by :meth:`allocate_jtj_shared_mem_buf`.
 
         Parameters
         ----------
         jtj_buf : tuple or None
-            The value returned from :method:`allocate_jtj_shared_mem_buf`
+            The value returned from :meth:`allocate_jtj_shared_mem_buf`
         """
         pass
 
@@ -837,7 +837,7 @@ class DistributedArraysInterface(ArraysInterface):
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
             the caller assumes responsibilty for freeing the memory via
-            :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
+            :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
         -------
@@ -890,7 +890,7 @@ class DistributedArraysInterface(ArraysInterface):
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
             the caller assumes responsibilty for freeing the memory via
-            :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
+            :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
         -------
@@ -1208,7 +1208,7 @@ class DistributedArraysInterface(ArraysInterface):
 
         shared_mem_buf : tuple or None
             Scratch space of shared memory used to speed up repeated calls to `fill_jtj`.
-            If not none, the value returned from :method:`allocate_jtj_shared_mem_buf`.
+            If not none, the value returned from :meth:`allocate_jtj_shared_mem_buf`.
 
         Returns
         -------
@@ -1218,7 +1218,7 @@ class DistributedArraysInterface(ArraysInterface):
 
     def allocate_jtj_shared_mem_buf(self):
         """
-        Allocate scratch space to be used for repeated calls to :method:`fill_jtj`.
+        Allocate scratch space to be used for repeated calls to :meth:`fill_jtj`.
 
         Returns
         -------
@@ -1232,12 +1232,12 @@ class DistributedArraysInterface(ArraysInterface):
 
     def deallocate_jtj_shared_mem_buf(self, jtj_buf):
         """
-        Frees the scratch memory allocated by :method:`allocate_jtj_shared_mem_buf`.
+        Frees the scratch memory allocated by :meth:`allocate_jtj_shared_mem_buf`.
 
         Parameters
         ----------
         jtj_buf : tuple or None
-            The value returned from :method:`allocate_jtj_shared_mem_buf`
+            The value returned from :meth:`allocate_jtj_shared_mem_buf`
         """
         buf, buf_shm = jtj_buf
         _smt.cleanup_shared_ndarray(buf_shm)

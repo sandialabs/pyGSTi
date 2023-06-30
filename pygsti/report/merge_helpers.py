@@ -752,13 +752,13 @@ def evaluate_call(call, stdout, stderr, returncode, printer):
     ----------
     call : list
         List containing the command and flags in the form that
-        :function:`subprocess.check_call` uses.
+        :func:`subprocess.check_call` uses.
 
     stdout : file pointer
-        As in :function:`subprocess.check_call`.
+        As in :func:`subprocess.check_call`.
 
     stderr : file pointer
-        As in :function:`subprocess.check_call`.
+        As in :func:`subprocess.check_call`.
 
     returncode : int
         Return/exit code.
@@ -864,7 +864,7 @@ def compile_latex_report(report_filename, latex_call, printer, auto_open):
 
     latex_call : list of string
         List containing the command and flags in the form that
-        :function:`subprocess.check_call` uses.
+        :func:`subprocess.check_call` uses.
 
     printer : VerbosityPrinter
         Printer to handle logging.

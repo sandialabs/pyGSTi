@@ -33,11 +33,11 @@ def op_from_factories(factory_dict, lbl):
     If the label has arguments, then this function looks for an
     operator factory associated with the label without its arguments.
     If one exists, the operator is created by calling
-    :method:`OpFactory.create_simplified_op`.  with the label's
+    :meth:`OpFactory.create_simplified_op`.  with the label's
     arguments.  Otherwise, it looks for a factory associated with the
     label's name (`lbl.name`) and passes both the labe's
     state-space-labels and arguments (if any) to
-    :method:`OpFactory.create_simplified_op`.
+    :meth:`OpFactory.create_simplified_op`.
 
     Raises a `KeyError` if a matching factory cannot be found.
 
@@ -106,7 +106,7 @@ class OpFactory(_gm.ModelMember):
         Create the object that implements the operation associated with the given `args` and `sslbls`.
 
         **Note to developers**
-        The difference beween this method and :method:`create_op` is that
+        The difference beween this method and :meth:`create_op` is that
         this method just creates the foundational object without needing
         to setup its parameter indices (a technical detail which connects
         the created object with the originating factory's parameters).  The
@@ -171,7 +171,7 @@ class OpFactory(_gm.ModelMember):
         """
         Create the *simplified* operation associated with the given `args`, `sslbls`, and `item_lbl`.
 
-        Similar to as :method:`create_op`, but returns a *simplified* operation
+        Similar to as :meth:`create_op`, but returns a *simplified* operation
         (i.e. not a POVM or Instrument).  In addition, the `item_lbl` argument
         must be used for POVMs and Instruments, as these need to know which
         (simple) member of themselves to return (this machinery still needs
@@ -403,7 +403,7 @@ class EmbeddingOpFactory(OpFactory):
 
     This is similar to an `EmbeddedOpFactory` except in this case how the
     "contained" operation/factory is embedded is *not* determined at creation
-    time: the `sslbls` argument of :method:`create_op` is used instead.
+    time: the `sslbls` argument of :meth:`create_op` is used instead.
 
     Parameters
     ----------

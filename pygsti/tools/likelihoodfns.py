@@ -610,7 +610,7 @@ def two_delta_logl_nsigma(model, dataset, circuits=None,
                           poisson_picture=True, op_label_aliases=None,
                           dof_calc_method='modeltest', wildcard=None):
     """
-    See docstring for :function:`pygsti.tools.two_delta_logl`
+    See docstring for :func:`pygsti.tools.two_delta_logl`
 
     Parameters
     ----------
@@ -687,8 +687,8 @@ def two_delta_logl(model, dataset, circuits=None,
     p-value relative to expected chi^2 distribution (when `dof_calc_method`
     is not None).
 
-    This function's arguments are supersets of :function:`logl`, and
-    :function:`logl_max`. This is a convenience function, equivalent to
+    This function's arguments are supersets of :func:`logl`, and
+    :func:`logl_max`. This is a convenience function, equivalent to
     `2*(logl_max(...) - logl(...))`, whose value is what is often called
     the *log-likelihood-ratio* between the "maximal model" (that which trivially
     fits the data exactly) and the model given by `model`.

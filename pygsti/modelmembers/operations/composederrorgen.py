@@ -116,7 +116,7 @@ class ComposedErrorgen(_LinearOperator):
             essentially converts the coefficient into a rate that is
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
-            This is the value returned by :method:`error_rates`.
+            This is the value returned by :meth:`error_rates`.
 
         Returns
         -------
@@ -186,7 +186,7 @@ class ComposedErrorgen(_LinearOperator):
 
     def coefficient_labels(self):
         """
-        The elementary error-generator labels corresponding to the elements of :method:`coefficients_array`.
+        The elementary error-generator labels corresponding to the elements of :meth:`coefficients_array`.
 
         Returns
         -------
@@ -200,7 +200,7 @@ class ComposedErrorgen(_LinearOperator):
         """
         The weighted coefficients of this error generator in terms of "standard" error generators.
 
-        Constructs a 1D array of all the coefficients returned by :method:`coefficients`,
+        Constructs a 1D array of all the coefficients returned by :meth:`coefficients`,
         weighted so that different error generators can be weighted differently when a
         `errorgen_penalty_factor` is used in an objective function.
 
@@ -214,7 +214,7 @@ class ComposedErrorgen(_LinearOperator):
 
     def coefficients_array_deriv_wrt_params(self):
         """
-        The jacobian of :method:`coefficients_array` with respect to this error generator's parameters.
+        The jacobian of :meth:`coefficients_array` with respect to this error generator's parameters.
 
         Returns
         -------
@@ -290,11 +290,11 @@ class ComposedErrorgen(_LinearOperator):
         logscale_nonham : bool, optional
             Whether or not the values in `lindblad_term_dict` for non-hamiltonian
             error generators should be interpreted as error *rates* (of an
-            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
+            "equivalent" depolarizing channel, see :meth:`errorgen_coefficients`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
             the corresponding value given in `lindblad_term_dict`.  This is what is
-            performed by the function :method:`set_error_rates`.
+            performed by the function :meth:`set_error_rates`.
 
         truncate : bool, optional
             Whether to truncate the projections onto the Lindblad terms in
@@ -332,7 +332,7 @@ class ComposedErrorgen(_LinearOperator):
 
         Cofficients are set so that the contributions of the resulting channel's
         error rate are given by the values in `lindblad_term_dict`.  See
-        :method:`error_rates` for more details.
+        :meth:`error_rates` for more details.
 
         Parameters
         ----------
@@ -658,7 +658,7 @@ class ComposedErrorgen(_LinearOperator):
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         assert(order == 0), \
             "Error generators currently treat all terms as 0-th order; nothing else should be requested!"

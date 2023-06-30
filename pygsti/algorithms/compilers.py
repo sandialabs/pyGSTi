@@ -1139,11 +1139,11 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
         The ordering of the qubits in (`s`,`p`) is taken w.r.t the ordering of this list.
 
     cnotalg : str, optional
-        The `algorithm` argument to pass internally to :function:`compile_cnot_circuit`
+        The `algorithm` argument to pass internally to :func:`compile_cnot_circuit`
         when compiling CNOT gates.
 
     cargs : various, optional
-        The `aargs` argument to pass internally to :function:`compile_cnot_circuit`
+        The `aargs` argument to pass internally to :func:`compile_cnot_circuit`
         when compiling CNOT gates.
 
     check : bool, optional
@@ -1812,7 +1812,7 @@ def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_lab
     An improved, ordered and connectivity-adjusted Gaussian-elimination (OiCAGE) algorithm for compiling a CNOT circuit.
 
     This is a *slight* improvement (for some CNOT circuits), on the algorithm in
-    :function:`_compile_cnot_circuit_using_ocage_algorithm()`, which is the meaning of the "improved". See the docstring
+    :func:`_compile_cnot_circuit_using_ocage_algorithm()`, which is the meaning of the "improved". See the docstring
     for that function for information on the parameters of this function and the basic outline of the algorithm.
 
     Parameters
@@ -2026,7 +2026,7 @@ def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilat
     Generates a circuit to create the stabilizer state from the standard input state |0,0,0,...>.
 
     The stabilizer state is specified by `s` and `p`. The circuit returned is over the gates in
-    the processor spec.  See :function:`compile_stabilizer_state()` for the inverse of this.
+    the processor spec.  See :func:`compile_stabilizer_state()` for the inverse of this.
 
     Parameters
     ----------

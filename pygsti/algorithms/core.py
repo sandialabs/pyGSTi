@@ -846,7 +846,7 @@ def _do_runopt(objective, optimizer, printer):
 
     This is factored out as a separate function because of the differences
     when running Taylor-term simtype calculations, which utilize this
-    as a subroutine (see :function:`_do_term_runopt`).
+    as a subroutine (see :func:`_do_term_runopt`).
 
     Parameters
     ----------
@@ -897,7 +897,7 @@ def _do_term_runopt(objective, optimizer, printer):
     Runs the core model-optimization step for models using the
     Taylor-term (path integral) method of computing probabilities.
 
-    This routine serves the same purpose as :function:`_do_runopt`, but
+    This routine serves the same purpose as :func:`_do_runopt`, but
     is more complex because an appropriate "path set" must be found,
     requiring a loop of model optimizations with fixed path sets until
     a sufficient "good" path set is obtained.

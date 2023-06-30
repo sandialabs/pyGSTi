@@ -66,7 +66,7 @@ def fidelity(a, b):
 
     To compute process fidelity, pass this function the
     Choi matrices of the two processes, or just call
-    :function:`entanglement_fidelity` with the operation matrices.
+    :func:`entanglement_fidelity` with the operation matrices.
 
     Parameters
     ----------
@@ -1559,7 +1559,7 @@ def elementary_errorgens_dual(dim, typ, basis):
     Compute the set of dual-to-elementary error generators of a given type.
 
     These error generators are dual to the elementary error generators
-    constructed by :function:`elementary_errorgens`.
+    constructed by :func:`elementary_errorgens`.
 
     Parameters
     ----------
@@ -1859,7 +1859,7 @@ def rotation_gate_mx(r, mx_basis="gm"):
     obtained via `pp_matrices(d)`, where `d = sqrt(len(r)+1)`.
     The division by 2 is for convention, and the `sqrt(d)` is to
     essentially un-normalise the matrices returned by
-    :function:`pp_matrices` to they are equal to products of the
+    :func:`pp_matrices` to they are equal to products of the
     *standard* Pauli matrices.
 
     Parameters

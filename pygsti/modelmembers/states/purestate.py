@@ -149,7 +149,7 @@ class EmbeddedPureState(_State):
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         if self.num_params > 0:
             raise ValueError(("EmbeddedPureState.taylor_order_terms(...) is only "

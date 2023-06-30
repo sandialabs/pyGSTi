@@ -45,7 +45,7 @@ class DenseStateInterface(object):
         Return the array used to identify this state within its range of possible values.
 
         For instance, if the state is a pure state, this returns a complex pure-state
-        vector regardless of the evolution type.  The related :method:`to_dense`
+        vector regardless of the evolution type.  The related :meth:`to_dense`
         method, in contrast, returns the dense representation of the state, which
         varies by evolution type.
 
