@@ -63,7 +63,7 @@ def hamiltonian_jac_element(prep, error, observable):
     # dp/deps where p = eps * i * Tr(Obs (Err*rho - rho*Err)) = eps * i * ( Tr(Obs Err rho) - Tr(Obs rho Err))
     #                 = eps * i * Tr([Obs,Err] * rho)  so dp/deps just drops eps factor
     com = error.icommutator_over_2(observable)
-    return 0 if (com is None) else com.statedot(prep)
+    return 0 if (com is None) else 2*com.statedot(prep)
 
 
 def stochastic_outcome(prep, error, meas):
@@ -831,7 +831,7 @@ def make_idle_tomography_lists(nqubits, max_lengths, pauli_basis_dicts, maxweigh
 # -----------------------------------------------------------------------------
 
 def compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, idle_string,
-                                        outcome, max_lengths, fit_order=1):
+                                        observable, max_lengths, fit_order=1):
     """
     Extract the observed error rate from a series of experiments which prepares
     and measures in the *same* Pauli basis and tracks a particular `outcome`.
@@ -877,25 +877,53 @@ def compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dict
     prepDict, measDict = pauli_basis_dicts
     prepFid = pauli_prep.to_circuit(prepDict)
     measFid = pauli_meas.to_circuit(measDict)
+    #observable is always equal to pauli_meas (up to signs) with all but 1 or 2
+    # (maxErrWt in general) of it's elements replaced with 'I', essentially just
+    # telling us which 1 or 2 qubits to take the <Z> or <ZZ> expectation value of
+    # (since the meas fiducial gets us in the right basis) -- i.e. the qubits to *not* trace over.
+    obs_indices = [i for i, letter in enumerate(observable.rep) if letter != 'I']
+    minus_sign = _np.prod([pauli_meas.signs[i] for i in obs_indices])
 
     #Note on weights:
     # data point with frequency f and N samples should be weighted w/ sqrt(N)/sqrt(f*(1-f))
     # but in case f is 0 or 1 we use proxy f' by adding a dummy 0 and 1 count.
-    def freq_and_weight(circuit, outcome):
-        """Get the frequency, weight, and errobar for a ptic circuit"""
-        cnts = dataset[circuit].counts  # a normal dict
-        total = sum(cnts.values())
-        f = cnts.get((outcome.rep,), 0) / total  # (py3 division) NOTE: outcomes are actually 1-tuples
-        fp = (cnts.get((outcome.rep,), 0) + 1) / (total + 2)  # Note: can't == 1
-        wt = _np.sqrt(total / abs(fp * (1.0 - fp)))  # abs to deal with non-CP data (simulated using termorder:1)
-        err = _np.sqrt(abs(f * (1.0 - f)) / total)  # no need to use fp
-        return f, wt, err
+    def freq_and_weight(circuit, observed_indices):
+        #compute expectation value of observable
+        drow = dataset[circuit]  # dataset row
+        total = drow.total
+
+        # <Z> = 0 count - 1 count (if measFid sign is +1, otherwise reversed via minus_sign)
+        if len(observed_indices) == 1:
+            i = observed_indices[0]  # the qubit we care about
+            cnt0 = cnt1 = 0
+            for outcome, cnt in drow.counts.items():
+                if outcome[0][i] == '0': cnt0 += cnt  # [0] b/c outcomes are actually 1-tuples
+                else: cnt1 += cnt
+            exptn = float(cnt0 - cnt1) / total
+            fp = 0.5 + 0.5 * float(cnt0 - cnt1 + 1) / (total + 2)
+
+        # <ZZ> = 00 count - 01 count - 10 count + 11 count (* minus_sign)
+        elif len(observed_indices) == 2:
+            i, j = observed_indices  # the qubits we care about
+            cnt_even = cnt_odd = 0
+            for outcome, cnt in drow.counts.items():
+                if outcome[0][i] == outcome[0][j]: cnt_even += cnt
+                else: cnt_odd += cnt
+            exptn = float(cnt_even - cnt_odd) / total
+            fp = 0.5 + 0.5 * float(cnt_even - cnt_odd + 1) / (total + 2)
+        else:
+            raise NotImplementedError("Expectation values of weight > 2 observables are not implemented!")
+
+        wt = _np.sqrt(total) / _np.sqrt(fp * (1.0 - fp))
+        f = 0.5 + 0.5 * exptn
+        err = 2 * _np.sqrt(f * (1.0 - f) / total)  # factor of 2 b/c expectation is addition of 2 terms
+        return exptn, wt, err
 
     #Get data to fit and weights to use in fitting
     data_to_fit = []; wts = []; errbars = []
     for L in max_lengths:
         opstr = prepFid + idle_string * L + measFid
-        f, wt, err = freq_and_weight(opstr, outcome)
+        f, wt, err = freq_and_weight(opstr, obs_indices)
         data_to_fit.append(f)
         wts.append(wt)
         errbars.append(err)
@@ -1118,7 +1146,7 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
     else:
         GiStr = _Circuit(idle_string, num_lines=nqubits)
 
-    jacmode = advanced_options.get("jacobian mode", "separate")
+    jacmode = advanced_options.get("jacobian mode", "together")
     sto_aff_jac = None; sto_aff_obs_err_rates = None
     ham_aff_jac = None; ham_aff_obs_err_rates = None
 
@@ -1170,11 +1198,11 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
         for i, (ifp, pauli_fidpair) in enumerate(my_FidpairList):
             #NOTE: pauli_fidpair is a 2-tuple of NQPauliState objects
 
-            all_outcomes = _idttools.alloutcomes(pauli_fidpair[0], pauli_fidpair[1], maxweight)
+            all_observables = _idttools.allobservables(pauli_fidpair[1], maxweight)
             t0 = _time.time(); infos_for_this_fidpair = _collections.OrderedDict()
-            for j, out in enumerate(all_outcomes):
+            for j, out in enumerate(all_observables):
 
-                printer.log("  - outcome %d of %d" % (j, len(all_outcomes)), 2)
+                printer.log("  - observable %d of %d" % (j, len(all_observables)), 2)
 
                 #form jacobian rows as we get extrinsic error rates
                 Jrow = [stochastic_jac_element(pauli_fidpair[0], err, pauli_fidpair[1], out)
@@ -1191,7 +1219,7 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
 
             my_obs_infos.append(infos_for_this_fidpair)
             printer.log("%sStochastic fidpair %d of %d: %d outcomes analyzed [%.1fs]" %
-                        (rankStr, i, len(my_FidpairList), len(all_outcomes), _time.time() - t0), 1)
+                        (rankStr, i, len(my_FidpairList), len(all_observables), _time.time() - t0), 1)
 
         #Gather results
         info_list = [my_obs_infos] if (comm is None) else comm.gather(my_obs_infos, root=0)
