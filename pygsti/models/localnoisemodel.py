@@ -121,7 +121,7 @@ class LocalNoiseModel(_ImplicitOpModel):
         name.  If True, then gates with the same name acting on different
         qudits may have different local noise, and so the
         `operation_bks['gates']` dictionary contains a key for each gate
-         available gate placement.
+        available gate placement.
 
     ensure_composed_gates : bool, optional
         If True then the elements of the `operation_bks['gates']` will always

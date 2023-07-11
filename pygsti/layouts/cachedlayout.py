@@ -121,7 +121,7 @@ class CachedCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         for each *unique* circuit held by this layout, where `element_indices` and `outcomes`
         are the values that would be retrieved by the :meth:`indices` and :meth:`outcomes`
         methods, `circuit` is the unique circuit itself, and `cache` is the user-defined value
-        of the cache-dictionary entry for this circuit..
+        of the cache-dictionary entry for this circuit.
 
         Returns
         -------

@@ -10,7 +10,7 @@
 """
 Encapsulates a text parser for reading GST input files.
 
-** Grammar **
+**Grammar**
 
 expop   :: '^'
 multop  :: '*'

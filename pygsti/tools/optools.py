@@ -445,7 +445,7 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     the target matrix b is unitary then we can use a more efficient
     formula:
     
-      `F= Tr(a @ b.conjugate().T)/d^2
+      `F= Tr(a @ b.conjugate().T)/d^2`
         
     Parameters
     ----------

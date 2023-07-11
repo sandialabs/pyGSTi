@@ -283,8 +283,8 @@ class ModelMember(ModelChild, _NicelySerializable):
         This operation is appropriate to do when "re-linking" a parent with
         its children after the parent and child have been serialized.
         (the parent is *not* saved in serialization - see
-         ModelChild.__getstate__ -- and so must be manually re-linked
-         upon de-serialization).
+        ModelChild.__getstate__ -- and so must be manually re-linked
+        upon de-serialization).
 
         In addition to setting the parent of this object, this method
         sets the parent of any objects this object contains (i.e.
@@ -818,7 +818,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         LindbladErrorgen) should overload this function to account for that.
 
         Parameters
-        ---------
+        ----------
         other: ModelMember
             ModelMember to compare to
         rtol: float
@@ -853,7 +853,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         are the same.
 
         Parameters
-        ---------
+        ----------
         other: ModelMember
             ModelMember to compare to
         rtol: float
@@ -895,7 +895,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = OrderedDict()
@@ -958,7 +958,7 @@ class ModelMember(ModelChild, _NicelySerializable):
         mm_dict: dict
             A dict representation of this ModelMember ready for deserialization
             This must have at least the following fields:
-                module, class, submembers, state_space, evotype
+            module, class, submembers, state_space, evotype
 
         serial_memo: dict
             Keys are serialize_ids and values are ModelMembers. This is NOT the same as

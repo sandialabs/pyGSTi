@@ -19,7 +19,7 @@ class Section:
 
     Parameters
     ----------
-    **kwargs
+    `**kwargs`
         Computation of specific section elements can be configured at
         runtime by passing the name of a figure as a keyword argument
         set to ``False``.
@@ -66,13 +66,13 @@ class Section:
             higher brevity levels, certain non-critical figures will
             not be rendered. Defaults to 0 (most verbose).
 
-        **kwargs
+        `**kwargs`
             All additional reportable quantities used when computing
             the figures of this section.
 
         Returns
         -------
-        dict (str -> any)
+        `dict (str -> any)`
             Key-value map of report quantities used for this section.
         """
         return {

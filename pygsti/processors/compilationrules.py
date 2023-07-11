@@ -50,7 +50,7 @@ class CompilationRules(object):
         Values are 2-tuples of (gate unitary, gate template). The gate unitary
         can either be a unitary matrix, function returning a matrix, or None if the
         gate name is a standard PyGSTi unitary. The gate template is either a Circuit
-        with local state space labels (i.e. 0..k-1 for k qubits) or a function that takes
+        with local state space labels (i.e. `0..k-1` for k qubits) or a function that takes
         the target gate label and returns the proper Circuit. If the key is a gate label,
         the gate template (second entry of the value tuple) MUST be a Circuit with
         absolute state space labels.

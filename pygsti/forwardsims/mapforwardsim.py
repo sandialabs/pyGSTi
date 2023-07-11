@@ -468,7 +468,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         min_prob_clip_for_weighting : float, optional
             Sets the minimum and maximum probability p allowed in the chi^2
-            weights: N/(p*(1-p)) by clipping probability p values to lie within
+            weights: `N/(p*(1-p))` by clipping probability p values to lie within
             the interval [ min_prob_clip_for_weighting, 1-min_prob_clip_for_weighting ].
 
         prob_clip_interval : 2-tuple or None, optional
@@ -478,7 +478,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         chi2_array_to_fill : numpy array, optional
             when not None, an already-allocated length-E numpy array that is filled
             with the per-circuit chi2 contributions, just like in
-            bulk_fill_timedep_chi2(...).
+            `bulk_fill_timedep_chi2(...)`.
 
         Returns
         -------
@@ -514,7 +514,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             an already-allocated 1D numpy array of length equal to the
             total number of computed elements (i.e. layout.num_elements)
 
-       layout : CircuitOutcomeProbabilityArrayLayout
+        layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
             element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
@@ -616,7 +616,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         logl_array_to_fill : numpy array, optional
             when not None, an already-allocated length-E numpy array that is filled
             with the per-circuit logl contributions, just like in
-            bulk_fill_timedep_loglpp(...).
+            `bulk_fill_timedep_loglpp(...)` .
 
         Returns
         -------

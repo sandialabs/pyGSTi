@@ -890,7 +890,7 @@ class DataSet(_MongoSerializable):
 
     file_to_load_from : string or file object
         Specify this argument and no others to create a static DataSet by loading
-        from a file (just like using the load(...) function).
+        from a file (just like using the `load(...)` function).
 
     collision_action : {"aggregate","overwrite","keepseparate"}
         Specifies how duplicate circuits should be handled.  "aggregate"
@@ -1762,7 +1762,7 @@ class DataSet(_MongoSerializable):
         """
         Updates the internal outcome-label list in this dataset.
 
-        Call this after calling add_count_dict(...) or add_raw_series_data(...)
+        Call this after calling `add_count_dict(...)` or `add_raw_series_data(...)`
         with `update_olIndex=False`.
 
         Returns
@@ -3067,7 +3067,7 @@ class DataSet(_MongoSerializable):
         ----------
         nqubits : int
             The number of qubits.  For example, if equal to 3 the outcome labels
-            '000', '001', ... '111' are added.
+            '000', '001', `...` '111' are added.
 
         Returns
         -------

@@ -203,7 +203,7 @@ class UndistributedArraysInterface(ArraysInterface):
             so there's no need to do any MPI communication.
 
         x : numpy.array or LocalNumpyArray
-            The output vector, typically a slice of `global_x`..
+            The output vector, typically a slice of `global_x`.
 
         Returns
         -------
@@ -772,7 +772,7 @@ class DistributedArraysInterface(ArraysInterface):
             so there's no need to do any MPI communication.
 
         x : numpy.array or LocalNumpyArray
-            The output vector, typically a slice of `global_x`..
+            The output vector, typically a slice of `global_x`.
 
         Returns
         -------

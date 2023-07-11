@@ -2938,8 +2938,8 @@ class Circuit(object):
             one_q_gate_relations[name1,name2] = name3, name1 -> name3 and name2 -> self.identity, the
             identity name in the circuit. Moreover, this is still implemented when there are self.identity
             gates between these 1-qubit gates, and it is implemented iteratively in the sense that if there
-            is a sequence of 1-qubit gates with names name1, name2, name3, ... and there are relations
-            for all of (name1,name2) -> name12, (name12,name3) -> name123 etc then the entire sequence of
+            is a sequence of 1-qubit gates with names `name1, name2, name3, ...` and there are relations
+            for all of `(name1,name2) -> name12`, `(name12,name3) -> name123` etc then the entire sequence of
             1-qubit gates will be compressed into a single possibly non-idle 1-qubit gate followed by
             idle gates in place of the previous 1-qubit gates.  Note that `None` can be used as `name3`
             to signify that the result is the identity (no gate labels).
@@ -3110,7 +3110,7 @@ class Circuit(object):
             one_q_gate_relations[name1,name2] = name3, name1 -> name3 and name2 -> self.identity, the
             identity name in the circuit. Moreover, this is still implemented when there are self.identity
             gates between these 1-qubit gates, and it is implemented iteratively in the sense that if there
-            is a sequence of 1-qubit gates with names name1, name2, name3, ... and there are relations
+            is a sequence of 1-qubit gates with names `name1, name2, name3, ...` and there are relations
             for all of (name1,name2) -> name12, (name12,name3) -> name123 etc then the entire sequence of
             1-qubit gates will be compressed into a single possibly non-idle 1-qubit gate followed by
             idle gates in place of the previous 1-qubit gates.

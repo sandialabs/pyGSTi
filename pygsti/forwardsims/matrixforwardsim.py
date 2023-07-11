@@ -1947,7 +1947,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             an already-allocated 1D numpy array of length equal to the
             total number of computed elements (i.e. layout.num_elements)
 
-       layout : CircuitOutcomeProbabilityArrayLayout
+        layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
             element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 

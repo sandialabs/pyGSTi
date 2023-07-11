@@ -184,21 +184,21 @@ def standard_gatename_unitaries():
 
     These gates (the keys of the returned dictionary) are:
 
-    - Clifford Gates:
+    * Clifford Gates:
 
-      - 'Gi' : the 1Q idle operation.
-      - 'Gxpi','Gypi','Gzpi' : 1Q pi rotations around X, Y and Z.
-      - 'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
-      - 'Gxmpi2','Gympi2','Gzmpi2' : 1Q -pi/2 rotations around X, Y and Z.
-      - 'Gh' : Hadamard.
-      - 'Gp', 'Gpdag' : phase and inverse phase (an alternative notation/name for Gzpi and Gzmpi2).
-      - 'Gci' where i = 0, 1, ..., 23 : the 24 1-qubit Cliffor gates (all the gates above are included as one of these).
-      - 'Gcphase','Gcnot','Gswap' : standard 2Q gates.
+      * 'Gi' : the 1Q idle operation.
+      * 'Gxpi','Gypi','Gzpi' : 1Q pi rotations around X, Y and Z.
+      * 'Gxpi2','Gypi2','Gzpi2' : 1Q pi/2 rotations around X, Y and Z.
+      * 'Gxmpi2','Gympi2','Gzmpi2' : 1Q -pi/2 rotations around X, Y and Z.
+      * 'Gh' : Hadamard.
+      * 'Gp', 'Gpdag' : phase and inverse phase (an alternative notation/name for Gzpi and Gzmpi2).
+      * 'Gci' where `i = 0, 1, ..., 23` : the 24 1-qubit Cliffor gates (all the gates above are included as one of these).
+      * 'Gcphase','Gcnot','Gswap' : standard 2Q gates.
 
-    - Non-Clifford gates:
+    * Non-Clifford gates:
 
-      - 'Gt', 'Gtdag' : the T and inverse T gates (T is a Z rotation by pi/4).
-      - 'Gzr' : a parameterized gate that is a Z rotation by an angle, where when the angle = pi then it equals Z.
+      * 'Gt', 'Gtdag' : the T and inverse T gates (T is a Z rotation by pi/4).
+      * 'Gzr' : a parameterized gate that is a Z rotation by an angle, where when the angle = pi then it equals Z.
 
     Mostly, pyGSTi does not assume that a gate with one of these names is indeed
     the unitary specified here. Instead, these names are intended as short-hand

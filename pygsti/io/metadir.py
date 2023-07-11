@@ -511,7 +511,7 @@ def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attribu
 
     This is similar to :func:`write_meta_based_dir`, except it takes an object (`obj`)
     whose `.__dict__`, minus omitted attributes, is used as the dictionary to write and whose
-    auxfile-types comes from another object attribute..
+    auxfile-types comes from another object attribute.
 
     Parameters
     ----------

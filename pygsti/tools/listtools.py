@@ -332,7 +332,7 @@ def incd_product(*args):
 
     Parameters
     ----------
-    *args : iterables
+    `*args` : iterables
         Any number of iterable things that we're taking the product of.
     """
     lists = [list(a) for a in args]  # so we can get new iterators to each argument

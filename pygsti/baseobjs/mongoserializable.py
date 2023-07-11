@@ -67,7 +67,7 @@ class MongoSerializable(object):
             document is loaded from the collection given by the `collection_name` attribute of
             this class.
 
-        **kwargs : dict
+        `**kwargs` : dict
             Additional keyword arguments poentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_create_obj_from_doc_and_mongodb` method is allowed here.
 
@@ -103,7 +103,7 @@ class MongoSerializable(object):
             The already-retrieved main document for the object being loaded.  This takes the place
             of giving an identifier for this object.
 
-        **kwargs : dict
+        `**kwargs` : dict
             Additional keyword arguments poentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_create_obj_from_doc_and_mongodb` method is allowed here.
 
@@ -145,7 +145,7 @@ class MongoSerializable(object):
             a ValueError to be raised if a document with the given `_id` already exists
             and is different from what is being written.
 
-        **kwargs : dict
+        `**kwargs` : dict
             Additional keyword arguments poentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_add_auxiliary_write_ops_and_update_doc` method is allowed here.
 
@@ -187,7 +187,7 @@ class MongoSerializable(object):
             a ValueError to be raised if a document with the given `_id` already exists
             and is different from what is being written.
 
-        **kwargs : dict
+        `**kwargs` : dict
             Additional keyword arguments poentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_add_auxiliary_write_ops_and_update_doc` method is allowed here.
 

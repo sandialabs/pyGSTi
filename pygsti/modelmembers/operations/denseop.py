@@ -364,7 +364,7 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
@@ -606,7 +606,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)

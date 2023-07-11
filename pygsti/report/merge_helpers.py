@@ -86,11 +86,11 @@ def insert_resource(connected, online_url, offline_filename,
 
     integrity : str, optional
         The "integrity" attribute string of the <script> tag used to reference
-        a *.js (javascript) file on the internet.
+        a `*.js` (javascript) file on the internet.
 
     crossorigin : str, optional
         The "crossorigin" attribute string of the <script> tag used to reference
-        a *.js (javascript) file on the internet.
+        a `*.js` (javascript) file on the internet.
 
     Returns
     -------

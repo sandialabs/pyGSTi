@@ -140,7 +140,7 @@ class NQPauliState(object):
         """
         Convert this Pauli basis state or measurement to a fiducial operation sequence.
 
-        When the returned operation sequence follows a preparation in the |0...0>
+        When the returned operation sequence follows a preparation in the `|0...0>`
         Z-basis state or is followed by a Z-basis measurement (with all "+"
         signs), then the Pauli state preparation or measurement described by
         this object will be performed.

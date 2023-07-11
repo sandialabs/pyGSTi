@@ -1053,7 +1053,9 @@ def complex_compare(a, b):
     Returns
     -------
     -1 if a < b
-        0 if a == b
+    
+    0 if a == b
+    
     +1 if a > b
     """
     if a.real < b.real: return -1

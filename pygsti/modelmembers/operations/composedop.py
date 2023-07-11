@@ -30,7 +30,7 @@ from pygsti.tools import slicetools as _slct
 
 class ComposedOp(_LinearOperator):
     """
-    An operation that is the composition of a number of map-like factors (possibly other `LinearOperator`s).
+    An operation that is the composition of a number of map-like factors (possibly other `LinearOperator`).
 
     Parameters
     ----------
@@ -184,7 +184,7 @@ class ComposedOp(_LinearOperator):
 
         Parameters
         ----------
-        *factors_to_add : LinearOperator
+        `*factors_to_add` : LinearOperator
             One or multiple factor operators to add on at the *end* (evaluated
             last) of this operator.
 
@@ -211,7 +211,7 @@ class ComposedOp(_LinearOperator):
             The index at which to insert `factorops_to_insert`.  The factor at this
             index and those after it are shifted back by `len(factorops_to_insert)`.
 
-        *factors_to_insert : LinearOperator
+        `*factors_to_insert` : LinearOperator
             One or multiple factor operators to insert within this operator.
 
         Returns
@@ -233,7 +233,7 @@ class ComposedOp(_LinearOperator):
 
         Parameters
         ----------
-        *factorop_indices : int
+        `*factorop_indices` : int
             One or multiple factor indices to remove from this operator.
 
         Returns

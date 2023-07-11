@@ -132,7 +132,7 @@ class VerbosityPrinter(object):
 
     comm : mpi4py.MPI.Comm or ResourceAllocation, optional
         Restricts output if the program is running in parallel  (By default,
-        if the rank is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, ...
+        if the rank is 0, output is sent to screen, and otherwise sent to commfiles `1, 2, ...`
 
     warnings : bool, optional
         Whether or not to print warnings
@@ -191,7 +191,7 @@ class VerbosityPrinter(object):
 
         comm : mpi4py.MPI.Comm or ResourceAllocation, optional
             Restricts output if the program is running in parallel  (By default,
-            if the rank is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, ...
+            if the rank is 0, output is sent to screen, and otherwise sent to `commfiles 1, 2, ...`
 
         warnings : bool, optional
             Whether or not to print warnings

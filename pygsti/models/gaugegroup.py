@@ -52,7 +52,7 @@ class GaugeGroup(_NicelySerializable):
     @property
     def num_params(self):
         """
-        Return the number of parameters (degrees of freedom) of this gauge group..
+        Return the number of parameters (degrees of freedom) of this gauge group.
 
         Returns
         -------
@@ -805,11 +805,11 @@ class SpamGaugeGroup(OpGaugeGroup):
     """
     Gauge transformations which scale the SPAM and non-unital portions of the gates in a gate set.
 
-    A 2-dimensional gauge group spanning transform matrices of the form:
-    [ [ a 0 ... 0]   where a and b are the 2 parameters.  These diagonal
-      [ 0 b ... 0]   transform matrices do not affect the SPAM operations
-      [ . . ... .]   much more than typical near-unital and TP operations, and
-      [ 0 0 ... b] ] so we call this group of transformations the "SPAM gauge".
+    A 2-dimensional gauge group spanning transform matrices of the form ::
+        [ [ a 0 ... 0]   where a and b are the 2 parameters.  These diagonal
+          [ 0 b ... 0]   transform matrices do not affect the SPAM operations
+          [ . . ... .]   much more than typical near-unital and TP operations, and
+          [ 0 0 ... b] ] so we call this group of transformations the "SPAM gauge".
 
     Parameters
     ----------

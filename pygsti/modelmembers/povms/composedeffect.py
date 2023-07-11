@@ -32,7 +32,7 @@ class ComposedPOVMEffect(_POVMEffect):  # , _ErrorMapContainer
         the "base" preparation or projection that is followed or preceded
         by, respectively, the parameterized Lindblad-form error generator.
         (This argument is *not* copied if it is a POVMEffect.  A numpy array
-         is converted to a new static POVM effect.)
+        is converted to a new static POVM effect.)
 
     errormap : MapOperator
         The error generator action and parameterization, encapsulated in

@@ -170,7 +170,7 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
     @classmethod
     def create_from(cls, objective='logl', freq_weighted_chi2=False):
         """
-        Creates common :class:`ObjectiveFunctionBuilder`s from a few arguments.
+        Creates common :class:`ObjectiveFunctionBuilder` from a few arguments.
 
         Parameters
         ----------
@@ -2882,7 +2882,7 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             self.fmin = None
 
     def _intermediates(self, probs, counts, total_counts, freqs):
-        """ Intermediate values used by both terms(...) and dterms(...) """
+        """ Intermediate values used by both `terms(...)` and `dterms(...)` """
         # Quantities depending on data only (not probs): could be computed once and
         # passed in as arguments to this (and other) functions?
         freqs_nozeros = _np.where(counts == 0, 1.0, freqs)
@@ -3240,7 +3240,7 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
             self.regtype = "pfratio"
 
     def _intermediates(self, probs, counts, total_counts, freqs):
-        """ Intermediate values used by both terms(...) and dterms(...) """
+        """ Intermediate values used by both `terms(...)` and `dterms(...)` """
         # Quantities depending on data only (not probs): could be computed once and
         # passed in as arguments to this (and other) functions?
         freqs_nozeros = _np.where(counts == 0, 1.0, freqs)

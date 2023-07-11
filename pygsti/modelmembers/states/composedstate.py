@@ -33,7 +33,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
         the "base" preparation or projection that is followed or preceded
         by, respectively, the parameterized Lindblad-form error generator.
         (This argument is *not* copied if it is a State.  A numpy array
-         is converted to a new StaticState.)
+        is converted to a new StaticState.)
 
     errormap : MapOperator
         The error generator action and parameterization, encapsulated in

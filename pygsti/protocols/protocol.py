@@ -260,7 +260,7 @@ class MultiPassProtocol(Protocol):
 
 class ProtocolRunner(object):
     """
-    Used to run :class:`Protocol`(s) on an entire *tree* of data
+    Used to run :class:`Protocol` objects on an entire *tree* of data
 
     This class provides a way of combining multiple calls to :meth:`Protocol.run`,
     potentially running multiple protocols on different data.  From the outside, a
@@ -1214,7 +1214,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         A dictionary of other :class:`ExperimentDesign` objects whose keys
         are names for each sub-edesign (used for directories and to index
         the sub-edesigns from this experiment design).  If a list is given instead,
-        a default names of the form "**<number>" are used.
+        a default names of the form " `**<number>` " are used.
 
     all_circuits : list, optional
         A list of :class:`Circuit`s, specifying all the circuits needing
@@ -1277,7 +1277,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             A dictionary of other :class:`ExperimentDesign` objects whose keys
             are names for each sub-edesign (used for directories and to index
             the sub-edesigns from this experiment design).  If a list is given instead,
-            a default names of the form "**<number>" are used.
+            a default names of the form " `**<number>` " are used.
 
         all_circuits : list, optional
             A list of :class:`Circuit`s, specifying all the circuits needing
@@ -2538,6 +2538,7 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
     child-:class:`ProtocolResultsDir` objects representing sub-directories.
 
     This container object holds two things:
+    
     1. A `.for_protocol` dictionary of :class:`ProtocolResults` corresponding
        to different protocols (keys are protocol names).
 
@@ -2680,6 +2681,7 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         Create a new ProtocolResultsDir object.
 
         This container object holds two things:
+        
         1. A `.for_protocol` dictionary of :class:`ProtocolResults` corresponding
            to different protocols (keys are protocol names).
 

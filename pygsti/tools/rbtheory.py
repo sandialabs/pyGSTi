@@ -711,9 +711,9 @@ def errormaps(model, target_model):
     """
     Computes the 'left-multiplied' error maps associated with a noisy gate set, along with the average error map.
 
-    This is the model [E_1,...] such that
+    This is the model `[E_1,...]` such that
 
-        `G_i = E_iT_i`,
+    `G_i = E_iT_i`,
 
     where `T_i` is the gate which `G_i` is a noisy
     implementation of. There is an additional gate in the set, that has

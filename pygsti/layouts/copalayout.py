@@ -383,7 +383,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
     def gather_local_array_base(self, array_type, array_portion, extra_elements=0,
                                 all_gather=False, return_shared=False):
         """
-        Gathers an array onto the root processor or all the processors..
+        Gathers an array onto the root processor or all the processors.
 
         Gathers the portions of an array that was distributed using this
         layout (i.e. according to the host_element_slice, etc. slices in
@@ -611,7 +611,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         array_type : {'e', 'ep', 'epp'}
             The type of array.  This string specifies the shape of the array,
             with `'e'` indicating dimension holding the layout's elements and
-            `'p'`s indicating parameter dimensions.
+            `'p'` indicating parameter dimensions.
 
         dtype : numpy.dtype
             The NumPy data type for the array.

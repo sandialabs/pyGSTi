@@ -165,6 +165,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
     shared-memory structure to the physical processors, where the total number of cores
     is divided into node-groups that are able to share memory.  The total number of
     cores is divided like this:
+    
     - first, we divide the cores into atom-processing groups, i.e. "atom-processors".
       An atom-processor is most accurately seen as a comm (group of processors).  If
       shared memory is being used, either the entire atom-processor must be contained
@@ -1045,7 +1046,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
     def gather_local_array_base(self, array_type, array_portion, extra_elements=0, all_gather=False,
                                 return_shared=False):
         """
-        Gathers an array onto the root processor or all the processors..
+        Gathers an array onto the root processor or all the processors.
 
         Gathers the portions of an array that was distributed using this
         layout (i.e. according to the host_element_slice, etc. slices in

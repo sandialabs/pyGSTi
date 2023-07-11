@@ -216,7 +216,7 @@ class OpModelNoise(ModelNoise):
         so that, if desired, the same errors can be used on multiple sets of target qudits
         (often this is done when a "independent" argument to a model-creation function is
         `False`).  An "error map stencil" is a stencil whose operators are error maps
-         rather than error generators.
+        rather than error generators.
 
         Parameters
         ----------

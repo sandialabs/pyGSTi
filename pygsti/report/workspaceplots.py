@@ -1384,8 +1384,7 @@ class ColorBoxPlot(WorkspacePlot):
     ws : Workspace
         The containing (parent) workspace.
 
-    plottype : {"chi2","logl","tvd","blank","errorrate","dscmp",
-                "driftdetector", "driftsize"}
+    plottype : {"chi2","logl","tvd","blank","errorrate","dscmp", "driftdetector", "driftsize"}
         Specifies the type of plot. "errorate" requires that `direct_gst_models` be set.
 
     circuits : CircuitList or list of Circuits
@@ -1416,10 +1415,10 @@ class ColorBoxPlot(WorkspacePlot):
 
     prec : int, optional
         Precision for box labels.  Allowed values are:
-          'compact' = round to nearest whole number using at most 3 characters
-          'compacthp' = show as much precision as possible using at most 3 characters
-          int >= 0 = fixed precision given by int
-          int <  0 = number of significant figures given by -int
+        * 'compact' = round to nearest whole number using at most 3 characters
+        * 'compacthp' = show as much precision as possible using at most 3 characters
+        *  int >= 0 = fixed precision given by int
+        *  int <  0 = number of significant figures given by -int
 
     linlg_pcntle : float, optional
         Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots
@@ -1495,8 +1494,7 @@ class ColorBoxPlot(WorkspacePlot):
 
         Parameters
         ----------
-        plottype : {"chi2","logl","tvd","blank","errorrate","dscmp",
-                    "driftdetector", "driftsize"}
+        plottype : {"chi2","logl","tvd","blank","errorrate","dscmp", "driftdetector", "driftsize"}
             Specifies the type of plot. "errorate" requires that `direct_gst_models` be set.
 
         circuits : CircuitList or list of Circuits

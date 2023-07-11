@@ -871,6 +871,7 @@ def two_delta_logl_per_circuit(model, dataset, circuits=None,
     Returns
     -------
     twoDeltaLogL_terms : numpy.ndarray
+    
     Nsigma, pvalue : numpy.ndarray
         Only returned when `dof_calc_method` is not None.
     """

@@ -100,20 +100,19 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     algorithm : {'greedy', 'grasp', 'slack'}, optional
         Specifies the algorithm to use to generate the germ set. Current
         options are:
-        'greedy'
-            Add germs one-at-a-time until the set is AC, picking the germ that
-            improves the germ-set score by the largest amount at each step. See
-            :func:`find_germs_breadthfirst` for more details.
-        'grasp'
-            Use GRASP to generate random greedy germ sets and then locally
-            optimize them. See :func:`find_germs_grasp` for more
-            details.
-        'slack'
-            From a initial set of germs, add or remove a germ at each step in
-            an attempt to improve the germ-set score. Will allow moves that
-            degrade the score in an attempt to escape local optima as long as
-            the degredation is within some specified amount of "slack". See
-            :func:`find_germs_integer_slack` for more details.
+        'greedy' : Add germs one-at-a-time until the set is AC, picking the germ that
+        improves the germ-set score by the largest amount at each step. See
+        :func:`find_germs_breadthfirst` for more details.
+        
+        'grasp': Use GRASP to generate random greedy germ sets and then locally
+        optimize them. See :func:`find_germs_grasp` for more 
+        details.
+        
+        'slack': From a initial set of germs, add or remove a germ at each step in 
+        an attempt to improve the germ-set score. Will allow moves that 
+        degrade the score in an attempt to escape local optima as long as 
+        the degredation is within some specified amount of "slack". See 
+        :func:`find_germs_integer_slack` for more details.
 
     algorithm_kwargs : dict
         Dictionary of ``{'keyword': keyword_arg}`` pairs providing keyword
@@ -948,7 +947,7 @@ def test_germs_list_completeness(model_list, germs_list, score_func, threshold, 
         score is ``sum(1/eigval_array)``. If 'worst', score is ``1/min(eigval_array)``.
 
     threshold : float, optional
-        An eigenvalue of jacobian^T*jacobian is considered zero and thus a
+        An eigenvalue of `jacobian^T*jacobian` is considered zero and thus a
         parameter un-amplified when its reciprocal is greater than threshold.
         Also used for eigenvector degeneracy testing in twirling operation.
         
@@ -1166,7 +1165,7 @@ def _twirled_deriv(model, circuit, eps=1e-6, float_type=_np.cdouble):
 
     eps : float, optional
         Tolerance used for testing whether two eigenvectors are degenerate
-        (i.e. abs(eval1 - eval2) < eps ? )
+        (i.e. `abs(eval1 - eval2) < eps` ? )
         
     float_type : numpy dtype object, optional
         Nump data type to use for floating point arrays.
@@ -1207,7 +1206,7 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float
 
     eps : float, optional
         Tolerance used for testing whether two eigenvectors are degenerate
-        (i.e. abs(eval1 - eval2) < eps ? )
+        (i.e. `abs(eval1 - eval2) < eps` ? )
 
     check : bool, optional
         Whether to perform internal consistency checks, at the expense of
@@ -1277,14 +1276,14 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
         A 1-D array of weights with length equal len(germs_to_test),
         which multiply the contribution of each germ to the total
         jacobian matrix determining parameter amplification. If
-        None, a uniform weighting of 1.0/len(germs_to_test) is applied.
+        None, a uniform weighting of `1.0/len(germs_to_test)` is applied.
 
     return_spectrum : bool, optional
-        If True, return the jacobian^T*jacobian spectrum in addition
+        If True, return the `jacobian^T*jacobian` spectrum in addition
         to the success flag.
 
     tol : float, optional
-        Tolerance: an eigenvalue of jacobian^T*jacobian is considered
+        Tolerance: an eigenvalue of `jacobian^T*jacobian` is considered
         zero and thus a parameter un-amplified when it is less than tol.
 
     Returns
@@ -1345,14 +1344,14 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
         A 1-D array of weights with length equal len(germs_to_test),
         which multiply the contribution of each germ to the total
         jacobian matrix determining parameter amplification. If
-        None, a uniform weighting of 1.0/len(germs_to_test) is applied.
+        None, a uniform weighting of `1.0/len(germs_to_test)` is applied.
 
     return_spectrum : bool, optional
-        If ``True``, return the jacobian^T*jacobian spectrum in addition
+        If ``True``, return the `jacobian^T*jacobian` spectrum in addition
         to the success flag.
 
     threshold : float, optional
-        An eigenvalue of jacobian^T*jacobian is considered zero and thus a
+        An eigenvalue of `jacobian^T*jacobian` is considered zero and thus a
         parameter un-amplified when its reciprocal is greater than threshold.
         Also used for eigenvector degeneracy testing in twirling operation.
 
@@ -1420,7 +1419,7 @@ def find_germs_depthfirst(model_list, germs_list, randomize=True,
     Parameters
     ----------
     model_list : Model or list
-        The model or list of `Model`s to select germs for.
+        The model or list of Models to select germs for.
 
     germs_list : list of Circuit
         The list of germs to contruct a germ set from.
@@ -3469,7 +3468,7 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
     Parameters
     ----------
     model_list : Model or list
-        The model or list of `Model`s to select germs for.
+        The model or list of Models to select germs for.
 
     germs_list : list of Circuit
         The list of germs to contruct a germ set from.

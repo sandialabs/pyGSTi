@@ -240,10 +240,10 @@ class ComposedErrorgen(_LinearOperator):
         contribution that basis element's term would have to the
         error rate of a depolarization channel.  For example, if
         the rate corresponding to the term ('S','X') is 0.01 this
-        means that the coefficient of the rho -> X*rho*X-rho error
+        means that the coefficient of the `rho -> X*rho*X-rho` error
         generator is set such that if this coefficient were used
         for all 3 (X,Y, and Z) terms the resulting depolarizing
-        channel would have error rate 3*0.01 = 0.03.
+        channel would have error rate `3*0.01 = 0.03`.
 
         Note that because error generator terms do not necessarily
         commute with one another, the sum of the returned error
@@ -457,7 +457,7 @@ class ComposedErrorgen(_LinearOperator):
 
         Parameters
         ----------
-        *factors_to_add : LinearOperator
+        `*factors_to_add` : LinearOperator
             One or multiple factor operators to add on at the *end* (summed
             last) of this operator.
 
@@ -482,7 +482,7 @@ class ComposedErrorgen(_LinearOperator):
             The index at which to insert `factors_to_insert`.  The factor at this
             index and those after it are shifted back by `len(factors_to_insert)`.
 
-        *factors_to_insert : LinearOperator
+        `*factors_to_insert` : LinearOperator
             One or multiple factor operators to insert within this operator.
 
         Returns
@@ -502,7 +502,7 @@ class ComposedErrorgen(_LinearOperator):
 
         Parameters
         ----------
-        *factorop_indices : int
+        `*factorop_indices` : int
             One or multiple factor indices to remove from this operator.
 
         Returns
@@ -624,7 +624,7 @@ class ComposedErrorgen(_LinearOperator):
 
     def taylor_order_terms(self, order, max_polynomial_vars=100, return_coeff_polys=False):
         """
-        Get the `order`-th order Taylor-expansion terms of this error generator..
+        Get the `order`-th order Taylor-expansion terms of this error generator.
 
         This function either constructs or returns a cached list of the terms at
         the given order.  Each term is "rank-1", meaning that its action on a
