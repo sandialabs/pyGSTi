@@ -75,29 +75,29 @@ class HypothesisTest(object):
         using this procedure. Must be one of:
 
         * 'Holms'. This implements the Holms multi-test compensation technique. This
-        controls the FWER for each set of nested hypotheses (and so controls the global FWER, in
-        combination with the "top level" corrections). This requires no assumptions about the
-        null hypotheses.
+          controls the FWER for each set of nested hypotheses (and so controls the global FWER, in
+          combination with the "top level" corrections). This requires no assumptions about the
+          null hypotheses.
         * 'Bonferroni'. This implements the well-known Bonferroni multi-test compensation technique. 
-        This is strictly less powerful test than the Hochberg correction. Note that neither 
-        'Holms' nor 'Bonferronni' gained any advantage from being implemented
-        using "nesting", as if all the hypotheses were put into the "top level" the same corrections
-        could be achieved.
+          This is strictly less powerful test than the Hochberg correction. Note that neither 
+          'Holms' nor 'Bonferronni' gained any advantage from being implemented
+          using "nesting", as if all the hypotheses were put into the "top level" the same corrections
+          could be achieved.
         * 'Hochberg'. This implements the Hockberg multi-test compensation technique. It is
-        not a "closed test procedure", so it is not something that can be implemented in the
-        top level. To be provably valid, it is necessary for the p-values of the nested
-        hypotheses to be non-negatively dependent. When that is true, this is strictly better
-        than the Holms and Bonferroni corrections whilst still controlling the FWER.
+          not a "closed test procedure", so it is not something that can be implemented in the
+          top level. To be provably valid, it is necessary for the p-values of the nested
+          hypotheses to be non-negatively dependent. When that is true, this is strictly better
+          than the Holms and Bonferroni corrections whilst still controlling the FWER.
         * 'none'. This implements no multi-test compensation. This option does *not* control the
-        FWER of the nested hypotheses. So it will generally not control the global FWER as specified.
+          FWER of the nested hypotheses. So it will generally not control the global FWER as specified.
         * 'Benjamini-Hochberg'. This implements the Benjamini-Hockberg multi-test compensation
-        technique. This does *not* control the FWER of the nested hypotheses, and instead controls
-        the "False Detection Rate" (FDR); see wikipedia. That means that the global significance is
-        maintained in the sense that the probability of one or more tests triggering is at most `significance`.
-        But, if one or more tests are triggered in a particular nested hypothesis test we are only guaranteed
-        that (in expectation) no more than a fraction of  "local signifiance" of tests are false alarms.This
-        method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
-        quantity.
+          technique. This does *not* control the FWER of the nested hypotheses, and instead controls
+          the "False Detection Rate" (FDR); see wikipedia. That means that the global significance is
+          maintained in the sense that the probability of one or more tests triggering is at most `significance`.
+          But, if one or more tests are triggered in a particular nested hypothesis test we are only guaranteed
+          that (in expectation) no more than a fraction of  "local signifiance" of tests are false alarms.This
+          method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
+          quantity.
         
     """
 
@@ -162,29 +162,29 @@ class HypothesisTest(object):
             using this procedure. Must be one of:
 
             * 'Holms'. This implements the Holms multi-test compensation technique. This
-            controls the FWER for each set of nested hypotheses (and so controls the global FWER, in
-            combination with the "top level" corrections). This requires no assumptions about the
-            null hypotheses.
+              controls the FWER for each set of nested hypotheses (and so controls the global FWER, in
+              combination with the "top level" corrections). This requires no assumptions about the
+              null hypotheses.
             * 'Bonferroni'. This implements the well-known Bonferroni multi-test compensation
-            technique. This is strictly less powerful test than the Hochberg correction.
-            Note that neither 'Holms' nor 'Bonferronni' gained any advantage from being implemented
-            using "nesting", as if all the hypotheses were put into the "top level" the same corrections
-            could be achieved.
+              technique. This is strictly less powerful test than the Hochberg correction.
+              Note that neither 'Holms' nor 'Bonferronni' gained any advantage from being implemented
+              using "nesting", as if all the hypotheses were put into the "top level" the same corrections
+              could be achieved.
             * 'Hochberg'. This implements the Hockberg multi-test compensation technique. It is
-            not a "closed test procedure", so it is not something that can be implemented in the
-            top level. To be provably valid, it is necessary for the p-values of the nested
-            hypotheses to be non-negatively dependent. When that is true, this is strictly better
-            than the Holms and Bonferroni corrections whilst still controlling the FWER.
+              not a "closed test procedure", so it is not something that can be implemented in the
+              top level. To be provably valid, it is necessary for the p-values of the nested
+              hypotheses to be non-negatively dependent. When that is true, this is strictly better
+              than the Holms and Bonferroni corrections whilst still controlling the FWER.
             * 'none'. This implements no multi-test compensation. This option does *not* control the
-            FWER of the nested hypotheses. So it will generally not control the global FWER as specified.
+              FWER of the nested hypotheses. So it will generally not control the global FWER as specified.
             * 'Benjamini-Hochberg'. This implements the Benjamini-Hockberg multi-test compensation
-            technique. This does *not* control the FWER of the nested hypotheses, and instead controls
-            the "False Detection Rate" (FDR); see wikipedia. That means that the global significance is
-            maintained in the sense that the probability of one or more tests triggering is at most `significance`.
-            But, if one or more tests are triggered in a particular nested hypothesis test we are only guaranteed
-            that (in expectation) no more than a fraction of  "local signifiance" of tests are false alarms.This
-            method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
-            quantity.
+              technique. This does *not* control the FWER of the nested hypotheses, and instead controls
+              the "False Detection Rate" (FDR); see wikipedia. That means that the global significance is
+              maintained in the sense that the probability of one or more tests triggering is at most `significance`.
+              But, if one or more tests are triggered in a particular nested hypothesis test we are only guaranteed
+              that (in expectation) no more than a fraction of  "local signifiance" of tests are false alarms.This
+              method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
+              quantity.
 
         Returns
         -------

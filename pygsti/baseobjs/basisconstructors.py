@@ -709,17 +709,22 @@ def qsim_matrices(matrix_dim):
     The returned matrices are given in the QuantumSim representation of the
     density matrix space, and are thus kronecker products of
     the standard representation of the QuantumSim matrices:
-        '0' == [[1, 0],[0,0]]
-        'X' == [[0, 1],[1,0]]
-        'Y' == [[0,-1.j],[1.j,0]]
-        '1' == [[0, 0],[0,1]]
+    
+    * `'0' == [[1, 0],[0,0]]`
+    * `'X' == [[0, 1],[1,0]]`
+    * `'Y' == [[0,-1.j],[1.j,0]]`
+    * `'1' == [[0, 0],[0,1]]`
+    
     The normalization is such that the resulting basis is orthonormal
     under the trace inner product:
-        Tr( dot(Mi,Mj) ) == delta_ij.
+    
+    `Tr( dot(Mi,Mj) ) == delta_ij`.
+    
     In the returned list, the right-most factor of the kronecker product
     varies the fastest, so, for example, when matrix_dim == 4 the
     returned list is:
-        [ 00,0X,0Y,01,X0,XX,XY,X1,Y0,Y0,YX,YY,Y1,10,1X,1Y,11 ].
+        
+    `[ 00,0X,0Y,01,X0,XX,XY,X1,Y0,Y0,YX,YY,Y1,10,1X,1Y,11 ]`.
 
     Parameters
     ----------

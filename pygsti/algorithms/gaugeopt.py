@@ -252,8 +252,11 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
 
     Returns
     -------
-    model                            if return_all == False
-    (goodnessMin, gaugeMx, model)    if return_all == True
+    model                            
+        if return_all == False
+    
+    (goodnessMin, gaugeMx, model)    
+        if return_all == True
         where goodnessMin is the minimum value of the goodness function (the best 'goodness')
         found, gaugeMx is the gauge matrix used to transform the model, and model is the
         final gauge-transformed model.

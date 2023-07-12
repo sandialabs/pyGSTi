@@ -19,8 +19,9 @@ class RobustPhaseEstimation(object):
 
     Runs the non-adaptive RPE algorithm using a dictionary of measurement results,
     `Q.raw_angles`, containing the angles calculated from the probabilities:
-        `P^{γ'γ}_{Nₖs} = |<γ' y| U^Nₖ |γ x>|² = |<γ' x| U^Nₖ |-γ y>|² = (1 ± sin(θ))/2`
-        `P^{γ'γ}_{Nₖc} = |<γ' x| U^Nₖ |γ x>|² = |<γ' y| U^Nₖ | γ y>|² = (1 ± cos(θ))/2`
+    
+    `P^{γ'γ}_{Nₖs} = |<γ' y| U^Nₖ |γ x>|² = |<γ' x| U^Nₖ |-γ y>|² = (1 ± sin(θ))/2`
+    `P^{γ'γ}_{Nₖc} = |<γ' x| U^Nₖ |γ x>|² = |<γ' y| U^Nₖ | γ y>|² = (1 ± cos(θ))/2`
 
     Expect `measured[Nₖ] = θ`.
 

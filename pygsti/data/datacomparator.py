@@ -530,32 +530,32 @@ class DataComparator():
             value for the `localcorrections` input parameter of the HypothesisTest object. This includes:
 
             * 'Hochberg'. This implements the Hochberg multi-test compensation technique. This
-            is strictly the best method available in the code, if you wish to control the FWER,
-            and it is the method described in "Probing context-dependent errors in quantum processors",
-            by Rudinger et al.
+              is strictly the best method available in the code, if you wish to control the FWER,
+              and it is the method described in "Probing context-dependent errors in quantum processors",
+              by Rudinger et al.
             * 'Holms'. This implements the Holms multi-test compensation technique. This
-            controls the FWER, and it results in a strictly less powerful test than the Hochberg
-            correction.
+              controls the FWER, and it results in a strictly less powerful test than the Hochberg
+              correction.
             * 'Bonferroni'. This implements the well-known Bonferroni multi-test compensation
-            technique. This controls the FWER, and it results in a strictly less powerful test than
-            the Hochberg correction.
+              technique. This controls the FWER, and it results in a strictly less powerful test than
+              the Hochberg correction.
             * 'none'. This implements no multi-test compensation for the per-sequence comparsions,
-            so they are all implemented at a "local" signifincance level that is altered from `significance`
-            only by the (inbuilt) Bonferroni-like correction between the "aggregate" test and the per-sequence
-            tests. This option does *not* control the FWER, and many sequences may be flagged up as context
-            dependent even if none are.
+              so they are all implemented at a "local" signifincance level that is altered from `significance`
+              only by the (inbuilt) Bonferroni-like correction between the "aggregate" test and the per-sequence
+              tests. This option does *not* control the FWER, and many sequences may be flagged up as context
+              dependent even if none are.
             * 'Benjamini-Hochberg'. This implements the Benjamini-Hockberg multi-test compensation
-            technique. This does *not* control the FWER, and instead controls the "False Detection Rate"
-            (FDR); see, for example, https://en.wikipedia.org/wiki/False_discovery_rate. That means that
-            the global significance is maintained for the test of "Is there any context dependence?". I.e.,
-            one or more tests will trigger when there is no context dependence with at most a probability of `significance`. 
-            But, if one or more per-sequence tests trigger then we are only guaranteed that (in expectation) no 
-            more than a fraction of "local-signifiance" of the circuits that have been flagged up as context dependent actually aren't.
-            Here, "local-significance" is the  significance at which the per-sequence tests are, together,
-            implemented, which is `significance`*(1 - `aggregate_test_weighting`) if the aggregate test doesn't
-            detect context dependence and `significance` if it does (as long as `pass_alpha` is True). This
-            method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
-            quantity.
+              technique. This does *not* control the FWER, and instead controls the "False Detection Rate"
+              (FDR); see, for example, https://en.wikipedia.org/wiki/False_discovery_rate. That means that
+              the global significance is maintained for the test of "Is there any context dependence?". I.e.,
+              one or more tests will trigger when there is no context dependence with at most a probability of `significance`. 
+              But, if one or more per-sequence tests trigger then we are only guaranteed that (in expectation) no 
+              more than a fraction of "local-signifiance" of the circuits that have been flagged up as context dependent actually aren't.
+              Here, "local-significance" is the  significance at which the per-sequence tests are, together,
+              implemented, which is `significance`*(1 - `aggregate_test_weighting`) if the aggregate test doesn't
+              detect context dependence and `significance` if it does (as long as `pass_alpha` is True). This
+              method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
+              quantity.
 
         aggregate_test_weighting : float in [0,1], optional (default is 0.5)
             The weighting, in a generalized Bonferroni correction, to put on the "aggregate test", that jointly

@@ -2390,7 +2390,7 @@ class DataSet(_MongoSerializable):
         aggregate_to_time : float, optional
             If not None, a single timestamp to give all the data in
             each returned data set, resulting in time-independent
-            `DataSet`s.  If None, then the original timestamps are
+            `DataSet` objects.  If None, then the original timestamps are
             preserved.
 
         Returns
@@ -2469,12 +2469,10 @@ class DataSet(_MongoSerializable):
         Manipulate this DataSet's timestamps according to `processor_fn`.
 
         For example, using, the folloing `process_times_array_fn` would change
-        the timestamps for each circuit to sequential integers.
-
-        ```
-        def process_times_array_fn(times):
-            return list(range(len(times)))
-        ```
+        the timestamps for each circuit to sequential integers. ::
+        
+            def process_times_array_fn(times):
+                return list(range(len(times)))
 
         Parameters
         ----------

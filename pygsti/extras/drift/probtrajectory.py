@@ -66,7 +66,7 @@ class ProbTrajectory(object):
 
     def basisfunction(self, i, times):
         """
-        The ith basis function of the model, evaluated at the times in `times.
+        The ith basis function of the model, evaluated at the times in `times`.
 
         **Defined in a derived class**
 

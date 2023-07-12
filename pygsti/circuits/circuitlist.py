@@ -138,7 +138,7 @@ class CircuitList(_NicelySerializable):
         Returns
         -------
         list
-            A list of :class:`Circuit`s.
+            A list of :class:`Circuit` objects.
         """
         return _lt.apply_aliases_to_circuits(self._circuits, self.op_label_aliases)
 

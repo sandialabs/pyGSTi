@@ -378,8 +378,7 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         - XX op_label_aliases = dict (default = None)
         - always_perform_mle = bool (default = False)
         - only_perform_mle = bool (default = False)
-        - XX truncScheme = "whole germ powers" (default) or "truncated germ powers"
-                          or "length as exponent"
+        - XX truncScheme = "whole germ powers" (default) or "truncated germ powers" or "length as exponent"
         - appendTo = Results (default = None)
         - estimateLabel = str (default = "default")
         - XX missingDataAction = {'drop','raise'} (default = 'drop')
@@ -408,8 +407,7 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         - 2 -- show summary details about each individual iteration
         - 3 -- also shows outer iterations of LM algorithm
         - 4 -- also shows inner iterations of LM algorithm
-        - 5 -- also shows detailed info from within jacobian
-               and objective function calls.
+        - 5 -- also shows detailed info from within jacobian and objective function calls.
 
     Returns
     -------
@@ -530,8 +528,7 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
         - 2 -- show summary details about each individual iteration
         - 3 -- also shows outer iterations of LM algorithm
         - 4 -- also shows inner iterations of LM algorithm
-        - 5 -- also shows detailed info from within jacobian
-               and objective function calls.
+        - 5 -- also shows detailed info from within jacobian and objective function calls.
 
     Returns
     -------

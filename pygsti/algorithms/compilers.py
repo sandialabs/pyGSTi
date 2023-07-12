@@ -2937,7 +2937,7 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
     1. C1 is a CNOT circuit
     2. C2 is a circuit with the form 1-qubit-gates -- CNOT circuit -- 1-qubit gates.
     3. The symplectic rep of the circuit consisting of C1 followed by C2 has the form ((.,B)(.,D))
-    when s has the form ((A,B),(C,D)).
+       when s has the form ((A,B),(C,D)).
 
     Therefore, the circuit C2 acting on `|0,0,0,...>` generates the same stabilizer state (up to Paulis)
     as a circuit that has the symplectic rep (s,p) for any valid p. The circuit is only "conditionally"

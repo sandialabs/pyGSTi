@@ -67,6 +67,11 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
     def label_index(self, label, ok_if_missing=False):
         """
         TODO: docstring
+        
+        Parameters
+        ----------
+        label
+        
         ok_if_missing : bool
            If True, then returns `None` instead of an integer when the given label is not present.
         """
@@ -447,6 +452,11 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
     def label_index(self, elemgen_label, ok_if_missing=False):
         """
         TODO: docstring
+        
+        Parameters
+        ----------
+        elemgen_label
+        
         ok_if_missing : bool
            If True, then returns `None` instead of an integer when the given label is not present.
         """

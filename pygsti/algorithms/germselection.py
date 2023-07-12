@@ -607,7 +607,7 @@ def compute_composite_germ_set_score(score_fn, threshold_ac=1e6, init_n=1,
 
     eps : float, optional
         Used when calculating `partial_deriv_dagger_deriv` to determine if two
-        eigenvalues are equal (see :func:`_bulk_twirled_deriv` for details). Not
+        eigenvalues are equal (see :func:`~pygsti.algorithms.germselection._bulk_twirled_deriv` for details). Not
         used if `partial_deriv_dagger_deriv` is provided.
 
     op_penalty : float, optional
@@ -940,7 +940,7 @@ def test_germs_list_completeness(model_list, germs_list, score_func, threshold, 
         models around a model of interest.
 
     germs_list : list
-        A list of the germ :class:`Circuit`s (the "germ set") to test for completeness.
+        A list of the germ :class:`Circuit` objects (the "germ set") to test for completeness.
 
     score_func : {'all', 'worst'}
         Sets the objective function for scoring the eigenvalues. If 'all',
@@ -1584,7 +1584,7 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
     Parameters
     ----------
     model_list : Model or list
-        The model or list of `Model`s to select germs for.
+        The model or list of `Model` objects to select germs for.
 
     germs_list : list of Circuit
         The list of germs to contruct a germ set from.

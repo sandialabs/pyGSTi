@@ -212,7 +212,7 @@ class Circuit(object):
         to a Label objects.  For example, any of the following are allowed:
 
         - `['Gx','Gx']` : X gate on each of 2 layers
-        - `[Label('Gx'),Label('Gx')] : same as above
+        - `[Label('Gx'),Label('Gx')]` : same as above
         - `[('Gx',0),('Gy',0)]` : X then Y on qubit 0 (2 layers)
         - `[[('Gx',0),('Gx',1)],[('Gy',0),('Gy',1)]]` : parallel X then Y on qubits 0 & 1
 
@@ -362,7 +362,7 @@ class Circuit(object):
             to a Label objects.  For example, any of the following are allowed:
 
             - `['Gx','Gx']` : X gate on each of 2 layers
-            - `[Label('Gx'),Label('Gx')] : same as above
+            - `[Label('Gx'),Label('Gx')]` : same as above
             - `[('Gx',0),('Gy',0)]` : X then Y on qubit 0 (2 layers)
             - `[[('Gx',0),('Gx',1)],[('Gy',0),('Gy',1)]]` : parallel X then Y on qubits 0 & 1
 

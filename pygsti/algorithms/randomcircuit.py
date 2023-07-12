@@ -57,7 +57,7 @@ def sample_random_clifford_one_qubit_unitary_parameters():
 def sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr', xname='Gxpi2', qubit_labels=None):
     """
     TODO: docstring  #generate layer of random unitaries and make a series of circuit layers with the compiled versions
-     of these
+    of these
     """
     if qubit_labels is not None:
         n = len(qubit_labels)
@@ -86,7 +86,7 @@ def sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr'
 def sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr', xname='Gxpi2', qubit_labels=None):
     """
     TODO: docstring  #generate layer of random unitaries and make a series of circuit layers with the compiled versions
-     of these
+    of these
     """
     if qubit_labels is not None:
         n = len(qubit_labels)
@@ -2433,7 +2433,7 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
         by the first half.
 
         If `paulirandomize` is True and `localclifford` is False, the depth of the circuits is
-        2*length+1 with odd-indexed layers sampled according to the sampler specified by `sampler, and
+        2*length+1 with odd-indexed layers sampled according to the sampler specified by `sampler`, and
         the the zeroth layer + the even-indexed layers consisting of random 1-qubit Pauli gates.
 
         If `paulirandomize` and `localclifford` are True, the depth of the circuits is

@@ -40,7 +40,7 @@ class MongoSerializable(object):
 
     def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing,
                                                 **kwargs):
-        """ Add to `write_ops` and update `doc` so that all of `self`'s data is serialized """
+        """ Add to `write_ops` and update `doc` so that all of `self` 's data is serialized """
         raise NotImplementedError("Subclasses must implement this!")
 
     @classmethod
@@ -487,13 +487,13 @@ def prepare_doc_for_existing_doc_check(doc, existing_doc, set_id=True, convert_t
     Prepares a to-be inserted document for comparison with an existing document.
 
     Optionally (see parameters):
-    1) sets _id of `doc` to that of `existing_doc`.  This is useful in cases where the _id
+    1. sets _id of `doc` to that of `existing_doc` .  This is useful in cases where the _id
        field is redundant with other uniquely identifying fields in the document, and so inserted
        documents don't need to match this field.
-    2) converts all of `doc`'s tuples to lists, as the existing_doc is typically read from a MongoDB
+    2. converts all of `doc` 's tuples to lists, as the existing_doc is typically read from a MongoDB
        which only stores lists and doesn't distinguish between lists and tuples.
-    3) converts numpy datatypes to native python types
-    4) rounds floating point values
+    3. converts numpy datatypes to native python types
+    4. rounds floating point values
 
     Parameters
     ----------
