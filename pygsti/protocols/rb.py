@@ -1242,11 +1242,13 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
 RB = RandomizedBenchmarking
 RBResults = RandomizedBenchmarkingResults  # shorthand
 
-def create_udrb_edesign(pspec, depths, k, qubit_labels=None, twoQ_gate_density=1/2):
+def create_udrb_edesign(pspec, depths, k, qubit_labels=None, twoQ_gate_density=0.25, layer_type='standard'):
     circs_and_idealouts_by_depth = {d:[] for d in depths}
     for d in depths:
             print(f'generating {k} DRB circuits with depth {d}')
-            cs_and_idealouts = [(a,[b]) for a,b in [_rc.create_udrb_circuit(pspec, d, qubit_labels = qubit_labels, twoQ_gate_density = twoQ_gate_density) for _ in range(k)]]           
+            cs_and_idealouts = [(a,[b]) for a,b in [_rc.create_udrb_circuit(pspec, d, qubit_labels = qubit_labels, twoQ_gate_density = twoQ_gate_density, layer_type=layer_type) for _ in range(k)]]           
             circs_and_idealouts_by_depth[d].extend(cs_and_idealouts)
             ed = DirectRBDesign.from_existing_circuits(circs_and_idealouts_by_depth, qubit_labels=qubit_labels)
     return ed
+
+    

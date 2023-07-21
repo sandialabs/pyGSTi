@@ -3166,17 +3166,17 @@ def create_udrb_circuit(pspec, length, qubit_labels = None, layer_type='standard
 
     
     #generate d random layers, alternating Haar-random 1Q unitaries and 2Q gates
-    circuit = _cir.Circuit(layer_labels=[], line_labels=qubit_labels, editable=True)
+    #circuit = _cir.Circuit(layer_labels=[], line_labels=qubit_labels, editable=True)
     
 ####replace with existing pygsti machinery for generating these circuits#######
     #have option to sample alternating laters or mixed layers
     if layer_type=='cz-zxzxz':
-        sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=qubit_labels, two_q_gate_density=twoQ_gate_density,
+        circuit2 = sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=qubit_labels, two_q_gate_density=twoQ_gate_density,
                                    one_q_gate_type='haar',
                                    two_q_gate_args_lists={'Gczr': [(str(a),) for a in angles]})
+    #consider adding in a check for continuous-arg gates
     elif layer_type=='standard':                                   
-        sample_circuit_layer_by_edgegrab(pspec, qubit_labels=qubit_labels, two_q_gate_density=twoQ_gate_density, one_q_gate_names=None,
-                                     gate_args_lists=None, rand_state=None)                                   
+        circuit2 = create_random_circuit(pspec, length, qubit_labels=qubit_labels, sampler='edgegrab', samplerargs=[twoQ_gate_density])                                  
                                    
     #for a in range(length):
     #   #generate random 1q unitary layer
@@ -3194,6 +3194,10 @@ def create_udrb_circuit(pspec, length, qubit_labels = None, layer_type='standard
     #circuit.done_editing()
     
     #get unitary for circuit 
+    circuit = circuit2.copy(editable=True)
+    circuit.delete_idle_layers_inplace()
+
+    print(circuit)
 
     circ_unitary = model.sim.product(circuit)
     
