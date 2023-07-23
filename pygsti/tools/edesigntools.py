@@ -405,7 +405,7 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
         # Collect all terms, do this on rank zero:
         if comm is None or comm.Get_rank() == 0: 
             printer.log('Accumulating per-circuit contributions to fisher information.', 3)
-            fisher_information = _np.zeros((num_params, num_params))
+            fisher_information = _np.zeros((num_params, num_params), dtype= _np.double)
             for circ in circuits:
                 fisher_information += term_cache[circ] * num_shots[circ]
         else:
@@ -415,7 +415,7 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
     else:
         #initialize the empty fisher information matrix on rank 0:
         if comm is None or comm.Get_rank() == 0: 
-            fisher_information = _np.zeros((num_params, num_params))
+            fisher_information = _np.zeros((num_params, num_params), dtype = _np.double)
         else:
             fisher_information = None
         #divide up the list of circuits into chunks of size at most circuit_chunk_size
@@ -549,6 +549,7 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
             assert(len(unique_circuit_lists) == len(circuit_lists))
             
             for i, (L, ckt_list) in enumerate(zip(Ls, unique_circuit_lists)):
+                printer.log(f'Current length L={L}', 2)
                 fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
                                                                term_cache=term_cache, regularize_spam=False, verbosity=verbosity)
                 if i!=0:
@@ -564,6 +565,7 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
     else:
         fisher_information_by_L = {}
         for i, (L, ckt_list) in enumerate(zip(Ls, unique_circuit_lists)):
+            printer.log(f'Current length L={L}',2)
             fisher_information_by_L[L] = calculate_fisher_information_matrix(regularized_model, ckt_list, num_shots,
                                                            term_cache=None, regularize_spam=False,
                                                            approx = approx, 
@@ -714,6 +716,7 @@ def _calculate_fisher_information_per_chunk(regularized_model, circuits, approx=
         if not approx:
             comm.Reduce(sendbuf=split_total_hterm, recvbuf=total_hterm_recv_buffer, root=0)
         #Reshape the array:
+        if comm.Get_rank()==0:
             fisher_info_term= fisher_info_recv_buffer.reshape((num_params, num_params))
             if not approx:
                 total_hterm= total_hterm_recv_buffer.reshape((num_params, num_params))
@@ -752,7 +755,6 @@ def accumulate_fim_matrix(subcircuits, num_params, num_shots, outcomes, ps, js, 
     for circuit in subcircuits:
         if num_shots is not None:
             num_shots_for_circuit = num_shots[circuit]
-            printer.log(f'num_shots_for_circuit {num_shots_for_circuit}',3)
         else:
             num_shots_for_circuit=1
         p = ps[circuit]
