@@ -927,7 +927,7 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
     return newmodelList
 
 
-def test_germs_list_completeness(model_list, germs_list, score_func, threshold, float_type=_np.cdouble, comm=None):
+def test_germs_list_completeness(model_list, germs_list, score_func, threshold, float_type=_np.cdouble, comm=None, num_gauge_params = None):
     """
     Check to see if the germs_list is amplificationally complete (AC).
 
@@ -959,12 +959,17 @@ def test_germs_list_completeness(model_list, germs_list, score_func, threshold, 
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
+        
+    num_gauge_params : int, optional (default None)
+        A optional kwarg for specifying the number of gauge
+        parameters. Specifying this if already precomputed can
+        save on computation.
 
     Returns
     -------
     int
         The index of the first model in `model_list` to fail the amplficational
-        completeness test.
+        completeness test. Returns -1 if germ set is AC for all tested models.
     """
     for modelNum, model in enumerate(model_list):
         initial_test = test_germ_set_infl(model, germs_list,
@@ -1338,7 +1343,7 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
 
 def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
                        return_spectrum=False, threshold=1e6, check=False,
-                       float_type=_np.cdouble, comm=None):
+                       float_type=_np.cdouble, comm=None, nGaugeParams = None):
     """
     Test whether a set of germs is able to amplify all non-gauge parameters.
 
@@ -1379,6 +1384,11 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
     comm : mpi4py.MPI.Comm, optional
         When not None, an MPI communicator for distributing the computation
         across multiple processors.
+        
+    nGaugeParams : int, optional (default None)
+        A optional kwarg for specifying the number of gauge
+        parameters. Specifying this if already precomputed can
+        save on computation.
 
     Returns
     -------
@@ -1433,7 +1443,8 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
     combinedTDDD = _np.tensordot(weights, twirledDerivDaggerDeriv, (0, 0))
     sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
 
-    nGaugeParams = model.num_gauge_params
+    if nGaugeParams is None:
+        nGaugeParams = model.num_gauge_params
     observableEigenvals = sortedEigenvals[nGaugeParams:]
 
     bSuccess = bool(_scoring.list_score(observableEigenvals, score_func)
@@ -3639,7 +3650,10 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
     
     if (num_nongauge_params is None):
         (_, numGaugeParams,
-         numNonGaugeParams, _) = _get_model_params(model_list)
+         numNonGaugeParams, _) = _get_model_params(model_list
+        #TODO: This block doesn't make sense to me anymore. But I also
+        #don't think this can be reached, so figure out what the intention here
+        #was supposed to be another time.
         if num_nongauge_params is not None:
             numGaugeParams = numGaugeParams + numNonGaugeParams - num_nongauge_params
             numNonGaugeParams = num_nongauge_params
@@ -3720,19 +3734,21 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         raise ValueError('Unsupported argument. Force must either be a string, list or None.')    
 
     if pretest:
+        printer.log("Performing pretest on complete candidate germ list to verify amplficational completeness", 1)
         undercompleteModelNum = test_germs_list_completeness(model_list,
                                                              germs_list,
                                                              score_func,
                                                              threshold,
                                                              float_type=float_type,
-                                                             comm=comm)
+                                                             comm=comm,
+                                                             num_gauge_params = numGaugeParams)
         if undercompleteModelNum > -1:
-            printer.warning("Complete initial germ set FAILS on model "
+            printer.warning("Complete initial candidate germ set FAILS on model "
                             + str(undercompleteModelNum) + ".")
             printer.warning("Aborting search.")
             return None
 
-        printer.log("Complete initial germ set succeeds on all input models.", 1)
+        printer.log("Complete initial candidate germ set succeeds on all input models.", 1)
         printer.log("Now searching for best germ set.", 1)
 
     printer.log("Starting germ set optimization. Lower score is better.", 1)
