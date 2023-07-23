@@ -2562,7 +2562,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
                 xd = yd = 16  # include identity in basis dimensions
         else:
             if projections.size == d2 - 1:  # == 4**nQubits - 1
-                projections = _np.concatenate(([0.0], projections)).reshape((4, projections.size // 4))
+                projections = _np.concatenate(([0.0], projections)).reshape((4, (projections.size+1) // 4))
                 eb_matrix = _np.concatenate(([0.0], eb_matrix)) if (eb_matrix is not None) else None
                 xlabel = "Q*"; ylabel = "Q1"
                 yd, xd = projections.shape
