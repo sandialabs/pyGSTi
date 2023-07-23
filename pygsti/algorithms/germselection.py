@@ -1410,7 +1410,7 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
 
     for i, GermIdx in enumerate(loc_Indices):
         twirledDerivDaggerDeriv += _compute_twirled_ddd(
-            model, germs_list[GermIdx], 1. / threshold, float_type=float_type)
+            model, germs_to_test[GermIdx], 1. / threshold, float_type=float_type)
 
     #aggregate each currendDDDList across all procs
     if comm is not None and comm.Get_size() > 1:
