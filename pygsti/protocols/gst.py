@@ -1577,20 +1577,10 @@ class StandardGST(_proto.Protocol):
         The name of this protocol, also used to (by default) name the
         results produced by this protocol.  If None, the class name will
         be used.
-    initial_model : Model, GSTInitialModel or dict, optional (default None)
-        An optional argument for setting the initial model for the GST fit.
-        If a Model or GSTInitialModel object is passed in then this will be used as the initial model
-        for all non-model-test based operations (i.e. this isn't used with testing the target
-        model or the elements of models_to_test). A dictonary can also be passed in with
-        keys corresponding to the strings in modes (only the non-model-test ones need to be specified,
-        all others will be ignored) and values given by either Model objects or GSTInitialModel 
-        to use for that mode. If a key is missing or None then the protocol will fall back to using the target
-        model.
     """
 
     def __init__(self, modes="full TP,CPTP,Target", gaugeopt_suite='stdgaugeopt', target_model=None,
-                 models_to_test=None, objfn_builders=None, optimizer=None, badfit_options=None, verbosity=2, name=None,
-                 initial_model = None):
+                 models_to_test=None, objfn_builders=None, optimizer=None, badfit_options=None, verbosity=2, name=None):
 
         super().__init__(name)
         self.modes = modes.split(',')
@@ -1601,20 +1591,21 @@ class StandardGST(_proto.Protocol):
         self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
-        self.initial_model = initial_model
 
         if not isinstance(optimizer, _opt.Optimizer) and isinstance(optimizer, dict) \
            and 'first_fditer' not in optimizer:  # then a dict was cast into a CustomLMOptimizer above.
             # by default, set special "first_fditer=auto" behavior (see logic in GateSetTomography.__init__)
             self.optimizer.first_fditer = None
-        
-        #TODO: Make sure initial model gets properly serialized.
+
         self.auxfile_types['target_model'] = 'serialized-object'
         self.auxfile_types['models_to_test'] = 'dict:serialized-object'
         self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
         self.auxfile_types['objfn_builders'] = 'serialized-object'
         self.auxfile_types['optimizer'] = 'serialized-object'
         self.auxfile_types['badfit_options'] = 'serialized-object'
+
+        #Advanced options that could be changed by users who know what they're doing
+        self.starting_point = {}  # a dict whose keys are modes
 
     #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, max_lengths):
     #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, max_lengths)
@@ -1695,36 +1686,15 @@ class StandardGST(_proto.Protocol):
 
                     #Try to interpret `mode` as a parameterization
                     parameterization = mode  # for now, 1-1 correspondence
-                    
-                    #set up the initial model:
-                    if self.initial_model is None:
-                        initial_model = GSTInitialModel(target_model= target_model, starting_point = 'target')
-                    elif isinstance(self.initial_model, _Model):
-                        initial_model = GSTInitialModel(self.initial_model)
-                    elif isinstance(self.initial_model, GSTInitialModel):
-                        initial_model = self.initial_model
-                    elif isinstance(self.initial_model, dict):
-                        initial_model = self.initial_model.get(mode, None)
-                        if isinstance(initial_model, _Model):
-                            initial_model = GSTInitialModel(initial_model)
-                        #don't need to do anything in this case, just adding it for readability
-                        elif isinstance(initial_model, GSTInitialModel):
-                            pass
-                        elif initial_model is None:
-                            initial_model = GSTInitialModel(target_model= target_model, starting_point= 'target')
-                    else:
-                        raise ValueError('Unsupported input type for initial model. Must be a Model, GSTInitialModel or None.')
-                    
+                    initial_model = target_model
+
                     try:
-                        #By this point the initial model should be a GSTInitialModel, so call this on the contained model.
-                        if initial_model.model is not None:
-                            initial_model.model.set_all_parameterizations(parameterization)
-                        else:
-                            initial_model.target_model.set_all_parameterizations(parameterization)
+                        initial_model.set_all_parameterizations(parameterization)
                     except ValueError as e:
                         raise ValueError("Could not interpret '%s' mode as a parameterization! Details:\n%s"
                                          % (mode, str(e)))
 
+                    initial_model = GSTInitialModel(initial_model, self.starting_point.get(mode, None))
                     gst = GST(initial_model, self.gaugeopt_suite, self.objfn_builders,
                               self.optimizer, self.badfit_options, verbosity=printer - 1, name=mode)
                     result = gst.run(data, memlimit, comm)
@@ -2365,8 +2335,6 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
     # if p is prob that box is red and there are N boxes, then prob of no red boxes is q = (1-p)^N ~= 1-p*N
     # and so probability of any red boxes is ~p*N.  Here `percentile` is the probability of seeing *any* red
     # boxes, i.e. ~p*N, so to compute the prob of a single box being red we compute `p = percentile/N`.
-
-    #print("DB2: ",twoDeltaLogL_threshold,redbox_threshold)
 
     assert(isinstance(mdc_objfn, _objfns.PoissonPicDeltaLogLFunction)), \
         "Can only use wildcard scaling with 'logl' objective!"
