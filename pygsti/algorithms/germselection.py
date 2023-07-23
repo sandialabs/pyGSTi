@@ -987,10 +987,18 @@ def _remove_spam_vectors(model):
     Model
     """
     reducedModel = model.copy()
-    for prepLabel in list(reducedModel.preps.keys()):
-        del reducedModel.preps[prepLabel]
-    for povmLabel in list(reducedModel.povms.keys()):
-        del reducedModel.povms[povmLabel]
+    try:
+        for prepLabel in list(reducedModel.preps.keys()):
+            del reducedModel.preps[prepLabel]
+        for povmLabel in list(reducedModel.povms.keys()):
+            del reducedModel.povms[povmLabel]
+    except AttributeError:
+        # Implicit model instead
+        for prepLabel in list(reducedModel.prep_blks.keys()):
+            del reducedModel.prep_blks[prepLabel]
+        for povmLabel in list(reducedModel.povm_blks.keys()):
+            del reducedModel.povm_blks[povmLabel]
+
     reducedModel._mark_for_rebuild()
     return reducedModel
 
