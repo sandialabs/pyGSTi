@@ -1603,7 +1603,6 @@ class StandardGST(_proto.Protocol):
         self.auxfile_types['objfn_builders'] = 'serialized-object'
         self.auxfile_types['optimizer'] = 'serialized-object'
         self.auxfile_types['badfit_options'] = 'serialized-object'
-        self.auxfile_types['initial_model'] = 'dict:serialized-object'
 
         #Advanced options that could be changed by users who know what they're doing
         self.starting_point = {}  # a dict whose keys are modes
