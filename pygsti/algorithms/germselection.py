@@ -1408,7 +1408,6 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
     loc_Indices, _, _ = _mpit.distribute_indices(
         list(range(len(germs_to_test))), comm, False)
 
-    with printer.progress_logging(3):
     for i, GermIdx in enumerate(loc_Indices):
         twirledDerivDaggerDeriv += _compute_twirled_ddd(
             model, germs_list[GermIdx], 1. / threshold, float_type=float_type)
