@@ -927,7 +927,7 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
     return newmodelList
 
 
-def test_germs_list_completeness(model_list, germs_list, score_func, threshold, float_type=_np.cdouble):
+def test_germs_list_completeness(model_list, germs_list, score_func, threshold, float_type=_np.cdouble, comm=None):
     """
     Check to see if the germs_list is amplificationally complete (AC).
 
@@ -955,6 +955,10 @@ def test_germs_list_completeness(model_list, germs_list, score_func, threshold, 
         
     float_type : numpy dtype object, optional
         Numpy data type to use for floating point arrays.
+    
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
 
     Returns
     -------
@@ -965,7 +969,8 @@ def test_germs_list_completeness(model_list, germs_list, score_func, threshold, 
     for modelNum, model in enumerate(model_list):
         initial_test = test_germ_set_infl(model, germs_list,
                                           score_func=score_func,
-                                          threshold=threshold, float_type=float_type)
+                                          threshold=threshold, float_type=float_type,
+                                          comm=comm)
         if not initial_test:
             return modelNum
 
@@ -1333,7 +1338,7 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
 
 def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
                        return_spectrum=False, threshold=1e6, check=False,
-                       float_type=_np.cdouble):
+                       float_type=_np.cdouble, comm=None):
     """
     Test whether a set of germs is able to amplify all non-gauge parameters.
 
@@ -1370,6 +1375,10 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
         
     float_type: numpy dtype object, optional
         Optional numpy data type to use for internal numpy array calculations.
+        
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
 
     Returns
     -------
@@ -1384,12 +1393,33 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
     model = _remove_spam_vectors(model)
-
+    Np= model.num_params
+    
     germLengths = _np.array([len(germ) for germ in germs_to_test], _np.int64)
-    twirledDerivDaggerDeriv = _compute_bulk_twirled_ddd(model, germs_to_test,
-                                                        1. / threshold, check,
-                                                        germLengths, 
-                                                        float_type=float_type)
+    #twirledDerivDaggerDeriv = _compute_bulk_twirled_ddd(model, germs_to_test,
+    #                                                    1. / threshold, check,
+    #                                                    germLengths, 
+    #                                                    float_type=float_type)
+    
+    #Use a more memory efficient implementation that builds up the J^T@J matrix
+    #borrowing the code used for single-Jac mode in the germ search routine below:
+    twirledDerivDaggerDeriv = _np.zeros((Np, Np), dtype=float_type)
+
+    loc_Indices, _, _ = _mpit.distribute_indices(
+        list(range(len(germs_to_test))), comm, False)
+
+    with printer.progress_logging(3):
+    for i, GermIdx in enumerate(loc_Indices):
+        twirledDerivDaggerDeriv += _compute_twirled_ddd(
+            model, germs_list[GermIdx], 1. / threshold, float_type=float_type)
+
+    #aggregate each currendDDDList across all procs
+    if comm is not None and comm.Get_size() > 1:
+        result = _np.empty((Np, Np), dtype=float_type)
+        comm.Allreduce(twirledDerivDaggerDeriv, result, op=MPI.SUM)
+        twirledDerivDaggerDeriv[:, :] = result[:, :]
+        result = None  # free mem
+                                                        
     # result[i] = _np.dot( twirledDeriv[i].H, twirledDeriv[i] ) i.e. matrix
     # product
     # result[i,k,l] = sum_j twirledDerivH[i,k,j] * twirledDeriv(i,j,l)
@@ -1744,7 +1774,8 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
                                                              germs_list,
                                                              score_func,
                                                              threshold,
-                                                             float_type=float_type)
+                                                             float_type=float_type,
+                                                             comm=comm)
         if undercompleteModelNum > -1:
             printer.warning("Complete initial germ set FAILS on model "
                             + str(undercompleteModelNum) + ".")
@@ -3694,7 +3725,8 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
                                                              germs_list,
                                                              score_func,
                                                              threshold,
-                                                             float_type=float_type)
+                                                             float_type=float_type,
+                                                             comm=comm)
         if undercompleteModelNum > -1:
             printer.warning("Complete initial germ set FAILS on model "
                             + str(undercompleteModelNum) + ".")
@@ -3858,7 +3890,8 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         printer.log('Testing initial germ list for AC.', 2)
         initial_germ_set_completeness = test_germs_list_completeness(model_list, goodGerms,
                                                                      score_func, threshold,
-                                                                     float_type=float_type)
+                                                                     float_type=float_type,
+                                                                     comm=comm)
         if initial_germ_set_completeness == -1:
             initN= numNonGaugeParams
             first_outer_iter_log= False
@@ -4340,7 +4373,7 @@ def stable_pinv(mat):
 def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_type=_np.cdouble, 
                               num_nongauge_params=None, tol = 1e-6, pretest=False, evd_tol = 1e-10,
                               verbosity=1, threshold = 1e6, mode = 'greedy', update_cache_low_rank = False,
-                              final_test = True): 
+                              final_test = True, comm=None): 
     """
     Parameters
     ----------
@@ -4397,6 +4430,23 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         the use of update_cache_low_rank, as this can help detect numerical
         stability problems in the use of low-rank updates for cache construction.
         
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+        
+    Returns
+    -------
+    
+    germ_vec_dict : dict
+        A dictionary whose keys are germs and whose elements are numpy arrays
+        whose columns correspond to the amplified directions in parameter space
+        identified for that germ such that when combined with the amplified directions
+        selected for each other germ in the set we maintain amplificational completeness.
+
+    currentDDD : ndarray
+        The J^T@J matrix for subset of twirled derivative columns selected accross
+        all of the germs. The spectrum of this matrix provides information about the
+        amplificational properties of the reduced vector set. 
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
     
@@ -4431,7 +4481,8 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
                                                              germ_list, 
                                                              'all',
                                                              threshold,
-                                                             float_type=float_type)
+                                                             float_type=float_type,
+                                                             comm=comm)
         if undercompleteModelNum > -1:
             printer.warning("Complete initial germ set FAILS on model "
                             + str(undercompleteModelNum) + ".")
