@@ -248,7 +248,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
             array_types, nprocs, num_params, len(circuits), default_natoms=2 * self.model.dim)  # heuristic?
-
+        printer.log(f'Num Param Processors {npp}')
+        
         printer.log("MapLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
                     (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
         printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
