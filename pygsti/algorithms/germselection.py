@@ -3650,7 +3650,7 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
     
     if (num_nongauge_params is None):
         (_, numGaugeParams,
-         numNonGaugeParams, _) = _get_model_params(model_list
+         numNonGaugeParams, _) = _get_model_params(model_list)
         #TODO: This block doesn't make sense to me anymore. But I also
         #don't think this can be reached, so figure out what the intention here
         #was supposed to be another time.
