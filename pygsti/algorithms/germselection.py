@@ -1414,34 +1414,27 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
     #Use a more memory efficient implementation that builds up the J^T@J matrix
     #borrowing the code used for single-Jac mode in the germ search routine below:
     twirledDerivDaggerDeriv = _np.zeros((Np, Np), dtype=float_type)
-
-    loc_Indices, _, _ = _mpit.distribute_indices(
-        list(range(len(germs_to_test))), comm, False)
-
-    for i, GermIdx in enumerate(loc_Indices):
-        twirledDerivDaggerDeriv += _compute_twirled_ddd(
-            model, germs_to_test[GermIdx], 1. / threshold, float_type=float_type)
-
-    #aggregate each currendDDDList across all procs
-    if comm is not None and comm.Get_size() > 1:
-        result = _np.empty((Np, Np), dtype=float_type)
-        comm.Allreduce(twirledDerivDaggerDeriv, result, op=MPI.SUM)
-        twirledDerivDaggerDeriv[:, :] = result[:, :]
-        result = None  # free mem
-                                                        
-    # result[i] = _np.dot( twirledDeriv[i].H, twirledDeriv[i] ) i.e. matrix
-    # product
-    # result[i,k,l] = sum_j twirledDerivH[i,k,j] * twirledDeriv(i,j,l)
-    # result[i,k,l] = sum_j twirledDeriv_conj[i,j,k] * twirledDeriv(i,j,l)
-
+    
     if weights is None:
         nGerms = len(germs_to_test)
         # weights = _np.array( [1.0/nGerms]*nGerms, 'd')
         weights = _np.array([1.0] * nGerms, 'd')
 
-    #combinedTDDD = _np.einsum('i,ijk->jk', weights, twirledDerivDaggerDeriv)
-    combinedTDDD = _np.tensordot(weights, twirledDerivDaggerDeriv, (0, 0))
-    sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
+    loc_Indices, _, _ = _mpit.distribute_indices(
+        list(range(len(germs_to_test))), comm, False)
+
+    for i, GermIdx in enumerate(loc_Indices):
+        twirledDerivDaggerDeriv += weights[GermIdx]*_compute_twirled_ddd(
+            model, germs_to_test[GermIdx], 1. / threshold, float_type=float_type)
+
+    #aggregate each twirledDerivDaggerDeriv across all procs
+    if comm is not None and comm.Get_size() > 1:
+        result = _np.empty((Np, Np), dtype=float_type)
+        comm.Allreduce(twirledDerivDaggerDeriv, result, op=MPI.SUM)
+        twirledDerivDaggerDeriv[:, :] = result[:, :]
+        result = None  # free mem
+                                                       
+    sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(twirledDerivDaggerDeriv)))
 
     if nGaugeParams is None:
         nGaugeParams = model.num_gauge_params
