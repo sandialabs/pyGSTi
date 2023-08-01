@@ -622,7 +622,7 @@ class QuditSpace(StateSpace):
         """
         The number of qubits in this quantum state space.
         """
-        return len(self.qubit_labels)
+        return len(self.qudit_labels)
 
     @property
     def num_tensor_product_blocks(self):
