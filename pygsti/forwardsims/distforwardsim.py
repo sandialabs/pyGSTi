@@ -456,7 +456,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
             else self._pblk_sizes[0:len(param_dimensions)]  # automatically set these?
 
         if self._processor_grid is not None:
-            assert(_np.product(self._processor_grid) <= nprocs), "`processor_grid` must multiply to # of procs!"
+            assert(_np.prod(self._processor_grid) <= nprocs), "`processor_grid` must multiply to # of procs!"
             na = self._processor_grid[0]
             natoms = max(na, self._num_atoms) if (self._num_atoms is not None) else na
             npp = ()

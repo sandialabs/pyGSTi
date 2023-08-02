@@ -543,7 +543,7 @@ class ComposedOp(_LinearOperator):
             #                 for i, pi in enumerate(p)]
             factor_lists = [factor_lists_cache[i][pi] for i, pi in enumerate(p)]
             for factors in _itertools.product(*factor_lists):
-                mag = _np.product([factor.magnitude for factor in factors])
+                mag = _np.prod([factor.magnitude for factor in factors])
                 if mag >= min_term_mag:
                     terms.append(_term.compose_terms_with_mag(factors, mag))
         return terms
@@ -585,7 +585,7 @@ class ComposedOp(_LinearOperator):
         #  of an errorgen or operator.
         # In this case, since the taylor expansions are composed (~multiplied),
         # the total term magnitude is just the product of those of the components.
-        return _np.product([f.total_term_magnitude for f in self.factorops])
+        return _np.prod([f.total_term_magnitude for f in self.factorops])
 
     @property
     def total_term_magnitude_deriv(self):
@@ -601,7 +601,7 @@ class ComposedOp(_LinearOperator):
             An array of length self.num_params
         """
         opmags = [f.total_term_magnitude for f in self.factorops]
-        product = _np.product(opmags)
+        product = _np.prod(opmags)
         ret = _np.zeros(self.num_params, 'd')
         for opmag, f, f_local_inds in zip(opmags, self.factorops, self._submember_rpindices):
             #f_local_inds = _modelmember._decompose_gpindices(

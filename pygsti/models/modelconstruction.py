@@ -240,7 +240,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
         if opName == "I":
             # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
             labels = to_labels(args)
-            stateSpaceUDim = int(_np.product([state_space.label_udimension(l) for l in labels]))
+            stateSpaceUDim = int(_np.prod([state_space.label_udimension(l) for l in labels]))
             # a complex 2x2 mx unitary for the identity in Pauli-product basis
             Uop = _op.StaticUnitaryOp(_np.identity(stateSpaceUDim, 'complex'), 'pp', build_evotype)
 

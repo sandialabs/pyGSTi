@@ -1034,8 +1034,8 @@ def processor_group_size(nprocs, number_of_tasks):
         fctrs = sorted(_prime_factors(nprocs)); i = 1
         if int(_np.ceil(number_of_tasks)) in fctrs:
             return int(_np.ceil(number_of_tasks))  # we got lucky
-        while _np.product(fctrs[0:i]) < number_of_tasks: i += 1
-        return _np.product(fctrs[0:i])
+        while _np.prod(fctrs[0:i]) < number_of_tasks: i += 1
+        return _np.prod(fctrs[0:i])
 
 
 def sum_arrays(local_array, owners, comm):

@@ -278,7 +278,7 @@ class FASTPolynomial(object):
         #FUTURE: make this function smarter (Russian peasant)
         ret = 0
         for ivar, coeff in self.coeffs.items():
-            ret += coeff * _np.product([variable_values[i] for i in ivar])
+            ret += coeff * _np.prod([variable_values[i] for i in ivar])
         return ret
 
     def compact(self, complex_coeff_tape=True):
@@ -768,7 +768,7 @@ Polynomial = FASTPolynomial
 #         #FUTURE: make this function smarter (Russian peasant)
 #         ret = 0
 #         for ivar, coeff in self.items():
-#             ret += coeff * _np.product([variable_values[i] for i in ivar])
+#             ret += coeff * _np.prod([variable_values[i] for i in ivar])
 #         assert(_np.isclose(ret, self.fastpoly.evaluate(variable_values)))
 #         self._check_fast_polynomial()
 #         return ret

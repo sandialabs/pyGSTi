@@ -129,7 +129,7 @@ def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, memory_t
         :function:`cleanup_shared_ndarray` to ensure `ar` is deallocated properly.
     """
     hostcomm = resource_alloc.host_comm if shared_mem_is_enabled() else None
-    nelements = _np.product(shape)
+    nelements = _np.prod(shape)
     if hostcomm is None or nelements == 0:  # Note: shared memory must be for size > 0
         # every processor allocates its own memory
         if memory_tracker is not None: memory_tracker.add_tracked_memory(nelements)

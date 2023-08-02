@@ -326,9 +326,9 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             array_types, nprocs, num_params, len(circuits), default_natoms=nprocs)
 
         printer.log("TermLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
-                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
+                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)))
         printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
-        assert(_np.product((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
         layout = _TermCOPALayout(circuits, self.model, dataset, natoms, na, npp, param_dimensions,
                                  param_blk_sizes, resource_alloc, printer)
@@ -950,7 +950,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             Eops = [self.model.circuit_layer_operator(elbl, 'povm') for elbl in elabels]
             partial_op_maxmag_values = [op.total_term_magnitude() for op in partial_ops]
             Eop_maxmag_values = [Eop.total_term_magnitude() for Eop in Eops]
-            maxmag_partial_product = _np.product(partial_op_maxmag_values)
+            maxmag_partial_product = _np.prod(partial_op_maxmag_values)
             maxmag_products = [maxmag_partial_product * Eop_val for Eop_val in Eop_maxmag_values]
 
             deriv = _np.zeros((len(elabels), Np), 'd')

@@ -333,7 +333,7 @@ class Basis(_NicelySerializable):
         int
         """
         if self.elshape is None: return 0
-        return int(_np.product(self.elshape))
+        return int(_np.prod(self.elshape))
 
     @property
     def first_element_is_identity(self):
@@ -957,7 +957,7 @@ class ExplicitBasis(Basis):
                 if elshape is None: elshape = el.shape
                 else: assert(elshape == el.shape), "Inconsistent element shapes!"
                 self.elements.append(el)
-            dim = int(_np.product(elshape))
+            dim = int(_np.prod(elshape))
         self.ellookup = {lbl: el for lbl, el in zip(self.labels, self.elements)}  # fast by-label element lookup
 
         if vector_elements is not None:
@@ -1459,7 +1459,7 @@ class DirectSumBasis(LazyBasis):
             number of vectors).
         """
         assert(not self.sparse), "to_elementstd_transform_matrix not implemented for sparse mode"
-        expanddim = self.elsize  # == _np.product(self.elshape)
+        expanddim = self.elsize  # == _np.prod(self.elshape)
         if self.sparse:
             toSimpleStd = _sps.lil_matrix((expanddim, self.size), dtype='complex')
         else:
@@ -1617,7 +1617,7 @@ class TensorProdBasis(LazyBasis):
         spans.  Equivalently, the length of the `vector_elements` of the
         basis.
         """
-        dim = int(_np.product([c.dim for c in self.component_bases]))
+        dim = int(_np.prod([c.dim for c in self.component_bases]))
 
         #NOTE: this is actually to restrictive -- what we need is a test/flag for whether the elements of a
         # basis are in their "natrual" representation where it makes sense to take tensor products.  For
@@ -1635,7 +1635,7 @@ class TensorProdBasis(LazyBasis):
         """
         The number of elements (or vector-elements) in the basis.
         """
-        return int(_np.product([c.size for c in self.component_bases]))
+        return int(_np.prod([c.size for c in self.component_bases]))
 
     @property
     def elshape(self):
