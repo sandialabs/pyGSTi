@@ -26,6 +26,9 @@ from ...modelmembers import states as _state
 from ...modelmembers import operations as _op
 from ...baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from ...circuits.circuit import Circuit as _Circuit
+from pygsti.baseobjs import Basis
+from itertools import product, permutations
+from ...baseobjs import basisconstructors
 
 
 # This module implements idle tomography, which deals only with
@@ -36,281 +39,317 @@ from ...circuits.circuit import Circuit as _Circuit
 # qubit.
 
 
-def hamiltonian_jac_element(prep, error, observable):
-    """
-    Computes the Jacobian matrix element for a Hamiltonian error: how the
-    expectation value of `observable` in state `prep` changes due to
-    Hamiltonian `error`.
-
-    Parameters
-    ----------
-    prep : NQPauliState
-        The state that is prepared.
-
-    error : NQPauliOp
-        The type (as a pauli operator) of Hamiltonian error.
-
-    observable : NQPauliOp
-        The observable whose expectation value is measured.
-        Note: giving a NQPauliState will be treated as an
-        N-qubit Pauli operator whose sign is the product of
-        the signs of the NQPauliState's per-qubit basis signs.
-
-    Returns
-    -------
-    float
-    """
-    # dp/deps where p = eps * i * Tr(Obs (Err*rho - rho*Err)) = eps * i * ( Tr(Obs Err rho) - Tr(Obs rho Err))
-    #                 = eps * i * Tr([Obs,Err] * rho)  so dp/deps just drops eps factor
-    com = error.icommutator_over_2(observable)
-    return 0 if (com is None) else 2 * com.statedot(prep)
+# Commutator Helper Functions
+def commute(mat1, mat2):
+    return mat1 @ mat2 + mat2 @ mat1
 
 
-def stochastic_outcome(prep, error, meas):
-    """
-    Computes the "expected" outcome when the stochastic error `error`
-    occurs between preparing in `prep` and measuring in basis `meas`.
-
-    Note: currently, the preparation and measurement bases must be the
-    same (up to signs) or an AssertionError is raised. (If they're not,
-    there isn't a single expected outcome).
-
-    Parameters
-    ----------
-    prep : NQPauliState
-        The state that is prepared.
-
-    error : NQPauliOp
-        The type (as a pauli operator) of Stochastic error.
-
-    meas : NQPauliState
-        The basis which is measured.  The 'signs' of the basis
-        Paulis determine which state is measured as a '0' vs. a '1'.
-        (essentially the POVM.)
-
-    Returns
-    -------
-    NQOutcome
-    """
-    # We can consider each qubit separately, since Tr(A x B) = Tr(A)Tr(B).
-    # If for the i-th qubit the prep basis is s1*P and the meas basis is s2*P
-    #  (s1 and s2 are the signs -- either +1 or -1 -- and P is the common
-    #  Pauli whose eigenstates 1. form the measurement basis and 2. contain the
-    #  state prep), then we're trying to sell which of:
-    # Tr( (I+s2*P) Err (I+s1*P) ) ['+' or '0' outcome] OR
-    # Tr( (I-s2*P) Err (I+s1*P) ) ['-' or '1' outcome] is nonzero.
-    # Combining these two via use of '+-' and expanding gives:
-    # Tr( Err + s1* Err P +- s2* P Err +- s1*s2* P Err P )
-    #   assuming Err != I so Tr(Err) = 0 and Tr(P Err P) = 0 (b/c P either
-    #   commutes or anticommutes w/Err and P^2 == I) =>
-    # Tr( s1* Err P +- s2* P Err )
-    # if [Err,P] = 0, then the '+'/'0' branch is nonzero when s1==s2
-    #   and the '-'/'1' branch is nonzero when s1!=s2
-    # if {Err,P} = 0, then the opposite is true: '+'/'0' branch is nonzero
-    #   when s1!=s2, etc.
-    # Takeaway: if basis (P) commutes with Err then outcome is '0' if s1==s2, "1" otherwise ...
-    outcome_str = ""
-    for s1, P1, s2, P2, Err in zip(
-        prep.signs, prep.rep, meas.signs, meas.rep, error.rep
-    ):
-        assert P1 == P2, "Stochastic outcomes must prep & measure along same bases!"
-        P = P1  # ( = P2)
-        if _pobjs._commute_parity(P, Err) == 1:  # commutes: [P,Err] == 0
-            outcome_str += "0" if (s1 == s2) else "1"
-        else:  # anticommutes: {P,Err} == 0
-            outcome_str += "1" if (s1 == s2) else "0"
-
-    return _pobjs.NQOutcome(outcome_str)
+def anti_commute(mat1, mat2):
+    return mat1 @ mat2 - mat2 @ mat1
 
 
-# Now we can define the functions that do the real work for stochastic tomography.
+# Hamiltonian Error Generator
+def hamiltonian_error_generator(initial_state, indexed_pauli, identity):
+    return 2 * (
+        -1j * indexed_pauli @ initial_state @ identity
+        + 1j * identity @ initial_state @ indexed_pauli
+    )
 
 
-# StochasticMatrixElement() computes the derivative of the probability of "Outcome" with respect
-# to the rate of "Error" if the N-qubit Pauli basis defined by "PrepMeas" is prepped and measured.
-def stochastic_jac_element(prep, error, meas, outcome):
-    """
-    Computes the Jacobian matrix element for a Stochastic error: how the
-    probability of `outcome` changes with respect to the rate of `error`
-    when preparing state `prep` and measuring in basis `meas`.
-
-    Parameters
-    ----------
-    prep : NQPauliState
-        The state that is prepared.
-
-    error : NQPauliOp
-        The type (as a pauli operator) of Stochastic error.
-
-    meas : NQPauliState
-        The basis that is measured (essentially the POVM).
-
-    outcome : NQOutcome
-        The measurement outcome that is considered.
-
-    Returns
-    -------
-    float
-    """
-    print("prep: ", prep)
-    print("error", error)
-    print("meas: ", meas)
-    print("function output: ", stochastic_outcome(prep, error, meas))
-    print("outcome", outcome)
-    return 1 if (stochastic_outcome(prep, error, meas) == outcome) else 0
+# Stochastic Error Generator
+def stochastic_error_generator(initial_state, indexed_pauli, identity):
+    return 2 * (
+        indexed_pauli @ initial_state @ indexed_pauli
+        - identity @ initial_state @ identity
+    )
 
 
-def affine_jac_element(prep, error, meas, outcome):
-    """
-    Computes the Jacobian matrix element for a Affine error: how the
-    probability of `outcome` changes with respect to the rate of `error`
-    when preparing state `prep` and measuring in basis `meas`.
+# Pauli-correlation Error Generator
+def pauli_correlation_error_generator(
+    initial_state,
+    pauli_index_1,
+    pauli_index_2,
+):
+    return 2 * (
+        pauli_index_1 @ initial_state @ pauli_index_2
+        + pauli_index_2 @ initial_state @ pauli_index_1
+        - 0.5 * commute(commute(pauli_index_1, pauli_index_2), initial_state)
+    )
 
-    Note: Affine error maps leave qubits corresponging to I's in
-    `error` alone.  An affine error is defined as replacing
-    portions of the density matrix corresponding to *non-trivial*
-    Pauli operators with those operators.
 
-    Parameters
-    ----------
-    prep : NQPauliState
-        The state that is prepared.
+# Anti-symmetric Error Generator
+def anti_symmetric_error_generator(initial_state, pauli_index_1, pauli_index_2):
+    return 2j * (
+        pauli_index_1 @ initial_state @ pauli_index_2
+        - pauli_index_2 @ initial_state @ pauli_index_1
+        + 0.5
+        * commute(
+            anti_commute(pauli_index_1, pauli_index_2),
+            initial_state,
+        )
+    )
 
-    error : NQPauliOp
-        The type (as a pauli operator) of Affine error.
 
-    meas : NQPauliState
-        The basis that is measured (essentially the POVM).
+# Convert basis
+def convert_to_pauli(matrix, numQubits):
+    pauliNames1Q = ["I", "X", "Y", "Z"]
+    # Hard force to 1- or 2-qubit
+    if numQubits == 1:
+        pauliNames = pauliNames1Q
+    elif numQubits == 2:
+        pauliNames = ["".join(name) for name in product(pauliNames1Q, pauliNames1Q)]
+    pp = Basis.cast("PP", dim=4**numQubits)
+    translationMatrix = pp.from_std_transform_matrix
+    coefs = _np.real_if_close(_np.dot(translationMatrix, matrix.flatten()))
+    return [(a, b) for (a, b) in zip(coefs, pauliNames) if abs(a) > 0.0001]
 
-    outcome : NQOutcome
-        The measurement outcome that is considered.
 
-    Returns
-    -------
-    float
-    """
-    # Note an error of 'ZI' does *not* mean the "ZI affine error":
-    #   rho -> (Id[rho] + eps*AffZI[rho]) = rho + eps*ZI
-    #   where ZI = diag(1,1,-1,-1), so this adds prob to 00 and 01 and removes from 10 and 11.
-    # Instead it means the map AffZ x Id where AffZ : rho -> rho + eps Z and Id : rho -> rho.
+# Compute the set of measurable effects of Hamiltonian error generators operating on two qubits in each of the specified eigenstates
+# Return: hamiltonian error and coef dictionary
+def gather_hamiltonian_jacobian_coefs(pauliDict, numQubits, printFlag=True):
+    parities = [1, -1]
+    hamiltonianErrorOutputs = dict()
+    identKey = "I" * numQubits
+    ident = pauliDict[identKey]
 
-    def _affhelper(
-        prep_sign, prep_basis, error_pauli, meas_sign, meas_basis, outcome_bit
-    ):
-        """
-        Answers this question:
-        If a qubit is prepped in state (prep_sign,prep_basis) & measured
-        using POVM (meas_sign,meas_basis), and experiences an affine error given
-        (at this qubit) by Pauli "error_pauli", then at what rate does that change probability of outcome "bit"?
-        This is going to get multiplied over all qubits.  A zero indicates that the affine error is orthogonal
-        to the measurement basis, which means the probability of *all* outcomes including this bit are unaffected.
+    pauliDictProduct = list(
+        _itertools.product(
+            [key for key in pauliDict.keys() if key != identKey],
+            [key for key in pauliDict.keys() if key != identKey],
+        )
+    )
+    for pauliPair in pauliDictProduct:
+        for parity in parities:
+            inputStateName = str(parity)[:-1] + pauliPair[0]
+            inputState = parity * pauliDict[pauliPair[0]]
+            indexedPauli = pauliDict[pauliPair[1]]
+            inputState = ident / 2 + inputState / 2
 
-        Returns 0, +1, or -1.
-        """
-        # Specifically, this computes Tr( (I+/-P) AffErr[ (I+/-P) ] ) where the two
-        # P's represent the prep & measure bases (and can be different).  Here AffErr
-        # outputs ErrP if ErrP != 'I', otherwise it's just the identity map (see above).
-        #
-        # Thus, when ErrP != 'I', we have Tr( (I+/-P) ErrP ) which equals 0 whenever
-        # ErrP != P and +/-1 if ErrP == P.  The sign equals meas_sign when outcome_bit == "0",
-        # and is reversed when it == "1".
-        # When ErrP == 'I', we have Tr( (I+/-P) (I+/-P) ) = Tr( I + sign*I)
-        #  = 1 where sign = prep_sign*meas_sign when outcome == "0" and -1 times
-        #      this when == "1".
-        #  = 0 otherwise
-
-        assert prep_basis in ("X", "Y", "Z")  # 'I', for instance, is invalid
-        assert meas_basis in ("X", "Y", "Z")  # 'I', for instance, is invalid
-        assert prep_basis == meas_basis  # always true
-        outsign = (
-            1 if (outcome_bit == "0") else -1
-        )  # b/c we often just flip a sign when == "1"
-        # i.e. the sign used in I+/-P for measuring is meas_sign * outsign
-
-        if error_pauli == "I":  # special case: no affine action on this space
-            if prep_basis == meas_basis:
-                return 1 if (prep_sign * meas_sign * outsign == 1) else 0
-            else:
-                return 1  # bases don't match
-
-        if (
-            meas_basis != error_pauli
-        ):  # then they don't commute (b/c neither can be 'I')
-            return 0  # so there's no change along this axis (see docstring)
-        else:  # meas_basis == error_pauli != 'I'
-            if outcome_bit == "0":
-                return meas_sign
-            else:
-                return meas_sign * -1
-
-    return _np.prod(
-        [
-            _affhelper(s1, P1, Err, s2, P2, o)
-            for s1, P1, s2, P2, Err, o in zip(
-                prep.signs, prep.rep, meas.signs, meas.rep, error.rep, outcome.rep
+            process_matrix = hamiltonian_error_generator(
+                inputState, indexedPauli, ident
             )
-        ]
+            decomposition = convert_to_pauli(process_matrix, numQubits)
+            for element in decomposition:
+                hamiltonianErrorOutputs[
+                    ((inputStateName, element[1]), pauliPair[1])
+                ] = element[0]
+    if printFlag:
+        for key in hamiltonianErrorOutputs:
+            print(key, "\n", hamiltonianErrorOutputs[key])
+    return hamiltonianErrorOutputs
+
+
+# Compute the set of measurable effects of stochastic error generators operating on a single qubit in each of the specified eigenstates
+def gather_stochastic_jacobian_coefs(pauliDict, numQubits, printFlag=False):
+    parities = [1, -1]
+    stochasticErrorOutputs = dict()
+    identKey = "I" * numQubits
+    ident = pauliDict[identKey]
+
+    pauliDictProduct = list(
+        _itertools.product(
+            [key for key in pauliDict.keys() if key != identKey],
+            [key for key in pauliDict.keys() if key != identKey],
+        )
+    )
+    for pauliPair in pauliDictProduct:
+        for parity in parities:
+            inputStateName = str(parity)[:-1] + pauliPair[0]
+            inputState = parity * pauliDict[pauliPair[0]]
+            indexedPauli = pauliDict[pauliPair[1]]
+            inputState = ident / 2 + inputState / 2
+
+            process_matrix = stochastic_error_generator(inputState, indexedPauli, ident)
+            decomposition = convert_to_pauli(process_matrix, numQubits)
+            for element in decomposition:
+                stochasticErrorOutputs[
+                    ((inputStateName, element[1]), pauliPair[1])
+                ] = element[0]
+    if printFlag:
+        for key in stochasticErrorOutputs:
+            print(key, "\n", stochasticErrorOutputs[key])
+
+    return stochasticErrorOutputs
+
+
+# Compute the set of measurable effects of pauli-correlation error generators operating on a single qubit in each of the specified eigenstates
+def gather_pauli_correlation_jacobian_coefs(pauliDict, numQubits, printFlag=False):
+    pauliCorrelationErrorOutputs = dict()
+    parities = [1, -1]
+    identKey = "I" * numQubits
+    ident = pauliDict[identKey]
+
+    pauliDictProduct = list(
+        _itertools.permutations([key for key in pauliDict.keys() if key != identKey], 2)
     )
 
-
-def affine_jac_obs_element(prep, error, observable):
-    """
-    Computes the Jacobian matrix element for a Affine error: how the
-    expectation value of `observable` changes with respect to the rate of
-    `error` when preparing state `prep`.
-
-    Note: Affine error maps leave qubits corresponging to I's in
-    `error` alone.  An affine error is defined as replacing
-    portions of the density matrix corresponding to *non-trivial*
-    Pauli operators with those operators.
-
-    Parameters
-    ----------
-    prep : NQPauliState
-        The state that is prepared.
-
-    error : NQPauliOp
-        The type (as a pauli operator) of Affine error.
-
-    observable : NQPauliOp
-        The observable whose expectation value is measured.
-
-    Returns
-    -------
-    float
-    """
-    # Computes the Jacobian element of Tr(observable * error * prep) with basis
-    # convention given by `meas` (dictates sign of outcome).
-    # (observable should be equal to meas when it's not equal to 'I', up to sign)
-
-    # Note: as in affine_jac_element, 'I's in error mean that this affine error
-    # doesn't act (acts as the identity) on that qubit.
-
-    def _affhelper(prep_sign, prep_basis, error_pauli, obs_pauli):
-        assert prep_basis in ("X", "Y", "Z")  # 'I', for instance, is invalid
-
-        # want Tr(obs_pauli * AffErr[ I+/-P ] ).  There are several cases:
-        # 1) if obs_pauli == 'I':
-        #   - if error_pauli == 'I' (so AffErr = Id), Tr(I +/- P) == 1 always
-        #   - if error_pauli != 'I', Tr(ErrP) == 0 since ErrP != 'I'
-        # 2) if obs_pauli != 'I' (so Tr(obs_pauli) == 0)
-        #   - if error_pauli == 'I', Tr(obs_pauli * (I +/- P)) = prep_sign if (obs_pauli == prep_basis) else 0
-        #   - if error_pauli != 'I', Tr(obs_pauli * error_pauli) = 1 if (obs_pauli == error_pauli) else 0
-        #      (and actually this counts at 2 instead of 1 b/c obs isn't normalized (I think?))
-
-        if obs_pauli == "I":
-            return 1 if (error_pauli == "I") else 0
-        elif error_pauli == "I":
-            return prep_sign if (prep_basis == obs_pauli) else 0
-        else:
-            return 1 if (obs_pauli == error_pauli) else 0
-
-    return _np.prod(
-        [
-            _affhelper(s1, P1, Err, o)
-            for s1, P1, Err, o in zip(prep.signs, prep.rep, error.rep, observable.rep)
-        ]
+    pauliDictProduct = list(
+        _itertools.product(
+            [key for key in pauliDict.keys() if key != identKey], pauliDictProduct
+        )
     )
+    for pauliPair in pauliDictProduct:
+        for parity in parities:
+            inputStateName = str(parity)[:-1] + pauliPair[0]
+            inputState = parity * pauliDict[pauliPair[0]]
+            indexedPauli1 = pauliDict[pauliPair[1][0]]
+            indexedPauli2 = pauliDict[pauliPair[1][1]]
+            inputState = ident / 2 + inputState / 2
+            process_matrix = pauli_correlation_error_generator(
+                inputState, indexedPauli1, indexedPauli2
+            )
+            decomposition = convert_to_pauli(process_matrix, numQubits)
+            for element in decomposition:
+                pauliCorrelationErrorOutputs[
+                    ((inputStateName, element[1]), pauliPair[1])
+                ] = element[0]
+
+    if printFlag:
+        for key in pauliCorrelationErrorOutputs:
+            print(key, "\n", pauliCorrelationErrorOutputs[key])
+
+    return pauliCorrelationErrorOutputs
+
+
+# Compute the set of measurable effects of pauli-correlation error generators operating on a single qubit in each of the specified eigenstates
+def gather_anti_symmetric_jacobian_coefs(pauliDict, numQubits, printFlag=False):
+    antiSymmetricErrorOutputs = dict()
+    parities = [1, -1]
+    identKey = "I" * numQubits
+    ident = pauliDict[identKey]
+
+    pauliDictProduct = list(
+        _itertools.permutations([key for key in pauliDict.keys() if key != identKey], 2)
+    )
+
+    pauliDictProduct = list(
+        _itertools.product(
+            [key for key in pauliDict.keys() if key != identKey], pauliDictProduct
+        )
+    )
+    for pauliPair in pauliDictProduct:
+        for parity in parities:
+            inputStateName = str(parity)[:-1] + pauliPair[0]
+            inputState = parity * pauliDict[pauliPair[0]]
+            indexedPauli1 = pauliDict[pauliPair[1][0]]
+            indexedPauli2 = pauliDict[pauliPair[1][1]]
+            inputState = ident / 2 + inputState / 2
+            process_matrix = anti_symmetric_error_generator(
+                inputState, indexedPauli1, indexedPauli2
+            )
+            decomposition = convert_to_pauli(process_matrix, numQubits)
+            for element in decomposition:
+                antiSymmetricErrorOutputs[
+                    ((inputStateName, element[1]), pauliPair[1])
+                ] = element[0]
+    if printFlag:
+        for key in antiSymmetricErrorOutputs:
+            print(key, "\n", antiSymmetricErrorOutputs[key])
+
+    return antiSymmetricErrorOutputs
+
+
+def build_class_jacobian(classification, numQubits):
+    pauli_matrices = basisconstructors.pp_matrices_dict(2**numQubits, normalize=False)
+    identKey = "I" * numQubits
+
+    # classification within ["H", "S", "C", "A"]
+    if classification == "H":
+        jacobian_coefs = gather_hamiltonian_jacobian_coefs(
+            pauliDict=pauli_matrices,
+            numQubits=numQubits,
+            printFlag=False,
+        )
+        # print(jacobian_coefs)
+
+    elif classification == "S":
+        jacobian_coefs = gather_stochastic_jacobian_coefs(
+            pauliDict=pauli_matrices,
+            numQubits=numQubits,
+            printFlag=False,
+        )
+        # print(jacobian_coefs)
+    elif classification == "C":
+        jacobian_coefs = gather_pauli_correlation_jacobian_coefs(
+            pauliDict=pauli_matrices,
+            numQubits=numQubits,
+            printFlag=False,
+        )
+        # print(jacobian_coefs)
+    elif classification == "A":
+        jacobian_coefs = gather_anti_symmetric_jacobian_coefs(
+            pauliDict=pauli_matrices,
+            numQubits=numQubits,
+            printFlag=False,
+        )
+        # print(jacobian_coefs)
+    else:
+        print(
+            "Classification value must be 'H', 'S', 'C', or 'A'.  Please provide a valid argument."
+        )
+        quit()
+
+    return jacobian_coefs
+
+
+def dict_to_jacobian(coef_dict, classification, numQubits):
+    pauli_matrices = basisconstructors.pp_matrices_dict(2**numQubits, normalize=False)
+    identKey = "I" * numQubits
+    initial_states = [key for key in pauli_matrices.keys() if key != identKey] + [
+        str("-" + key) for key in pauli_matrices.keys() if key != identKey
+    ]
+
+    if classification == "H" or classification == "S":
+        pauliDictProduct = list(
+            _itertools.product(
+                initial_states,
+                [key for key in pauli_matrices.keys() if key != identKey],
+            )
+        )
+        index_list = [key for key in pauli_matrices.keys() if key != identKey]
+        output_jacobian = _np.zeros((len(pauliDictProduct), len(index_list)))
+        quit()
+    elif classification == "C" or classification == "A":
+        pass
+    else:
+        print(
+            "Classification value must be 'H', 'S', 'C', or 'A'.  Please provide a valid argument."
+        )
+        quit()
+    return output_jacobian
+
+
+def jacobian_index_label(numQubits):
+    index_labels = {"rows": {}, "columns": {}}
+    if numQubits == 1:
+        pauliNames = pauliNames1Q
+        initialStates = pauliStates1Q
+    elif numQubits == 2:
+        pauliNames = ["".join(name) for name in product(pauliNames1Q, pauliNames1Q)]
+        initialStates = [
+            ",".join((name))
+            for name in product(pauliStates1Q + ["I"], pauliStates1Q + ["I"])
+        ][:-1]
+    extrinsicErrorList = dict(enumerate(product(pauliNames[1:], initialStates)))
+    extrinsicErrorList = {(v[1], v[0]): k for k, v in extrinsicErrorList.items()}
+    index_labels["rows"] = extrinsicErrorList
+    index_register = 0
+    pauliIndexList = dict(enumerate(pauliNames[1:]))
+    pauliIndexList = {v: k for k, v in pauliIndexList.items()}
+    for k, v in pauliIndexList.items():
+        index_labels["columns"][("H", k)] = v
+    index_register = len(index_labels["columns"])
+    for k, v in pauliIndexList.items():
+        index_labels["columns"][("S", k)] = v + index_register
+    index_register = len(index_labels["columns"])
+    pauliIndexList = dict(enumerate(permutations(pauliNames[1:], 2)))
+    pauliIndexList = {v: k for k, v in pauliIndexList.items()}
+    for k, v in pauliIndexList.items():
+        index_labels["columns"][("C", k)] = v + index_register
+    index_register = len(index_labels["columns"])
+    for k, v in pauliIndexList.items():
+        index_labels["columns"][("A", k)] = v + index_register
+    return index_labels
 
 
 # -----------------------------------------------------------------------------

@@ -1,14 +1,14 @@
 """
 Functions for creating the standard sets of matrices in the standard, Pauli, Gell-Mann, and qutrit bases
 """
-#***************************************************************************************************
+# ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
-#***************************************************************************************************
+# ***************************************************************************************************
 import itertools as _itertools
 import numbers as _numbers
 import numpy as _np
@@ -45,15 +45,30 @@ def mut(i, j, n):
         A `(n,n)`-shaped array that is all zeros except a single "1"
         in the `i`,`j` element.
     """
-    mx = _np.zeros((n, n), 'd'); mx[i, j] = 1.0
+    mx = _np.zeros((n, n), "d")
+    mx[i, j] = 1.0
     return mx
 
 
 MX_UNIT_VEC = (mut(0, 0, 2), mut(0, 1, 2), mut(1, 0, 2), mut(1, 1, 2))
-MX_UNIT_VEC_2Q = (mut(0, 0, 4), mut(0, 1, 4), mut(0, 2, 4), mut(0, 3, 4),
-                  mut(1, 0, 4), mut(1, 1, 4), mut(1, 2, 4), mut(1, 3, 4),
-                  mut(2, 0, 4), mut(2, 1, 4), mut(2, 2, 4), mut(2, 3, 4),
-                  mut(3, 0, 4), mut(3, 1, 4), mut(3, 2, 4), mut(3, 3, 4))
+MX_UNIT_VEC_2Q = (
+    mut(0, 0, 4),
+    mut(0, 1, 4),
+    mut(0, 2, 4),
+    mut(0, 3, 4),
+    mut(1, 0, 4),
+    mut(1, 1, 4),
+    mut(1, 2, 4),
+    mut(1, 3, 4),
+    mut(2, 0, 4),
+    mut(2, 1, 4),
+    mut(2, 2, 4),
+    mut(2, 3, 4),
+    mut(3, 0, 4),
+    mut(3, 1, 4),
+    mut(3, 2, 4),
+    mut(3, 3, 4),
+)
 
 MAX_BASIS_MATRIX_DIM = 2**6
 
@@ -63,12 +78,16 @@ def _check_dim(dim):
     if not isinstance(dim, _numbers.Integral):
         dim = max(dim)  # assume dim is a list/tuple of dims & just consider max
     if dim > MAX_BASIS_MATRIX_DIM:
-        raise ValueError(("You have requested to build a basis with %d x %d matrices."
-                          " This is pretty big and so we're throwing this error because"
-                          " there's a good chance you didn't mean to to this.  If you "
-                          " really want to, increase `pygsti.tools.basisconstructors.MAX_BASIS_MATRIX_DIM`"
-                          " (currently == %d) to something greater than %d and rerun this.")
-                         % (dim, dim, MAX_BASIS_MATRIX_DIM, dim))
+        raise ValueError(
+            (
+                "You have requested to build a basis with %d x %d matrices."
+                " This is pretty big and so we're throwing this error because"
+                " there's a good chance you didn't mean to to this.  If you "
+                " really want to, increase `pygsti.tools.basisconstructors.MAX_BASIS_MATRIX_DIM`"
+                " (currently == %d) to something greater than %d and rerun this."
+            )
+            % (dim, dim, MAX_BASIS_MATRIX_DIM, dim)
+        )
 
 
 class MatrixBasisConstructor(object):
@@ -95,7 +114,9 @@ class MatrixBasisConstructor(object):
         real components.
     """
 
-    def __init__(self, longname, matrixgen_fn, labelgen_fn, real, first_element_is_identity):
+    def __init__(
+        self, longname, matrixgen_fn, labelgen_fn, real, first_element_is_identity
+    ):
         """
         Create a new MatrixBasisConstructor:
 
@@ -138,7 +159,9 @@ class MatrixBasisConstructor(object):
         int
         """
         d = int(round(_np.sqrt(dim)))
-        assert(d**2 == dim), "Matrix bases can only have dimension = perfect square (not %d)!" % dim
+        assert d**2 == dim, (
+            "Matrix bases can only have dimension = perfect square (not %d)!" % dim
+        )
         return d
 
     def labeler(self, dim, sparse):
@@ -176,7 +199,8 @@ class MatrixBasisConstructor(object):
         list of basis elements
         """
         els = self.matrixgen_fn(self.matrix_dim(dim))
-        if sparse: els = [_sps.csr_matrix(el) for el in els]
+        if sparse:
+            els = [_sps.csr_matrix(el) for el in els]
         return els
 
     def sizes(self, dim, sparse):
@@ -211,7 +235,8 @@ class MatrixBasisConstructor(object):
         nElements = dim  # the number of matrices in the basis
         basisDim = dim  # the dimension of the vector space this basis is for
         # (== size for a full basis, > size for a partial basis)
-        d = self.matrix_dim(dim); elshape = (d, d)
+        d = self.matrix_dim(dim)
+        elshape = (d, d)
         return nElements, basisDim, elshape
 
 
@@ -239,11 +264,12 @@ class DiagonalMatrixBasisConstructor(MatrixBasisConstructor):
         -------
         list of basis elements
         """
-        dtype = 'd' if self.real else 'complex'
+        dtype = "d" if self.real else "complex"
         d = self.matrix_dim(dim)
         vectorgen_fn = self.matrixgen_fn  # matrixgen really just construct vectors
         els = [_np.array(_np.diag(v), dtype) for v in vectorgen_fn(d)]
-        if sparse: els = [_sps.csr_matrix(el) for el in els]
+        if sparse:
+            els = [_sps.csr_matrix(el) for el in els]
         return els
 
     def sizes(self, dim, sparse):
@@ -275,7 +301,8 @@ class DiagonalMatrixBasisConstructor(MatrixBasisConstructor):
             The shape of the elements that might be
             constructed (if `constructor` was called).
         """
-        d = self.matrix_dim(dim); elshape = (d, d)
+        d = self.matrix_dim(dim)
+        elshape = (d, d)
         nElements = d  # the number of matrices in the basis
         basisDim = dim  # the dimension of the vector space this basis
         return nElements, basisDim, elshape
@@ -310,10 +337,11 @@ class SingleElementMatrixBasisConstructor(MatrixBasisConstructor):
             The shape of the elements that might be
             constructed (if `constructor` was called).
         """
-        nElements = 1   # the number of matrices in the basis
+        nElements = 1  # the number of matrices in the basis
         basisDim = dim  # the dimension of the vector space this basis is for
         # (== size for a full basis, > size for a partial basis)
-        d = self.matrix_dim(dim); elshape = (d, d)
+        d = self.matrix_dim(dim)
+        elshape = (d, d)
         return nElements, basisDim, elshape
 
 
@@ -401,7 +429,7 @@ class VectorBasisConstructor(object):
         list of basis elements
         """
         els = self.vectorgen_fn(dim)
-        assert(not sparse), "Sparse vector bases not supported (yet)"
+        assert not sparse, "Sparse vector bases not supported (yet)"
         return els
 
     def sizes(self, dim, sparse):
@@ -467,7 +495,7 @@ def std_matrices(matrix_dim):
     a single "1" entry amidst a background of zeros.
     """
     _check_dim(matrix_dim)
-    basisDim = matrix_dim ** 2
+    basisDim = matrix_dim**2
 
     mxList = []
     for i in range(matrix_dim):
@@ -491,8 +519,10 @@ def std_labels(matrix_dim):
     -------
     list of strs
     """
-    if matrix_dim == 0: return []
-    if matrix_dim == 1: return ['']  # special case - use empty label instead of "I"
+    if matrix_dim == 0:
+        return []
+    if matrix_dim == 1:
+        return [""]  # special case - use empty label instead of "I"
     return ["(%d,%d)" % (i, j) for i in range(matrix_dim) for j in range(matrix_dim)]
 
 
@@ -524,7 +554,7 @@ def col_matrices(matrix_dim):
     a single "1" entry amidst a background of zeros.
     """
     _check_dim(matrix_dim)
-    basisDim = matrix_dim ** 2
+    basisDim = matrix_dim**2
 
     mxList = []
     for row_index in range(matrix_dim):
@@ -548,8 +578,10 @@ def col_labels(matrix_dim):
     -------
     list of strs
     """
-    if matrix_dim == 0: return []
-    if matrix_dim == 1: return ['']  # special case - use empty label instead of "I"
+    if matrix_dim == 0:
+        return []
+    if matrix_dim == 1:
+        return [""]  # special case - use empty label instead of "I"
     return ["(%d,%d)" % (j, i) for i in range(matrix_dim) for j in range(matrix_dim)]
 
 
@@ -559,11 +591,11 @@ def _get_gell_mann_non_identity_diag_mxs(dimension):
     if d > 2:
         dm1_listOfMxs = _get_gell_mann_non_identity_diag_mxs(d - 1)
         for dm1_mx in dm1_listOfMxs:
-            mx = _np.zeros((d, d), 'complex')
-            mx[0:d - 1, 0:d - 1] = dm1_mx
+            mx = _np.zeros((d, d), "complex")
+            mx[0 : d - 1, 0 : d - 1] = dm1_mx
             listOfMxs.append(mx)
     if d > 1:
-        mx = _np.identity(d, 'complex')
+        mx = _np.identity(d, "complex")
         mx[d - 1, d - 1] = 1 - d
         mx *= _np.sqrt(2.0 / (d * (d - 1)))
         listOfMxs.append(mx)
@@ -596,29 +628,31 @@ def gm_matrices_unnormalized(matrix_dim):
         equal to sum( block_dim_i^2 ).
     """
     _check_dim(matrix_dim)
-    if matrix_dim == 0: return []
+    if matrix_dim == 0:
+        return []
     if isinstance(matrix_dim, _numbers.Integral):
         d = matrix_dim
-        #Identity Mx
-        listOfMxs = [_np.identity(d, 'complex')]
+        # Identity Mx
+        listOfMxs = [_np.identity(d, "complex")]
 
-        #Non-diagonal matrices -- only take those whose non-zero elements are not "frozen" in cssb case
+        # Non-diagonal matrices -- only take those whose non-zero elements are not "frozen" in cssb case
         for k in range(d):
             for j in range(k + 1, d):
-                mx = _np.zeros((d, d), 'complex')
+                mx = _np.zeros((d, d), "complex")
                 mx[k, j] = mx[j, k] = 1.0
                 listOfMxs.append(mx)
 
         for k in range(d):
             for j in range(k + 1, d):
-                mx = _np.zeros((d, d), 'complex')
-                mx[k, j] = -1.0j; mx[j, k] = 1.0j
+                mx = _np.zeros((d, d), "complex")
+                mx[k, j] = -1.0j
+                mx[j, k] = 1.0j
                 listOfMxs.append(mx)
 
-        #Non-Id Diagonal matrices
+        # Non-Id Diagonal matrices
         listOfMxs.extend(_get_gell_mann_non_identity_diag_mxs(d))
 
-        assert(len(listOfMxs) == d**2)
+        assert len(listOfMxs) == d**2
         return listOfMxs
     else:
         raise ValueError("Invalid matrix_dim = %s" % str(matrix_dim))
@@ -673,26 +707,26 @@ def gm_labels(matrix_dim):
     -------
     list
     """
-    if matrix_dim == 0: return []
-    if matrix_dim == 1: return ['']  # special case - use empty label instead of "I"
+    if matrix_dim == 0:
+        return []
+    if matrix_dim == 1:
+        return [""]  # special case - use empty label instead of "I"
     if matrix_dim == 2:  # Special case of Pauli's
         return ["I", "X", "Y", "Z"]
 
     d = matrix_dim
     lblList = []
 
-    #labels for gm_matrices of dim "blockDim":
+    # labels for gm_matrices of dim "blockDim":
     lblList.append("I")  # identity on i-th block
 
-    #X-like matrices, containing 1's on two off-diagonal elements (k,j) & (j,k)
-    lblList.extend(["X_{%d,%d}" % (k, j)
-                    for k in range(d) for j in range(k + 1, d)])
+    # X-like matrices, containing 1's on two off-diagonal elements (k,j) & (j,k)
+    lblList.extend(["X_{%d,%d}" % (k, j) for k in range(d) for j in range(k + 1, d)])
 
-    #Y-like matrices, containing -1j & 1j on two off-diagonal elements (k,j) & (j,k)
-    lblList.extend(["Y_{%d,%d}" % (k, j)
-                    for k in range(d) for j in range(k + 1, d)])
+    # Y-like matrices, containing -1j & 1j on two off-diagonal elements (k,j) & (j,k)
+    lblList.extend(["Y_{%d,%d}" % (k, j) for k in range(d) for j in range(k + 1, d)])
 
-    #Z-like matrices, diagonal mxs with 1's on diagonal until (k,k) element == 1-d,
+    # Z-like matrices, diagonal mxs with 1's on diagonal until (k,k) element == 1-d,
     # then diagonal elements beyond (k,k) are zero.  This matrix is then scaled
     # by sqrt( 2.0 / (d*(d-1)) ) to ensure proper normalization.
     lblList.extend(["Z_{%d}" % (k) for k in range(1, d)])
@@ -738,14 +772,15 @@ def qsim_matrices(matrix_dim):
     Matrices are ordered with first qubit being most significant,
     e.g., for 2 qubits: 00, 0X, 0Y, 01, X0, XX, XY, X1, Y0, ... 11
     """
-    sig0q = _np.array([[1., 0], [0, 0]], dtype='complex')
-    sigXq = _np.array([[0, 1], [1, 0]], dtype='complex')
-    sigYq = _np.array([[0, -1], [1, 0]], dtype='complex') * 1.j
-    sig1q = _np.array([[0, 0], [0, 1]], dtype='complex')
+    sig0q = _np.array([[1.0, 0], [0, 0]], dtype="complex")
+    sigXq = _np.array([[0, 1], [1, 0]], dtype="complex")
+    sigYq = _np.array([[0, -1], [1, 0]], dtype="complex") * 1.0j
+    sig1q = _np.array([[0, 0], [0, 1]], dtype="complex")
 
     _check_dim(matrix_dim)
-    sigmaVec = (sig0q, sigXq / _np.sqrt(2.), sigYq / _np.sqrt(2.), sig1q)
-    if matrix_dim == 0: return []
+    sigmaVec = (sig0q, sigXq / _np.sqrt(2.0), sigYq / _np.sqrt(2.0), sig1q)
+    if matrix_dim == 0:
+        return []
 
     def _is_integer(x):
         return bool(abs(x - round(x)) < 1e-6)
@@ -753,17 +788,18 @@ def qsim_matrices(matrix_dim):
     nQubits = _np.log2(matrix_dim)
     if not _is_integer(nQubits):
         raise ValueError(
-            "Dimension for QuantumSim tensor product matrices must be an integer *power of 2* (not %d)" % matrix_dim)
+            "Dimension for QuantumSim tensor product matrices must be an integer *power of 2* (not %d)"
+            % matrix_dim
+        )
     nQubits = int(round(nQubits))
 
     if nQubits == 0:  # special case: return single 1x1 identity mx
-        return [_np.identity(1, 'complex')]
+        return [_np.identity(1, "complex")]
 
     matrices = []
     basisIndList = [[0, 1, 2, 3]] * nQubits
     for sigmaInds in _itertools.product(*basisIndList):
-
-        M = _np.identity(1, 'complex')
+        M = _np.identity(1, "complex")
         for i in sigmaInds:
             M = _np.kron(M, sigmaVec[i])
         matrices.append(M)
@@ -784,21 +820,110 @@ def qsim_labels(matrix_dim):
     -------
     list
     """
+
     def _is_integer(x):
         return bool(abs(x - round(x)) < 1e-6)
-    if matrix_dim == 0: return []
-    if matrix_dim == 1: return ['']  # special case - use empty label instead of "I"
+
+    if matrix_dim == 0:
+        return []
+    if matrix_dim == 1:
+        return [""]  # special case - use empty label instead of "I"
 
     nQubits = _np.log2(matrix_dim)
     if not _is_integer(nQubits):
-        raise ValueError("Dimension for QuantumSim tensor product matrices must be an integer *power of 2*")
+        raise ValueError(
+            "Dimension for QuantumSim tensor product matrices must be an integer *power of 2*"
+        )
     nQubits = int(round(nQubits))
 
     lblList = []
-    basisLblList = [['0', 'X', 'Y', '1']] * nQubits
+    basisLblList = [["0", "X", "Y", "1"]] * nQubits
     for sigmaLbls in _itertools.product(*basisLblList):
-        lblList.append(''.join(sigmaLbls))
+        lblList.append("".join(sigmaLbls))
     return lblList
+
+
+def pp_matrices_dict(matrix_dim, max_weight=None, normalize=True):
+    """
+    Get the elements of the Pauil-product basis with matrix dimension `matrix_dim`.
+
+    These matrices span the space of matrix_dim x matrix_dim density matrices
+    (matrix-dimension matrix_dim, space dimension matrix_dim^2).
+
+    The returned matrices are given in the standard basis of the
+    density matrix space, and are thus kronecker products of
+    the standard representation of the Pauli matrices, (i.e. where
+    sigma_y == [[ 0, -i ], [i, 0]] ) normalized (when `normalize=True`
+    so that the resulting basis is orthonormal under the trace inner
+    product, i.e. Tr( dot(Mi,Mj) ) == delta_ij.  In the returned list,
+    the right-most factor of the kronecker product varies the
+    fastest, so, for example, when matrix_dim == 4 the returned list
+    is [ II,IX,IY,IZ,XI,XX,XY,XY,YI,YX,YY,YZ,ZI,ZX,ZY,ZZ ].
+
+    Parameters
+    ----------
+    matrix_dim : int
+        Matrix-dimension of the density-matrix space.  Must be
+        a power of 2.
+
+    max_weight : int, optional
+        Restrict the elements returned to those having weight <= `max_weight`. An
+        element's "weight" is defined as the number of non-identity single-qubit
+        factors of which it is comprised.  For example, if `matrix_dim == 4` and
+        `max_weight == 1` then the returned list is [II, IX, IY, IZ, XI, YI, ZI].
+
+    normalize : bool, optional
+        Whether the Pauli matrices are normalized (see above) or not.
+
+    Returns
+    -------
+    list
+        A list of N numpy arrays each of shape (matrix_dim, matrix_dim), where N == matrix_dim^2,
+        the dimension of the density-matrix space. (Exception: when max_weight
+        is not None, the returned list may have fewer than N elements.)
+
+    Notes
+    -----
+    Matrices are ordered with first qubit being most significant,
+    e.g., for 2 qubits: II, IX, IY, IZ, XI, XX, XY, XZ, YI, ... ZZ
+    """
+    _check_dim(matrix_dim)
+    sigmaVec = (id2x2, sigmax, sigmay, sigmaz)
+    pauliStrings = ("I", "X", "Y", "Z")
+    if normalize:
+        sigmaVec = tuple((s / sqrt2 for s in sigmaVec))
+
+    if matrix_dim == 0:
+        return []
+
+    def _is_integer(x):
+        return bool(abs(x - round(x)) < 1e-6)
+
+    nQubits = _np.log2(matrix_dim)
+    if not _is_integer(nQubits):
+        raise ValueError(
+            "Dimension for Pauli tensor product matrices must be an integer *power of 2* (not %d)"
+            % matrix_dim
+        )
+    nQubits = int(round(nQubits))
+
+    if nQubits == 0:  # special case: return single 1x1 identity mx
+        return [_np.identity(1, "complex")]
+
+    matrices = dict()
+    basisIndList = [[0, 1, 2, 3]] * nQubits
+    for sigmaInds in _itertools.product(*basisIndList):
+        if max_weight is not None:
+            if sigmaInds.count(0) < nQubits - max_weight:
+                continue
+        pauliString = ""
+        M = _np.identity(1, "complex")
+        for i in sigmaInds:
+            M = _np.kron(M, sigmaVec[i])
+            pauliString += pauliStrings[i]
+        matrices[pauliString] = M
+
+    return matrices
 
 
 def pp_matrices(matrix_dim, max_weight=None, normalize=True):
@@ -850,7 +975,8 @@ def pp_matrices(matrix_dim, max_weight=None, normalize=True):
     if normalize:
         sigmaVec = tuple((s / sqrt2 for s in sigmaVec))
 
-    if matrix_dim == 0: return []
+    if matrix_dim == 0:
+        return []
 
     def _is_integer(x):
         return bool(abs(x - round(x)) < 1e-6)
@@ -858,19 +984,22 @@ def pp_matrices(matrix_dim, max_weight=None, normalize=True):
     nQubits = _np.log2(matrix_dim)
     if not _is_integer(nQubits):
         raise ValueError(
-            "Dimension for Pauli tensor product matrices must be an integer *power of 2* (not %d)" % matrix_dim)
+            "Dimension for Pauli tensor product matrices must be an integer *power of 2* (not %d)"
+            % matrix_dim
+        )
     nQubits = int(round(nQubits))
 
     if nQubits == 0:  # special case: return single 1x1 identity mx
-        return [_np.identity(1, 'complex')]
+        return [_np.identity(1, "complex")]
 
     matrices = []
     basisIndList = [[0, 1, 2, 3]] * nQubits
     for sigmaInds in _itertools.product(*basisIndList):
         if max_weight is not None:
-            if sigmaInds.count(0) < nQubits - max_weight: continue
+            if sigmaInds.count(0) < nQubits - max_weight:
+                continue
 
-        M = _np.identity(1, 'complex')
+        M = _np.identity(1, "complex")
         for i in sigmaInds:
             M = _np.kron(M, sigmaVec[i])
         matrices.append(M)
@@ -894,20 +1023,26 @@ def pp_labels(matrix_dim):
     -------
     list
     """
+
     def _is_integer(x):
         return bool(abs(x - round(x)) < 1e-6)
-    if matrix_dim == 0: return []
-    if matrix_dim == 1: return ['']  # special case - use empty label instead of "I"
+
+    if matrix_dim == 0:
+        return []
+    if matrix_dim == 1:
+        return [""]  # special case - use empty label instead of "I"
 
     nQubits = _np.log2(matrix_dim)
     if not _is_integer(nQubits):
-        raise ValueError("Dimension for Pauli tensor product matrices must be an integer *power of 2*")
+        raise ValueError(
+            "Dimension for Pauli tensor product matrices must be an integer *power of 2*"
+        )
     nQubits = int(round(nQubits))
 
     lblList = []
-    basisLblList = [['I', 'X', 'Y', 'Z']] * nQubits
+    basisLblList = [["I", "X", "Y", "Z"]] * nQubits
     for sigmaLbls in _itertools.product(*basisLblList):
-        lblList.append(''.join(sigmaLbls))
+        lblList.append("".join(sigmaLbls))
     return lblList
 
 
@@ -936,36 +1071,37 @@ def qt_matrices(matrix_dim, selected_pp_indices=(0, 5, 10, 11, 1, 2, 3, 6, 7)):
         A list of 9 numpy arrays each of shape (3, 3).
     """
     if matrix_dim == 1:  # special case of just identity mx
-        return [_np.identity(1, 'd')]
+        return [_np.identity(1, "d")]
 
-    assert(matrix_dim == 3)
-    A = _np.array([[1, 0, 0, 0],
-                   [0, 1. / _np.sqrt(2), 1. / _np.sqrt(2), 0],
-                   [0, 0, 0, 1]], 'd')  # projector onto symmetric space
+    assert matrix_dim == 3
+    A = _np.array(
+        [[1, 0, 0, 0], [0, 1.0 / _np.sqrt(2), 1.0 / _np.sqrt(2), 0], [0, 0, 0, 1]], "d"
+    )  # projector onto symmetric space
 
     def _to_qutrit_space(input_matrix):
         return _np.dot(A, _np.dot(input_matrix, A.transpose()))
 
     qt_mxs = []
     pp_mxs = pp_matrices(4)
-    #selected_pp_indices = [0,5,10,11,1,2,3,6,7] #which pp mxs to project
+    # selected_pp_indices = [0,5,10,11,1,2,3,6,7] #which pp mxs to project
     # labels = ['II', 'XX', 'YY', 'YZ', 'IX', 'IY', 'IZ', 'XY', 'XZ']
     qt_mxs = [_to_qutrit_space(pp_mxs[i]) for i in selected_pp_indices]
 
     # Normalize so Tr(BiBj) = delta_ij (done by hand, since only 3x3 mxs)
     qt_mxs[0] *= 1 / _np.sqrt(0.75)
 
-    #TAKE 2 (more symmetric = better?)
+    # TAKE 2 (more symmetric = better?)
     q1 = qt_mxs[1] - qt_mxs[0] * _np.sqrt(0.75) / 3
     q2 = qt_mxs[2] - qt_mxs[0] * _np.sqrt(0.75) / 3
-    qt_mxs[1] = (q1 + q2) / _np.sqrt(2. / 3.)
+    qt_mxs[1] = (q1 + q2) / _np.sqrt(2.0 / 3.0)
     qt_mxs[2] = (q1 - q2) / _np.sqrt(2)
 
-    #TAKE 1 (XX-II and YY-XX-II terms... not symmetric):
-    #qt_mxs[1] = (qt_mxs[1] - qt_mxs[0]*_np.sqrt(0.75)/3) / _np.sqrt(2.0/3.0)
-    #qt_mxs[2] = (qt_mxs[2] - qt_mxs[0]*_np.sqrt(0.75)/3 + qt_mxs[1]*_np.sqrt(2.0/3.0)/2) / _np.sqrt(0.5)
+    # TAKE 1 (XX-II and YY-XX-II terms... not symmetric):
+    # qt_mxs[1] = (qt_mxs[1] - qt_mxs[0]*_np.sqrt(0.75)/3) / _np.sqrt(2.0/3.0)
+    # qt_mxs[2] = (qt_mxs[2] - qt_mxs[0]*_np.sqrt(0.75)/3 + qt_mxs[1]*_np.sqrt(2.0/3.0)/2) / _np.sqrt(0.5)
 
-    for i in range(3, 9): qt_mxs[i] *= 1 / _np.sqrt(0.5)
+    for i in range(3, 9):
+        qt_mxs[i] *= 1 / _np.sqrt(0.5)
 
     return qt_mxs
 
@@ -984,10 +1120,12 @@ def qt_labels(matrix_dim):
     -------
     list of strs
     """
-    if matrix_dim == 0: return []
-    if matrix_dim == 1: return ['']  # special case
-    assert(matrix_dim == 3), "Qutrit basis must have matrix_dim == 3!"
-    return ['II', 'X+Y', 'X-Y', 'YZ', 'IX', 'IY', 'IZ', 'XY', 'XZ']
+    if matrix_dim == 0:
+        return []
+    if matrix_dim == 1:
+        return [""]  # special case
+    assert matrix_dim == 3, "Qutrit basis must have matrix_dim == 3!"
+    return ["II", "X+Y", "X-Y", "YZ", "IX", "IY", "IZ", "XY", "XZ"]
 
 
 def identity_matrices(matrix_dim):
@@ -1007,10 +1145,11 @@ def identity_matrices(matrix_dim):
     -------
     list
     """
-    if matrix_dim == 0: return []
-    assert(isinstance(matrix_dim, _numbers.Integral))
+    if matrix_dim == 0:
+        return []
+    assert isinstance(matrix_dim, _numbers.Integral)
     d = matrix_dim
-    return [_np.identity(d, 'complex')]
+    return [_np.identity(d, "complex")]
 
 
 def identity_labels(dim):
@@ -1022,7 +1161,7 @@ def identity_labels(dim):
     dim : int
         The matrix dimension.
     """
-    return ['I']
+    return ["I"]
 
 
 def cl_vectors(dim):
@@ -1043,7 +1182,8 @@ def cl_vectors(dim):
     """
     vecList = []
     for i in range(dim):
-        v = _np.zeros(dim, 'd'); v[i] = 1.0
+        v = _np.zeros(dim, "d")
+        v[i] = 1.0
         vecList.append(v)
     return vecList
 
@@ -1062,8 +1202,10 @@ def cl_labels(dim):
     -------
     list of strs
     """
-    if dim == 0: return []
-    if dim == 1: return ['']  # special case - use empty label instead of "0"
+    if dim == 0:
+        return []
+    if dim == 1:
+        return [""]  # special case - use empty label instead of "0"
     return ["%d" % i for i in range(dim)]
 
 
@@ -1084,8 +1226,9 @@ def clgm_vectors(dim):
     list
         A list of `dim` numpy arrays each of shape (dim,).
     """
-    if dim == 0: return []
-    vecList = [_np.ones(dim, 'd')]
+    if dim == 0:
+        return []
+    vecList = [_np.ones(dim, "d")]
     for diag_mx in _get_gell_mann_non_identity_diag_mxs(dim):
         vecList.append(_np.diag(diag_mx).copy())
     return vecList
@@ -1105,8 +1248,10 @@ def clgm_labels(dim):
     -------
     list of strs
     """
-    if dim == 0: return []
-    if dim == 1: return ['']  # special case - use empty label instead of "I"
+    if dim == 0:
+        return []
+    if dim == 1:
+        return [""]  # special case - use empty label instead of "I"
     return ["I"] + ["Z_{%d}" % i for i in range(1, dim)]
 
 
@@ -1127,8 +1272,9 @@ def clpp_vectors(dim):
     list
         A list of `dim` numpy arrays each of shape (dim,).
     """
-    if dim == 0: return []
-    sigmaVec = (_np.ones(2, 'd'), _np.array([1, -1], 'd'))
+    if dim == 0:
+        return []
+    sigmaVec = (_np.ones(2, "d"), _np.array([1, -1], "d"))
 
     def _is_integer(x):
         return bool(abs(x - round(x)) < 1e-6)
@@ -1136,15 +1282,18 @@ def clpp_vectors(dim):
     nBits = _np.log2(dim)
     if not _is_integer(nBits):
         raise ValueError(
-            "Dimension for classical Pauli basis must be an integer *power of 2* (not %d)" % dim)
+            "Dimension for classical Pauli basis must be an integer *power of 2* (not %d)"
+            % dim
+        )
     nBits = int(round(nBits))
 
-    if nBits == 0: return [_np.ones(1, 'd')]
+    if nBits == 0:
+        return [_np.ones(1, "d")]
 
-    vecList = [_np.ones(dim, 'd')]
+    vecList = [_np.ones(dim, "d")]
     basisIndList = [[0, 1]] * nBits
     for sigmaInds in _itertools.product(*basisIndList):
-        V = _np.ones(1, 'd')
+        V = _np.ones(1, "d")
         for i in sigmaInds:
             V = _np.kron(V, sigmaVec[i])
         vecList.append(V)
@@ -1166,21 +1315,26 @@ def clpp_labels(dim):
     -------
     list of strs
     """
+
     def _is_integer(x):
         return bool(abs(x - round(x)) < 1e-6)
 
-    if dim == 0: return []
-    if dim == 1: return ['']  # special case - use empty label instead of "I"
+    if dim == 0:
+        return []
+    if dim == 1:
+        return [""]  # special case - use empty label instead of "I"
 
     nBits = _np.log2(dim)
     if not _is_integer(nBits):
-        raise ValueError("Dimension for classical Pauli basis must be an integer *power of 2*")
+        raise ValueError(
+            "Dimension for classical Pauli basis must be an integer *power of 2*"
+        )
     nBits = int(round(nBits))
 
     lblList = []
-    basisLblList = [['I', 'Z']] * nBits
+    basisLblList = [["I", "Z"]] * nBits
     for sigmaLbls in _itertools.product(*basisLblList):
-        lblList.append(''.join(sigmaLbls))
+        lblList.append("".join(sigmaLbls))
     return lblList
 
 
@@ -1202,7 +1356,8 @@ def sv_vectors(dim):
     """
     vecList = []
     for i in range(dim):
-        v = _np.zeros(dim, complex); v[i] = 1.0
+        v = _np.zeros(dim, complex)
+        v[i] = 1.0
         vecList.append(v)
     return vecList
 
@@ -1221,8 +1376,10 @@ def sv_labels(dim):
     -------
     list of strs
     """
-    if dim == 0: return []
-    if dim == 1: return ['']  # special case - use empty label instead of "0"
+    if dim == 0:
+        return []
+    if dim == 1:
+        return [""]  # special case - use empty label instead of "0"
     return ["|%d>" % i for i in range(dim)]
 
 
@@ -1239,7 +1396,7 @@ def unknown_els(dim):
     -------
     list
     """
-    assert(dim == 0), "Unknown basis must have dimension 0!"
+    assert dim == 0, "Unknown basis must have dimension 0!"
     return []
 
 
@@ -1259,29 +1416,57 @@ def unknown_labels(dim):
     return []
 
 
-_basis_constructor_dict = dict()  # global dict holding all builtin basis constructors (used by Basis objects)
-_basis_constructor_dict['std'] = MatrixBasisConstructor('Matrix-unit basis', std_matrices, std_labels, False, False)
-_basis_constructor_dict['col'] = MatrixBasisConstructor('Column-stacked matrix-unit basis', col_matrices,
-                                                        col_labels, False, False)
-_basis_constructor_dict['gm_unnormalized'] = MatrixBasisConstructor(
-    'Unnormalized Gell-Mann basis', gm_matrices_unnormalized, gm_labels, True, True)
-_basis_constructor_dict['gm'] = MatrixBasisConstructor('Gell-Mann basis', gm_matrices, gm_labels, True, True)
-_basis_constructor_dict['pp'] = MatrixBasisConstructor('Normalized Pauli-Product basis', pp_matrices, pp_labels, True,
-                                                       True)
-_basis_constructor_dict['PP'] = MatrixBasisConstructor('Pauli-Product basis', PP_matrices, pp_labels, True, True)
-_basis_constructor_dict['qsim'] = MatrixBasisConstructor('QuantumSim basis', qsim_matrices, qsim_labels, True, False)
-_basis_constructor_dict['qt'] = MatrixBasisConstructor('Qutrit basis', qt_matrices, qt_labels, True, True)
-_basis_constructor_dict['id'] = SingleElementMatrixBasisConstructor('Identity-only subbasis', identity_matrices,
-                                                                    identity_labels, True, True)
-_basis_constructor_dict['clmx'] = DiagonalMatrixBasisConstructor('Diagonal Matrix-unit basis', cl_vectors,
-                                                                 cl_labels, True, False)
-_basis_constructor_dict['clgmmx'] = DiagonalMatrixBasisConstructor('Diagonal Gell-Mann basis', clgm_vectors,
-                                                                   clgm_labels, True, True)
-_basis_constructor_dict['clppmx'] = DiagonalMatrixBasisConstructor('Diagonal Pauli-Product basis', clpp_vectors,
-                                                                   clpp_labels, True, True)
-_basis_constructor_dict['cl'] = VectorBasisConstructor('Classical basis', cl_vectors, cl_labels, True)
-_basis_constructor_dict['clgm'] = VectorBasisConstructor('Classical Gell-Mann basis', clgm_vectors, clgm_labels, True)
-_basis_constructor_dict['clpp'] = VectorBasisConstructor('Classical Pauli-Product basis', clpp_vectors,
-                                                         clpp_labels, True)
-_basis_constructor_dict['sv'] = VectorBasisConstructor('State-vector basis', sv_vectors, sv_labels, False)
-_basis_constructor_dict['unknown'] = VectorBasisConstructor('Unknown (0-dim) basis', unknown_els, unknown_labels, False)
+_basis_constructor_dict = (
+    dict()
+)  # global dict holding all builtin basis constructors (used by Basis objects)
+_basis_constructor_dict["std"] = MatrixBasisConstructor(
+    "Matrix-unit basis", std_matrices, std_labels, False, False
+)
+_basis_constructor_dict["col"] = MatrixBasisConstructor(
+    "Column-stacked matrix-unit basis", col_matrices, col_labels, False, False
+)
+_basis_constructor_dict["gm_unnormalized"] = MatrixBasisConstructor(
+    "Unnormalized Gell-Mann basis", gm_matrices_unnormalized, gm_labels, True, True
+)
+_basis_constructor_dict["gm"] = MatrixBasisConstructor(
+    "Gell-Mann basis", gm_matrices, gm_labels, True, True
+)
+_basis_constructor_dict["pp"] = MatrixBasisConstructor(
+    "Normalized Pauli-Product basis", pp_matrices, pp_labels, True, True
+)
+_basis_constructor_dict["PP"] = MatrixBasisConstructor(
+    "Pauli-Product basis", PP_matrices, pp_labels, True, True
+)
+_basis_constructor_dict["qsim"] = MatrixBasisConstructor(
+    "QuantumSim basis", qsim_matrices, qsim_labels, True, False
+)
+_basis_constructor_dict["qt"] = MatrixBasisConstructor(
+    "Qutrit basis", qt_matrices, qt_labels, True, True
+)
+_basis_constructor_dict["id"] = SingleElementMatrixBasisConstructor(
+    "Identity-only subbasis", identity_matrices, identity_labels, True, True
+)
+_basis_constructor_dict["clmx"] = DiagonalMatrixBasisConstructor(
+    "Diagonal Matrix-unit basis", cl_vectors, cl_labels, True, False
+)
+_basis_constructor_dict["clgmmx"] = DiagonalMatrixBasisConstructor(
+    "Diagonal Gell-Mann basis", clgm_vectors, clgm_labels, True, True
+)
+_basis_constructor_dict["clppmx"] = DiagonalMatrixBasisConstructor(
+    "Diagonal Pauli-Product basis", clpp_vectors, clpp_labels, True, True
+)
+_basis_constructor_dict["cl"] = VectorBasisConstructor(
+    "Classical basis", cl_vectors, cl_labels, True
+)
+_basis_constructor_dict["clgm"] = VectorBasisConstructor(
+    "Classical Gell-Mann basis", clgm_vectors, clgm_labels, True
+)
+_basis_constructor_dict["clpp"] = VectorBasisConstructor(
+    "Classical Pauli-Product basis", clpp_vectors, clpp_labels, True
+)
+_basis_constructor_dict["sv"] = VectorBasisConstructor(
+    "State-vector basis", sv_vectors, sv_labels, False
+)
+_basis_constructor_dict["unknown"] = VectorBasisConstructor(
+    "Unknown (0-dim) basis", unknown_els, unknown_labels, False
+)
