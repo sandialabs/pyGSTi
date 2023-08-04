@@ -152,6 +152,11 @@ def stochastic_jac_element(prep, error, meas, outcome):
     -------
     float
     """
+    print("prep: ", prep)
+    print("error", error)
+    print("meas: ", meas)
+    print("function output: ", stochastic_outcome(prep, error, meas))
+    print("outcome", outcome)
     return 1 if (stochastic_outcome(prep, error, meas) == outcome) else 0
 
 
@@ -298,7 +303,7 @@ def affine_jac_obs_element(prep, error, observable):
         elif error_pauli == "I":
             return prep_sign if (prep_basis == obs_pauli) else 0
         else:
-            return 2 if (obs_pauli == error_pauli) else 0
+            return 1 if (obs_pauli == error_pauli) else 0
 
     return _np.prod(
         [
@@ -1085,7 +1090,7 @@ def compute_observed_samebasis_err_rate(
     for L in max_lengths:
         opstr = prepFid + idle_string * L + measFid
         f, wt, err = freq_and_weight(opstr, obs_indices)
-        data_to_fit.append(f)
+        data_to_fit.append(minus_sign * f)
         wts.append(wt)
         errbars.append(err)
 
@@ -1101,7 +1106,16 @@ def compute_observed_samebasis_err_rate(
         slope = -_np.sign(coeffs[0]) * _np.sqrt(det) if det >= 0 else coeffs[1]
     else:
         raise NotImplementedError("Only fit_order <= 2 are supported!")
-
+    print(
+        {
+            "rate": slope,
+            "fit_order": fit_order,
+            "fitCoeffs": coeffs,
+            "data": data_to_fit,
+            "errbars": errbars,
+            "weights": wts,
+        }
+    )
     return {
         "rate": slope,
         "fit_order": fit_order,
@@ -1408,10 +1422,14 @@ def do_idle_tomography(
 
         my_J = []
         my_obs_infos = []
+        my_Jaff = []
         for i, (ifp, pauli_fidpair) in enumerate(my_FidpairList):
             # NOTE: pauli_fidpair is a 2-tuple of NQPauliState objects
 
-            all_observables = _idttools.allobservables(pauli_fidpair[1], maxweight)
+            # all_observables = _idttools.allobservables(pauli_fidpair[1], maxweight)
+            all_observables = _idttools.alloutcomes(
+                pauli_fidpair[0], pauli_fidpair[1], maxweight
+            )
             t0 = _time.time()
             infos_for_this_fidpair = _collections.OrderedDict()
             for j, out in enumerate(all_observables):
@@ -1487,6 +1505,9 @@ def do_idle_tomography(
                     if include_affine == "auto":
                         J_sto = J[:, 0 : len(errors)]
                         rank_sto = _np.linalg.matrix_rank(J_sto)
+                        print("J_sto:\n", J_sto)
+                        print("rank_sto:\n", rank_sto)
+                        print("len(errors):\n", len(errors))
                         if rank_sto < len(errors):
                             if include_stochastic == "auto":
                                 include_stochastic = False  # drop stochastic part
@@ -1536,6 +1557,8 @@ def do_idle_tomography(
                     elif jacmode == "together":
                         sto_aff_jac = J
                         sto_aff_obs_err_rates = obs_err_rates
+                        print("sto_aff_jac:\n", sto_aff_jac)
+                        print("sto_aff_obs_err_rates:\n", sto_aff_obs_err_rates)
                     else:
                         raise ValueError("Invalid `jacmode` == %s" % str(jacmode))
                     pauli_fidpair_dict[
@@ -1693,8 +1716,11 @@ def do_idle_tomography(
                 if include_affine:
                     Jaff = _np.concatenate(Jaff_list, axis=0)
                     ham_aff_jac = _np.concatenate((J, Jaff), axis=1)
+                    print("Jaff:\n", Jaff)
+                    print("Ham_aff_jac:\n", ham_aff_jac)
                 else:
                     ham_aff_jac = J
+                print("obs_err_rates:\n", obs_err_rates)
                 ham_aff_obs_err_rates = obs_err_rates
 
             pauli_fidpair_dict[
@@ -1702,6 +1728,8 @@ def do_idle_tomography(
             ] = pauli_fidpairs  # give "key" to observed rates
             observed_rate_infos["diffbasis"] = infos_by_fidpair
             printer.log("Completed Hamiltonian in %.2fs" % (_time.time() - tStart), 1)
+
+    print("sto_aff_jac:\n", sto_aff_jac)
 
     if comm is None or comm.Get_rank() == 0:
         if jacmode == "together":
@@ -1740,7 +1768,16 @@ def do_idle_tomography(
                 Jbig[sto_row:, sto_col:] = sto_aff_jac
                 obs_to_concat.append(sto_aff_obs_err_rates)
 
+            print(ham_aff_obs_err_rates)
+            print(sto_aff_obs_err_rates)
+            print("Hey full Jacobian:\n", Jbig)
+            print(obs_to_concat)
+
             while _np.linalg.matrix_rank(Jbig) < Jbig.shape[1]:
+                print(include_affine)
+                print(include_hamiltonian)
+                print(include_stochastic)
+                print(Jbig.shape)
                 if include_affine == "auto":  # then drop affine
                     include_affine = False
                     Jbig = Jbig[:, 0 : sto_col + Ne]
@@ -1768,7 +1805,9 @@ def do_idle_tomography(
             if Jbig.shape[1] > 0:  # if there's any jacobian left
                 invJ = _np.linalg.pinv(Jbig)
                 obs_err_rates = _np.concatenate(obs_to_concat)
+                print(obs_err_rates)
                 all_intrinsic_rates = _np.dot(invJ, obs_err_rates)
+                print(all_intrinsic_rates)
 
             off = 0
             if include_hamiltonian:
