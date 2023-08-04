@@ -298,58 +298,38 @@ def dict_to_jacobian(coef_dict, classification, numQubits):
     initial_states = [key for key in pauli_matrices.keys() if key != identKey] + [
         str("-" + key) for key in pauli_matrices.keys() if key != identKey
     ]
+    pauliDictProduct = list(
+        _itertools.product(
+            initial_states,
+            [key for key in pauli_matrices.keys() if key != identKey],
+        )
+    )
 
     if classification == "H" or classification == "S":
-        pauliDictProduct = list(
-            _itertools.product(
-                initial_states,
-                [key for key in pauli_matrices.keys() if key != identKey],
+        index_list = [key for key in pauli_matrices.keys() if key != identKey]
+
+    elif classification == "C" or classification == "A":
+        index_list = list(
+            _itertools.permutations(
+                [key for key in pauli_matrices.keys() if key != identKey], 2
             )
         )
-        index_list = [key for key in pauli_matrices.keys() if key != identKey]
-        output_jacobian = _np.zeros((len(pauliDictProduct), len(index_list)))
-        quit()
-    elif classification == "C" or classification == "A":
-        pass
     else:
         print(
             "Classification value must be 'H', 'S', 'C', or 'A'.  Please provide a valid argument."
         )
         quit()
+    row_index_list = {v: k for (k, v) in dict(enumerate(pauliDictProduct)).items()}
+    print(row_index_list)
+    col_index_list = {v: k for (k, v) in dict(enumerate(index_list)).items()}
+    print(col_index_list)
+    output_jacobian = _np.zeros((len(pauliDictProduct), len(index_list)))
+    for coef in coef_dict:
+        output_jacobian[row_index_list[coef[0]]][col_index_list[coef[1]]] = coef_dict[
+            coef
+        ]
+    print(output_jacobian)
     return output_jacobian
-
-
-def jacobian_index_label(numQubits):
-    index_labels = {"rows": {}, "columns": {}}
-    if numQubits == 1:
-        pauliNames = pauliNames1Q
-        initialStates = pauliStates1Q
-    elif numQubits == 2:
-        pauliNames = ["".join(name) for name in product(pauliNames1Q, pauliNames1Q)]
-        initialStates = [
-            ",".join((name))
-            for name in product(pauliStates1Q + ["I"], pauliStates1Q + ["I"])
-        ][:-1]
-    extrinsicErrorList = dict(enumerate(product(pauliNames[1:], initialStates)))
-    extrinsicErrorList = {(v[1], v[0]): k for k, v in extrinsicErrorList.items()}
-    index_labels["rows"] = extrinsicErrorList
-    index_register = 0
-    pauliIndexList = dict(enumerate(pauliNames[1:]))
-    pauliIndexList = {v: k for k, v in pauliIndexList.items()}
-    for k, v in pauliIndexList.items():
-        index_labels["columns"][("H", k)] = v
-    index_register = len(index_labels["columns"])
-    for k, v in pauliIndexList.items():
-        index_labels["columns"][("S", k)] = v + index_register
-    index_register = len(index_labels["columns"])
-    pauliIndexList = dict(enumerate(permutations(pauliNames[1:], 2)))
-    pauliIndexList = {v: k for k, v in pauliIndexList.items()}
-    for k, v in pauliIndexList.items():
-        index_labels["columns"][("C", k)] = v + index_register
-    index_register = len(index_labels["columns"])
-    for k, v in pauliIndexList.items():
-        index_labels["columns"][("A", k)] = v + index_register
-    return index_labels
 
 
 # -----------------------------------------------------------------------------
