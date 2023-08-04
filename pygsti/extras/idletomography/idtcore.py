@@ -64,7 +64,6 @@ def stochastic_error_generator(initial_state, indexed_pauli, identity):
     )
 
 
-
 # Pauli-correlation Error Generator
 def pauli_correlation_error_generator(
     initial_state,
@@ -77,6 +76,7 @@ def pauli_correlation_error_generator(
         - 0.5 * commute(commute(pauli_index_1, pauli_index_2), initial_state)
     )
 
+
 # Anti-symmetric Error Generator
 def anti_symmetric_error_generator(initial_state, pauli_index_1, pauli_index_2):
     return 2j * (
@@ -88,6 +88,7 @@ def anti_symmetric_error_generator(initial_state, pauli_index_1, pauli_index_2):
             initial_state,
         )
     )
+
 
 # Convert basis
 def convert_to_pauli(matrix, numQubits):
@@ -1284,8 +1285,16 @@ def compute_observed_diffbasis_err_rate(
     }
 
 
-def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweight=2,
-                       idle_string=((),), advanced_options=None, verbosity=0):
+def do_idle_tomography(
+    nqubits,
+    dataset,
+    max_lengths,
+    pauli_basis_dicts,
+    maxweight=2,
+    idle_string=((),),
+    advanced_options=None,
+    verbosity=0,
+):
     """
     Analyze `dataset` using the idle tomography protocol to characterize
     `idle_string`.
@@ -1327,7 +1336,7 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
         - "pauli_fidpairs": alternate list of pauli fiducial pairs to use
         - "fit order" : integer order for polynomial fits to data
         - "ham_tmpl" : see :function:`make_idle_tomography_list`
-        - "include_hamiltonian", "include_stochastic", "include_correlation", 
+        - "include_hamiltonian", "include_stochastic", "include_correlation",
           "include_active" : {True, False}, (default True).
            Whether to extract Hamiltonian, Stochastic, Correlation, and Active-type
            intrinsic errors.
@@ -1359,6 +1368,30 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
         GiStr = _Circuit(idle_string, line_labels=line_labels)
     else:
         GiStr = _Circuit(idle_string, num_lines=nqubits)
+
+    hamiltonian_jacobian_coefs = build_class_jacobian("H", nqubits)
+    # print(hamiltonian_jacobian_coefs)
+    hamiltonian_jacobian = dict_to_jacobian(hamiltonian_jacobian_coefs, "H", nqubits)
+    stochastic_jacobian_coefs = build_class_jacobian("S", nqubits)
+    stochastic_jacobian = dict_to_jacobian(stochastic_jacobian_coefs, "S", nqubits)
+    # print(stochastic_jacobian_coefs)
+    correlation_jacobian_coefs = build_class_jacobian("C", nqubits)
+    correlation_jacobian = dict_to_jacobian(correlation_jacobian_coefs, "C", nqubits)
+    # print(correlation_jacobian_coefs)
+    anti_symmetric_jacobian_coefs = build_class_jacobian("A", nqubits)
+    anti_symmetric_jacobian = dict_to_jacobian(
+        anti_symmetric_jacobian_coefs, "A", nqubits
+    )
+    # print(anti_symmetric_jacobian_coefs)
+
+    full_jacobian = _np.hstack(
+        (
+            hamiltonian_jacobian,
+            stochastic_jacobian,
+            correlation_jacobian,
+            anti_symmetric_jacobian,
+        ),
+    )
 
     sto_act_jac = None
     sto_act_obs_err_rates = None
@@ -1397,22 +1430,27 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
     intrinsic_rates = {}
     pauli_fidpair_dict = {}
     observed_rate_infos = {}
-    
-    #pull the include_hamiltonian etc. values from advanced_options, if present.
-    include_hamiltonian = advanced_options.get('include_hamiltonian', False)
-    include_stochastic = advanced_options.get('include_stochastic', False)
-    include_correlation = advanced_options.get('include_correlation', False)
-    include_active = advanced_options.get('include_active', False)
-    
+
+    # pull the include_hamiltonian etc. values from advanced_options, if present.
+    include_hamiltonian = advanced_options.get("include_hamiltonian", False)
+    include_stochastic = advanced_options.get("include_stochastic", False)
+    include_correlation = advanced_options.get("include_correlation", False)
+    include_active = advanced_options.get("include_active", False)
 
     if include_stochastic:
         if "pauli_fidpairs" in advanced_options:
             pauli_fidpairs = same_basis_fidpairs
         else:
-            pauli_fidpairs = idle_tomography_fidpairs(nqubits, maxweight, False,
-                                                      include_stochastic, include_active,
-                                                      advanced_options.get("ham_tmpl", "auto"),
-                                                      preferred_prep_basis_signs, preferred_meas_basis_signs)
+            pauli_fidpairs = idle_tomography_fidpairs(
+                nqubits,
+                maxweight,
+                False,
+                include_stochastic,
+                include_active,
+                advanced_options.get("ham_tmpl", "auto"),
+                preferred_prep_basis_signs,
+                preferred_meas_basis_signs,
+            )
         # print("DB: %d same-basis pairs" % len(pauli_fidpairs))
 
         # divide up strings among ranks
@@ -1425,33 +1463,62 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
             # NOTE: pauli_fidpair is a 2-tuple of NQPauliState objects
 
             # all_observables = _idttools.allobservables(pauli_fidpair[1], maxweight)
-            all_observables = _idttools.alloutcomes( pauli_fidpair[0], pauli_fidpair[1], maxweight )
+            all_observables = _idttools.alloutcomes(
+                pauli_fidpair[0], pauli_fidpair[1], maxweight
+            )
             infos_for_this_fidpair = _collections.OrderedDict()
             for j, out in enumerate(all_observables):
                 printer.log("  - observable %d of %d" % (j, len(all_observables)), 2)
 
                 # form jacobian rows as we get extrinsic error rates
-                Jrow = [stochastic_jac_element(pauli_fidpair[0], err, pauli_fidpair[1], out) for err in errors]
+                Jrow = [
+                    stochastic_jac_element(pauli_fidpair[0], err, pauli_fidpair[1], out)
+                    for err in errors
+                ]
                 if include_active:
-                    Jrow.extend( [active_jac_element(pauli_fidpair[0], err, pauli_fidpair[1], out) for err in errors])
+                    Jrow.extend(
+                        [
+                            active_jac_element(
+                                pauli_fidpair[0], err, pauli_fidpair[1], out
+                            )
+                            for err in errors
+                        ]
+                    )
                 J.append(Jrow)
 
-                info = compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, GiStr,
-                                                           out, max_lengths, fit_order)
+                info = compute_observed_samebasis_err_rate(
+                    dataset,
+                    pauli_fidpair,
+                    pauli_basis_dicts,
+                    GiStr,
+                    out,
+                    max_lengths,
+                    fit_order,
+                )
                 info["jacobian row"] = _np.array(Jrow)
                 infos_for_this_fidpair[out] = info
 
             obs_infos.append(infos_for_this_fidpair)
-            printer.log("%sStochastic fidpair %d of %d: %d outcomes analyzed" % (rankStr, i, len(indxFidpairList), len(all_observables)), 1)
+            printer.log(
+                "%sStochastic fidpair %d of %d: %d outcomes analyzed"
+                % (rankStr, i, len(indxFidpairList), len(all_observables)),
+                1,
+            )
 
-        obs_err_rates = _np.array([info["rate"] for fidpair_infos in obs_infos for info in fidpair_infos.values()])
+        obs_err_rates = _np.array(
+            [
+                info["rate"]
+                for fidpair_infos in obs_infos
+                for info in fidpair_infos.values()
+            ]
+        )
 
         if include_active:
             sto_act_jac = J
             sto_act_obs_err_rates = obs_err_rates
-            printer.log(f'sto_act_jac:\n {sto_act_jac}', 3)
-            printer.log(f'sto_act_obs_err_rates:\n {sto_act_obs_err_rates}', 3)
-            
+            printer.log(f"sto_act_jac:\n {sto_act_jac}", 3)
+            printer.log(f"sto_act_obs_err_rates:\n {sto_act_obs_err_rates}", 3)
+
             pauli_fidpair_dict["samebasis"] = pauli_fidpairs  # "key" to observed rates
             observed_rate_infos["samebasis"] = obs_infos
 
@@ -1462,18 +1529,25 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
             "Cannot extract active error rates without also extracting stochastic ones!"
         )
 
-    if include_hamiltonian :
+    if include_hamiltonian:
         if "pauli_fidpairs" in advanced_options:
             pauli_fidpairs = diff_basis_fidpairs
         else:
-            pauli_fidpairs = idle_tomography_fidpairs(nqubits, maxweight, include_hamiltonian,
-                                                      False, False, advanced_options.get("ham_tmpl", "auto"),
-                                                      preferred_prep_basis_signs, preferred_meas_basis_signs)
+            pauli_fidpairs = idle_tomography_fidpairs(
+                nqubits,
+                maxweight,
+                include_hamiltonian,
+                False,
+                False,
+                advanced_options.get("ham_tmpl", "auto"),
+                preferred_prep_basis_signs,
+                preferred_meas_basis_signs,
+            )
         # print("DB: %d diff-basis pairs" % len(pauli_fidpairs))
 
         # divide up fiducial pairs among ranks
         indxFidpairList = list(enumerate(pauli_fidpairs))
-        
+
         J = []
         obs_infos = []
         Jact = []
@@ -1485,43 +1559,66 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
                 printer.log("  - observable %d of %d" % (j, len(all_observables)), 2)
 
                 # form jacobian rows as we get extrinsic error rates
-                Jrow = [ hamiltonian_jac_element(pauli_fidpair[0], err, obs) for err in errors]
+                Jrow = [
+                    hamiltonian_jac_element(pauli_fidpair[0], err, obs)
+                    for err in errors
+                ]
                 J.append(Jrow)
 
-                info = compute_observed_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dicts, 
-                                                           GiStr, obs, max_lengths, fit_order)
+                info = compute_observed_diffbasis_err_rate(
+                    dataset,
+                    pauli_fidpair,
+                    pauli_basis_dicts,
+                    GiStr,
+                    obs,
+                    max_lengths,
+                    fit_order,
+                )
                 info["jacobian row"] = _np.array(Jrow)
 
                 # J_ham * Hintrinsic + J_act * Aintrinsic = observed_rates, and Aintrinsic is known
                 #  -> need to find J_act, the jacobian of *observable expectation vales* w/active params.
                 if include_active:
-                    Jact_row = [active_jac_obs_element(pauli_fidpair[0], err, obs) for err in errors]
+                    Jact_row = [
+                        active_jac_obs_element(pauli_fidpair[0], err, obs)
+                        for err in errors
+                    ]
                     Jact.append(Jact_row)
                     info["active jacobian row"] = _np.array(Jact_row)
-                
+
                 infos_for_this_fidpair[obs] = info
 
             obs_infos.append(infos_for_this_fidpair)
-            printer.log("%sHamiltonian fidpair %d of %d: %d observables analyzed"% (rankStr, i,len(indxFidpairList), len(all_observables)), 1)
+            printer.log(
+                "%sHamiltonian fidpair %d of %d: %d observables analyzed"
+                % (rankStr, i, len(indxFidpairList), len(all_observables)),
+                1,
+            )
 
         # pseudo-invert J to get "intrinsic" error rates (labeled by AllErrors(nqubits))
         # J*intr = obs
-        obs_err_rates = _np.array([info["rate"] for fidpair_infos in obs_infos for info in fidpair_infos.values()])
+        obs_err_rates = _np.array(
+            [
+                info["rate"]
+                for fidpair_infos in obs_infos
+                for info in fidpair_infos.values()
+            ]
+        )
 
         if include_active:
             ham_act_jac = _np.concatenate((J, Jact), axis=1)
-            printer.log(f'Jact:\n {Jact}', 3)
-            printer.log(f'Ham_act_jac:\n" {ham_act_jac}',3)
+            printer.log(f"Jact:\n {Jact}", 3)
+            printer.log(f'Ham_act_jac:\n" {ham_act_jac}', 3)
         else:
             ham_act_jac = J
-        printer.log(f'obs_err_rates:\n" {obs_err_rates}',3)
+        printer.log(f'obs_err_rates:\n" {obs_err_rates}', 3)
         ham_act_obs_err_rates = obs_err_rates
 
         pauli_fidpair_dict["diffbasis"] = pauli_fidpairs  # give "key" to observed rates
         observed_rate_infos["diffbasis"] = obs_infos
         printer.log("Completed Hamiltonian.", 1)
 
-    printer.log(f"sto_act_jac:\n {sto_act_jac}",3)
+    printer.log(f"sto_act_jac:\n {sto_act_jac}", 3)
 
     # Compute all intrinsic rates now, by inverting one big jacobian
     Ne = len(errors)
@@ -1535,7 +1632,7 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
         sto_row = ham_act_jac.shape[0]
     else:
         sto_col = sto_row = 0
-        
+
     if include_stochastic:
         Nrows += sto_act_jac.shape[0]
         Ncols += Ne
@@ -1568,7 +1665,12 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
         else:  # nothing to drop... warn if anything is left
             if include_hamiltonian or include_stochastic or include_active:
                 rank = _np.linalg.matrix_rank(Jbig)
-                _warnings.warn(("Idle tomography: whole-jacobian rank (%d) < #intrinsic rates (%d)")% (rank, Jbig.shape[1]))
+                _warnings.warn(
+                    (
+                        "Idle tomography: whole-jacobian rank (%d) < #intrinsic rates (%d)"
+                    )
+                    % (rank, Jbig.shape[1])
+                )
             break
         if Jbig.shape[1] == 0:
             break  # nothing left (matrix_rank will fail!)
@@ -1580,14 +1682,10 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
 
     off = 0
     if include_hamiltonian:
-        intrinsic_rates["hamiltonian"] = all_intrinsic_rates[
-            off : off + len(errors)
-        ]
+        intrinsic_rates["hamiltonian"] = all_intrinsic_rates[off : off + len(errors)]
         off += len(errors)
     if include_stochastic:
-        intrinsic_rates["stochastic"] = all_intrinsic_rates[
-            off : off + len(errors)
-        ]
+        intrinsic_rates["stochastic"] = all_intrinsic_rates[off : off + len(errors)]
         off += len(errors)
     if include_active:
         intrinsic_rates["active"] = all_intrinsic_rates[off : off + len(errors)]
@@ -1604,5 +1702,3 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
         pauli_fidpair_dict,
         observed_rate_infos,
     )
-    else:  # no results on other ranks...
-        return None
