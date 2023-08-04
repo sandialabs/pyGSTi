@@ -1,11 +1,11 @@
-#***************************************************************************************************
+# ***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
 # in this software.
 # Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
-#***************************************************************************************************
+# ***************************************************************************************************
 """ Idle Tomography reporting and plotting functions """
 
 import collections as _collections
@@ -61,17 +61,21 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
         ReportTable
         """
         super(IdleTomographyObservedRatesTable, self).__init__(
-            ws, self._create, idtresults, threshold, mdl_simulator)
+            ws, self._create, idtresults, threshold, mdl_simulator
+        )
 
     def _create(self, idtresults, threshold, mdl_simulator):
-        colHeadings = ['Observable Rate', 'Relation to intrinsic rates', ]
+        colHeadings = [
+            "Observable Rate",
+            "Relation to intrinsic rates",
+        ]
 
         # compute rate_threshold, so we know what to display
         all_obs_rates = []
         for typ in idtresults.pauli_fidpairs:
             for dict_of_infos in idtresults.observed_rate_infos[typ]:
                 for info_dict in dict_of_infos.values():
-                    all_obs_rates.append(abs(info_dict['rate']))
+                    all_obs_rates.append(abs(info_dict["rate"]))
         all_obs_rates.sort(reverse=True)
 
         if isinstance(threshold, float):
@@ -86,66 +90,90 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
         else:
             rate_threshold = -1e100  # include everything
 
-        #if typ in ('stochastic','affine') and \
+        # if typ in ('stochastic','affine') and \
         #        'stochastic/affine' in idtresults.pauli_fidpairs:
         #    typ = 'stochastic/affine' # for intrinsic stochastic and affine types
         #    if typ == "affine":  # affine columns follow all stochastic columns in jacobian
         #        intrinsicIndx += len(idtresults.error_list)
 
-        #get "specs" tuple for all the observable rates that we'll display
-        obs_rate_specs = []; nBelowThreshold = 0
+        # get "specs" tuple for all the observable rates that we'll display
+        obs_rate_specs = []
+        nBelowThreshold = 0
         for typ in idtresults.pauli_fidpairs:  # keys == "types" of observed rates
-            for fidpair, dict_of_infos in zip(idtresults.pauli_fidpairs[typ],
-                                              idtresults.observed_rate_infos[typ]):
+            for fidpair, dict_of_infos in zip(
+                idtresults.pauli_fidpairs[typ], idtresults.observed_rate_infos[typ]
+            ):
                 for obsORoutcome, info_dict in dict_of_infos.items():
-                    jac_row = info_dict['jacobian row']
-                    if 'affine jacobian row' in info_dict:
-                        jac_row = _np.concatenate((jac_row, info_dict['affine jacobian row']))
-                    rate = info_dict['rate']
+                    jac_row = info_dict["jacobian row"]
+                    if "affine jacobian row" in info_dict:
+                        jac_row = _np.concatenate(
+                            (jac_row, info_dict["affine jacobian row"])
+                        )
+                    rate = info_dict["rate"]
                     if abs(rate) > rate_threshold:
-                        obs_rate_specs.append((typ, fidpair, obsORoutcome, jac_row, rate))
+                        obs_rate_specs.append(
+                            (typ, fidpair, obsORoutcome, jac_row, rate)
+                        )
                     else:
                         nBelowThreshold += 1
 
-        #sort obs_rate_specs by rate
+        # sort obs_rate_specs by rate
         obs_rate_specs.sort(key=lambda x: x[4], reverse=True)
 
         errlst = idtresults.error_list  # shorthand
         Ne = len(idtresults.error_list)
+        print(errlst)
+        print(Ne)
         # number of intrinsic rates for each type (ham, sto, aff)
 
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
         for typ, fidpair, obsOrOutcome, jac_row, _ in obs_rate_specs:
-            fig = IdleTomographyObservedRatePlot(self.ws, idtresults, typ,
-                                                 fidpair, obsOrOutcome, title="auto",
-                                                 mdl_simulator=mdl_simulator)
+            fig = IdleTomographyObservedRatePlot(
+                self.ws,
+                idtresults,
+                typ,
+                fidpair,
+                obsOrOutcome,
+                title="auto",
+                mdl_simulator=mdl_simulator,
+            )
             intrinsic_reln = ""
             for i, el in enumerate(jac_row):
+                print(i)
                 if abs(el) > 1e-6:
                     # get intrinsic name `iname` for i-th element:
                     if typ == "diffbasis":
-                        if i < Ne: iname = "H(%s)" % str(errlst[i]).strip()
-                        else: iname = "A(%s)" % str(errlst[i - Ne]).strip()
+                        if i < Ne:
+                            iname = "H(%s)" % str(errlst[i]).strip()
+                        else:
+                            iname = "A(%s)" % str(errlst[i - Ne]).strip()
                     else:  # typ == "samebasis"
-                        if i < Ne: iname = "S(%s)" % str(errlst[i]).strip()
-                        else: iname = "A(%s)" % str(errlst[i - Ne]).strip()
+                        if i < Ne:
+                            iname = "S(%s)" % str(errlst[i]).strip()
+                        else:
+                            iname = "A(%s)" % str(errlst[i - Ne]).strip()
 
                     if len(intrinsic_reln) == 0:
-                        if el == 1.0: elstr = ""
-                        elif el == -1.0: elstr = "-"
-                        else: elstr = "%g" % el
+                        if el == 1.0:
+                            elstr = ""
+                        elif el == -1.0:
+                            elstr = "-"
+                        else:
+                            elstr = "%g" % el
                     else:
                         elstr = " + " if el >= 0 else " - "
                         elstr += "" if abs(el) == 1.0 else "%g" % abs(el)
                     intrinsic_reln += elstr + iname
 
             row_data = [fig, intrinsic_reln]
-            row_formatters = ['Figure', None]
+            row_formatters = ["Figure", None]
             table.add_row(row_data, row_formatters)
 
         if nBelowThreshold > 0:
-            table.add_row(["%d observed rates below %g" % (nBelowThreshold, rate_threshold), ""],
-                          [None, None])
+            table.add_row(
+                ["%d observed rates below %g" % (nBelowThreshold, rate_threshold), ""],
+                [None, None],
+            )
 
         table.finish()
         return table
@@ -158,8 +186,9 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
     observed rates.
     """
 
-    def __init__(self, ws, idtresults, typ, error_op, threshold=1.0,
-                 mdl_simulator=None):
+    def __init__(
+        self, ws, idtresults, typ, error_op, threshold=1.0, mdl_simulator=None
+    ):
         """
         Create a IdleTomographyObservedRatesForIntrinsicRateTable.
 
@@ -193,28 +222,34 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
         ReportTable
         """
         super(IdleTomographyObservedRatesForIntrinsicRateTable, self).__init__(
-            ws, self._create, idtresults, typ, error_op, threshold,
-            mdl_simulator)
+            ws, self._create, idtresults, typ, error_op, threshold, mdl_simulator
+        )
 
     def _create(self, idtresults, typ, error_op, threshold, mdl_simulator):
-        colHeadings = ['Jacobian El', 'Observable Rate']
+        colHeadings = ["Jacobian El", "Observable Rate"]
 
         if not isinstance(error_op, _pobjs.NQPauliOp):
-            error_op = _pobjs.NQPauliOp(error_op)  # try to init w/whatever we've been given
+            error_op = _pobjs.NQPauliOp(
+                error_op
+            )  # try to init w/whatever we've been given
 
         intrinsicIndx = idtresults.error_list.index(error_op)
 
-        if typ in ('stochastic', 'affine') and \
-                'stochastic/affine' in idtresults.pauli_fidpairs:
-            typ = 'stochastic/affine'  # for intrinsic stochastic and affine types
-            if typ == "affine":  # affine columns follow all stochastic columns in jacobian
+        if (
+            typ in ("stochastic", "affine")
+            and "stochastic/affine" in idtresults.pauli_fidpairs
+        ):
+            typ = "stochastic/affine"  # for intrinsic stochastic and affine types
+            if (
+                typ == "affine"
+            ):  # affine columns follow all stochastic columns in jacobian
                 intrinsicIndx += len(idtresults.error_list)
 
-        #thresholding:
+        # thresholding:
         all_obs_rates = []
         for dict_of_infos in idtresults.observed_rate_infos[typ]:
             for info_dict in dict_of_infos.values():
-                all_obs_rates.append(abs(info_dict['rate']))
+                all_obs_rates.append(abs(info_dict["rate"]))
         all_obs_rates.sort(reverse=True)
 
         if isinstance(threshold, float):
@@ -229,39 +264,51 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
         else:
             rate_threshold = -1e100  # include everything
 
-        #get all the observable rates that contribute to the intrinsic
+        # get all the observable rates that contribute to the intrinsic
         # rate specified by `typ` and `error_op`
-        obs_rate_specs = []; nBelowThreshold = 0
-        #print("DB: err list = ",idtresults.error_list, " LEN=",len(idtresults.error_list))
-        #print("DB: Intrinsic index = ",intrinsicIndx)
-        for fidpair, dict_of_infos in zip(idtresults.pauli_fidpairs[typ],
-                                          idtresults.observed_rate_infos[typ]):
+        obs_rate_specs = []
+        nBelowThreshold = 0
+        # print("DB: err list = ",idtresults.error_list, " LEN=",len(idtresults.error_list))
+        # print("DB: Intrinsic index = ",intrinsicIndx)
+        for fidpair, dict_of_infos in zip(
+            idtresults.pauli_fidpairs[typ], idtresults.observed_rate_infos[typ]
+        ):
             for obsORoutcome, info_dict in dict_of_infos.items():
-                jac_element = info_dict['jacobian row'][intrinsicIndx]
-                rate = info_dict['rate']
+                jac_element = info_dict["jacobian row"][intrinsicIndx]
+                rate = info_dict["rate"]
                 if abs(jac_element) > 0:
-                    #print("DB: found in Jrow=",info_dict['jacobian row'], " LEN=",len(info_dict['jacobian row']))
-                    #print("   (fidpair = ",fidpair[0],fidpair[1]," o=",obsORoutcome)
+                    # print("DB: found in Jrow=",info_dict['jacobian row'], " LEN=",len(info_dict['jacobian row']))
+                    # print("   (fidpair = ",fidpair[0],fidpair[1]," o=",obsORoutcome)
                     if abs(rate) > rate_threshold:
-                        obs_rate_specs.append((fidpair, obsORoutcome, jac_element, rate))
+                        obs_rate_specs.append(
+                            (fidpair, obsORoutcome, jac_element, rate)
+                        )
                     else:
                         nBelowThreshold += 1
 
-        #sort obs_rate_specs by rate
+        # sort obs_rate_specs by rate
         obs_rate_specs.sort(key=lambda x: x[3], reverse=True)
 
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
         for fidpair, obsOrOutcome, jac_element, _ in obs_rate_specs:
-            fig = IdleTomographyObservedRatePlot(self.ws, idtresults, typ,
-                                                 fidpair, obsOrOutcome, title="auto",
-                                                 mdl_simulator=mdl_simulator)
+            fig = IdleTomographyObservedRatePlot(
+                self.ws,
+                idtresults,
+                typ,
+                fidpair,
+                obsOrOutcome,
+                title="auto",
+                mdl_simulator=mdl_simulator,
+            )
             row_data = [str(jac_element), fig]
-            row_formatters = [None, 'Figure']
+            row_formatters = [None, "Figure"]
             table.add_row(row_data, row_formatters)
 
         if nBelowThreshold > 0:
-            table.add_row(["", "%d observed rates below %g" % (nBelowThreshold, rate_threshold)],
-                          [None, None])
+            table.add_row(
+                ["", "%d observed rates below %g" % (nBelowThreshold, rate_threshold)],
+                [None, None],
+            )
 
         table.finish()
         return table
@@ -273,8 +320,17 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
     of observed data to a simple polynomial.
     """
 
-    def __init__(self, ws, idtresults, typ, fidpair, obs_or_outcome, title="auto",
-                 scale=1.0, mdl_simulator=None):
+    def __init__(
+        self,
+        ws,
+        idtresults,
+        typ,
+        fidpair,
+        obs_or_outcome,
+        title="auto",
+        scale=1.0,
+        mdl_simulator=None,
+    ):
         """
         Create a IdleTomographyObservedRatePlot.
 
@@ -310,12 +366,20 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
             points and plot these simulated values alongside the data.
         """
         super(IdleTomographyObservedRatePlot, self).__init__(
-            ws, self._create, idtresults, typ, fidpair, obs_or_outcome,
-            title, scale, mdl_simulator)
+            ws,
+            self._create,
+            idtresults,
+            typ,
+            fidpair,
+            obs_or_outcome,
+            title,
+            scale,
+            mdl_simulator,
+        )
 
-    def _create(self, idtresults, typ, fidpair, obs_or_outcome,
-                title, scale, mdl_simulator):
-
+    def _create(
+        self, idtresults, typ, fidpair, obs_or_outcome, title, scale, mdl_simulator
+    ):
         maxLens = idtresults.max_lengths
         GiStr = _Circuit(idtresults.idle_str)
         prepStr = fidpair[0].to_circuit(idtresults.prep_basis_strs)
@@ -323,19 +387,23 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
 
         ifidpair = idtresults.pauli_fidpairs[typ].index(fidpair)
         info_dict = idtresults.observed_rate_infos[typ][ifidpair][obs_or_outcome]
-        obs_rate = info_dict['rate']
-        data_pts = info_dict['data']
-        errorbars = info_dict['errbars']
-        fitCoeffs = info_dict['fitCoeffs']
-        fitOrder = info_dict['fit_order']
+        obs_rate = info_dict["rate"]
+        data_pts = info_dict["data"]
+        errorbars = info_dict["errbars"]
+        fitCoeffs = info_dict["fitCoeffs"]
+        fitOrder = info_dict["fit_order"]
         if idtresults.predicted_obs_rates is not None:
             predictedRate = idtresults.predicted_obs_rates[typ][fidpair][obs_or_outcome]
         else:
             predictedRate = None
 
         if title == "auto":
-            title = "Prep: %s (%s), Meas: %s (%s)" % (prepStr.str, str(fidpair[0]),
-                                                      measStr.str, str(fidpair[1]))
+            title = "Prep: %s (%s), Meas: %s (%s)" % (
+                prepStr.str,
+                str(fidpair[0]),
+                measStr.str,
+                str(fidpair[1]),
+            )
         xlabel = "Length"
         if typ == "diffbasis":
             ylabel = "<" + str(obs_or_outcome).strip() + ">"  # Expectation value
@@ -345,22 +413,23 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
         traces = []
         x = _np.linspace(maxLens[0], maxLens[-1], 50)
 
-        traces.append(go.Scatter(
-            x=maxLens,
-            y=data_pts,
-            error_y=dict(
-                type='data',
-                array=errorbars,
-                visible=True,
-                color='#000000',
-                thickness=1,
-                width=2
-            ),
-            mode="markers",
-            marker=dict(
-                color='black',
-                size=10),
-            name='observed data'))
+        traces.append(
+            go.Scatter(
+                x=maxLens,
+                y=data_pts,
+                error_y=dict(
+                    type="data",
+                    array=errorbars,
+                    visible=True,
+                    color="#000000",
+                    thickness=1,
+                    width=2,
+                ),
+                mode="markers",
+                marker=dict(color="black", size=10),
+                name="observed data",
+            )
+        )
 
         if mdl_simulator:
             circuits = [prepStr + GiStr * L + measStr for L in maxLens]
@@ -369,9 +438,13 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
             for opstr in circuits:
                 ps = probs[opstr]
 
-                #Expectation value - assume weight at most 2 for now
+                # Expectation value - assume weight at most 2 for now
                 if typ == "diffbasis":
-                    obs_indices = [i for i, letter in enumerate(obs_or_outcome.rep) if letter != 'I']
+                    obs_indices = [
+                        i
+                        for i, letter in enumerate(obs_or_outcome.rep)
+                        if letter != "I"
+                    ]
                     minus_sign = _np.prod([fidpair[1].signs[i] for i in obs_indices])
 
                     # <Z> = p0 - p1 (* minus_sign)
@@ -379,8 +452,10 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
                         i = obs_indices[0]  # the qubit we care about
                         p0 = p1 = 0
                         for outcome, p in ps.items():
-                            if outcome[0][i] == '0': p0 += p  # [0] b/c outcomes are actually 1-tuples
-                            else: p1 += p
+                            if outcome[0][i] == "0":
+                                p0 += p  # [0] b/c outcomes are actually 1-tuples
+                            else:
+                                p1 += p
                         exptn = p0 - p1
 
                     # <ZZ> = p00 - p01 - p10 + p11 (* minus_sign)
@@ -388,79 +463,94 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
                         i, j = obs_indices  # the qubits we care about
                         p_even = p_odd = 0
                         for outcome, p in ps.items():
-                            if outcome[0][i] == outcome[0][j]: p_even += p
-                            else: p_odd += p
+                            if outcome[0][i] == outcome[0][j]:
+                                p_even += p
+                            else:
+                                p_odd += p
                             exptn = p_even - p_odd
                     else:
-                        raise NotImplementedError("Expectation values of weight > 2 observables are not implemented!")
+                        raise NotImplementedError(
+                            "Expectation values of weight > 2 observables are not implemented!"
+                        )
                     val = minus_sign * exptn
 
-                #Outcome probability
+                # Outcome probability
                 else:
                     outcomeStr = str(obs_or_outcome)
                     val = ps[outcomeStr]
                 sim_data.append(val)
 
-            traces.append(go.Scatter(
-                x=maxLens,
-                y=sim_data,
-                mode="markers",
-                marker=dict(
-                    color='#DD00DD',
-                    size=5),
-                name='simulated'))
+            traces.append(
+                go.Scatter(
+                    x=maxLens,
+                    y=sim_data,
+                    mode="markers",
+                    marker=dict(color="#DD00DD", size=5),
+                    name="simulated",
+                )
+            )
 
         if len(fitCoeffs) == 2:  # 1st order fit
-            assert(_np.isclose(fitCoeffs[0], obs_rate))
+            assert _np.isclose(fitCoeffs[0], obs_rate)
             fit = fitCoeffs[0] * x + fitCoeffs[1]
             fit_line = None
         elif len(fitCoeffs) == 3:
             fit = fitCoeffs[0] * x**2 + fitCoeffs[1] * x + fitCoeffs[2]
-            #OLD: assert(_np.isclose(fitCoeffs[1], obs_rate))
-            #OLD: fit_line = fitCoeffs[1]*x + (fitCoeffs[0]*x[0]**2 + fitCoeffs[2])
-            det = fitCoeffs[1]**2 - 4 * fitCoeffs[2] * fitCoeffs[0]
-            slope = -_np.sign(fitCoeffs[0]) * _np.sqrt(det) if det >= 0 else fitCoeffs[1]
+            # OLD: assert(_np.isclose(fitCoeffs[1], obs_rate))
+            # OLD: fit_line = fitCoeffs[1]*x + (fitCoeffs[0]*x[0]**2 + fitCoeffs[2])
+            det = fitCoeffs[1] ** 2 - 4 * fitCoeffs[2] * fitCoeffs[0]
+            slope = (
+                -_np.sign(fitCoeffs[0]) * _np.sqrt(det) if det >= 0 else fitCoeffs[1]
+            )
             fit_line = slope * x + (fit[0] - slope * x[0])
-            assert(_np.isclose(slope, obs_rate))
+            assert _np.isclose(slope, obs_rate)
         else:
-            #print("DB: ",fitCoeffs)
+            # print("DB: ",fitCoeffs)
             raise NotImplementedError("Only up to order 2 fits!")
 
-        traces.append(go.Scatter(
-            x=x,
-            y=fit,
-            mode="lines",  # dashed? "markers"?
-            marker=dict(
-                color='rgba(0,0,255,0.8)',
-                line=dict(
-                    width=2,
-                )),
-            name='o(%d) fit (slope=%.2g)' % (fitOrder, obs_rate)))
-
-        if fit_line is not None:
-            traces.append(go.Scatter(
+        traces.append(
+            go.Scatter(
                 x=x,
-                y=fit_line,
-                mode="lines",
-                marker=dict(
-                    color='rgba(0,0,280,0.8)'),
-                line=dict(
-                    width=1,
-                    dash='dash'),
-                name='o(%d) fit line' % fitOrder,
-                showlegend=False))
-
-        if predictedRate is not None:
-            traces.append(go.Scatter(
-                x=x,
-                y=(fit[0] - predictedRate * x[0]) + predictedRate * x,
+                y=fit,
                 mode="lines",  # dashed? "markers"?
                 marker=dict(
-                    color='rgba(0,280,0,0.8)',  # black?
+                    color="rgba(0,0,255,0.8)",
                     line=dict(
                         width=2,
-                    )),
-                name='predicted rate = %g' % predictedRate))
+                    ),
+                ),
+                name="o(%d) fit (slope=%.2g)" % (fitOrder, obs_rate),
+            )
+        )
+
+        if fit_line is not None:
+            traces.append(
+                go.Scatter(
+                    x=x,
+                    y=fit_line,
+                    mode="lines",
+                    marker=dict(color="rgba(0,0,280,0.8)"),
+                    line=dict(width=1, dash="dash"),
+                    name="o(%d) fit line" % fitOrder,
+                    showlegend=False,
+                )
+            )
+
+        if predictedRate is not None:
+            traces.append(
+                go.Scatter(
+                    x=x,
+                    y=(fit[0] - predictedRate * x[0]) + predictedRate * x,
+                    mode="lines",  # dashed? "markers"?
+                    marker=dict(
+                        color="rgba(0,280,0,0.8)",  # black?
+                        line=dict(
+                            width=2,
+                        ),
+                    ),
+                    name="predicted rate = %g" % predictedRate,
+                )
+            )
 
         layout = go.Layout(
             width=700 * scale,
@@ -477,8 +567,8 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
 
         pythonVal = {}  # TODO
         return _reportfigure.ReportFigure(
-            go.Figure(data=traces, layout=layout),
-            None, pythonVal)
+            go.Figure(data=traces, layout=layout), None, pythonVal
+        )
 
 
 class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
@@ -486,8 +576,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
     A table of all the intrinsic rates found by idle tomography.
     """
 
-    def __init__(self, ws, idtresults,
-                 display=("H", "S", "A"), display_as="boxes"):
+    def __init__(self, ws, idtresults, display=("H", "S", "A"), display_as="boxes"):
         """
         Create a IdleTomographyIntrinsicErrorsTable.
 
@@ -513,62 +602,71 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
         ReportTable
         """
         super(IdleTomographyIntrinsicErrorsTable, self).__init__(
-            ws, self._create, idtresults, display, display_as)
+            ws, self._create, idtresults, display, display_as
+        )
 
     def _create(self, idtresults, display, display_as):
-        colHeadings = ['Qubits']
+        colHeadings = ["Qubits"]
 
-        irname = {'H': 'hamiltonian', 'S': 'stochastic', 'A': 'affine'}
-        display = [disp for disp in display
-                   if irname[disp] in idtresults.intrinsic_rates]
+        irname = {"H": "hamiltonian", "S": "stochastic", "A": "affine"}
+        display = [
+            disp for disp in display if irname[disp] in idtresults.intrinsic_rates
+        ]
 
         for disp in display:
             if disp == "H":
-                colHeadings.append('Hamiltonian')
+                colHeadings.append("Hamiltonian")
             elif disp == "S":
-                colHeadings.append('Stochastic')
+                colHeadings.append("Stochastic")
             elif disp == "A":
-                colHeadings.append('Affine')
-            else: raise ValueError("Invalid display element: %s" % disp)
+                colHeadings.append("Affine")
+            else:
+                raise ValueError("Invalid display element: %s" % disp)
 
-        assert(display_as == "boxes" or display_as == "numbers")
+        assert display_as == "boxes" or display_as == "numbers"
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
 
         def process_rates(typ):
             """Process list of intrinsic rates, binning into rates for different sets of qubits"""
             rates = _collections.defaultdict(dict)
-            for err, value in zip(idtresults.error_list,
-                                  idtresults.intrinsic_rates[typ]):
-                qubits = [i for i, P in enumerate(err.rep) if P != 'I']  # (in sorted order)
-                op = _pobjs.NQPauliOp(''.join([P for P in err.rep if P != 'I']))
+            for err, value in zip(
+                idtresults.error_list, idtresults.intrinsic_rates[typ]
+            ):
+                qubits = [
+                    i for i, P in enumerate(err.rep) if P != "I"
+                ]  # (in sorted order)
+                op = _pobjs.NQPauliOp("".join([P for P in err.rep if P != "I"]))
                 rates[tuple(qubits)][op] = value
             return rates
 
-        M = 0; all_keys = set()
+        M = 0
+        all_keys = set()
         ham_rates = sto_rates = aff_rates = {}  # defaults
-        if 'H' in display:
-            ham_rates = process_rates('hamiltonian')
-            M = max(M, max(_np.abs(idtresults.intrinsic_rates['hamiltonian'])))
+        if "H" in display:
+            ham_rates = process_rates("hamiltonian")
+            M = max(M, max(_np.abs(idtresults.intrinsic_rates["hamiltonian"])))
             all_keys.update(ham_rates.keys())
-        if 'S' in display:
-            sto_rates = process_rates('stochastic')
-            M = max(M, max(_np.abs(idtresults.intrinsic_rates['stochastic'])))
+        if "S" in display:
+            sto_rates = process_rates("stochastic")
+            M = max(M, max(_np.abs(idtresults.intrinsic_rates["stochastic"])))
             all_keys.update(sto_rates.keys())
-        if 'A' in display:
-            aff_rates = process_rates('affine')
-            M = max(M, max(_np.abs(idtresults.intrinsic_rates['affine'])))
+        if "A" in display:
+            aff_rates = process_rates("affine")
+            M = max(M, max(_np.abs(idtresults.intrinsic_rates["affine"])))
             all_keys.update(aff_rates.keys())
 
-        #min/max
+        # min/max
         m = -M
 
         def _get_plot_info(qubits, rate_dict):
             wt = len(qubits)  # the weight of the errors
-            basisLblLookup = {_pobjs.NQPauliOp(''.join(tup)): i for i, tup in
-                              enumerate(_itertools.product(["X", "Y", "Z"], repeat=wt))}
-            #print("DB: ",list(basisLblLookup.keys()))
-            #print("DB: ",list(rate_dict.keys()))
-            values = _np.zeros(len(basisLblLookup), 'd')
+            basisLblLookup = {
+                _pobjs.NQPauliOp("".join(tup)): i
+                for i, tup in enumerate(_itertools.product(["X", "Y", "Z"], repeat=wt))
+            }
+            # print("DB: ",list(basisLblLookup.keys()))
+            # print("DB: ",list(rate_dict.keys()))
+            values = _np.zeros(len(basisLblLookup), "d")
             for op, val in rate_dict.items():
                 values[basisLblLookup[op]] = val
             if wt == 2:
@@ -583,7 +681,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
 
         sorted_keys = sorted(list(all_keys), key=lambda x: (len(x),) + x)
 
-        #Create rows with plots
+        # Create rows with plots
         for ky in sorted_keys:
             row_data = [str(ky)]
             row_formatters = [None]
@@ -593,44 +691,66 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                     values, xlabels, ylabels = _get_plot_info(ky, ham_rates[ky])
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
-                            self.ws, values, m, M, xlabels, ylabels,
-                            box_labels=True, prec="compacthp")
+                            self.ws,
+                            values,
+                            m,
+                            M,
+                            xlabels,
+                            ylabels,
+                            box_labels=True,
+                            prec="compacthp",
+                        )
                         row_data.append(fig)
-                        row_formatters.append('Figure')
+                        row_formatters.append("Figure")
                     else:
                         row_data.append(values)
-                        row_formatters.append('Brackets')
+                        row_formatters.append("Brackets")
 
                 if disp == "S" and ky in sto_rates:
                     values, xlabels, ylabels = _get_plot_info(ky, sto_rates[ky])
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
-                            self.ws, values, m, M, xlabels, ylabels,
-                            box_labels=True, prec="compacthp")
+                            self.ws,
+                            values,
+                            m,
+                            M,
+                            xlabels,
+                            ylabels,
+                            box_labels=True,
+                            prec="compacthp",
+                        )
                         row_data.append(fig)
-                        row_formatters.append('Figure')
+                        row_formatters.append("Figure")
                     else:
                         row_data.append(values)
-                        row_formatters.append('Brackets')
+                        row_formatters.append("Brackets")
 
                 if disp == "A" and ky in aff_rates:
                     values, xlabels, ylabels = _get_plot_info(ky, aff_rates[ky])
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
-                            self.ws, values, m, M, xlabels, ylabels,
-                            box_labels=True, prec="compacthp")
+                            self.ws,
+                            values,
+                            m,
+                            M,
+                            xlabels,
+                            ylabels,
+                            box_labels=True,
+                            prec="compacthp",
+                        )
                         row_data.append(fig)
-                        row_formatters.append('Figure')
+                        row_formatters.append("Figure")
                     else:
                         row_data.append(values)
-                        row_formatters.append('Brackets')
+                        row_formatters.append("Brackets")
 
             table.add_row(row_data, row_formatters)
 
         table.finish()
         return table
 
-#Note: SAME function as in report/factory.py (copied)
+
+# Note: SAME function as in report/factory.py (copied)
 
 
 def _add_new_labels(running_lbls, current_lbls):
@@ -663,8 +783,9 @@ def _create_switchboard(ws, results_dict):
     switchBd = ws.Switchboard(
         ["Dataset"],
         [dataset_labels],
-        ["dropdown"], [0],
-        show=[multidataset]  # only show dataset dropdown (for sidebar)
+        ["dropdown"],
+        [0],
+        show=[multidataset],  # only show dataset dropdown (for sidebar)
     )
 
     switchBd.add("results", (0,))
@@ -674,9 +795,17 @@ def _create_switchboard(ws, results_dict):
     return switchBd, dataset_labels
 
 
-def create_idletomography_report(results, filename, title="auto",
-                                 ws=None, auto_open=False, link_to=None,
-                                 brevity=0, advanced_options=None, verbosity=1):
+def create_idletomography_report(
+    results,
+    filename,
+    title="auto",
+    ws=None,
+    auto_open=False,
+    link_to=None,
+    brevity=0,
+    advanced_options=None,
+    verbosity=1,
+):
     """
     Creates an Idle Tomography report, summarizing the results of running
     idle tomography on a data set.
@@ -760,30 +889,36 @@ def create_idletomography_report(results, filename, title="auto",
     tStart = _time.time()
     printer = _VerbosityPrinter.create_printer(verbosity)  # , comm=comm)
 
-    if advanced_options is None: advanced_options = {}
-    precision = advanced_options.get('precision', None)
-    cachefile = advanced_options.get('cachefile', None)
-    connected = advanced_options.get('connected', False)
-    resizable = advanced_options.get('resizable', True)
-    autosize = advanced_options.get('autosize', 'initial')
-    mdl_sim = advanced_options.get('simulator', None)  # a model
+    if advanced_options is None:
+        advanced_options = {}
+    precision = advanced_options.get("precision", None)
+    cachefile = advanced_options.get("cachefile", None)
+    connected = advanced_options.get("connected", False)
+    resizable = advanced_options.get("resizable", True)
+    autosize = advanced_options.get("autosize", "initial")
+    mdl_sim = advanced_options.get("simulator", None)  # a model
 
     if filename and filename.endswith(".pdf"):
         fmt = "latex"
     else:
         fmt = "html"
 
-    printer.log('*** Creating workspace ***')
-    if ws is None: ws = _ws.Workspace(cachefile)
+    printer.log("*** Creating workspace ***")
+    if ws is None:
+        ws = _ws.Workspace(cachefile)
 
     if title is None or title == "auto":
         if filename is not None:
             autoname = _autotitle.generate_name()
             title = "Idle Tomography Report for " + autoname
-            _warnings.warn(("You should really specify `title=` when generating reports,"
-                            " as this makes it much easier to identify them later on.  "
-                            "Since you didn't, pyGSTi has generated a random one"
-                            " for you: '{}'.").format(autoname))
+            _warnings.warn(
+                (
+                    "You should really specify `title=` when generating reports,"
+                    " as this makes it much easier to identify them later on.  "
+                    "Since you didn't, pyGSTi has generated a random one"
+                    " for you: '{}'."
+                ).format(autoname)
+            )
         else:
             title = "N/A"  # No title - but it doesn't matter since filename is None
 
@@ -796,77 +931,98 @@ def create_idletomography_report(results, filename, title="auto",
     def addqty(b, name, fn, *args, **kwargs):
         """Adds an item to the qtys dict within a timed block"""
         if b is None or brevity < b:
-            with _timed_block(name, format_str='{:45}', printer=printer, verbosity=2):
+            with _timed_block(name, format_str="{:45}", printer=printer, verbosity=2):
                 qtys[name] = fn(*args, **kwargs)
 
-    qtys['title'] = title
-    qtys['date'] = _time.strftime("%B %d, %Y")
+    qtys["title"] = title
+    qtys["date"] = _time.strftime("%B %d, %Y")
 
-    pdfInfo = [('Author', 'pyGSTi'), ('Title', title),
-               ('Keywords', 'GST'), ('pyGSTi Version', _version.version)]
-    qtys['pdfinfo'] = _merge.to_pdfinfo(pdfInfo)
+    pdfInfo = [
+        ("Author", "pyGSTi"),
+        ("Title", title),
+        ("Keywords", "GST"),
+        ("pyGSTi Version", _version.version),
+    ]
+    qtys["pdfinfo"] = _merge.to_pdfinfo(pdfInfo)
 
     # Generate Switchboard
     printer.log("*** Generating switchboard ***")
 
-    #Create master switchboard
-    switchBd, dataset_labels = \
-        _create_switchboard(ws, results_dict)
+    # Create master switchboard
+    switchBd, dataset_labels = _create_switchboard(ws, results_dict)
     if fmt == "latex" and (len(dataset_labels) > 1):
-        raise ValueError("PDF reports can only show a *single* dataset,"
-                         " estimate, and gauge optimization.")
+        raise ValueError(
+            "PDF reports can only show a *single* dataset,"
+            " estimate, and gauge optimization."
+        )
 
     # Generate Tables
     printer.log("*** Generating tables ***")
 
     multidataset = bool(len(dataset_labels) > 1)
-    #REM intErrView = [False,True,True]
+    # REM intErrView = [False,True,True]
 
     if fmt == "html":
-        qtys['topSwitchboard'] = switchBd
-        #REM qtys['intrinsicErrSwitchboard'] = switchBd.view(intErrView,"v1")
+        qtys["topSwitchboard"] = switchBd
+        # REM qtys['intrinsicErrSwitchboard'] = switchBd.view(intErrView,"v1")
 
     results = switchBd.results
-    #REM errortype = switchBd.errortype
-    #REM errorop = switchBd.errorop
+    # REM errortype = switchBd.errortype
+    # REM errorop = switchBd.errorop
     A = None  # no brevity restriction: always display; for "Summary"- & "Help"-tab figs
 
-    #Brevity key:
+    # Brevity key:
     # TODO - everything is always displayed for now
 
-    addqty(A, 'intrinsicErrorsTable', ws.IdleTomographyIntrinsicErrorsTable, results)
-    addqty(A, 'observedRatesTable', ws.IdleTomographyObservedRatesTable, results,
-           20, mdl_sim)  # HARDCODED - show only top 20 rates
+    addqty(A, "intrinsicErrorsTable", ws.IdleTomographyIntrinsicErrorsTable, results)
+    addqty(
+        A,
+        "observedRatesTable",
+        ws.IdleTomographyObservedRatesTable,
+        results,
+        20,
+        mdl_sim,
+    )  # HARDCODED - show only top 20 rates
     # errortype, errorop,
 
     # Generate plots
     printer.log("*** Generating plots ***")
 
     toggles = {}
-    toggles['CompareDatasets'] = False  # not comparable by default
+    toggles["CompareDatasets"] = False  # not comparable by default
     if multidataset:
-        #check if data sets are comparable (if they have the same sequences)
+        # check if data sets are comparable (if they have the same sequences)
         comparable = True
-        gstrCmpList = list(results_dict[dataset_labels[0]].dataset.keys())  # maybe use circuit_lists['final']??
+        gstrCmpList = list(
+            results_dict[dataset_labels[0]].dataset.keys()
+        )  # maybe use circuit_lists['final']??
         for dslbl in dataset_labels:
             if list(results_dict[dslbl].dataset.keys()) != gstrCmpList:
-                _warnings.warn("Not all data sets are comparable - no comparisions will be made.")
-                comparable = False; break
+                _warnings.warn(
+                    "Not all data sets are comparable - no comparisions will be made."
+                )
+                comparable = False
+                break
 
         if comparable:
-            #initialize a new "dataset comparison switchboard"
+            # initialize a new "dataset comparison switchboard"
             dscmp_switchBd = ws.Switchboard(
                 ["Dataset1", "Dataset2"],
                 [dataset_labels, dataset_labels],
-                ["buttons", "buttons"], [0, 1]
+                ["buttons", "buttons"],
+                [0, 1],
             )
             dscmp_switchBd.add("dscmp", (0, 1))
             dscmp_switchBd.add("dscmp_gss", (0,))
             dscmp_switchBd.add("refds", (0,))
 
             for d1, dslbl1 in enumerate(dataset_labels):
-                dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].circuit_structs['final']
-                dscmp_switchBd.refds[d1] = results_dict[dslbl1].dataset  # only used for #of spam labels below
+                dscmp_switchBd.dscmp_gss[d1] = results_dict[dslbl1].circuit_structs[
+                    "final"
+                ]
+                dscmp_switchBd.refds[d1] = results_dict[
+                    dslbl1
+                ].dataset  # only used for #of spam labels below
 
             # dsComp = dict()
             all_dsComps = dict()
@@ -880,22 +1036,46 @@ def create_idletomography_report(results, filename, title="auto",
                 dslbl2 = dataset_labels[d2]
                 ds1 = results_dict[dslbl1].dataset
                 ds2 = results_dict[dslbl2].dataset
-                all_dsComps[(d1, d2)] = _DataComparator([ds1, ds2], ds_names=[dslbl1, dslbl2])
+                all_dsComps[(d1, d2)] = _DataComparator(
+                    [ds1, ds2], ds_names=[dslbl1, dslbl2]
+                )
                 dscmp_switchBd.dscmp[d1, d2] = all_dsComps[(d1, d2)]
 
-            qtys['dscmpSwitchboard'] = dscmp_switchBd
-            addqty(4, 'ds_comparison_summary', ws.DatasetComparisonSummaryPlot, dataset_labels, all_dsComps)
-            #addqty('ds_comparison_histogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp,display='pvalue')
-            addqty(4, 'ds_comparison_histogram', ws.ColorBoxPlot,
-                   'dscmp', dscmp_switchBd.dscmp_gss, dscmp_switchBd.refds, None,
-                   dscomparator=dscmp_switchBd.dscmp, typ="histogram")
-            addqty(1, 'ds_comparison_box_plot', ws.ColorBoxPlot, 'dscmp', dscmp_switchBd.dscmp_gss,
-                   dscmp_switchBd.refds, None, dscomparator=dscmp_switchBd.dscmp)
-            toggles['CompareDatasets'] = True
+            qtys["dscmpSwitchboard"] = dscmp_switchBd
+            addqty(
+                4,
+                "ds_comparison_summary",
+                ws.DatasetComparisonSummaryPlot,
+                dataset_labels,
+                all_dsComps,
+            )
+            # addqty('ds_comparison_histogram', ws.DatasetComparisonHistogramPlot, dscmp_switchBd.dscmp,display='pvalue')
+            addqty(
+                4,
+                "ds_comparison_histogram",
+                ws.ColorBoxPlot,
+                "dscmp",
+                dscmp_switchBd.dscmp_gss,
+                dscmp_switchBd.refds,
+                None,
+                dscomparator=dscmp_switchBd.dscmp,
+                typ="histogram",
+            )
+            addqty(
+                1,
+                "ds_comparison_box_plot",
+                ws.ColorBoxPlot,
+                "dscmp",
+                dscmp_switchBd.dscmp_gss,
+                dscmp_switchBd.refds,
+                None,
+                dscomparator=dscmp_switchBd.dscmp,
+            )
+            toggles["CompareDatasets"] = True
         else:
-            toggles['CompareDatasets'] = False  # not comparable!
+            toggles["CompareDatasets"] = False  # not comparable!
     else:
-        toggles['CompareDatasets'] = False
+        toggles["CompareDatasets"] = False
 
     if filename is not None:
         if True:  # comm is None or comm.Get_rank() == 0:
@@ -905,36 +1085,62 @@ def create_idletomography_report(results, filename, title="auto",
             if fmt == "html":
                 if filename.endswith(".html"):
                     _merge.merge_jinja_template(
-                        qtys, filename, template_dir='~idletomography_html_report',
-                        auto_open=auto_open, precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles, render_math=render_math,
-                        resizable=resizable, autosize=autosize, verbosity=printer
+                        qtys,
+                        filename,
+                        template_dir="~idletomography_html_report",
+                        auto_open=auto_open,
+                        precision=precision,
+                        link_to=link_to,
+                        connected=connected,
+                        toggles=toggles,
+                        render_math=render_math,
+                        resizable=resizable,
+                        autosize=autosize,
+                        verbosity=printer,
                     )
                 else:
                     _merge.merge_jinja_template_dir(
-                        qtys, filename, template_dir='~idletomography_html_report',
-                        auto_open=auto_open, precision=precision, link_to=link_to,
-                        connected=connected, toggles=toggles, render_math=render_math,
-                        resizable=resizable, autosize=autosize, verbosity=printer
+                        qtys,
+                        filename,
+                        template_dir="~idletomography_html_report",
+                        auto_open=auto_open,
+                        precision=precision,
+                        link_to=link_to,
+                        connected=connected,
+                        toggles=toggles,
+                        render_math=render_math,
+                        resizable=resizable,
+                        autosize=autosize,
+                        verbosity=printer,
                     )
 
             elif fmt == "latex":
-                raise NotImplementedError("No PDF version of this report is available yet.")
+                raise NotImplementedError(
+                    "No PDF version of this report is available yet."
+                )
                 templateFile = "idletomography_pdf_report.tex"
                 base = _os.path.splitext(filename)[0]  # no extension
-                _merge.merge_latex_template(qtys, templateFile, base + ".tex", toggles,
-                                            precision, printer)
+                _merge.merge_latex_template(
+                    qtys, templateFile, base + ".tex", toggles, precision, printer
+                )
 
                 # compile report latex file into PDF
-                cmd = _ws.WorkspaceOutput.default_render_options.get('latex_cmd', None)
-                flags = _ws.WorkspaceOutput.default_render_options.get('latex_flags', [])
-                assert(cmd), "Cannot render PDF documents: no `latex_cmd` render option."
-                printer.log("Latex file(s) successfully generated.  Attempting to compile with %s..." % cmd)
+                cmd = _ws.WorkspaceOutput.default_render_options.get("latex_cmd", None)
+                flags = _ws.WorkspaceOutput.default_render_options.get(
+                    "latex_flags", []
+                )
+                assert cmd, "Cannot render PDF documents: no `latex_cmd` render option."
+                printer.log(
+                    "Latex file(s) successfully generated.  Attempting to compile with %s..."
+                    % cmd
+                )
                 _merge.compile_latex_report(base, [cmd] + flags, printer, auto_open)
             else:
                 raise ValueError("Unrecognized format: %s" % fmt)
     else:
         printer.log("*** NOT Merging into template file (filename is None) ***")
-    printer.log("*** Report Generation Complete!  Total time %gs ***" % (_time.time() - tStart))
+    printer.log(
+        "*** Report Generation Complete!  Total time %gs ***" % (_time.time() - tStart)
+    )
 
     return ws
