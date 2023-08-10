@@ -1420,7 +1420,7 @@ class ErrgenTable(WorkspaceTable):
 
             - "logG-logT" : errgen = log(gate) - log(target_op)
             - "logTiG" : errgen = log( dot(inv(target_op), gate) )
-            - "logTiG" : errgen = log( dot(gate, inv(target_op)) )
+            - "logGTi" : errgen = log( dot(gate, inv(target_op)) )
 
         Returns
         -------
