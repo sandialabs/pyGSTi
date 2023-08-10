@@ -259,4 +259,4 @@ def compact_deriv(vtape, ctape, wrt_params):
 
 
 def float_product(ar):
-    return _np.product(ar)
+    return _np.prod(ar)

@@ -162,9 +162,9 @@ class EmbeddedOp(_LinearOperator):
 
         # number of basis elements preceding our block's elements
         if on_space == "Hilbert":
-            blockDims = [_np.product(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_udimensions]
+            blockDims = [_np.prod(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_udimensions]
         else:
-            blockDims = [_np.product(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_dimensions]
+            blockDims = [_np.prod(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_dimensions]
         offset = sum(blockDims[0:iTensorProdBlk])
 
         return divisors, multipliers, sorted_bili, basisInds_noop, offset

@@ -405,7 +405,7 @@ class NQPauliOp(object):
         sign = (-1)**((num_i + 1) / 2) * _np.prod([ri_sign(pauli1, pauli2, p)
                                                    for pauli1, pauli2, p in zip(s1, s2, parities)])
         if isinstance(other, NQPauliOp): other_sign = other.sign
-        elif isinstance(other, NQPauliState): other_sign = _np.product(other.signs)
+        elif isinstance(other, NQPauliState): other_sign = _np.prod(other.signs)
         else: raise ValueError("Can't take commutator with %s type" % str(type(other)))
 
         return NQPauliOp(op, sign * self.sign * other_sign)

@@ -285,7 +285,7 @@ class TensorProductState(_State):
         #HACK to deal with fact that output of to_dense is really what is differentiated
         # but this may not match self.dim == self.state_space.dim, e.g. for pure state vecs.
         dims = [len(fct.to_dense(on_space='minimal')) for fct in self.factors]
-        dim = int(_np.product(dims))
+        dim = int(_np.prod(dims))
 
         derivMx = _np.zeros((dim, self.num_params), typ)
 

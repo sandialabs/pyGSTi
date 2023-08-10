@@ -1504,7 +1504,7 @@ class ExplicitOpModel(_mdl.OpModel):
             # assume this is a kronecker product (check this in FUTURE?), so just fill extracted
             # unitary by fixing all non-extracted qudits (assumed identity-action on these) to 0
             # and looping over extracted ones:
-            U_extracted = _np.zeros((_np.product(extracted_udims), _np.product(extracted_udims)), complex)
+            U_extracted = _np.zeros((_np.prod(extracted_udims), _np.prod(extracted_udims)), complex)
             for ii, itup in enumerate(_itertools.product(*[range(ud) for ud in extracted_udims])):
                 i = _np.dot(extracted_inc, itup)
                 for jj, jtup in enumerate(_itertools.product(*[range(ud) for ud in extracted_udims])):

@@ -610,7 +610,7 @@ class QuditSpace(StateSpace):
         """
         Integer Hilbert (unitary operator) space dimension of this quantum state space.
         """
-        return _np.product(self.qudit_udims)
+        return _np.prod(self.qudit_udims)
 
     @property
     def dim(self):
@@ -1060,17 +1060,17 @@ class ExplicitStateSpace(StateSpace):
         self.tpb_dims = []
         self.tpb_udims = []
         for iTPB, tpbLabels in enumerate(self.labels):
-            float_prod = _np.product(_np.array([self.label_dims[lbl] for lbl in tpbLabels], 'd'))
+            float_prod = _np.prod(_np.array([self.label_dims[lbl] for lbl in tpbLabels], 'd'))
             if float_prod >= float(_sys.maxsize):  # too many qubits to hold dimension in an integer
                 self.tpb_dims.append(_np.inf)
             else:
-                self.tpb_dims.append(int(_np.product([self.label_dims[lbl] for lbl in tpbLabels])))
+                self.tpb_dims.append(int(_np.prod([self.label_dims[lbl] for lbl in tpbLabels])))
 
-            float_prod = _np.product(_np.array([self.label_udims[lbl] for lbl in tpbLabels], 'd'))
+            float_prod = _np.prod(_np.array([self.label_udims[lbl] for lbl in tpbLabels], 'd'))
             if float_prod >= float(_sys.maxsize):  # too many qubits to hold dimension in an integer
                 self.tpb_udims.append(_np.inf)
             else:
-                self.tpb_udims.append(int(_np.product([self.label_udims[lbl] for lbl in tpbLabels])))
+                self.tpb_udims.append(int(_np.prod([self.label_udims[lbl] for lbl in tpbLabels])))
 
             self.tpb_index.update({lbl: iTPB for lbl in tpbLabels})
 

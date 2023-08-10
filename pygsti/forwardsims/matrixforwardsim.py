@@ -1093,9 +1093,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             na, npp = 1, (1, 1)  # save all processor division for within the (single) atom, for different timestamps
 
         printer.log("MatrixLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
-                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
+                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)))
         printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
-        assert(_np.product((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
         layout = _MatrixCOPALayout(circuits, self.model, dataset, natoms,
                                    na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity)

@@ -250,9 +250,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             array_types, nprocs, num_params, len(circuits), default_natoms=2 * self.model.dim)  # heuristic?
 
         printer.log("MapLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
-                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
+                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)))
         printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
-        assert(_np.product((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
         layout = _MapCOPALayout(circuits, self.model, dataset, self._max_cache_size, natoms, na, npp,
                                 param_dimensions, param_blk_sizes, resource_alloc, verbosity)
