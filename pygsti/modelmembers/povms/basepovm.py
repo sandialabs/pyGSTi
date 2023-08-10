@@ -75,7 +75,10 @@ class _BasePOVM(_POVM):
         paramlbls = []
         for k, v in items:
             if k == self.complement_label: continue
-            if isinstance(v, _POVMEffect):
+            if called_from_reduce:  # __reduce__ should always initialize w/POVMEffects except for ...
+                assert isinstance(v, _POVMEffect)  # complement (which hits continue above)
+                effect = v  # don't copy as we want to preserve the gpindices in effects
+            elif isinstance(v, _POVMEffect):
                 effect = v if (not preserve_sum) else v.copy()  # .copy() just to de-allocate parameters
             else:
                 assert(evotype is not None), "Must specify `evotype` when effect vectors are not POVMEffect objects!"
@@ -108,7 +111,7 @@ class _BasePOVM(_POVM):
             identity_for_complement = _np.array(sum([v.to_dense().reshape(comp_val.shape) for v in non_comp_effects])
                                                 + comp_val, 'd')  # ensure shapes match before summing
             complement_effect = _ComplementPOVMEffect(
-                identity_for_complement, non_comp_effects)
+                identity_for_complement, non_comp_effects, called_from_reduce)
             items.append((self.complement_label, complement_effect))
 
         super(_BasePOVM, self).__init__(state_space, evotype, None, items)
