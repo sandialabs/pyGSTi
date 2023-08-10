@@ -231,7 +231,7 @@ def _encode_std_obj(py_obj, binary):
         if kind == 'O':
             #Special case of object arrays:  store flattened array data
             data = [encode_obj(el, binary) for el in py_obj.flat]
-            assert(len(data) == _np.product(py_obj.shape))
+            assert(len(data) == _np.prod(py_obj.shape))
         else:
             data = py_obj.tobytes() if binary else _tostr(_base64.b64encode(py_obj.tobytes()))
 

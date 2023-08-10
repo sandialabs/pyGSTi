@@ -121,7 +121,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     num_atoms : int, optional
         The number of atoms (sub-prefix-tables) to use when creating the layout (i.e. when calling
-        :method:`create_layout`).  This determines how many units the element (circuit outcome
+        :meth:`create_layout`).  This determines how many units the element (circuit outcome
         probability) dimension is divided into, and doesn't have to correclate with the number of
         processors.  When multiple processors are used, if `num_atoms` is less than the number of
         processors then `num_atoms` should divide the number of processors evenly, so that
@@ -210,7 +210,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             the layout (evaluation strategy) is constructed.
 
         array_types : tuple, optional
-            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+            A tuple of string-valued array types.  See :meth:`ForwardSimulator.create_layout`.
 
         derivative_dimension : int, optional
             Optionally, the parameter-space dimension used when taking first
@@ -250,9 +250,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             array_types, nprocs, num_params, len(circuits), default_natoms=2 * self.model.dim)  # heuristic?
 
         printer.log("MapLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
-                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
+                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)))
         printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
-        assert(_np.product((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
         layout = _MapCOPALayout(circuits, self.model, dataset, self._max_cache_size, natoms, na, npp,
                                 param_dimensions, param_blk_sizes, resource_alloc, verbosity)
@@ -385,7 +385,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -437,7 +437,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         """
         Compute the chi2 jacobian contributions for an entire tree of circuits, allowing for time dependent operations.
 
-        Similar to :method:`bulk_fill_timedep_chi2` but compute the *jacobian*
+        Similar to :meth:`bulk_fill_timedep_chi2` but compute the *jacobian*
         of the summed chi2 contributions for each circuit with respect to the
         model's parameters.
 
@@ -450,7 +450,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -468,7 +468,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         min_prob_clip_for_weighting : float, optional
             Sets the minimum and maximum probability p allowed in the chi^2
-            weights: N/(p*(1-p)) by clipping probability p values to lie within
+            weights: `N/(p*(1-p))` by clipping probability p values to lie within
             the interval [ min_prob_clip_for_weighting, 1-min_prob_clip_for_weighting ].
 
         prob_clip_interval : 2-tuple or None, optional
@@ -478,7 +478,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         chi2_array_to_fill : numpy array, optional
             when not None, an already-allocated length-E numpy array that is filled
             with the per-circuit chi2 contributions, just like in
-            bulk_fill_timedep_chi2(...).
+            `bulk_fill_timedep_chi2(...)`.
 
         Returns
         -------
@@ -514,9 +514,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             an already-allocated 1D numpy array of length equal to the
             total number of computed elements (i.e. layout.num_elements)
 
-       layout : CircuitOutcomeProbabilityArrayLayout
+        layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -574,7 +574,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         """
         Compute the ("poisson picture")log-likelihood jacobian contributions for an entire tree of circuits.
 
-        Similar to :method:`bulk_fill_timedep_loglpp` but compute the *jacobian*
+        Similar to :meth:`bulk_fill_timedep_loglpp` but compute the *jacobian*
         of the summed logl (in posison picture) contributions for each circuit
         with respect to the model's parameters.
 
@@ -587,7 +587,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -616,7 +616,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         logl_array_to_fill : numpy array, optional
             when not None, an already-allocated length-E numpy array that is filled
             with the per-circuit logl contributions, just like in
-            bulk_fill_timedep_loglpp(...).
+            `bulk_fill_timedep_loglpp(...)` .
 
         Returns
         -------

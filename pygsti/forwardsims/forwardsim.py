@@ -324,7 +324,7 @@ class ForwardSimulator(_NicelySerializable):
 
         array_types : tuple, optional
             A tuple of string-valued array types, as given by
-            :method:`CircuitOutcomeProbabilityArrayLayout.allocate_local_array`.  These types determine
+            :meth:`CircuitOutcomeProbabilityArrayLayout.allocate_local_array`.  These types determine
             what types of arrays we anticipate computing using this layout (and forward simulator).  These
             are used to check available memory against the limit (if it exists) within `resource_alloc`.
             The array types also determine the number of derivatives that this layout is able to compute.
@@ -548,7 +548,7 @@ class ForwardSimulator(_NicelySerializable):
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         Returns
         -------
@@ -592,11 +592,11 @@ class ForwardSimulator(_NicelySerializable):
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         pr_mx_to_fill : numpy array, optional
             when not None, an already-allocated length-`len(layout)` numpy array that is
-            filled with probabilities, just as in :method:`bulk_fill_probs`.
+            filled with probabilities, just as in :meth:`bulk_fill_probs`.
 
         Returns
         -------
@@ -663,21 +663,21 @@ class ForwardSimulator(_NicelySerializable):
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         pr_mx_to_fill : numpy array, optional
             when not None, an already-allocated length-`len(layout)` numpy array that is
-            filled with probabilities, just as in :method:`bulk_fill_probs`.
+            filled with probabilities, just as in :meth:`bulk_fill_probs`.
 
         deriv1_array_to_fill : numpy array, optional
             when not None, an already-allocated numpy array of shape `(len(layout),M1)`
             that is filled with probability derivatives, similar to
-            :method:`bulk_fill_dprobs` (see `array_to_fill` for a definition of `M1`).
+            :meth:`bulk_fill_dprobs` (see `array_to_fill` for a definition of `M1`).
 
         deriv2_array_to_fill : numpy array, optional
             when not None, an already-allocated numpy array of shape `(len(layout),M2)`
             that is filled with probability derivatives, similar to
-            :method:`bulk_fill_dprobs` (see `array_to_fill` for a definition of `M2`).
+            :meth:`bulk_fill_dprobs` (see `array_to_fill` for a definition of `M2`).
 
         Returns
         -------
@@ -747,7 +747,7 @@ class ForwardSimulator(_NicelySerializable):
         ----------
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for generated arrays, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         wrt_slices_list : list
             A list of `(rowSlice,colSlice)` 2-tuples, each of which specify
@@ -857,7 +857,7 @@ class CacheForwardSimulator(ForwardSimulator):
             the layout (evaluation strategy) is constructed.
 
         array_types : tuple, optional
-            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+            A tuple of string-valued array types.  See :meth:`ForwardSimulator.create_layout`.
 
         derivative_dimensions : tuple, optional
             A tuple containing, optionally, the parameter-space dimension used when taking first
@@ -877,7 +877,7 @@ class CacheForwardSimulator(ForwardSimulator):
         cache = None  # Derived classes should override this function and create a cache here.
         # A dictionary whose keys are the elements of `circuits` and values can be
         #    whatever the user wants.  These values are provided when calling
-        #    :method:`iter_unique_circuits_with_cache`.
+        #    :meth:`iter_unique_circuits_with_cache`.
         return _CachedCOPALayout.create_from(circuits, self.model, dataset, derivative_dimensions, cache)
 
     # Override these two functions to plumb `cache` down to _compute* methods

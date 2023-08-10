@@ -231,7 +231,7 @@ class StabilizerFrame(object):
 
     def pop_view(self):
         """
-        Removes the last-applied (via :method:`push_view`) view filter.
+        Removes the last-applied (via :meth:`push_view`) view filter.
 
         Returns
         -------
@@ -655,7 +655,7 @@ class StabilizerFrame(object):
         Update this stabilizer frame by the action of a Clifford operation.
 
         The Clifford operation is given in the usual symplectic representation.
-        If there are any active views (from calling :method:`push_view`) and/or
+        If there are any active views (from calling :meth:`push_view`) and/or
         if `qubit_filter` is not None, then `smatrix`, `svector`, and `u_mx`
         should be sized for just the number of qubits in the current view.
 
@@ -676,7 +676,7 @@ class StabilizerFrame(object):
 
         qubit_filter : list, optional
             An additional view filter to apply just for this function call (i.e.
-            it is not stored on a stack as it is for :method:`push_view`.
+            it is not stored on a stack as it is for :meth:`push_view`.
 
         Returns
         -------

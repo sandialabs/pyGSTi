@@ -751,7 +751,7 @@ class Estimate(_MongoSerializable):
             The resource allocation object used to create the MDC store underlying the objective function.
             This can just be left as `None` unless multiple processors are being utilized - and in this case
             the *cached* objective function doesn't even benefit from these processors (but calls to
-            :method:`final_objective_fn` will return an objective function setup for multiple processors).
+            :meth:`final_objective_fn` will return an objective function setup for multiple processors).
             Note that this argument is only used when there is no existing cached objective function and
             an underlying MDC store needs to be created.
 

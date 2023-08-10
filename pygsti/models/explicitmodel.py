@@ -64,7 +64,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
     default_param : {"full", "TP", "CPTP", etc.}, optional
         Specifies the default gate and SPAM vector parameterization type.
-        Can be any value allowed by :method:`set_all_parameterizations`,
+        Can be any value allowed by :meth:`set_all_parameterizations`,
         which also gives a description of each parameterization type.
 
     prep_prefix: string, optional
@@ -89,8 +89,8 @@ class ExplicitOpModel(_mdl.OpModel):
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The circuit simulator used to compute any
-        requested probabilities, e.g. from :method:`probs` or
-        :method:`bulk_probs`.  The default value of `"auto"` automatically
+        requested probabilities, e.g. from :meth:`probs` or
+        :meth:`bulk_probs`.  The default value of `"auto"` automatically
         selects the simulation type, and is usually what you want. Other
         special allowed values are:
 
@@ -1504,7 +1504,7 @@ class ExplicitOpModel(_mdl.OpModel):
             # assume this is a kronecker product (check this in FUTURE?), so just fill extracted
             # unitary by fixing all non-extracted qudits (assumed identity-action on these) to 0
             # and looping over extracted ones:
-            U_extracted = _np.zeros((_np.product(extracted_udims), _np.product(extracted_udims)), complex)
+            U_extracted = _np.zeros((_np.prod(extracted_udims), _np.prod(extracted_udims)), complex)
             for ii, itup in enumerate(_itertools.product(*[range(ud) for ud in extracted_udims])):
                 i = _np.dot(extracted_inc, itup)
                 for jj, jtup in enumerate(_itertools.product(*[range(ud) for ud in extracted_udims])):

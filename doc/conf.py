@@ -34,22 +34,24 @@ sys.path.insert(0, os.path.abspath('..'))  # so can import 'pygsti'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = [
-    'sphinx.ext.autodoc',
-    'sphinx.ext.autosummary',
-    'sphinx.ext.doctest',
-    'sphinx.ext.coverage',
-    'sphinx.ext.napoleon',
-    'numpydoc'
+extensions = ['autoapi.extension']
+
+autoapi_dirs = ['../pygsti']
+autoapi_type = "python"
+
+autoapi_options = [
+    "members",
+    "undoc-members",
+    "show-inheritance",
+    "show-module-summary",
+    "imported-members",
 ]
 
-autosummary_generate = True
-autosummary_imported_members = True
-autodoc_default_options = {
-    'members': None,
-    'inherited-members': None,
-    'show-inheritance': None,
-}
+autoapi_add_toctree_entry = False
+autoapi_python_class_content = 'both'
+autoapi_keep_files = True
+autoapi_template_dir = "_templates"
+
 napoleon_numpy_docstring = True
 napoleon_use_rtype = False
 
@@ -86,7 +88,7 @@ version = '.'.join((release.split('.') + ['0'] * 2)[:3])
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = 'en'
 
 # There are two options for replacing |today|: either, you set today to some
 # non-false value, then it is used:
@@ -310,10 +312,3 @@ texinfo_documents = [
 
 # Make the primary domain python since that's the only language we're using.
 primary_domain = 'py'
-
-# Define some default imports so that we don't have to include them in doctests.
-doctest_global_setup = '''
-from __future__ import division, print_function
-import numpy as np
-import pygsti
-'''

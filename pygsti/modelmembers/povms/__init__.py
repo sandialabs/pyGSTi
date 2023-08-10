@@ -310,7 +310,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
     to_type : {"full","full TP","static","static pure","H+S terms",
         "H+S clifford terms","clifford"}
         The type of parameterizaton to convert to.  See
-        :method:`Model.set_all_parameterizations` for more details.
+        :meth:`Model.set_all_parameterizations` for more details.
         TODO docstring: update the options here.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
@@ -425,7 +425,7 @@ def convert_effect(effect, to_type, basis, ideal_effect=None, flatten_structure=
     to_type : {"full","TP","static","static pure","clifford",LINDBLAD}
         The type of parameterizaton to convert to.  "LINDBLAD" is a placeholder
         for the various Lindblad parameterization types.  See
-        :method:`Model.set_all_parameterizations` for more details.
+        :meth:`Model.set_all_parameterizations` for more details.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for `spamvec`.  Allowed values are Matrix-unit (std),

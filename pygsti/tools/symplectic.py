@@ -789,7 +789,7 @@ def colsum_acc(acc_s, acc_p, j, s, p, n):
     """
     A helper routine used for manipulating stabilizer state representations.
 
-    Similar to :function:`colsum` except a separate "accumulator" column is
+    Similar to :func:`colsum` except a separate "accumulator" column is
     used instead of the `i`-th column of `s` and element of `p`. I.e., this
     performs:
 

@@ -349,9 +349,9 @@ class ReportableQty(object):
         Convert Table values into ReportableQtys or leave them be if they are well-formed types.
 
         Well-formed types include:
-        - strings
-        - figures
-        - :class:`ReportableQty`s
+        * strings
+        * figures
+        * :class:`ReportableQty`
 
         A tuple will be converted to a :class:`ReportableQty`
         holding the first field as a value and second field as an error bar.
@@ -468,7 +468,7 @@ class ReportableQty(object):
 
         ebstring : str, optional
             format string that describes how to display the value and error bar
-            after they are rendered as string (`ebstring` should have two `%s`s in it).
+            after they are rendered as string (`ebstring` should have two `%s` in it).
 
         nmebstring : str, optional
             format string, similar to `ebstring`, for displaying non-Markovian error

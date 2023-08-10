@@ -303,12 +303,9 @@ def volumetric_distribution_plot(vbdataframe, metric='polarization', threshold=1
 
     hypothesis_test : string, optional
         The type of statistical significance adjustment to apply to the boundaries. The options are
-        - 'standard': this reproduces the method used and described in arXiv:2008.11294 (see the
-            appendices for details). With this option, there will be a difference between the
-            boundary for the minimum and maximum polarization only if there is statistically significant
-            evidence in the data for this.
-        - 'none': no statistical significance adjustment: all three boundaries show the point at which
-            relevant statistic (maximum, mean, minimum) drops below the threshold.
+        
+        * 'standard': this reproduces the method used and described in arXiv:2008.11294 (see the appendices for details). With this option, there will be a difference between the boundary for the minimum and maximum polarization only if there is statistically significant evidence in the data for this.
+        * 'none': no statistical significance adjustment: all three boundaries show the point at which relevant statistic (maximum, mean, minimum) drops below the threshold.
 
     significance : float, optional
         The statistical significance in the hypothesis tests. Only used in `hypothesis_test` is not 'none'.
