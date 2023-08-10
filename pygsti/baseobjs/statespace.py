@@ -37,7 +37,7 @@ class StateSpace(_NicelySerializable):
         ----------
         obj : StateSpace or int or list
             Either an already-built state space object or an integer specifying the number of qubits,
-            or a list of labels as would be provided to the first argument of :method:`ExplicitStateSpace.__init__`.
+            or a list of labels as would be provided to the first argument of :meth:`ExplicitStateSpace.__init__`.
 
         Returns
         -------

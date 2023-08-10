@@ -428,7 +428,7 @@ def preferred_signs_from_paulidict(pauli_basis_dict):
     tuple
         A 3-tuple of elements in {"+", "-"}, exactly the format expected
         by `preferred_*_basis_signs` arguments of
-        :function:`idle_tomography_fidpairs`.
+        :func:`idle_tomography_fidpairs`.
     """
     preferred_signs = ()
     for let in ('X', 'Y', 'Z'):
@@ -469,7 +469,7 @@ def fidpairs_to_pauli_fidpairs(fidpairs_list, pauli_basis_dicts, nqubits):
     pauli_basis_dicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries
         specifying the way to prepare and measure in Pauli bases.  See
-        :function:`preferred_signs_from_paulidict` for details on each
+        :func:`preferred_signs_from_paulidict` for details on each
         dictionary's format.
 
     nqubits : int
@@ -679,7 +679,7 @@ def make_idle_tomography_list(nqubits, max_lengths, pauli_basis_dicts, maxweight
     pauli_basis_dicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries
         specifying the way to prepare and measure in Pauli bases.  See
-        :function:`preferred_signs_from_paulidict` for details on each
+        :func:`preferred_signs_from_paulidict` for details on each
         dictionary's format.
 
     maxweight : int, optional
@@ -706,7 +706,7 @@ def make_idle_tomography_list(nqubits, max_lengths, pauli_basis_dicts, maxweight
         or measuring in the X, Y, and Z bases is preferable.  Usually one
         orientation if preferred because it's easier to achieve using the
         native model.  Additionally, the special (and default) value "auto"
-        may be used, in which case :function:`preferred_signs_from_paulidict`
+        may be used, in which case :func:`preferred_signs_from_paulidict`
         is used to choose preferred signs based on `pauli_basis_dicts`.
 
     Returns
@@ -764,7 +764,7 @@ def make_idle_tomography_lists(nqubits, max_lengths, pauli_basis_dicts, maxweigh
     pauli_basis_dicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries
         specifying the way to prepare and measure in Pauli bases.  See
-        :function:`preferred_signs_from_paulidict` for details on each
+        :func:`preferred_signs_from_paulidict` for details on each
         dictionary's format.
 
     maxweight : int, optional
@@ -791,7 +791,7 @@ def make_idle_tomography_lists(nqubits, max_lengths, pauli_basis_dicts, maxweigh
         or measuring in the X, Y, and Z bases is preferable.  Usually one
         orientation if preferred because it's easier to achieve using the
         native model.  Additionally, the special (and default) value "auto"
-        may be used, in which case :function:`preferred_signs_from_paulidict`
+        may be used, in which case :func:`preferred_signs_from_paulidict`
         is used to choose preferred signs based on `pauli_basis_dicts`.
 
     Returns
@@ -848,7 +848,7 @@ def compute_observed_samebasis_err_rate(dataset, pauli_fidpair, pauli_basis_dict
     pauli_basis_dicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries
         specifying the way to prepare and measure in Pauli bases.  See
-        :function:`preferred_signs_from_paulidict` for details on each
+        :func:`preferred_signs_from_paulidict` for details on each
         dictionary's format.
 
     idle_string : Circuit
@@ -937,7 +937,7 @@ def compute_observed_diffbasis_err_rate(dataset, pauli_fidpair, pauli_basis_dict
     pauli_basis_dicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries
         specifying the way to prepare and measure in Pauli bases.  See
-        :function:`preferred_signs_from_paulidict` for details on each
+        :func:`preferred_signs_from_paulidict` for details on each
         dictionary's format.
 
     idle_string : Circuit
@@ -1062,7 +1062,7 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
     pauli_basis_dicts : tuple
         A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries
         specifying the way to prepare and measure in Pauli bases.  See
-        :function:`preferred_signs_from_paulidict` for details on each
+        :func:`preferred_signs_from_paulidict` for details on each
         dictionary's format.
 
     maxweight : int, optional
@@ -1088,7 +1088,7 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
         - "preferred_meas_basis_signs" : 3-tuple of "+"/"-" or default="auto"
         - "pauli_fidpairs": alternate list of pauli fiducial pairs to use
         - "fit order" : integer order for polynomial fits to data
-        - "ham_tmpl" : see :function:`make_idle_tomography_list`
+        - "ham_tmpl" : see :func:`make_idle_tomography_list`
 
     verbosity : int, optional
         How much detail to send to stdout.

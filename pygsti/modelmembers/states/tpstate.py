@@ -25,7 +25,7 @@ class TPState(_DenseState):
     A fixed-unit-trace state vector.
 
     This state vector is fully parameterized except for the first element, which
-    is frozen to be 1/(d**0.25).  This is so that, when the state vector is
+    is frozen to be `1/(d**0.25)`.  This is so that, when the state vector is
     interpreted in the Pauli or Gell-Mann basis, the represented density matrix
     has trace == 1.  This restriction is frequently used in conjuction with
     trace-preserving (TP) gates, hence its name.

@@ -484,7 +484,7 @@ def _obj_to_meta_json(obj, dirname):
     Create a meta.json file within `dirname` that contains (only) the type of `obj` in its 'type' field.
 
     This is used to save an object that contains essentially no other data
-    to a directory, in lieu of :function:`write_obj_to_meta_based_dir`.
+    to a directory, in lieu of :func:`write_obj_to_meta_based_dir`.
 
     Parameters
     ----------
@@ -509,9 +509,9 @@ def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attribu
     """
     Write the contents of `obj` to `dirname` using a 'meta.json' file and an auxfile-types dictionary.
 
-    This is similar to :function:`write_meta_based_dir`, except it takes an object (`obj`)
+    This is similar to :func:`write_meta_based_dir`, except it takes an object (`obj`)
     whose `.__dict__`, minus omitted attributes, is used as the dictionary to write and whose
-    auxfile-types comes from another object attribute..
+    auxfile-types comes from another object attribute.
 
     Parameters
     ----------
@@ -611,7 +611,7 @@ def write_dict_to_json_or_pkl_files(d, dirname):
     If the element is json-able, it is JSON-serialized and the ".json"
     extension is used.  If not, pickle is used to serialize the element,
     and the ".pkl" extension is used.  This is the reverse of
-    :function:`_read_json_or_pkl_files_to_dict`.
+    :func:`_read_json_or_pkl_files_to_dict`.
 
     Parameters
     ----------

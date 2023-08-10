@@ -132,7 +132,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
     num_atoms : int, optional
         The number of atoms (sub-tables) to use when creating the layout (i.e. when calling
-        :method:`create_layout`).  This determines how many units the element (circuit outcome
+        :meth:`create_layout`).  This determines how many units the element (circuit outcome
         probability) dimension is divided into, and doesn't have to correclate with the number of
         processors.  When multiple processors are used, if `num_atoms` is less than the number of
         processors then `num_atoms` should divide the number of processors evenly, so that
@@ -286,7 +286,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
             the layout (evaluation strategy) is constructed.
 
         array_types : tuple, optional
-            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+            A tuple of string-valued array types.  See :meth:`ForwardSimulator.create_layout`.
 
         derivative_dimension : int, optional
             Optionally, the parameter-space dimension used when taking first
@@ -995,7 +995,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
     def bulk_sopm_gaps_jacobian(self, layout):
         """
-        Compute the jacobian of the the output of :method:`bulk_sopm_gaps`.
+        Compute the jacobian of the the output of :meth:`bulk_sopm_gaps`.
 
         Parameters
         ----------
@@ -1051,7 +1051,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         In particular, the circuit-outcomes under consideration share the same state
         preparation and differ only in their POVM effects.  Employs a truncated or pruned
         path-integral approach, as opposed to just including everything up to some Taylor
-        order as in :method:`_prs_as_polynomials`.
+        order as in :meth:`_prs_as_polynomials`.
 
         Parameters
         ----------

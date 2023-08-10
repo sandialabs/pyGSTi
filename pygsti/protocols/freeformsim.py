@@ -96,7 +96,7 @@ class ModelFreeformSimulator(FreeformDataSimulator):
 
     Holds a dictionary of models and provides basic functionality for computing
     probabilities, final states, and process matrices corresponding to circuits
-    which make implementing :method:`compute_freeform_data` easier.
+    which make implementing :meth:`compute_freeform_data` easier.
 
     Parameters
     ----------

@@ -85,7 +85,7 @@ class ModelFunction(object):
         Evaluate this model-function at `nearby_model`.
 
         `nearby_model` can be assumed to be very close to the `model` provided
-        to the last call to :method:`evaluate`.
+        to the last call to :meth:`evaluate`.
 
         Parameters
         ----------

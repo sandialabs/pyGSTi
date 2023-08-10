@@ -358,7 +358,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         ret = self.state.taylor_order_terms(order, max_polynomial_vars, return_coeff_polys)
         state_terms = ret[0] if return_coeff_polys else ret

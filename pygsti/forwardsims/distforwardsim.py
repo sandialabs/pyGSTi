@@ -39,7 +39,7 @@ class DistributableForwardSimulator(_ForwardSimulator):
         but it will need to be set (by assigning `self.model` before using this simulator.
 
     num_atoms : int, optional
-        The number of atoms to use when creating a layout (i.e. when calling :method:`create_layout`).
+        The number of atoms to use when creating a layout (i.e. when calling :meth:`create_layout`).
         This determines how many units the element (circuit outcome probability) dimension is divided
         into, and doesn't have to correclate with the number of processors.  When multiple processors
         are used, if `num_atoms` is less than the number of processors it should divide the number of

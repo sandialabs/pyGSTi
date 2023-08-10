@@ -772,7 +772,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         Construct Lindblad coefficients (for this block) from a set of parameter values.
 
         This function essentially performs the inverse of
-        :method:`coefficients_to_paramvals`.
+        :meth:`coefficients_to_paramvals`.
 
         Parameters
         ----------
@@ -856,7 +856,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         Construct derivative of Lindblad coefficients (for this block) from a set of parameter values.
 
         This function gives the Jacobian of what is returned by
-        :function:`paramvals_to_coefficients` (as a function of the parameters).
+        :func:`paramvals_to_coefficients` (as a function of the parameters).
 
         Parameters
         ----------

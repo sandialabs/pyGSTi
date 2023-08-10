@@ -886,7 +886,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
     shm : multiprocessing.shared_memory.SharedMemory
         A shared memory object needed to cleanup the shared memory.  If
         a normal array is created, this is `None`.  Provide this to
-        :function:`cleanup_shared_ndarray` to ensure `ar` is deallocated properly.
+        :func:`cleanup_shared_ndarray` to ensure `ar` is deallocated properly.
     """
     # R_ij = sum_k A_ik * B_kj
     from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation

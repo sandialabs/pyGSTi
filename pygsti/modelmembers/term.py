@@ -27,7 +27,7 @@ def compose_terms_with_mag(terms, magnitude):
     Parameters
     ----------
     terms : sequence
-        A sequence of :class:`RankOneTerm`s.
+        A sequence of :class:`RankOneTerm` objects.
 
     magnitude : float
         The magnitude of the compsed term.
@@ -56,7 +56,7 @@ def compose_terms(terms):
     Parameters
     ----------
     terms : list
-        A list of :class:`RankOneTerm`s to compose.
+        A list of :class:`RankOneTerm` objects to compose.
 
     Returns
     -------
@@ -361,7 +361,7 @@ class RankOnePrepTerm(RankOneTerm, _NoMagnitude):
     @classmethod
     def create_from(cls, coeff, pre_state, post_state, evotype, state_space):
         """
-        Creates a :class:`RankOnePrepTerm`s using natural arguments.
+        Creates a :class:`RankOnePrepTerm` using natural arguments.
 
         Parameters
         ----------
@@ -436,7 +436,7 @@ class RankOneEffectTerm(RankOneTerm, _NoMagnitude):
     @classmethod
     def create_from(cls, coeff, pre_effect, post_effect, evotype, state_space):
         """
-        Creates a :class:`RankOneEffectTerm`s using natural arguments.
+        Creates a :class:`RankOneEffectTerm` using natural arguments.
 
         Parameters
         ----------
@@ -511,7 +511,7 @@ class RankOneOpTerm(RankOneTerm, _NoMagnitude):
     @classmethod
     def create_from(cls, coeff, pre_op, post_op, evotype, state_space):
         """
-        Creates a :class:`RankOneOpTerm`s using natural arguments.
+        Creates a :class:`RankOneOpTerm` using natural arguments.
 
         Parameters
         ----------
@@ -699,7 +699,7 @@ class _HasNumericalCoefficient(object):
 
 class _HasPolynomialCoefficient(object):
     """
-    A base class for terms that have polynomial coefficients..
+    A base class for terms that have polynomial coefficients.
 
     Attributes
     ----------
@@ -749,7 +749,7 @@ class _HasPolynomialCoefficient(object):
         """
         Performs a bulk find & replace on this polynomial's variable indices.
 
-        This function is similar to :method:`map_indices` but uses a *vector*
+        This function is similar to :meth:`map_indices` but uses a *vector*
         to describe *individual* index updates instead of a function for
         increased performance.
 
@@ -761,7 +761,7 @@ class _HasPolynomialCoefficient(object):
         mapvec : numpy.ndarray
             An array whose i-th element gives the updated "new" index for
             the i-th variable.  Note that this vector maps *individual*
-            variable indices old->new, whereas `mapfn` in :method:`map_indices`
+            variable indices old->new, whereas `mapfn` in :meth:`map_indices`
             maps between *tuples* of indices.
 
         Returns

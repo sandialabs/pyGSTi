@@ -366,7 +366,7 @@ class Basis(_NicelySerializable):
 
     def is_partial(self):
         """
-        The negative of :method:`is_complete`, effectively "is_incomplete".
+        The negative of :meth:`is_complete`, effectively "is_incomplete".
 
         Returns
         -------
@@ -509,7 +509,7 @@ class Basis(_NicelySerializable):
         """
         Get the matrix that transforms a vector from `from_basis` to this basis.
 
-        The reverse of :method:`create_transform_matrix`.
+        The reverse of :meth:`create_transform_matrix`.
 
         Parameters
         ----------
@@ -781,7 +781,7 @@ class LazyBasis(Basis):
     def __init__(self, name, longname, real, sparse):
         """
         Creates a new LazyBasis.  Parameters are the same as those to
-        :method:`Basis.__init__`.
+        :meth:`Basis.__init__`.
         """
         self._elements = None        # "natural-shape" elements - can be vecs or matrices
         self._labels = None          # element labels
@@ -1210,7 +1210,7 @@ class DirectSumBasis(LazyBasis):
     ----------
     component_bases : iterable
         A list of the component bases.  Each list elements may be either
-        a Basis object or a tuple of arguments to :function:`Basis.cast`,
+        a Basis object or a tuple of arguments to :func:`Basis.cast`,
         e.g. `('pp',4)`.
 
     name : str, optional
@@ -1236,7 +1236,7 @@ class DirectSumBasis(LazyBasis):
         ----------
         component_bases : iterable
             A list of the component bases.  Each list elements may be either
-            a Basis object or a tuple of arguments to :function:`Basis.cast`,
+            a Basis object or a tuple of arguments to :func:`Basis.cast`,
             e.g. `('pp',4)`.
 
         name : str, optional
@@ -1542,7 +1542,7 @@ class TensorProdBasis(LazyBasis):
     ----------
     component_bases : iterable
         A list of the component bases.  Each list elements may be either
-        a Basis object or a tuple of arguments to :function:`Basis.cast`,
+        a Basis object or a tuple of arguments to :func:`Basis.cast`,
         e.g. `('pp',4)`.
 
     name : str, optional
@@ -1563,7 +1563,7 @@ class TensorProdBasis(LazyBasis):
         ----------
         component_bases : iterable
             A list of the component bases.  Each list elements may be either
-            a Basis object or a tuple of arguments to :function:`Basis.cast`,
+            a Basis object or a tuple of arguments to :func:`Basis.cast`,
             e.g. `('pp',4)`.
 
         name : str, optional
@@ -1840,7 +1840,7 @@ class EmbeddedBasis(LazyBasis):
     @classmethod
     def unembed_label(cls, lbl, target_labels):
         """
-        Convenience method that performs the reverse of :method:`embed_label`
+        Convenience method that performs the reverse of :meth:`embed_label`
 
         Parameters
         ----------

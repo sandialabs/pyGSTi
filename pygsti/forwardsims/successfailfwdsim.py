@@ -36,7 +36,7 @@ class SuccessFailForwardSimulator(_CacheForwardSimulator):
             the layout (evaluation strategy) is constructed.
 
         array_types : tuple, optional
-            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+            A tuple of string-valued array types.  See :meth:`ForwardSimulator.create_layout`.
 
         derivative_dimension : int, optional
             Optionally, the parameter-space dimension used when taking first
