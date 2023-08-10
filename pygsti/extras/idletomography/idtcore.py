@@ -356,48 +356,181 @@ def jacobian_index_label(numQubits):
 # -----------------------------------------------------------------------------
 
 
-def idle_tomography_fidpairs(
-    nqubits,
-    maxweight=2,
-    include_hamiltonian=True,
-    include_stochastic=True,
-    include_active=True,
-    ham_tmpl="auto",
-    preferred_prep_basis_signs=("+", "+", "+"),
-    preferred_meas_basis_signs=("+", "+", "+"),
-):
+#def idle_tomography_fidpairs(
+#    nqubits,
+#    maxweight=2,
+#    include_hamiltonian=True,
+#    include_stochastic=True,
+#    include_correlation= True,
+#    include_active=True,
+#    ham_tmpl="auto",
+#    preferred_prep_basis_signs=("+", "+", "+"),
+#    preferred_meas_basis_signs=("+", "+", "+"),
+#):
+#    """
+#    Construct a list of Pauli-basis fiducial pairs for idle tomography.
+#
+#    This function constructs the "standard" set of fiducial pairs used
+#    to generate idle tomography sequences which probe Hamiltonian,
+#    Stochastic, and/or active errors in an idle gate.
+#
+#    Parameters
+#    ----------
+#    nqubits : int
+#        The number of qubits.
+#
+#    maxweight : int, optional
+#        The maximum weight of errors to consider.
+#
+#    include_hamiltonian, include_stochastic, include_active : bool, optional
+#        Whether to include fiducial pairs for finding Hamiltonian-, Stochastic-,
+#        and active-type errors.
+#
+#    ham_tmpl : tuple, optional
+#        A tuple of length-`maxweight` Pauli strings (i.e. string w/letters "X",
+#        "Y", or "Z"), describing how to construct the fiducial pairs used to
+#        detect Hamiltonian errors.  The special (and default) value "auto"
+#        uses `("X","Y","Z")` and `("ZY","ZX","XZ","YZ","YX","XY")` for
+#        `maxweight` equal to 1 and 2, repectively, and will generate an error
+#        if `maxweight > 2`.
+#
+#    preferred_prep_basis_signs, preferred_meas_basis_signs: tuple, optional
+#        A 3-tuple of "+" or "-" strings indicating which sign for preparing
+#        or measuring in the X, Y, and Z bases is preferable.  Usually one
+#        orientation if preferred because it's easier to achieve using the
+#        native model.
+#
+#    Returns
+#    -------
+#    list
+#        a list of (prep,meas) 2-tuples of NQPauliState objects, each of
+#        length `nqubits`, representing the fiducial pairs.
+#    """
+#    fidpairs = []  # list of 2-tuples of NQPauliState objects to return
+#
+#    # convert +'s and -'s to dictionaries of +/-1 used later:
+#    def conv(x):
+#        return 1 if x == "+" else -1
+#
+#    base_prep_signs = {
+#        l: conv(s) for l, s in zip(("X", "Y", "Z"), preferred_prep_basis_signs)
+#    }
+#    base_meas_signs = {
+#        l: conv(s) for l, s in zip(("X", "Y", "Z"), preferred_meas_basis_signs)
+#    }
+#    # these dicts give the preferred sign for prepping or measuring along each 1Q axis.
+#
+#    if include_stochastic:
+#        if include_active:
+#            # in general there are 2^maxweight different permutations of +/- signs
+#            # in maxweight==1 case, need 2 of 2 permutations
+#            # in maxweight==2 case, need 3 of 4 permutations
+#            # higher maxweight?
+#
+#            if maxweight == 1:
+#                flips = [
+#                    (1,),
+#                    (-1,),
+#                ]  # consider both cases of not-flipping & flipping the preferred basis signs
+#
+#            elif maxweight == 2:
+#                flips = [
+#                    (1, 1),  # don't flip anything
+#                    (1, -1),
+#                    (-1, 1),
+#                ]  # flip 2nd or 1st pauli basis (weight = 2)
+#            else:
+#                raise NotImplementedError(
+#                    "No implementation for active errors and maxweight > 2!"
+#                )
+#                # need to do more work to figure out how to generalize this to maxweight > 2
+#        else:
+#            flips = [(1,) * maxweight]  # don't flip anything
+#
+#        # Build up "template" of 2-tuples of NQPauliState objects acting on
+#        # maxweight qubits that should be tiled to full fiducial pairs.
+#        sto_tmpl_pairs = []
+#        for fliptup in flips:  # elements of flips must have length=maxweight
+#            # Create a set of "template" fiducial pairs using the current flips
+#            for basisLets in _itertools.product(("X", "Y", "Z"), repeat=maxweight):
+#                # flip base (preferred) basis signs as instructed by fliptup
+#                prep_signs = [
+#                    f * base_prep_signs[l] for f, l in zip(fliptup, basisLets)
+#                ]
+#                meas_signs = [
+#                    f * base_meas_signs[l] for f, l in zip(fliptup, basisLets)
+#                ]
+#                sto_tmpl_pairs.append(
+#                    (
+#                        _pobjs.NQPauliState("".join(basisLets), prep_signs),
+#                        _pobjs.NQPauliState("".join(basisLets), meas_signs),
+#                    )
+#                )
+#
+#        fidpairs.extend(
+#            _idttools.tile_pauli_fidpairs(sto_tmpl_pairs, nqubits, maxweight)
+#        )
+#
+#    elif include_active:
+#        raise ValueError(
+#            "Cannot include active sequences without also including stochastic ones!"
+#        )
+#
+#    if include_hamiltonian:
+#        nextPauli = {"X": "Y", "Y": "Z", "Z": "X"}
+#        prevPauli = {"X": "Z", "Y": "X", "Z": "Y"}
+#
+#        def prev(expt):
+#            return "".join([prevPauli[p] for p in expt])
+#
+#        def next(expt):
+#            return "".join([nextPauli[p] for p in expt])
+#
+#        if ham_tmpl == "auto":
+#            if maxweight == 1:
+#                ham_tmpl = ("X", "Y", "Z")
+#            elif maxweight == 2:
+#                ham_tmpl = ("ZY", "ZX", "XZ", "YZ", "YX", "XY")
+#            else:
+#                raise ValueError("Must supply `ham_tmpl` when `maxweight > 2`!")
+#        ham_tmpl_pairs = []
+#        for tmplLets in ham_tmpl:  # "Lets" = "letters", i.e. 'X', 'Y', or 'Z'
+#            assert len(tmplLets) == maxweight, (
+#                "Hamiltonian 'template' strings must have length == maxweight: len(%s) != %d!"
+#                % (tmplLets, maxweight)
+#            )
+#
+#            prepLets, measLets = prev(tmplLets), next(tmplLets)
+#
+#            # basis sign doesn't matter for hamiltonian terms,
+#            #  so just use preferred signs
+#            prep_signs = [base_prep_signs[l] for l in prepLets]
+#            meas_signs = [base_meas_signs[l] for l in measLets]
+#            ham_tmpl_pairs.append(
+#                (
+#                    _pobjs.NQPauliState(prepLets, prep_signs),
+#                    _pobjs.NQPauliState(measLets, meas_signs),
+#                )
+#            )
+#
+#        fidpairs.extend(
+#            _idttools.tile_pauli_fidpairs(ham_tmpl_pairs, nqubits, maxweight)
+#        )
+#
+#    return fidpairs
+
+def idle_tomography_fidpairs(nqubits):
     """
     Construct a list of Pauli-basis fiducial pairs for idle tomography.
 
-    This function constructs the "standard" set of fiducial pairs used
-    to generate idle tomography sequences which probe Hamiltonian,
-    Stochastic, and/or active errors in an idle gate.
+    This function simply does the most naive, symmetric experiment designations
+    possible, which consists of all possible pairs of paulis, and all possible
+    signs on the prep fiducial.
 
     Parameters
     ----------
     nqubits : int
         The number of qubits.
-
-    maxweight : int, optional
-        The maximum weight of errors to consider.
-
-    include_hamiltonian, include_stochastic, include_active : bool, optional
-        Whether to include fiducial pairs for finding Hamiltonian-, Stochastic-,
-        and active-type errors.
-
-    ham_tmpl : tuple, optional
-        A tuple of length-`maxweight` Pauli strings (i.e. string w/letters "X",
-        "Y", or "Z"), describing how to construct the fiducial pairs used to
-        detect Hamiltonian errors.  The special (and default) value "auto"
-        uses `("X","Y","Z")` and `("ZY","ZX","XZ","YZ","YX","XY")` for
-        `maxweight` equal to 1 and 2, repectively, and will generate an error
-        if `maxweight > 2`.
-
-    preferred_prep_basis_signs, preferred_meas_basis_signs: tuple, optional
-        A 3-tuple of "+" or "-" strings indicating which sign for preparing
-        or measuring in the X, Y, and Z bases is preferable.  Usually one
-        orientation if preferred because it's easier to achieve using the
-        native model.
 
     Returns
     -------
@@ -405,118 +538,24 @@ def idle_tomography_fidpairs(
         a list of (prep,meas) 2-tuples of NQPauliState objects, each of
         length `nqubits`, representing the fiducial pairs.
     """
-    fidpairs = []  # list of 2-tuples of NQPauliState objects to return
-
-    # convert +'s and -'s to dictionaries of +/-1 used later:
-    def conv(x):
-        return 1 if x == "+" else -1
-
-    base_prep_signs = {
-        l: conv(s) for l, s in zip(("X", "Y", "Z"), preferred_prep_basis_signs)
-    }
-    base_meas_signs = {
-        l: conv(s) for l, s in zip(("X", "Y", "Z"), preferred_meas_basis_signs)
-    }
-    # these dicts give the preferred sign for prepping or measuring along each 1Q axis.
-
-    if include_stochastic:
-        if include_active:
-            # in general there are 2^maxweight different permutations of +/- signs
-            # in maxweight==1 case, need 2 of 2 permutations
-            # in maxweight==2 case, need 3 of 4 permutations
-            # higher maxweight?
-
-            if maxweight == 1:
-                flips = [
-                    (1,),
-                    (-1,),
-                ]  # consider both cases of not-flipping & flipping the preferred basis signs
-
-            elif maxweight == 2:
-                flips = [
-                    (1, 1),  # don't flip anything
-                    (1, -1),
-                    (-1, 1),
-                ]  # flip 2nd or 1st pauli basis (weight = 2)
-            else:
-                raise NotImplementedError(
-                    "No implementation for active errors and maxweight > 2!"
-                )
-                # need to do more work to figure out how to generalize this to maxweight > 2
-        else:
-            flips = [(1,) * maxweight]  # don't flip anything
-
-        # Build up "template" of 2-tuples of NQPauliState objects acting on
-        # maxweight qubits that should be tiled to full fiducial pairs.
-        sto_tmpl_pairs = []
-        for fliptup in flips:  # elements of flips must have length=maxweight
-            # Create a set of "template" fiducial pairs using the current flips
-            for basisLets in _itertools.product(("X", "Y", "Z"), repeat=maxweight):
-                # flip base (preferred) basis signs as instructed by fliptup
-                prep_signs = [
-                    f * base_prep_signs[l] for f, l in zip(fliptup, basisLets)
-                ]
-                meas_signs = [
-                    f * base_meas_signs[l] for f, l in zip(fliptup, basisLets)
-                ]
-                sto_tmpl_pairs.append(
-                    (
-                        _pobjs.NQPauliState("".join(basisLets), prep_signs),
-                        _pobjs.NQPauliState("".join(basisLets), meas_signs),
-                    )
-                )
-
-        fidpairs.extend(
-            _idttools.tile_pauli_fidpairs(sto_tmpl_pairs, nqubits, maxweight)
-        )
-
-    elif include_active:
-        raise ValueError(
-            "Cannot include active sequences without also including stochastic ones!"
-        )
-
-    if include_hamiltonian:
-        nextPauli = {"X": "Y", "Y": "Z", "Z": "X"}
-        prevPauli = {"X": "Z", "Y": "X", "Z": "Y"}
-
-        def prev(expt):
-            return "".join([prevPauli[p] for p in expt])
-
-        def next(expt):
-            return "".join([nextPauli[p] for p in expt])
-
-        if ham_tmpl == "auto":
-            if maxweight == 1:
-                ham_tmpl = ("X", "Y", "Z")
-            elif maxweight == 2:
-                ham_tmpl = ("ZY", "ZX", "XZ", "YZ", "YX", "XY")
-            else:
-                raise ValueError("Must supply `ham_tmpl` when `maxweight > 2`!")
-        ham_tmpl_pairs = []
-        for tmplLets in ham_tmpl:  # "Lets" = "letters", i.e. 'X', 'Y', or 'Z'
-            assert len(tmplLets) == maxweight, (
-                "Hamiltonian 'template' strings must have length == maxweight: len(%s) != %d!"
-                % (tmplLets, maxweight)
-            )
-
-            prepLets, measLets = prev(tmplLets), next(tmplLets)
-
-            # basis sign doesn't matter for hamiltonian terms,
-            #  so just use preferred signs
-            prep_signs = [base_prep_signs[l] for l in prepLets]
-            meas_signs = [base_meas_signs[l] for l in measLets]
-            ham_tmpl_pairs.append(
-                (
-                    _pobjs.NQPauliState(prepLets, prep_signs),
-                    _pobjs.NQPauliState(measLets, meas_signs),
-                )
-            )
-
-        fidpairs.extend(
-            _idttools.tile_pauli_fidpairs(ham_tmpl_pairs, nqubits, maxweight)
-        )
-
+    
+    pauli_strings = ['I', 'X', 'Y', 'Z']
+    nq_pauli_strings = list(product(pauli_strings, repeat=nqubits))[1:] #skip the all identity string
+    
+    #we also want all possible combinations of sign for each the pauli
+    #observable on each qubit. The NQPauliState expects these to be either 0
+    #for + or 1 for -.
+    signs = list(product([0,1], repeat=nqubits))
+    
+    fidpairs = []
+    for prep_string, meas_string in product(nq_pauli_strings, repeat=2):
+        for sign in signs:
+            fidpairs.append((_pobjs.NQPauliState(prep_string, sign),
+                             _pobjs.NQPauliState(meas_string, signs[0])))
+    
+    
     return fidpairs
+
 
 
 def preferred_signs_from_paulidict(pauli_basis_dict):
@@ -1424,7 +1463,6 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
     include_correlation = advanced_options.get('include_correlation', False)
     include_active = advanced_options.get('include_active', False)
     
-
     if include_stochastic:
         if "pauli_fidpairs" in advanced_options:
             pauli_fidpairs = same_basis_fidpairs
