@@ -998,153 +998,6 @@ def make_idle_tomography_lists(
 # -----------------------------------------------------------------------------
 
 
-def compute_observed_samebasis_err_rate(
-    dataset,
-    pauli_fidpair,
-    pauli_basis_dicts,
-    idle_string,
-    observable,
-    max_lengths,
-    fit_order=1,
-):
-    """
-    Extract the observed error rate from a series of experiments which prepares
-    and measures in the *same* Pauli basis and tracks a particular `outcome`.
-
-    Parameters
-    ----------
-    dataset : DataSet
-        The set of data counts (observations) to use.
-
-    pauli_fidpair : tuple
-        A `(prep,measure)` 2-tuple of :class:`NQPauliState` objects specifying
-        the prepation state and measurement basis.
-
-    pauli_basis_dicts : tuple
-        A `(prepPauliBasisDict,measPauliBasisDict)` tuple of dictionaries
-        specifying the way to prepare and measure in Pauli bases.  See
-        :function:`preferred_signs_from_paulidict` for details on each
-        dictionary's format.
-
-    idle_string : Circuit
-        The Circuit representing the idle operation being characterized.
-
-    outcome : NQOutcome
-        The outcome being tracked.
-
-    max_lengths : list
-        A list of maximum germ-power lengths.  The seriese of sequences
-        considered is `prepFiducial + idle_string^L + measFiducial`, where
-        `L` ranges over the values in `max_lengths`.
-
-    fit_order : int, optional
-        The polynomial order used to fit the observed data probabilities.
-
-    Returns
-    -------
-    dict
-        A dictionary of information about the fit, including the observed
-        error rate and the data points that were fit.
-    """
-    # fit number of given outcome counts to a line
-    pauli_prep, pauli_meas = pauli_fidpair
-
-    prepDict, measDict = pauli_basis_dicts
-    prepFid = pauli_prep.to_circuit(prepDict)
-    measFid = pauli_meas.to_circuit(measDict)
-    # observable is always equal to pauli_meas (up to signs) with all but 1 or 2
-    # (maxErrWt in general) of it's elements replaced with 'I', essentially just
-    # telling us which 1 or 2 qubits to take the <Z> or <ZZ> expectation value of
-    # (since the meas fiducial gets us in the right basis) -- i.e. the qubits to *not* trace over.
-    obs_indices = [i for i, letter in enumerate(observable.rep) if letter != "I"]
-    minus_sign = _np.prod([pauli_meas.signs[i] for i in obs_indices])
-
-    # Note on weights:
-    # data point with frequency f and N samples should be weighted w/ sqrt(N)/sqrt(f*(1-f))
-    # but in case f is 0 or 1 we use proxy f' by adding a dummy 0 and 1 count.
-    def freq_and_weight(circuit, observed_indices):
-        # compute expectation value of observable
-        drow = dataset[circuit]  # dataset row
-        total = drow.total
-
-        # <Z> = 0 count - 1 count (if measFid sign is +1, otherwise reversed via minus_sign)
-        if len(observed_indices) == 1:
-            i = observed_indices[0]  # the qubit we care about
-            cnt0 = cnt1 = 0
-            for outcome, cnt in drow.counts.items():
-                if outcome[0][i] == "0":
-                    cnt0 += cnt  # [0] b/c outcomes are actually 1-tuples
-                else:
-                    cnt1 += cnt
-            exptn = float(cnt0 - cnt1) / total
-            fp = 0.5 + 0.5 * float(cnt0 - cnt1 + 1) / (total + 2)
-
-        # <ZZ> = 00 count - 01 count - 10 count + 11 count (* minus_sign)
-        elif len(observed_indices) == 2:
-            i, j = observed_indices  # the qubits we care about
-            cnt_even = cnt_odd = 0
-            for outcome, cnt in drow.counts.items():
-                if outcome[0][i] == outcome[0][j]:
-                    cnt_even += cnt
-                else:
-                    cnt_odd += cnt
-            exptn = float(cnt_even - cnt_odd) / total
-            fp = 0.5 + 0.5 * float(cnt_even - cnt_odd + 1) / (total + 2)
-        else:
-            raise NotImplementedError(
-                "Expectation values of weight > 2 observables are not implemented!"
-            )
-
-        wt = _np.sqrt(total) / _np.sqrt(fp * (1.0 - fp))
-        f = 0.5 + 0.5 * exptn
-        err = 2 * _np.sqrt(
-            f * (1.0 - f) / total
-        )  # factor of 2 b/c expectation is addition of 2 terms
-        return exptn, wt, err
-
-    # Get data to fit and weights to use in fitting
-    data_to_fit = []
-    wts = []
-    errbars = []
-    for L in max_lengths:
-        opstr = prepFid + idle_string * L + measFid
-        f, wt, err = freq_and_weight(opstr, obs_indices)
-        data_to_fit.append(minus_sign * f)
-        wts.append(wt)
-        errbars.append(err)
-
-    # curvefit -> slope
-    coeffs = _np.polyfit(
-        max_lengths, data_to_fit, fit_order, w=wts
-    )  # when fit_order = 1 = line
-    if fit_order == 1:
-        slope = coeffs[0]
-    elif fit_order == 2:
-        # OLD: slope =  coeffs[1] # c2*x2 + c1*x + c0 ->deriv@x=0-> c1
-        det = coeffs[1] ** 2 - 4 * coeffs[2] * coeffs[0]
-        slope = -_np.sign(coeffs[0]) * _np.sqrt(det) if det >= 0 else coeffs[1]
-    else:
-        raise NotImplementedError("Only fit_order <= 2 are supported!")
-    print(
-        {
-            "rate": slope,
-            "fit_order": fit_order,
-            "fitCoeffs": coeffs,
-            "data": data_to_fit,
-            "errbars": errbars,
-            "weights": wts,
-        }
-    )
-    return {
-        "rate": slope,
-        "fit_order": fit_order,
-        "fitCoeffs": coeffs,
-        "data": data_to_fit,
-        "errbars": errbars,
-        "weights": wts,
-    }
-
-
 def compute_observed_err_rate(
     dataset,
     pauli_fidpair,
@@ -1394,14 +1247,15 @@ def do_idle_tomography(
     full_jacobian_inv = _np.linalg.pinv(full_jacobian)
 
     if "pauli_fidpairs" in advanced_options:
-        same_basis_fidpairs = []  # *all* qubits prep/meas in same basis
-        diff_basis_fidpairs = []  # at least one doesn't
-        for pauli_fidpair in advanced_options["pauli_fidpairs"]:
+        fidpair_index_dict = dict(enumerate(advanced_options["pauli_fidpairs"]))
+        same_basis_fidpairs = dict()  # *all* qubits prep/meas in same basis
+        diff_basis_fidpairs = dict()  # at least one doesn't
+        for key, value in fidpair_index_dict.items():
             # pauli_fidpair is a (prep,meas) tuple of NQPauliState objects
-            if pauli_fidpair[0].rep == pauli_fidpair[1].rep:  # don't care about sign
-                same_basis_fidpairs.append(pauli_fidpair)
+            if value[0].rep == value[1].rep:  # don't care about sign
+                same_basis_fidpairs[key] = value
             else:
-                diff_basis_fidpairs.append(pauli_fidpair)
+                diff_basis_fidpairs[key] = value
         # print("DB: LENGTHS: same=",len(same_basis_fidpairs)," diff=",len(diff_basis_fidpairs))
     else:
         same_basis_fidpairs = None  # just for
@@ -1412,6 +1266,7 @@ def do_idle_tomography(
     intrinsic_rates = {}
     pauli_fidpair_dict = {}
     observed_rate_infos = {}
+    observed_error_rates = {}
 
     # pull the include_hamiltonian etc. values from advanced_options, if present.
     include_hamiltonian = advanced_options.get("include_hamiltonian", True)
@@ -1435,17 +1290,16 @@ def do_idle_tomography(
             )
         # print("DB: %d same-basis pairs" % len(pauli_fidpairs))
 
-        indxFidpairList = list(enumerate(pauli_fidpairs))
+        obs_infos = dict()
 
-        obs_infos = []
-
-        for i, (ifp, pauli_fidpair) in enumerate(indxFidpairList):
+        for i, (ifp, pauli_fidpair) in enumerate(same_basis_fidpairs.items()):
             # NOTE: pauli_fidpair is a 2-tuple of NQPauliState objects
 
-            # all_observables = _idttools.allobservables(pauli_fidpair[1], maxweight)
-            all_observables = _idttools.alloutcomes(
-                pauli_fidpair[0], pauli_fidpair[1], maxweight
-            )
+            all_observables = _idttools.allobservables(pauli_fidpair[1], maxweight)
+            # all_observables = _idttools.alloutcomes(
+            #    pauli_fidpair[0], pauli_fidpair[1], maxweight
+            # )
+            # print("all_observables: \n", all_observables)
             infos_for_this_fidpair = _collections.OrderedDict()
             for j, out in enumerate(all_observables):
                 printer.log("  - observable %d of %d" % (j, len(all_observables)), 2)
@@ -1462,20 +1316,18 @@ def do_idle_tomography(
                 info["jacobian row"] = full_jacobian[i]
                 infos_for_this_fidpair[out] = info
 
-            obs_infos.append(infos_for_this_fidpair)
+            obs_infos[ifp] = infos_for_this_fidpair
+            # print("infos for this fidpair:\n", infos_for_this_fidpair)
+            # if we need additional bookkeeping, more dictionaries
+            observed_error_rates[ifp] = [
+                info["rate"] for info in infos_for_this_fidpair.values()
+            ]
+            # print("observed_error_rates:\n", observed_error_rates)
             printer.log(
                 "Stochastic fidpair %d of %d: %d outcomes analyzed"
-                % (i, len(indxFidpairList), len(all_observables)),
+                % (i, len(same_basis_fidpairs.values()), len(all_observables)),
                 1,
             )
-
-        obs_err_rates_sto = _np.array(
-            [
-                info["rate"]
-                for fidpair_infos in obs_infos
-                for info in fidpair_infos.values()
-            ]
-        )
 
         if include_active:
             pauli_fidpair_dict["samebasis"] = pauli_fidpairs  # "key" to observed rates
@@ -1504,11 +1356,8 @@ def do_idle_tomography(
             )
         # print("DB: %d diff-basis pairs" % len(pauli_fidpairs))
 
-        # divide up fiducial pairs among ranks
-        indxFidpairList = list(enumerate(pauli_fidpairs))
-
-        obs_infos = []
-        for i, (ifp, pauli_fidpair) in enumerate(indxFidpairList):
+        obs_infos = dict()
+        for i, (ifp, pauli_fidpair) in enumerate(diff_basis_fidpairs.items()):
             all_observables = _idttools.allobservables(pauli_fidpair[1], maxweight)
 
             infos_for_this_fidpair = _collections.OrderedDict()
@@ -1527,29 +1376,30 @@ def do_idle_tomography(
                 info["jacobian row"] = full_jacobian[i]
                 infos_for_this_fidpair[obs] = info
 
-            obs_infos.append(infos_for_this_fidpair)
+            obs_infos[ifp] = infos_for_this_fidpair
+            observed_error_rates[ifp] = [
+                info["rate"] for info in infos_for_this_fidpair.values()
+            ]
             printer.log(
                 "Hamiltonian fidpair %d of %d: %d observables analyzed"
-                % (i, len(indxFidpairList), len(all_observables)),
+                % (i, len(diff_basis_fidpairs.values()), len(all_observables)),
                 1,
             )
-
-        # pseudo-invert J to get "intrinsic" error rates (labeled by AllErrors(nqubits))
-        # J*intr = obs
-        obs_err_rates_ham = _np.array(
-            [
-                info["rate"]
-                for fidpair_infos in obs_infos
-                for info in fidpair_infos.values()
-            ]
-        )
-
-        printer.log(f'obs_err_rates:\n" {obs_err_rates_ham}', 3)
 
         pauli_fidpair_dict["diffbasis"] = pauli_fidpairs  # give "key" to observed rates
         observed_rate_infos["diffbasis"] = obs_infos
         printer.log("Completed Hamiltonian.", 1)
-    obs_err_rates = _np.concatenate([obs_err_rates_ham, obs_err_rates_sto])
+
+    obs_err_rates = _np.concatenate(
+        [
+            _np.array(
+                [
+                    observed_error_rates[i]
+                    for i in range(len(advanced_options["pauli_fidpairs"]))
+                ]
+            )
+        ]
+    )
     intrinsic_rates = _np.dot(full_jacobian_inv, obs_err_rates)
 
     return _IdleTomographyResults(
