@@ -24,8 +24,8 @@ def chi2(model, dataset, circuits=None,
     The chi^2 test statistic obtained by summing up the
     contributions of a given set of circuits or all
     the circuits available in a dataset.  For the gradient or
-    Hessian, see the :function:`chi2_jacobian` and
-    :function:`chi2_hessian` functions.
+    Hessian, see the :func:`chi2_jacobian` and
+    :func:`chi2_hessian` functions.
 
     Parameters
     ----------
@@ -147,7 +147,7 @@ def chi2_jacobian(model, dataset, circuits=None,
                   min_prob_clip_for_weighting=1e-4, prob_clip_interval=(-10000, 10000),
                   op_label_aliases=None, mdc_store=None, comm=None, mem_limit=None):
     """
-    Compute the gradient of the chi^2 function computed by :function:`chi2`.
+    Compute the gradient of the chi^2 function computed by :func:`chi2`.
 
     The returned value holds the derivatives of the chi^2 function with
     respect to `model`'s parameters.

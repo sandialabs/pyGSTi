@@ -1420,7 +1420,7 @@ class ErrgenTable(WorkspaceTable):
 
             - "logG-logT" : errgen = log(gate) - log(target_op)
             - "logTiG" : errgen = log( dot(inv(target_op), gate) )
-            - "logTiG" : errgen = log( dot(gate, inv(target_op)) )
+            - "logGTi" : errgen = log( dot(gate, inv(target_op)) )
 
         Returns
         -------
@@ -2748,7 +2748,7 @@ class FitComparisonTable(WorkspaceTable):
         Specifies the set of circuits used at each X.
 
     model_by_x : list of Models
-        `Model`s corresponding to each X value.
+        `Model` corresponding to each X value.
 
     dataset : DataSet
         The data set to compare each model against.
@@ -2793,7 +2793,7 @@ class FitComparisonTable(WorkspaceTable):
             Specifies the set of circuits used at each X.
 
         model_by_x : list of Models
-            `Model`s corresponding to each X value.
+            `Model` corresponding to each X value.
 
         dataset : DataSet
             The data set to compare each model against.

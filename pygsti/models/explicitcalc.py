@@ -449,7 +449,7 @@ class ExplicitOpModelCalc(object):
         """
         Helper function for building gauge/non-gauge projectors and
           for computing the number of gauge/non-gauge elements.
-        Returns the [ dP | dG ] matrix, i.e. np.concatenate( (dP,dG), axis=1 )
+        Returns the `[ dP | dG ]` matrix, i.e. np.concatenate( (dP,dG), axis=1 )
         whose nullspace gives the gauge directions in parameter space.
         """
 

@@ -33,7 +33,7 @@ def spectrum(x, times=None, null_hypothesis=None, counts=1, frequencies='auto', 
 
     where the arithmetic is element-wise, and `null_hypothesis` is a vector in (0,1).
     If `null_hypothesis` is None it is set to the mean of x. If that mean is 0 or 1 then
-    the power spectrum returned is (0,1,1,1,...).
+    the power spectrum returned is `(0,1,1,1,...)`.
 
     Parameters
     ----------
@@ -295,7 +295,7 @@ def lsp(x, times, frequencies='auto', null_hypothesis=None, counts=1):
     Performs a Lomb-Scargle periodogram (lsp) on the input data, returning powers
     and frequencies.
 
-    *** This function uses astropy, which is not a required dependency for pyGSTi ***
+    **This function uses astropy, which is not a required dependency for pyGSTi**
 
     Parameters
     ----------
@@ -588,9 +588,9 @@ def sparsity(p):
     """
     Returns the Hoyer sparsity index of the input vector p. This is defined to be:
 
-    HoyerIndex = (sqrt(l) - (|p|_1 / |p|_2)) / (sqrt(l) - 1)
+    `HoyerIndex = (sqrt(l) - (|p|_1 / |p|_2)) / (sqrt(l) - 1)`
 
-    where l is the length of the vector and |.|_1 and |.|_2 are the 1-norm and 2-norm of the vector, resp.
+    where l is the length of the vector and `|.|_1` and `|.|_2` are the 1-norm and 2-norm of the vector, resp.
 
     """
     n = len(p)
@@ -717,7 +717,7 @@ def generate_flat_signal(power, nummodes, n, candidatefreqs=None, base=0.5, meth
         The number of sample times that the probability trajectory is being created for.
 
     candidatefreqs : list, optional
-        A list containing a subset of 1,2,...,n-1. If not None, then all frequencies are included.
+        A list containing a subset of `1,2,...,n-1`. If not None, then all frequencies are included.
 
 
     base : float in (0,1), optional

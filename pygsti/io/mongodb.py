@@ -863,7 +863,7 @@ def _remove_auxdoc_member(mongodb, member_name, typ, metadata, session, recursiv
 
 def read_dict_from_mongodb(mongodb, collection_name, identifying_metadata):
     """
-    Read a dictionary serialized via :function:`write_dict_to_mongodb` into a dictionary.
+    Read a dictionary serialized via :func:`write_dict_to_mongodb` into a dictionary.
 
     The elements of the constructed dictionary are stored as a separate documents in a
     the specified MongoDB collection.

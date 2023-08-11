@@ -351,7 +351,7 @@ def read_circuit_list(filename, read_raw_strings=False, line_labels='auto', num_
 
 def convert_strings_to_circuits(obj):
     """
-    Converts an object resulting from :function:`convert_circuits_to_strings` back to its original.
+    Converts an object resulting from :func:`convert_circuits_to_strings` back to its original.
 
     Parameters
     ----------

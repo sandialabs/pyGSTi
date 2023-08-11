@@ -24,7 +24,7 @@ class NamedDict(dict, _NicelySerializable):
     its keys, and key and value type names indicating the types
     of its keys and values.
 
-    The main purpose of this class is to utilize its :method:`to_dataframe` method.
+    The main purpose of this class is to utilize its :meth:`to_dataframe` method.
 
     Parameters
     ----------

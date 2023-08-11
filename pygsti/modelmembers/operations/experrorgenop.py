@@ -436,7 +436,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         if order not in self.terms:
             self._compute_taylor_order_terms(order, max_polynomial_vars)
@@ -492,7 +492,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
-        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
+        It calls :meth:`taylor_order_terms` internally, so that all the terms at order `order`
         are typically cached for future calls.
 
         The coefficients of these terms are typically polynomials of the operation's

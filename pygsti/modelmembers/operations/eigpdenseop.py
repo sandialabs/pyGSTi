@@ -47,10 +47,10 @@ class EigenvalueParamDenseOp(_DenseOperator):
 
     tp_constrained_and_unital : bool
         If True, assume the top row of the operation matrix is fixed
-        to [1, 0, ... 0] and should not be parameterized, and verify
+        to `[1, 0, ... 0]` and should not be parameterized, and verify
         that the matrix is unital.  In this case, "1" is always a
         fixed (not-paramterized) eigenvalue with eigenvector
-        [1,0,...0] and if include_off_diags_in_degen_blocks is True
+        `[1,...0]` and if include_off_diags_in_degen_blocks is True
         any off diagonal elements lying on the top row are *not*
         parameterized as implied by the TP constraint.
 
@@ -327,7 +327,7 @@ class EigenvalueParamDenseOp(_DenseOperator):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator

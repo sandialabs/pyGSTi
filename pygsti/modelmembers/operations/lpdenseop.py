@@ -65,7 +65,7 @@ class LinearlyParamArbitraryOp(_DenseOperator):
     parameter_array : numpy array
         a 1D numpy array that holds the all the parameters for this
         operation.  The shape of this array sets is what is returned by
-        value_dimension(...).
+        `value_dimension(...)`.
 
     parameter_to_base_indices_map : dict
         A dictionary with keys == index of a parameter
@@ -183,7 +183,7 @@ class LinearlyParamArbitraryOp(_DenseOperator):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         param_to_base_indices_map = self._construct_param_to_base_indices_map()

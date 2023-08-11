@@ -187,7 +187,7 @@ class Label(object):
         -------
         tuple
             A tuple of component Labels (none of which should be
-            :class:`CircuitLabel`s).
+            :class:`CircuitLabel` objects).
         """
         return (self,)  # most labels just expand to themselves
 
@@ -1157,7 +1157,7 @@ class LabelTupTup(Label, tuple):
         -------
         tuple
             A tuple of component Labels (none of which should be
-            :class:`CircuitLabel`s).
+            :class:`CircuitLabel` objects).
         """
         ret = []
         expanded_comps = [x.expand_subcircuits() for x in self.components]
@@ -1426,7 +1426,7 @@ class LabelTupTupWithTime(Label, tuple):
         -------
         tuple
             A tuple of component Labels (none of which should be
-            :class:`CircuitLabel`s).
+            :class:`CircuitLabel` objects).
         """
         ret = []
         expanded_comps = [x.expand_subcircuits() for x in self.components]
@@ -1721,7 +1721,7 @@ class CircuitLabel(Label, tuple):
         -------
         tuple
             A tuple of component Labels (none of which should be
-            :class:`CircuitLabel`s).
+            :class:`CircuitLabel` objects).
         """
         return tuple(_itertools.chain(*[x.expand_subcircuits() for x in self.components])) * self.reps
 

@@ -886,7 +886,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
     shm : multiprocessing.shared_memory.SharedMemory
         A shared memory object needed to cleanup the shared memory.  If
         a normal array is created, this is `None`.  Provide this to
-        :function:`cleanup_shared_ndarray` to ensure `ar` is deallocated properly.
+        :func:`cleanup_shared_ndarray` to ensure `ar` is deallocated properly.
     """
     # R_ij = sum_k A_ik * B_kj
     from ..baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
@@ -1034,8 +1034,8 @@ def processor_group_size(nprocs, number_of_tasks):
         fctrs = sorted(_prime_factors(nprocs)); i = 1
         if int(_np.ceil(number_of_tasks)) in fctrs:
             return int(_np.ceil(number_of_tasks))  # we got lucky
-        while _np.product(fctrs[0:i]) < number_of_tasks: i += 1
-        return _np.product(fctrs[0:i])
+        while _np.prod(fctrs[0:i]) < number_of_tasks: i += 1
+        return _np.prod(fctrs[0:i])
 
 
 def sum_arrays(local_array, owners, comm):
