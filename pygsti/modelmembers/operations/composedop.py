@@ -71,6 +71,17 @@ class ComposedOp(_LinearOperator):
             "All operations must have the same evolution type (%s expected)!" % evotype
         evotype = _Evotype.cast(evotype)
 
+        rep = self._create_rep_object(evotype, state_space)
+
+        # caches in case terms are used
+        self.terms = {}
+        self.local_term_poly_coeffs = {}
+
+        _LinearOperator.__init__(self, rep, evotype)
+        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
+        if self._rep_type == 'dense': self._update_denserep()  # update dense rep if needed
+
+    def _create_rep_object(self, evotype, state_space):
         #Create representation object
         rep_type_order = ('dense', 'composed') if evotype.prefer_dense_reps else ('composed', 'dense')
         rep = None
@@ -95,14 +106,7 @@ class ComposedOp(_LinearOperator):
 
         if rep is None:
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
-
-        # caches in case terms are used
-        self.terms = {}
-        self.local_term_poly_coeffs = {}
-
-        _LinearOperator.__init__(self, rep, evotype)
-        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
-        if self._rep_type == 'dense': self._update_denserep()  # update dense rep if needed
+        return rep
 
     def _update_denserep(self):
         """Performs additional update for the case when we use a dense underlying representation."""
@@ -116,6 +120,10 @@ class ComposedOp(_LinearOperator):
         self._rep.base.flags.writeable = True
         self._rep.base[:, :] = mx
         self._rep.base.flags.writeable = False
+
+    def _update_submember_state_spaces(self, old_parent_state_space, new_parent_state_space):
+        self._rep = self._create_rep_object(self.evotype, new_parent_state_space)  # update representation
+        super()._update_submember_state_spaces(old_parent_state_space, new_parent_state_space)
 
     #Note: no to_memoized_dict needed, as ModelMember version does all we need.
 
