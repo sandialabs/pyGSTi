@@ -532,7 +532,7 @@ class GSTInitialModel(_NicelySerializable):
         if comm is None or comm.Get_rank() == 0:
             #Advanced Options can specify further manipulation of starting model
             if self.contract_start_to_cptp:
-                mdl_start = _alg.contract(mdl_start, "CPTP")
+                mdl_start = _alg.contract(mdl_start, "CPTPLND")
                 raise ValueError(
                     "'contractStartToCPTP' has been removed b/c it can change the parameterization of a model")
             if self.depolarize_start > 0:
@@ -1534,13 +1534,13 @@ class StandardGST(_proto.Protocol):
         parameterizations/constraints to apply to the estimated model.
         The default value is usually fine.  Allowed values are:
 
-        - "full" : full (completely unconstrained)
-        - "TP"   : TP-constrained
-        - "CPTP" : Lindbladian CPTP-constrained
-        - "H+S"  : Only Hamiltonian + Stochastic errors allowed (CPTP)
-        - "S"    : Only Stochastic errors allowed (CPTP)
-        - "Target" : use the target (ideal) gates as the estimate
-        - <model> : any key in the `models_to_test` argument
+        - "full"    : full (completely unconstrained)
+        - "TP"      : TP-constrained
+        - "CPTPLND" : Lindbladian CPTP-constrained
+        - "H+S"     : Only Hamiltonian + Stochastic errors allowed (CPTP)
+        - "S"       : Only Stochastic errors allowed (CPTP)
+        - "Target"  : use the target (ideal) gates as the estimate
+        - <model>   : any key in the `models_to_test` argument
 
     gaugeopt_suite : GSTGaugeOptSuite, optional
         Specifies which gauge optimizations to perform on each estimate.  Can also
@@ -1581,7 +1581,7 @@ class StandardGST(_proto.Protocol):
         be used.
     """
 
-    def __init__(self, modes="full TP,CPTP,Target", gaugeopt_suite='stdgaugeopt', target_model=None,
+    def __init__(self, modes="full TP,CPTPLND,Target", gaugeopt_suite='stdgaugeopt', target_model=None,
                  models_to_test=None, objfn_builders=None, optimizer=None, badfit_options=None, verbosity=2, name=None):
 
         super().__init__(name)
