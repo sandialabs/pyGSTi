@@ -16,6 +16,7 @@ import os as _os
 import pickle as _pickle
 import time as _time
 import warnings as _warnings
+import pathlib as _pathlib
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
@@ -41,6 +42,7 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.modelmembers import states as _states, povms as _povms
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.circuits import Circuit
 
 
 #For results object:
@@ -1265,7 +1267,7 @@ class GateSetTomography(_proto.Protocol):
     #    design = GateSetTomographyDesign(target_model, circuit_lists)
     #    return self.run(_proto.ProtocolData(design, dataset))
 
-    def run(self, data, memlimit=None, comm=None):
+    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None):
         """
         Run this protocol on `data`.
 
@@ -1274,12 +1276,24 @@ class GateSetTomography(_proto.Protocol):
         data : ProtocolData
             The input data.
 
-        memlimit : int, optional
+        memlimit : int, optional (default None)
             A rough per-processor memory limit in bytes.
 
-        comm : mpi4py.MPI.Comm, optional
+        comm : mpi4py.MPI.Comm, optional (default None)
             When not ``None``, an MPI communicator used to run this protocol
             in parallel.
+
+        checkpoint : GateSetTomographyCheckpoint, optional (default None)
+            If specified use a previously generated checkpoint object to restart
+            or warm start this run part way through.
+
+        checkpoint_path : str, optional (default None)
+            A string for the path/name to use for writing intermediate checkpoint
+            files to disk. Format is {path}/{name}, without inclusion of the json
+            file extension. This {path}/{name} combination will have the latest
+            completed iteration number appended to it before writing it to disk.
+            If none, the value of {name} will be set to the name of the protocol
+            being run.
 
         Returns
         -------
@@ -1315,17 +1329,84 @@ class GateSetTomography(_proto.Protocol):
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
         mdl_start = self.initial_model.retrieve_model(data.edesign, self.gaugeopt_suite.gaugeopt_target,
                                                       data.dataset, comm)
+        
+        #Set the checkpoint_path variable if None
+        if checkpoint_path is None:
+            checkpoint_path = _pathlib.Path('./gst_checkpoints/' + self.name)
+        else:
+            #cast this to a pathlib path with the file extension (suffix) dropped
+            checkpoint_path = _pathlib.Path(checkpoint_path).with_suffix('')
+        
+        #create the parent directory of the checkpoint if needed:
+        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        #If there is no checkpoint we should start from with the seed model,
+        #otherwise we should seed the next iteration with the last iteration's result.
+        if checkpoint is None:
+            seed_model = mdl_start.copy()
+        elif isinstance(checkpoint, GateSetTomographyCheckpoint):
+            seed_model = checkpoint.mdl_list[-1]
+        else:
+            NotImplementedError('The only currently valid checkpoint inputs are None and GateSetTomographyCheckpoint.')
 
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
+        
+        #If there is no checkpoint initialize these to be empty, otherwise re-initialize
+        #their values from the checkpoint   
+        if checkpoint is None:
+            mdl_lsgst_list = []
+
+        elif isinstance(checkpoint, GateSetTomographyCheckpoint):
+            mdl_lsgst_list = checkpoint.mdl_list
+            final_objfn = checkpoint.final_objfn
+            #This is initialized to None in the GateSetTomographyCheckpoint and will be overwritten
+            #during the loop below unless the last completed iteration is the final iteration
+            #in which case the loop should be skipped. If so I think it is ok that this gets
+            #left set to None. There looks to be some logic for handling this and it looks
+            #like the serialization routines effectively do this already, as the value
+            #of this is lost between writing and reading.
+
+        #If we haven't passed in a checkpoint object then at this point we should initialize one.
+        if checkpoint is None:
+            checkpoint = GateSetTomographyCheckpoint()
+        
+        #Set the truncate the circuit lists and iteration builder lists based on what
+        #we've already completed based on the checkpoint (note the last completed iter value
+        # is initialized to -1 so the below line will have us correctly starting at 0).
+        starting_idx = checkpoint.last_completed_iter + 1
 
         #Run Long-sequence GST on data
-        mdl_lsgst_list, optimums_list, final_objfn = _alg.run_iterative_gst(
-            ds, mdl_start, bulk_circuit_lists, self.optimizer,
+        #Use the generator based version and query each of the intermediate results.
+        gst_iter_generator = _alg.iterative_gst_generator( 
+            ds, seed_model, bulk_circuit_lists, self.optimizer,
             self.objfn_builders.iteration_builders, self.objfn_builders.final_builders,
-            resource_alloc, printer)
+            resource_alloc, starting_idx, printer)
+
+        #The optima don't actually get used right now, so don't bother trying to
+        #checkpoint these.
+        optima_list = []
+
+        #Now loop through the generator and query the intermediate results:
+        #Do all but the last circuit list.
+        for i in range(starting_idx, len(bulk_circuit_lists)):
+            #then do the final iteration slightly differently since the generator should
+            #give three return values.
+            if i==len(bulk_circuit_lists)-1:
+                mdl_iter, opt_iter, final_objfn =  next(gst_iter_generator)
+            else:
+                mdl_iter, opt_iter =  next(gst_iter_generator)
+            mdl_lsgst_list.append(mdl_iter)
+            optima_list.append(opt_iter)
+
+            #update the checkpoint along the way:
+            checkpoint.mdl_list = mdl_lsgst_list
+            checkpoint.last_completed_iter += 1
+            checkpoint.last_completed_circuit_list = bulk_circuit_lists[i]
+            #write the updated checkpoint to disk:
+            checkpoint.write(f'{checkpoint_path}_iteration_{i}.json')
 
         tnxt = _time.time(); profiler.add_time('GST: total iterative optimization', tref); tref = tnxt
-
+    
         #set parameters
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
@@ -1337,7 +1418,7 @@ class GateSetTomography(_proto.Protocol):
         # Note: we associate 'final_cache' with the Estimate, which means we assume that *all*
         # of the models in the estimate can use same evaltree, have the same default prep/POVMs, etc.
 
-        #TODO: add qtys about fit from optimums_list
+        #TODO: add qtys about fit from optima_list
 
         ret = ModelEstimateResults(data, self)
 
@@ -2937,6 +3018,43 @@ class ModelEstimateResults(_proto.ProtocolResults):
         s += "\n"
         return s
 
+class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
+    """
+    A class for storing intermediate results associated with running
+    a GateSetTomography protocol's run method to allow for restarting
+    that method partway through.
+
+    Parameters
+    ----------
+
+    """
+
+    def __init__(self, mdl_list = [], last_completed_iter = -1, 
+                 last_completed_circuit_list = [], final_objfn = None,
+                 name= None):
+        self.mdl_list = mdl_list
+        self.last_completed_iter = last_completed_iter
+        self.last_completed_circuit_list = last_completed_circuit_list
+        self.final_objfn = final_objfn
+        super().__init__(name)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'mdl_list': [mdl.to_nice_serialization() for mdl in self.mdl_list],
+                      'last_completed_iter': self.last_completed_iter,
+                      'last_completed_circuit_list': [ckt.str for ckt in self.last_completed_circuit_list],
+                      'final_objfn': self.final_objfn,
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        mdl_list = [_Model.from_nice_serialization(mdl) for mdl in state['mdl_list']]
+        last_completed_iter = state['last_completed_iter']
+        last_completed_circuit_list = [Circuit(ckt_str) for ckt_str in state['last_completed_circuit_list']]
+        final_objfn = state['final_objfn']
+        return cls(mdl_list, last_completed_iter, last_completed_circuit_list, 
+                   final_objfn)
 
 GSTDesign = GateSetTomographyDesign
 GST = GateSetTomography

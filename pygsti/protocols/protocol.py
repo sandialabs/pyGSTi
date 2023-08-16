@@ -24,6 +24,7 @@ from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.dataframetools import _process_dataframe
 from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
 class Protocol(_MongoSerializable):
@@ -3207,6 +3208,23 @@ class DataCountsSimulator(DataSimulator):
                             self.alias_dict, self.collision_action,
                             self.record_zero_counts, comm, memlimit, self.times)
         return ProtocolData(edesign, ds)
+
+class ProtocolCheckpoint(_NicelySerializable):
+    """
+    Class for storing checkpointing intermediate progress during
+    the running of a protocol in order to enable restarting subsequent
+    runs of the protocol from that point.
+    
+    Parameters
+    ----------
+    name : str
+        Name of the protocol associated with this checkpoint.
+    """
+
+    def __init__(self, name):
+        self.name = name
+        #Need to add this for MongoDB serialization related reasons.
+        self._dbcoordinates = None
 
 
 #In the future, we could put this function into a base class for
