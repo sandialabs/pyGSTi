@@ -1342,33 +1342,26 @@ class GateSetTomography(_proto.Protocol):
         
         #If there is no checkpoint we should start from with the seed model,
         #otherwise we should seed the next iteration with the last iteration's result.
+        #If there is no checkpoint initialize mdl_lsgst_list and final_objfn to be empty, 
+        #otherwise re-initialize their values from the checkpoint   
         if checkpoint is None:
             seed_model = mdl_start.copy()
+            mdl_lsgst_list = []
+            checkpoint = GateSetTomographyCheckpoint()
         elif isinstance(checkpoint, GateSetTomographyCheckpoint):
             seed_model = checkpoint.mdl_list[-1]
-        else:
-            NotImplementedError('The only currently valid checkpoint inputs are None and GateSetTomographyCheckpoint.')
-
-        tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
-        
-        #If there is no checkpoint initialize these to be empty, otherwise re-initialize
-        #their values from the checkpoint   
-        if checkpoint is None:
-            mdl_lsgst_list = []
-
-        elif isinstance(checkpoint, GateSetTomographyCheckpoint):
             mdl_lsgst_list = checkpoint.mdl_list
             final_objfn = checkpoint.final_objfn
-            #This is initialized to None in the GateSetTomographyCheckpoint and will be overwritten
+            #final_objfn initialized to None in the GateSetTomographyCheckpoint and will be overwritten
             #during the loop below unless the last completed iteration is the final iteration
             #in which case the loop should be skipped. If so I think it is ok that this gets
             #left set to None. There looks to be some logic for handling this and it looks
             #like the serialization routines effectively do this already, as the value
             #of this is lost between writing and reading.
+        else:
+            NotImplementedError('The only currently valid checkpoint inputs are None and GateSetTomographyCheckpoint.')
 
-        #If we haven't passed in a checkpoint object then at this point we should initialize one.
-        if checkpoint is None:
-            checkpoint = GateSetTomographyCheckpoint()
+        tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
         
         #Set the truncate the circuit lists and iteration builder lists based on what
         #we've already completed based on the checkpoint (note the last completed iter value
@@ -1695,7 +1688,7 @@ class StandardGST(_proto.Protocol):
     #    data = _proto.ProtocolData(design, dataset)
     #    return self.run(data)
 
-    def run(self, data, memlimit=None, comm=None):
+    def run(self, data, memlimit=None, comm=None, checkpoint= None, checkpoint_path=None):
         """
         Run this protocol on `data`.
 
@@ -3055,6 +3048,54 @@ class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
         final_objfn = state['final_objfn']
         return cls(mdl_list, last_completed_iter, last_completed_circuit_list, 
                    final_objfn)
+    
+class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
+    """
+    A class for storing intermediate results associated with running
+    a GateSetTomography protocol's run method to allow for restarting
+    that method partway through.
+
+    Parameters
+    ----------
+    mdl_list
+
+    last_completed_iter
+
+    last_completed_circuit_list
+
+    final_objfn
+
+    name
+    """
+
+    def __init__(self, mdl_list = [], last_completed_iter = -1, 
+                 last_completed_circuit_list = [], final_objfn = None,
+                 name= None):
+        self.mdl_list = mdl_list
+        self.last_completed_iter = last_completed_iter
+        self.last_completed_circuit_list = last_completed_circuit_list
+        self.final_objfn = final_objfn
+        super().__init__(name)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'mdl_list': [mdl.to_nice_serialization() for mdl in self.mdl_list],
+                      'last_completed_iter': self.last_completed_iter,
+                      'last_completed_circuit_list': [ckt.str for ckt in self.last_completed_circuit_list],
+                      'final_objfn': self.final_objfn,
+                      'name': self.name
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        mdl_list = [_Model.from_nice_serialization(mdl) for mdl in state['mdl_list']]
+        last_completed_iter = state['last_completed_iter']
+        last_completed_circuit_list = [Circuit(ckt_str) for ckt_str in state['last_completed_circuit_list']]
+        final_objfn = state['final_objfn']
+        name = state['name']
+        return cls(mdl_list, last_completed_iter, last_completed_circuit_list, 
+                   final_objfn, name)
 
 GSTDesign = GateSetTomographyDesign
 GST = GateSetTomography
