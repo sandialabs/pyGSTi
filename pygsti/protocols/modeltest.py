@@ -262,13 +262,14 @@ class ModelTestCheckpoint(_proto.ProtocolCheckpoint):
     """
 
     def __init__(self, last_completed_iter = -1, 
-                 last_completed_circuit_list = [], objfn_vals = [],
-                 chi2k_distributed_vals=[], name= None):
+                 last_completed_circuit_list = None, objfn_vals = None,
+                 chi2k_distributed_vals=None, name= None, parent = None):
         self.last_completed_iter = last_completed_iter
-        self.last_completed_circuit_list = last_completed_circuit_list
-        self.objfn_vals = objfn_vals
-        self.chi2k_distributed_vals = chi2k_distributed_vals
-        super().__init__(name)
+        self.last_completed_circuit_list = last_completed_circuit_list if last_completed_circuit_list is not None else []
+        self.objfn_vals = objfn_vals if objfn_vals is not None else []
+        self.chi2k_distributed_vals = chi2k_distributed_vals if chi2k_distributed_vals is not None else []
+
+        super().__init__(name, parent)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()

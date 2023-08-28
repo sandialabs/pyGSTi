@@ -3221,10 +3221,17 @@ class ProtocolCheckpoint(_NicelySerializable):
         Name of the protocol associated with this checkpoint.
     """
 
-    def __init__(self, name):
+    def __init__(self, name, parent = None):
         self.name = name
+        self.parent = parent
         #Need to add this for MongoDB serialization related reasons.
         self._dbcoordinates = None
+
+    def write(self, path):
+        if self.parent is not None:
+            self.parent.write(path)
+        else:
+            super().write(path)
 
 
 #In the future, we could put this function into a base class for
