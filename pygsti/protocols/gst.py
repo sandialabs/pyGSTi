@@ -1662,11 +1662,20 @@ class StandardGST(_proto.Protocol):
         be used.
     """
 
-    def __init__(self, modes="full TP,CPTP,Target", gaugeopt_suite='stdgaugeopt', target_model=None,
+    def __init__(self, modes=('full TP','CPTPLND','Target'), gaugeopt_suite='stdgaugeopt', target_model=None,
                  models_to_test=None, objfn_builders=None, optimizer=None, badfit_options=None, verbosity=2, name=None):
 
         super().__init__(name)
-        self.modes = modes.split(',')
+        if isinstance(modes, str):
+            if ',' in modes:
+                self.modes = modes.split(',')
+                _warnings.warn("The use of a comma-separated string as input for 'modes' is deprecated " 
+                            + " and may be removed in a future release. Please pass in a list or tuple"
+                                +" (or other iterable) of strings")
+            else:
+                self.modes = list(modes) #Cast to a list for uniformity
+        else:
+            self.modes = modes
         self.models_to_test = models_to_test
         self.target_model = target_model
         self.gaugeopt_suite = GSTGaugeOptSuite.cast(gaugeopt_suite)
