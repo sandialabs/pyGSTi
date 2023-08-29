@@ -1403,7 +1403,8 @@ class GateSetTomography(_proto.Protocol):
             checkpoint.last_completed_iter += 1
             checkpoint.last_completed_circuit_list = bulk_circuit_lists[i]
             #write the updated checkpoint to disk:
-            checkpoint.write(f'{checkpoint_path}_iteration_{i}.json')
+            if resource_alloc.comm_rank == 0:
+                checkpoint.write(f'{checkpoint_path}_iteration_{i}.json')
 
         tnxt = _time.time(); profiler.add_time('GST: total iterative optimization', tref); tref = tnxt
     

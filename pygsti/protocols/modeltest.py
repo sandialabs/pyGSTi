@@ -220,7 +220,8 @@ class ModelTest(_proto.Protocol):
             checkpoint.last_completed_iter += 1
             checkpoint.last_completed_circuit_list= circuit_list
             #write the updated checkpoint to disk:
-            checkpoint.write(f'{checkpoint_path}_iteration_{i}.json')
+            if resource_alloc.comm_rank == 0:
+                checkpoint.write(f'{checkpoint_path}_iteration_{i}.json')
 
         mdc_store = _ModelDatasetCircuitStore(the_model, ds, bulk_circuit_lists[-1], resource_alloc)
         parameters = _collections.OrderedDict()
