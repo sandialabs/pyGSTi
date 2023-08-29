@@ -131,7 +131,7 @@ class ModelTest(_proto.Protocol):
     #    design = _StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
     #    return self.run(_proto.ProtocolData(design, dataset))
 
-    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None):
+    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing= False):
         """
         Run this protocol on `data`.
 
@@ -158,6 +158,11 @@ class ModelTest(_proto.Protocol):
             completed iteration number appended to it before writing it to disk.
             If none, the value of {name} will be set to the name of the protocol
             being run.
+        
+        disable_checkpointing : bool, optional (default False)
+            When set to True checkpoint objects will not be constructed and written
+            to disk during the course of this protocol. It is strongly recommended
+            that this be kept set to False without good reason to disable the checkpoints.
 
         Returns
         -------
@@ -190,33 +195,38 @@ class ModelTest(_proto.Protocol):
                               if not isinstance(lst, _CircuitList) else lst
                               for lst in circuit_lists]
         
-        #Set the checkpoint_path variable if None
-        if checkpoint_path is None:
-            checkpoint_path = _pathlib.Path('./model_test_checkpoints/' + self.name)
+        if not disable_checkpointing:
+            #Set the checkpoint_path variable if None
+            if checkpoint_path is None:
+                checkpoint_path = _pathlib.Path('./model_test_checkpoints/' + self.name)
+            else:
+                #cast this to a pathlib path with the file extension (suffix) dropped
+                checkpoint_path = _pathlib.Path(checkpoint_path).with_suffix('')
+            
+            #create the parent directory of the checkpoint if needed:
+            checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            #If there is no checkpoint we should start from with the first circuit list,
+            #otherwise we should load in the cached results and start from the point
+            # in the objective function calculation we left off.
+            if checkpoint is None:
+                objfn_vals = []
+                chi2k_distributed_vals = []
+                checkpoint = ModelTestCheckpoint()
+            elif isinstance(checkpoint, ModelTestCheckpoint):
+                objfn_vals = checkpoint.objfn_vals
+                chi2k_distributed_vals = checkpoint.chi2k_distributed_vals
+            else:
+                NotImplementedError('The only currently valid checkpoint inputs are None and ModelTestCheckpoint.')
+
+            #Check the last completed iteration identified in the checkpoint and set that as the
+            #starting point for the iteration through bulk_circuit_lists. This starts at -1 for
+            #a freshly initialized checkpoint.
+            starting_idx = checkpoint.last_completed_iter + 1
         else:
-            #cast this to a pathlib path with the file extension (suffix) dropped
-            checkpoint_path = _pathlib.Path(checkpoint_path).with_suffix('')
-        
-        #create the parent directory of the checkpoint if needed:
-        checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        #If there is no checkpoint we should start from with the first circuit list,
-        #otherwise we should load in the cached results and start from the point
-        # in the objective function calculation we left off.
-        if checkpoint is None:
+            starting_idx = 0
             objfn_vals = []
             chi2k_distributed_vals = []
-            checkpoint = ModelTestCheckpoint()
-        elif isinstance(checkpoint, ModelTestCheckpoint):
-            objfn_vals = checkpoint.objfn_vals
-            chi2k_distributed_vals = checkpoint.chi2k_distributed_vals
-        else:
-            NotImplementedError('The only currently valid checkpoint inputs are None and ModelTestCheckpoint.')
-
-        #Check the last completed iteration identified in the checkpoint and set that as the
-        #starting point for the iteration through bulk_circuit_lists. This starts at -1 for
-        #a freshly initialized checkpoint.
-        starting_idx = checkpoint.last_completed_iter + 1
 
         assert(len(self.objfn_builders) == 1), "Only support for a single objective function so far."
         for i in range(starting_idx, len(bulk_circuit_lists)):
@@ -226,14 +236,15 @@ class ModelTest(_proto.Protocol):
             objfn_vals.append(f)
             chi2k_distributed_vals.append(objective.chi2k_distributed_qty(f))
 
-            #Update the checkpoint:
-            checkpoint.objfn_vals = objfn_vals
-            checkpoint.chi2k_distributed_vals = chi2k_distributed_vals
-            checkpoint.last_completed_iter += 1
-            checkpoint.last_completed_circuit_list= circuit_list
-            #write the updated checkpoint to disk:
-            if resource_alloc.comm_rank == 0:
-                checkpoint.write(f'{checkpoint_path}_iteration_{i}.json')
+            if not disable_checkpointing:
+                #Update the checkpoint:
+                checkpoint.objfn_vals = objfn_vals
+                checkpoint.chi2k_distributed_vals = chi2k_distributed_vals
+                checkpoint.last_completed_iter += 1
+                checkpoint.last_completed_circuit_list= circuit_list
+                #write the updated checkpoint to disk:
+                if resource_alloc.comm_rank == 0:
+                    checkpoint.write(f'{checkpoint_path}_iteration_{i}.json')
 
         mdc_store = _ModelDatasetCircuitStore(the_model, ds, bulk_circuit_lists[-1], resource_alloc)
         parameters = _collections.OrderedDict()
