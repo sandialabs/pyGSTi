@@ -147,6 +147,18 @@ class ModelTest(_proto.Protocol):
             When not ``None``, an MPI communicator used to run this protocol
             in parallel.
 
+        checkpoint : ModelTestCheckpoint, optional (default None)
+            If specified use a previously generated checkpoint object to restart
+            or warm start this run part way through.
+
+        checkpoint_path : str, optional (default None)
+            A string for the path/name to use for writing intermediate checkpoint
+            files to disk. Format is {path}/{name}, without inclusion of the json
+            file extension. This {path}/{name} combination will have the latest
+            completed iteration number appended to it before writing it to disk.
+            If none, the value of {name} will be set to the name of the protocol
+            being run.
+
         Returns
         -------
         ModelEstimateResults
@@ -259,6 +271,30 @@ class ModelTestCheckpoint(_proto.ProtocolCheckpoint):
 
     Parameters
     ----------
+    last_completed_iter : int, optional (default -1)
+        Index of the last iteration what was successfully completed.
+
+    last_completed_circuit_list : list of Circuit objects, CircuitList or equivalent, optional (default None)
+        A list of Circuit objects corresponding to the last iteration successfully completed.
+
+    objfn_vals : list, optional (default None)
+        A list of the current objective function values for each iteration/circuit list
+        evaluated during the ModelTest protocol.
+
+    chi2k_distributed_vals : list, optional (default None)
+        A list of the current objective function values for each iteration/circuit list
+         evaluated during the ModelTest protocol rescaled so as to have an expected chi-squared
+         distribution under the null hypothesis of Wilks' theorem.
+        
+    name : str, optional (default None)
+        An optional name for the checkpoint. Note this is not necessarily the name used in the
+        automatic generation of filenames when written to disk. 
+    
+    parent : ProtocolCheckpoint, optional (default None)
+        When specified this checkpoint object is treated as the child of another ProtocolCheckpoint
+        object that acts as the parent. When present, the parent's `write` method supersedes
+        the child objects and is called when calling `write` on the child. Currently only used
+        in the implementation of StandardGSTCheckpoint.
 
     """
 

@@ -1721,6 +1721,18 @@ class StandardGST(_proto.Protocol):
             When not ``None``, an MPI communicator used to run this protocol
             in parallel.
 
+        checkpoint : StandardGSTCheckpoint, optional (default None)
+            If specified use a previously generated checkpoint object to restart
+            or warm start this run part way through.
+
+        checkpoint_path : str, optional (default None)
+            A string for the path/name to use for writing intermediate checkpoint
+            files to disk. Format is {path}/{name}, without inclusion of the json
+            file extension. This {path}/{name} combination will have the latest
+            completed iteration number appended to it before writing it to disk.
+            If none, the value of {name} will be set to the name of the protocol
+            being run.
+
         Returns
         -------
         ProtocolResults
@@ -3066,15 +3078,29 @@ class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
 
     Parameters
     ----------
-    mdl_list
+    mdl_list : list of models, optional (default None)
+        Current list of models for each of the completed iterations of the protocol.
 
-    last_completed_iter
+    last_completed_iter : int, optional (default -1)
+        Index of the last iteration what was successfully completed.
 
-    last_completed_circuit_list
+    last_completed_circuit_list : list of Circuit objects, CircuitList or equivalent, optional (default None)
+        A list of Circuit objects corresponding to the last iteration successfully completed.
+    
+    final_objfn : ModelDatasetCircuitStore, optional (Default None)
+        A ModelDatasetCircuitStore object corresponding to the final evaluated objective function.
+        Not currently serialized or used during the warmstarting, so purely informational and may
+        not always be initialized.
 
-    final_objfn
+    name : str, optional (default None)
+        An optional name for the checkpoint. Note this is not necessarily the name used in the
+        automatic generation of filenames when written to disk.
 
-    name
+    parent : ProtocolCheckpoint, optional (default None)
+        When specified this checkpoint object is treated as the child of another ProtocolCheckpoint
+        object that acts as the parent. When present, the parent's `write` method supersedes
+        the child objects and is called when calling `write` on the child. Currently only used
+        in the implementation of StandardGSTCheckpoint.
     """
 
     def __init__(self, mdl_list = None, last_completed_iter = -1, 
@@ -3114,19 +3140,26 @@ class StandardGSTCheckpoint(_proto.ProtocolCheckpoint):
     """
     A class for storing intermediate results associated with running
     a StandardGST protocol's run method to allow for restarting
-    that method partway through.
+    that method partway through. This class acts as a container
+    class for some set of child GateSetTomographyCheckpoint and
+    ModelTestCheckpoint objects for each of the sub-protocols run in
+    the course of the StandardGST protocol.
 
     Parameters
     ----------
-    mdl_list
+    modes : list of str, optional (default None)
+        A list of strings corresponding to the mode labels being run in the
+        StandardGST protocol object that generated this checkpoint.
 
-    last_completed_iter
-
-    last_completed_circuit_list
-
-    final_objfn
-
-    name
+    children : dict, optional (default None)
+        A dictionary whose keys correspond to modes (i.e. the same elements as the
+        modes kwarg) and whose values are either GateSetTomographyCheckpoint
+        or ModelTestCheckpoint objects, depending on whichever is appropriate
+        for that mode.
+        
+    name : str, optional (default None)
+        An optional name for the checkpoint. Note this is not necessarily the name used in the
+        automatic generation of filenames when written to disk. 
     """
 
     def __init__(self, modes= None, children = None, name= None):

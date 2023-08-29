@@ -3219,6 +3219,12 @@ class ProtocolCheckpoint(_NicelySerializable):
     ----------
     name : str
         Name of the protocol associated with this checkpoint.
+
+    parent : ProtocolCheckpoint, optional (default None)
+        When specified this checkpoint object is treated as the child of another ProtocolCheckpoint
+        object that acts as the parent. When present, the parent's `write` method supersedes
+        the child objects and is called when calling `write` on the child. Currently only used
+        in the implementation of StandardGSTCheckpoint.
     """
 
     def __init__(self, name, parent = None):
