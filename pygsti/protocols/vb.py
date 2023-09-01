@@ -354,6 +354,9 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
                                                                   self.descriptor)
 
 
+
+
+
 class SummaryStatistics(_proto.Protocol):
     """
     A protocol that can construct "summary" quantities from raw data.
@@ -374,14 +377,14 @@ class SummaryStatistics(_proto.Protocol):
         Static list of the categories of circuit information this protocol can compute.
     """
     summary_statistics = ('success_counts', 'total_counts', 'hamming_distance_counts',
-                          'success_probabilities', 'polarization', 'adjusted_success_probabilities')
+                          'success_probabilities', 'polarization', 'adjusted_success_probabilities', 'energies')
     circuit_statistics = ('two_q_gate_count', 'depth', 'idealout', 'circuit_index', 'width')
     # dscmp_statistics = ('tvds', 'pvals', 'jsds', 'llrs', 'sstvds')
 
     def __init__(self, name):
         super().__init__(name)
 
-    def _compute_summary_statistics(self, data):
+    def _compute_summary_statistics(self, data, energy = False):
         """
         Computes all summary statistics for the given data.
 
@@ -394,6 +397,21 @@ class SummaryStatistics(_proto.Protocol):
         -------
         NamedDict
         """
+        
+        def outcome_energy(outcome, measurement, sign):
+            energy = 1
+            for i,j in zip(outcome,measurement):
+                if i == '1' and j == 'Z':
+                    energy = -1*energy
+            return sign*energy
+
+        def avg_energy(dsrow, measurement, sign):
+            energy = 0
+            for i in dsrow.counts:
+                out_eng = outcome_energy(i[0],measurement,sign)
+                energy += dsrow.counts[i] * out_eng    
+            return energy / dsrow.total
+        
         def success_counts(dsrow, circ, idealout):
             if dsrow.total == 0: return 0  # shortcut?
             return dsrow.get(tuple(idealout), 0.)
@@ -417,6 +435,11 @@ class SummaryStatistics(_proto.Protocol):
                 hamming_distance_pdf = _np.array(hamming_distance_counts) / _np.sum(hamming_distance_counts)
                 adjSP = _np.sum([(-1 / 2)**n * hamming_distance_pdf[n] for n in range(len(hamming_distance_pdf))])
                 return adjSP
+            
+        def _get_energies(icirc, circ, dsrow, measurement, sign):
+            eng = avg_energy(dsrow, measurement, sign)
+            ret = {'energies': eng}
+            return ret
 
         def _get_summary_values(icirc, circ, dsrow, idealout):
             sc = success_counts(dsrow, circ, idealout)
@@ -432,9 +455,15 @@ class SummaryStatistics(_proto.Protocol):
                    'hamming_distance_counts': hdc,
                    'adjusted_success_probabilities': adjusted_success_probability(hdc)}
             return ret
-
-        return self._compute_dict(data, self.summary_statistics,
+        
+        if energy is False:
+            return self._compute_dict(data, self.summary_statistics,
                                   _get_summary_values, for_passes='all')
+        
+        else:
+            return self._compute_dict(data, ['energies'],
+                                     _get_energies, for_passes = 'all', energy = True)
+        # Double check what _compute_dict does for other cases
 
     def _compute_circuit_statistics(self, data):
         """
@@ -500,7 +529,7 @@ class SummaryStatistics(_proto.Protocol):
         return self._compute_dict(data, ('success_probabilities',),
                                   _get_success_prob, for_passes="none")
 
-    def _compute_dict(self, data, component_names, compute_fn, for_passes="all"):
+    def _compute_dict(self, data, component_names, compute_fn, for_passes="all", energy = False):
         """
         Executes a computation function row-by-row on the data in `data` and packages the results.
 
@@ -538,17 +567,25 @@ class SummaryStatistics(_proto.Protocol):
                                      for comp in component_names})
 
         #loop over all circuits
-        for depth, circuits_at_depth, idealouts_at_depth in zip(depths, design.circuit_lists, design.idealout_lists):
-            for icirc, (circ, idealout) in enumerate(zip(circuits_at_depth, idealouts_at_depth)):
-                dsrow = ds[circ] if (ds is not None) else None  # stripOccurrenceTags=True ??
+        if energy is False:
+            for depth, circuits_at_depth, idealouts_at_depth in zip(depths, design.circuit_lists, design.idealout_lists):
+                for icirc, (circ, idealout) in enumerate(zip(circuits_at_depth, idealouts_at_depth)):
+                    dsrow = ds[circ] if (ds is not None) else None  # stripOccurrenceTags=True ??
                 # -- this is where Tim thinks there's a bottleneck, as these loops will be called for each
                 # member of a simultaneous experiment separately instead of having an inner-more iteration
                 # that loops over the "structure", i.e. the simultaneous qubit sectors.
                 #TODO: <print percentage>
 
-                for component_name, val in compute_fn(icirc, circ, dsrow, idealout).items():
-                    qty_data[component_name][depth].append(val)  # maybe use a pandas dataframe here?
-
+                    for component_name, val in compute_fn(icirc, circ, dsrow, idealout).items():
+                        qty_data[component_name][depth].append(val)  # maybe use a pandas dataframe here?
+        else:
+            for depth, circuits_at_depth, measurements_at_depth, signs_at_depth in zip(depths, design.circuit_lists, design.measurements, design.signs):
+                for icirc, (circ, measurement, sign) in enumerate(zip(circuits_at_depth, measurements_at_depth, signs_at_depth)):
+                    dsrow = ds[circ] if (ds is not None) else None
+                    
+                    for component_name, val in compute_fn(icirc, circ, dsrow, measurement, sign).items():
+                        qty_data[component_name][depth].append(val)
+    
         return qty_data
 
     def _create_depthwidth_dict(self, depths, widths, fillfn, seriestype):
@@ -612,9 +649,19 @@ class SummaryStatistics(_proto.Protocol):
             num_existing = 0
 
         #extract "base" values from cache, to base boostrap off of
-        success_probabilities = data_cache['success_probabilities']
-        total_counts = data_cache['total_counts']
-        hamming_distance_counts = data_cache['hamming_distance_counts']
+        # Wonky try statements aren't working...
+        try:
+            success_probabilities = data_cache['success_probabilities']
+        except:
+            success_probabilities = data_cache['energies']
+        try:
+            total_counts = data_cache['total_counts']
+        except:
+            pass
+        try:
+            hamming_distance_counts = data_cache['hamming_distance_counts']
+        except:
+            pass
         depths = list(success_probabilities.keys())
 
         for i in range(num_existing, num_qtys):
@@ -660,6 +707,7 @@ class SummaryStatistics(_proto.Protocol):
                     bcache['adjusted_success_probabilities'][depth].append(adjSP)
 
             data_cache[key].append(bcache)
+
 
 
 class ByDepthSummaryStatistics(SummaryStatistics):
