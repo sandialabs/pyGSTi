@@ -858,7 +858,7 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
     def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None,
                  sampler='edgegrab', samplerargs=[0.25, ],
                  addlocal=False, lsargs=(),
-                 citerations=20, compilerargs=(), partitioned=False, descriptor='A DRB experiment',
+                 citerations=20, compilerargs=(), idle_name='Gc0', partitioned=False, descriptor='A BiRB experiment',
                  add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
 
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
@@ -878,7 +878,7 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
 
             args_list = [(pspec, clifford_compilations, l)] * circuits_per_depth
-            kwargs_list = [dict(qubit_labels=qubit_labels, sampler=sampler, samplerargs=samplerargs,
+            kwargs_list = [dict(idle_name=idle_name, qubit_labels=qubit_labels, sampler=sampler, samplerargs=samplerargs,
                                 addlocal=addlocal, lsargs=lsargs,
                                 citerations=citerations, compilerargs=compilerargs,
                                 partitioned=partitioned,
@@ -893,18 +893,18 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
             for c, meas, sign in results:
                 circuits_at_depth.append(c)
                 measurements_at_depth.append(meas)
-                signs_at_depth.append(sign)
+                signs_at_depth.append(int(sign))
 
             circuit_lists.append(circuits_at_depth)
             measurements.append(measurements_at_depth)
             signs.append(signs_at_depth)
 
         self._init_foundation(depths, circuit_lists, measurements, signs, circuits_per_depth, qubit_labels,
-                              sampler, samplerargs, addlocal, lsargs, citerations, compilerargs, partitioned, descriptor,
+                              sampler, samplerargs, idle_name, addlocal, lsargs, citerations, compilerargs, partitioned, descriptor,
                               add_default_protocol)
 
     def _init_foundation(self, depths, circuit_lists, measurements, signs, circuits_per_depth, qubit_labels,
-                         sampler, samplerargs, addlocal, lsargs, citerations, compilerargs, partitioned, descriptor,
+                         sampler, samplerargs, idle_name, addlocal, lsargs, citerations, compilerargs, partitioned, descriptor,
                          add_default_protocol):
         super().__init__(depths, circuit_lists, signs, qubit_labels, remove_duplicates=False)
         self.measurements = measurements
@@ -921,6 +921,7 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
         self.addlocal = addlocal
         self.lsargs = lsargs
         self.partitioned = partitioned
+        self.idle_name = idle_name
 
         if add_default_protocol:
             if randomizeout:
@@ -1081,6 +1082,8 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
         if self.datatype not in data.cache:
             summary_data_dict = self._compute_summary_statistics(data, energy = self.energies)
             data.cache.update(summary_data_dict)
+            #print('data cache updated')
+            #print(data.cache)
         src_data = data.cache[self.datatype]
         data_per_depth = src_data
 
@@ -1116,6 +1119,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
 
             #print(adj_sps)
             # Don't think this needs changed
+            #print(asymptote)
             full_fit_results, fixed_asym_fit_results = _rbfit.std_least_squares_fit(
                 depths, adj_sps, nqubits, seed=self.seed, asymptote=asymptote,
                 ftype='full+FA', rtype=self.rtype)
@@ -1135,8 +1139,10 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             failcount_faf = 0
 
             #Store bootstrap "cache" dicts (containing summary keys) as a list under data.cache
+            #print(len(data.cache['bootstraps']))
             if 'bootstraps' not in data.cache or len(data.cache['bootstraps']) < self.bootstrap_samples:
                 # TIM - finite counts always True here?
+                #print('adding bootstrap')
                 self._add_bootstrap_qtys(data.cache, self.bootstrap_samples, finitecounts=True)
             bootstrap_caches = data.cache['bootstraps']  # if finitecounts else 'infbootstraps'
 

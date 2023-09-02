@@ -21,6 +21,7 @@ from pygsti.baseobjs import label as _lbl
 from pygsti.tools import group as _rbobjs
 from pygsti.tools import symplectic as _symp
 from pygsti.tools import compilationtools as _comp
+from pygsti.tools import internalgates as _gates
 
 ################################
 #### BEGIN CODE FROM JORDAN ######
@@ -3130,7 +3131,7 @@ def create_random_germpower_mirror_circuits(pspec, absolute_compilation, depths,
     return circlist, outlist, aux
     
 ###begin BiRB tools###
-def stabilizer_to_all_zs(stabilizer):
+def stabilizer_to_all_zs(stabilizer, qubit_labels, absolute_compilation, idle_name='Gc0'):
     n = len(stabilizer)
     
     symp_reps = _symp.compute_internal_gate_symplectic_representations()
@@ -3138,31 +3139,38 @@ def stabilizer_to_all_zs(stabilizer):
     s_inv_p, p_inv_p = _symp.inverse_clifford(symp_reps['P'][0],symp_reps['P'][1])
     s_h, p_h = symp_reps['H']
     s_y, p_y = symp_reps['C1']
+    # s_y, p_y = _symp.compose_cliffords(s_inv_p, p_inv_p, s_h, p_h)
     
     stab_layer = []
-    c_str = [[]]
+    c = []
     
-    for i in range(n):
+    for i in range(len(qubit_labels)):
         if stabilizer[i] == 'Y':
             stab_layer.append((s_y, p_y))
-            c_str[0].append(('Gc1','Q{}'.format(i)))
+            c.append(_lbl.Label('C1','{}'.format(qubit_labels[i])))
         elif stabilizer[i] == 'X':
             stab_layer.append((s_h, p_h))
-            c_str[0].append(('Gc12','Q{}'.format(i)))
+            c.append(_lbl.Label('C12','{}'.format(qubit_labels[i])))
         elif stabilizer[i] == 'I':
             rand_clifford = str(_np.random.choice(_np.arange(24)))
             s_rand, p_rand = symp_reps['C'+rand_clifford]
             stab_layer.append((s_rand, p_rand))
-            c_str[0].append(('Gc'+rand_clifford,'Q{}'.format(i)))
+            c.append(_lbl.Label('C'+rand_clifford,'{}'.format(qubit_labels[i])))
         else:
             s_rand, p_rand = symp_reps['C0']
             stab_layer.append((s_rand, p_rand))
-            c_str[0].append(('Gc0', 'Q{}'.format(i)))
+            c.append(_lbl.Label('C0', '{}'.format(qubit_labels[i])))
             
     s_layer, p_layer = _symp.symplectic_kronecker(stab_layer)
-    stab_circuit = _cir.Circuit(c_str).parallelize()
+    stab_circuit = _cir.Circuit([c], editable=True)
+    stab_circuit.change_gate_library(absolute_compilation)
+    if stab_circuit.depth == 0:
+            stab_circuit.insert_layer_inplace([_lbl.Label(idle_name, q) for q in qubit_labels], 0)
+    stab_circuit.done_editing()
     
     return s_layer, p_layer, stab_circuit
+
+# TO DO: Update DRB to use this new function
 
 def symplectic_to_pauli(s,p):
     # Takes in the symplectic representation of a Pauli (ie a 2n bitstring in the Hostens notation) and converts it into a list of characters
@@ -3263,9 +3271,9 @@ def select_neg_evecs(pauli, sign):
     return bit_evecs
 
 def compose_initial_cliffords(prep_circuit):
-    composition_rules = {'Gc0': 'Gc3',
-                         'Gc2': 'Gc5',
-                         'Gc12': 'Gc15'} #supposed to give Gc# * X
+    composition_rules = {'C0': 'C3',
+                         'C2': 'C5',
+                         'C12': 'C15'} #supposed to give Gc# * X
     
     sign_layer = prep_circuit[0]
     circ_layer = prep_circuit[1]
@@ -3275,12 +3283,12 @@ def compose_initial_cliffords(prep_circuit):
         sign_gate = sign_layer[i]
         circ_gate = circ_layer[i]
         new_gate = circ_gate
-        if sign_gate == 'Gc3': # we know that what follows must prep a X, Y, or Z stablizer
+        if sign_gate == 'C3': # we know that what follows must prep a X, Y, or Z stablizer
             new_gate = composition_rules[circ_gate]
         composed_layer.append(new_gate)
     return composed_layer
 
-def sample_stabilizer(pauli, sign):
+def sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels, idle_name='Gc0'):
     # Samples a random stabilizer of a Pauli, s = s_1 \otimes ... \otimes s_n. For each s_i,
     # we perform the following gates:
     #     - s_i = X: H
@@ -3290,17 +3298,21 @@ def sample_stabilizer(pauli, sign):
     # Also creates the circuit layer that is needed to prepare
     # the stabilizer state. 
     #     - pauli: a list of 1Q paulis whose tensor product gives the n-qubit Pauli
+    #     - sign: The overall phase of the pauli. This will determine how many -1 1Q eigenvectors 
+    #             our stabilizer state must have.
     # Returns: The symplectic representation of the stabilizer state, symplectic representation of the 
     #          preparation circuit, and a pygsti circuit representation of the prep circuit
+
+
+
+
     n = len(pauli)
     neg_evecs = select_neg_evecs(pauli, sign)
     assert((-1)**sum(neg_evecs) == sign)
     zvals = [0 if neg_evecs[i] == 0 else -1 for i in range(n)]
     
-    #zvals = _np.random.choice([0,-1], n) 
-    #print(zvals)
     
-    # init_stab, init_phase = _symp.prep_stabilizer_state(n, zvals)
+    #init_stab, init_phase = _symp.prep_stabilizer_state(n, zvals)
     init_stab, init_phase = _symp.prep_stabilizer_state(n)
     
     symp_reps = _symp.compute_internal_gate_symplectic_representations()
@@ -3311,36 +3323,39 @@ def sample_stabilizer(pauli, sign):
                                                    ,symp_reps['P'][0]
                                                    ,symp_reps['P'][1])), 
                 'Z': symp_reps['I']}
-    circ_dict = {'X': 'Gc12',
-                 'Y': 'Gc2',
-                 'Z': 'Gc0'}
+    circ_dict = {'X': 'C12',
+                 'Y': 'C2',
+                 'Z': 'C0'}
     
-    x_layer = [symp_reps['I'] if zvals[i] == 0 else symp_reps['X'] for i in range(len(zvals))]
-    
-    circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'Gc'+str(_np.random.randint(24)) for i in pauli]
+    x_layer = [symp_reps['I'] if zvals[i] == 0 else symp_reps['X'] for i in range(len(zvals))] # why is this n-i-1 again and not just i?
+    circ_layer = [circ_dict[i] if i in circ_dict.keys() else 'C'+str(_np.random.randint(24)) for i in pauli]
     #init_layer = [layer_dict[pauli[i]] if pauli[i] in layer_dict.keys() else symp_reps[circ_layer[i].replace('Gc','C')] for i in range(len(pauli))]
+    # rand_cliffords = [init_layer[i] for i in range(len(pauli)) if pauli[i] == 'I']
+    init_layer = [symp_reps[circ_layer[i]] for i in range(len(pauli))]
     
-    init_layer = [symp_reps[circ_layer[i].replace('Gc', 'C')] for i in range(len(pauli))]
-                  
     x_layer_rep, x_layer_phase = _symp.symplectic_kronecker(x_layer)
 
     layer_rep, layer_phase = _symp.symplectic_kronecker(init_layer)
-    
-    #stab_state, stab_phase =  _symp.apply_clifford_to_stabilizer_state(layer_rep, layer_phase,
-    #                                                                  stab_state, stab_phase) 
-    
+
+
     s_prep, p_prep = _symp.compose_cliffords(x_layer_rep,x_layer_phase, layer_rep, layer_phase)
     
-    stab_state, stab_phase = _symp.apply_clifford_to_stabilizer_state(s_prep, p_prep, init_stab, init_phase)
     
-    sign_layer = ['Gc0' if zvals[i] == 0 else 'Gc3' for i in range(len(zvals))]
+    stab_state, stab_phase =  _symp.apply_clifford_to_stabilizer_state(s_prep, p_prep,
+                                                                      init_stab, init_phase) 
+    sign_layer = ['C0' if zvals[i] == 0 else 'C3' for i in range(len(zvals))]
     
-    layer = [sign_layer, circ_layer]
-    
-    # sign = (-1)**(-1*_np.sum(zvals))
-
+    layer_gates = compose_initial_cliffords([sign_layer, circ_layer])#composition of circ layer and sign layer, with sign layer first
+    #layer_gates = [recomp_dict[(sign_layer[i], circ_layer[i], 'Gc0')].replace('Gc','C') for i in range(n)]
+    layer = _cir.Circuit([[_lbl.Label(layer_gates[i], qubit_labels[i]) for i in range(len(qubit_labels))]], line_labels=qubit_labels).parallelize()
+    compiled_layer = layer.copy(editable=True)
+    compiled_layer.change_gate_library(absolute_compilation)
+    if compiled_layer.depth == 0:
+            #print('depth 0')
+            compiled_layer.insert_layer_inplace([_lbl.Label(idle_name, q) for q in qubit_labels], 0)
     #return stab_state, stab_phase, layer_rep, layer_phase, circuit_rep
-    return stab_state, stab_phase, s_prep, p_prep, layer
+    #print(compiled_layer)
+    return stab_state, stab_phase, s_prep, p_prep, compiled_layer
 
 def measure(s_state, p_state):
     num_qubits = len(p_state) // 2
@@ -3362,9 +3377,9 @@ def determine_sign(s_state, p_state, measurement):
     return _np.prod(sign) 
 
 
-def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=None, sampler='Qelimination',
+def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=None, layer_sampling = 'mixed1q2q', sampler='Qelimination',
                              samplerargs=[], addlocal=False, lsargs=[],
-                             citerations=20, compilerargs=[], partitioned=False, seed=None):
+                             citerations=20, compilerargs=[], partitioned=False, seed=None, idle_name='Gc0'):
     
     if qubit_labels is not None: n = len(qubit_labels)
     else: 
@@ -3379,22 +3394,28 @@ def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
                                                                    absolute_compilation = clifford_compilations['absolute'],
                                                                    circuit = True, include_identity = False)
     
-    s_inputstate, p_inputstate, s_init_layer, p_init_layer, prep_circuit = sample_stabilizer(rand_pauli, rand_sign)
-    prep_circuit = compose_initial_cliffords(prep_circuit)
+    s_inputstate, p_inputstate, s_init_layer, p_init_layer, prep_circuit = sample_stabilizer(rand_pauli, rand_sign, clifford_compilations['absolute'], qubit_labels, idle_name=idle_name)
+    
     s_pc, p_pc = _symp.symplectic_rep_of_clifford_circuit(pauli_circuit, pspec = pspec)
     
     # build the initial layer of the blown up circuit
-    initial_circuit = _cir.Circuit([[(prep_circuit[i], qubit_labels[i]) for i in range(len(qubit_labels))]])
-    full_circuit = initial_circuit.copy(editable = True)
+    full_circuit = prep_circuit.copy(editable=True)
+    #initial_circuit = _cir.Circuit([[(prep_circuit[i], qubit_labels[i]) for i in range(len(qubit_labels))]])
+    #full_circuit = initial_circuit.copy(editable = True)
 
     # Sample a random circuit of "native gates".
-    if sampler == 'Qelimination' or sampler == 'edgegrab':
+    if layer_sampling == 'alternating1q2q':
+        circuit = random_alternating_clifford_circ(pspec, length, qubit_labels=qubit_labels, samplerargs=samplerargs) 
+    elif layer_sampling == 'mixed1q2q':
         circuit = create_random_circuit(pspec=pspec, length=length, qubit_labels=qubit_labels, sampler=sampler,
                                     samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs, rand_state=rand_state)
-    elif sampler == create_random_quintuple_layered_circuit:
-        circuit = sampler(pspec, qubit_labels, length, *samplerargs, rand_state = rand_state)
+    #if sampler == 'Qelimination' or sampler == 'edgegrab':
+    #    circuit = create_random_circuit(pspec=pspec, length=length, qubit_labels=qubit_labels, sampler=sampler,
+    #                                samplerargs=samplerargs, addlocal=addlocal, lsargs=lsargs, rand_state=rand_state)
+    #elif sampler == create_random_quintuple_layered_circuit:
+    #    circuit = sampler(pspec, qubit_labels, length, *samplerargs, rand_state = rand_state)
     else:
-        raise ValueError(f'{sampler} is not supported')
+        raise ValueError(f'{layer_sampling} is not supported')
         
     # find the symplectic matrix / phase vector this "native gates" circuit implements.
     s_rc, p_rc = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
@@ -3420,7 +3441,7 @@ def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
         
     # Turn the stabilizer into an all Z and I stabilizer. Append this to the circuit.
     
-    s_stab, p_stab, stab_circuit = stabilizer_to_all_zs(pauli)
+    s_stab, p_stab, stab_circuit = stabilizer_to_all_zs(pauli, qubit_labels, clifford_compilations['absolute'], idle_name=idle_name)
     
     full_circuit.append_circuit_inplace(stab_circuit)
     

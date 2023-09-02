@@ -357,6 +357,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
 
 
 
+
 class SummaryStatistics(_proto.Protocol):
     """
     A protocol that can construct "summary" quantities from raw data.
@@ -438,7 +439,7 @@ class SummaryStatistics(_proto.Protocol):
             
         def _get_energies(icirc, circ, dsrow, measurement, sign):
             eng = avg_energy(dsrow, measurement, sign)
-            ret = {'energies': eng}
+            ret = {'energies': eng, 'total_counts': dsrow.total}
             return ret
 
         def _get_summary_values(icirc, circ, dsrow, idealout):
@@ -461,10 +462,9 @@ class SummaryStatistics(_proto.Protocol):
                                   _get_summary_values, for_passes='all')
         
         else:
-            return self._compute_dict(data, ['energies'],
+            return self._compute_dict(data, ['energies',  'total_counts'],
                                      _get_energies, for_passes = 'all', energy = True)
-        # Double check what _compute_dict does for other cases
-
+    
     def _compute_circuit_statistics(self, data):
         """
         Computes all circuit statistics for the given data.
@@ -652,17 +652,28 @@ class SummaryStatistics(_proto.Protocol):
         # Wonky try statements aren't working...
         try:
             success_probabilities = data_cache['success_probabilities']
+            depths = list(success_probabilities.keys())
+            exists_sps = True
         except:
-            success_probabilities = data_cache['energies']
+            exists_sps = False
         try:
             total_counts = data_cache['total_counts']
         except:
             pass
         try:
             hamming_distance_counts = data_cache['hamming_distance_counts']
+            depths = list(success_probabilities.keys())
+            exists_hds = True
         except:
-            pass
-        depths = list(success_probabilities.keys())
+            exists_hds = False
+        try:
+            energies = data_cache['energies']
+
+            depths = list(energies.keys())
+            exists_energies = True
+        except:
+            exists_energies = False
+
 
         for i in range(num_existing, num_qtys):
 
@@ -672,181 +683,69 @@ class SummaryStatistics(_proto.Protocol):
                 {comp: _tools.NamedDict('Depth', 'int', 'Value', 'float', {depth: [] for depth in depths})
                  for comp in component_names})  # ~= "RB summary dataset"
 
-            for depth, SPs in success_probabilities.items():
-                numcircuits = len(SPs)
-                for k in range(numcircuits):
-                    ind = _np.random.randint(numcircuits)
-                    sampledSP = SPs[ind]
-                    totalcounts = total_counts[depth][ind] if finitecounts else None
-                    bcache['success_probabilities'][depth].append(sampledSP)
-                    if finitecounts:
-                        if not _np.isnan(sampledSP):
-                            bcache['success_counts'][depth].append(_np.random.binomial(totalcounts, sampledSP))
+            if exists_sps:
+                for depth, SPs in success_probabilities.items():
+                    numcircuits = len(SPs)
+                    for k in range(numcircuits):
+                        ind = _np.random.randint(numcircuits)
+                        sampledSP = SPs[ind]
+                        totalcounts = total_counts[depth][ind] if finitecounts else None
+                        bcache['success_probabilities'][depth].append(sampledSP)
+                        if finitecounts:
+                            if not _np.isnan(sampledSP):
+                                bcache['success_counts'][depth].append(_np.random.binomial(totalcounts, sampledSP))
+                            else:
+                                bcache['success_probabilities'][depth].append(sampledSP)
+                            bcache['total_counts'][depth].append(totalcounts)
                         else:
-                            bcache['success_probabilities'][depth].append(sampledSP)
+                            bcache['success_counts'][depth].append(sampledSP)
+
+                        ind = _np.random.randint(numcircuits)  # note: old code picked different random ints
+                        totalcounts = total_counts[depth][ind] if finitecounts else None  # need this if a new randint
+                        sampledE = (energies[depth][ind]+1)/2
+                        #sampledHDpdf = _np.array(sampledHDcounts) / _np.sum(sampledHDcounts)
+                        if exists_hds:
+                            if finitecounts:
+                                if not _np.isnan(sampledSP):
+                                    bcache['hamming_distance_counts'][depth].append(
+                                        list(_np.random.multinomial(totalcounts, sampledHDpdf)))
+
+                                else:
+                                    bcache['hamming_distance_counts'][depth].append(sampledHDpdf)
+                            else:
+                                bcache['hamming_distance_counts'][depth].append(sampledHDpdf)
+
+                            # replicates adjusted_success_probability function above
+                            adjSP = _np.sum([(-1 / 2)**n * sampledHDpdf[n] for n in range(len(sampledHDpdf))])
+                            bcache['adjusted_success_probabilities'][depth].append(adjSP)
+                    
+            #ENERGIES BOOTSTRAP#
+            if exists_energies:
+                for depth, Es in energies.items():
+                    #print(energies)
+                    numcircuits = len(Es)
+                    for k in range(numcircuits):
+                        ind = _np.random.randint(numcircuits)
+
+                        sampledSP = (Es[ind]+1)/2 #energies[depth][ind]
+                        totalcounts = total_counts[depth][ind]
                         bcache['total_counts'][depth].append(totalcounts)
-                    else:
-                        bcache['success_counts'][depth].append(sampledSP)
-
-                    #ind = _np.random.randint(numcircuits)  # note: old code picked different random ints
-                    #totalcounts = total_counts[depth][ind] if finitecounts else None  # need this if a new randint
-                    sampledHDcounts = hamming_distance_counts[depth][ind]
-                    sampledHDpdf = _np.array(sampledHDcounts) / _np.sum(sampledHDcounts)
-
-                    if finitecounts:
-                        if not _np.isnan(sampledSP):
-                            bcache['hamming_distance_counts'][depth].append(
-                                list(_np.random.multinomial(totalcounts, sampledHDpdf)))
+            
+            #resample at each depth
+                        if finitecounts:
+                            if not _np.isnan(sampledSP):
+                                new_sp = _np.random.binomial(totalcounts, sampledSP)/totalcounts    
+                                #reconvert to energy
+                                e = 2*new_sp-1
+                                bcache['energies'][depth].append(e)
+                            else:
+                                #return original
+                                bcache['energies'][depth].append(2*sampledSP-1)
                         else:
-                            bcache['hamming_distance_counts'][depth].append(sampledHDpdf)
-                    else:
-                        bcache['hamming_distance_counts'][depth].append(sampledHDpdf)
+                            bcache['energies'][depth].append(2*sampledSP-1)
 
-                    # replicates adjusted_success_probability function above
-                    adjSP = _np.sum([(-1 / 2)**n * sampledHDpdf[n] for n in range(len(sampledHDpdf))])
-                    bcache['adjusted_success_probabilities'][depth].append(adjSP)
 
             data_cache[key].append(bcache)
-
-
-
-class ByDepthSummaryStatistics(SummaryStatistics):
-    """
-    A protocol that computes summary statistics for data organized into by-depth circuit lists.
-
-    Parameters
-    ----------
-    depths : list or "all", optional
-        A sequence of the depths to compute summary statistics for or the special `"all"`
-        value which means "all the depths in the data".  If data being processed does not
-        contain a given value in `depths`, it is just ignored.
-
-    statistics_to_compute : tuple, optional
-        A sequence of the statistic names to compute. Allowed names are:
-       'success_counts', 'total_counts', 'hamming_distance_counts', 'success_probabilities', 'polarization',
-       'adjusted_success_probabilities', 'two_q_gate_count', 'depth', 'idealout', 'circuit_index',
-       and 'width'.
-
-    names_to_compute : tuple, optional
-        A sequence of user-defined names for the statistics in `statistics_to_compute`.  If `None`, then
-        the statistic names themselves are used.  These names are the column names produced by calling
-        `to_dataframe` on this protocol's results, so can be useful to name the computed statistics differently
-        from the statistic name itself to distinguish it from the same statistic run on other data, when you
-        want to combine data frames generated from multiple :class:`ProtocolData` objects.
-
-    custom_data_src : SuccessFailModel, optional
-        An alternate source of the data counts used to compute the desired summary statistics.  Currently
-        this can only be a :class:`SuccessFailModel`.
-
-    name : str, optional
-        The name of this protocol, also used to (by default) name the
-        results produced by this protocol.  If None, the class name will
-        be used.
-    """
-    def __init__(self, depths='all', statistics_to_compute=('polarization',), names_to_compute=None,
-                 custom_data_src=None, name=None):
-        super().__init__(name)
-        self.depths = depths
-        self.statistics_to_compute = statistics_to_compute
-        self.names_to_compute = statistics_to_compute if (names_to_compute is None) else names_to_compute
-        self.custom_data_src = custom_data_src
-        # because this *could* be a model or a qty dict (or just a string?)
-        self.auxfile_types['custom_data_src'] = 'serialized-object'
-
-    def _get_statistic_per_depth(self, statistic, data):
-        design = data.edesign
-
-        if self.custom_data_src is None:  # then use the data in `data`
-            #Note: can only take/put things ("results") in data.cache that *only* depend on the exp. design
-            # and dataset (i.e. the DataProtocol object).  Protocols must be careful of this in their implementation!
-            if statistic in self.summary_statistics:
-                if statistic not in data.cache:
-                    summary_data_dict = self._compute_summary_statistics(data)
-                    data.cache.update(summary_data_dict)
-            # Code currently doesn't work with a dscmp, so commented out.
-            # elif statistic in self.dscmp_statistics:
-            #     if statistic not in data.cache:
-            #         dscmp_data = self.compute_dscmp_data(data, dscomparator)
-            #         data.cache.update(dscmp_data)
-            elif statistic in self.circuit_statistics:
-                if statistic not in data.cache:
-                    circuit_data = self._compute_circuit_statistics(data)
-                    data.cache.update(circuit_data)
-            else:
-                raise ValueError("Invalid statistic: %s" % statistic)
-
-            statistic_per_depth = data.cache[statistic]
-
-        elif isinstance(self.custom_data_src, _SuccessFailModel):  # then simulate all the circuits in `data`
-            assert(statistic in ('success_probabilities', 'polarization')), \
-                "Only success probabilities or polarizations can be simulated!"
-            sfmodel = self.custom_data_src
-            depths = design.depths if self.depths == 'all' else self.depths
-            statistic_per_depth = _tools.NamedDict('Depth', 'int', 'Value', 'float', {depth: [] for depth in depths})
-            circuit_lists_for_depths = {depth: lst for depth, lst in zip(design.depths, design.circuit_lists)}
-
-            for depth in depths:
-                for circ in circuit_lists_for_depths[depth]:
-                    predicted_success_prob = sfmodel.probabilities(circ)[('success',)]
-                    if statistic == 'success_probabilities':
-                        statistic_per_depth[depth].append(predicted_success_prob)
-                    elif statistic == 'polarization':
-                        nQ = len(circ.line_labels)
-                        pol = (predicted_success_prob - 1 / 2**nQ) / (1 - 1 / 2**nQ)
-                        statistic_per_depth[depth].append(pol)
-
-        # Note sure this is used anywhere, so commented out for now.
-        #elif isinstance(custom_data_src, dict):  # Assume this is a "summary dataset"
-        #    summary_data = self.custom_data_src
-        #    statistic_per_depth = summary_data['success_probabilities']
-
-        else:
-            raise ValueError("Invalid 'custom_data_src' of type: %s" % str(type(self.custom_data_src)))
-
-        return statistic_per_depth
-
-    def run(self, data, memlimit=None, comm=None, dscomparator=None):
-        """
-        Run this protocol on `data`.
-
-        Parameters
-        ----------
-        results : ProtocolResults or ProtocolResultsDir
-            The input results.
-
-        memlimit : int, optional
-            A rough per-processor memory limit in bytes.
-
-        comm : mpi4py.MPI.Comm, optional
-            When not ``None``, an MPI communicator used to run this protocol
-            in parallel.
-
-        dscomparator : DataComparator
-            Special additional comparator object for
-            comparing data sets.
-
-        Returns
-        -------
-        SummaryStatisticsResults
-        """
-        design = data.edesign
-        width = len(design.qubit_labels)
-        results = SummaryStatisticsResults(data, self)
-
-        for statistic, statistic_nm in zip(self.statistics_to_compute, self.names_to_compute):
-            statistic_per_depth = self._get_statistic_per_depth(statistic, data)
-            depths = statistic_per_depth.keys() if self.depths == 'all' else \
-                filter(lambda d: d in statistic_per_depth, self.depths)
-            statistic_per_dwc = self._create_depthwidth_dict(depths, (width,), lambda: None, 'float')
-            # a nested NamedDict with indices: depth, width, circuit_index (width only has single value though)
-
-            for depth in depths:
-                percircuitdata = statistic_per_depth[depth]
-                statistic_per_dwc[depth][width] = \
-                    _tools.NamedDict('CircuitIndex', 'int', 'Value', 'float',
-                                     {i: j for i, j in enumerate(percircuitdata)})
-            results.statistics[statistic_nm] = statistic_per_dwc
-        return results
 
 
 # This is currently not used I think
