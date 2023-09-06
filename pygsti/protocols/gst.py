@@ -1812,7 +1812,10 @@ class StandardGST(_proto.Protocol):
             for i, mode in enumerate(modes):
                 printer.show_progress(i, len(modes), prefix='-- Std Practice: ', suffix=' (%s) --' % mode)
                 if not disable_checkpointing:
-                    checkpoint_path = checkpoint_path_base.with_stem(f"{checkpoint_path_base.stem}_{mode.replace(' ', '_')}")
+                    #pre python 3.9 compatible version.
+                    checkpoint_path = checkpoint_path_base.with_name(f"{checkpoint_path_base.stem}_{mode.replace(' ', '_')}")
+                    #The line below only works for python 3.9+
+                    #checkpoint_path = checkpoint_path_base.with_stem(f"{checkpoint_path_base.stem}_{mode.replace(' ', '_')}")
                 if mode == "Target":
                     if target_model is None:
                         raise ValueError(("Must specify `target_model` when creating this StandardGST, since one could"
