@@ -919,7 +919,7 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
     def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None, layer_sampling='mixed1q2q',
                  sampler='edgegrab', samplerargs=[0.25, ],
                  addlocal=False, lsargs=(),
-                 citerations=20, compilerargs=(), idle_name='Gc0', partitioned=False, descriptor='A BiRB experiment',
+                 descriptor='A BiRB experiment',
                  add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
 
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
@@ -939,10 +939,8 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
 
             args_list = [(pspec, clifford_compilations, l)] * circuits_per_depth
-            kwargs_list = [dict(idle_name=idle_name, qubit_labels=qubit_labels, layer_sampling=layer_sampling, sampler=sampler, samplerargs=samplerargs,
+            kwargs_list = [dict(qubit_labels=qubit_labels, layer_sampling=layer_sampling, sampler=sampler, samplerargs=samplerargs,
                                 addlocal=addlocal, lsargs=lsargs,
-                                citerations=citerations, compilerargs=compilerargs,
-                                partitioned=partitioned,
                                 seed=lseed + i) for i in range(circuits_per_depth)]
             #results = [_rc.create_direct_rb_circuit(*(args_list[0]), **(kwargs_list[0]))]  # num_processes == 1 case
             results = _tools.mptools.starmap_with_kwargs(_rc.create_binary_rb_circuit, circuits_per_depth,
@@ -961,18 +959,16 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
             signs.append(signs_at_depth)
 
         self._init_foundation(depths, circuit_lists, measurements, signs, circuits_per_depth, qubit_labels, layer_sampling,
-                              sampler, samplerargs, idle_name, addlocal, lsargs, citerations, compilerargs, partitioned, descriptor,
+                              sampler, samplerargs, addlocal, lsargs, descriptor,
                               add_default_protocol)
 
     def _init_foundation(self, depths, circuit_lists, measurements, signs, circuits_per_depth, qubit_labels, layer_sampling,
-                         sampler, samplerargs, idle_name, addlocal, lsargs, citerations, compilerargs, partitioned, descriptor,
+                         sampler, samplerargs,  addlocal, lsargs, descriptor,
                          add_default_protocol):
         super().__init__(depths, circuit_lists, signs, qubit_labels, remove_duplicates=False)
         self.measurements = measurements
         self.signs = signs
         self.circuits_per_depth = circuits_per_depth
-        self.citerations = citerations
-        self.compilerargs = compilerargs
         self.descriptor = descriptor
         self.layer_sampling = layer_sampling
         if isinstance(sampler, str):
@@ -982,8 +978,7 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
         self.samplerargs = samplerargs
         self.addlocal = addlocal
         self.lsargs = lsargs
-        self.partitioned = partitioned
-        self.idle_name = idle_name
+
 
         if add_default_protocol:
             if randomizeout:
@@ -1361,11 +1356,11 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
             a = self.fits[fitkey].estimates['a']
             b = self.fits[fitkey].estimates['b']
             p = self.fits[fitkey].estimates['p']
-            #_plt.plot(lengths, a + b * p**lengths,
-            #          label='Fit, r = {:.2} +/- {:.1}'.format(self.fits[fitkey].estimates['r'],
-            #                                                  self.fits[fitkey].stds['r']))
             _plt.plot(lengths, a + b * p**lengths,
-                      label='Fit, r = {:.2}'.format(self.fits[fitkey].estimates['r']))
+                      label='Fit, r = {:.2} +/- {:.1}'.format(self.fits[fitkey].estimates['r'],
+                                                              self.fits[fitkey].stds['r']))
+            #_plt.plot(lengths, a + b * p**lengths,
+            #          label='Fit, r = {:.2}'.format(self.fits[fitkey].estimates['r']))
 
         if success_probabilities:
             all_success_probs_by_depth = [data_per_depth[depth] for depth in self.depths]
