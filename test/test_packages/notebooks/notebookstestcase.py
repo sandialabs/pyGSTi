@@ -1,10 +1,9 @@
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
-
+import pytest
 import nbformat
 from nbconvert.preprocessors import ExecutePreprocessor
-from nose.plugins.attrib import attr
 
 _DEFAULT_IPYNB_VERSION = 4
 _DEFAULT_TIMEOUT = 60 * 20  # 20 minutes
@@ -48,7 +47,7 @@ def _make_test(nb_path, tmp_path, root_path):
     workdir = tmp_path / rel_path.parent
     workdir.mkdir(parents=True, exist_ok=True)
 
-    @attr(description="Running notebook {}".format(rel_path))
+    @pytest.mark.parameterize(ids=["Running notebook {}".format(rel_path)])
     def test_wrapper():
         run_notebook(nb_path, workdir)
     return test_wrapper

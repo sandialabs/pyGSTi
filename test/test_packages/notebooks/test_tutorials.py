@@ -17,6 +17,15 @@ _TUTORIAL_FILES = [
 
 
 def test_tutorials():
+    """
+    WARNING: this is a factory function that generates tests for PyTest.
+    Unfortunately, that functionality was removed in PyTest 4.1. Quoting from the release notes ...
+
+        issue #3079: Removed support for yield tests - they are fundamentally broken because they
+        don’t support fixtures properly since collection and test execution were separated.
+
+    TODO: redesign this part of the testing infrastructure for modern pytest.
+    """
     logging.getLogger('traitlets').setLevel(logging.CRITICAL)
     with TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
