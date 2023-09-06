@@ -1,0 +1,5579 @@
+{
+    "module": "pygsti.protocols.gst",
+    "class": "GateSetTomographyCheckpoint",
+    "version": 0,
+    "mdl_list": [
+        {
+            "module": "pygsti.models.explicitmodel",
+            "class": "ExplicitOpModel",
+            "version": 0,
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        "Q0"
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "parameter_labels": [
+                [
+                    "rho0",
+                    "VecElement 1"
+                ],
+                [
+                    "rho0",
+                    "VecElement 2"
+                ],
+                [
+                    "rho0",
+                    "VecElement 3"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(0)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(1)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(2)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(3)"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,3"
+                ]
+            ],
+            "parameter_bounds": null,
+            "basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": false,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "ExplicitStateSpace",
+                    "version": 0,
+                    "labels": [
+                        [
+                            "Q0"
+                        ]
+                    ],
+                    "unitary_space_dimensions": [
+                        [
+                            2
+                        ]
+                    ],
+                    "types": [
+                        [
+                            "Q"
+                        ]
+                    ]
+                }
+            },
+            "default_gate_type": "full",
+            "default_prep_type": [
+                "full"
+            ],
+            "default_povm_type": [
+                "full"
+            ],
+            "default_instrument_type": [
+                "full"
+            ],
+            "prep_prefix": "rho",
+            "effect_prefix": "E",
+            "gate_prefix": "G",
+            "povm_prefix": "M",
+            "instrument_prefix": "I",
+            "evotype": "densitymx",
+            "simulator": {
+                "module": "pygsti.forwardsims.matrixforwardsim",
+                "class": "MatrixForwardSimulator",
+                "version": 0,
+                "mode": "time_independent"
+            },
+            "default_gauge_group": {
+                "module": "pygsti.models.gaugegroup",
+                "class": "TPGaugeGroup",
+                "version": 0,
+                "state_space_dimension": 4,
+                "evotype": "densitymx",
+                "basis": {
+                    "module": "pygsti.baseobjs.basis",
+                    "class": "BuiltinBasis",
+                    "version": 0,
+                    "name": "pp",
+                    "sparse": false,
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    }
+                }
+            },
+            "parameter_interposer": null,
+            "modelmembers": {
+                "0": {
+                    "module": "pygsti.modelmembers.states.tpstate",
+                    "class": "TPState",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        0,
+                        1,
+                        2
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "VecElement 1",
+                        "VecElement 2",
+                        "VecElement 3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_superket_vector": [
+                        0.7071067811865476,
+                        0.008907640237666102,
+                        0.000740801199718135,
+                        0.6666233201112575
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "preps"
+                    ],
+                    "memberdict_labels": [
+                        "rho0"
+                    ]
+                },
+                "1": {
+                    "module": "pygsti.modelmembers.states.fullstate",
+                    "class": "FullState",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "VecElement Re(0)",
+                        "VecElement Re(1)",
+                        "VecElement Re(2)",
+                        "VecElement Re(3)"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_superket_vector": [
+                        0.7059611456743841,
+                        0.0055080282716081065,
+                        0.00413514375014575,
+                        0.6883345083946529
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    }
+                },
+                "2": {
+                    "module": "pygsti.modelmembers.povms.fulleffect",
+                    "class": "FullPOVMEffect",
+                    "submembers": [
+                        1
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": null,
+                    "parameter_bounds": null
+                },
+                "3": {
+                    "module": "pygsti.modelmembers.povms.complementeffect",
+                    "class": "ComplementPOVMEffect",
+                    "submembers": [
+                        2
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": null,
+                    "parameter_bounds": null,
+                    "identity_vector": [
+                        1.4142135623730951,
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "4": {
+                    "module": "pygsti.modelmembers.povms.tppovm",
+                    "class": "TPPOVM",
+                    "submembers": [
+                        2,
+                        3
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ],
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": [
+                        "VecElement Re(0)",
+                        "VecElement Re(1)",
+                        "VecElement Re(2)",
+                        "VecElement Re(3)"
+                    ],
+                    "parameter_bounds": null,
+                    "effect_labels": [
+                        "0",
+                        "1"
+                    ],
+                    "memberdict_types": [
+                        "povms"
+                    ],
+                    "memberdict_labels": [
+                        "Mdefault"
+                    ]
+                },
+                "5": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        7,
+                        8,
+                        9,
+                        10,
+                        11,
+                        12,
+                        13,
+                        14,
+                        15,
+                        16,
+                        17,
+                        18
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0,
+                            0.0,
+                            0.0,
+                            3.043960907270858e-17
+                        ],
+                        [
+                            -0.007588068565044773,
+                            0.9340002803124893,
+                            -0.06810579182869615,
+                            0.031168433174346054
+                        ],
+                        [
+                            -0.01871182438431956,
+                            0.0008601388906665628,
+                            0.9511551095444766,
+                            0.011060993170475061
+                        ],
+                        [
+                            -0.01312024212217139,
+                            -0.004631368711556457,
+                            -0.06486545133360086,
+                            0.9362304583581502
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gi"
+                    ]
+                },
+                "6": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        19,
+                        20,
+                        21,
+                        22,
+                        23,
+                        24,
+                        25,
+                        26,
+                        27,
+                        28,
+                        29,
+                        30
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0000000000000002,
+                            0.0,
+                            5.281075224346595e-17,
+                            -2.237114317075737e-17
+                        ],
+                        [
+                            0.011512085301339547,
+                            0.9223997573278147,
+                            -0.049866336075668864,
+                            -0.026296213304682525
+                        ],
+                        [
+                            0.006893555135057745,
+                            -0.014141198194897783,
+                            -0.02463859916183402,
+                            -0.9540659700520064
+                        ],
+                        [
+                            0.005093232259310491,
+                            0.0055858110377497204,
+                            0.9387885000375874,
+                            0.010795596140615824
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gx"
+                    ]
+                },
+                "7": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        31,
+                        32,
+                        33,
+                        34,
+                        35,
+                        36,
+                        37,
+                        38,
+                        39,
+                        40,
+                        41,
+                        42
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0000000000000002,
+                            -5.281075224346595e-17,
+                            0.0,
+                            -2.237114317075737e-17
+                        ],
+                        [
+                            -0.011516458245261907,
+                            -0.004333938237009687,
+                            -0.0579332140067751,
+                            0.9497564731851559
+                        ],
+                        [
+                            -0.010562298372496927,
+                            -0.027972317796210476,
+                            0.962230333547872,
+                            -0.006687439136332337
+                        ],
+                        [
+                            0.005176243087682291,
+                            -0.9627134552320351,
+                            -0.01732122242391954,
+                            0.008185186251914897
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gy"
+                    ]
+                }
+            }
+        },
+        {
+            "module": "pygsti.models.explicitmodel",
+            "class": "ExplicitOpModel",
+            "version": 0,
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        "Q0"
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "parameter_labels": [
+                [
+                    "rho0",
+                    "VecElement 1"
+                ],
+                [
+                    "rho0",
+                    "VecElement 2"
+                ],
+                [
+                    "rho0",
+                    "VecElement 3"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(0)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(1)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(2)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(3)"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,3"
+                ]
+            ],
+            "parameter_bounds": null,
+            "basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": false,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "ExplicitStateSpace",
+                    "version": 0,
+                    "labels": [
+                        [
+                            "Q0"
+                        ]
+                    ],
+                    "unitary_space_dimensions": [
+                        [
+                            2
+                        ]
+                    ],
+                    "types": [
+                        [
+                            "Q"
+                        ]
+                    ]
+                }
+            },
+            "default_gate_type": "full",
+            "default_prep_type": [
+                "full"
+            ],
+            "default_povm_type": [
+                "full"
+            ],
+            "default_instrument_type": [
+                "full"
+            ],
+            "prep_prefix": "rho",
+            "effect_prefix": "E",
+            "gate_prefix": "G",
+            "povm_prefix": "M",
+            "instrument_prefix": "I",
+            "evotype": "densitymx",
+            "simulator": {
+                "module": "pygsti.forwardsims.matrixforwardsim",
+                "class": "MatrixForwardSimulator",
+                "version": 0,
+                "mode": "time_independent"
+            },
+            "default_gauge_group": {
+                "module": "pygsti.models.gaugegroup",
+                "class": "TPGaugeGroup",
+                "version": 0,
+                "state_space_dimension": 4,
+                "evotype": "densitymx",
+                "basis": {
+                    "module": "pygsti.baseobjs.basis",
+                    "class": "BuiltinBasis",
+                    "version": 0,
+                    "name": "pp",
+                    "sparse": false,
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    }
+                }
+            },
+            "parameter_interposer": null,
+            "modelmembers": {
+                "0": {
+                    "module": "pygsti.modelmembers.states.tpstate",
+                    "class": "TPState",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        0,
+                        1,
+                        2
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "VecElement 1",
+                        "VecElement 2",
+                        "VecElement 3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_superket_vector": [
+                        0.7071067811865476,
+                        0.008907640237666102,
+                        0.000740801199718135,
+                        0.6666233201112575
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "preps"
+                    ],
+                    "memberdict_labels": [
+                        "rho0"
+                    ]
+                },
+                "1": {
+                    "module": "pygsti.modelmembers.states.fullstate",
+                    "class": "FullState",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "VecElement Re(0)",
+                        "VecElement Re(1)",
+                        "VecElement Re(2)",
+                        "VecElement Re(3)"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_superket_vector": [
+                        0.7059611456743841,
+                        0.0055080282716081065,
+                        0.00413514375014575,
+                        0.6883345083946529
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    }
+                },
+                "2": {
+                    "module": "pygsti.modelmembers.povms.fulleffect",
+                    "class": "FullPOVMEffect",
+                    "submembers": [
+                        1
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": null,
+                    "parameter_bounds": null
+                },
+                "3": {
+                    "module": "pygsti.modelmembers.povms.complementeffect",
+                    "class": "ComplementPOVMEffect",
+                    "submembers": [
+                        2
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": null,
+                    "parameter_bounds": null,
+                    "identity_vector": [
+                        1.4142135623730951,
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "4": {
+                    "module": "pygsti.modelmembers.povms.tppovm",
+                    "class": "TPPOVM",
+                    "submembers": [
+                        2,
+                        3
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ],
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": [
+                        "VecElement Re(0)",
+                        "VecElement Re(1)",
+                        "VecElement Re(2)",
+                        "VecElement Re(3)"
+                    ],
+                    "parameter_bounds": null,
+                    "effect_labels": [
+                        "0",
+                        "1"
+                    ],
+                    "memberdict_types": [
+                        "povms"
+                    ],
+                    "memberdict_labels": [
+                        "Mdefault"
+                    ]
+                },
+                "5": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        7,
+                        8,
+                        9,
+                        10,
+                        11,
+                        12,
+                        13,
+                        14,
+                        15,
+                        16,
+                        17,
+                        18
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0,
+                            0.0,
+                            0.0,
+                            3.043960907270858e-17
+                        ],
+                        [
+                            -0.007588068565044773,
+                            0.9340002803124893,
+                            -0.06810579182869615,
+                            0.031168433174346054
+                        ],
+                        [
+                            -0.01871182438431956,
+                            0.0008601388906665628,
+                            0.9511551095444766,
+                            0.011060993170475061
+                        ],
+                        [
+                            -0.01312024212217139,
+                            -0.004631368711556457,
+                            -0.06486545133360086,
+                            0.9362304583581502
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gi"
+                    ]
+                },
+                "6": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        19,
+                        20,
+                        21,
+                        22,
+                        23,
+                        24,
+                        25,
+                        26,
+                        27,
+                        28,
+                        29,
+                        30
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0000000000000002,
+                            0.0,
+                            5.281075224346595e-17,
+                            -2.237114317075737e-17
+                        ],
+                        [
+                            0.011512085301339547,
+                            0.9223997573278147,
+                            -0.049866336075668864,
+                            -0.026296213304682525
+                        ],
+                        [
+                            0.006893555135057745,
+                            -0.014141198194897783,
+                            -0.02463859916183402,
+                            -0.9540659700520064
+                        ],
+                        [
+                            0.005093232259310491,
+                            0.0055858110377497204,
+                            0.9387885000375874,
+                            0.010795596140615824
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gx"
+                    ]
+                },
+                "7": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        31,
+                        32,
+                        33,
+                        34,
+                        35,
+                        36,
+                        37,
+                        38,
+                        39,
+                        40,
+                        41,
+                        42
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0000000000000002,
+                            -5.281075224346595e-17,
+                            0.0,
+                            -2.237114317075737e-17
+                        ],
+                        [
+                            -0.011516458245261907,
+                            -0.004333938237009687,
+                            -0.0579332140067751,
+                            0.9497564731851559
+                        ],
+                        [
+                            -0.010562298372496927,
+                            -0.027972317796210476,
+                            0.962230333547872,
+                            -0.006687439136332337
+                        ],
+                        [
+                            0.005176243087682291,
+                            -0.9627134552320351,
+                            -0.01732122242391954,
+                            0.008185186251914897
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gy"
+                    ]
+                }
+            }
+        },
+        {
+            "module": "pygsti.models.explicitmodel",
+            "class": "ExplicitOpModel",
+            "version": 0,
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        "Q0"
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "parameter_labels": [
+                [
+                    "rho0",
+                    "VecElement 1"
+                ],
+                [
+                    "rho0",
+                    "VecElement 2"
+                ],
+                [
+                    "rho0",
+                    "VecElement 3"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(0)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(1)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(2)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(3)"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,3"
+                ]
+            ],
+            "parameter_bounds": null,
+            "basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": false,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "ExplicitStateSpace",
+                    "version": 0,
+                    "labels": [
+                        [
+                            "Q0"
+                        ]
+                    ],
+                    "unitary_space_dimensions": [
+                        [
+                            2
+                        ]
+                    ],
+                    "types": [
+                        [
+                            "Q"
+                        ]
+                    ]
+                }
+            },
+            "default_gate_type": "full",
+            "default_prep_type": [
+                "full"
+            ],
+            "default_povm_type": [
+                "full"
+            ],
+            "default_instrument_type": [
+                "full"
+            ],
+            "prep_prefix": "rho",
+            "effect_prefix": "E",
+            "gate_prefix": "G",
+            "povm_prefix": "M",
+            "instrument_prefix": "I",
+            "evotype": "densitymx",
+            "simulator": {
+                "module": "pygsti.forwardsims.matrixforwardsim",
+                "class": "MatrixForwardSimulator",
+                "version": 0,
+                "mode": "time_independent"
+            },
+            "default_gauge_group": {
+                "module": "pygsti.models.gaugegroup",
+                "class": "TPGaugeGroup",
+                "version": 0,
+                "state_space_dimension": 4,
+                "evotype": "densitymx",
+                "basis": {
+                    "module": "pygsti.baseobjs.basis",
+                    "class": "BuiltinBasis",
+                    "version": 0,
+                    "name": "pp",
+                    "sparse": false,
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    }
+                }
+            },
+            "parameter_interposer": null,
+            "modelmembers": {
+                "0": {
+                    "module": "pygsti.modelmembers.states.tpstate",
+                    "class": "TPState",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        0,
+                        1,
+                        2
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "VecElement 1",
+                        "VecElement 2",
+                        "VecElement 3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_superket_vector": [
+                        0.7071067811865476,
+                        0.01121469430158314,
+                        0.0029325359756650887,
+                        0.6663503875005211
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "preps"
+                    ],
+                    "memberdict_labels": [
+                        "rho0"
+                    ]
+                },
+                "1": {
+                    "module": "pygsti.modelmembers.states.fullstate",
+                    "class": "FullState",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "VecElement Re(0)",
+                        "VecElement Re(1)",
+                        "VecElement Re(2)",
+                        "VecElement Re(3)"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_superket_vector": [
+                        0.7057666545818969,
+                        0.004827992307144765,
+                        0.0035243256276947764,
+                        0.6881179008417999
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    }
+                },
+                "2": {
+                    "module": "pygsti.modelmembers.povms.fulleffect",
+                    "class": "FullPOVMEffect",
+                    "submembers": [
+                        1
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": null,
+                    "parameter_bounds": null
+                },
+                "3": {
+                    "module": "pygsti.modelmembers.povms.complementeffect",
+                    "class": "ComplementPOVMEffect",
+                    "submembers": [
+                        2
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": null,
+                    "parameter_bounds": null,
+                    "identity_vector": [
+                        1.4142135623730951,
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "4": {
+                    "module": "pygsti.modelmembers.povms.tppovm",
+                    "class": "TPPOVM",
+                    "submembers": [
+                        2,
+                        3
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ],
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": [
+                        "VecElement Re(0)",
+                        "VecElement Re(1)",
+                        "VecElement Re(2)",
+                        "VecElement Re(3)"
+                    ],
+                    "parameter_bounds": null,
+                    "effect_labels": [
+                        "0",
+                        "1"
+                    ],
+                    "memberdict_types": [
+                        "povms"
+                    ],
+                    "memberdict_labels": [
+                        "Mdefault"
+                    ]
+                },
+                "5": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        7,
+                        8,
+                        9,
+                        10,
+                        11,
+                        12,
+                        13,
+                        14,
+                        15,
+                        16,
+                        17,
+                        18
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0,
+                            0.0,
+                            0.0,
+                            3.043960907270858e-17
+                        ],
+                        [
+                            -0.005295021853170602,
+                            0.9388824312684321,
+                            -0.06486171883828787,
+                            0.04109218112759669
+                        ],
+                        [
+                            -0.01778466396717046,
+                            0.0055465763580135365,
+                            0.9495203751291225,
+                            0.008985082802925606
+                        ],
+                        [
+                            -0.015115629311254333,
+                            -0.0024557645764080732,
+                            -0.0648932949537214,
+                            0.9391473833352557
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gi"
+                    ]
+                },
+                "6": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        19,
+                        20,
+                        21,
+                        22,
+                        23,
+                        24,
+                        25,
+                        26,
+                        27,
+                        28,
+                        29,
+                        30
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0000000000000002,
+                            0.0,
+                            5.281075224346595e-17,
+                            -2.237114317075737e-17
+                        ],
+                        [
+                            0.010021016271453121,
+                            0.9257014919647476,
+                            -0.04848711565414112,
+                            -0.02477577234128513
+                        ],
+                        [
+                            0.005111730101742946,
+                            -0.011079835569252013,
+                            -0.026935506727431634,
+                            -0.9538128487486627
+                        ],
+                        [
+                            0.004611102123618817,
+                            0.003160346489062049,
+                            0.938770797996726,
+                            0.009107144132588894
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gx"
+                    ]
+                },
+                "7": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        31,
+                        32,
+                        33,
+                        34,
+                        35,
+                        36,
+                        37,
+                        38,
+                        39,
+                        40,
+                        41,
+                        42
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0000000000000002,
+                            -5.281075224346595e-17,
+                            0.0,
+                            -2.237114317075737e-17
+                        ],
+                        [
+                            -0.013599144472655244,
+                            -0.002082096133973528,
+                            -0.05652810096672588,
+                            0.9495578485356523
+                        ],
+                        [
+                            -0.012235283998885302,
+                            -0.02368715446895442,
+                            0.9585911257980898,
+                            -0.008905265119419461
+                        ],
+                        [
+                            0.0056978860921360385,
+                            -0.9626178380201975,
+                            -0.015764845622345373,
+                            0.009246021230712212
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gy"
+                    ]
+                }
+            }
+        },
+        {
+            "module": "pygsti.models.explicitmodel",
+            "class": "ExplicitOpModel",
+            "version": 0,
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        "Q0"
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "parameter_labels": [
+                [
+                    "rho0",
+                    "VecElement 1"
+                ],
+                [
+                    "rho0",
+                    "VecElement 2"
+                ],
+                [
+                    "rho0",
+                    "VecElement 3"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(0)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(1)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(2)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(3)"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,3"
+                ]
+            ],
+            "parameter_bounds": null,
+            "basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": false,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "ExplicitStateSpace",
+                    "version": 0,
+                    "labels": [
+                        [
+                            "Q0"
+                        ]
+                    ],
+                    "unitary_space_dimensions": [
+                        [
+                            2
+                        ]
+                    ],
+                    "types": [
+                        [
+                            "Q"
+                        ]
+                    ]
+                }
+            },
+            "default_gate_type": "full",
+            "default_prep_type": [
+                "full"
+            ],
+            "default_povm_type": [
+                "full"
+            ],
+            "default_instrument_type": [
+                "full"
+            ],
+            "prep_prefix": "rho",
+            "effect_prefix": "E",
+            "gate_prefix": "G",
+            "povm_prefix": "M",
+            "instrument_prefix": "I",
+            "evotype": "densitymx",
+            "simulator": {
+                "module": "pygsti.forwardsims.matrixforwardsim",
+                "class": "MatrixForwardSimulator",
+                "version": 0,
+                "mode": "time_independent"
+            },
+            "default_gauge_group": {
+                "module": "pygsti.models.gaugegroup",
+                "class": "TPGaugeGroup",
+                "version": 0,
+                "state_space_dimension": 4,
+                "evotype": "densitymx",
+                "basis": {
+                    "module": "pygsti.baseobjs.basis",
+                    "class": "BuiltinBasis",
+                    "version": 0,
+                    "name": "pp",
+                    "sparse": false,
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    }
+                }
+            },
+            "parameter_interposer": null,
+            "modelmembers": {
+                "0": {
+                    "module": "pygsti.modelmembers.states.tpstate",
+                    "class": "TPState",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        0,
+                        1,
+                        2
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "VecElement 1",
+                        "VecElement 2",
+                        "VecElement 3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_superket_vector": [
+                        0.7071067811865476,
+                        0.010086296381997697,
+                        0.0036444189327891866,
+                        0.6659680919009491
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "preps"
+                    ],
+                    "memberdict_labels": [
+                        "rho0"
+                    ]
+                },
+                "1": {
+                    "module": "pygsti.modelmembers.states.fullstate",
+                    "class": "FullState",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "VecElement Re(0)",
+                        "VecElement Re(1)",
+                        "VecElement Re(2)",
+                        "VecElement Re(3)"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_superket_vector": [
+                        0.705690751858214,
+                        0.004357552374121012,
+                        0.0044374266758731495,
+                        0.6876953305153076
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    }
+                },
+                "2": {
+                    "module": "pygsti.modelmembers.povms.fulleffect",
+                    "class": "FullPOVMEffect",
+                    "submembers": [
+                        1
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": null,
+                    "parameter_bounds": null
+                },
+                "3": {
+                    "module": "pygsti.modelmembers.povms.complementeffect",
+                    "class": "ComplementPOVMEffect",
+                    "submembers": [
+                        2
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": null,
+                    "parameter_bounds": null,
+                    "identity_vector": [
+                        1.4142135623730951,
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "4": {
+                    "module": "pygsti.modelmembers.povms.tppovm",
+                    "class": "TPPOVM",
+                    "submembers": [
+                        2,
+                        3
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ],
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": [
+                        "VecElement Re(0)",
+                        "VecElement Re(1)",
+                        "VecElement Re(2)",
+                        "VecElement Re(3)"
+                    ],
+                    "parameter_bounds": null,
+                    "effect_labels": [
+                        "0",
+                        "1"
+                    ],
+                    "memberdict_types": [
+                        "povms"
+                    ],
+                    "memberdict_labels": [
+                        "Mdefault"
+                    ]
+                },
+                "5": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        7,
+                        8,
+                        9,
+                        10,
+                        11,
+                        12,
+                        13,
+                        14,
+                        15,
+                        16,
+                        17,
+                        18
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0,
+                            0.0,
+                            0.0,
+                            3.043960907270858e-17
+                        ],
+                        [
+                            -0.004899049406770908,
+                            0.9401593752594555,
+                            -0.06176350006657945,
+                            0.04035466988271526
+                        ],
+                        [
+                            -0.018517406950748827,
+                            0.005525529626807681,
+                            0.9479320917391063,
+                            0.010251973787649672
+                        ],
+                        [
+                            -0.01343094842734434,
+                            -0.004920351006473475,
+                            -0.06200740227292601,
+                            0.9376899344910509
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gi"
+                    ]
+                },
+                "6": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        19,
+                        20,
+                        21,
+                        22,
+                        23,
+                        24,
+                        25,
+                        26,
+                        27,
+                        28,
+                        29,
+                        30
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0000000000000002,
+                            0.0,
+                            5.281075224346595e-17,
+                            -2.237114317075737e-17
+                        ],
+                        [
+                            0.009683832981883429,
+                            0.9312800784085993,
+                            -0.04844173036620451,
+                            -0.024320884751259257
+                        ],
+                        [
+                            0.005072479910088903,
+                            -0.01293475932004165,
+                            -0.026316603495114724,
+                            -0.9544696029699806
+                        ],
+                        [
+                            0.005238200391293213,
+                            0.003565605482262152,
+                            0.9399136680485661,
+                            0.008193100099588915
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gx"
+                    ]
+                },
+                "7": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        31,
+                        32,
+                        33,
+                        34,
+                        35,
+                        36,
+                        37,
+                        38,
+                        39,
+                        40,
+                        41,
+                        42
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0000000000000002,
+                            -5.281075224346595e-17,
+                            0.0,
+                            -2.237114317075737e-17
+                        ],
+                        [
+                            -0.01296098547447907,
+                            -0.0025324810886101006,
+                            -0.055896175790964966,
+                            0.9495789701919621
+                        ],
+                        [
+                            -0.012108114054793643,
+                            -0.023471986306912322,
+                            0.9537062875619301,
+                            -0.007059478230784143
+                        ],
+                        [
+                            0.0058537880720633964,
+                            -0.9622983475973496,
+                            -0.015755194845876407,
+                            0.010142149745368955
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gy"
+                    ]
+                }
+            }
+        },
+        {
+            "module": "pygsti.models.explicitmodel",
+            "class": "ExplicitOpModel",
+            "version": 0,
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        "Q0"
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "parameter_labels": [
+                [
+                    "rho0",
+                    "VecElement 1"
+                ],
+                [
+                    "rho0",
+                    "VecElement 2"
+                ],
+                [
+                    "rho0",
+                    "VecElement 3"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(0)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(1)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(2)"
+                ],
+                [
+                    "Mdefault",
+                    "VecElement Re(3)"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gi",
+                    "MxElement 3,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gx",
+                    "MxElement 3,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 1,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 2,3"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,0"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,1"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,2"
+                ],
+                [
+                    "Gy",
+                    "MxElement 3,3"
+                ]
+            ],
+            "parameter_bounds": null,
+            "basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": false,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "ExplicitStateSpace",
+                    "version": 0,
+                    "labels": [
+                        [
+                            "Q0"
+                        ]
+                    ],
+                    "unitary_space_dimensions": [
+                        [
+                            2
+                        ]
+                    ],
+                    "types": [
+                        [
+                            "Q"
+                        ]
+                    ]
+                }
+            },
+            "default_gate_type": "full",
+            "default_prep_type": [
+                "full"
+            ],
+            "default_povm_type": [
+                "full"
+            ],
+            "default_instrument_type": [
+                "full"
+            ],
+            "prep_prefix": "rho",
+            "effect_prefix": "E",
+            "gate_prefix": "G",
+            "povm_prefix": "M",
+            "instrument_prefix": "I",
+            "evotype": "densitymx",
+            "simulator": {
+                "module": "pygsti.forwardsims.matrixforwardsim",
+                "class": "MatrixForwardSimulator",
+                "version": 0,
+                "mode": "time_independent"
+            },
+            "default_gauge_group": {
+                "module": "pygsti.models.gaugegroup",
+                "class": "TPGaugeGroup",
+                "version": 0,
+                "state_space_dimension": 4,
+                "evotype": "densitymx",
+                "basis": {
+                    "module": "pygsti.baseobjs.basis",
+                    "class": "BuiltinBasis",
+                    "version": 0,
+                    "name": "pp",
+                    "sparse": false,
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    }
+                }
+            },
+            "parameter_interposer": null,
+            "modelmembers": {
+                "0": {
+                    "module": "pygsti.modelmembers.states.tpstate",
+                    "class": "TPState",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        0,
+                        1,
+                        2
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "VecElement 1",
+                        "VecElement 2",
+                        "VecElement 3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_superket_vector": [
+                        0.7071067811865476,
+                        0.009706290325786873,
+                        0.003301689528583432,
+                        0.6660296922424975
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "preps"
+                    ],
+                    "memberdict_labels": [
+                        "rho0"
+                    ]
+                },
+                "1": {
+                    "module": "pygsti.modelmembers.states.fullstate",
+                    "class": "FullState",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "VecElement Re(0)",
+                        "VecElement Re(1)",
+                        "VecElement Re(2)",
+                        "VecElement Re(3)"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_superket_vector": [
+                        0.7057382614259865,
+                        0.004870453702419491,
+                        0.004906042419048637,
+                        0.6877393531313689
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    }
+                },
+                "2": {
+                    "module": "pygsti.modelmembers.povms.fulleffect",
+                    "class": "FullPOVMEffect",
+                    "submembers": [
+                        1
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": null,
+                    "parameter_bounds": null
+                },
+                "3": {
+                    "module": "pygsti.modelmembers.povms.complementeffect",
+                    "class": "ComplementPOVMEffect",
+                    "submembers": [
+                        2
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": null,
+                    "parameter_bounds": null,
+                    "identity_vector": [
+                        1.4142135623730951,
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "4": {
+                    "module": "pygsti.modelmembers.povms.tppovm",
+                    "class": "TPPOVM",
+                    "submembers": [
+                        2,
+                        3
+                    ],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        3,
+                        4,
+                        5,
+                        6
+                    ],
+                    "relative_submember_parameter_indices": [
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ],
+                        [
+                            0,
+                            1,
+                            2,
+                            3
+                        ]
+                    ],
+                    "parameter_labels": [
+                        "VecElement Re(0)",
+                        "VecElement Re(1)",
+                        "VecElement Re(2)",
+                        "VecElement Re(3)"
+                    ],
+                    "parameter_bounds": null,
+                    "effect_labels": [
+                        "0",
+                        "1"
+                    ],
+                    "memberdict_types": [
+                        "povms"
+                    ],
+                    "memberdict_labels": [
+                        "Mdefault"
+                    ]
+                },
+                "5": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        7,
+                        8,
+                        9,
+                        10,
+                        11,
+                        12,
+                        13,
+                        14,
+                        15,
+                        16,
+                        17,
+                        18
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0,
+                            0.0,
+                            0.0,
+                            3.043960907270858e-17
+                        ],
+                        [
+                            -0.005718271130725015,
+                            0.9411983867036389,
+                            -0.06117276637478225,
+                            0.039781031096706
+                        ],
+                        [
+                            -0.017596592143784312,
+                            0.005295658987131583,
+                            0.9476932776239376,
+                            0.011060872608502022
+                        ],
+                        [
+                            -0.014146218357085965,
+                            -0.004021175064062178,
+                            -0.06294554476243754,
+                            0.9375203117913657
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gi"
+                    ]
+                },
+                "6": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        19,
+                        20,
+                        21,
+                        22,
+                        23,
+                        24,
+                        25,
+                        26,
+                        27,
+                        28,
+                        29,
+                        30
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0000000000000002,
+                            0.0,
+                            5.281075224346595e-17,
+                            -2.237114317075737e-17
+                        ],
+                        [
+                            0.009691460283528793,
+                            0.9324910473968505,
+                            -0.04560249451595831,
+                            -0.022740916001838737
+                        ],
+                        [
+                            0.005290692935819502,
+                            -0.013035996381417005,
+                            -0.026318682534342663,
+                            -0.9545669922459162
+                        ],
+                        [
+                            0.005169199516856674,
+                            0.005177373724208135,
+                            0.9403019752577627,
+                            0.008695209848225275
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gx"
+                    ]
+                },
+                "7": {
+                    "module": "pygsti.modelmembers.operations.fulltpop",
+                    "class": "FullTPOp",
+                    "submembers": [],
+                    "state_space": {
+                        "module": "pygsti.baseobjs.statespace",
+                        "class": "ExplicitStateSpace",
+                        "version": 0,
+                        "labels": [
+                            [
+                                "Q0"
+                            ]
+                        ],
+                        "unitary_space_dimensions": [
+                            [
+                                2
+                            ]
+                        ],
+                        "types": [
+                            [
+                                "Q"
+                            ]
+                        ]
+                    },
+                    "evotype": "densitymx",
+                    "model_parameter_indices": [
+                        31,
+                        32,
+                        33,
+                        34,
+                        35,
+                        36,
+                        37,
+                        38,
+                        39,
+                        40,
+                        41,
+                        42
+                    ],
+                    "relative_submember_parameter_indices": [],
+                    "parameter_labels": [
+                        "MxElement 1,0",
+                        "MxElement 1,1",
+                        "MxElement 1,2",
+                        "MxElement 1,3",
+                        "MxElement 2,0",
+                        "MxElement 2,1",
+                        "MxElement 2,2",
+                        "MxElement 2,3",
+                        "MxElement 3,0",
+                        "MxElement 3,1",
+                        "MxElement 3,2",
+                        "MxElement 3,3"
+                    ],
+                    "parameter_bounds": null,
+                    "dense_matrix": [
+                        [
+                            1.0000000000000002,
+                            -5.281075224346595e-17,
+                            0.0,
+                            -2.237114317075737e-17
+                        ],
+                        [
+                            -0.01272500542251483,
+                            -0.002615823512481009,
+                            -0.05410760513775064,
+                            0.9494337756107636
+                        ],
+                        [
+                            -0.012417912942887858,
+                            -0.024520788391058396,
+                            0.952683007364559,
+                            -0.006720146064136805
+                        ],
+                        [
+                            0.005951089083280033,
+                            -0.9617744086237576,
+                            -0.013110633300765442,
+                            0.009120311024796457
+                        ]
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "pp",
+                        "sparse": false,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "ExplicitStateSpace",
+                            "version": 0,
+                            "labels": [
+                                [
+                                    "Q0"
+                                ]
+                            ],
+                            "unitary_space_dimensions": [
+                                [
+                                    2
+                                ]
+                            ],
+                            "types": [
+                                [
+                                    "Q"
+                                ]
+                            ]
+                        }
+                    },
+                    "memberdict_types": [
+                        "operations"
+                    ],
+                    "memberdict_labels": [
+                        "Gy"
+                    ]
+                }
+            }
+        }
+    ],
+    "last_completed_iter": 4,
+    "last_completed_circuit_list": [
+        "{}",
+        "Gx",
+        "Gy",
+        "GxGx",
+        "GxGxGx",
+        "GyGyGy",
+        "GxGy",
+        "GxGxGxGx",
+        "GxGyGyGy",
+        "GyGx",
+        "GyGy",
+        "GyGxGx",
+        "GyGxGxGx",
+        "GyGyGyGy",
+        "GxGxGy",
+        "GxGxGxGxGx",
+        "GxGxGyGyGy",
+        "GxGxGxGy",
+        "GxGxGxGxGxGx",
+        "GxGxGxGyGyGy",
+        "GyGyGyGx",
+        "GyGyGyGxGx",
+        "GyGyGyGxGxGx",
+        "GyGyGyGyGyGy",
+        "(Gi)",
+        "(Gi)Gx",
+        "(Gi)Gy",
+        "(Gi)GxGx",
+        "(Gi)GxGxGx",
+        "(Gi)GyGyGy",
+        "Gx(Gi)",
+        "Gx(Gi)Gx",
+        "Gx(Gi)Gy",
+        "Gx(Gi)GxGx",
+        "Gx(Gi)GxGxGx",
+        "Gx(Gi)GyGyGy",
+        "Gy(Gi)",
+        "Gy(Gi)Gx",
+        "Gy(Gi)Gy",
+        "Gy(Gi)GxGx",
+        "Gy(Gi)GxGxGx",
+        "Gy(Gi)GyGyGy",
+        "GxGx(Gi)",
+        "GxGx(Gi)Gx",
+        "GxGx(Gi)Gy",
+        "GxGx(Gi)GxGx",
+        "GxGx(Gi)GxGxGx",
+        "GxGx(Gi)GyGyGy",
+        "GxGxGx(Gi)",
+        "GxGxGx(Gi)Gx",
+        "GxGxGx(Gi)Gy",
+        "GxGxGx(Gi)GxGx",
+        "GxGxGx(Gi)GxGxGx",
+        "GxGxGx(Gi)GyGyGy",
+        "GyGyGy(Gi)",
+        "GyGyGy(Gi)Gx",
+        "GyGyGy(Gi)Gy",
+        "GyGyGy(Gi)GxGx",
+        "GyGyGy(Gi)GxGxGx",
+        "GyGyGy(Gi)GyGyGy",
+        "Gy(Gx)Gy",
+        "Gy(Gx)GxGxGx",
+        "Gy(Gx)GyGyGy",
+        "GxGxGx(Gx)Gy",
+        "GxGxGx(Gx)GxGxGx",
+        "GxGxGx(Gx)GyGyGy",
+        "GyGyGy(Gx)Gy",
+        "GyGyGy(Gx)GxGxGx",
+        "GyGyGy(Gx)GyGyGy",
+        "Gx(Gy)Gx",
+        "Gx(Gy)Gy",
+        "Gx(Gy)GxGx",
+        "Gx(Gy)GxGxGx",
+        "Gx(Gy)GyGyGy",
+        "Gy(Gy)Gx",
+        "Gy(Gy)GxGx",
+        "Gy(Gy)GxGxGx",
+        "Gy(Gy)GyGyGy",
+        "GxGx(Gy)Gx",
+        "GxGx(Gy)Gy",
+        "GxGx(Gy)GxGx",
+        "GxGx(Gy)GxGxGx",
+        "GxGx(Gy)GyGyGy",
+        "GxGxGx(Gy)Gx",
+        "GxGxGx(Gy)Gy",
+        "GxGxGx(Gy)GxGx",
+        "GxGxGx(Gy)GxGxGx",
+        "GxGxGx(Gy)GyGyGy",
+        "GyGyGy(Gy)Gx",
+        "GyGyGy(Gy)GxGx",
+        "GyGyGy(Gy)GxGxGx",
+        "GyGyGy(Gy)GyGyGy",
+        "(Gi)^2",
+        "(Gi)^2Gx",
+        "(Gi)^2Gy",
+        "(Gi)^2GxGx",
+        "(Gi)^2GxGxGx",
+        "(Gi)^2GyGyGy",
+        "Gx(Gi)^2",
+        "Gx(Gi)^2Gx",
+        "Gx(Gi)^2Gy",
+        "Gx(Gi)^2GxGx",
+        "Gx(Gi)^2GxGxGx",
+        "Gx(Gi)^2GyGyGy",
+        "Gy(Gi)^2",
+        "Gy(Gi)^2Gx",
+        "Gy(Gi)^2Gy",
+        "Gy(Gi)^2GxGx",
+        "Gy(Gi)^2GxGxGx",
+        "Gy(Gi)^2GyGyGy",
+        "GxGx(Gi)^2",
+        "GxGx(Gi)^2Gx",
+        "GxGx(Gi)^2Gy",
+        "GxGx(Gi)^2GxGx",
+        "GxGx(Gi)^2GxGxGx",
+        "GxGx(Gi)^2GyGyGy",
+        "GxGxGx(Gi)^2",
+        "GxGxGx(Gi)^2Gx",
+        "GxGxGx(Gi)^2Gy",
+        "GxGxGx(Gi)^2GxGx",
+        "GxGxGx(Gi)^2GxGxGx",
+        "GxGxGx(Gi)^2GyGyGy",
+        "GyGyGy(Gi)^2",
+        "GyGyGy(Gi)^2Gx",
+        "GyGyGy(Gi)^2Gy",
+        "GyGyGy(Gi)^2GxGx",
+        "GyGyGy(Gi)^2GxGxGx",
+        "GyGyGy(Gi)^2GyGyGy",
+        "Gy(Gx)^2Gy",
+        "Gy(Gx)^2GxGxGx",
+        "Gy(Gx)^2GyGyGy",
+        "GxGxGx(Gx)^2Gy",
+        "GxGxGx(Gx)^2GxGxGx",
+        "GxGxGx(Gx)^2GyGyGy",
+        "GyGyGy(Gx)^2Gy",
+        "GyGyGy(Gx)^2GxGxGx",
+        "GyGyGy(Gx)^2GyGyGy",
+        "Gx(Gy)^2Gx",
+        "Gx(Gy)^2GxGx",
+        "Gx(Gy)^2GxGxGx",
+        "Gx(Gy)^2GyGyGy",
+        "GxGx(Gy)^2Gx",
+        "GxGx(Gy)^2GxGx",
+        "GxGx(Gy)^2GxGxGx",
+        "GxGx(Gy)^2GyGyGy",
+        "GxGxGx(Gy)^2Gx",
+        "GxGxGx(Gy)^2GxGx",
+        "GxGxGx(Gy)^2GxGxGx",
+        "GxGxGx(Gy)^2GyGyGy",
+        "GyGyGy(Gy)^2Gx",
+        "GyGyGy(Gy)^2GxGx",
+        "GyGyGy(Gy)^2GxGxGx",
+        "GyGyGy(Gy)^2GyGyGy",
+        "Gy(GxGy)Gx",
+        "Gy(GxGy)Gy",
+        "Gy(GxGy)GxGx",
+        "Gy(GxGy)GxGxGx",
+        "Gy(GxGy)GyGyGy",
+        "GxGxGx(GxGy)Gx",
+        "GxGxGx(GxGy)Gy",
+        "GxGxGx(GxGy)GxGx",
+        "GxGxGx(GxGy)GxGxGx",
+        "GxGxGx(GxGy)GyGyGy",
+        "GyGyGy(GxGy)Gx",
+        "GyGyGy(GxGy)Gy",
+        "GyGyGy(GxGy)GxGx",
+        "GyGyGy(GxGy)GxGxGx",
+        "GyGyGy(GxGy)GyGyGy",
+        "(Gi)^4",
+        "(Gi)^4Gx",
+        "(Gi)^4Gy",
+        "(Gi)^4GxGx",
+        "(Gi)^4GxGxGx",
+        "(Gi)^4GyGyGy",
+        "Gx(Gi)^4",
+        "Gx(Gi)^4Gx",
+        "Gx(Gi)^4Gy",
+        "Gx(Gi)^4GxGx",
+        "Gx(Gi)^4GxGxGx",
+        "Gx(Gi)^4GyGyGy",
+        "Gy(Gi)^4",
+        "Gy(Gi)^4Gx",
+        "Gy(Gi)^4Gy",
+        "Gy(Gi)^4GxGx",
+        "Gy(Gi)^4GxGxGx",
+        "Gy(Gi)^4GyGyGy",
+        "GxGx(Gi)^4",
+        "GxGx(Gi)^4Gx",
+        "GxGx(Gi)^4Gy",
+        "GxGx(Gi)^4GxGx",
+        "GxGx(Gi)^4GxGxGx",
+        "GxGx(Gi)^4GyGyGy",
+        "GxGxGx(Gi)^4",
+        "GxGxGx(Gi)^4Gx",
+        "GxGxGx(Gi)^4Gy",
+        "GxGxGx(Gi)^4GxGx",
+        "GxGxGx(Gi)^4GxGxGx",
+        "GxGxGx(Gi)^4GyGyGy",
+        "GyGyGy(Gi)^4",
+        "GyGyGy(Gi)^4Gx",
+        "GyGyGy(Gi)^4Gy",
+        "GyGyGy(Gi)^4GxGx",
+        "GyGyGy(Gi)^4GxGxGx",
+        "GyGyGy(Gi)^4GyGyGy",
+        "Gy(Gx)^4Gy",
+        "Gy(Gx)^4GxGx",
+        "Gy(Gx)^4GxGxGx",
+        "Gy(Gx)^4GyGyGy",
+        "GxGx(Gx)^4Gy",
+        "GxGx(Gx)^4GxGxGx",
+        "GxGx(Gx)^4GyGyGy",
+        "GxGxGx(Gx)^4Gy",
+        "GxGxGx(Gx)^4GxGxGx",
+        "GxGxGx(Gx)^4GyGyGy",
+        "GyGyGy(Gx)^4Gy",
+        "GyGyGy(Gx)^4GxGx",
+        "GyGyGy(Gx)^4GxGxGx",
+        "GyGyGy(Gx)^4GyGyGy",
+        "Gx(Gy)^4Gx",
+        "Gx(Gy)^4GxGx",
+        "Gx(Gy)^4GxGxGx",
+        "Gx(Gy)^4GyGyGy",
+        "GxGx(Gy)^4Gx",
+        "GxGx(Gy)^4GxGx",
+        "GxGx(Gy)^4GxGxGx",
+        "GxGx(Gy)^4GyGyGy",
+        "GxGxGx(Gy)^4Gx",
+        "GxGxGx(Gy)^4GxGx",
+        "GxGxGx(Gy)^4GxGxGx",
+        "GxGxGx(Gy)^4GyGyGy",
+        "GyGyGy(Gy)^4Gx",
+        "GyGyGy(Gy)^4GxGx",
+        "GyGyGy(Gy)^4GxGxGx",
+        "GyGyGy(Gy)^4GyGyGy",
+        "(GxGy)^2",
+        "(GxGy)^2Gx",
+        "(GxGy)^2Gy",
+        "(GxGy)^2GxGx",
+        "(GxGy)^2GxGxGx",
+        "(GxGy)^2GyGyGy",
+        "Gx(GxGy)^2",
+        "Gx(GxGy)^2Gx",
+        "Gx(GxGy)^2Gy",
+        "Gx(GxGy)^2GxGx",
+        "Gx(GxGy)^2GxGxGx",
+        "Gx(GxGy)^2GyGyGy",
+        "Gy(GxGy)^2",
+        "Gy(GxGy)^2Gx",
+        "Gy(GxGy)^2Gy",
+        "Gy(GxGy)^2GxGx",
+        "Gy(GxGy)^2GxGxGx",
+        "Gy(GxGy)^2GyGyGy",
+        "GxGx(GxGy)^2",
+        "GxGx(GxGy)^2Gx",
+        "GxGx(GxGy)^2Gy",
+        "GxGx(GxGy)^2GxGx",
+        "GxGx(GxGy)^2GxGxGx",
+        "GxGx(GxGy)^2GyGyGy",
+        "GxGxGx(GxGy)^2",
+        "GxGxGx(GxGy)^2Gx",
+        "GxGxGx(GxGy)^2Gy",
+        "GxGxGx(GxGy)^2GxGx",
+        "GxGxGx(GxGy)^2GxGxGx",
+        "GxGxGx(GxGy)^2GyGyGy",
+        "GyGyGy(GxGy)^2",
+        "GyGyGy(GxGy)^2Gx",
+        "GyGyGy(GxGy)^2Gy",
+        "GyGyGy(GxGy)^2GxGx",
+        "GyGyGy(GxGy)^2GxGxGx",
+        "GyGyGy(GxGy)^2GyGyGy",
+        "Gy(GxGxGy)Gx",
+        "Gy(GxGxGy)Gy",
+        "Gy(GxGxGy)GxGx",
+        "Gy(GxGxGy)GxGxGx",
+        "Gy(GxGxGy)GyGyGy",
+        "GxGxGx(GxGxGy)Gx",
+        "GxGxGx(GxGxGy)Gy",
+        "GxGxGx(GxGxGy)GxGx",
+        "GxGxGx(GxGxGy)GxGxGx",
+        "GxGxGx(GxGxGy)GyGyGy",
+        "GyGyGy(GxGxGy)Gx",
+        "GyGyGy(GxGxGy)Gy",
+        "GyGyGy(GxGxGy)GxGx",
+        "GyGyGy(GxGxGy)GxGxGx",
+        "GyGyGy(GxGxGy)GyGyGy",
+        "Gy(GxGyGy)Gx",
+        "Gy(GxGyGy)GxGx",
+        "Gy(GxGyGy)GxGxGx",
+        "Gy(GxGyGy)GyGyGy",
+        "GxGxGx(GxGyGy)Gx",
+        "GxGxGx(GxGyGy)GxGx",
+        "GxGxGx(GxGyGy)GxGxGx",
+        "GxGxGx(GxGyGy)GyGyGy",
+        "GyGyGy(GxGyGy)Gx",
+        "GyGyGy(GxGyGy)GxGx",
+        "GyGyGy(GxGyGy)GxGxGx",
+        "GyGyGy(GxGyGy)GyGyGy",
+        "(GxGyGi)",
+        "(GxGyGi)Gx",
+        "(GxGyGi)Gy",
+        "(GxGyGi)GxGx",
+        "(GxGyGi)GxGxGx",
+        "(GxGyGi)GyGyGy",
+        "Gx(GxGyGi)",
+        "Gx(GxGyGi)Gx",
+        "Gx(GxGyGi)Gy",
+        "Gx(GxGyGi)GxGx",
+        "Gx(GxGyGi)GxGxGx",
+        "Gx(GxGyGi)GyGyGy",
+        "Gy(GxGyGi)",
+        "Gy(GxGyGi)Gx",
+        "Gy(GxGyGi)Gy",
+        "Gy(GxGyGi)GxGx",
+        "Gy(GxGyGi)GxGxGx",
+        "Gy(GxGyGi)GyGyGy",
+        "GxGx(GxGyGi)",
+        "GxGx(GxGyGi)Gx",
+        "GxGx(GxGyGi)Gy",
+        "GxGx(GxGyGi)GxGx",
+        "GxGx(GxGyGi)GxGxGx",
+        "GxGx(GxGyGi)GyGyGy",
+        "GxGxGx(GxGyGi)",
+        "GxGxGx(GxGyGi)Gx",
+        "GxGxGx(GxGyGi)Gy",
+        "GxGxGx(GxGyGi)GxGx",
+        "GxGxGx(GxGyGi)GxGxGx",
+        "GxGxGx(GxGyGi)GyGyGy",
+        "GyGyGy(GxGyGi)",
+        "GyGyGy(GxGyGi)Gx",
+        "GyGyGy(GxGyGi)Gy",
+        "GyGyGy(GxGyGi)GxGx",
+        "GyGyGy(GxGyGi)GxGxGx",
+        "GyGyGy(GxGyGi)GyGyGy",
+        "(GxGiGy)Gx",
+        "(GxGiGy)Gy",
+        "(GxGiGy)GxGx",
+        "(GxGiGy)GxGxGx",
+        "(GxGiGy)GyGyGy",
+        "Gx(GxGiGy)Gx",
+        "Gx(GxGiGy)Gy",
+        "Gx(GxGiGy)GxGx",
+        "Gx(GxGiGy)GxGxGx",
+        "Gx(GxGiGy)GyGyGy",
+        "Gy(GxGiGy)",
+        "Gy(GxGiGy)Gx",
+        "Gy(GxGiGy)Gy",
+        "Gy(GxGiGy)GxGx",
+        "Gy(GxGiGy)GxGxGx",
+        "Gy(GxGiGy)GyGyGy",
+        "GxGx(GxGiGy)Gx",
+        "GxGx(GxGiGy)Gy",
+        "GxGx(GxGiGy)GxGx",
+        "GxGx(GxGiGy)GxGxGx",
+        "GxGx(GxGiGy)GyGyGy",
+        "GxGxGx(GxGiGy)",
+        "GxGxGx(GxGiGy)Gx",
+        "GxGxGx(GxGiGy)Gy",
+        "GxGxGx(GxGiGy)GxGx",
+        "GxGxGx(GxGiGy)GxGxGx",
+        "GxGxGx(GxGiGy)GyGyGy",
+        "GyGyGy(GxGiGy)",
+        "GyGyGy(GxGiGy)Gx",
+        "GyGyGy(GxGiGy)Gy",
+        "GyGyGy(GxGiGy)GxGx",
+        "GyGyGy(GxGiGy)GxGxGx",
+        "GyGyGy(GxGiGy)GyGyGy",
+        "Gy(GxGiGi)",
+        "Gy(GxGiGi)Gx",
+        "Gy(GxGiGi)Gy",
+        "Gy(GxGiGi)GxGx",
+        "Gy(GxGiGi)GxGxGx",
+        "Gy(GxGiGi)GyGyGy",
+        "GxGxGx(GxGiGi)",
+        "GxGxGx(GxGiGi)Gx",
+        "GxGxGx(GxGiGi)Gy",
+        "GxGxGx(GxGiGi)GxGx",
+        "GxGxGx(GxGiGi)GxGxGx",
+        "GxGxGx(GxGiGi)GyGyGy",
+        "GyGyGy(GxGiGi)",
+        "GyGyGy(GxGiGi)Gx",
+        "GyGyGy(GxGiGi)Gy",
+        "GyGyGy(GxGiGi)GxGx",
+        "GyGyGy(GxGiGi)GxGxGx",
+        "GyGyGy(GxGiGi)GyGyGy",
+        "Gx(GyGiGi)",
+        "Gx(GyGiGi)Gx",
+        "Gx(GyGiGi)Gy",
+        "Gx(GyGiGi)GxGx",
+        "Gx(GyGiGi)GxGxGx",
+        "Gx(GyGiGi)GyGyGy",
+        "Gy(GyGiGi)",
+        "Gy(GyGiGi)Gx",
+        "Gy(GyGiGi)Gy",
+        "Gy(GyGiGi)GxGx",
+        "Gy(GyGiGi)GxGxGx",
+        "Gy(GyGiGi)GyGyGy",
+        "GxGx(GyGiGi)",
+        "GxGx(GyGiGi)Gx",
+        "GxGx(GyGiGi)Gy",
+        "GxGx(GyGiGi)GxGx",
+        "GxGx(GyGiGi)GxGxGx",
+        "GxGx(GyGiGi)GyGyGy",
+        "GxGxGx(GyGiGi)",
+        "GxGxGx(GyGiGi)Gx",
+        "GxGxGx(GyGiGi)Gy",
+        "GxGxGx(GyGiGi)GxGx",
+        "GxGxGx(GyGiGi)GxGxGx",
+        "GxGxGx(GyGiGi)GyGyGy",
+        "GyGyGy(GyGiGi)",
+        "GyGyGy(GyGiGi)Gx",
+        "GyGyGy(GyGiGi)Gy",
+        "GyGyGy(GyGiGi)GxGx",
+        "GyGyGy(GyGiGi)GxGxGx",
+        "GyGyGy(GyGiGi)GyGyGy",
+        "(GxGyGyGi)",
+        "(GxGyGyGi)Gx",
+        "(GxGyGyGi)Gy",
+        "(GxGyGyGi)GxGx",
+        "(GxGyGyGi)GxGxGx",
+        "(GxGyGyGi)GyGyGy",
+        "Gx(GxGyGyGi)",
+        "Gx(GxGyGyGi)Gx",
+        "Gx(GxGyGyGi)Gy",
+        "Gx(GxGyGyGi)GxGx",
+        "Gx(GxGyGyGi)GxGxGx",
+        "Gx(GxGyGyGi)GyGyGy",
+        "Gy(GxGyGyGi)",
+        "Gy(GxGyGyGi)Gx",
+        "Gy(GxGyGyGi)Gy",
+        "Gy(GxGyGyGi)GxGx",
+        "Gy(GxGyGyGi)GxGxGx",
+        "Gy(GxGyGyGi)GyGyGy",
+        "GxGx(GxGyGyGi)",
+        "GxGx(GxGyGyGi)Gx",
+        "GxGx(GxGyGyGi)Gy",
+        "GxGx(GxGyGyGi)GxGx",
+        "GxGx(GxGyGyGi)GxGxGx",
+        "GxGx(GxGyGyGi)GyGyGy",
+        "GxGxGx(GxGyGyGi)",
+        "GxGxGx(GxGyGyGi)Gx",
+        "GxGxGx(GxGyGyGi)Gy",
+        "GxGxGx(GxGyGyGi)GxGx",
+        "GxGxGx(GxGyGyGi)GxGxGx",
+        "GxGxGx(GxGyGyGi)GyGyGy",
+        "GyGyGy(GxGyGyGi)",
+        "GyGyGy(GxGyGyGi)Gx",
+        "GyGyGy(GxGyGyGi)Gy",
+        "GyGyGy(GxGyGyGi)GxGx",
+        "GyGyGy(GxGyGyGi)GxGxGx",
+        "GyGyGy(GxGyGyGi)GyGyGy",
+        "(Gi)^8",
+        "(Gi)^8Gx",
+        "(Gi)^8Gy",
+        "(Gi)^8GxGx",
+        "(Gi)^8GxGxGx",
+        "(Gi)^8GyGyGy",
+        "Gx(Gi)^8",
+        "Gx(Gi)^8Gx",
+        "Gx(Gi)^8Gy",
+        "Gx(Gi)^8GxGx",
+        "Gx(Gi)^8GxGxGx",
+        "Gx(Gi)^8GyGyGy",
+        "Gy(Gi)^8",
+        "Gy(Gi)^8Gx",
+        "Gy(Gi)^8Gy",
+        "Gy(Gi)^8GxGx",
+        "Gy(Gi)^8GxGxGx",
+        "Gy(Gi)^8GyGyGy",
+        "GxGx(Gi)^8",
+        "GxGx(Gi)^8Gx",
+        "GxGx(Gi)^8Gy",
+        "GxGx(Gi)^8GxGx",
+        "GxGx(Gi)^8GxGxGx",
+        "GxGx(Gi)^8GyGyGy",
+        "GxGxGx(Gi)^8",
+        "GxGxGx(Gi)^8Gx",
+        "GxGxGx(Gi)^8Gy",
+        "GxGxGx(Gi)^8GxGx",
+        "GxGxGx(Gi)^8GxGxGx",
+        "GxGxGx(Gi)^8GyGyGy",
+        "GyGyGy(Gi)^8",
+        "GyGyGy(Gi)^8Gx",
+        "GyGyGy(Gi)^8Gy",
+        "GyGyGy(Gi)^8GxGx",
+        "GyGyGy(Gi)^8GxGxGx",
+        "GyGyGy(Gi)^8GyGyGy",
+        "(Gx)^8Gy",
+        "(Gx)^8GxGxGx",
+        "(Gx)^8GyGyGy",
+        "Gx(Gx)^8Gy",
+        "Gx(Gx)^8GxGxGx",
+        "Gx(Gx)^8GyGyGy",
+        "Gy(Gx)^8",
+        "Gy(Gx)^8Gx",
+        "Gy(Gx)^8Gy",
+        "Gy(Gx)^8GxGx",
+        "Gy(Gx)^8GxGxGx",
+        "Gy(Gx)^8GyGyGy",
+        "GxGx(Gx)^8Gy",
+        "GxGx(Gx)^8GxGxGx",
+        "GxGx(Gx)^8GyGyGy",
+        "GxGxGx(Gx)^8Gy",
+        "GxGxGx(Gx)^8GxGxGx",
+        "GxGxGx(Gx)^8GyGyGy",
+        "GyGyGy(Gx)^8",
+        "GyGyGy(Gx)^8Gx",
+        "GyGyGy(Gx)^8Gy",
+        "GyGyGy(Gx)^8GxGx",
+        "GyGyGy(Gx)^8GxGxGx",
+        "GyGyGy(Gx)^8GyGyGy",
+        "(Gy)^8Gx",
+        "(Gy)^8Gy",
+        "(Gy)^8GxGx",
+        "(Gy)^8GxGxGx",
+        "(Gy)^8GyGyGy",
+        "Gx(Gy)^8",
+        "Gx(Gy)^8Gx",
+        "Gx(Gy)^8Gy",
+        "Gx(Gy)^8GxGx",
+        "Gx(Gy)^8GxGxGx",
+        "Gx(Gy)^8GyGyGy",
+        "Gy(Gy)^8Gx",
+        "Gy(Gy)^8GxGx",
+        "Gy(Gy)^8GxGxGx",
+        "Gy(Gy)^8GyGyGy",
+        "GxGx(Gy)^8",
+        "GxGx(Gy)^8Gx",
+        "GxGx(Gy)^8Gy",
+        "GxGx(Gy)^8GxGx",
+        "GxGx(Gy)^8GxGxGx",
+        "GxGx(Gy)^8GyGyGy",
+        "GxGxGx(Gy)^8",
+        "GxGxGx(Gy)^8Gx",
+        "GxGxGx(Gy)^8Gy",
+        "GxGxGx(Gy)^8GxGx",
+        "GxGxGx(Gy)^8GxGxGx",
+        "GxGxGx(Gy)^8GyGyGy",
+        "GyGyGy(Gy)^8Gx",
+        "GyGyGy(Gy)^8GxGx",
+        "GyGyGy(Gy)^8GxGxGx",
+        "GyGyGy(Gy)^8GyGyGy",
+        "(GxGy)^4",
+        "(GxGy)^4Gx",
+        "(GxGy)^4Gy",
+        "(GxGy)^4GxGx",
+        "(GxGy)^4GxGxGx",
+        "(GxGy)^4GyGyGy",
+        "Gx(GxGy)^4",
+        "Gx(GxGy)^4Gx",
+        "Gx(GxGy)^4Gy",
+        "Gx(GxGy)^4GxGx",
+        "Gx(GxGy)^4GxGxGx",
+        "Gx(GxGy)^4GyGyGy",
+        "Gy(GxGy)^4",
+        "Gy(GxGy)^4Gx",
+        "Gy(GxGy)^4Gy",
+        "Gy(GxGy)^4GxGx",
+        "Gy(GxGy)^4GxGxGx",
+        "Gy(GxGy)^4GyGyGy",
+        "GxGx(GxGy)^4",
+        "GxGx(GxGy)^4Gx",
+        "GxGx(GxGy)^4Gy",
+        "GxGx(GxGy)^4GxGx",
+        "GxGx(GxGy)^4GxGxGx",
+        "GxGx(GxGy)^4GyGyGy",
+        "GxGxGx(GxGy)^4",
+        "GxGxGx(GxGy)^4Gx",
+        "GxGxGx(GxGy)^4Gy",
+        "GxGxGx(GxGy)^4GxGx",
+        "GxGxGx(GxGy)^4GxGxGx",
+        "GxGxGx(GxGy)^4GyGyGy",
+        "GyGyGy(GxGy)^4",
+        "GyGyGy(GxGy)^4Gx",
+        "GyGyGy(GxGy)^4Gy",
+        "GyGyGy(GxGy)^4GxGx",
+        "GyGyGy(GxGy)^4GxGxGx",
+        "GyGyGy(GxGy)^4GyGyGy",
+        "(GxGxGy)^2",
+        "(GxGxGy)^2Gx",
+        "(GxGxGy)^2Gy",
+        "(GxGxGy)^2GxGx",
+        "(GxGxGy)^2GxGxGx",
+        "(GxGxGy)^2GyGyGy",
+        "Gx(GxGxGy)^2",
+        "Gx(GxGxGy)^2Gx",
+        "Gx(GxGxGy)^2Gy",
+        "Gx(GxGxGy)^2GxGx",
+        "Gx(GxGxGy)^2GxGxGx",
+        "Gx(GxGxGy)^2GyGyGy",
+        "Gy(GxGxGy)^2",
+        "Gy(GxGxGy)^2Gx",
+        "Gy(GxGxGy)^2Gy",
+        "Gy(GxGxGy)^2GxGx",
+        "Gy(GxGxGy)^2GxGxGx",
+        "Gy(GxGxGy)^2GyGyGy",
+        "GxGx(GxGxGy)^2",
+        "GxGx(GxGxGy)^2Gx",
+        "GxGx(GxGxGy)^2Gy",
+        "GxGx(GxGxGy)^2GxGx",
+        "GxGx(GxGxGy)^2GxGxGx",
+        "GxGx(GxGxGy)^2GyGyGy",
+        "GxGxGx(GxGxGy)^2",
+        "GxGxGx(GxGxGy)^2Gx",
+        "GxGxGx(GxGxGy)^2Gy",
+        "GxGxGx(GxGxGy)^2GxGx",
+        "GxGxGx(GxGxGy)^2GxGxGx",
+        "GxGxGx(GxGxGy)^2GyGyGy",
+        "GyGyGy(GxGxGy)^2",
+        "GyGyGy(GxGxGy)^2Gx",
+        "GyGyGy(GxGxGy)^2Gy",
+        "GyGyGy(GxGxGy)^2GxGx",
+        "GyGyGy(GxGxGy)^2GxGxGx",
+        "GyGyGy(GxGxGy)^2GyGyGy",
+        "(GxGyGy)^2",
+        "(GxGyGy)^2Gx",
+        "(GxGyGy)^2Gy",
+        "(GxGyGy)^2GxGx",
+        "(GxGyGy)^2GxGxGx",
+        "(GxGyGy)^2GyGyGy",
+        "Gx(GxGyGy)^2",
+        "Gx(GxGyGy)^2Gx",
+        "Gx(GxGyGy)^2Gy",
+        "Gx(GxGyGy)^2GxGx",
+        "Gx(GxGyGy)^2GxGxGx",
+        "Gx(GxGyGy)^2GyGyGy",
+        "Gy(GxGyGy)^2",
+        "Gy(GxGyGy)^2Gx",
+        "Gy(GxGyGy)^2Gy",
+        "Gy(GxGyGy)^2GxGx",
+        "Gy(GxGyGy)^2GxGxGx",
+        "Gy(GxGyGy)^2GyGyGy",
+        "GxGx(GxGyGy)^2",
+        "GxGx(GxGyGy)^2Gx",
+        "GxGx(GxGyGy)^2Gy",
+        "GxGx(GxGyGy)^2GxGx",
+        "GxGx(GxGyGy)^2GxGxGx",
+        "GxGx(GxGyGy)^2GyGyGy",
+        "GxGxGx(GxGyGy)^2",
+        "GxGxGx(GxGyGy)^2Gx",
+        "GxGxGx(GxGyGy)^2Gy",
+        "GxGxGx(GxGyGy)^2GxGx",
+        "GxGxGx(GxGyGy)^2GxGxGx",
+        "GxGxGx(GxGyGy)^2GyGyGy",
+        "GyGyGy(GxGyGy)^2",
+        "GyGyGy(GxGyGy)^2Gx",
+        "GyGyGy(GxGyGy)^2Gy",
+        "GyGyGy(GxGyGy)^2GxGx",
+        "GyGyGy(GxGyGy)^2GxGxGx",
+        "GyGyGy(GxGyGy)^2GyGyGy",
+        "(GxGyGi)^2",
+        "(GxGyGi)^2Gx",
+        "(GxGyGi)^2Gy",
+        "(GxGyGi)^2GxGx",
+        "(GxGyGi)^2GxGxGx",
+        "(GxGyGi)^2GyGyGy",
+        "Gx(GxGyGi)^2",
+        "Gx(GxGyGi)^2Gx",
+        "Gx(GxGyGi)^2Gy",
+        "Gx(GxGyGi)^2GxGx",
+        "Gx(GxGyGi)^2GxGxGx",
+        "Gx(GxGyGi)^2GyGyGy",
+        "Gy(GxGyGi)^2",
+        "Gy(GxGyGi)^2Gx",
+        "Gy(GxGyGi)^2Gy",
+        "Gy(GxGyGi)^2GxGx",
+        "Gy(GxGyGi)^2GxGxGx",
+        "Gy(GxGyGi)^2GyGyGy",
+        "GxGx(GxGyGi)^2",
+        "GxGx(GxGyGi)^2Gx",
+        "GxGx(GxGyGi)^2Gy",
+        "GxGx(GxGyGi)^2GxGx",
+        "GxGx(GxGyGi)^2GxGxGx",
+        "GxGx(GxGyGi)^2GyGyGy",
+        "GxGxGx(GxGyGi)^2",
+        "GxGxGx(GxGyGi)^2Gx",
+        "GxGxGx(GxGyGi)^2Gy",
+        "GxGxGx(GxGyGi)^2GxGx",
+        "GxGxGx(GxGyGi)^2GxGxGx",
+        "GxGxGx(GxGyGi)^2GyGyGy",
+        "GyGyGy(GxGyGi)^2",
+        "GyGyGy(GxGyGi)^2Gx",
+        "GyGyGy(GxGyGi)^2Gy",
+        "GyGyGy(GxGyGi)^2GxGx",
+        "GyGyGy(GxGyGi)^2GxGxGx",
+        "GyGyGy(GxGyGi)^2GyGyGy",
+        "(GxGiGy)^2",
+        "(GxGiGy)^2Gx",
+        "(GxGiGy)^2Gy",
+        "(GxGiGy)^2GxGx",
+        "(GxGiGy)^2GxGxGx",
+        "(GxGiGy)^2GyGyGy",
+        "Gx(GxGiGy)^2",
+        "Gx(GxGiGy)^2Gx",
+        "Gx(GxGiGy)^2Gy",
+        "Gx(GxGiGy)^2GxGx",
+        "Gx(GxGiGy)^2GxGxGx",
+        "Gx(GxGiGy)^2GyGyGy",
+        "Gy(GxGiGy)^2",
+        "Gy(GxGiGy)^2Gx",
+        "Gy(GxGiGy)^2Gy",
+        "Gy(GxGiGy)^2GxGx",
+        "Gy(GxGiGy)^2GxGxGx",
+        "Gy(GxGiGy)^2GyGyGy",
+        "GxGx(GxGiGy)^2",
+        "GxGx(GxGiGy)^2Gx",
+        "GxGx(GxGiGy)^2Gy",
+        "GxGx(GxGiGy)^2GxGx",
+        "GxGx(GxGiGy)^2GxGxGx",
+        "GxGx(GxGiGy)^2GyGyGy",
+        "GxGxGx(GxGiGy)^2",
+        "GxGxGx(GxGiGy)^2Gx",
+        "GxGxGx(GxGiGy)^2Gy",
+        "GxGxGx(GxGiGy)^2GxGx",
+        "GxGxGx(GxGiGy)^2GxGxGx",
+        "GxGxGx(GxGiGy)^2GyGyGy",
+        "GyGyGy(GxGiGy)^2",
+        "GyGyGy(GxGiGy)^2Gx",
+        "GyGyGy(GxGiGy)^2Gy",
+        "GyGyGy(GxGiGy)^2GxGx",
+        "GyGyGy(GxGiGy)^2GxGxGx",
+        "GyGyGy(GxGiGy)^2GyGyGy",
+        "(GxGiGi)^2",
+        "(GxGiGi)^2Gx",
+        "(GxGiGi)^2Gy",
+        "(GxGiGi)^2GxGx",
+        "(GxGiGi)^2GxGxGx",
+        "(GxGiGi)^2GyGyGy",
+        "Gx(GxGiGi)^2",
+        "Gx(GxGiGi)^2Gx",
+        "Gx(GxGiGi)^2Gy",
+        "Gx(GxGiGi)^2GxGx",
+        "Gx(GxGiGi)^2GxGxGx",
+        "Gx(GxGiGi)^2GyGyGy",
+        "Gy(GxGiGi)^2",
+        "Gy(GxGiGi)^2Gx",
+        "Gy(GxGiGi)^2Gy",
+        "Gy(GxGiGi)^2GxGx",
+        "Gy(GxGiGi)^2GxGxGx",
+        "Gy(GxGiGi)^2GyGyGy",
+        "GxGx(GxGiGi)^2",
+        "GxGx(GxGiGi)^2Gx",
+        "GxGx(GxGiGi)^2Gy",
+        "GxGx(GxGiGi)^2GxGx",
+        "GxGx(GxGiGi)^2GxGxGx",
+        "GxGx(GxGiGi)^2GyGyGy",
+        "GxGxGx(GxGiGi)^2",
+        "GxGxGx(GxGiGi)^2Gx",
+        "GxGxGx(GxGiGi)^2Gy",
+        "GxGxGx(GxGiGi)^2GxGx",
+        "GxGxGx(GxGiGi)^2GxGxGx",
+        "GxGxGx(GxGiGi)^2GyGyGy",
+        "GyGyGy(GxGiGi)^2",
+        "GyGyGy(GxGiGi)^2Gx",
+        "GyGyGy(GxGiGi)^2Gy",
+        "GyGyGy(GxGiGi)^2GxGx",
+        "GyGyGy(GxGiGi)^2GxGxGx",
+        "GyGyGy(GxGiGi)^2GyGyGy",
+        "(GyGiGi)^2",
+        "(GyGiGi)^2Gx",
+        "(GyGiGi)^2Gy",
+        "(GyGiGi)^2GxGx",
+        "(GyGiGi)^2GxGxGx",
+        "(GyGiGi)^2GyGyGy",
+        "Gx(GyGiGi)^2",
+        "Gx(GyGiGi)^2Gx",
+        "Gx(GyGiGi)^2Gy",
+        "Gx(GyGiGi)^2GxGx",
+        "Gx(GyGiGi)^2GxGxGx",
+        "Gx(GyGiGi)^2GyGyGy",
+        "Gy(GyGiGi)^2",
+        "Gy(GyGiGi)^2Gx",
+        "Gy(GyGiGi)^2Gy",
+        "Gy(GyGiGi)^2GxGx",
+        "Gy(GyGiGi)^2GxGxGx",
+        "Gy(GyGiGi)^2GyGyGy",
+        "GxGx(GyGiGi)^2",
+        "GxGx(GyGiGi)^2Gx",
+        "GxGx(GyGiGi)^2Gy",
+        "GxGx(GyGiGi)^2GxGx",
+        "GxGx(GyGiGi)^2GxGxGx",
+        "GxGx(GyGiGi)^2GyGyGy",
+        "GxGxGx(GyGiGi)^2",
+        "GxGxGx(GyGiGi)^2Gx",
+        "GxGxGx(GyGiGi)^2Gy",
+        "GxGxGx(GyGiGi)^2GxGx",
+        "GxGxGx(GyGiGi)^2GxGxGx",
+        "GxGxGx(GyGiGi)^2GyGyGy",
+        "GyGyGy(GyGiGi)^2",
+        "GyGyGy(GyGiGi)^2Gx",
+        "GyGyGy(GyGiGi)^2Gy",
+        "GyGyGy(GyGiGi)^2GxGx",
+        "GyGyGy(GyGiGi)^2GxGxGx",
+        "GyGyGy(GyGiGi)^2GyGyGy",
+        "(GxGyGyGi)^2",
+        "(GxGyGyGi)^2Gx",
+        "(GxGyGyGi)^2Gy",
+        "(GxGyGyGi)^2GxGx",
+        "(GxGyGyGi)^2GxGxGx",
+        "(GxGyGyGi)^2GyGyGy",
+        "Gx(GxGyGyGi)^2",
+        "Gx(GxGyGyGi)^2Gx",
+        "Gx(GxGyGyGi)^2Gy",
+        "Gx(GxGyGyGi)^2GxGx",
+        "Gx(GxGyGyGi)^2GxGxGx",
+        "Gx(GxGyGyGi)^2GyGyGy",
+        "Gy(GxGyGyGi)^2",
+        "Gy(GxGyGyGi)^2Gx",
+        "Gy(GxGyGyGi)^2Gy",
+        "Gy(GxGyGyGi)^2GxGx",
+        "Gy(GxGyGyGi)^2GxGxGx",
+        "Gy(GxGyGyGi)^2GyGyGy",
+        "GxGx(GxGyGyGi)^2",
+        "GxGx(GxGyGyGi)^2Gx",
+        "GxGx(GxGyGyGi)^2Gy",
+        "GxGx(GxGyGyGi)^2GxGx",
+        "GxGx(GxGyGyGi)^2GxGxGx",
+        "GxGx(GxGyGyGi)^2GyGyGy",
+        "GxGxGx(GxGyGyGi)^2",
+        "GxGxGx(GxGyGyGi)^2Gx",
+        "GxGxGx(GxGyGyGi)^2Gy",
+        "GxGxGx(GxGyGyGi)^2GxGx",
+        "GxGxGx(GxGyGyGi)^2GxGxGx",
+        "GxGxGx(GxGyGyGi)^2GyGyGy",
+        "GyGyGy(GxGyGyGi)^2",
+        "GyGyGy(GxGyGyGi)^2Gx",
+        "GyGyGy(GxGyGyGi)^2Gy",
+        "GyGyGy(GxGyGyGi)^2GxGx",
+        "GyGyGy(GxGyGyGi)^2GxGxGx",
+        "GyGyGy(GxGyGyGi)^2GyGyGy",
+        "(GxGxGyGxGyGy)Gx",
+        "(GxGxGyGxGyGy)Gy",
+        "(GxGxGyGxGyGy)GxGx",
+        "(GxGxGyGxGyGy)GxGxGx",
+        "(GxGxGyGxGyGy)GyGyGy",
+        "Gx(GxGxGyGxGyGy)Gx",
+        "Gx(GxGxGyGxGyGy)Gy",
+        "Gx(GxGxGyGxGyGy)GxGx",
+        "Gx(GxGxGyGxGyGy)GxGxGx",
+        "Gx(GxGxGyGxGyGy)GyGyGy",
+        "Gy(GxGxGyGxGyGy)",
+        "Gy(GxGxGyGxGyGy)Gx",
+        "Gy(GxGxGyGxGyGy)Gy",
+        "Gy(GxGxGyGxGyGy)GxGx",
+        "Gy(GxGxGyGxGyGy)GxGxGx",
+        "Gy(GxGxGyGxGyGy)GyGyGy",
+        "GxGx(GxGxGyGxGyGy)Gx",
+        "GxGx(GxGxGyGxGyGy)Gy",
+        "GxGx(GxGxGyGxGyGy)GxGx",
+        "GxGx(GxGxGyGxGyGy)GxGxGx",
+        "GxGx(GxGxGyGxGyGy)GyGyGy",
+        "GxGxGx(GxGxGyGxGyGy)",
+        "GxGxGx(GxGxGyGxGyGy)Gx",
+        "GxGxGx(GxGxGyGxGyGy)Gy",
+        "GxGxGx(GxGxGyGxGyGy)GxGx",
+        "GxGxGx(GxGxGyGxGyGy)GxGxGx",
+        "GxGxGx(GxGxGyGxGyGy)GyGyGy",
+        "GyGyGy(GxGxGyGxGyGy)",
+        "GyGyGy(GxGxGyGxGyGy)Gx",
+        "GyGyGy(GxGxGyGxGyGy)Gy",
+        "GyGyGy(GxGxGyGxGyGy)GxGx",
+        "GyGyGy(GxGxGyGxGyGy)GxGxGx",
+        "GyGyGy(GxGxGyGxGyGy)GyGyGy"
+    ],
+    "final_objfn": null,
+    "name": null
+}

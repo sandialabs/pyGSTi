@@ -1685,7 +1685,7 @@ class StandardGST(_proto.Protocol):
                             + " and may be removed in a future release. Please pass in a list or tuple"
                                 +" (or other iterable) of strings")
             else:
-                self.modes = list(modes) #Cast to a list for uniformity
+                self.modes = [modes] #Cast to a list for uniformity
         else:
             self.modes = modes
         self.models_to_test = models_to_test
