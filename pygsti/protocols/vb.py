@@ -749,6 +749,134 @@ class SummaryStatistics(_proto.Protocol):
             data_cache[key].append(bcache)
 
 
+class ByDepthSummaryStatistics(SummaryStatistics):
+    """
+    A protocol that computes summary statistics for data organized into by-depth circuit lists.
+    Parameters
+    ----------
+    depths : list or "all", optional
+        A sequence of the depths to compute summary statistics for or the special `"all"`
+        value which means "all the depths in the data".  If data being processed does not
+        contain a given value in `depths`, it is just ignored.
+    statistics_to_compute : tuple, optional
+        A sequence of the statistic names to compute. Allowed names are:
+       'success_counts', 'total_counts', 'hamming_distance_counts', 'success_probabilities', 'polarization',
+       'adjusted_success_probabilities', 'two_q_gate_count', 'depth', 'idealout', 'circuit_index',
+       and 'width'.
+    names_to_compute : tuple, optional
+        A sequence of user-defined names for the statistics in `statistics_to_compute`.  If `None`, then
+        the statistic names themselves are used.  These names are the column names produced by calling
+        `to_dataframe` on this protocol's results, so can be useful to name the computed statistics differently
+        from the statistic name itself to distinguish it from the same statistic run on other data, when you
+        want to combine data frames generated from multiple :class:`ProtocolData` objects.
+    custom_data_src : SuccessFailModel, optional
+        An alternate source of the data counts used to compute the desired summary statistics.  Currently
+        this can only be a :class:`SuccessFailModel`.
+    name : str, optional
+        The name of this protocol, also used to (by default) name the
+        results produced by this protocol.  If None, the class name will
+        be used.
+    """
+    def __init__(self, depths='all', statistics_to_compute=('polarization',), names_to_compute=None,
+                 custom_data_src=None, name=None):
+        super().__init__(name)
+        self.depths = depths
+        self.statistics_to_compute = statistics_to_compute
+        self.names_to_compute = statistics_to_compute if (names_to_compute is None) else names_to_compute
+        self.custom_data_src = custom_data_src
+        # because this *could* be a model or a qty dict (or just a string?)
+        self.auxfile_types['custom_data_src'] = 'serialized-object'
+
+    def _get_statistic_per_depth(self, statistic, data):
+        design = data.edesign
+
+        if self.custom_data_src is None:  # then use the data in `data`
+            #Note: can only take/put things ("results") in data.cache that *only* depend on the exp. design
+            # and dataset (i.e. the DataProtocol object).  Protocols must be careful of this in their implementation!
+            if statistic in self.summary_statistics:
+                if statistic not in data.cache:
+                    summary_data_dict = self._compute_summary_statistics(data)
+                    data.cache.update(summary_data_dict)
+            # Code currently doesn't work with a dscmp, so commented out.
+            # elif statistic in self.dscmp_statistics:
+            #     if statistic not in data.cache:
+            #         dscmp_data = self.compute_dscmp_data(data, dscomparator)
+            #         data.cache.update(dscmp_data)
+            elif statistic in self.circuit_statistics:
+                if statistic not in data.cache:
+                    circuit_data = self._compute_circuit_statistics(data)
+                    data.cache.update(circuit_data)
+            else:
+                raise ValueError("Invalid statistic: %s" % statistic)
+
+            statistic_per_depth = data.cache[statistic]
+
+        elif isinstance(self.custom_data_src, _SuccessFailModel):  # then simulate all the circuits in `data`
+            assert(statistic in ('success_probabilities', 'polarization')), \
+                "Only success probabilities or polarizations can be simulated!"
+            sfmodel = self.custom_data_src
+            depths = design.depths if self.depths == 'all' else self.depths
+            statistic_per_depth = _tools.NamedDict('Depth', 'int', 'Value', 'float', {depth: [] for depth in depths})
+            circuit_lists_for_depths = {depth: lst for depth, lst in zip(design.depths, design.circuit_lists)}
+
+            for depth in depths:
+                for circ in circuit_lists_for_depths[depth]:
+                    predicted_success_prob = sfmodel.probabilities(circ)[('success',)]
+                    if statistic == 'success_probabilities':
+                        statistic_per_depth[depth].append(predicted_success_prob)
+                    elif statistic == 'polarization':
+                        nQ = len(circ.line_labels)
+                        pol = (predicted_success_prob - 1 / 2**nQ) / (1 - 1 / 2**nQ)
+                        statistic_per_depth[depth].append(pol)
+
+        # Note sure this is used anywhere, so commented out for now.
+        #elif isinstance(custom_data_src, dict):  # Assume this is a "summary dataset"
+        #    summary_data = self.custom_data_src
+        #    statistic_per_depth = summary_data['success_probabilities']
+
+        else:
+            raise ValueError("Invalid 'custom_data_src' of type: %s" % str(type(self.custom_data_src)))
+
+        return statistic_per_depth
+
+    def run(self, data, memlimit=None, comm=None, dscomparator=None):
+        """
+        Run this protocol on `data`.
+        Parameters
+        ----------
+        results : ProtocolResults or ProtocolResultsDir
+            The input results.
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this protocol
+            in parallel.
+        dscomparator : DataComparator
+            Special additional comparator object for
+            comparing data sets.
+        Returns
+        -------
+        SummaryStatisticsResults
+        """
+        design = data.edesign
+        width = len(design.qubit_labels)
+        results = SummaryStatisticsResults(data, self)
+
+        for statistic, statistic_nm in zip(self.statistics_to_compute, self.names_to_compute):
+            statistic_per_depth = self._get_statistic_per_depth(statistic, data)
+            depths = statistic_per_depth.keys() if self.depths == 'all' else \
+                filter(lambda d: d in statistic_per_depth, self.depths)
+            statistic_per_dwc = self._create_depthwidth_dict(depths, (width,), lambda: None, 'float')
+            # a nested NamedDict with indices: depth, width, circuit_index (width only has single value though)
+
+            for depth in depths:
+                percircuitdata = statistic_per_depth[depth]
+                statistic_per_dwc[depth][width] = \
+                    _tools.NamedDict('CircuitIndex', 'int', 'Value', 'float',
+                                     {i: j for i, j in enumerate(percircuitdata)})
+            results.statistics[statistic_nm] = statistic_per_dwc
+        return results
+
 # This is currently not used I think
 # class PredictedByDepthSummaryStatsConstructor(ByDepthSummaryStatsConstructor):
 #     """
