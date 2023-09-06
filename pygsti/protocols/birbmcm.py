@@ -6,7 +6,7 @@ from pygsti.processors import CliffordCompilationRules as CCR
 
 import copy as _copy
 
-import birb
+from pygsti.protocols import birb
 
 import numpy as _np
 
@@ -171,10 +171,10 @@ def sample_loqs_rb_mcm_circuit_layer_with_1Q_gates_by_edgegrab(pspec, qubit_labe
     
     unused_qubits = _np.setdiff1d(qubits, mcm_locs)
     gates = {q: 'Gc{}'.format(_np.random.choice(_np.arange(0,24))) for q in unused_qubits}
-    pre_oneq_layer = [Label(gates[q], q) for q in unused_qubits]
+    pre_oneq_layer = [Label(gates[q], str(q)) for q in unused_qubits]
     
     gates = {q: 'Gc{}'.format(_np.random.choice(_np.arange(0,24))) for q in unused_qubits}
-    post_oneq_layer = [Label(gates[q], q) for q in unused_qubits]
+    post_oneq_layer = [Label(gates[q], str(q)) for q in unused_qubits]
     
     layers = {'mixed-layer': mixed_layers['mixed-layer']}
     layers['pre-oneq-layers'] = [pre_oneq_layer]
