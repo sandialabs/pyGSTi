@@ -333,7 +333,6 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     jamiolkowski_matrix = JBstd - JAstd
 
     if old_cvxpy:
-        # Here we define a bunch of auxiliary matrices because CVXPY 0.4 doesn't use complex numbers
         K = jamiolkowski_matrix.real  # J.real
         L = jamiolkowski_matrix.imag  # J.imag
         prob, vars = _diamond_norm_cvxpy_04(dim, smallDim, K, L)
@@ -362,77 +361,92 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
 
 
 def _diamond_norm_cvxpy_04(dim, smallDim, K, L):
-    import cvxpy as _cvxpy
-    Y = _cvxpy.Variable(dim, dim)  # X.real
-    Z = _cvxpy.Variable(dim, dim)  # X.imag
-
-    sig0 = _cvxpy.Variable(smallDim, smallDim)  # rho0.real
-    sig1 = _cvxpy.Variable(smallDim, smallDim)  # rho1.real
-    tau0 = _cvxpy.Variable(smallDim, smallDim)  # rho1.imag
-    tau1 = _cvxpy.Variable(smallDim, smallDim)  # rho1.imag
+    import cvxpy as _cp
+    Y = _cp.Variable(dim, dim)  # X.real
+    Z = _cp.Variable(dim, dim)  # X.imag
+    sig0 = _cp.Variable(smallDim, smallDim)  # rho0.real
+    sig1 = _cp.Variable(smallDim, smallDim)  # rho1.real
+    tau0 = _cp.Variable(smallDim, smallDim)  # rho1.imag
+    tau1 = _cp.Variable(smallDim, smallDim)  # rho1.imag
 
     ident = _np.identity(smallDim, 'd')
 
-    objective = _cvxpy.Maximize(_cvxpy.trace(K.T @ Y + L.T @ Z))
-    constraints = [_cvxpy.bmat([
-        [_cvxpy.kron(ident, sig0), Y, -_cvxpy.kron(ident, tau0), -Z],
-        [Y.T, _cvxpy.kron(ident, sig1), Z.T, -_cvxpy.kron(ident, tau1)],
-        [_cvxpy.kron(ident, tau0), Z, _cvxpy.kron(ident, sig0), Y],
-        [-Z.T, _cvxpy.kron(ident, tau1), Y.T, _cvxpy.kron(ident, sig1)]]) >> 0,
-        _cvxpy.bmat([[sig0, -tau0],
+    objective = _cp.Maximize(_cp.trace(K.T @ Y + L.T @ Z))
+    constraints = [_cp.bmat([
+        [_cp.kron(ident, sig0), Y, -_cp.kron(ident, tau0), -Z],
+        [Y.T, _cp.kron(ident, sig1), Z.T, -_cp.kron(ident, tau1)],
+        [_cp.kron(ident, tau0), Z, _cp.kron(ident, sig0), Y],
+        [-Z.T, _cp.kron(ident, tau1), Y.T, _cp.kron(ident, sig1)]]) >> 0,
+        _cp.bmat([[sig0, -tau0],
                      [tau0, sig0]]) >> 0,
-        _cvxpy.bmat([[sig1, -tau1],
+        _cp.bmat([[sig1, -tau1],
                      [tau1, sig1]]) >> 0,
         sig0 == sig0.T,
         sig1 == sig1.T,
         tau0 == -tau0.T,
         tau1 == -tau1.T,
-        _cvxpy.trace(sig0) == 1.,
-        _cvxpy.trace(sig1) == 1.
+        _cp.trace(sig0) == 1.,
+        _cp.trace(sig1) == 1.
     ]
-    prob = _cvxpy.Problem(objective, constraints)
-    return prob, [Y, Z]
+    prob = _cp.Problem(objective, constraints)
+    return prob, [Y, Z, sig0, sig1, tau0, tau1]
 
 
-def _diamond_norm_cvxpy_1x(dim, smallDim, jamiolkowski_matrix):
+def _diamond_norm_cvxpy_1x(dim, smallDim, jamiolkowski_matrix, use_herm=True):
     K = jamiolkowski_matrix.real  # J.real
     L = jamiolkowski_matrix.imag  # J.imag
 
-    import cvxpy as _cvxpy
-    X = _cvxpy.Variable((dim, dim), complex=True)
-    Y = _cvxpy.real(X)  # X.real
-    Z = _cvxpy.imag(X)  # X.imag
+    import cvxpy as _cp
+    if use_herm:
+        vartype = {'hermitian': True}
+    else:
+        vartype = {'complex': True}
 
-    rho0 = _cvxpy.Variable((smallDim, smallDim), complex=True)
-    rho1 = _cvxpy.Variable((smallDim, smallDim), complex=True)
+    X = _cp.Variable((dim, dim), name='X', complex=True)
+    # ^ we get different results if X is constrained to be Hermitian.
+    Y = _cp.real(X)  # X.real
+    Z = _cp.imag(X)  # X.imag
 
-    sig0 = _cvxpy.real(rho0)  # rho0.real
-    sig1 = _cvxpy.real(rho1)  # rho1.real
+    rho0 = _cp.Variable((smallDim, smallDim), name='rho0', **vartype)
+    rho1 = _cp.Variable((smallDim, smallDim), name='rho1', **vartype)
 
-    tau0 = _cvxpy.imag(rho0)
-    tau1 = _cvxpy.imag(rho1)
+    sig0 = _cp.real(rho0)  # rho0.real
+    sig1 = _cp.real(rho1)  # rho1.real
+
+    tau0 = _cp.imag(rho0)
+    tau1 = _cp.imag(rho1)
 
     ident = _np.identity(smallDim, 'd')
 
-    objective = _cvxpy.Maximize(_cvxpy.trace(K.T @ Y + L.T @ Z))
-    constraints = [_cvxpy.bmat([
-        [_cvxpy.kron(ident, sig0), Y, -_cvxpy.kron(ident, tau0), -Z],
-        [Y.T, _cvxpy.kron(ident, sig1), Z.T, -_cvxpy.kron(ident, tau1)],
-        [_cvxpy.kron(ident, tau0), Z, _cvxpy.kron(ident, sig0), Y],
-        [-Z.T, _cvxpy.kron(ident, tau1), Y.T, _cvxpy.kron(ident, sig1)]]) >> 0,
-        _cvxpy.bmat([[sig0, -tau0],
-                     [tau0, sig0]]) >> 0,
-        _cvxpy.bmat([[sig1, -tau1],
-                     [tau1, sig1]]) >> 0,
-        sig0 == sig0.T,
-        sig1 == sig1.T,
-        tau0 == -tau0.T,
-        tau1 == -tau1.T,
-        _cvxpy.trace(sig0) == 1.,
-        _cvxpy.trace(sig1) == 1.
+    objective = _cp.Maximize(_cp.trace(K.T @ Y + L.T @ Z))
+
+    kr_tau0 = _cp.kron(ident, tau0)
+    kr_tau1 = _cp.kron(ident, tau1)
+    kr_sig0 = _cp.kron(ident, sig0)
+    kr_sig1 = _cp.kron(ident, sig1)
+
+    block_11 = _cp.bmat([[kr_sig0 ,    Y   ],
+                         [   Y.T  , kr_sig1]])
+    block_21 = _cp.bmat([[kr_tau0 ,    Z   ],
+                         [   -Z.T , kr_tau1]])
+    block_12 = block_21.T
+    mat_joint = _cp.bmat([[block_11, block_12],
+                          [block_21, block_11]])
+
+    sigtau0 = _cp.bmat([[sig0, tau0.T],
+                        [tau0, sig0  ]])
+
+    sigtau1 = _cp.bmat([[sig1, tau1.T],
+                        [tau1, sig1  ]])
+    constraints = [
+        mat_joint >> 0,
+        sigtau0 >> 0,
+        sigtau1 >> 0,
+        _cp.trace(sig0) == 1.,
+        _cp.trace(sig1) == 1.
     ]
-    prob = _cvxpy.Problem(objective, constraints)
-    return prob, [X]
+    prob = _cp.Problem(objective, constraints)
+    return prob, [X, rho0, rho1]
 
 
 def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J(b)|)
