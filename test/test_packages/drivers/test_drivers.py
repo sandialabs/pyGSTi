@@ -1,4 +1,4 @@
-import unittest #noqa
+import unittest # noqa: E999
 import numpy as np
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 from numpy.linalg import norm
