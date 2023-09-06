@@ -3163,8 +3163,8 @@ def _stabilizer_to_all_zs(stabilizer, qubit_labels, absolute_compilation):
     stab_circuit.change_gate_library(absolute_compilation)
 
     if stab_circuit.depth == 0:
-            stab_circuit.insert_layer_inplace([_lbl.Label(())], 0)
-            #stab_circuit.insert_layer_inplace([_lbl.Label((idle_name), q) for q in qubit_labels], 0)
+        stab_circuit.insert_layer_inplace([_lbl.Label(())], 0)
+        #stab_circuit.insert_layer_inplace([_lbl.Label((idle_name), q) for q in qubit_labels], 0)
     stab_circuit.done_editing()
     
     return s_layer, p_layer, stab_circuit
@@ -3234,8 +3234,8 @@ def _sample_random_pauli(n,pspec = None, absolute_compilation = None, qubit_labe
         pauli_circuit.change_gate_library(absolute_compilation)
         if pauli_circuit.depth == 0:
             pauli_circuit.insert_layer_inplace([_lbl.Label(())], 0)
-
         pauli_circuit.done_editing()
+
     return pauli, sign, pauli_circuit
 
       
@@ -3365,11 +3365,13 @@ def _measure(s_state, p_state):
         else:
             outcome.append(1)
             s_state, p_state = ss1, sp1 % 4
+    
     return outcome
 
 def _determine_sign(s_state, p_state, measurement):
     an_outcome = _measure(s_state, p_state)
     sign = [-1 if bit == 1 and pauli == 'Z' else 1 for bit, pauli in zip(an_outcome, measurement)]
+    
     return _np.prod(sign) 
 
 
@@ -3533,7 +3535,7 @@ def random_alternating_clifford_circ(pspec, depth, qubit_labels=None, two_q_gate
         The number of composite layers in the final circuit.
 
     qubit_labels : list, optional
-        If not None, a list of the qubits that the RB circuit is to be sampled for. This should
+        If not None, a list of the qubFalseits that the RB circuit is to be sampled for. This should
         be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
         If None, it is assumed that the RB circuit should be over all the qubits. Note that the
         ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise

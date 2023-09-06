@@ -845,6 +845,7 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         MirrorRBDesign
         """
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
+        
         return DirectRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
                                                      mapped_qubit_labels,
                                                      self.circuit_type, self.sampler,
@@ -978,7 +979,6 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
         self.samplerargs = samplerargs
         self.addlocal = addlocal
         self.lsargs = lsargs
-
 
         if add_default_protocol:
             if randomizeout:
