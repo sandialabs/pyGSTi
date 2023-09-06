@@ -1,4 +1,4 @@
-import unittest
+import unittest #noqa
 import numpy as np
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 from numpy.linalg import norm
