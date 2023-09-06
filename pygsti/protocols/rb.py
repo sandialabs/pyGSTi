@@ -855,7 +855,68 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
 
 
 class BinaryRBDesign(_vb.BenchmarkingDesign):
-    def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None,
+    """
+    Experiment design for binary randomized benchmarking.
+
+    Encapsulates a "binary randomized benchmarking" (BiRB) experiment.
+
+    Parameters
+    ----------
+    pspec : QubitProcessorSpec
+       The QubitProcessorSpec for the device that the experiment is being generated for. The `pspec` is always
+       handed to the sampler, as the first argument of the sampler function.
+
+    clifford_compilation: CompilationRules
+        Rules for exactly (absolutely) compiling the "native" gates of `pspec` into Clifford gates.
+
+    depths : list of ints
+        The "benchmark depth" of the circuit, which is the number of randomly sampled layers of gates in 
+        the core circuit. The full BiRB circuit has depth=length+2. 
+
+    circuits_per_depth : int
+        The number of (possibly) different MRB circuits sampled at each length.
+
+    qubit_labels : list, optional
+        If not None, a list of the qubits that the RB circuit is to be sampled for. This should
+        be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
+        If None, it is assumed that the RB circuit should be over all the qubits. Note that the
+        ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
+        irrelevant.
+
+    layer_sampling: str, optional
+        Determines the structure of the randomly sampled layers of gates:
+            1. 'mixed1q2q': Layers contain radomly-sampled two-qubit gates and randomly-sampled 
+            single-qubit gates on all remaining qubits. 
+            2. 'alternating1q2q': Each layer consists of radomly-sampled two-qubit gates, with 
+            all other qubits idling, followed by randomly sampled single-qubit gates on all qubits. 
+
+    sampler : str or function, optional
+        If a string, this should be one of: {'edgegrab', 'Qelimination', 'co2Qgates', 'local'}.
+        Except for 'local', this corresponds to sampling layers according to the sampling function
+        in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+        corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
+        a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
+        forbidden by this function]. If `sampler` is a function, it should be a function that takes
+        as the first argument a QubitProcessorSpec, and returns a random circuit layer as a list of gate
+        Label objects. Note that the default 'Qelimination' is not necessarily the most useful
+        in-built sampler, but it is the only sampler that requires no parameters beyond the QubitProcessorSpec
+        *and* works for arbitrary connectivity devices. See the docstrings for each of these samplers
+        for more information.
+
+    samplerargs : list, optional
+        A list of arguments that are handed to the sampler function, specified by `sampler`.
+        The first argument handed to the sampler is `pspec` and `samplerargs` lists the
+        remaining arguments handed to the sampler.
+
+
+    descriptor : str, optional
+        A string describing the generated experiment. Stored in the returned dictionary.
+
+    add_default_protocol : bool, optional
+        Whether to add a default RB protocol to the experiment design, which can be run
+        later (once data is taken) by using a :class:`DefaultProtocolRunner` object.
+    """
+    def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None, layer_sampling='mixed1q2q',
                  sampler='edgegrab', samplerargs=[0.25, ],
                  addlocal=False, lsargs=(),
                  citerations=20, compilerargs=(), idle_name='Gc0', partitioned=False, descriptor='A BiRB experiment',
@@ -878,7 +939,7 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
                     circuits_per_depth, l, lnum + 1, len(depths), lseed))
 
             args_list = [(pspec, clifford_compilations, l)] * circuits_per_depth
-            kwargs_list = [dict(idle_name=idle_name, qubit_labels=qubit_labels, sampler=sampler, samplerargs=samplerargs,
+            kwargs_list = [dict(idle_name=idle_name, qubit_labels=qubit_labels, layer_sampling=layer_sampling, sampler=sampler, samplerargs=samplerargs,
                                 addlocal=addlocal, lsargs=lsargs,
                                 citerations=citerations, compilerargs=compilerargs,
                                 partitioned=partitioned,
@@ -899,11 +960,11 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
             measurements.append(measurements_at_depth)
             signs.append(signs_at_depth)
 
-        self._init_foundation(depths, circuit_lists, measurements, signs, circuits_per_depth, qubit_labels,
+        self._init_foundation(depths, circuit_lists, measurements, signs, circuits_per_depth, qubit_labels, layer_sampling,
                               sampler, samplerargs, idle_name, addlocal, lsargs, citerations, compilerargs, partitioned, descriptor,
                               add_default_protocol)
 
-    def _init_foundation(self, depths, circuit_lists, measurements, signs, circuits_per_depth, qubit_labels,
+    def _init_foundation(self, depths, circuit_lists, measurements, signs, circuits_per_depth, qubit_labels, layer_sampling,
                          sampler, samplerargs, idle_name, addlocal, lsargs, citerations, compilerargs, partitioned, descriptor,
                          add_default_protocol):
         super().__init__(depths, circuit_lists, signs, qubit_labels, remove_duplicates=False)
@@ -913,6 +974,7 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
         self.citerations = citerations
         self.compilerargs = compilerargs
         self.descriptor = descriptor
+        self.layer_sampling = layer_sampling
         if isinstance(sampler, str):
             self.sampler = sampler
         else:
@@ -944,16 +1006,16 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
 
     Parameters
     ----------
-    datatype: 'success_probabilities' or 'adjusted_success_probabilities', optional
+    datatype: 'success_probabilities',  'adjusted_success_probabilities', or 'energies', optional
         The type of summary data to extract, average, and the fit to an exponential decay. If
         'success_probabilities' then the summary data for a circuit is the frequency that
         the target bitstring is observed, i.e., the success probability of the circuit. If
         'adjusted_success_probabilties' then the summary data for a circuit is
         S = sum_{k = 0}^n (-1/2)^k h_k where h_k is the frequency at which the output bitstring is
         a Hamming distance of k from the target bitstring, and n is the number of qubits.
-        This datatype is used in Mirror RB, but can also be used in Clifford and Direct RB.
-        
-        #added in "energies" as a datatype for DRB without Inversion
+        This datatype is used in Mirror RB, but can also be used in Clifford and Direct RB. 
+        If 'energies',  then the summary data is Pauli operator measurement results. This datatype is
+        only used for Binary RB. 
 
     defaultfit: 'A-fixed' or 'full'
         The summary data is fit to A + Bp^m with A fixed and with A as a fit parameter.
