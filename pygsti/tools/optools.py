@@ -332,28 +332,44 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     #Kevin's function: def diamondnorm( jamiolkowski_matrix ):
     jamiolkowski_matrix = JBstd - JAstd
 
-    # Here we define a bunch of auxiliary matrices because CVXPY doesn't use complex numbers
-
-    K = jamiolkowski_matrix.real  # J.real
-    L = jamiolkowski_matrix.imag  # J.imag
-
     if old_cvxpy:
-        Y = _cvxpy.Variable(dim, dim)  # X.real
-        Z = _cvxpy.Variable(dim, dim)  # X.imag
-
-        sig0 = _cvxpy.Variable(smallDim, smallDim)  # rho0.real
-        sig1 = _cvxpy.Variable(smallDim, smallDim)  # rho1.real
-        tau0 = _cvxpy.Variable(smallDim, smallDim)  # rho1.imag
-        tau1 = _cvxpy.Variable(smallDim, smallDim)  # rho1.imag
-
+        # Here we define a bunch of auxiliary matrices because CVXPY 0.4 doesn't use complex numbers
+        K = jamiolkowski_matrix.real  # J.real
+        L = jamiolkowski_matrix.imag  # J.imag
+        prob, vars = _diamond_norm_cvxpy_04(dim, smallDim, K, L)
     else:
-        Y = _cvxpy.Variable(shape=(dim, dim))  # X.real
-        Z = _cvxpy.Variable(shape=(dim, dim))  # X.imag
+        prob, vars = _diamond_norm_cvxpy_1x(dim, smallDim, jamiolkowski_matrix)
 
-        sig0 = _cvxpy.Variable(shape=(smallDim, smallDim))  # rho0.real
-        sig1 = _cvxpy.Variable(shape=(smallDim, smallDim))  # rho1.real
-        tau0 = _cvxpy.Variable(shape=(smallDim, smallDim))  # rho1.imag
-        tau1 = _cvxpy.Variable(shape=(smallDim, smallDim))  # rho1.imag
+    def recover_x(vars):
+        if old_cvxpy:
+            return vars[0].value + 1j*vars[1].value
+        else:
+            return vars[0].value
+
+    try:
+        prob.solve(solver='CVXOPT')
+    except _cvxpy.error.SolverError as e:
+        _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
+        return (-2, _np.zeros((dim, dim))) if return_x else -2
+    except:
+        _warnings.warn("CVXOPT failed (uknown err) - diamonddist returning -2!")
+        return (-2, _np.zeros((dim, dim))) if return_x else -2
+
+    if return_x:
+        return prob.value, recover_x(vars)
+    else:
+        return prob.value
+
+
+def _diamond_norm_cvxpy_04(dim, smallDim, K, L):
+    import cvxpy as _cvxpy
+    Y = _cvxpy.Variable(dim, dim)  # X.real
+    Z = _cvxpy.Variable(dim, dim)  # X.imag
+
+    sig0 = _cvxpy.Variable(smallDim, smallDim)  # rho0.real
+    sig1 = _cvxpy.Variable(smallDim, smallDim)  # rho1.real
+    tau0 = _cvxpy.Variable(smallDim, smallDim)  # rho1.imag
+    tau1 = _cvxpy.Variable(smallDim, smallDim)  # rho1.imag
 
     ident = _np.identity(smallDim, 'd')
 
@@ -372,29 +388,51 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
         tau0 == -tau0.T,
         tau1 == -tau1.T,
         _cvxpy.trace(sig0) == 1.,
-        _cvxpy.trace(sig1) == 1.]
-
+        _cvxpy.trace(sig1) == 1.
+    ]
     prob = _cvxpy.Problem(objective, constraints)
-    try:
-        prob.solve(solver="CVXOPT")
-#       prob.solve(solver="ECOS")
-#       prob.solve(solver="SCS")#This always fails
-    except _cvxpy.error.SolverError as e:
-        _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
-    except:
-        _warnings.warn("CVXOPT failed (uknown err) - diamonddist returning -2!")
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
+    return prob, [Y, Z]
 
-    #Validate result
-    #assert( abs(_np.trace(_np.dot(K.T,Y.value) + _np.dot(L.T,Z.value))-prob.value) < 1e-6 ), \
-    #    "Diamondnorm mismatch"
 
-    if return_x:
-        X = Y.value + 1j * Z.value  # encodes state at which maximum trace-distance occurs
-        return prob.value, X
-    else:
-        return prob.value
+def _diamond_norm_cvxpy_1x(dim, smallDim, jamiolkowski_matrix):
+    K = jamiolkowski_matrix.real  # J.real
+    L = jamiolkowski_matrix.imag  # J.imag
+
+    import cvxpy as _cvxpy
+    X = _cvxpy.Variable((dim, dim), complex=True)
+    Y = _cvxpy.real(X)  # X.real
+    Z = _cvxpy.imag(X)  # X.imag
+
+    rho0 = _cvxpy.Variable((smallDim, smallDim), complex=True)
+    rho1 = _cvxpy.Variable((smallDim, smallDim), complex=True)
+
+    sig0 = _cvxpy.real(rho0)  # rho0.real
+    sig1 = _cvxpy.real(rho1)  # rho1.real
+
+    tau0 = _cvxpy.imag(rho0)
+    tau1 = _cvxpy.imag(rho1)
+
+    ident = _np.identity(smallDim, 'd')
+
+    objective = _cvxpy.Maximize(_cvxpy.trace(K.T @ Y + L.T @ Z))
+    constraints = [_cvxpy.bmat([
+        [_cvxpy.kron(ident, sig0), Y, -_cvxpy.kron(ident, tau0), -Z],
+        [Y.T, _cvxpy.kron(ident, sig1), Z.T, -_cvxpy.kron(ident, tau1)],
+        [_cvxpy.kron(ident, tau0), Z, _cvxpy.kron(ident, sig0), Y],
+        [-Z.T, _cvxpy.kron(ident, tau1), Y.T, _cvxpy.kron(ident, sig1)]]) >> 0,
+        _cvxpy.bmat([[sig0, -tau0],
+                     [tau0, sig0]]) >> 0,
+        _cvxpy.bmat([[sig1, -tau1],
+                     [tau1, sig1]]) >> 0,
+        sig0 == sig0.T,
+        sig1 == sig1.T,
+        tau0 == -tau0.T,
+        tau1 == -tau1.T,
+        _cvxpy.trace(sig0) == 1.,
+        _cvxpy.trace(sig1) == 1.
+    ]
+    prob = _cvxpy.Problem(objective, constraints)
+    return prob, [X]
 
 
 def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J(b)|)
