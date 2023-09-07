@@ -392,38 +392,43 @@ def _diamond_norm_cvxpy_04(dim, smallDim, K, L):
     return prob, [Y, Z, sig0, sig1, tau0, tau1]
 
 
-def _diamond_norm_cvxpy_1x(dim, smallDim, jamiolkowski_matrix, use_herm=True):
-    K = jamiolkowski_matrix.real  # J.real
-    L = jamiolkowski_matrix.imag  # J.imag
+def _diamond_norm_cvxpy_1x(dim, smallDim, jamiolkowski_matrix):
+    # Compute the diamond norm
+    #
+    # Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
+    #
+    # Maximize 1/2 ( < J(phi), X > + < J(phi).dag, X.dag > )
+    # Subject to  [[ I otimes rho0,       X        ],
+    #              [      X.dag   ,   I otimes rho1]] >> 0
+    #              rho0, rho1 are density matrices
+    #              X is linear operator
 
     import cvxpy as _cp
-    if use_herm:
-        vartype = {'hermitian': True}
-    else:
-        vartype = {'complex': True}
 
+    rho0 = _cp.Variable((smallDim, smallDim), name='rho0', hermitian=True)
+    rho1 = _cp.Variable((smallDim, smallDim), name='rho1', hermitian=True)
     X = _cp.Variable((dim, dim), name='X', complex=True)
-    # ^ we get different results if X is constrained to be Hermitian.
     Y = _cp.real(X)  # X.real
     Z = _cp.imag(X)  # X.imag
 
-    rho0 = _cp.Variable((smallDim, smallDim), name='rho0', **vartype)
-    rho1 = _cp.Variable((smallDim, smallDim), name='rho1', **vartype)
+    K = jamiolkowski_matrix.real  # J.real
+    L = jamiolkowski_matrix.imag  # J.imag
+    if hasattr(_cp, 'scalar_product'):
+        objective_expr = _cp.scalar_product(K, Y) + _cp.scalar_product(L, Z)
+    else:
+        Kf = K.flatten(order='F')
+        Yf = Y.flatten(order='F')
+        Lf = L.flatten(order='F')
+        Zf = Z.flatten(order='F')
+        objective_expr = Kf @ Yf + Lf @ Zf
 
-    sig0 = _cp.real(rho0)  # rho0.real
-    sig1 = _cp.real(rho1)  # rho1.real
-
-    tau0 = _cp.imag(rho0)
-    tau1 = _cp.imag(rho1)
+    objective = _cp.Maximize(objective_expr)
 
     ident = _np.identity(smallDim, 'd')
-
-    objective = _cp.Maximize(_cp.trace(K.T @ Y + L.T @ Z))
-
-    kr_tau0 = _cp.kron(ident, tau0)
-    kr_tau1 = _cp.kron(ident, tau1)
-    kr_sig0 = _cp.kron(ident, sig0)
-    kr_sig1 = _cp.kron(ident, sig1)
+    kr_tau0 = _cp.kron(ident, _cp.imag(rho0))
+    kr_tau1 = _cp.kron(ident, _cp.imag(rho1))
+    kr_sig0 = _cp.kron(ident, _cp.real(rho0))
+    kr_sig1 = _cp.kron(ident, _cp.real(rho1))
 
     block_11 = _cp.bmat([[kr_sig0 ,    Y   ],
                          [   Y.T  , kr_sig1]])
@@ -432,18 +437,12 @@ def _diamond_norm_cvxpy_1x(dim, smallDim, jamiolkowski_matrix, use_herm=True):
     block_12 = block_21.T
     mat_joint = _cp.bmat([[block_11, block_12],
                           [block_21, block_11]])
-
-    sigtau0 = _cp.bmat([[sig0, tau0.T],
-                        [tau0, sig0  ]])
-
-    sigtau1 = _cp.bmat([[sig1, tau1.T],
-                        [tau1, sig1  ]])
     constraints = [
         mat_joint >> 0,
-        sigtau0 >> 0,
-        sigtau1 >> 0,
-        _cp.trace(sig0) == 1.,
-        _cp.trace(sig1) == 1.
+        rho0 >> 0,
+        rho1 >> 0,
+        _cp.trace(rho0) == 1.,
+        _cp.trace(rho1) == 1.
     ]
     prob = _cp.Problem(objective, constraints)
     return prob, [X, rho0, rho1]
