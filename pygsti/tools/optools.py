@@ -258,81 +258,26 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     """
     mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
 
-    #currently cvxpy is only needed for this function, so don't import until here
-
+    # currently cvxpy is only needed for this function, so don't import until here
     import cvxpy as _cvxpy
-
-    #Check if using version < 1.0
     old_cvxpy = bool(tuple(map(int, _cvxpy.__version__.split('.'))) < (1, 0))
     if old_cvxpy:
         raise RuntimeError('CVXPY 0.4 is no longer supported. Please upgrade to CVXPY 1.0 or higher.')
-    # This SDP implementation is a modified version of Kevin's code
 
-    #Compute the diamond norm
-
-    #Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
-
-    #Maximize 1/2 ( < J(phi), X > + < J(phi).dag, X.dag > )
-    #Subject to  [[ I otimes rho0, X],
-    #            [X.dag, I otimes rho1]] >> 0
-    #              rho0, rho1 are density matrices
-    #              X is linear operator
-
-    #Jamiolkowski representation of the process
-    #  J(phi) = sum_ij Phi(Eij) otimes Eij
-
-    #< a, b > = Tr(a.dag b)
-
-    #def vec(matrix_in):
-    #    # Stack the columns of a matrix to return a vector
-    #    return _np.transpose(matrix_in).flatten()
-    #
-    #def unvec(vector_in):
-    #    # Slice a vector into columns of a matrix
-    #    d = int(_np.sqrt(vector_in.size))
-    #    return _np.transpose(vector_in.reshape( (d,d) ))
-
-    #Code below assumes *un-normalized* Jamiol-isomorphism, so multiply by
-    # density mx dimension (`smallDim`) below
+    # _jam code below assumes *un-normalized* Jamiol-isomorphism.
+    # It will convert a & b to a "single-block" basis representation
+    # when mx_basis has multiple blocks. So after we call it, we need
+    # to multiply by mx dimension (`smallDim`).
     JAstd = _jam.fast_jamiolkowski_iso_std(a, mx_basis)
     JBstd = _jam.fast_jamiolkowski_iso_std(b, mx_basis)
-
-    #Do this *after* the fast_jamiolkowski_iso calls above because these will convert
-    # a & b to a "single-block" basis representation when mx_basis has multiple blocks.
     dim = JAstd.shape[0]
     smallDim = int(_np.sqrt(dim))
-    JAstd *= smallDim  # see above comment
-    JBstd *= smallDim  # see above comment
+    JAstd *= smallDim
+    JBstd *= smallDim
     assert(dim == JAstd.shape[1] == JBstd.shape[0] == JBstd.shape[1])
 
-    #CHECK: Kevin's jamiolowski, which implements the un-normalized isomorphism:
-    #  smallDim * _jam.jamiolkowski_iso(M, "std", "std")
-    #def kevins_jamiolkowski(process, representation = 'superoperator'):
-    #    # Return the Choi-Jamiolkowski representation of a quantum process
-    #    # Add methods as necessary to accept different representations
-    #    process = _np.array(process)
-    #    if representation == 'superoperator':
-    #        # Superoperator is the linear operator acting on vec(rho)
-    #        dimension = int(_np.sqrt(process.shape[0]))
-    #        print "dim = ",dimension
-    #        jamiolkowski_matrix = _np.zeros([dimension**2, dimension**2], dtype='complex')
-    #        for i in range(dimension**2):
-    #            Ei_vec= _np.zeros(dimension**2)
-    #            Ei_vec[i] = 1
-    #            output = unvec(_np.dot(process,Ei_vec))
-    #            tmp = _np.kron(output, unvec(Ei_vec))
-    #            print "E%d = \n" % i,unvec(Ei_vec)
-    #            #print "contrib =",_np.kron(output, unvec(Ei_vec))
-    #            jamiolkowski_matrix += tmp
-    #        return jamiolkowski_matrix
-    #JAstd_kev = jamiolkowski(a)
-    #JBstd_kev = jamiolkowski(b)
-    #print "diff a = ",_np.linalg.norm(JAstd_kev/2.0-JAstd)
-    #print "diff b = ",_np.linalg.norm(JBstd_kev/2.0-JBstd)
-
-    #Kevin's function: def diamondnorm( jamiolkowski_matrix ):
     J = JBstd - JAstd
-    prob, vars = _diamond_norm_cvxpy_1x(dim, smallDim, J)
+    prob, vars = _diamond_norm_model(dim, smallDim, J)
 
     try:
         prob.solve(solver='CVXOPT')
@@ -340,7 +285,7 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
         _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
         return (-2, _np.zeros((dim, dim))) if return_x else -2
     except:
-        _warnings.warn("CVXOPT failed (uknown err) - diamonddist returning -2!")
+        _warnings.warn("CVXOPT failed (unknown err) - diamonddist returning -2!")
         return (-2, _np.zeros((dim, dim))) if return_x else -2
 
     if return_x:
@@ -349,8 +294,8 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
         return prob.value
 
 
-def _diamond_norm_cvxpy_1x(dim, smallDim, J):
-    # Compute the diamond norm
+def _diamond_norm_model(dim, smallDim, J):
+    # return a model for computing the diamond norm.
     #
     # Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
     #
@@ -365,11 +310,11 @@ def _diamond_norm_cvxpy_1x(dim, smallDim, J):
     rho0 = _cp.Variable((smallDim, smallDim), name='rho0', hermitian=True)
     rho1 = _cp.Variable((smallDim, smallDim), name='rho1', hermitian=True)
     X = _cp.Variable((dim, dim), name='X', complex=True)
-    Y = _cp.real(X)  # X.real
-    Z = _cp.imag(X)  # X.imag
+    Y = _cp.real(X)
+    Z = _cp.imag(X)
 
-    K = J.real  # J.real
-    L = J.imag  # J.imag
+    K = J.real
+    L = J.imag
     if hasattr(_cp, 'scalar_product'):
         objective_expr = _cp.scalar_product(K, Y) + _cp.scalar_product(L, Z)
     else:
