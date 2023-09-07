@@ -504,7 +504,10 @@ class EmbeddingOpFactory(OpFactory):
             raise ValueError("Not allowed to embed onto sslbls=" + str(sslbls))
 
         if self.embeds_factory:
-            op = self.embedded_factory_or_op.create_op(args, None)  # Note: will have its gpindices set already
+            #Even though the produced op is (or should be) just a local op on `sslbls` (self.embedded_factory_or_op
+            # should not return an op embedded on `sslbls`) it may still depend on `sslbls` and so is passed to
+            # create_op call here.
+            op = self.embedded_factory_or_op.create_op(args, sslbls)  # Note: will have its gpindices set already
         else:
             op = self.embedded_factory_or_op
         embedded_op = _EmbeddedOp(self.state_space, sslbls, op)
@@ -820,7 +823,8 @@ class UnitaryOpFactory(OpFactory):
             Can be any type of operation, e.g. a LinearOperator, State,
             Instrument, or POVM, depending on the label requested.
         """
-        assert(sslbls is None), "UnitaryOpFactory.create_object must be called with `sslbls=None`!"
+        # Note: sslbls is unused, and may be None or non-None depending on the context this UnitaryOpFactory is
+        #  used in (e.g. it will be none when used with an EmbeddedOpFactory but not with an EmbeddingOpFactory).
         U = self.fn(args)
 
         # Expanded call to _bt.change_basis(_ot.unitary_to_std_process_mx(U), 'std', self.basis) for speed
