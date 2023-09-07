@@ -264,7 +264,8 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
 
     #Check if using version < 1.0
     old_cvxpy = bool(tuple(map(int, _cvxpy.__version__.split('.'))) < (1, 0))
-
+    if old_cvxpy:
+        raise RuntimeError('CVXPY 0.4 is no longer supported. Please upgrade to CVXPY 1.0 or higher.')
     # This SDP implementation is a modified version of Kevin's code
 
     #Compute the diamond norm
@@ -330,20 +331,8 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     #print "diff b = ",_np.linalg.norm(JBstd_kev/2.0-JBstd)
 
     #Kevin's function: def diamondnorm( jamiolkowski_matrix ):
-    jamiolkowski_matrix = JBstd - JAstd
-
-    if old_cvxpy:
-        K = jamiolkowski_matrix.real  # J.real
-        L = jamiolkowski_matrix.imag  # J.imag
-        prob, vars = _diamond_norm_cvxpy_04(dim, smallDim, K, L)
-    else:
-        prob, vars = _diamond_norm_cvxpy_1x(dim, smallDim, jamiolkowski_matrix)
-
-    def recover_x(vars):
-        if old_cvxpy:
-            return vars[0].value + 1j*vars[1].value
-        else:
-            return vars[0].value
+    J = JBstd - JAstd
+    prob, vars = _diamond_norm_cvxpy_1x(dim, smallDim, J)
 
     try:
         prob.solve(solver='CVXOPT')
@@ -355,44 +344,12 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
         return (-2, _np.zeros((dim, dim))) if return_x else -2
 
     if return_x:
-        return prob.value, recover_x(vars)
+        return prob.value, vars[0].value
     else:
         return prob.value
 
 
-def _diamond_norm_cvxpy_04(dim, smallDim, K, L):
-    import cvxpy as _cp
-    Y = _cp.Variable(dim, dim)  # X.real
-    Z = _cp.Variable(dim, dim)  # X.imag
-    sig0 = _cp.Variable(smallDim, smallDim)  # rho0.real
-    sig1 = _cp.Variable(smallDim, smallDim)  # rho1.real
-    tau0 = _cp.Variable(smallDim, smallDim)  # rho1.imag
-    tau1 = _cp.Variable(smallDim, smallDim)  # rho1.imag
-
-    ident = _np.identity(smallDim, 'd')
-
-    objective = _cp.Maximize(_cp.trace(K.T @ Y + L.T @ Z))
-    constraints = [_cp.bmat([
-        [_cp.kron(ident, sig0), Y, -_cp.kron(ident, tau0), -Z],
-        [Y.T, _cp.kron(ident, sig1), Z.T, -_cp.kron(ident, tau1)],
-        [_cp.kron(ident, tau0), Z, _cp.kron(ident, sig0), Y],
-        [-Z.T, _cp.kron(ident, tau1), Y.T, _cp.kron(ident, sig1)]]) >> 0,
-        _cp.bmat([[sig0, -tau0],
-                     [tau0, sig0]]) >> 0,
-        _cp.bmat([[sig1, -tau1],
-                     [tau1, sig1]]) >> 0,
-        sig0 == sig0.T,
-        sig1 == sig1.T,
-        tau0 == -tau0.T,
-        tau1 == -tau1.T,
-        _cp.trace(sig0) == 1.,
-        _cp.trace(sig1) == 1.
-    ]
-    prob = _cp.Problem(objective, constraints)
-    return prob, [Y, Z, sig0, sig1, tau0, tau1]
-
-
-def _diamond_norm_cvxpy_1x(dim, smallDim, jamiolkowski_matrix):
+def _diamond_norm_cvxpy_1x(dim, smallDim, J):
     # Compute the diamond norm
     #
     # Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
@@ -411,8 +368,8 @@ def _diamond_norm_cvxpy_1x(dim, smallDim, jamiolkowski_matrix):
     Y = _cp.real(X)  # X.real
     Z = _cp.imag(X)  # X.imag
 
-    K = jamiolkowski_matrix.real  # J.real
-    L = jamiolkowski_matrix.imag  # J.imag
+    K = J.real  # J.real
+    L = J.imag  # J.imag
     if hasattr(_cp, 'scalar_product'):
         objective_expr = _cp.scalar_product(K, Y) + _cp.scalar_product(L, Z)
     else:
