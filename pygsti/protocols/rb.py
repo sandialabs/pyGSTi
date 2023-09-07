@@ -844,8 +844,8 @@ class MirrorRBDesign(_vb.BenchmarkingDesign):
         -------
         MirrorRBDesign
         """
+        mapped_circuits_and_idealouts_by_depth = self._mapped_circuits_and_idealouts_by_depth(mapper)
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
-        
         return DirectRBDesign.from_existing_circuits(mapped_circuits_and_idealouts_by_depth,
                                                      mapped_qubit_labels,
                                                      self.circuit_type, self.sampler,
@@ -980,12 +980,8 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
         self.addlocal = addlocal
         self.lsargs = lsargs
 
-        if add_default_protocol:
-            if randomizeout:
-                defaultfit = 'A-fixed'
-            else:
-                defaultfit = 'full'
-            self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
+        defaultfit = 'A-fixed'
+        self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
             
         self.auxfile_types['signs'] = 'json' # Makes sure that signs and measurements are saved seperately
         self.auxfile_types['measurements'] = 'json'

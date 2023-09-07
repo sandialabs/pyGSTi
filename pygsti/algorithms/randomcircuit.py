@@ -3161,10 +3161,8 @@ def _stabilizer_to_all_zs(stabilizer, qubit_labels, absolute_compilation):
     s_layer, p_layer = _symp.symplectic_kronecker(stab_layer)
     stab_circuit = _cir.Circuit([c], editable=True)
     stab_circuit.change_gate_library(absolute_compilation)
-
     if stab_circuit.depth == 0:
         stab_circuit.insert_layer_inplace([_lbl.Label(())], 0)
-        #stab_circuit.insert_layer_inplace([_lbl.Label((idle_name), q) for q in qubit_labels], 0)
     stab_circuit.done_editing()
     
     return s_layer, p_layer, stab_circuit
@@ -3348,7 +3346,7 @@ def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels):
     compiled_layer = layer.copy(editable=True)
     compiled_layer.change_gate_library(absolute_compilation)
     if compiled_layer.depth == 0:
-        stab_circuit.insert_layer_inplace([_lbl.Label(())], 0)
+        compiled_layer.insert_layer_inplace([_lbl.Label(())], 0)
             #compiled_layer.insert_layer_inplace([_lbl.Label(idle_name, q) for q in qubit_labels], 0)
 
     return stab_state, stab_phase, s_prep, p_prep, compiled_layer
