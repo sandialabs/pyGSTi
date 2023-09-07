@@ -272,7 +272,6 @@ class TestDriversMethods(DriversTestCase):
         
         diff = norm(result_gst.estimates['GateSetTomography'].models['final iteration estimate'].to_vector()-
                          result_gst_warmstart.estimates['GateSetTomography'].models['final iteration estimate'].to_vector())
-        print(f'{diff=}')
         #Assert that this gives the same result as before:
         self.assertTrue(diff<=1e-10)
             
