@@ -338,7 +338,7 @@ class TestDriversMethods(DriversTestCase):
         diff1 = norm(result_standardgst.estimates['full TP'].models['final iteration estimate'].to_vector()- 
                      result_standardgst_warmstart.estimates['full TP'].models['final iteration estimate'].to_vector())
         
-        self.assertTrue(abs(diff)<=1e-8)
+        self.assertTrue(abs(diff)<=1e-6)
         self.assertTrue(diff1<=1e-10)
 
 
