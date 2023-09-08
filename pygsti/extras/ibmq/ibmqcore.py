@@ -258,7 +258,7 @@ class IBMQExperiment(dict):
                 try:
                     backend_properties = ibmq_backend.properties()
                     #If using a simulator backend then backend_properties is None
-                    if not False:#ibmq_backend.simulator:
+                    if not ibmq_backend.simulator:
                         self['submit_time_calibration_data'].append(backend_properties.to_dict())
                     #if using the new API we need to pass in the number of shots.
                     if backend_version == 1:

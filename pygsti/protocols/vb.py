@@ -400,6 +400,24 @@ class SummaryStatistics(_proto.Protocol):
         """
         
         def outcome_energy(outcome, measurement, sign):
+            """
+            Computes the result of a Pauli measurement from a computational basis outcome
+            Parameters
+            ----------
+            outcome: str
+                A string of '0's and '1's, representing a measurement outcome
+
+            measurement: str
+                A string of 'I's and 'Z's, representing the target Pauli measurement, 
+
+            sign: int
+                The sign of the target measurement (either 1 or -1)
+
+            Returns
+            -------
+            int
+                The Pauli measurement result
+            """
             energy = 1
             for i,j in zip(outcome,measurement):
                 if i == '1' and j == 'Z':
@@ -407,6 +425,23 @@ class SummaryStatistics(_proto.Protocol):
             return sign*energy
 
         def avg_energy(dsrow, measurement, sign):
+            """Computes the result of a Pauli measurement from counts of computational basis measurements
+            Parameters
+            ----------
+            dsrow: DataSetRow
+                The data to operate on
+
+            measurement: str
+                A string of 'I's and 'Z's, representing the target Pauli measurement, 
+
+            sign: int
+                The sign of the target measurement (either 1 or -1)
+
+            Returns
+            -------
+            float
+                The Pauli measurement result
+            """
             energy = 0
             for i in dsrow.counts:
                 out_eng = outcome_energy(i[0],measurement,sign)
@@ -438,7 +473,7 @@ class SummaryStatistics(_proto.Protocol):
                 return adjSP
             
         def _get_energies(icirc, circ, dsrow, measurement, sign):
-            eng = avg_energy(dsrow, measurement, sign)
+            eng = _avg_energy(dsrow, measurement, sign)
             ret = {'energies': eng, 'total_counts': dsrow.total}
             return ret
 

@@ -3130,6 +3130,14 @@ def create_random_germpower_mirror_circuits(pspec, absolute_compilation, depths,
     
 ###begin BiRB tools###
 def _stabilizer_to_all_zs(stabilizer, qubit_labels, absolute_compilation):
+    #inputs: 
+    #   - stabilizer: An n-qubit Pauli, represented as a string of X, Y, Z, and Is.
+    #   - qubit_labels: list/tuple of qubit labels
+    #   - absolute_compilation: Absolute Clifford compilation rules for desired gate set
+    #returns: A layer of single-qubit gates that transforms the input stabilizer 
+    #   into a Pauli with only Zs and Is.
+    #   - s, layer, p_layer: Symplectic representation of the layer
+    #   - stab_circuit: Layer as a compiled circuit
     n = len(stabilizer)
     
     symp_reps = _symp.compute_internal_gate_symplectic_representations()
@@ -3268,6 +3276,12 @@ def _select_neg_evecs(pauli, sign):
     return bit_evecs
 
 def _compose_initial_cliffords(prep_circuit):
+    #Composes initial random Clifford gates with a second layer of Clifford gates
+    #that changes the sign of the target stabilizer
+    #   - prep_circuit:  a list of the form [sign_layer, prep_layer], where sign_layer and prep_layer
+    #   are lists of gates.
+    #Returns a list of gates found by composing the corresponding elements of sign_layer
+    #and prep_layer
     composition_rules = {'C0': 'C3',
                          'C2': 'C5',
                          'C12': 'C15'} #supposed to give Gc# * X
@@ -3351,7 +3365,11 @@ def _sample_stabilizer(pauli, sign, absolute_compilation, qubit_labels):
 
     return stab_state, stab_phase, s_prep, p_prep, compiled_layer
 
-def _measure(s_state, p_state):
+def _measure(s_state, p_state): 
+    #Inputs
+    #   - s_state, p_state: The symplectic representation of an n-qubit state
+    #Outputs: 
+    #   An n-qubit bit string resulting from measuiring the input state in the computational basis
     num_qubits = len(p_state) // 2
     outcome = []
     for i in range(num_qubits):
@@ -3367,6 +3385,10 @@ def _measure(s_state, p_state):
     return outcome
 
 def _determine_sign(s_state, p_state, measurement):
+    #Inputs:
+    #   - s_state, p_state: The symplectic representation of an n-qubit state
+    #   - measurement: The target measurement, which is a length-n string of 'Z' and 'I'
+    #Outputs: +/-1, the sign of the result of measuring the "measurement" Pauuli on the input state
     an_outcome = _measure(s_state, p_state)
     sign = [-1 if bit == 1 and pauli == 'Z' else 1 for bit, pauli in zip(an_outcome, measurement)]
     
