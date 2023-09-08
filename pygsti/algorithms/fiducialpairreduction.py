@@ -161,7 +161,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
                         for prepLbl, povmLbl in prep_povm_tuples]
 
     def _get_derivs(length):
-        """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
+        """ Compute all derivative info: get derivative of each `<E_i|germ^exp|rho_j>`
             where i = composite EVec & fiducial index and j similar """
 
         st = 0  # running row count over to-be-concatenated dPall matrix
@@ -962,7 +962,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
                        for prepLbl, povmLbl in pre_povm_tuples]
 
     def _get_derivs(length):
-        """ Compute all derivative info: get derivative of each <E_i|germ^exp|rho_j>
+        """ Compute all derivative info: get derivative of each `<E_i|germ^exp|rho_j>`
             where i = composite EVec & fiducial index and j similar """
 
         circuits = []

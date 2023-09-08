@@ -51,7 +51,7 @@ class ImplicitOpModel(_mdl.OpModel):
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The circuit simulator used to compute any
-        requested probabilities, e.g. from :method:`probs` or
+        requested probabilities, e.g. from :meth:`probs` or
 
     evotype : {"densitymx", "statevec", "stabilizer", "svterm", "cterm"}
         The evolution type of this model, describing how states are

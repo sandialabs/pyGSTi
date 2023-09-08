@@ -96,8 +96,8 @@ class CloudNoiseModel(_ImplicitOpModel):
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The circuit simulator used to compute any
-        requested probabilities, e.g. from :method:`probs` or
-        :method:`bulk_probs`.  The default value of `"auto"` automatically
+        requested probabilities, e.g. from :meth:`probs` or
+        :meth:`bulk_probs`.  The default value of `"auto"` automatically
         selects the simulation type, and is usually what you want. Other
         special allowed values are:
 

@@ -476,7 +476,7 @@ def write_empty_protocol_data(dirname, edesign, sparse="auto", clobber_ok=False)
 
     Write to a directory an experimental design (`edesign`) and the dataset
     template files needed to load in a :class:`ProtocolData` object, e.g.
-    using the :function:`read_data_from_dir` function, after the template
+    using the :func:`read_data_from_dir` function, after the template
     files are filled in.
 
     Parameters
@@ -618,7 +618,7 @@ def fill_in_empty_dataset_with_fake_data(dataset_filename, model, num_samples, s
         value as its *start time*.
 
     fixed_column_mode : bool or 'auto', optional
-        How the underlying data set file is written - see :function:`write_dataset`.
+        How the underlying data set file is written - see :func:`write_dataset`.
 
     Returns
     -------

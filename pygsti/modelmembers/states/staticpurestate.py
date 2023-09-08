@@ -81,7 +81,7 @@ class StaticPureState(_DensePureState, _NoErrorGeneratorInterface):
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         if order == 0:  # only 0-th order term exists (assumes static pure_state_vec)
             coeff = _Polynomial({(): 1.0}, max_polynomial_vars)

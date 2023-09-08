@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## [0.9.11.2] - 2023-08-11
+
+### Fixed
+
+- Fixed FAQ hyperlinks (#304)
+- Removed deprecated functions for NumPy 1.25+ (#335)
+- Fixed pickling of TPPOVM objects (#336)
+- Updated the ReadTheDocs builds (#331)
+- Fixed dataset pickling (#326)
+- Removed deprecated functions for notebook 7+ (#337)
+
+### Changed
+
+- Slight performance improvements for GST fitting (#305)
+
 ## [0.9.11.1] - 2023-05-19
 
 ### Fixed

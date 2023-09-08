@@ -151,7 +151,7 @@ class _DataSetRow(object):
     ----------
     outcomes : list
         Returns this row's sequence of outcome labels, one per "bin" of repetition
-        counts (returned by :method:`get_counts`).
+        counts (returned by :meth:`get_counts`).
 
     counts : dict
         a dictionary of per-outcome counts.
@@ -890,7 +890,7 @@ class DataSet(_MongoSerializable):
 
     file_to_load_from : string or file object
         Specify this argument and no others to create a static DataSet by loading
-        from a file (just like using the load(...) function).
+        from a file (just like using the `load(...)` function).
 
     collision_action : {"aggregate","overwrite","keepseparate"}
         Specifies how duplicate circuits should be handled.  "aggregate"
@@ -1762,7 +1762,7 @@ class DataSet(_MongoSerializable):
         """
         Updates the internal outcome-label list in this dataset.
 
-        Call this after calling add_count_dict(...) or add_raw_series_data(...)
+        Call this after calling `add_count_dict(...)` or `add_raw_series_data(...)`
         with `update_olIndex=False`.
 
         Returns
@@ -1839,7 +1839,7 @@ class DataSet(_MongoSerializable):
             if a two-qubit DataSet has outcome labels "00", "01", "10", and "11", and
             we want to ''aggregate out'' the second qubit, we could use label_merge_dict =
             {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
-            to use :function:`filter_qubits` which also updates the circuits.
+            to use :func:`filter_qubits` which also updates the circuits.
 
         record_zero_counts : bool, optional
             Whether zero-counts are actually recorded (stored) in the returned
@@ -2390,7 +2390,7 @@ class DataSet(_MongoSerializable):
         aggregate_to_time : float, optional
             If not None, a single timestamp to give all the data in
             each returned data set, resulting in time-independent
-            `DataSet`s.  If None, then the original timestamps are
+            `DataSet` objects.  If None, then the original timestamps are
             preserved.
 
         Returns
@@ -2469,12 +2469,10 @@ class DataSet(_MongoSerializable):
         Manipulate this DataSet's timestamps according to `processor_fn`.
 
         For example, using, the folloing `process_times_array_fn` would change
-        the timestamps for each circuit to sequential integers.
-
-        ```
-        def process_times_array_fn(times):
-            return list(range(len(times)))
-        ```
+        the timestamps for each circuit to sequential integers. ::
+        
+            def process_times_array_fn(times):
+                return list(range(len(times)))
 
         Parameters
         ----------
@@ -2803,7 +2801,8 @@ class DataSet(_MongoSerializable):
                     'collisionAction': self.collisionAction,
                     'uuid': self.uuid,
                     'auxInfo': self.auxInfo,
-                    'comment': self.comment}
+                    'comment': self.comment,
+                    'dbcoordinates': self._dbcoordinates}
         return toPickle
 
     def __setstate__(self, state_dict):
@@ -2855,6 +2854,7 @@ class DataSet(_MongoSerializable):
             self.timeType = _np.dtype(state_dict['timeType'])
             self.repType = _np.dtype(state_dict['repType'])
             self.comment = state_dict.get('comment', '')
+            self._dbcoordinates = state_dict.get('dbcoordinates', None)
             if bStatic:  # always empty - don't save this, just init
                 self.cnt_cache = {opstr: _ld.OutcomeLabelDict() for opstr in self.cirIndex}
             else: self.cnt_cache = None
@@ -2934,7 +2934,7 @@ class DataSet(_MongoSerializable):
         """
         Read a DataSet from a binary file, clearing any data is contained previously.
 
-        The file should have been created with :method:`DataSet.write_binary`
+        The file should have been created with :meth:`DataSet.write_binary`
 
         Parameters
         ----------
@@ -3065,7 +3065,7 @@ class DataSet(_MongoSerializable):
         ----------
         nqubits : int
             The number of qubits.  For example, if equal to 3 the outcome labels
-            '000', '001', ... '111' are added.
+            '000', '001', `...` '111' are added.
 
         Returns
         -------

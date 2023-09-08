@@ -139,9 +139,9 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
     """
     Experiment design for periodic mirror-circuit benchmarking.
 
-    **THIS METHOD IS IN DEVELOPEMENT. DO NOT EXPECT THAT THIS FUNCTION WILL BEHAVE THE SAME IN FUTURE RELEASES
+    THIS METHOD IS IN DEVELOPEMENT. DO NOT EXPECT THAT THIS FUNCTION WILL BEHAVE THE SAME IN FUTURE RELEASES
     OF PYGSTI! THE DOCSTRINGS SHOULD ALSO NOT BE TRUSTED -- MANY (MAYBE ALL) OF THEM ARE COPIED FROM THE
-    MIRRORBDESIGN OBJECT AND SO SOME BITS ARE WRONG OR NOT APPLICABLE.**
+    MIRRORBDESIGN OBJECT AND SO SOME BITS ARE WRONG OR NOT APPLICABLE.
 
     Parameters
     ----------
@@ -153,21 +153,18 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         The "mirror RB depths" of the circuits, which is closely related to the circuit depth. A MRB
         length must be an even integer, and can be zero.
 
-        - If `localclifford` and `paulirandomize` are False, the depth of a sampled circuit = the MRB length.
+        * If `localclifford` and `paulirandomize` are False, the depth of a sampled circuit = the MRB length.
           The first length/2 layers are all sampled independently according to the sampler specified by
           `sampler`. The remaining half of the circuit is the "inversion" circuit that is determined
           by the first half.
-
-        - If `paulirandomize` is True and `localclifford` is False, the depth of a circuit is
-          2*length+1 with odd-indexed layers sampled according to the sampler specified by `sampler, and
+        * If `paulirandomize` is True and `localclifford` is False, the depth of a circuit is
+          `2*length+1` with odd-indexed layers sampled according to the sampler specified by `sampler`, and
           the the zeroth layer + the even-indexed layers consisting of random 1-qubit Pauli gates.
-
-        - If `paulirandomize` and `localclifford` are True, the depth of a circuit is
-          2*length+1 + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for
+        * If `paulirandomize` and `localclifford` are True, the depth of a circuit is
+          `2*length+1 + X` where X is a random variable (between 0 and normally `<= ~12-16`) that accounts for
           the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
-
-        - If `paulirandomize` is False and `localclifford` is True, the depth of a circuit is
-          length + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for
+        * If `paulirandomize` is False and `localclifford` is True, the depth of a circuit is
+          length + X where X is a random variable (between 0 and normally `<= ~12-16`) that accounts for
           the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
 
     circuits_per_depth : int
@@ -177,13 +174,13 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
         If not None, a list of the qubits that the RB circuit is to be sampled for. This should
         be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
         If None, it is assumed that the RB circuit should be over all the qubits. Note that the
-        ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
+        ordering of this list is the order of the "wires" in the returned circuit, but is otherwise
         irrelevant.
 
     sampler : str or function, optional
         If a string, this should be one of: {'pairingQs', 'Qelimination', 'co2Qgates', 'local'}.
         Except for 'local', this corresponds to sampling layers according to the sampling function
-        in rb.sampler named circuit_layer_by* (with * replaced by 'sampler'). For 'local', this
+        in rb.sampler named `circuit_layer_by*` (with `*` replaced by 'sampler'). For 'local', this
         corresponds to sampling according to rb.sampler.circuit_layer_of_oneQgates [which is not
         a valid option for n-qubit MRB -- it results in sim. 1-qubit MRB -- but it is not explicitly
         forbidden by this function]. If `sampler` is a function, it should be a function that takes
@@ -238,7 +235,7 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
             If not None, a list of the qubits that the RB circuit is to be sampled for. This should
             be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
             If None, it is assumed that the RB circuit should be over all the qubits. Note that the
-            ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
+            ordering of this list is the order of the "wires" in the returned circuit, but is otherwise
             irrelevant.
 
         sampler : str or function, optional

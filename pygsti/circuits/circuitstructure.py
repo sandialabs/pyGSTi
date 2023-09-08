@@ -626,7 +626,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         circuits_or_structure : list or CircuitList
             The object to convert.  If a :class:`PlaquetteGridCircuitStructure`,
             then the object is simply returned.  Lists of circuits (including
-            :class:`CircuitList`s are converted to structures having no
+            :class:`CircuitList` objects are converted to structures having no
             plaquettes.
 
         Returns

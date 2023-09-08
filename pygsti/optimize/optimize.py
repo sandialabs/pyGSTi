@@ -58,7 +58,7 @@ def minimize(fn, x0, method='cg', callback=None,
     callback : function, optional
         A callback function to be called in order to track optimizer progress.
         Should have signature: myCallback(x, f=None, accepted=None).  Note that
-        create_objfn_printer(...) function can be used to create a callback.
+        `create_objfn_printer(...)` function can be used to create a callback.
 
     tol : float, optional
         Tolerance value used for all types of tolerances available in a given method.

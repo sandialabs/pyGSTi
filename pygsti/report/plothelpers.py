@@ -166,7 +166,7 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
     Parameters
     ----------
     gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+        Obtained via :meth:`CircuitStructure.get_plaquette`, this object
         specifies which matrix indices should be computed and which circuits
         they correspond to.
 
@@ -204,7 +204,7 @@ def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
     Parameters
     ----------
     gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+        Obtained via :meth:`CircuitStructure.get_plaquette`, this object
         specifies which matrix indices should be computed and which circuits
         they correspond to.
 
@@ -242,7 +242,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
     Parameters
     ----------
     gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+        Obtained via :meth:`CircuitStructure.get_plaquette`, this object
         specifies which matrix indices should be computed and which circuits
         they correspond to.
 

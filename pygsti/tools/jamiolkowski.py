@@ -133,7 +133,7 @@ def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp'):
     """
     Given a choi matrix, return the corresponding operation matrix.
 
-    This function performs the inverse of :function:`jamiolkowski_iso`.
+    This function performs the inverse of :func:`jamiolkowski_iso`.
 
     Parameters
     ----------
@@ -238,7 +238,7 @@ def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
     """
     Given a choi matrix in the standard basis, return the corresponding operation matrix.
 
-    This function performs the inverse of :function:`fast_jamiolkowski_iso_std`.
+    This function performs the inverse of :func:`fast_jamiolkowski_iso_std`.
 
     Parameters
     ----------
@@ -311,7 +311,7 @@ def sums_of_negative_choi_eigenvalues(model):
 
     This is defined (somewhat arbitarily) by summing the negative
     eigenvalues of the Choi matrix for each gate in model separately.
-    This function is different from :function:`sum_of_negative_choi_eigenvalues`
+    This function is different from :func:`sum_of_negative_choi_eigenvalues`
     in that it returns sums separately for each operation of `model`.
 
     Parameters

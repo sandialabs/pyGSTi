@@ -31,7 +31,7 @@ class ModelTest(_proto.Protocol):
     Parameters
     ----------
     model_to_test : Model
-        The model to compare with data when :method:`run` is called.
+        The model to compare with data when :meth:`run` is called.
 
     target_model : Model, optional
         The ideal or desired model of perfect operations.  It is often useful to bundle this
@@ -77,9 +77,9 @@ class ModelTest(_proto.Protocol):
         ----------
         obj : object
             If `obj` is already an :class:`ObjectiveFunctionBuilder` it is used directly.  A
-            dictionary is assumed to hold arguments of :method:`ObjectiveFunctionBuilder.simple`.
+            dictionary is assumed to hold arguments of :meth:`ObjectiveFunctionBuilder.simple`.
             A list or tuple is assumed to hold positional arguments of
-            :method:`ObjectiveFunctionBuilder.__init__`.
+            :meth:`ObjectiveFunctionBuilder.__init__`.
 
         Returns
         -------

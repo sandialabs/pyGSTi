@@ -140,7 +140,7 @@ class NQPauliState(object):
         """
         Convert this Pauli basis state or measurement to a fiducial operation sequence.
 
-        When the returned operation sequence follows a preparation in the |0...0>
+        When the returned operation sequence follows a preparation in the `|0...0>`
         Z-basis state or is followed by a Z-basis measurement (with all "+"
         signs), then the Pauli state preparation or measurement described by
         this object will be performed.
@@ -405,7 +405,7 @@ class NQPauliOp(object):
         sign = (-1)**((num_i + 1) / 2) * _np.prod([ri_sign(pauli1, pauli2, p)
                                                    for pauli1, pauli2, p in zip(s1, s2, parities)])
         if isinstance(other, NQPauliOp): other_sign = other.sign
-        elif isinstance(other, NQPauliState): other_sign = _np.product(other.signs)
+        elif isinstance(other, NQPauliState): other_sign = _np.prod(other.signs)
         else: raise ValueError("Can't take commutator with %s type" % str(type(other)))
 
         return NQPauliOp(op, sign * self.sign * other_sign)

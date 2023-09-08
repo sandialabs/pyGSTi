@@ -49,24 +49,24 @@ class StabilityAnalysis(_proto.Protocol):
     transform : str, optional
         The type of transform to use in the spectral analysis. Options are:
 
-            - 'auto':   An attempt is made to choose the best transform given the "meta-data" of the data,
-                        e.g., the variability in the time-step between data points. For beginners,
-                        'auto' is the best option. If you are familiar with the underlying methods, the
-                        meta-data of the input, and the relative merits of the different transform, then
-                        it is probably better to choose this yourself -- as the auto-selection is not hugely
-                        sophisticated.
+        * 'auto':   An attempt is made to choose the best transform given the "meta-data" of the data,
+                    e.g., the variability in the time-step between data points. For beginners,
+                    'auto' is the best option. If you are familiar with the underlying methods, the
+                    meta-data of the input, and the relative merits of the different transform, then
+                    it is probably better to choose this yourself -- as the auto-selection is not hugely
+                    sophisticated.
 
-            - 'dct' :   The Type-II Discrete Cosine Transform (with an orthogonal normalization). This is
-                        the only tested option, and it is our recommended option when the data is
-                        approximately equally-spaced, i.e., the time-step between each "click" for each
-                        circuit is almost a constant. (the DCT transform implicitly assumes that this
-                        time-step is exactly constant)
+        * 'dct' :   The Type-II Discrete Cosine Transform (with an orthogonal normalization). This is
+                    the only tested option, and it is our recommended option when the data is
+                    approximately equally-spaced, i.e., the time-step between each "click" for each
+                    circuit is almost a constant. (the DCT transform implicitly assumes that this
+                    time-step is exactly constant)
 
-            - 'dft' :   The discrete Fourier transform (with an orthogonal normalization). *** This is an
-                        experimental feature, and the results are unreliable with this transform ***
+        * 'dft' :   The discrete Fourier transform (with an orthogonal normalization). 
+                    **This is an experimental feature, and the results are unreliable with this transform**
 
-            - 'lsp' :   The Lomb-Scargle periodogram.  *** This is an experimental feature, and the code is
-                        untested with this transform ***
+        * 'lsp' :   The Lomb-Scargle periodogram.  
+                    **This is an experimental feature, and the code is untested with this transform**
 
     marginalize : str or bool, optional
         True, False or 'auto'. Whether or not to marginalize multi-qubit data, to look for instability
@@ -176,19 +176,17 @@ class StabilityAnalysis(_proto.Protocol):
         model for each probability trajectory, after that parameterized model has been selected with the model
         selection methods. Allowed values are:
 
-            - 'auto'. The estimation method is chosen automatically, default to the fast method that is also
-                reasonably reliable.
-
-            - 'filter'. Performs a type of signal filtering: implements the transform used for generating power
-                spectra (e.g., the DCT), sets the amplitudes to zero for all freuquencies that the model selection
-                has not included in the model, inverts the transform, and then performs some minor post-processing
-                to guarantee probabilities within [0, 1]. This method is less statically well-founded than 'mle',
-                but it is faster and typically gives similar results. This method is not an option for
-                non-invertable transforms, such as the Lomb-Scargle periodogram.
-
-            - 'mle'. Implements maximum likelihood estimation, on the parameterized model chosen by the model
-                selection. The most statistically well-founded option, but can be slower than 'filter' and relies
-                on numerical optimization.
+        * 'auto'. The estimation method is chosen automatically, default to the fast method that is also
+            reasonably reliable.
+        * 'filter'. Performs a type of signal filtering: implements the transform used for generating power
+            spectra (e.g., the DCT), sets the amplitudes to zero for all freuquencies that the model selection
+            has not included in the model, inverts the transform, and then performs some minor post-processing
+            to guarantee probabilities within [0, 1]. This method is less statically well-founded than 'mle',
+            but it is faster and typically gives similar results. This method is not an option for
+            non-invertable transforms, such as the Lomb-Scargle periodogram.
+        * 'mle'. Implements maximum likelihood estimation, on the parameterized model chosen by the model
+            selection. The most statistically well-founded option, but can be slower than 'filter' and relies
+            on numerical optimization.
 
     modelselector : tuple, optional
         The model selection method. If not None, a "test class" tuple, specifying which test results to use to
@@ -228,24 +226,21 @@ class StabilityAnalysis(_proto.Protocol):
         transform : str, optional
             The type of transform to use in the spectral analysis. Options are:
 
-                - 'auto':   An attempt is made to choose the best transform given the "meta-data" of the data,
-                            e.g., the variability in the time-step between data points. For beginners,
-                            'auto' is the best option. If you are familiar with the underlying methods, the
-                            meta-data of the input, and the relative merits of the different transform, then
-                            it is probably better to choose this yourself -- as the auto-selection is not hugely
-                            sophisticated.
-
-                - 'dct' :   The Type-II Discrete Cosine Transform (with an orthogonal normalization). This is
-                            the only tested option, and it is our recommended option when the data is
-                            approximately equally-spaced, i.e., the time-step between each "click" for each
-                            circuit is almost a constant. (the DCT transform implicitly assumes that this
-                            time-step is exactly constant)
-
-                - 'dft' :   The discrete Fourier transform (with an orthogonal normalization). *** This is an
-                            experimental feature, and the results are unreliable with this transform ***
-
-                - 'lsp' :   The Lomb-Scargle periodogram.  *** This is an experimental feature, and the code is
-                            untested with this transform ***
+            * 'auto':   An attempt is made to choose the best transform given the "meta-data" of the data,
+                        e.g., the variability in the time-step between data points. For beginners,
+                        'auto' is the best option. If you are familiar with the underlying methods, the
+                        meta-data of the input, and the relative merits of the different transform, then
+                        it is probably better to choose this yourself -- as the auto-selection is not hugely
+                        sophisticated.
+            * 'dct' :   The Type-II Discrete Cosine Transform (with an orthogonal normalization). This is
+                        the only tested option, and it is our recommended option when the data is
+                        approximately equally-spaced, i.e., the time-step between each "click" for each
+                        circuit is almost a constant. (the DCT transform implicitly assumes that this
+                        time-step is exactly constant)
+            * 'dft' :   The discrete Fourier transform (with an orthogonal normalization). 
+                        **This is an experimental feature, and the results are unreliable with this transform**
+            * 'lsp' :   The Lomb-Scargle periodogram.  
+                        **This is an experimental feature, and the code is untested with this transform**
 
         marginalize : str or bool, optional
             True, False or 'auto'. Whether or not to marginalize multi-qubit data, to look for instability
@@ -355,19 +350,17 @@ class StabilityAnalysis(_proto.Protocol):
             model for each probability trajectory, after that parameterized model has been selected with the model
             selection methods. Allowed values are:
 
-                - 'auto'. The estimation method is chosen automatically, default to the fast method that is also
-                    reasonably reliable.
-
-                - 'filter'. Performs a type of signal filtering: implements the transform used for generating power
-                    spectra (e.g., the DCT), sets the amplitudes to zero for all freuquencies that the model selection
-                    has not included in the model, inverts the transform, and then performs some minor post-processing
-                    to guarantee probabilities within [0, 1]. This method is less statically well-founded than 'mle',
-                    but it is faster and typically gives similar results. This method is not an option for
-                    non-invertable transforms, such as the Lomb-Scargle periodogram.
-
-                - 'mle'. Implements maximum likelihood estimation, on the parameterized model chosen by the model
-                    selection. The most statistically well-founded option, but can be slower than 'filter' and relies
-                    on numerical optimization.
+            * 'auto'. The estimation method is chosen automatically, default to the fast method that is also
+                reasonably reliable.
+            * 'filter'. Performs a type of signal filtering: implements the transform used for generating power
+                spectra (e.g., the DCT), sets the amplitudes to zero for all freuquencies that the model selection
+                has not included in the model, inverts the transform, and then performs some minor post-processing
+                to guarantee probabilities within [0, 1]. This method is less statically well-founded than 'mle',
+                but it is faster and typically gives similar results. This method is not an option for
+                non-invertable transforms, such as the Lomb-Scargle periodogram.
+            * 'mle'. Implements maximum likelihood estimation, on the parameterized model chosen by the model
+                selection. The most statistically well-founded option, but can be slower than 'filter' and relies
+                on numerical optimization.
 
         modelselector : tuple, optional
             The model selection method. If not None, a "test class" tuple, specifying which test results to use to

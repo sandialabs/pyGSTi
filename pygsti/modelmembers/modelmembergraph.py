@@ -27,7 +27,7 @@ class ModelMemberGraph(object):
         ----------
         sdict: dict
             Flat dict of the ModelMemberGraph that was serialized by a
-            prior call to :method:`ModelMemberGraph.create_serialization_dict`.
+            prior call to :meth:`ModelMemberGraph.create_serialization_dict`.
 
         Returns
         -------
