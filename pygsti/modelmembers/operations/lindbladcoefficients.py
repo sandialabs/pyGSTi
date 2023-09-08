@@ -772,7 +772,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         Construct Lindblad coefficients (for this block) from a set of parameter values.
 
         This function essentially performs the inverse of
-        :method:`coefficients_to_paramvals`.
+        :meth:`coefficients_to_paramvals`.
 
         Parameters
         ----------
@@ -817,10 +817,10 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 #  cache_mx[i,i] = params[i,i]
                 #  cache_mx[i,j] = params[i,j] + 1j*params[j,i] (i > j)
                 cache_mx = self._cache_mx
+                iparams = 1j * params
                 for i in range(num_bels):
                     cache_mx[i, i] = params[i, i]
-                    for j in range(i):
-                        cache_mx[i, j] = params[i, j] + 1j * params[j, i]
+                    cache_mx[i, :i] = params[i, :i] + iparams[:i, i]
 
                 #The matrix of (complex) "other"-coefficients is build by assuming
                 # cache_mx is its Cholesky decomp; means otherCoeffs is pos-def.
@@ -839,11 +839,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
 
             elif self._param_mode == "elements":  # params mx stores block_data (hermitian) directly
                 #params holds block_data real and imaginary parts directly
+                iparams = 1j * params
                 for i in range(num_bels):
                     self.block_data[i, i] = params[i, i]
-                    for j in range(i):
-                        self.block_data[i, j] = params[i, j] + 1j * params[j, i]
-                        self.block_data[j, i] = params[i, j] - 1j * params[j, i]
+                    self.block_data[i, :i] = params[i, :i] + iparams[:i, i]
+                    self.block_data[:i, i] = params[i, :i] - iparams[:i, i]
             else:
                 raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
                                  % (self._param_mode, self._block_type))
@@ -856,7 +856,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         Construct derivative of Lindblad coefficients (for this block) from a set of parameter values.
 
         This function gives the Jacobian of what is returned by
-        :function:`paramvals_to_coefficients` (as a function of the parameters).
+        :func:`paramvals_to_coefficients` (as a function of the parameters).
 
         Parameters
         ----------

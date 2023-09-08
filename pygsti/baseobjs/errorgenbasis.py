@@ -67,6 +67,11 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
     def label_index(self, label, ok_if_missing=False):
         """
         TODO: docstring
+        
+        Parameters
+        ----------
+        label
+        
         ok_if_missing : bool
            If True, then returns `None` instead of an integer when the given label is not present.
         """
@@ -194,7 +199,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             right_offsets = [(i + 1 if ii < ifirst_trivial else 0) for ii, i in enumerate(left_inds)]
             if n1 == n: right_offsets[-1] += 1  # advance past diagonal element
             start_at = _np.dot(right_offsets, placevals)
-            cnt += _np.product(right_lengths) - start_at
+            cnt += _np.prod(right_lengths) - start_at
 
         return cnt
 
@@ -447,6 +452,11 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
     def label_index(self, elemgen_label, ok_if_missing=False):
         """
         TODO: docstring
+        
+        Parameters
+        ----------
+        elemgen_label
+        
         ok_if_missing : bool
            If True, then returns `None` instead of an integer when the given label is not present.
         """

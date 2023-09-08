@@ -147,13 +147,13 @@ class StandardGSTDesign(GateSetTomographyDesign):
         The processor API used by this experiment design.
 
     prep_fiducial_list_or_filename : list or str
-        A list of preparation fiducial :class:`Circuit`s or the path to a filename containing them.
+        A list of preparation fiducial :class:`Circuit` objects or the path to a filename containing them.
 
     meas_fiducial_list_or_filename : list or str
-        A list of measurement fiducial :class:`Circuit`s or the path to a filename containing them.
+        A list of measurement fiducial :class:`Circuit` objects or the path to a filename containing them.
 
     germ_list_or_filename : list or str
-        A list of germ :class:`Circuit`s or the path to a filename containing them.
+        A list of germ :class:`Circuit` objects or the path to a filename containing them.
 
     max_lengths : list
         List of integers, one per LSGST iteration, which set truncation lengths
@@ -323,9 +323,10 @@ class StandardGSTDesign(GateSetTomographyDesign):
             `dscheck` (only relevant when `dscheck` is not None).  "raise" causes
             a ValueError to be raised; "drop" causes the missing sequences to be
             dropped from the returned set.
-
+        
+        Returns
         -------
-        StandardGSTDesign
+            StandardGSTDesign
         """
         if germ_length_limits is None:
             gll = self.germ_length_limits
@@ -587,11 +588,12 @@ class GSTBadFitOptions(_NicelySerializable):
 
     actions : tuple, optional
         Actions to take when a GST fit is unsatisfactory. Allowed actions include:
-        - 'wildcard': Find an admissable wildcard model...
-        - 'ddist_wildcard': Fits a single parameter wildcard model in which
+        
+        * 'wildcard': Find an admissable wildcard model.
+        * 'ddist_wildcard': Fits a single parameter wildcard model in which
           the amount of wildcard error added to an operation is proportional
           to the diamond distance between that operation and the target.
-        - 'robust': scale data according out "robust statistics v1" algorithm,
+        * 'robust': scale data according out "robust statistics v1" algorithm,
            where we drastically scale down (reduce) the data due to especially
            poorly fitting circuits.  Namely, if a circuit's log-likelihood ratio
            exceeds the 95% confidence region about its expected value (the # of
@@ -599,17 +601,17 @@ class GSTBadFitOptions(_NicelySerializable):
            by the `expected_value / actual_value`, so that the new value exactly
            matches what would be expected.  Ideally there are only a few of these
            "outlier" circuits, which correspond errors in the measurement apparatus.
-        - 'Robust': same as 'robust', but re-optimize the final objective function
+        * 'Robust': same as 'robust', but re-optimize the final objective function
            (usually the log-likelihood) after performing the scaling to get the
            final estimate.
-        - 'robust+': scale data according out "robust statistics v2" algorithm,
+        * 'robust+': scale data according out "robust statistics v2" algorithm,
            which performs the v1 algorithm (see 'robust' above) and then further
            rescales all the circuit data to achieve the desired chi2 distribution
            of per-circuit goodness-of-fit values *without reordering* these values.
-        - 'Robust+': same as 'robust+', but re-optimize the final objective function
+        * 'Robust+': same as 'robust+', but re-optimize the final objective function
            (usually the log-likelihood) after performing the scaling to get the
            final estimate.
-        - 'do nothing': do not perform any additional actions.  Used to help avoid
+        * 'do nothing': do not perform any additional actions.  Used to help avoid
            the need for special cases when working with multiple types of bad-fit actions.
 
     wildcard_budget_includes_spam : bool, optional
@@ -734,7 +736,7 @@ class GSTObjFnBuilders(_NicelySerializable):
         ----------
         obj : object
             Object to cast.  Can be a `GSTObjFnBuilders` (naturally), a
-            dictionary of :method:`create_from` arguments (or None), or a
+            dictionary of :meth:`create_from` arguments (or None), or a
             list or tuple of the `(iteration_builders, final_builders)` constructor arguments.
 
         Returns
@@ -899,7 +901,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
 
         This essentially renders the gauge-optimization directives within this object
         in an "expanded" form for either running gauge optimization (e.g. within
-        a :method:`GateSetTomography.run` call) or for constructing the would-be gauge
+        a :meth:`GateSetTomography.run` call) or for constructing the would-be gauge
         optimization call arguments so they can be slightly modeified before passing
         them in as the actual gauge-optimization suite used in an analysis (the
         resulting dictionary can be used to initialize a new `GSTGaugeOptSuite` object
@@ -2549,7 +2551,7 @@ def _reoptimize_with_weights(mdc_objfn, circuit_weights_dict, optimizer, verbosi
 
     circuit_weights_dict : dict
         A dictionary of circuit weights, such as that returned by
-        :function:`_compute_robust_scaling`, giving the data-count scaling factors.
+        :func:`_compute_robust_scaling`, giving the data-count scaling factors.
 
     objfn_builder : ObjectiveFunctionBuilder
         The objective function (builder) that represents the final stage of

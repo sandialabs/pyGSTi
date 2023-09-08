@@ -77,7 +77,7 @@ class ModelPack(_ABC):
         ----------
         parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
             The gate and SPAM vector parameterization type. See
-            :function:`Model.set_all_parameterizations` for all allowed values.
+            :func:`Model.set_all_parameterizations` for all allowed values.
 
         simulator : ForwardSimulator or {"auto", "matrix", "map"}
             The simulator (or type) to be used for model calculations (leave as

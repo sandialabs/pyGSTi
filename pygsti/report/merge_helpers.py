@@ -18,8 +18,6 @@ import subprocess as _subprocess
 import webbrowser as _webbrowser
 from pathlib import Path
 
-from markupsafe import Markup
-
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.tools import timed_block as _timed_block
 
@@ -27,6 +25,7 @@ try:
     from jinja2.runtime import Undefined as _Undefined
 except ImportError:
     _Undefined = ()
+
 
 
 def _read_contents(filename):
@@ -87,11 +86,11 @@ def insert_resource(connected, online_url, offline_filename,
 
     integrity : str, optional
         The "integrity" attribute string of the <script> tag used to reference
-        a *.js (javascript) file on the internet.
+        a `*.js` (javascript) file on the internet.
 
     crossorigin : str, optional
         The "crossorigin" attribute string of the <script> tag used to reference
-        a *.js (javascript) file on the internet.
+        a `*.js` (javascript) file on the internet.
 
     Returns
     -------
@@ -467,7 +466,7 @@ def _make_jinja_env(static_path, template_dir=None, render_options=None, link_to
         # XXX we gotta find a better way, this is so wild dude
         contents = offline_loader.get_source(env, filename)[0]
 
-        return Markup(contents)
+        return markupsafe.Markup(contents)
 
 
     @jinja_filter
@@ -475,7 +474,7 @@ def _make_jinja_env(static_path, template_dir=None, render_options=None, link_to
     def render(eval_ctx, value):
         html = _render_as_html(value, render_options or {}, link_to)
 
-        return Markup(html) if eval_ctx.autoescape else html
+        return markupsafe.Markup(html) if eval_ctx.autoescape else html
 
     return env
 
@@ -753,13 +752,13 @@ def evaluate_call(call, stdout, stderr, returncode, printer):
     ----------
     call : list
         List containing the command and flags in the form that
-        :function:`subprocess.check_call` uses.
+        :func:`subprocess.check_call` uses.
 
     stdout : file pointer
-        As in :function:`subprocess.check_call`.
+        As in :func:`subprocess.check_call`.
 
     stderr : file pointer
-        As in :function:`subprocess.check_call`.
+        As in :func:`subprocess.check_call`.
 
     returncode : int
         Return/exit code.
@@ -865,7 +864,7 @@ def compile_latex_report(report_filename, latex_call, printer, auto_open):
 
     latex_call : list of string
         List containing the command and flags in the form that
-        :function:`subprocess.check_call` uses.
+        :func:`subprocess.check_call` uses.
 
     printer : VerbosityPrinter
         Printer to handle logging.

@@ -47,7 +47,8 @@ extras = {
     'html_reports': ['jinja2', 'MarkupSafe'],
     'notebooks': [
         'ipython',
-        'notebook'
+        'notebook',
+        'jupyter_server'
     ],
     'mongodb': ['pymongo'],
     'msgpack': ['msgpack'],
@@ -62,7 +63,6 @@ extras = {
         'pytest-xdist',
         'pytest-cov',
         'nbval',
-        'nose',
         'csaps',
         'cvxopt<=1.3.0.1',
         'cvxpy',
@@ -78,9 +78,10 @@ extras = {
         'seaborn',
         'ply',
         'qibo<=0.1.7',
-        'cirq',
+        'cirq-core',
         'notebook',
-        'ipython'
+        'ipython',
+        'jupyter_server'
     ]
 }
 

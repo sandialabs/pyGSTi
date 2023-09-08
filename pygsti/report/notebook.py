@@ -366,8 +366,8 @@ class Notebook(object):
         self.save_to(output_filename, template_filename)
         output_filename = _os.path.abspath(output_filename)  # for path manips below
 
-        from notebook import notebookapp
-        servers = list(notebookapp.list_running_servers())
+        from jupyter_server import serverapp
+        servers = list(serverapp.list_running_servers())
         for serverinfo in servers:
             rel = _os.path.relpath(output_filename, serverinfo['notebook_dir'])
             if ".." not in rel:  # notebook servers don't allow moving up directories

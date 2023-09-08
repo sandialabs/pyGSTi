@@ -264,7 +264,7 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
     to_type : {"full","full TP","static","static unitary","clifford",LINDBLAD}
         The type of parameterizaton to convert to.  "LINDBLAD" is a placeholder
         for the various Lindblad parameterization types.  See
-        :method:`Model.set_all_parameterizations` for more details.
+        :meth:`Model.set_all_parameterizations` for more details.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for `operation`.  Allowed values are Matrix-unit (std),

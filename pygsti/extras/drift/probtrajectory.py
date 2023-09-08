@@ -66,9 +66,9 @@ class ProbTrajectory(object):
 
     def basisfunction(self, i, times):
         """
-        The ith basis function of the model, evaluated at the times in `times.
+        The ith basis function of the model, evaluated at the times in `times`.
 
-        *** Defined in a derived class ***
+        **Defined in a derived class**
 
         Parameters
         ----------
@@ -266,7 +266,7 @@ class CosineProbTrajectory(ProbTrajectory):
 
         numtimes : int
             The number of data collection times defining the DCT basis functions (defines the total number
-            of DCT basis functions: the hyperparameters list is then a subset of this [0,1,2,...,numtimes-1]).
+            of DCT basis functions: the hyperparameters list is then a subset of this `[0,1,2,...,numtimes-1]`).
             This is typically set to the number of data collection times for the circuit that this probability
             trajectory is being defined for.
 

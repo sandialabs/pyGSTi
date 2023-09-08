@@ -638,9 +638,10 @@ def create_prep_cache(model, available_prep_fid_list, circuit_cache=None):
     """
     Make a dictionary structure mapping native state preps and circuits to numpy
     column vectors for the corresponding effective state prep.
-    
+
     This can then be passed into 'create_prep_mxs' to more efficiently generate the
     matrices for score function evaluation.
+    
     Parameters
     ----------
     model : Model
@@ -651,7 +652,7 @@ def create_prep_cache(model, available_prep_fid_list, circuit_cache=None):
 
     circuit_cache : dict
         dictionary of PTMs for the circuits in the available_prep_fid_list
-    
+
     Returns
     -------
     dictionary
@@ -682,9 +683,10 @@ def create_meas_cache(model, available_meas_fid_list, circuit_cache=None):
     """
     Make a dictionary structure mapping native measurements and circuits to numpy
     column vectors corresponding to the transpose of the effective measurement effects.
-    
+
     This can then be passed into 'create_meas_mxs' to more efficiently generate the
     matrices for score function evaluation.
+
     Parameters
     ----------
     model : Model

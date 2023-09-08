@@ -247,9 +247,9 @@ class StabilityAnalyzer(object):
         Initialize a StabilityAnalyzer, by inputing time-series data and some information on how it should be
         processed.
 
-        *** Some of the nominally allowed values for the inputs are not yet functional. For
+        Some of the nominally allowed values for the inputs are not yet functional. For
         entirely non-functional code an assert() will flag up the input as not yet allowed, and for untested
-        and perhaps unreliable code a warning will be flagged but the code will still run ***
+        and perhaps unreliable code a warning will be flagged but the code will still run.
 
         Parameters
         ----------
@@ -259,24 +259,24 @@ class StabilityAnalyzer(object):
         transform : str, optional
             The type of transform to use in the spectral analysis. Options are:
 
-                - 'auto':   An attempt is made to choose the best transform given the "meta-data" of the data,
-                            e.g., the variability in the time-step between data points. For beginners,
-                            'auto' is the best option. If you are familiar with the underlying methods, the
-                            meta-data of the input, and the relative merits of the different transform, then
-                            it is probably better to choose this yourself -- as the auto-selection is not hugely
-                            sophisticated.
+            * 'auto':   An attempt is made to choose the best transform given the "meta-data" of the data,
+                        e.g., the variability in the time-step between data points. For beginners,
+                        'auto' is the best option. If you are familiar with the underlying methods, the
+                        meta-data of the input, and the relative merits of the different transform, then
+                        it is probably better to choose this yourself -- as the auto-selection is not hugely
+                        sophisticated.
 
-                - 'dct' :   The Type-II Discrete Cosine Transform (with an orthogonal normalization). This is
-                            the only tested option, and it is our recommended option when the data is
-                            approximately equally-spaced, i.e., the time-step between each "click" for each
-                            circuit is almost a constant. (the DCT transform implicitly assumes that this
-                            time-step is exactly constant)
+            * 'dct' :   The Type-II Discrete Cosine Transform (with an orthogonal normalization). This is
+                        the only tested option, and it is our recommended option when the data is
+                        approximately equally-spaced, i.e., the time-step between each "click" for each
+                        circuit is almost a constant. (the DCT transform implicitly assumes that this
+                        time-step is exactly constant)
 
-                - 'dft' :   The discrete Fourier transform (with an orthogonal normalization). *** This is an
-                            experimental feature, and the results are unreliable with this transform ***
+            * 'dft' :   The discrete Fourier transform (with an orthogonal normalization). **This is an**
+                        **experimental feature, and the results are unreliable with this transform**
 
-                - 'lsp' :   The Lomb-Scargle periodogram.  *** This is an experimental feature, and the code is
-                            untested with this transform ***
+            * 'lsp' :   The Lomb-Scargle periodogram.  **This is an experimental feature, and the code is**
+                        **untested with this transform**
 
         marginalize : str or bool, optional
             True, False or 'auto'. Whether or not to marginalize multi-qubit data, to look for instability

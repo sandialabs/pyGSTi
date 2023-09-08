@@ -1106,7 +1106,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
         gate_inverse[`name1`] = `name2` and gate_inverse[`name2`] = `name1`
 
         1-qubit gates are not computed by this method, as they are be computed by the method
-        :method:`compute_one_qubit_gate_relations`.
+        :meth:`compute_one_qubit_gate_relations`.
 
         Returns
         -------

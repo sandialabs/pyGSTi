@@ -43,7 +43,7 @@ class TensorProductPOVM(_POVM):
     """
 
     def __init__(self, factor_povms, evotype="auto", state_space=None):
-        dim = _np.product([povm.state_space.dim for povm in factor_povms])
+        dim = _np.prod([povm.state_space.dim for povm in factor_povms])
         if state_space is None:
             state_space = _statespace.default_space_for_dim(dim)
         else:
@@ -102,7 +102,7 @@ class TensorProductPOVM(_POVM):
         return self.keys()
 
     def __len__(self):
-        return _np.product([len(fk) for fk in self._factor_keys])
+        return _np.prod([len(fk) for fk in self._factor_keys])
 
     def keys(self):
         """
