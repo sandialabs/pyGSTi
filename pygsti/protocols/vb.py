@@ -470,7 +470,7 @@ class SummaryStatistics(_proto.Protocol):
                 return adjSP
             
         def _get_energies(icirc, circ, dsrow, measurement, sign):
-            eng = _avg_energy(dsrow, measurement, sign)
+            eng = avg_energy(dsrow, measurement, sign)
             ret = {'energies': eng, 'total_counts': dsrow.total}
             return ret
 
