@@ -3489,13 +3489,13 @@ def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
     rand_state = _np.random.RandomState(seed)  # Ok if seed is None
     
 
-    rand_pauli, rand_sign, pauli_circuit = _sample_random_pauli(n = n, pspec = pspec, 
+    rand_pauli, rand_sign, pauli_circuit = _sample_random_pauli(n = n, pspec = pspec, qubit_labels=qubit_labels,
                                                                    absolute_compilation = clifford_compilations,
                                                                    circuit = True, include_identity = False)
-    
+
     s_inputstate, p_inputstate, s_init_layer, p_init_layer, prep_circuit = _sample_stabilizer(rand_pauli, rand_sign, clifford_compilations, qubit_labels)
     
-    s_pc, p_pc = _symp.symplectic_rep_of_clifford_circuit(pauli_circuit, pspec = pspec)
+    s_pc, p_pc = _symp.symplectic_rep_of_clifford_circuit(pauli_circuit, pspec=pspec.subset(gate_names_to_include='all', qubit_labels_to_keep=qubit_labels)) #note: if the pspec contains gates not in pyGSTi, this
     
     # build the initial layer of the circuit
     full_circuit = prep_circuit.copy(editable=True)
@@ -3510,7 +3510,7 @@ def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
         raise ValueError(f'{layer_sampling} is not a known layer type')
         
     # find the symplectic matrix / phase vector this "native gates" circuit implements.
-    s_rc, p_rc = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec)
+    s_rc, p_rc = _symp.symplectic_rep_of_clifford_circuit(circuit, pspec=pspec.subset(gate_names_to_include='all', qubit_labels_to_keep=qubit_labels))
     
     s_composite, p_composite = _symp.compose_cliffords(s1 = s_init_layer, p1 = p_init_layer, s2 = s_rc, p2 = p_rc)
 

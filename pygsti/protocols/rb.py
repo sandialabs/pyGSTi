@@ -1045,16 +1045,17 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
 
         Parameters
         ----------
-        datatype: 'success_probabilities' or 'adjusted_success_probabilities', optional
+        datatype: 'success_probabilities', 'adjusted_success_probabilities', or 'energies', optional
             The type of summary data to extract, average, and the fit to an exponential decay. If
             'success_probabilities' then the summary data for a circuit is the frequency that
             the target bitstring is observed, i.e., the success probability of the circuit. If
             'adjusted_success_probabilties' then the summary data for a circuit is
             S = sum_{k = 0}^n (-1/2)^k h_k where h_k is the frequency at which the output bitstring is
             a Hamming distance of k from the target bitstring, and n is the number of qubits.
-            This datatype is used in Mirror RB, but can also be used in Clifford and Direct RB.
+            This datatype is used in Mirror RB, but can also be used in Clifford and Direct RB. 
+            If 'energies',  then the summary data is Pauli operator measurement results. This datatype is
+            only used for Binary RB. 
             
-            # Added in "energies" to work with Direct RB without Inversion
 
         defaultfit: 'A-fixed' or 'full'
             The summary data is fit to A + Bp^m with A fixed and with A as a fit parameter.
@@ -1092,7 +1093,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
 
         assert(datatype in self.summary_statistics), "Unknown data type: %s!" % str(datatype)
         assert(datatype in ('success_probabilities', 'adjusted_success_probabilities', 'energies')), \
-            "Data type '%s' must be 'success_probabilities' or 'adjusted_success_probabilities'!" % str(datatype)
+            "Data type '%s' must be 'success_probabilities', 'adjusted_success_probabilities', or 'energies'!" % str(datatype)
 
         self.seed = seed
         self.depths = depths
@@ -1128,6 +1129,9 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
         RandomizedBenchmarkingResults
         """
         design = data.edesign
+
+        if isinstance(design, BinaryRBDesign):
+            assert(self.datatype=='energies'),  'dataype=energies is required for Binary RB data!'
 
         if self.datatype not in data.cache:
             summary_data_dict = self._compute_summary_statistics(data, energy = self.energies)
