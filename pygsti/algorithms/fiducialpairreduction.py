@@ -1590,8 +1590,7 @@ def filter_useless_fid_pairs(fiducial_indices, element_map, complete_jacobian, s
 def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials, meas_fiducials,
                                                    germ_vector_spanning_set=None, germs=None, pre_povm_tuples="first",
                                                    mem_limit=None, inv_trace_tol= 10, initial_seed_mode='greedy',
-                                                   evd_tol=1e-10, sensitivity_threshold=1e-10, seed=None ,verbosity=0, 
-                                                   check_complete_fid_set=False, float_type = _np.cdouble,
+                                                   evd_tol=1e-10, seed=None ,verbosity=0, float_type = _np.cdouble,
                                                    germ_set_spanning_kwargs = None, precomputed_jacobians = None):
     """
     Finds a per-germ set of fiducial pairs that are amplificationally complete.
@@ -1709,7 +1708,7 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
                 used_kwargs.update(germ_set_spanning_kwargs)
                                        
             germ_vector_spanning_set = germ_set_spanning_vectors(target_model, germs, 
-                                                                 float_type=_np.cdouble, 
+                                                                 float_type=float_type, 
                                                                  evd_tol = evd_tol,
                                                                  verbosity=verbosity,
                                                                  **used_kwargs)
@@ -1733,20 +1732,14 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
     if precomputed_jacobians is None:
         precomputed_jacobians = {germ:None for germ in germ_vector_spanning_set.keys()}
     
-    #make the spam parameters of the target model static, as the output of the
-    #germ set spanning vector code doesn't include spam parameters.
-    target_model_static_spam = _make_spam_static(target_model)
-    
     printer.log("------  Per Germ Global Fiducial Pair Reduction --------")
     with printer.progress_logging(1):
         for i, (germ, germ_vector_list) in enumerate(germ_vector_spanning_set.items()):
             candidate_solution_list, best_score = get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuples,
                                                                     target_model, germ, germ_vector_list, mem_limit,
-                                                                    printer, dof_per_povm,
-                                                                    inv_trace_tol, initial_seed_mode=initial_seed_mode,
-                                                                    check_complete_fid_set=check_complete_fid_set, evd_tol=evd_tol,
-                                                                    sensitivity_threshold=sensitivity_threshold, float_type= _np.cdouble,
-                                                                    dprobs_dict = precomputed_jacobians[germ])
+                                                                    printer, dof_per_povm, inv_trace_tol, 
+                                                                    initial_seed_mode=initial_seed_mode, evd_tol=evd_tol,
+                                                                    float_type= float_type, dprobs_dict = precomputed_jacobians[germ])
             
             #print some output about the minimum eigenvalue acheived.
             if best_score is not None:
@@ -1765,8 +1758,7 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
     
 def get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuples,
                                  target_model, germ, germ_vector_list, mem_limit, printer, dof_per_povm, 
-                                 inv_trace_tol=10, initial_seed_mode= 'greedy',
-                                 check_complete_fid_set= True, evd_tol=1e-10, sensitivity_threshold= 1e-10,
+                                 inv_trace_tol=10, initial_seed_mode= 'greedy', evd_tol=1e-10, 
                                  float_type = _np.cdouble, dprobs_dict = None):                      
     #Get dP-matrix for full set of fiducials, where
     # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
@@ -1802,7 +1794,7 @@ def get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuple
     printer.log('Number of amplified parameter directions needed for this germ: %d'%(num_germ_vecs), 2)
 
     #Determine which fiducial-pair indices to iterate over
-    goodPairList = None; bestFirstEval = []; bestPairs = {}
+    goodPairList = None
     
     #loops over a number of pairs between min_pairs_needed and up to and not including the number of possible pairs
     min_pairs_needed= ceil((num_germ_vecs/(nPossiblePairs*dof_per_povm))*nPossiblePairs)
@@ -1842,7 +1834,7 @@ def get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuple
     
     directional_DDD_complete = _np.sum(_np.stack([compact_directional_DDD_list[i]@compact_directional_DDD_list[i].T 
                                                   for i in cleaned_pair_indices_list], axis=2), axis=2)
-    #print('directional_DDD_complete shape ' + str(directional_DDD_complete.shape))
+    
     inv_trace_complete= _np.trace(_np.linalg.pinv(directional_DDD_complete))
     
     printer.log('Full Fiducial Set Inverse Trace: %f' % (inv_trace_complete), 2)
