@@ -4898,7 +4898,11 @@ def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, f
 #function for doing rank-1 psuedoinverse update:
 def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_increase=False):
     """
-    
+    Helper function for calculating rank-one psuedoinverse updates.
+    Takes as input a rank-one update, the psuedo-inverse of the matrix
+    we're updating, the projector onto the column space for the matrix whose
+    psuedoinverse we are updating and a flag for specifying if we're requiring
+    the rank to increase.
     """
     
     #calculate some quantities we need. Following notation from matrix cookbook.

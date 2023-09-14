@@ -1647,7 +1647,37 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
 
     mem_limit : int, optional
         A memory limit in bytes.
-        
+
+    inv_trace_tol : float, optional (default 10)
+        A threshold tolerance value corresponding to the maximum reduction
+        in sensitivity we are willing to tolerate relative to the complete
+        set of fiducial pairs. Specifically the increase in the trace of the 
+        inverse/psuedoinverse of the directional derivative matrix for a germ's 
+        specified amplified parameters that we are willing to tolerate. 
+
+    initial_seed_mode : str, optional (default 'greedy')
+        Specifies the manner in which an initial set of fiducial pairs is
+        selected for a germ to seed the greedy search routine. Currently only
+        supports 'greedy' wherein we start from scratch from an empty set
+        of fiducial pairs and select them entirely greedily.
+    
+    evd_tol : float, optional (default 1e-10)
+        Threshold value for eigenvalues below which they are treated as zero.
+        Used in the construction of compact eigenvalue decompositions
+        (technically rank-decompositions) for directional derivative matrices.
+
+    seed : int, optional (default None)
+        Seed for PRNGs. Not currently used.
+
+    float_type : numpy dtype, optional (default numpy.cdouble)
+        Numpy data type to use for floating point arrays.
+
+    germ_set_spanning_kwargs : dict, optional (default None)
+        A dictionary of optional kwargs for the function
+        `pygsti.algorithms.germselection.germ_set_spanning_vectors`.
+        See doctring for that function for more details. Only utilized
+        if the germ_vector_spanning_set argument of this function is None.
+    
     precomputed_jacobians : dict, optional (default None)
         An optional dictionary of precomputed jacobian dictionaries for the
         germ fidcuials pair set. The keys are germs and the values are the dictionaries
