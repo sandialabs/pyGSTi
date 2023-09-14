@@ -1,6 +1,8 @@
 import pygsti.algorithms.fiducialpairreduction as fpr
+from pygsti.algorithms.germselection import germ_set_spanning_vectors
 import pygsti.circuits as pc
 from pygsti.circuits import Circuit
+import numpy as _np
 from . import fixtures
 from ..util import BaseCase
 
@@ -46,55 +48,6 @@ class FiducialPairReductionStdData(object):
         Circuit(('Gx','Gx','Gy','Gx','Gy','Gy')): [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)]
         }
         
-        
-        #self.fiducial_pairs_per_germ_old = {
-        #    Circuit(('Gi',)): [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2), (2, 0), (2, 1), (2, 2)],
-        #    Circuit(('Gx',)): [(0, 0), (0, 1), (2, 2)],
-        #    Circuit(('Gy',)): [(0, 0), (0, 2), (1, 4)],
-        #    Circuit(('Gx', 'Gy')): [(0, 0), (0, 1), (1, 3)],
-        #    Circuit(('Gx', 'Gx', 'Gy')): [(0, 0), (0, 1), (0, 2), (1, 0), (1, 4)],
-        #    Circuit(('Gx', 'Gy', 'Gy')): [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)],
-        #    Circuit(('Gx', 'Gy', 'Gi')): [(0, 0), (0, 1), (1, 3)],
-        #    Circuit(('Gx', 'Gi', 'Gy')): [(0, 0), (0, 1), (1, 3)],
-        #    Circuit(('Gx', 'Gi', 'Gi')): [(0, 0), (0, 1), (2, 2)],
-        #    Circuit(('Gy', 'Gi', 'Gi')): [(0, 0), (0, 2), (1, 4)],
-        #    Circuit(('Gx', 'Gy', 'Gy', 'Gi')): [(0, 0), (0, 1), (0, 2), (2, 0), (2, 2)],
-        #    Circuit(('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')): [(0, 0), (0, 1), (1, 3)]
-        #}
-
-        #self.fiducial_pairs_per_germ_old1 = {
-        #    Circuit(('Gi',)): [(0, 0), (1, 1), (2, 2)],
-        #    Circuit(('Gx',)): [(0, 0), (0, 1), (0, 2), (2, 2)],
-        #    Circuit(('Gy',)): [(0, 0), (0, 1), (0, 2), (1, 1)],
-        #    Circuit(('Gx', 'Gy')): [(0, 0), (0, 1), (0, 2), (2, 0)],
-        #    Circuit(('Gx', 'Gx', 'Gy')): [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)],
-        #    Circuit(('Gx', 'Gy', 'Gy')): [(0, 0), (0, 1), (0, 2), (2, 0), (2, 1), (2, 2)],
-        #    Circuit(('Gx', 'Gy', 'Gi')): [(0, 0), (0, 1), (0, 2), (2, 0)],
-        #    Circuit(('Gx', 'Gi', 'Gy')): [(0, 0), (0, 1), (0, 2), (2, 0)],
-        #    Circuit(('Gx', 'Gi', 'Gi')): [(0, 0), (0, 1), (0, 2), (2, 2)],
-        #    Circuit(('Gy', 'Gi', 'Gi')): [(0, 0), (0, 1), (0, 2), (1, 1)],
-        #    Circuit(('Gx', 'Gy', 'Gy', 'Gi')): [(0, 0), (0, 1), (0, 2), (2, 0), (2, 1), (2, 2)],
-        #    Circuit(('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')): [(0, 0), (0, 1), (0, 2), (1, 0)]
-        #}
-        #
-        ##I think this alternate set is due to a slightly different search ordering - it
-        ## still looks like a correct output (there are many), so we'll call this OK for now:
-        #self.fiducial_pairs_per_germ_old2 = {
-        #    Circuit(('Gi',)): [(0, 0), (1, 1), (2, 2)],
-        #    Circuit(('Gx',)): [(0, 0), (0, 1), (0, 2), (2, 0)],  # 2,2 => 2,0
-        #    Circuit(('Gy',)): [(0, 0), (0, 1), (0, 2), (1, 0)],  # 1,1 => 1,0
-        #    Circuit(('Gx', 'Gy')): [(0, 0), (0, 1), (0, 2), (2, 0)],
-        #    Circuit(('Gx', 'Gx', 'Gy')): [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1), (1, 2)],
-        #    Circuit(('Gx', 'Gy', 'Gy')): [(0, 0), (0, 1), (0, 2), (2, 0), (2, 1), (2, 2)],
-        #    Circuit(('Gx', 'Gy', 'Gi')): [(0, 0), (0, 1), (0, 2), (2, 0)],
-        #    Circuit(('Gx', 'Gi', 'Gy')): [(0, 0), (0, 1), (0, 2), (2, 0)],
-        #    Circuit(('Gx', 'Gi', 'Gi')): [(0, 0), (0, 1), (0, 2), (2, 0)],  # 2,2 => 2,0
-        #    Circuit(('Gy', 'Gi', 'Gi')): [(0, 0), (0, 1), (0, 2), (1, 0)],  # 1,1 => 1,0
-        #    Circuit(('Gx', 'Gy', 'Gy', 'Gi')): [(0, 0), (0, 1), (0, 2), (2, 0), (2, 1), (2, 2)],
-        #    Circuit(('Gx', 'Gx', 'Gy', 'Gx', 'Gy', 'Gy')): [(0, 0), (0, 1), (0, 2), (1, 0)]
-        #}
-
-
 class FiducialPairReductionSmallData(FiducialPairReductionStdData):
     def setUp(self):
         super(FiducialPairReductionSmallData, self).setUp()
@@ -129,9 +82,8 @@ class FindSufficientFiducialPairsPerGermBase(object):
             search_mode='sequential', retry_for_smaller=False, 
             min_iterations=1, verbosity=0
         )
-        print("Found per-germ pairs:\n", fiducial_pairs)
+        #print("Found per-germ pairs:\n", fiducial_pairs)
         self.assertTrue((fiducial_pairs == self.fiducial_pairs_per_germ) or (fiducial_pairs == self.fiducial_pairs_per_germ_windows_38))
-            # or fiducial_pairs == self.fiducial_pairs_per_germ_alt)
 
     def test_find_sufficient_fiducial_pairs_per_germ_random(self):
         fiducial_pairs = fpr.find_sufficient_fiducial_pairs_per_germ(
@@ -140,6 +92,41 @@ class FindSufficientFiducialPairsPerGermBase(object):
         )
         # TODO assert correctness
 
+
+class FindSufficientFiducialPairsPerGermGreedy(object):
+    def test_find_sufficient_fiducial_pairs_per_germ_greedy_random(self):
+        fiducial_pairs = fpr.find_sufficient_fiducial_pairs_per_germ_greedy(
+            self.model, self.preps, self.effects, self.germs,
+            initial_seed_mode='random', seed=_SEED, check_complete_fid_set=False)
+        #TODO assert correctness
+
+
+    def test_find_sufficient_fiducial_pairs_per_germ_greedy_greedy(self):
+        fiducial_pairs = fpr.find_sufficient_fiducial_pairs_per_germ_greedy(
+            self.model, self.preps, self.effects, self.germs,
+            initial_seed_mode='greedy', seed=_SEED, check_complete_fid_set=False)
+        #TODO assert correctness
+
+class FindSufficientFiducialPairsPerGermGlobal(object):
+
+    def test_germ_set_spanning_vectors_greedy(self):
+        spanning_vec_set = germ_set_spanning_vectors(self.model, self.germs, 
+                                                     assume_real=True, float_type=_np.double, 
+                                                     verbosity=0, mode = 'greedy', final_test = True)
+        
+        #TODO assert correctness
+
+    def test_germ_set_spanning_vectors_rrqr(self):
+        spanning_vec_set = germ_set_spanning_vectors(self.model, self.germs, 
+                                                     assume_real=True, float_type=_np.double, 
+                                                     verbosity=0, mode = 'rrqr', final_test = True)
+
+
+    def test_find_sufficient_fiducial_pairs_per_germ_global(self):
+        fiducial_pairs = fpr.find_sufficient_fiducial_pairs_per_germ_global(
+            self.model, self.preps, self.effects, germs= self.germs,
+            initial_seed_mode='greedy')
+        #TODO assert correctness
 
 class StdDataFindSufficientFiducialPairsTester(FindSufficientFiducialPairsBase,
                                                FindSufficientFiducialPairsPerGermBase,
