@@ -1428,6 +1428,7 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
 
     #aggregate each twirledDerivDaggerDeriv across all procs
     if comm is not None and comm.Get_size() > 1:
+        from mpi4py import MPI  # not at top so pygsti doesn't require mpi4py
         result = _np.empty((Np, Np), dtype=float_type)
         comm.Allreduce(twirledDerivDaggerDeriv, result, op=MPI.SUM)
         twirledDerivDaggerDeriv[:, :] = result[:, :]
@@ -4573,7 +4574,7 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
                     #do a rank one psuedoinverse update wrt the best vector from the prior round
                     current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol, 
                                                                            prev_update_cache = prev_update_cache,
-                                                                           rank_one_update=composite_twirled_deriv_array[:, [idx_best_candidate_vec]])
+                                                                           rank_one_update=composite_twirled_deriv_array[:, [idx_best_candidate_vec]]) # noqa: F821
                 else:
                     #otherwise rebuild the update cache from scratch using a fresh psuedoinverse. Could be useful if worried about stability.
                     current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol)

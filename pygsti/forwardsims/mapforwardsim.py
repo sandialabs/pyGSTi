@@ -14,6 +14,7 @@ import importlib as _importlib
 import warnings as _warnings
 
 import numpy as _np
+from numpy import linalg as _nla
 
 from pygsti.forwardsims.distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
@@ -674,6 +675,10 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                        'can be inefficient and should be avoided for the purposes of forward \n'
                        'simulation/calculation of circuit outcome probability distributions \n' 
                        'when using the MapForwardSimulator.')
+        
+        # Smallness tolerances, used internally for conditional scaling required
+        # to control bulk products, their gradients, and their Hessians.
+        _PSMALL = 1e-100
         
         if scale:
             scaledGatesAndExps = {}

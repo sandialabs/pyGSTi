@@ -294,13 +294,13 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
     #otherwise do things without splitting up among multiple cores.
     else:
         if approx:
-            fisher_info_terms = accumulate_fim_matrix_per_circuit(split_circuit_list, num_params, 
-                                                                  num_shots, outcomes, ps, js,
+            fisher_info_terms = accumulate_fim_matrix_per_circuit(circuits, num_params, 
+                                                                  outcomes, ps, js,
                                                                   printer,
                                                                   hs, approx=True)
         else:
-            fisher_info_terms, total_hterm = accumulate_fim_matrix_per_circuit(split_circuit_list, num_params, 
-                                                                               num_shots, outcomes, ps, js,
+            fisher_info_terms, total_hterm = accumulate_fim_matrix_per_circuit(circuits, num_params, 
+                                                                               outcomes, ps, js,
                                                                                printer,
                                                                                hs, approx=False)
     

@@ -1099,7 +1099,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
                         goparams = goparams.copy()
                         goparams['comm'] = None
                     to_pickle['gaugeopt_argument_dicts'][lbl] = goparams
-                else:  # goparams is a list
+                elif isinstance(goparams, list):  # goparams is a list
                     new_goparams = []  # new list
                     for goparams_dict in goparams:
                         if 'comm' in goparams_dict:
@@ -1107,6 +1107,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
                             goparams_dict['comm'] = None
                         new_goparams.append(goparams_dict)
                     to_pickle['gaugeopt_argument_dicts'][lbl] = new_goparams
+                elif lbl == 'trivial_gauge_opt':
+                    to_pickle['gaugeopt_argument_dicts'][lbl] = None
         return to_pickle
 
     def _to_nice_serialization(self):
