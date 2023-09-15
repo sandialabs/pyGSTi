@@ -551,7 +551,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
     """
     if version == 'u3':
         std_gatenames_to_qasm = {}
-        std_gatenames_to_qasm['Gi'] = ['id']
+        std_gatenames_to_qasm['Gi'] = ['id'] #delay? 
         std_gatenames_to_qasm['Gxpi2'] = ['u3(1.570796326794897, 4.71238898038469, 1.570796326794897)']  # [1,3,1]*pi/2
         std_gatenames_to_qasm['Gxmpi2'] = ['u3(1.570796326794897, 1.570796326794897, 4.71238898038469)']  # [1,1,3]*pi/2
         std_gatenames_to_qasm['Gxpi'] = ['x']

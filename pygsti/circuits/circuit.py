@@ -3872,7 +3872,7 @@ class Circuit(object):
                             gatename_conversion=None, qubit_conversion=None,
                             block_between_layers=True,
                             block_between_gates=False,
-                            gateargs_map=None):  # TODO
+                            gateargs_map=None, ancilla_label=None):  # TODO
         """
         Converts this circuit to an openqasm string.
 
@@ -3917,6 +3917,11 @@ class Circuit(object):
             this dictionary need not be specified, and an automatic conversion to the standard
             openqasm format will be implemented.
 
+        ancilla_label : string or int, optional 
+            If not None, a string indicating the qubit label of the ancilla used for mid-circuit 
+            measurement. If a string, should be of the form 'Qi' for integer i. Currently does 
+            not support multi-ancillae mid-circuit measurement. 
+
         Returns
         -------
         str
@@ -3934,24 +3939,29 @@ class Circuit(object):
                 if all([q[0] == 'Q' for q in self.line_labels]):
                     standardtype = True
                     qubit_conversion = {llabel: int(llabel[1:]) for llabel in self.line_labels}
+                    if ancilla_label != None:
+                        qubit_conversion[ancilla_label] = int(ancilla_label[1:])
             if all([isinstance(q, int) for q in self.line_labels]):
                 qubit_conversion = {q: q for q in self.line_labels}
                 standardtype = True
             if not standardtype:
                 raise ValueError(
                     "No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
-
+        #Make sure that 'Qi' and i both work!
         if num_qubits is None:
             num_qubits = len(self.line_labels)
+            if ancilla_label != None: 
+                num_qubits += 1
 
         # if gateargs_map is None:
         #     gateargs_map = {}
 
         #Currently only using 'Iz' as valid intermediate measurement ('IM') label.
         #Todo:  Expand to all intermediate measurements.
-        if 'Iz' in self.str:
+        if 'Iz' or 'Ipc' in self.str:
             # using_IMs = True
-            num_IMs = self.str.count('Iz')
+            num_IMs = self.expand_subcircuits().str.count('Iz')
+            num_IMs += self.expand_subcircuits().str.count('Ipc')
         else:
             # using_IMs = False
             num_IMs = 0
@@ -3981,7 +3991,7 @@ class Circuit(object):
                 assert(len(gate_qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
 
                 # Find the openqasm for the gate.
-                if gate.name.__str__() != 'Iz':
+                if gate.name.__str__() != 'Iz' and gate.name.__str__() != 'Ipc':
                     openqasmlist_for_gate = gatename_conversion.get(gate.name, None)
 
                     if openqasmlist_for_gate is None:
@@ -4018,11 +4028,18 @@ class Circuit(object):
                                 openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
 
                 else:
-                    assert len(gate.qubits) == 1
-                    q = gate.qubits[0]
-                    # classical_bit = num_IMs_used
-                    openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
-                    num_IMs_used += 1
+                    assert gate.name.__str__() == 'Iz' or 'Ipc'
+                    num_Ims_used = 0  
+                    if gate.name.__str__() == 'Iz':
+                        q = gate.qubits[0]
+                        # classical_bit = num_IMs_used
+                        openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
+                    else: 
+                        openqasm_for_gate = ""
+                        for control in gate_qubits:
+                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[control]), qubit_conversion[ancilla_label])
+                        openqasm_for_gate += "measure q[{0}] -> cr[{1}];\n".format(qubit_conversion[ancilla_label], num_IMs_used)
+                    num_Ims_used += 1 
 
                 # Add the openqasm for the gate to the openqasm string.
                 openqasm += openqasm_for_gate

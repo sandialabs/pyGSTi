@@ -57,6 +57,22 @@ def partial_trace(ordered_target_indices, input_dict):
             output_dict[new_string] = input_dict[bitstring]
     return output_dict
 
+def to_labeled_counts(input_dict, ordered_target_indices, num_qubits_in_pspec): 
+    outcome_labels = []
+    counts_data = []
+    for bitstring, count in input_dict.items():
+        new_label = []
+        term_string = ''
+        term_bits = bitstring[:num_qubits_in_pspec][::-1]
+        mid_bits = bitstring[num_qubits_in_pspec:][::-1]
+        for index in ordered_target_indices:
+            term_string += term_bits[index]
+        for bit in mid_bits:
+            new_label.append('p'+bit)
+        new_label.append(term_string)
+        outcome_labels.append(tuple(new_label))
+        counts_data.append(count)
+    return outcome_labels, counts_data
 
 def q_list_to_ordered_target_indices(q_list, num_qubits):
     if q_list is None:
@@ -71,7 +87,7 @@ def q_list_to_ordered_target_indices(q_list, num_qubits):
 
 class IBMQExperiment(dict):
 
-    def __init__(self, edesign, pspec, remove_duplicates=True, randomized_order=True, circuits_per_batch=75,
+    def __init__(self, edesign, pspec, ancilla_label=None,remove_duplicates=True, randomized_order=True, circuits_per_batch=75,
                  num_shots=1024):
         """
         A object that converts pyGSTi ExperimentDesigns into jobs to be submitted to IBM Q, submits these
@@ -162,7 +178,7 @@ class IBMQExperiment(dict):
             #openqasm_circuit_ids = []
             for circ_idx, circ in enumerate(circuit_batch):
                 pygsti_openqasm_circ = circ.convert_to_openqasm(num_qubits=pspec.num_qubits,
-                                                                standard_gates_version='x-sx-rz')
+                                                                standard_gates_version='x-sx-rz', ancilla_label=ancilla_label)
                 qiskit_qc = _qiskit.QuantumCircuit.from_qasm_str(pygsti_openqasm_circ)
 
                 self['pygsti_openqasm_circuits'][batch_idx].append(pygsti_openqasm_circ)
@@ -321,7 +337,7 @@ class IBMQExperiment(dict):
             status = qjob.status()
             print("Batch {}: {}".format(counter + 1, status))
             if status.name == 'QUEUED':
-                print('  - Queue position is {}'.format(qjob.queue_position()))
+                print('  - Queue position is {}'.format(qjob.queue_position(refresh=True))) #maybe refresh here? Could also make this whole thing autorefresh? Overall job monitoring could be more sophisticated 
 
         # Print unsubmitted for any entries in qobj but not qjob
         for counter in range(len(self['qjob']), len(self['qobj'])):
@@ -339,16 +355,19 @@ class IBMQExperiment(dict):
         #get results from backend jobs and add to dict
         ds = _data.DataSet()
         for exp_idx, qjob in enumerate(self['qjob']):
-            print("Querying IBMQ for results objects for batch {}...".format(exp_idx))
-            batch_result = qjob.result()
+            print("Querying IBMQ for results objects for batch {}...".format(exp_idx+1)) #+ 1 here? 
+            batch_result = qjob.result() 
+            #results of qjob with associated exp_idx 
             self['batch_result_object'].append(batch_result)
             #exp_dict['batch_data'] = []
-            for i, circ in enumerate(self['pygsti_circuits'][exp_idx]):
+            num_qubits_in_pspec = self['pspec'].num_qubits
+            for i, circ in enumerate(self['pygsti_circuits'][exp_idx]): 
                 ordered_target_indices = [self['pspec'].qubit_labels.index(q) for q in circ.line_labels]
-                counts_data = partial_trace(ordered_target_indices, reverse_dict_key_bits(batch_result.get_counts(i)))
-                #exp_dict['batch_data'].append(counts_data)
-                ds.add_count_dict(circ, counts_data)
-
+                #assumes qubit labeling of the form 'Q0' not '0' 
+                labeled_counts = to_labeled_counts(batch_result.get_counts(i), ordered_target_indices, num_qubits_in_pspec)
+                outcome_labels = labeled_counts[0]
+                counts_data = labeled_counts[1]
+                ds.add_count_list(circ, outcome_labels, counts_data)
         self['data'] = _ProtocolData(self['edesign'], ds)
 
     def write(self, dirname=None):
