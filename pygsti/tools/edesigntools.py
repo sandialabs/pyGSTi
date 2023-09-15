@@ -233,7 +233,7 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
             split_fisher_info_terms = accumulate_fim_matrix_per_circuit(split_circuit_list, num_params, 
                                                                         outcomes, ps, js,
                                                                         printer,
-                                                                        hs, approx=True)
+                                                                        approx=True)
         else:
             split_fisher_info_terms, total_hterm = accumulate_fim_matrix_per_circuit(split_circuit_list, num_params, 
                                                                                      outcomes, ps, js,
@@ -297,7 +297,7 @@ def calculate_fisher_information_per_circuit(regularized_model, circuits, approx
             fisher_info_terms = accumulate_fim_matrix_per_circuit(circuits, num_params, 
                                                                   outcomes, ps, js,
                                                                   printer,
-                                                                  hs, approx=True)
+                                                                  approx=True)
         else:
             fisher_info_terms, total_hterm = accumulate_fim_matrix_per_circuit(circuits, num_params, 
                                                                                outcomes, ps, js,
@@ -396,8 +396,15 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
         needed_circuits = [c for c in circuits if c not in term_cache]
         if len(needed_circuits):
             printer.log('Adding needed terms to the per-circuit term cache.',3)
-            new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, 
-                                                                 approx, verbosity=verbosity, comm=comm, mem_limit=mem_limit)
+
+            #might also return hessian terms if approx is False, but we currently aren't using this in
+            #this function.
+            if approx:
+                new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, 
+                                                                    approx, verbosity=verbosity, comm=comm, mem_limit=mem_limit)
+            else:
+                new_terms, _ = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, 
+                                                                    approx, verbosity=verbosity, comm=comm, mem_limit=mem_limit)
             if comm is None or comm.Get_rank()==0:
                 term_cache.update(new_terms)
 
@@ -427,10 +434,12 @@ def calculate_fisher_information_matrix(model, circuits, num_shots=1, term_cache
             for i, ckt_chunk in enumerate(chunked_circuit_lists):
                 printer.show_progress(iteration = i, total=len(chunked_circuit_lists), bar_length=50, 
                                       suffix= f'Circuit chunk {i+1} out of {len(chunked_circuit_lists)}')                         
-
-                fim_term_for_chunk = _calculate_fisher_information_per_chunk(regularized_model, ckt_chunk, 
+                if approx:
+                    fim_term_for_chunk = _calculate_fisher_information_per_chunk(regularized_model, ckt_chunk, 
                                                                      approx, num_shots, verbosity=verbosity, comm=comm, mem_limit=mem_limit)
-                    
+                else:
+                    fim_term_for_chunk, _ = _calculate_fisher_information_per_chunk(regularized_model, ckt_chunk, 
+                                                                     approx, num_shots, verbosity=verbosity, comm=comm, mem_limit=mem_limit)
                 # Collect all terms, do this on rank zero:
                 if comm is None or comm.Get_rank() == 0:
                     fisher_information += fim_term_for_chunk
@@ -460,6 +469,10 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
     circuit_lists: list of lists of circuits or CircuitLists
         Circuit lists for the experiment design for each L. Most likely from the value of
         the `circuit_lists` attribute of most experiment design objects.
+
+    Ls : list of ints
+        A list of integer values corresponding to the circuit lengths associated with each circuit list
+        as past in with circuit_lists.
 
     num_shots: int or dict
         If int, specifies how many shots each circuit gets. If dict, keys must be circuits
@@ -537,8 +550,12 @@ def calculate_fisher_information_matrices_by_L(model, circuit_lists, Ls, num_sho
             term_cache = {}
         needed_circuits = [c for ckt_list in circuit_lists for c in ckt_list if c not in term_cache]
         if len(needed_circuits):
-            new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, approx, verbosity=verbosity, 
-                                                                 comm=comm, mem_limit=mem_limit)
+            if approx:
+                new_terms = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, approx, verbosity=verbosity, 
+                                                                    comm=comm, mem_limit=mem_limit)
+            else:
+                new_terms, _ = calculate_fisher_information_per_circuit(regularized_model, needed_circuits, approx, verbosity=verbosity, 
+                                                                    comm=comm, mem_limit=mem_limit)
             if comm is None or comm.Get_rank()==0:
                 term_cache.update(new_terms)
         #should have already used the comm in the construction of the term cache, so this is just an accumulation
