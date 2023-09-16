@@ -573,51 +573,49 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
         (and default) value "first", which considers the first prep and POVM
         contained in `target_model`.
 
-    search_mode : {"sequential","random"}, optional
-        If "sequential", then all potential fiducial pair sets of a given length
-        are considered in sequence (per germ) before moving to sets of a larger
-        size.  This can take a long time when there are many possible fiducial
-        pairs.  If "random", then only `n_random` randomly chosen fiducial pair
-        sets are considered for each set size before the set is enlarged.
-
-    constrain_to_tp : bool, optional
+    constrain_to_tp : bool, optional (default True)
         Whether or not to consider non-TP parameters the the germs amplify.  If
         the fiducal pairs will be used in a GST estimation where the model is
         constrained to being trace-preserving (TP), this should be set to True.
 
-    n_random : int, optional
-        The number of random-pair-sets to consider for a given set size.
-        
-    min_iterations : int, optional
-        A minimum number of candidate fiducial sets to try for a given
-        set size before allowing the search to exit early in the event
-        an acceptable candidate solution has already been found.
-        
-    base_loweig_tol : float, optional (default 1e-1)
-        A relative threshold value for determining if a fiducial set
-        is an acceptable candidate solution. The tolerance value indicates
-        the decrease in the magnitude of the smallest eigenvalue of
-        the Jacobian we're will to accept relative to that of the full
-        fiducial set.
+    inv_trace_tol : float, optional (default 10)
+        Tolerance used to identify whether a candidate fiducial set has a feasible
+        cost function value and for comparing among both complete and incomplete candidate
+        sets. The cost function corresonds to trace(pinv(sum_i(dot(J_i,J_i^T)))), where
+        the J_i's are described above, which is related to a condition in optimal 
+        design theory called a-optimality. The tolerance is a relative tolerance 
+        compared to the complete fiducial set. This essentially measures the relative
+        sensitivity loss we're willing to accept as part of applying FPR. 
 
+    initial_seed_mode : str, optional (default 'random')
+        A string corresponding to the method used to seed an initial set of fiducial
+        pairs in starting the greedy search routine. The default 'random' identifies
+        the minimum number of fiducial pairs required for sensitivity to every parameter
+        of a given germ and then randomly samples that number of fiducial pairs to use
+        as an initial seed. Also supports the option 'greedy' in which case we start the
+        greedy search from scratch using an empty seed set and select every fiducial pair
+        greedily. Random is generally faster computationally, but greedy has been fount to
+        often (but not always) find a smaller solution.
+
+    evd_tol : float, optional (default 1e-10)
+        Threshold value for eigenvalues below which they are treated as zero.
+        Used in the construction of compact eigenvalue decompositions
+        (technically rank-decompositions) of jacobians. If encountering an error
+        related to failing Cholesky decompositions consider increasing the value
+        of this tolerance.
+
+    sensitivity_threshold : float, optional (default 1e-10)
+        Threshold used for determing is a fiducial pair is useless 
+        for measuring a given germ's amplified parameters due to 
+        trivial sensitivity to the germ kite parameters 
+        (norm of jacobian w.r.t. the kite parameters is <sensitivity_threshold).
+    
     seed : int, optional
         The seed to use for generating random-pair-sets.
 
     verbosity : int, optional
         How much detail to print to stdout.
        
-    num_soln_returned : int, optional
-        The number of candidate solutions to return for each run of the fiducial pair search.
-        
-    type_soln_returned : str, optional
-        Which type of criteria to use when selecting which of potentially many candidate fiducial pairs to search through.
-        Currently only "best" supported which returns the num_soln_returned best candidates as measured by minimum eigenvalue.
-        
-    retry_for_smaller : bool, optional
-        If true then a second search is performed seeded by the candidate solution sets found in the first pass.
-        The search routine then randomly subsamples sets of fiducial pairs from these candidate solutions to see if
-        a smaller subset will suffice.
-
     mem_limit : int, optional
         A memory limit in bytes.
 
@@ -1419,7 +1417,7 @@ def _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, pre_povm
     #search space.
     printer.log('Removing useless fidcuial pairs with trivial sensitivity to the germ kite parameters. Sensitivity threshold is %.3f'%(sensitivity_threshold), 3)
     printer.log('Number of fiducial pairs before filtering trivial ones: %d' %(len(allPairIndices)), 3)
-    cleaned_pair_indices_list= filter_useless_fid_pairs(allPairIndices, elIndicesForPair, dPall)
+    cleaned_pair_indices_list= filter_useless_fid_pairs(allPairIndices, elIndicesForPair, dPall, sensitivity_threshold)
     printer.log('Number of fiducial pairs after filtering trivial ones: %d' %(len(cleaned_pair_indices_list)), 3)
     #Change the value of nPossiblePairs to reflect the filtered list
     nPossiblePairs= len(cleaned_pair_indices_list)

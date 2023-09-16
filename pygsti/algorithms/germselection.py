@@ -3101,8 +3101,8 @@ def compact_EVD_via_SVD(mat, threshold= 1e-10):
     try:
         _, s, Vh = _np.linalg.svd(mat)
     except _np.linalg.LinAlgError:
-        print('SVD Calculation Failed to Converge.')
-        print('Falling back to Scipy SVD with lapack driver gesvd, which is slower but *should* be more stable.')
+        _warnings.warn('SVD Calculation Failed to Converge. Falling back to Scipy' \
+                        +' SVD with lapack driver gesvd, which is slower but *should* be more stable.')
         _, s, Vh = _sla.svd(mat, lapack_driver='gesvd')
 
     #How many non-zero eigenvalues are there and what are their indices
@@ -3395,9 +3395,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         #diagnostic information
         #if this prints something bad happened
         if central_mat.shape == (0,0):
-            import pdb
-            pdb.set_trace()
-            print('central_mat shape: ', central_mat.shape)
+            _warnings.warn(f'central_mat shape: {central_mat.shape}')
             
         #now calculate the diagonal elements of pinv_E_beta@central_mat@pinv_E_beta.T
         
@@ -3414,9 +3412,12 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
             #Cholesky decomposition probably failed.
             #I'm not sure why it failed though so print some diagnostic info:
             cholesky_success=False
-            print('Cholesky Decomposition Probably Failed. This may be due to a poorly conditioned original Jacobian. Here is some diagnostic info.')
-            print('Minimum original eigenvalue: ', _np.min(orig_e))
-            #raise err  
+            warnmsg = 'Cholesky Decomposition Probably Failed.' \
+                      +' This may be due to a poorly conditioned original Jacobian.'\
+                      +' Consider increasing the value of evd_tol, if relevant.'\
+                      +' Here is some diagnostic info.'\
+                      + f'Minimum original eigenvalue: {_np.min(orig_e)}'
+            _warnings.warn(warnmsg)
         if cholesky_success:
             pinv_E_beta_central_chol= pinv_E_beta@central_mat_chol
             inv_update_term_diag= _np.einsum('ij,ji->i', pinv_E_beta_central_chol, pinv_E_beta_central_chol.T)
@@ -3441,8 +3442,9 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         except _np.linalg.LinAlgError:
             #This means the SVD did not converge, try to fall back to a more stable
             #SVD implementation using the scipy lapack_driver options.
-            print('pinv Calculation Failed to Converge.')
-            print('Falling back to pinv implementation based on Scipy SVD with lapack driver gesvd, which is slower but *should* be more stable.')
+            _warnings.warn('pinv Calculation Failed to Converge.'\
+                           +'Falling back to pinv implementation based on Scipy SVD with lapack driver gesvd,'\
+                           +' which is slower but *should* be more stable.')
             pinv_R_update = stable_pinv(R_update)
             
         #I have a bunch of intermediate matrices I need to construct. Some of which are used to build up
@@ -3463,11 +3465,12 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
             #I'm not sure why it failed though so print some diagnostic info:
             #Is B symmetric or hermitian?
             cholesky_success=False
-            print('Cholesky Decomposition Probably Failed. This may be due to a poorly conditioned original Jacobian. Here is some diagnostic info.')
             #What are the eigenvalues of the Dinv matrix?
-            print('Dinv Condition Number: ', _np.linalg.cond(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)))
-            print('Minimum original eigenvalue: ', _np.min(orig_e))
-            #raise err
+            _warnings.warn('Cholesky Decomposition Probably Failed. This may be due to a poorly conditioned original Jacobian.' \
+                           +' Here is some diagnostic info.'\
+                           +f' Dinv Condition Number: {_np.linalg.cond(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))}'\
+                           +f' Minimum original eigenvalue: {_np.min(orig_e)}'\
+                           +' Falling back w/o use of Cholesky.')
             
         if cholesky_success:
             pinv_E_beta_B_Dinv_chol= pinv_E_beta@B@Dinv_chol
@@ -3482,7 +3485,6 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         
         else:
             #Since the cholesky decomposition failed go ahead and use an alternative calculation pipeline.
-            print('Falling back w/o use of Cholesky.')
             Dinv= _np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)
             pinv_E_beta_B= pinv_E_beta@B
             
@@ -4500,8 +4502,6 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         printer.log("Complete initial germ set succeeds on all input models.", 1)
         
     twirledDerivDaggerDerivList, germ_eigval_list = _compute_bulk_twirled_ddd_compact(target_model, germ_list, tol, evd_tol=evd_tol, float_type=float_type, printer=printer, return_eigs=True)
-
-    #print([mat.shape for mat in twirledDerivDaggerDerivList])
     
     #_compute_bulk_twirled_ddd returns a list of matrices of the form U@np.diag(np.sqrt(e)) where U@diag(e)@U^H is the compact eigenvalue decomposition of a matrix. It is done this way to ensure we have symmetric updates.
     
@@ -4655,13 +4655,9 @@ def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_
         #We should be able to use the integer array returned by the RRQR to
         #index directly into the composite_twirled_deriv_array
         permuted_composite_twirled_deriv_array = composite_twirled_deriv_array[:, P]
-        print('permutation', P)
-        print('Pre-permuted array shape ', composite_twirled_deriv_array.shape)
-        print('Permuted array shape ', permuted_composite_twirled_deriv_array.shape)
         #As for the subset to take, we want the first numNonGaugeParams columns
         #of the permuted array
         selected_vector_subset = permuted_composite_twirled_deriv_array[:, 0:numNonGaugeParams]
-        print('Selected vector subset array shape: ', selected_vector_subset.shape)
         
         #Add the vectors to the germ vector dictionary
         for vec_idx in P[0:numNonGaugeParams]:
@@ -4826,8 +4822,9 @@ def construct_update_cache_rank_one(mat, evd_tol=1e-10, prev_update_cache=None, 
         except _np.linalg.LinAlgError:
             #This means the SVD did not converge, try to fall back to a more stable
             #SVD implementation using the scipy lapack_driver options.
-            print('pinv Calculation Failed to Converge.')
-            print('Falling back to pinv implementation based on Scipy SVD with lapack driver gesvd, which is slower but *should* be more stable.')
+            _warnings.warn('pinv Calculation Failed to Converge.'\
+                           +'Falling back to pinv implementation based on Scipy SVD with lapack driver gesvd,'\
+                           +' which is slower but *should* be more stable.')
             pinv_A = stable_pinv(mat)
     
     #construct the projector
@@ -4839,7 +4836,11 @@ def construct_update_cache_rank_one(mat, evd_tol=1e-10, prev_update_cache=None, 
 #function for doing rank-1 psuedoinverse-trace update:
 def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, force_rank_increase=False):
     """
-    
+        Helper function for calculating rank-one updates to the trace of the psuedoinverse.
+        Takes as input a rank-one update, the psuedo-inverse of the matrix
+        we're updating, the projector onto the column space for the matrix whose
+        psuedoinverse we are updating and a flag for specifying if we're requiring
+        the rank to increase.
     """
     #calculate some quantities we need. Following notation from matrix cookbook.
     v = pinv_A@vector_update
@@ -4858,7 +4859,6 @@ def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, f
         ww_term_diag = (beta/norm_w**4)*(w**2)
         
         G_diag = vw_term_diag + ww_term_diag
-        #print(G_diag)
         
         #if the norm of w is non-zero this means our update has non-trivial
         #support on the orthogonal complement to the column space of A,
@@ -4875,7 +4875,8 @@ def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, f
         #The only circumstance I can think of where we'll hit this is if
         #the update is a -1 eigenstate of pinv_A. I have no intuition for
         #whether we'll encounter this in practice.
-        print('Case 6')
+        warnings.warn('Encountered Case 6 of the psuedoinverse update from the matrix cookbook,'\
+                       +' which probably should not be possible (AKA look into this).')
         gamma = pinv_A@v
         norm_v= _np.linalg.norm(v)
         
@@ -4939,7 +4940,8 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
         #The only circumstance I can think of where we'll hit this is if
         #the update is a -1 eigenstate of pinv_A. I have no intuition for
         #whether we'll encounter this in practice.
-        print('Case 6')
+        _warnings.warn('Encountered Case 6 of the psuedoinverse update from the matrix cookbook,'\
+                       +' which probably should not be possible (AKA look into this).')
         gamma = pinv_A@v
         norm_v= _np.linalg.norm(v)
         
