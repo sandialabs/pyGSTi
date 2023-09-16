@@ -156,7 +156,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         
         #add in logic forcing the empty fiducial into the candidate list if force_empty is true and it is not present.
         if not any([len(ckt)==0 for ckt in cleaned_availableFidList]) and force_empty:
-            cleaned_availableFidList.append(_circuits.Circuit(_baseobjs.Label(()), line_labels= target_model.state_space.qudit_labels))
+            cleaned_availableFidList.append(_circuits.Circuit(_baseobjs.Label(()), line_labels= target_model.state_space.state_space_labels))
             #and add this to the circuit cache.
             cleaned_circuit_cache.update(create_circuit_cache(target_model, [cleaned_availableFidList[-1]]))
         
@@ -529,14 +529,17 @@ def clean_fid_list(model, circuit_cache, available_fid_list,drop_identities=True
             
             #Now I need to split the arrays into subarrays based on the values of the trace.
             _, unique_trace_counts = _np.unique(sorted_traces, return_counts=True)
-            trace_split_points = [unique_trace_counts[0]]
-            if len(unique_trace_counts>1):        
+            if len(unique_trace_counts)>1:     
+                trace_split_points = [unique_trace_counts[0]]  
                 for i, unique_count in enumerate(unique_trace_counts[1:-1], start=1):
                     trace_split_points.append(unique_count+trace_split_points[i-1])
-            
-            #now split the array
-            split_circs_trace= _np.split(sorted_circs, trace_split_points)
-            
+                #now split the array
+                split_circs_trace= _np.split(sorted_circs, trace_split_points)
+            #otherwise don't split and set split_circs_trace to a list containting
+            #sorted_circs as a sublist
+            else:
+                split_circs_trace = [sorted_circs]
+
             for circ_trace_sublist in split_circs_trace:
                 #next let's split these up into equivalence classes using the
                 #number of nonzero entries.
@@ -550,12 +553,17 @@ def clean_fid_list(model, circuit_cache, available_fid_list,drop_identities=True
                 sorted_circs_nonzero = circ_trace_sublist[nonzero_perm]
                 #Now I need to split the arrays into subarrays based on the values of the trace.
                 _, unique_nonzero_counts = _np.unique(sorted_nonzero_entries, return_counts=True)
-                nonzero_split_points = [unique_nonzero_counts[0]]
-                if len(unique_nonzero_counts>1):        
-                    for i, unique_count in enumerate(unique_nonzero_counts[1:-1], start=1):
-                        nonzero_split_points.append(unique_count+nonzero_split_points[i-1])
-                #now split the array
-                split_circs_nonzero= _np.split(sorted_circs_nonzero, nonzero_split_points)
+                if len(unique_nonzero_counts)>1:
+                    nonzero_split_points = [unique_nonzero_counts[0]]
+                    if len(unique_nonzero_counts>1):        
+                        for i, unique_count in enumerate(unique_nonzero_counts[1:-1], start=1):
+                            nonzero_split_points.append(unique_count+nonzero_split_points[i-1])
+                    #now split the array
+                    split_circs_nonzero= _np.split(sorted_circs_nonzero, nonzero_split_points)
+                #otherwise don't split and set split_circs_nonzero to a list containting
+                #sorted_circs_nonzero as a sublist
+                else:
+                    split_circs_nonzero = [sorted_circs_nonzero]
             
                 #Now for each of these sublists we can independently perform the deduping routine.
                 for circ_sublist in split_circs_nonzero: 
@@ -1996,7 +2004,7 @@ def create_candidate_fiducial_list(target_model, omit_identity= True, ops_to_omi
     for fidLength, count in candidate_fid_counts.items():
         if count == "all upto":
             #Add the empty fiducial separate to get the circuit labels correct.
-            availableFidList.append(_circuits.Circuit(_baseobjs.Label(()), line_labels= target_model.state_space.qudit_labels))
+            availableFidList.append(_circuits.Circuit(_baseobjs.Label(()), line_labels= target_model.state_space.state_space_labels))
             #add everything else up to fidLength
             availableFidList.extend(_circuits.list_all_circuits(fidOps, 1, fidLength))
         #if "all" then include all circuits at that particular length.
