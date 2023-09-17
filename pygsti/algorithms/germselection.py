@@ -4875,7 +4875,7 @@ def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, f
         #The only circumstance I can think of where we'll hit this is if
         #the update is a -1 eigenstate of pinv_A. I have no intuition for
         #whether we'll encounter this in practice.
-        warnings.warn('Encountered Case 6 of the psuedoinverse update from the matrix cookbook,'\
+        _warnings.warn('Encountered Case 6 of the psuedoinverse update from the matrix cookbook,'\
                        +' which probably should not be possible (AKA look into this).')
         gamma = pinv_A@v
         norm_v= _np.linalg.norm(v)
