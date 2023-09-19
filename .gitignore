@@ -47,6 +47,8 @@ jupyter_notebooks/Tutorials/tutorial_files/exampleMultiDataSetReport
 jupyter_notebooks/Tutorials/tutorial_files/exampleBriefReport
 jupyter_notebooks/Tutorials/tutorial_files/*.ipynb
 jupyter_notebooks/Tutorials/tutorial_files/tempTest
+jupyter_notebooks/Tutorials/tutorial_files/*checkpoints
+
 
 
 # Compiled source #
