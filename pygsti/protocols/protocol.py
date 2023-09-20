@@ -24,6 +24,7 @@ from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.dataframetools import _process_dataframe
 from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
 class Protocol(_MongoSerializable):
@@ -3207,6 +3208,36 @@ class DataCountsSimulator(DataSimulator):
                             self.alias_dict, self.collision_action,
                             self.record_zero_counts, comm, memlimit, self.times)
         return ProtocolData(edesign, ds)
+
+class ProtocolCheckpoint(_NicelySerializable):
+    """
+    Class for storing checkpointing intermediate progress during
+    the running of a protocol in order to enable restarting subsequent
+    runs of the protocol from that point.
+    
+    Parameters
+    ----------
+    name : str
+        Name of the protocol associated with this checkpoint.
+
+    parent : ProtocolCheckpoint, optional (default None)
+        When specified this checkpoint object is treated as the child of another ProtocolCheckpoint
+        object that acts as the parent. When present, the parent's `write` method supersedes
+        the child objects and is called when calling `write` on the child. Currently only used
+        in the implementation of StandardGSTCheckpoint.
+    """
+
+    def __init__(self, name, parent = None):
+        self.name = name
+        self.parent = parent
+        #Need to add this for MongoDB serialization related reasons.
+        self._dbcoordinates = None
+
+    def write(self, path):
+        if self.parent is not None:
+            self.parent.write(path)
+        else:
+            super().write(path)
 
 
 #In the future, we could put this function into a base class for
