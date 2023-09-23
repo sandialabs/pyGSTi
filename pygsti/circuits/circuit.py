@@ -3928,7 +3928,7 @@ class Circuit(object):
             An openqasm string.
         """
 
-        # create standard conversations.
+        # create standard conversations. #Update ancilla conversion to be cleaner--it doesn't work for all stupidity 
         if gatename_conversion is None:
             gatename_conversion, gateargs_map = _itgs.standard_gatenames_openqasm_conversions(standard_gates_version)
         if qubit_conversion is None:
@@ -3944,6 +3944,8 @@ class Circuit(object):
             if all([isinstance(q, int) for q in self.line_labels]):
                 qubit_conversion = {q: q for q in self.line_labels}
                 standardtype = True
+                if ancilla_label != None:
+                    qubit_conversion[ancilla_label] = ancilla_label
             if not standardtype:
                 raise ValueError(
                     "No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
@@ -4023,22 +4025,27 @@ class Circuit(object):
                             openqasm_for_gate += ';\n'
                             if block_between_gates:
                                 openqasm_for_gate += 'barrier '
-                                for q in self.line_labels[:-1]:
-                                    openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                                openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+                                if ancilla_label is None: 
+                                    for q in self.line_labels[:-1]:
+                                        openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                    openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+                                else:
+                                    for q in self.line_labels:
+                                        openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                    openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
 
                 else:
                     assert gate.name.__str__() == 'Iz' or 'Ipc'
                     num_Ims_used = 0  
                     if gate.name.__str__() == 'Iz':
-                        q = gate.qubits[0]
+                        q = gate.qubits[0] #HARD CODED QUBIT LABEL 
                         # classical_bit = num_IMs_used
                         openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
                     else: 
                         openqasm_for_gate = ""
                         for control in gate_qubits:
                             openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[control]), qubit_conversion[ancilla_label])
-                        openqasm_for_gate += "measure q[{0}] -> cr[{1}];\n".format(qubit_conversion[ancilla_label], num_IMs_used)
+                        openqasm_for_gate += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[ancilla_label]), num_IMs_used)   
                     num_Ims_used += 1 
 
                 # Add the openqasm for the gate to the openqasm string.
@@ -4064,17 +4071,21 @@ class Circuit(object):
             # where pragma blocks should be.
             if block_between_layers:
                 openqasm += 'barrier '
-                for q in self.line_labels[:-1]:
-                    openqasm += 'q[{0}], '.format(str(qubit_conversion[q]))
-                openqasm += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+                if ancilla_label is None: 
+                    for q in self.line_labels[:-1]:
+                        openqasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                    openqasm += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+                else:
+                    for q in self.line_labels:
+                        openqasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                    openqasm += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
                 # openqasm += ';'
 
         # Add in a measurement at the end.
         for q in self.line_labels:
             # openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), str(qubit_conversion[q]))
             openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]),
-                                                              str(num_IMs_used + qubit_conversion[q]))
-
+                                                              str(num_IMs + qubit_conversion[q]))
         return openqasm
 
     def simulate(self, model, return_all_outcomes=False):

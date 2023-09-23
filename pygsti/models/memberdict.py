@@ -221,7 +221,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
             if self.flags['cast_to_type'] == "operation":
                 return self.parent._embed_operation(key_label.sslbls, self.cast_to_model_member(value))
             else:
-                raise NotImplementedError("Cannot auto-embed objects other than opeations yet (not %s)."
+                raise NotImplementedError("Cannot auto-embed objects other than operations yet (not %s)."
                                           % self.flags['cast_to_type'])
         else:
             return value
