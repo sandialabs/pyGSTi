@@ -63,7 +63,6 @@ extras = {
         'pytest-xdist',
         'pytest-cov',
         'nbval',
-        'nose',
         'csaps',
         'cvxopt<=1.3.0.1',
         'cvxpy',

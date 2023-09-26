@@ -936,13 +936,18 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                 inst_members = {}
                 for k, lst in instrument_spec.items():
                     member = None
-                    for effect_spec, prep_spec in lst:
-                        effect_vec = _spec_to_densevec(effect_spec, is_prep=False)
-                        prep_vec = _spec_to_densevec(prep_spec, is_prep=True)
-                        if member is None:
-                            member = _np.outer(effect_vec, prep_vec)
-                        else:
-                            member += _np.outer(effect_vec, prep_vec)
+                    if len(lst) == 2:
+                        for effect_spec, prep_spec in lst:
+                            effect_vec = _spec_to_densevec(effect_spec, is_prep=False)
+                            prep_vec = _spec_to_densevec(prep_spec, is_prep=True)
+                            if member is None:
+                                member = _np.outer(effect_vec, prep_vec)
+                            else:
+                                member += _np.outer(effect_vec, prep_vec)
+                    else: # elements are key, array of outer product already
+                        # TODO: This appears to be the new standard format. Deprecate outer prod code above?
+                        # But old code could still be useful.
+                        member = lst.copy()
 
                     assert (member is not None), \
                         "You must provide at least one rank-1 specifier for each instrument member!"

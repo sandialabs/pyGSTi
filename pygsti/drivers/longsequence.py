@@ -34,7 +34,8 @@ def run_model_test(model_filename_or_object,
                    prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                    germs_list_or_filename, max_lengths, gauge_opt_params=None,
                    advanced_options=None, comm=None, mem_limit=None,
-                   output_pkl=None, verbosity=2):
+                   output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
+                   disable_checkpointing= False):
     """
     Compares a :class:`Model`'s predictions to a `DataSet` using GST-like circuits.
 
@@ -120,6 +121,23 @@ def run_model_test(model_filename_or_object,
         The 'verbosity' option is an integer specifying the level of
         detail printed to stdout during the calculation.
 
+    checkpoint : ModelTestCheckpoint, optional (default None)
+            If specified use a previously generated checkpoint object to restart
+            or warm start this run part way through.
+
+    checkpoint_path : str, optional (default None)
+        A string for the path/name to use for writing intermediate checkpoint
+        files to disk. Format is {path}/{name}, without inclusion of the json
+        file extension. This {path}/{name} combination will have the latest
+        completed iteration number appended to it before writing it to disk.
+        If none, the value of {name} will be set to the name of the protocol
+        being run.
+
+    disable_checkpointing : bool, optional (default False)
+        When set to True checkpoint objects will not be constructed and written
+        to disk during the course of this protocol. It is strongly recommended
+        that this be kept set to False without good reason to disable the checkpoints.
+
     Returns
     -------
     Results
@@ -167,7 +185,7 @@ def run_model_test(model_filename_or_object,
     proto.circuit_weights = advanced_options.get('circuit_weights', None)
     proto.unreliable_ops = advanced_options.get('unreliable_ops', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
 
-    results = proto.run(data, mem_limit, comm)
+    results = proto.run(data, mem_limit, comm, checkpoint=checkpoint, checkpoint_path=checkpoint_path, disable_checkpointing=disable_checkpointing)
     _output_to_pickle(results, output_pkl, comm)
     return results
 
@@ -287,7 +305,8 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
                           prep_fiducial_list_or_filename, meas_fiducial_list_or_filename,
                           germs_list_or_filename, max_lengths, gauge_opt_params=None,
                           advanced_options=None, comm=None, mem_limit=None,
-                          output_pkl=None, verbosity=2):
+                          output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
+                          disable_checkpointing = False):
     """
     Perform long-sequence GST (LSGST).
 
@@ -409,6 +428,22 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         - 4 -- also shows inner iterations of LM algorithm
         - 5 -- also shows detailed info from within jacobian and objective function calls.
 
+    checkpoint : GateSetTomographyCheckpoint, optional (default None)
+        If specified use a previously generated checkpoint object to restart
+        or warm start this run part way through.
+
+    checkpoint_path : str, optional (default None)
+        A string for the path/name to use for writing intermediate checkpoint
+        files to disk. Format is {path}/{name}, without inclusion of the json
+        file extension. This {path}/{name} combination will have the latest
+        completed iteration number appended to it before writing it to disk.
+        If none, the value of {name} will be set to the name of the protocol
+        being run.
+    disable_checkpointing : bool, optional (default False)
+        When set to True checkpoint objects will not be constructed and written
+        to disk during the course of this protocol. It is strongly recommended
+        that this be kept set to False without good reason to disable the checkpoints.
+
     Returns
     -------
     Results
@@ -453,7 +488,7 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     proto.circuit_weights = advanced_options.get('circuit_weights', None)
     proto.unreliable_ops = advanced_options.get('unreliable_ops', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
 
-    results = proto.run(data, mem_limit, comm)
+    results = proto.run(data, mem_limit, comm, checkpoint=checkpoint, checkpoint_path= checkpoint_path, disable_checkpointing=disable_checkpointing)
     _output_to_pickle(results, output_pkl, comm)
     return results
 
@@ -461,7 +496,8 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
 def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_object,
                                lsgst_lists, gauge_opt_params=None,
                                advanced_options=None, comm=None, mem_limit=None,
-                               output_pkl=None, verbosity=2):
+                               output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
+                               disable_checkpointing = False):
     """
     A more fundamental interface for performing end-to-end GST.
 
@@ -530,6 +566,23 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
         - 4 -- also shows inner iterations of LM algorithm
         - 5 -- also shows detailed info from within jacobian and objective function calls.
 
+    checkpoint : GateSetTomographyCheckpoint, optional (default None)
+        If specified use a previously generated checkpoint object to restart
+        or warm start this run part way through.
+
+    checkpoint_path : str, optional (default None)
+        A string for the path/name to use for writing intermediate checkpoint
+        files to disk. Format is {path}/{name}, without inclusion of the json
+        file extension. This {path}/{name} combination will have the latest
+        completed iteration number appended to it before writing it to disk.
+        If none, the value of {name} will be set to the name of the protocol
+        being run.
+
+    disable_checkpointing : bool, optional (default False)
+        When set to True checkpoint objects will not be constructed and written
+        to disk during the course of this protocol. It is strongly recommended
+        that this be kept set to False without good reason to disable the checkpoints.
+        
     Returns
     -------
     Results
@@ -562,16 +615,16 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     proto.circuit_weights = advanced_options.get('circuit_weights', None)
     proto.unreliable_ops = advanced_options.get('unreliable_ops', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
 
-    results = proto.run(data, mem_limit, comm)
+    results = proto.run(data, mem_limit, comm, checkpoint=checkpoint, checkpoint_path=checkpoint_path, disable_checkpointing=disable_checkpointing)
     _output_to_pickle(results, output_pkl, comm)
     return results
 
 
 def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, prep_fiducial_list_or_filename,
                         meas_fiducial_list_or_filename, germs_list_or_filename, max_lengths,
-                        modes="full TP,CPTP,Target", gaugeopt_suite='stdgaugeopt', gaugeopt_target=None,
+                        modes=('full TP','CPTPLND','Target'), gaugeopt_suite='stdgaugeopt', gaugeopt_target=None,
                         models_to_test=None, comm=None, mem_limit=None, advanced_options=None, output_pkl=None,
-                        verbosity=2):
+                        verbosity=2, checkpoint=None, checkpoint_path=None, disable_checkpointing = False):
     """
     Perform end-to-end GST analysis using standard practices.
 
@@ -612,8 +665,8 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, p
         iteration includes the repeated germs truncated to the L-values *up to*
         and including the i-th one.
 
-    modes : str, optional
-        A comma-separated list of modes which dictate what types of analyses
+    modes : iterable of strs, optional (default ('full TP','CPTPLND','Target')
+        An iterable strings corresponding to modes which dictate what types of analyses
         are performed.  Currently, these correspond to different types of
         parameterizations/constraints to apply to the estimated model.
         The default value is usually fine.  Allowed values are:
@@ -678,6 +731,23 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, p
         The 'verbosity' option is an integer specifying the level of
         detail printed to stdout during the calculation.
 
+    checkpoint : StandardGSTCheckpoint, optional (default None)
+        If specified use a previously generated checkpoint object to restart
+        or warm start this run part way through.
+
+    checkpoint_path : str, optional (default None)
+        A string for the path/name to use for writing intermediate checkpoint
+        files to disk. Format is {path}/{name}, without inclusion of the json
+        file extension. This {path}/{name} combination will have the latest
+        completed iteration number appended to it before writing it to disk.
+        If none, the value of {name} will be set to the name of the protocol
+        being run.
+
+    disable_checkpointing : bool, optional (default False)
+        When set to True checkpoint objects will not be constructed and written
+        to disk during the course of this protocol. It is strongly recommended
+        that this be kept set to False without good reason to disable the checkpoints.
+
     Returns
     -------
     Results
@@ -721,7 +791,7 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, p
                                badfit_options=_get_badfit_options(advanced_options), verbosity=printer,
                                name=advanced_options.get('estimate_label', None))
 
-    results = proto.run(data, mem_limit, comm)
+    results = proto.run(data, mem_limit, comm, checkpoint=checkpoint, checkpoint_path= checkpoint_path, disable_checkpointing=disable_checkpointing)
     _output_to_pickle(results, output_pkl, comm)
     return results
 
