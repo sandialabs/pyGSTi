@@ -583,7 +583,7 @@ def recursive_compare_str(a, b, a_name='first obj', b_name='second obj', prefix=
             diff_accum.append(f"{prefix}.{k}: missing from {a_name}")
         for k in (a_keys - b_keys):  # keys missing from b
             diff_accum.append(f"{prefix}.{k}: missing from {b_name}")
-    elif isinstance(a, (list, tuple)):
+    elif isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
         if len(a) != len(b):
             diff_accum.append(f"{prefix}: have different lengths ({len(a)} vs {len(b)})")
         else:
