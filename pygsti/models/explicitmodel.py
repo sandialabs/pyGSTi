@@ -228,6 +228,38 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return _op.EmbeddedOp(self.state_space, op_target_labels, op_val)
 
+    def _embed_instrument(self, inst_target_labels, inst_val, force=False):
+        """
+        Called by OrderedMemberDict._auto_embed to create an embedded-instrument
+        object that embeds `inst_val` into the sub-space of
+        `self.state_space` given by `inst_target_labels`.
+
+        Parameters
+        ----------
+        inst_target_labels : list
+            A list of `inst_val`'s target state space labels.
+
+        inst_val : LinearOperator
+            The instrument object to embed.  Note this should be a legitimate
+            Instrument-derived object and not just a numpy array.
+
+        force : bool, optional
+            Always wrap with an embedded Instrument, even if the
+            dimension of `inst_val` is the full model dimension.
+
+        Returns
+        -------
+        Instrument
+            An instrument of the full model dimension.
+        """
+        if self.state_space is None:
+            raise ValueError("Must set model state space before adding auto-embedded gates.")
+
+        if inst_val.state_space == self.state_space and not force:
+            return inst_val  # if gate operates on full dimension, no need to embed.
+
+        return _instrument.EmbeddedInst(self.state_space, inst_target_labels, inst_val)
+
     @property
     def default_gauge_group(self):
         """
@@ -527,6 +559,8 @@ class ExplicitOpModel(_mdl.OpModel):
         return self.num_params - self.num_gauge_params
 
     @property
+
+    
     def num_gauge_params(self):
         """
         Return the number of gauge parameters in this model.
