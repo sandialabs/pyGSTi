@@ -43,20 +43,6 @@ def reverse_dict_key_bits(counts_dict):
         new_dict[key[::-1]] = counts_dict[key]
     return new_dict
 
-
-# NOTE: This is probably duplicative of some other code in pyGSTi
-def partial_trace(ordered_target_indices, input_dict):
-    output_dict = {}
-    for bitstring in input_dict.keys():
-        new_string = ''
-        for index in ordered_target_indices:
-            new_string += bitstring[index]
-        try:
-            output_dict[new_string] += input_dict[bitstring]
-        except:
-            output_dict[new_string] = input_dict[bitstring]
-    return output_dict
-
 def to_labeled_counts(input_dict, ordered_target_indices, num_qubits_in_pspec): 
     outcome_labels = []
     counts_data = []

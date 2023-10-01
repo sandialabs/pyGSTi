@@ -4035,18 +4035,18 @@ class Circuit(object):
                                     openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
 
                 else:
-                    assert gate.name.__str__() == 'Iz' or 'Ipc'
-                    num_Ims_used = 0  
+                    assert gate.name.__str__() == 'Iz' or 'Ipc'  
                     if gate.name.__str__() == 'Iz':
-                        q = gate.qubits[0] #HARD CODED QUBIT LABEL 
+                        q = gate.qubits[0] 
                         # classical_bit = num_IMs_used
                         openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
-                    else: 
+                    else:
+                        assert ancilla_label is not None, "Parity check 'Ipc' requires an ancilla, did you forget to set 'ancilla_label'?"
                         openqasm_for_gate = ""
                         for control in gate_qubits:
                             openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[control]), qubit_conversion[ancilla_label])
                         openqasm_for_gate += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[ancilla_label]), num_IMs_used)   
-                    num_Ims_used += 1 
+                    num_IMs_used += 1 
 
                 # Add the openqasm for the gate to the openqasm string.
                 openqasm += openqasm_for_gate
