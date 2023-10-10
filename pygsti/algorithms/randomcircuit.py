@@ -3150,7 +3150,7 @@ def create_random_germpower_mirror_circuits(pspec, absolute_compilation, depths,
     return circlist, outlist, aux
 
 
-def create_udrb_circuit(pspec, length, qubit_labels = None, layer_type='standard',twoQ_gate_density = 1/2, angles=[_np.pi/2, -1*_np.pi/2]):
+def create_udrb_circuit(pspec, length, qubit_labels = None, layer_type='cz-zxzxz',twoQ_gate_density = 1/2, angles=[_np.pi/2, -1*_np.pi/2]):
     #generates a unitary direct RB circuit
 
     if qubit_labels == None:
@@ -3187,8 +3187,8 @@ def create_udrb_circuit(pspec, length, qubit_labels = None, layer_type='standard
                                    one_q_gate_type='haar',
                                    two_q_gate_args_lists={'Gczr': [(str(a),) for a in angles]})
     #consider adding in a check for continuous-arg gates
-    elif layer_type=='standard':                                   
-        circuit2 = create_random_circuit(pspec, length, qubit_labels=qubit_labels, sampler='edgegrab', samplerargs=[twoQ_gate_density])                                  
+    #elif layer_type=='standard':                                   
+    #    circuit2 = create_random_circuit(pspec, length, qubit_labels=qubit_labels, sampler='edgegrab', samplerargs=[twoQ_gate_density])                                  
                                    
     #for a in range(length):
     #   #generate random 1q unitary layer
