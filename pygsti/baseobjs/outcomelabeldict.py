@@ -79,7 +79,7 @@ class OutcomeLabelDict(_collections.OrderedDict):
     def get(self, key, default):
         if not OutcomeLabelDict._strict:
             key = OutcomeLabelDict.to_outcome(key)
-        return super(OutcomeLabelDict, self).get(key)
+        return super(OutcomeLabelDict, self).get(key, default)
 
     def getitem_unsafe(self, key, defaultval):
         """

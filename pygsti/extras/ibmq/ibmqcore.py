@@ -87,8 +87,8 @@ class IBMQExperiment(dict):
             A QubitProcessorSpec that represents the IBM Q device being used. This can be created using the
             extras.devices.create_processor_spec(). The ProcessorSpecs qubit ordering *must* correspond
             to that of the IBM device (which will be the case if you create it using that function).
-             I.e., pspecs qubits should be labelled Q0 through Qn-1 and the labelling of the qubits
-             should agree with IBM's labelling.
+            I.e., pspecs qubits should be labelled Q0 through Qn-1 and the labelling of the qubits
+            should agree with IBM's labelling.
 
         remove_duplicates: bool, optional
             If true, each distinct circuit in `edesign` is run only once. If false, if a circuit is
@@ -257,7 +257,9 @@ class IBMQExperiment(dict):
             while not submit_status:
                 try:
                     backend_properties = ibmq_backend.properties()
-                    self['submit_time_calibration_data'].append(backend_properties.to_dict())
+                    #If using a simulator backend then backend_properties is None
+                    if not ibmq_backend.simulator:
+                        self['submit_time_calibration_data'].append(backend_properties.to_dict())
                     #if using the new API we need to pass in the number of shots.
                     if backend_version == 1:
                         self['qjob'].append(ibmq_backend.run(batch))

@@ -309,7 +309,7 @@ def _copy_target(std_module, param_type, simulator="auto", gscache=None):
 
     param_type : {"TP", "CPTP", "H+S", "S", ... }
         The gate and SPAM vector parameterization type. See
-        :function:`Model.set_all_parameterizations` for all allowed values.
+        :func:`Model.set_all_parameterizations` for all allowed values.
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The simulator (or type) to be used for model calculations (leave as
@@ -512,7 +512,7 @@ def stdmodule_to_smqmodule(std_module):
         ----------
         parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
             The gate and SPAM vector parameterization type. See
-            :function:`Model.set_all_parameterizations` for all allowed values.
+            :func:`Model.set_all_parameterizations` for all allowed values.
 
         simulator : ForwardSimulator or {"auto", "matrix", "map"}
             The simulator (or type) to be used for model calculations (leave as

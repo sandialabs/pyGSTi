@@ -298,7 +298,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
         Checks whether this factory has enough information to construct 'views' of itself.
 
         `ConfidenceRegionFactoryView` view objects are created using the
-        :method:`view` method, which can in turn be used to construct
+        :meth:`view` method, which can in turn be used to construct
         confidence intervals.
 
         Returns
@@ -340,7 +340,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
 
         approximate : bool, optional
             Whether to compute the true Hessian or just an approximation of it.
-            See :function:`logl_approximate_hessian`.  Setting to True can
+            See :func:`logl_approximate_hessian`.  Setting to True can
             significantly reduce the run time.
 
         Returns
@@ -819,7 +819,7 @@ class ConfidenceRegionFactoryView(object):
         Creates a new ConfidenceRegionFactoryView.
 
         Usually this constructor is not called directly, and objects of
-        this type are obtained by calling the :method:`view` method of
+        this type are obtained by calling the :meth:`view` method of
         a `ConfidenceRegionFactory` object.
 
         Parameters

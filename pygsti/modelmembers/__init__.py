@@ -25,7 +25,7 @@ def from_memoized_dict(mm_dict, serial_memo):
     mm_dict: dict
         A dict representation of this ModelMember ready for deserialization
         This must have at least the following fields:
-            module, class, submembers, params, state_space, evotype
+        module, class, submembers, params, state_space, evotype
 
     serial_memo: dict
         Keys are serialize_ids and values are ModelMembers. This is NOT the same as

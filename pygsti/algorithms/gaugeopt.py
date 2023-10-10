@@ -133,12 +133,14 @@ def gaugeopt_to_target(model, target_model, item_weights=None,
 
     Returns
     -------
-    model                            if return_all == False
-    (goodnessMin, gaugeMx, model)    if return_all == True
-        where goodnessMin is the minimum value of the goodness function (the best 'goodness')
-        found, gaugeMx is the gauge matrix used to transform the model, and model is the
+    model : if return_all == False
+    
+    (goodnessMin, gaugeMx, model) : if return_all == True
+        Where goodnessMin is the minimum value of the goodness function (the best 'goodness') 
+        found, gaugeMx is the gauge matrix used to transform the model, and model is the 
         final gauge-transformed model.
     """
+    
     if item_weights is None: item_weights = {}
 
     ls_mode_allowed = bool(target_model is not None
@@ -250,8 +252,11 @@ def gaugeopt_custom(model, objective_fn, gauge_group=None,
 
     Returns
     -------
-    model                            if return_all == False
-    (goodnessMin, gaugeMx, model)    if return_all == True
+    model                            
+        if return_all == False
+    
+    (goodnessMin, gaugeMx, model)    
+        if return_all == True
         where goodnessMin is the minimum value of the goodness function (the best 'goodness')
         found, gaugeMx is the gauge matrix used to transform the model, and model is the
         final gauge-transformed model.

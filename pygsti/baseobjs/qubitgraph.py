@@ -334,7 +334,7 @@ class QubitGraph(_NicelySerializable):
         All the node labels of this graph.
 
         These correpond to integer indices where appropriate,
-        e.g. for :method:`shortest_path_distance_matrix`.
+        e.g. for :meth:`shortest_path_distance_matrix`.
 
         Returns
         -------
@@ -755,7 +755,7 @@ class QubitGraph(_NicelySerializable):
 
     def shortest_path_edges(self, node1, node2):
         """
-        Like :method:`shortest_path`, but returns a list of (nodeA,nodeB) tuples.
+        Like :meth:`shortest_path`, but returns a list of (nodeA,nodeB) tuples.
 
         These tuples define a path from `node1` to `node2`, so the first tuple's
         nodeA == `node1` and the final tuple's nodeB == `node2`.
@@ -825,7 +825,7 @@ class QubitGraph(_NicelySerializable):
 
         This matrix is indexed by the integer-index of each node label (as
         specified to __init__).  The list of index-ordered node labels is given
-        by :method:`node_names`.
+        by :meth:`node_names`.
 
         Returns
         -------
@@ -842,7 +842,7 @@ class QubitGraph(_NicelySerializable):
 
         This matrix is indexed by the integer-index of each node label (as
         specified to __init__).  The list of index-ordered node labels is given
-        by :method:`node_names`.
+        by :meth:`node_names`.
 
         Returns
         -------

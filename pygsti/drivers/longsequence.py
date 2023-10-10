@@ -179,12 +179,12 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
     """
     Perform Linear Gate Set Tomography (LGST).
 
-    This function differs from the lower level :function:`run_lgst` function
+    This function differs from the lower level :func:`run_lgst` function
     in that it may perform a post-LGST gauge optimization and this routine
     returns a :class:`Results` object containing the LGST estimate.
 
     Overall, this is a high-level driver routine which can be used similarly
-    to :function:`run_long_sequence_gst`  whereas `run_lgst` is a low-level
+    to :func:`run_long_sequence_gst`  whereas `run_lgst` is a low-level
     routine used when building your own algorithms.
 
     Parameters
@@ -220,7 +220,7 @@ def run_linear_gst(data_filename_or_set, target_model_filename_or_object,
     advanced_options : dict, optional
         Specifies advanced options most of which deal with numerical details of
         the objective function or expert-level functionality.  See
-        :function:`run_long_sequence_gst`.
+        :func:`run_long_sequence_gst`.
 
     comm : mpi4py.MPI.Comm, optional
         When not ``None``, an MPI communicator for distributing the computation
@@ -378,8 +378,7 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         - XX op_label_aliases = dict (default = None)
         - always_perform_mle = bool (default = False)
         - only_perform_mle = bool (default = False)
-        - XX truncScheme = "whole germ powers" (default) or "truncated germ powers"
-                          or "length as exponent"
+        - XX truncScheme = "whole germ powers" (default) or "truncated germ powers" or "length as exponent"
         - appendTo = Results (default = None)
         - estimateLabel = str (default = "default")
         - XX missingDataAction = {'drop','raise'} (default = 'drop')
@@ -408,8 +407,7 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         - 2 -- show summary details about each individual iteration
         - 3 -- also shows outer iterations of LM algorithm
         - 4 -- also shows inner iterations of LM algorithm
-        - 5 -- also shows detailed info from within jacobian
-               and objective function calls.
+        - 5 -- also shows detailed info from within jacobian and objective function calls.
 
     Returns
     -------
@@ -530,8 +528,7 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
         - 2 -- show summary details about each individual iteration
         - 3 -- also shows outer iterations of LM algorithm
         - 4 -- also shows inner iterations of LM algorithm
-        - 5 -- also shows detailed info from within jacobian
-               and objective function calls.
+        - 5 -- also shows detailed info from within jacobian and objective function calls.
 
     Returns
     -------

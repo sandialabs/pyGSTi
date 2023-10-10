@@ -553,7 +553,7 @@ class FirstOrderGaugeInvariantStore(object):
     @classmethod
     def merge_binned_fogi_infos(cls, binned_fogi_infos, index_offsets):
         """
-        Merge together multiple FOGI-info dictionaries created by :method:`create_binned_fogi_infos`.
+        Merge together multiple FOGI-info dictionaries created by :meth:`create_binned_fogi_infos`.
 
         Parameters
         ----------

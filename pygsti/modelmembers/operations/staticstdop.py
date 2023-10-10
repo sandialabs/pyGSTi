@@ -116,7 +116,7 @@ class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface):
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         #Same as unitary op -- assume this op acts as a single unitary term -- consolidate in FUTURE?
         if order == 0:  # only 0-th order term exists
@@ -182,7 +182,7 @@ class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)

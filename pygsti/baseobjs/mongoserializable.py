@@ -40,7 +40,7 @@ class MongoSerializable(object):
 
     def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing,
                                                 **kwargs):
-        """ Add to `write_ops` and update `doc` so that all of `self`'s data is serialized """
+        """ Add to `write_ops` and update `doc` so that all of `self` 's data is serialized """
         raise NotImplementedError("Subclasses must implement this!")
 
     @classmethod
@@ -67,7 +67,7 @@ class MongoSerializable(object):
             document is loaded from the collection given by the `collection_name` attribute of
             this class.
 
-        **kwargs : dict
+        `**kwargs` : dict
             Additional keyword arguments poentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_create_obj_from_doc_and_mongodb` method is allowed here.
 
@@ -103,7 +103,7 @@ class MongoSerializable(object):
             The already-retrieved main document for the object being loaded.  This takes the place
             of giving an identifier for this object.
 
-        **kwargs : dict
+        `**kwargs` : dict
             Additional keyword arguments poentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_create_obj_from_doc_and_mongodb` method is allowed here.
 
@@ -145,7 +145,7 @@ class MongoSerializable(object):
             a ValueError to be raised if a document with the given `_id` already exists
             and is different from what is being written.
 
-        **kwargs : dict
+        `**kwargs` : dict
             Additional keyword arguments poentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_add_auxiliary_write_ops_and_update_doc` method is allowed here.
 
@@ -163,12 +163,12 @@ class MongoSerializable(object):
         """
         Accumulate write and update operations for writing this object to a MongoDB database.
 
-        Similar to :method:`write_to_mongodb` but collects write operations instead of actually
+        Similar to :meth:`write_to_mongodb` but collects write operations instead of actually
         executing any write operations on the database.  This function may be preferred to
-        :method:`write_to_mongodb` when this object is being written as a part of a larger entity
+        :meth:`write_to_mongodb` when this object is being written as a part of a larger entity
         and executing write operations is saved until the end.
 
-        As in :method:`write_to_mongodb`, `self.collection_name` is the collection name and `_id` is either:
+        As in :meth:`write_to_mongodb`, `self.collection_name` is the collection name and `_id` is either:
         1) the ID used by a previous write or initial read-in, if one exists, OR
         2) a new random `bson.objectid.ObjectId`
 
@@ -187,7 +187,7 @@ class MongoSerializable(object):
             a ValueError to be raised if a document with the given `_id` already exists
             and is different from what is being written.
 
-        **kwargs : dict
+        `**kwargs` : dict
             Additional keyword arguments poentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_add_auxiliary_write_ops_and_update_doc` method is allowed here.
 
@@ -414,7 +414,7 @@ class WriteOpsByCollection(dict):
         Add a GridFS put operation to this dictionary of write operations.
 
         This is a special type of operation for placing large chunks of binary data into a MongoDB.
-        Arguments are similar to :method:`add_one_op`.
+        Arguments are similar to :meth:`add_one_op`.
         """
         import gridfs as _gridfs
         fs = _gridfs.GridFS(mongodb, collection=collection_name)
@@ -432,8 +432,8 @@ class WriteOpsByCollection(dict):
         """
         Execute all of the "queued" operations within this dictionary on a MongoDB instance.
 
-        Note that `mongodb` should be the same as the `mongodb` given to any :method:`add_one_op` and
-        :method:`add_gridfs_put_op` method calls.  The session given at the initialization of
+        Note that `mongodb` should be the same as the `mongodb` given to any :meth:`add_one_op` and
+        :meth:`add_gridfs_put_op` method calls.  The session given at the initialization of
         this object is used for these write operations.  On exit, this dictionary is empty, indicating
         there are no more queued operations.
 
@@ -487,13 +487,13 @@ def prepare_doc_for_existing_doc_check(doc, existing_doc, set_id=True, convert_t
     Prepares a to-be inserted document for comparison with an existing document.
 
     Optionally (see parameters):
-    1) sets _id of `doc` to that of `existing_doc`.  This is useful in cases where the _id
+    1. sets _id of `doc` to that of `existing_doc` .  This is useful in cases where the _id
        field is redundant with other uniquely identifying fields in the document, and so inserted
        documents don't need to match this field.
-    2) converts all of `doc`'s tuples to lists, as the existing_doc is typically read from a MongoDB
+    2. converts all of `doc` 's tuples to lists, as the existing_doc is typically read from a MongoDB
        which only stores lists and doesn't distinguish between lists and tuples.
-    3) converts numpy datatypes to native python types
-    4) rounds floating point values
+    3. converts numpy datatypes to native python types
+    4. rounds floating point values
 
     Parameters
     ----------

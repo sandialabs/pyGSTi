@@ -33,11 +33,11 @@ def op_from_factories(factory_dict, lbl):
     If the label has arguments, then this function looks for an
     operator factory associated with the label without its arguments.
     If one exists, the operator is created by calling
-    :method:`OpFactory.create_simplified_op`.  with the label's
+    :meth:`OpFactory.create_simplified_op`.  with the label's
     arguments.  Otherwise, it looks for a factory associated with the
     label's name (`lbl.name`) and passes both the labe's
     state-space-labels and arguments (if any) to
-    :method:`OpFactory.create_simplified_op`.
+    :meth:`OpFactory.create_simplified_op`.
 
     Raises a `KeyError` if a matching factory cannot be found.
 
@@ -106,7 +106,7 @@ class OpFactory(_gm.ModelMember):
         Create the object that implements the operation associated with the given `args` and `sslbls`.
 
         **Note to developers**
-        The difference beween this method and :method:`create_op` is that
+        The difference beween this method and :meth:`create_op` is that
         this method just creates the foundational object without needing
         to setup its parameter indices (a technical detail which connects
         the created object with the originating factory's parameters).  The
@@ -171,7 +171,7 @@ class OpFactory(_gm.ModelMember):
         """
         Create the *simplified* operation associated with the given `args`, `sslbls`, and `item_lbl`.
 
-        Similar to as :method:`create_op`, but returns a *simplified* operation
+        Similar to as :meth:`create_op`, but returns a *simplified* operation
         (i.e. not a POVM or Instrument).  In addition, the `item_lbl` argument
         must be used for POVMs and Instruments, as these need to know which
         (simple) member of themselves to return (this machinery still needs
@@ -290,7 +290,7 @@ class EmbeddedOpFactory(OpFactory):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
@@ -403,7 +403,7 @@ class EmbeddingOpFactory(OpFactory):
 
     This is similar to an `EmbeddedOpFactory` except in this case how the
     "contained" operation/factory is embedded is *not* determined at creation
-    time: the `sslbls` argument of :method:`create_op` is used instead.
+    time: the `sslbls` argument of :meth:`create_op` is used instead.
 
     Parameters
     ----------
@@ -456,18 +456,20 @@ class EmbeddingOpFactory(OpFactory):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
         mm_dict['num_target_labels'] = self.num_target_labels
-        mm_dict['allowed_sslbls_fn'] = self.allowed_sslbls_fn.to_nice_serialization()
+        mm_dict['allowed_sslbls_fn'] = self.allowed_sslbls_fn.to_nice_serialization() \
+            if (self.allowed_sslbls_fn is not None) else None
         return mm_dict
 
     @classmethod
     def _from_memoized_dict(cls, mm_dict, serial_memo):
         state_space = _statespace.StateSpace.from_nice_serialization(mm_dict['state_space'])
-        allowed_sslbls_fn = _NicelySerializable.from_nice_serialization(mm_dict['allowed_sslbls_fn'])
+        allowed_sslbls_fn = _NicelySerializable.from_nice_serialization(mm_dict['allowed_sslbls_fn']) \
+            if (mm_dict['allowed_sslbls_fn'] is not None) else None
         return cls(state_space, serial_memo[mm_dict['submembers'][0]],
                    mm_dict['num_target_labels'], allowed_sslbls_fn)
 
@@ -502,7 +504,10 @@ class EmbeddingOpFactory(OpFactory):
             raise ValueError("Not allowed to embed onto sslbls=" + str(sslbls))
 
         if self.embeds_factory:
-            op = self.embedded_factory_or_op.create_op(args, None)  # Note: will have its gpindices set already
+            #Even though the produced op is (or should be) just a local op on `sslbls` (self.embedded_factory_or_op
+            # should not return an op embedded on `sslbls`) it may still depend on `sslbls` and so is passed to
+            # create_op call here.
+            op = self.embedded_factory_or_op.create_op(args, sslbls)  # Note: will have its gpindices set already
         else:
             op = self.embedded_factory_or_op
         embedded_op = _EmbeddedOp(self.state_space, sslbls, op)
@@ -738,7 +743,7 @@ class ComposedOpFactory(OpFactory):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator
@@ -818,7 +823,8 @@ class UnitaryOpFactory(OpFactory):
             Can be any type of operation, e.g. a LinearOperator, State,
             Instrument, or POVM, depending on the label requested.
         """
-        assert(sslbls is None), "UnitaryOpFactory.create_object must be called with `sslbls=None`!"
+        # Note: sslbls is unused, and may be None or non-None depending on the context this UnitaryOpFactory is
+        #  used in (e.g. it will be none when used with an EmbeddedOpFactory but not with an EmbeddingOpFactory).
         U = self.fn(args)
 
         # Expanded call to _bt.change_basis(_ot.unitary_to_std_process_mx(U), 'std', self.basis) for speed
@@ -844,7 +850,7 @@ class UnitaryOpFactory(OpFactory):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)  # includes 'dense_matrix' from DenseOperator

@@ -221,7 +221,7 @@ class SmartCache(object):
 
     def low_overhead_cached_compute(self, fn, arg_vals, kwargs=None):
         """
-        Cached compute with less profiling. See :method:`cached_compute` docstring.
+        Cached compute with less profiling. See :meth:`cached_compute` docstring.
 
         Parameters
         ----------

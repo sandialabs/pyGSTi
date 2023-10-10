@@ -141,7 +141,7 @@ class OpModelNoise(ModelNoise):
         Parameters
         ----------
         stencil : OrderedDict
-            The stencil to apply, usually created by :method:`create_errorgen_stencil`.
+            The stencil to apply, usually created by :meth:`create_errorgen_stencil`.
 
         evotype : str or Evotype
             The evolution type of to use when creating the embedded and composed operators,
@@ -154,7 +154,7 @@ class OpModelNoise(ModelNoise):
         target_labels : tuple or None, optional
             The target labels that determine where on the qudit graph this stencil will be placed.  When a
             tuple, it should have length equal to the `num_target_labels` argument passed to
-            :method:`create_errorgen_stencil`.  `None` indicates that the entire space is the "target"
+            :meth:`create_errorgen_stencil`.  `None` indicates that the entire space is the "target"
             space of the stencil (e.g. a global idle, preparation, or measurement).
 
         qudit_graph : QubitGraph, optional
@@ -216,7 +216,7 @@ class OpModelNoise(ModelNoise):
         so that, if desired, the same errors can be used on multiple sets of target qudits
         (often this is done when a "independent" argument to a model-creation function is
         `False`).  An "error map stencil" is a stencil whose operators are error maps
-         rather than error generators.
+        rather than error generators.
 
         Parameters
         ----------
@@ -262,7 +262,7 @@ class OpModelNoise(ModelNoise):
         Parameters
         ----------
         stencil : OrderedDict
-            The stencil to apply, usually created by :method:`create_errormap_stencil`.
+            The stencil to apply, usually created by :meth:`create_errormap_stencil`.
 
         evotype : str or Evotype
             The evolution type of to use when creating the embedded and composed operators,
@@ -275,7 +275,7 @@ class OpModelNoise(ModelNoise):
         target_labels : tuple or None, optional
             The target labels that determine where on the qudit graph this stencil will be placed.  When a
             tuple, it should have length equal to the `num_target_labels` argument passed to
-            :method:`create_errormap_stencil`.  `None` indicates that the entire space is the "target"
+            :meth:`create_errormap_stencil`.  `None` indicates that the entire space is the "target"
             space of the stencil (e.g. a global idle, preparation, or measurement).
 
         qudit_graph : QubitGraph, optional
@@ -339,7 +339,7 @@ class OpModelNoise(ModelNoise):
 
         These counters tally the number of times each operation key is accessed, and
         are used to identify model noise specification that are supplied by the user
-        but never used.  See :method:`warn_about_zero_counters`.
+        but never used.  See :meth:`warn_about_zero_counters`.
 
         Returns
         -------
@@ -443,7 +443,7 @@ class OpModelPerOpNoise(OpModelNoise):
 
     def create_errorgen_stencil(self, opkey, evotype, state_space, num_target_labels=None):
         """
-        See :method:`OpModelNoise.create_errorgen_stencil`.
+        See :meth:`OpModelNoise.create_errorgen_stencil`.
         """
         if opkey not in self.per_op_noise: return {}  # an empty stencil
         opnoise = self.per_op_noise[opkey]
@@ -474,7 +474,7 @@ class OpModelPerOpNoise(OpModelNoise):
 
     def apply_errorgen_stencil(self, stencil, evotype, state_space, target_labels=None, qudit_graph=None, copy=False):
         """
-        See :method:`OpModelNoise.apply_errorgen_stencil`.
+        See :meth:`OpModelNoise.apply_errorgen_stencil`.
         """
         embedded_errgens = []
         for stencil_sslbls, local_errorgen in stencil.items():
@@ -495,7 +495,7 @@ class OpModelPerOpNoise(OpModelNoise):
 
     def create_errormap_stencil(self, opkey, evotype, state_space, num_target_labels=None):
         """
-        See :method:`OpModelNoise.create_errormap_stencil`.
+        See :meth:`OpModelNoise.create_errormap_stencil`.
         """
         if opkey not in self.per_op_noise: return {}  # an empty stencil
         opnoise = self.per_op_noise[opkey]
@@ -528,7 +528,7 @@ class OpModelPerOpNoise(OpModelNoise):
 
     def apply_errormap_stencil(self, stencil, evotype, state_space, target_labels=None, qudit_graph=None, copy=False):
         """
-        See :method:`OpModelNoise.apply_errormap_stencil`.
+        See :meth:`OpModelNoise.apply_errormap_stencil`.
         """
         embedded_errmaps = []
         for stencil_sslbls, local_errormap in stencil.items():
@@ -649,7 +649,7 @@ class ComposedOpModelNoise(OpModelNoise):
 
     def create_errorgen_stencil(self, opkey, evotype, state_space, num_target_labels=None):
         """
-        See :method:`OpModelNoise.create_errorgen_stencil`.
+        See :meth:`OpModelNoise.create_errorgen_stencil`.
         """
         self._increment_touch_count(opkey)
         return tuple([modelnoise.create_errorgen_stencil(opkey, evotype, state_space, num_target_labels)
@@ -657,7 +657,7 @@ class ComposedOpModelNoise(OpModelNoise):
 
     def apply_errorgen_stencil(self, stencil, evotype, state_space, target_labels=None, qudit_graph=None, copy=False):
         """
-        See :method:`OpModelNoise.apply_errorgen_stencil`.
+        See :meth:`OpModelNoise.apply_errorgen_stencil`.
         """
         noise_errgens = [modelnoise.apply_errorgen_stencil(s, evotype, state_space, target_labels, qudit_graph, copy)
                          for s, modelnoise in zip(stencil, self.opmodelnoises)]
@@ -667,7 +667,7 @@ class ComposedOpModelNoise(OpModelNoise):
 
     def create_errormap_stencil(self, opkey, evotype, state_space, num_target_labels=None):
         """
-        See :method:`OpModelNoise.create_errormap_stencil`.
+        See :meth:`OpModelNoise.create_errormap_stencil`.
         """
         self._increment_touch_count(opkey)
         return tuple([modelnoise.create_errormap_stencil(opkey, evotype, state_space, num_target_labels)
@@ -675,7 +675,7 @@ class ComposedOpModelNoise(OpModelNoise):
 
     def apply_errormap_stencil(self, stencil, evotype, state_space, target_labels=None, qudit_graph=None, copy=False):
         """
-        See :method:`OpModelNoise.apply_errormap_stencil`.
+        See :meth:`OpModelNoise.apply_errormap_stencil`.
         """
         noise_ops = [modelnoise.apply_errormap_stencil(s, evotype, state_space, target_labels, qudit_graph, copy)
                      for s, modelnoise in zip(stencil, self.opmodelnoises)]

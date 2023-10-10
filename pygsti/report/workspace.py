@@ -1516,7 +1516,7 @@ class WorkspaceOutput(object):
         Sets rendering options, which affect how render() behaves.
 
         The reason render options are set via this function rather
-        than passed directly as arguments to the render(...) call
+        than passed directly as arguments to the `render(...)` call
         is twofold.  First, it allows for global 'default' options
         to be set before creating `WorkspaceOutput`-derived objects;
         Secondly, it allows the user to set render options right after
@@ -1740,7 +1740,7 @@ class WorkspaceOutput(object):
         """
         Helper rendering function, which takes care of the (complex)
         common logic which take a series of HTML div blocks corresponding
-        to the results of a Workspace.switched_compute(...) call and
+        to the results of a `Workspace.switched_compute(...)` call and
         builds the HTML and JS necessary for toggling the visibility of
         these divs in response to changes in switch position(s).
 
@@ -1751,7 +1751,7 @@ class WorkspaceOutput(object):
 
         div_htmls : list
             The html content for each switched block (typically a elements are
-            "<div>...</div>" blocks themselves).  This is the content that
+            `"<div>...</div>"` blocks themselves).  This is the content that
             is switched between.
 
         div_jss : list

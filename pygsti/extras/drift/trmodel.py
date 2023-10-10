@@ -67,7 +67,7 @@ class TimeResolvedModel(object):
 
     def probabilities(self, circuit, times):
         """
-        *** Specified in each derive class ***
+        **Specified in each derived class**
 
         Specifying this method is the core to building a time-resolved model. This method should return the
         probabiilties for each outcome, for the input circuit at the specified times.

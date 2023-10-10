@@ -218,7 +218,7 @@ def repeat_and_truncate(x, n, assert_at_least_one_rep=False):
 
 def _repeat_remainder_for_truncation(x, n, assert_at_least_one_rep=False):
     """
-    Returns the portion truncated by :function:`repeat_and_truncate`.
+    Returns the portion truncated by :func:`repeat_and_truncate`.
 
     Repeat the operation sequence x the fewest number of times such that the repeated
     sequence has length greater than or equal to n.  Return the portion of this
@@ -301,7 +301,7 @@ def list_all_circuits(op_labels, minlength, maxlength):
 
 def iter_all_circuits(op_labels, minlength, maxlength):
     """
-    Iterative version of :function:`list_all_circuits`
+    Iterative version of :func:`list_all_circuits`
 
     Parameters
     ----------
@@ -343,7 +343,7 @@ def list_all_circuits_onelen(op_labels, length):
 
 def iter_all_circuits_onelen(op_labels, length):
     """
-    Iterative version of :function:`list_all_circuits_onelen`
+    Iterative version of :func:`list_all_circuits_onelen`
 
     Parameters
     ----------
@@ -626,7 +626,7 @@ def translate_circuit(circuit, alias_dict):
 
 def translate_circuits(circuits, alias_dict):
     """
-    Applies :function:`translate_circuit` to each element of `circuits`.
+    Applies :func:`translate_circuit` to each element of `circuits`.
 
     Creates a new list of Circuit objects from an existing one by replacing
     operation labels in `circuits` by (possibly multiple) new labels according
@@ -780,7 +780,7 @@ def manipulate_circuit(circuit, rules, line_labels="auto"):
 
 def manipulate_circuits(circuits, rules, line_labels="auto"):
     """
-    Applies :function:`manipulate_circuit` to each element of `circuits`.
+    Applies :func:`manipulate_circuit` to each element of `circuits`.
 
     This creates a new list of Circuit objects from an existing one by performing
     replacements according to `rules` (see :func:`manipulate_circuit`).
@@ -814,7 +814,7 @@ def manipulate_circuits(circuits, rules, line_labels="auto"):
 
 def filter_circuits(circuits, sslbls_to_keep, new_sslbls=None, drop=False, idle=()):
     """
-    Applies :function:`filter_circuit` to each element of `circuits`.
+    Applies :func:`filter_circuit` to each element of `circuits`.
 
     Removes any labels from `circuits` whose state-space labels are not
     entirely in `sslbls_to_keep`.  If a gates label's state-space labels

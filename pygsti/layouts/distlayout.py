@@ -165,6 +165,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
     shared-memory structure to the physical processors, where the total number of cores
     is divided into node-groups that are able to share memory.  The total number of
     cores is divided like this:
+    
     - first, we divide the cores into atom-processing groups, i.e. "atom-processors".
       An atom-processor is most accurately seen as a comm (group of processors).  If
       shared memory is being used, either the entire atom-processor must be contained
@@ -197,7 +198,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
     unique_circuits : list of Circuits
         The same as `circuits`, except duplicates are removed.  Often this value is obtained
-        by a derived class calling the class method :method:`_compute_unique_circuits`.
+        by a derived class calling the class method :meth:`_compute_unique_circuits`.
 
     to_unique : dict
         A mapping that translates an index into `circuits` to one into `unique_circuits`.
@@ -935,7 +936,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
         memory_tracker : ResourceAllocation, optional
             If not None, the amount of memory being allocated is added, using
-            :method:`add_tracked_memory` to this resource allocation object.
+            :meth:`add_tracked_memory` to this resource allocation object.
 
         extra_elements : int, optional
             The number of additional "extra" elements to append to the element
@@ -1023,10 +1024,10 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
     def free_local_array(self, local_array):
         """
-        Frees an array allocated by :method:`allocate_local_array`.
+        Frees an array allocated by :meth:`allocate_local_array`.
 
         This method should always be paired with a call to
-        :method:`allocate_local_array`, since the allocated array
+        :meth:`allocate_local_array`, since the allocated array
         may utilize shared memory, which must be explicitly de-allocated.
 
         Parameters
@@ -1045,11 +1046,11 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
     def gather_local_array_base(self, array_type, array_portion, extra_elements=0, all_gather=False,
                                 return_shared=False):
         """
-        Gathers an array onto the root processor or all the processors..
+        Gathers an array onto the root processor or all the processors.
 
         Gathers the portions of an array that was distributed using this
         layout (i.e. according to the host_element_slice, etc. slices in
-        this layout).  This could be an array allocated by :method:`allocate_local_array`
+        this layout).  This could be an array allocated by :meth:`allocate_local_array`
         but need not be, as this routine does not require that `array_portion` be
         shared.  Arrays can be 1, 2, or 3-dimensional.  The dimensions
         are understood to be along the "element", "parameter", and
@@ -1059,7 +1060,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         ----------
         array_type : ("e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c", "cp", "cp2", "cpp")
             The type of array to allocate, often corresponding to the array shape.  See
-            :method:`allocate_local_array` for a more detailed description.
+            :meth:`allocate_local_array` for a more detailed description.
 
         array_portion : numpy.ndarray
             The portion of the final array that is local to the calling
@@ -1070,7 +1071,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         extra_elements : int, optional
             The number of additional "extra" elements to append to the element
             dimension, beyond those called for by this layout.  Should match
-            usage in :method:`allocate_local_array`.
+            usage in :meth:`allocate_local_array`.
 
         all_gather : bool, optional
             Whether the result should be returned on all the processors (when `all_gather=True`)
@@ -1081,7 +1082,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
             the caller assumes responsibilty for freeing the memory via
-            :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
+            :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
         -------
@@ -1196,7 +1197,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
         Gathers the portions of an array that was distributed using this
         layout (i.e. according to the host_element_slice, etc. slices in
-        this layout).  This could be an array allocated by :method:`allocate_local_array`
+        this layout).  This could be an array allocated by :meth:`allocate_local_array`
         but need not be, as this routine does not require that `array_portion` be
         shared.  Arrays can be 1, 2, or 3-dimensional.  The dimensions
         are understood to be along the "element", "parameter", and
@@ -1212,7 +1213,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         extra_elements : int, optional
             The number of additional "extra" elements to append to the element
             dimension, beyond those called for by this layout.  Should match
-            usage in :method:`allocate_local_array`.
+            usage in :meth:`allocate_local_array`.
 
         return_shared : bool, optional
             If `True` then, when shared memory is being used, the shared array used
@@ -1257,7 +1258,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         Calculate the matrix-vector product `j.T @ f`.
 
         Here `j` is often a jacobian matrix, and `f` a vector of objective function term
-        values.  `j` and `f` must be local arrays, created with :method:`allocate_local_array`.
+        values.  `j` and `f` must be local arrays, created with :meth:`allocate_local_array`.
         This function performs any necessary MPI/shared-memory communication when the
         arrays are distributed over multiple processors.
 

@@ -8,7 +8,7 @@ on:
     branches: [ "master" ]
     # Pattern matched against refs/tags
     tags:        
-      - '*'           # Push events to every tag not containing '/' (use '**' for hierarchical tags)
+      - 'v*'           # Push events to every tag not containing '/' (use '**' for hierarchical tags)
 
   # Dont allow running manually from Actions tab -- use manualdeploy for this
   #workflow_dispatch:
@@ -35,7 +35,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.1.2
         env:
-          CIBW_BUILD: cp36-* cp37-* cp38-* cp39-*
+          CIBW_BUILD: cp37-* cp38-* cp39-* cp310-*
           CIBW_BUILD_VERBOSITY: 1
           CIBW_BEFORE_ALL_LINUX: ./.github/ci-scripts/before_install.sh
 

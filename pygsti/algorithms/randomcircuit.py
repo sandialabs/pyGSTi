@@ -65,7 +65,7 @@ def sample_random_clifford_one_qubit_unitary_parameters():
 def sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr', xname='Gxpi2', qubit_labels=None):
     """
     TODO: docstring  #generate layer of random unitaries and make a series of circuit layers with the compiled versions
-     of these
+    of these
     """
     if qubit_labels is not None:
         n = len(qubit_labels)
@@ -94,7 +94,7 @@ def sample_compiled_haar_random_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr'
 def sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, zname='Gzr', xname='Gxpi2', qubit_labels=None):
     """
     TODO: docstring  #generate layer of random unitaries and make a series of circuit layers with the compiled versions
-     of these
+    of these
     """
     if qubit_labels is not None:
         n = len(qubit_labels)
@@ -546,7 +546,7 @@ def sample_circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_
     from those 1-qubit gates specified by `one_q_gate_names`.
 
     For example, consider 4 qubits with linear connectivity. a valid `co2_q_gates` list is
-    co2_q_gates = [[,],[Label(Gcphase,(0,1)),Label(Gcphase,(2,3))]] which consists of an
+    `co2_q_gates = [[,],[Label(Gcphase,(0,1)),Label(Gcphase,(2,3))]]` which consists of an
     element containing zero 2-qubit gates and an element containing  two 2-qubit gates
     that can be applied in parallel. In this example there are 5 possible sets of compatible
     2-qubit gates:
@@ -560,14 +560,14 @@ def sample_circuit_layer_by_co2_q_gates(pspec, qubit_labels, co2_q_gates, co2_q_
     The list of compatible two-qubit gates `co2_q_gates` can be any list containing anywhere
     from 1 to all 5 of these lists.
 
-    In order to allow for convenient sampling of some commonly useful distributions,
-    `co2_q_gates` can be a list of lists of lists of compatible 2-qubit gates ("nested" sampling).
-    In this case, a list of lists of compatible 2-qubit gates is picked according to the distribution
-    `co2_q_gates_prob`, and then one of the sublists of compatible 2-qubit gates in the selected list is
-    then chosen uniformly at random. For example, this is useful for sampling a layer containing one
-    uniformly random 2-qubit gate with probability p and a layer of 1-qubit gates with probability
-    1-p. Here, we can specify `co2_q_gates` as [[],[[the 1st 2Q-gate,],[the 2nd 2Q-gate,], ...]] and
-    set `two_q_prob=1` and `co2_q_gates_prob  = [1-p,p].
+    In order to allow for convenient sampling of some commonly useful distributions, 
+    `co2_q_gates` can be a list of lists of lists of compatible 2-qubit gates ("nested" sampling). 
+    In this case, a list of lists of compatible 2-qubit gates is picked according to the distribution 
+    `co2_q_gates_prob`, and then one of the sublists of compatible 2-qubit gates in the selected list is 
+    then chosen uniformly at random. For example, this is useful for sampling a layer containing one 
+    uniformly random 2-qubit gate with probability p and a layer of 1-qubit gates with probability 
+    1-p. Here, we can specify `co2_q_gates` as `[[],[[the 1st 2Q-gate,],[the 2nd 2Q-gate,], ...]]` and 
+    set `two_q_prob=1` and `co2_q_gates_prob  = [1-p,p]`.
 
     Parameters
     ----------
@@ -2172,7 +2172,7 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
         If not None, a list of the qubits that the RB circuit is to be sampled for. This should
         be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
         If None, it is assumed that the RB circuit should be over all the qubits. Note that the
-        ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
+        ordering of this list is the order of the "wires" in the returned circuit, but is otherwise
         irrelevant. If desired, a circuit that explicitly idles on the other qubits can be obtained
         by using methods of the Circuit object.
 
@@ -2186,7 +2186,7 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
         Some of the Clifford compilation algorithms in pyGSTi (including the default algorithm) are
         randomized, and the lowest-cost circuit is chosen from all the circuit generated in the
         iterations of the algorithm. This is the number of iterations used. The time required to
-        generate a CRB circuit is linear in `citerations` * (`length`+2). Lower-depth / lower 2-qubit
+        generate a CRB circuit is linear in `citerations` * (`length` + 2). Lower-depth / lower 2-qubit
         gate count compilations of the Cliffords are important in order to successfully implement
         CRB on more qubits.
 
@@ -2194,20 +2194,26 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
         A list of arguments that are handed to compile_clifford() function, which includes all the
         optional arguments of compile_clifford() *after* the `iterations` option (set by `citerations`).
         In order, this list should be values for:
-            - algorithm : str. A string that specifies the compilation algorithm. The default in
-                compile_clifford() will always be whatever we consider to be the 'best' all-round
-                algorith,
-            - aargs : list. A list of optional arguments for the particular compilation algorithm.
-            - costfunction : 'str' or function. The cost-function from which the "best" compilation
-                for a Clifford is chosen from all `citerations` compilations. The default costs a
-                circuit as 10x the num. of 2-qubit gates in the circuit + 1x the depth of the circuit.
-            - prefixpaulis : bool. Whether to prefix or append the Paulis on each Clifford.
-            - paulirandomize : bool. Whether to follow each layer in the Clifford circuit with a
-                random Pauli on each qubit (compiled into native gates). I.e., if this is True the
-                native gates are Pauli-randomized. When True, this prevents any coherent errors adding
-                (on average) inside the layers of each compiled Clifford, at the cost of increased
-                circuit depth. Defaults to False.
-        For more information on these options, see the compile_clifford() docstring.
+        
+        algorithm : str. A string that specifies the compilation algorithm. The default in
+        compile_clifford() will always be whatever we consider to be the 'best' all-round
+        algorithm
+        
+        aargs : list. A list of optional arguments for the particular compilation algorithm.
+        
+        costfunction : 'str' or function. The cost-function from which the "best" compilation
+        for a Clifford is chosen from all `citerations` compilations. The default costs a
+        circuit as 10x the num. of 2-qubit gates in the circuit + 1x the depth of the circuit.
+        
+        prefixpaulis : bool. Whether to prefix or append the Paulis on each Clifford.
+        
+        paulirandomize : bool. Whether to follow each layer in the Clifford circuit with a
+        random Pauli on each qubit (compiled into native gates). I.e., if this is True the
+        native gates are Pauli-randomized. When True, this prevents any coherent errors adding
+        (on average) inside the layers of each compiled Clifford, at the cost of increased
+        circuit depth. Defaults to False.
+        
+        For more information on these options, see the `:func:compile_clifford()` docstring.
 
     seed : int, optional
         A seed to initialize the random number generator used for creating random clifford
@@ -2215,9 +2221,10 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
 
     Returns
     -------
-    Circuit
+    full_circuit : Circuit
         A random CRB circuit over the "native" gate-set specified.
-    Tuple
+        
+    idealout : tuple
         A length-n tuple of integers in [0,1], corresponding to the error-free outcome of the
         circuit. Always all zeros if `randomizeout` is False. The ith element of the tuple
         corresponds to the error-free outcome for the qubit labelled by: the ith element of
@@ -2225,6 +2232,7 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
         In both cases, the ith element of the tuple corresponds to the error-free outcome for the
         qubit on the ith wire of the output circuit.
     """
+    
     # Find the labels of the qubits to create the circuit for.
     if qubit_labels is not None: qubits = qubit_labels[:]  # copy this list
     else: qubits = pspec.qubit_labels[:]  # copy this list
@@ -2427,28 +2435,28 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
         The "mirror RB length" of the circuit, which is closely related to the circuit depth. It
         must be an even integer, and can be zero.
 
-        - If `localclifford` and `paulirandomize` are False, this is the depth of the sampled circuit.
-          The first length/2 layers are all sampled independently according to the sampler specified by
-          `sampler`. The remaining half of the circuit is the "inversion" circuit that is determined
-          by the first half.
+        If `localclifford` and `paulirandomize` are False, this is the depth of the sampled circuit.
+        The first length/2 layers are all sampled independently according to the sampler specified by
+        `sampler`. The remaining half of the circuit is the "inversion" circuit that is determined
+        by the first half.
 
-        - If `paulirandomize` is True and `localclifford` is False, the depth of the circuits is
-          2*length+1 with odd-indexed layers sampled according to the sampler specified by `sampler, and
-          the the zeroth layer + the even-indexed layers consisting of random 1-qubit Pauli gates.
+        If `paulirandomize` is True and `localclifford` is False, the depth of the circuits is
+        2*length+1 with odd-indexed layers sampled according to the sampler specified by `sampler`, and
+        the the zeroth layer + the even-indexed layers consisting of random 1-qubit Pauli gates.
 
-        - If `paulirandomize` and `localclifford` are True, the depth of the circuits is
-          2*length+1 + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for
-          the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
+        If `paulirandomize` and `localclifford` are True, the depth of the circuits is
+        2*length+1 + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for
+        the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
 
-        - If `paulirandomize` is False and `localclifford` is True, the depth of the circuits is
-          length + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for
-          the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
+        If `paulirandomize` is False and `localclifford` is True, the depth of the circuits is
+        length + X where X is a random variable (between 0 and normally <= ~12-16) that accounts for
+        the depth from the layer of random 1-qubit Cliffords at the start and end of the circuit.
 
     qubit_labels : list, optional
         If not None, a list of the qubits that the RB circuit is to be sampled for. This should
         be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
         If None, it is assumed that the RB circuit should be over all the qubits. Note that the
-        ordering of this list is the order of the ``wires'' in the returned circuit, but is otherwise
+        ordering of this list is the order of the "wires" in the returned circuit, but is otherwise
         irrelevant.
 
     sampler : str or function, optional
@@ -2489,14 +2497,18 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
     Circuit
         A random MRB circuit, sampled as specified, of depth:
 
-            - `length`, if not paulirandomize and not local clifford.
-            - 2*`length`+1 if paulirandomize and not local clifford.
-            - `length` + X, if not paulirandomize and local clifford, where X is a random variable
-              that accounts for the depth from the layers of random 1-qubit Cliffords (X = 2 if the 1
-              qubit Clifford gates are "native" gates in the QubitProcessorSpec).
-            - 2*`length`+1 + X, if paulirandomize and local clifford, where X is a random variable
-              that accounts for the depth from the layers of random 1-qubit Cliffords (X = 2 if the 1
-              qubit Clifford gates are "native" gates in the QubitProcessorSpec).
+        `length`, if not paulirandomize and not local clifford.
+        
+        2*`length`+1 if paulirandomize and not local clifford.
+        
+        `length` + X, if not paulirandomize and local clifford, where X is a random variable
+        that accounts for the depth from the layers of random 1-qubit Cliffords (X = 2 if the 1
+        qubit Clifford gates are "native" gates in the QubitProcessorSpec).
+        
+        2*`length`+1 + X, if paulirandomize and local clifford, where X is a random variable
+        that accounts for the depth from the layers of random 1-qubit Cliffords (X = 2 if the 1
+        qubit Clifford gates are "native" gates in the QubitProcessorSpec).
+        
     Tuple
         A length-n tuple of integers in [0,1], corresponding to the error-free outcome of the
         circuit. Always all zeros if `randomizeout` is False. The ith element of the tuple
