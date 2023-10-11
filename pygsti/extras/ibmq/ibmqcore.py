@@ -73,7 +73,7 @@ def q_list_to_ordered_target_indices(q_list, num_qubits):
 
 class IBMQExperiment(dict):
 
-    def __init__(self, edesign, pspec, ancilla_label=None,remove_duplicates=True, randomized_order=True, circuits_per_batch=75,
+    def __init__(self, edesign, pspec, ancilla_label=None,remove_duplicates=True, randomized_order=True, seed=None, circuits_per_batch=75,
                  num_shots=1024):
         """
         A object that converts pyGSTi ExperimentDesigns into jobs to be submitted to IBM Q, submits these
@@ -100,6 +100,9 @@ class IBMQExperiment(dict):
             Whether or not to randomize the order of the circuits in `edesign` before turning them
             into jobs to be submitted to IBM Q.
 
+        seed: int or None, optional
+            Seed to be used in randomization. 
+
         circuits_per_batch: int, optional
             The circuits in edesign are divded into batches, each containing at most this many
             circuits. The default value of 75 is (or was) the maximal value allowed on the public
@@ -123,6 +126,7 @@ class IBMQExperiment(dict):
         self['pspec'] = pspec
         self['remove_duplicates'] = remove_duplicates
         self['randomized_order'] = randomized_order
+        self['seed'] = seed
         self['circuits_per_batch'] = circuits_per_batch
         self['num_shots'] = num_shots
         # Populated when submitting to IBM Q with .submit()
@@ -136,6 +140,7 @@ class IBMQExperiment(dict):
         if randomized_order:
             if remove_duplicates:
                 circuits = list(set(circuits))
+            _np.random.seed(seed)
             _np.random.shuffle(circuits)
         else:
             assert(not remove_duplicates), "Can only remove duplicates if randomizing order!"
