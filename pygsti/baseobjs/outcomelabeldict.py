@@ -63,10 +63,10 @@ class OutcomeLabelDict(_collections.OrderedDict):
         items : list, optional
             Used by pickle and other serializations to initialize elements.
         """
-        #** Note: if change __init__ signature, update __reduce__ below
-        super(OutcomeLabelDict, self).__init__(items)
         if items is None:
             items = []
+        #** Note: if change __init__ signature, update __reduce__ below
+        super(OutcomeLabelDict, self).__init__(items)
 
     def __getitem__(self, key):
         if not OutcomeLabelDict._strict:
