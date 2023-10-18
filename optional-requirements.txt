@@ -9,7 +9,6 @@ msgpack
 cython
 cvxopt
 cvxpy
-nose
 seaborn
 qibo
 packaging

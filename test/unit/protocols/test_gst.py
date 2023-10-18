@@ -256,7 +256,7 @@ class StandardGSTTester(BaseProtocolData, BaseCase):
     """
 
     def test_run(self):
-        proto = gst.StandardGST(modes="full TP,CPTPLND,Target")
+        proto = gst.StandardGST(modes=["full TP","CPTPLND","Target"])
         results = proto.run(self.gst_data)
 
         mdl_result = results.estimates["full TP"].models['stdgaugeopt']

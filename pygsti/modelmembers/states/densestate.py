@@ -349,7 +349,7 @@ class DensePureState(DenseStateInterface, _State):
         mm_dict = super().to_memoized_dict(mmg_memo)
 
         mm_dict['dense_state_vector'] = self._encodemx(self.to_dense('Hilbert'))
-        mm_dict['basis'] = self._basis.to_nice_serialization()
+        mm_dict['basis'] = self._basis.to_nice_serialization() if (self._basis is not None) else None
 
         return mm_dict
 

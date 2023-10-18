@@ -1565,10 +1565,12 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if all([udim == 2 for udim in all_udims]):
             return _QubitProcessorSpec(nqudits, list(gate_unitaries.keys()), gate_unitaries, availability,
-                                       qubit_labels=qudit_labels)
+                                       qubit_labels=qudit_labels,
+                                       instrument_names=list(self.instruments.keys()), nonstd_instruments=self.instruments)
         else:
             return _QuditProcessorSpec(qudit_labels, all_udims, list(gate_unitaries.keys()), gate_unitaries,
-                                       availability)
+                                       availability,
+                                       instrument_names=list(self.instruments.keys()), nonstd_instruments=self.instruments)
 
     def create_modelmember_graph(self):
         return _MMGraph({

@@ -5,7 +5,6 @@
 
 import os
 
-import nose
 import numpy as np
 from mpi4py import MPI
 
@@ -13,6 +12,7 @@ import pygsti
 from pygsti.modelpacks import smq1Q_XYI as std
 
 wcomm = MPI.COMM_WORLD
+
 
 class ParallelTest(object):
     # No setup here, must be defined in the derived classes
@@ -331,16 +331,10 @@ class PureMPIParallel_Test(ParallelTest):
 
 
 if __name__ == '__main__':
-    config = nose.config.Config()
-    config.verbosity = 2 if wcomm.rank == 0 else 0
-    
-    nose.main(config=config)
-    
-    #Eriks manual runs so that debugger can start (I couldn't figure out how to set options to nose)
-    #tester = PureMPIParallel_Test()
-    #tester.setup_class()
-    #tester.ralloc = pygsti.baseobjs.ResourceAllocation(wcomm)
-    ##tester.run_objfn_values('matrix','logl',4)
-    #tester.run_fills('map',1, None)
-    #tester.run_fills('map',4, None)
-    #tester.run_fills('matrix',4, 15)
+    tester = PureMPIParallel_Test()
+    tester.setup_class()
+    tester.ralloc = pygsti.baseobjs.ResourceAllocation(wcomm)
+    #tester.run_objfn_values('matrix','logl',4)
+    tester.run_fills('map', 1, None)
+    tester.run_fills('map', 4, None)
+    tester.run_fills('matrix', 4, 15)

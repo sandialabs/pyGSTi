@@ -3522,8 +3522,7 @@ class SoftwareEnvTable(WorkspaceTable):
         from .._version import version as pygsti_version
         table.add_row(("pyGSTi version", str(pygsti_version)), (None, 'Verbatim'))
 
-        packages = ['numpy', 'scipy', 'matplotlib', 'ply', 'cvxopt', 'cvxpy',
-                    'nose', 'PIL', 'psutil']
+        packages = ['numpy', 'scipy', 'matplotlib', 'ply', 'cvxopt', 'cvxpy', 'PIL', 'psutil']
         for pkg in packages:
             table.add_row((pkg, _get_package_version(pkg)), (None, 'Verbatim'))
 

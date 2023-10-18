@@ -87,7 +87,7 @@ def fidelity(a, b):
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
         F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(b, vec)).real  # vec^T * b * vec
-        return float(F)
+        return float(F[0, 0])
 
     evals, U = _np.linalg.eig(b)
     if len([ev for ev in evals if abs(ev) > 1e-8]) == 1:
@@ -95,7 +95,7 @@ def fidelity(a, b):
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
         F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(a, vec)).real  # vec^T * a * vec
-        return float(F)
+        return float(F[0, 0])
 
     #if _np.array_equal(a, b): return 1.0  # HACK - some cases when a and b are perfecty equal sqrtm(a) fails...
     sqrtA = _hack_sqrtm(a)  # _spl.sqrtm(a)
@@ -258,143 +258,96 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     """
     mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
 
-    #currently cvxpy is only needed for this function, so don't import until here
-
+    # currently cvxpy is only needed for this function, so don't import until here
     import cvxpy as _cvxpy
-
-    #Check if using version < 1.0
     old_cvxpy = bool(tuple(map(int, _cvxpy.__version__.split('.'))) < (1, 0))
+    if old_cvxpy:
+        raise RuntimeError('CVXPY 0.4 is no longer supported. Please upgrade to CVXPY 1.0 or higher.')
 
-    # This SDP implementation is a modified version of Kevin's code
-
-    #Compute the diamond norm
-
-    #Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
-
-    #Maximize 1/2 ( < J(phi), X > + < J(phi).dag, X.dag > )
-    #Subject to  [[ I otimes rho0, X],
-    #            [X.dag, I otimes rho1]] >> 0
-    #              rho0, rho1 are density matrices
-    #              X is linear operator
-
-    #Jamiolkowski representation of the process
-    #  J(phi) = sum_ij Phi(Eij) otimes Eij
-
-    #< a, b > = Tr(a.dag b)
-
-    #def vec(matrix_in):
-    #    # Stack the columns of a matrix to return a vector
-    #    return _np.transpose(matrix_in).flatten()
-    #
-    #def unvec(vector_in):
-    #    # Slice a vector into columns of a matrix
-    #    d = int(_np.sqrt(vector_in.size))
-    #    return _np.transpose(vector_in.reshape( (d,d) ))
-
-    #Code below assumes *un-normalized* Jamiol-isomorphism, so multiply by
-    # density mx dimension (`smallDim`) below
+    # _jam code below assumes *un-normalized* Jamiol-isomorphism.
+    # It will convert a & b to a "single-block" basis representation
+    # when mx_basis has multiple blocks. So after we call it, we need
+    # to multiply by mx dimension (`smallDim`).
     JAstd = _jam.fast_jamiolkowski_iso_std(a, mx_basis)
     JBstd = _jam.fast_jamiolkowski_iso_std(b, mx_basis)
-
-    #Do this *after* the fast_jamiolkowski_iso calls above because these will convert
-    # a & b to a "single-block" basis representation when mx_basis has multiple blocks.
     dim = JAstd.shape[0]
     smallDim = int(_np.sqrt(dim))
-    JAstd *= smallDim  # see above comment
-    JBstd *= smallDim  # see above comment
+    JAstd *= smallDim
+    JBstd *= smallDim
     assert(dim == JAstd.shape[1] == JBstd.shape[0] == JBstd.shape[1])
 
-    #CHECK: Kevin's jamiolowski, which implements the un-normalized isomorphism:
-    #  smallDim * _jam.jamiolkowski_iso(M, "std", "std")
-    #def kevins_jamiolkowski(process, representation = 'superoperator'):
-    #    # Return the Choi-Jamiolkowski representation of a quantum process
-    #    # Add methods as necessary to accept different representations
-    #    process = _np.array(process)
-    #    if representation == 'superoperator':
-    #        # Superoperator is the linear operator acting on vec(rho)
-    #        dimension = int(_np.sqrt(process.shape[0]))
-    #        print "dim = ",dimension
-    #        jamiolkowski_matrix = _np.zeros([dimension**2, dimension**2], dtype='complex')
-    #        for i in range(dimension**2):
-    #            Ei_vec= _np.zeros(dimension**2)
-    #            Ei_vec[i] = 1
-    #            output = unvec(_np.dot(process,Ei_vec))
-    #            tmp = _np.kron(output, unvec(Ei_vec))
-    #            print "E%d = \n" % i,unvec(Ei_vec)
-    #            #print "contrib =",_np.kron(output, unvec(Ei_vec))
-    #            jamiolkowski_matrix += tmp
-    #        return jamiolkowski_matrix
-    #JAstd_kev = jamiolkowski(a)
-    #JBstd_kev = jamiolkowski(b)
-    #print "diff a = ",_np.linalg.norm(JAstd_kev/2.0-JAstd)
-    #print "diff b = ",_np.linalg.norm(JBstd_kev/2.0-JBstd)
+    J = JBstd - JAstd
+    prob, vars = _diamond_norm_model(dim, smallDim, J)
 
-    #Kevin's function: def diamondnorm( jamiolkowski_matrix ):
-    jamiolkowski_matrix = JBstd - JAstd
-
-    # Here we define a bunch of auxiliary matrices because CVXPY doesn't use complex numbers
-
-    K = jamiolkowski_matrix.real  # J.real
-    L = jamiolkowski_matrix.imag  # J.imag
-
-    if old_cvxpy:
-        Y = _cvxpy.Variable(dim, dim)  # X.real
-        Z = _cvxpy.Variable(dim, dim)  # X.imag
-
-        sig0 = _cvxpy.Variable(smallDim, smallDim)  # rho0.real
-        sig1 = _cvxpy.Variable(smallDim, smallDim)  # rho1.real
-        tau0 = _cvxpy.Variable(smallDim, smallDim)  # rho1.imag
-        tau1 = _cvxpy.Variable(smallDim, smallDim)  # rho1.imag
-
-    else:
-        Y = _cvxpy.Variable(shape=(dim, dim))  # X.real
-        Z = _cvxpy.Variable(shape=(dim, dim))  # X.imag
-
-        sig0 = _cvxpy.Variable(shape=(smallDim, smallDim))  # rho0.real
-        sig1 = _cvxpy.Variable(shape=(smallDim, smallDim))  # rho1.real
-        tau0 = _cvxpy.Variable(shape=(smallDim, smallDim))  # rho1.imag
-        tau1 = _cvxpy.Variable(shape=(smallDim, smallDim))  # rho1.imag
-
-    ident = _np.identity(smallDim, 'd')
-
-    objective = _cvxpy.Maximize(_cvxpy.trace(K.T @ Y + L.T @ Z))
-    constraints = [_cvxpy.bmat([
-        [_cvxpy.kron(ident, sig0), Y, -_cvxpy.kron(ident, tau0), -Z],
-        [Y.T, _cvxpy.kron(ident, sig1), Z.T, -_cvxpy.kron(ident, tau1)],
-        [_cvxpy.kron(ident, tau0), Z, _cvxpy.kron(ident, sig0), Y],
-        [-Z.T, _cvxpy.kron(ident, tau1), Y.T, _cvxpy.kron(ident, sig1)]]) >> 0,
-        _cvxpy.bmat([[sig0, -tau0],
-                     [tau0, sig0]]) >> 0,
-        _cvxpy.bmat([[sig1, -tau1],
-                     [tau1, sig1]]) >> 0,
-        sig0 == sig0.T,
-        sig1 == sig1.T,
-        tau0 == -tau0.T,
-        tau1 == -tau1.T,
-        _cvxpy.trace(sig0) == 1.,
-        _cvxpy.trace(sig1) == 1.]
-
-    prob = _cvxpy.Problem(objective, constraints)
     try:
-        prob.solve(solver="CVXOPT")
-#       prob.solve(solver="ECOS")
-#       prob.solve(solver="SCS")#This always fails
+        prob.solve(solver='CVXOPT')
     except _cvxpy.error.SolverError as e:
         _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
         return (-2, _np.zeros((dim, dim))) if return_x else -2
     except:
-        _warnings.warn("CVXOPT failed (uknown err) - diamonddist returning -2!")
+        _warnings.warn("CVXOPT failed (unknown err) - diamonddist returning -2!")
         return (-2, _np.zeros((dim, dim))) if return_x else -2
 
-    #Validate result
-    #assert( abs(_np.trace(_np.dot(K.T,Y.value) + _np.dot(L.T,Z.value))-prob.value) < 1e-6 ), \
-    #    "Diamondnorm mismatch"
-
     if return_x:
-        X = Y.value + 1j * Z.value  # encodes state at which maximum trace-distance occurs
-        return prob.value, X
+        return prob.value, vars[0].value
     else:
         return prob.value
+
+
+def _diamond_norm_model(dim, smallDim, J):
+    # return a model for computing the diamond norm.
+    #
+    # Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
+    #
+    # Maximize 1/2 ( < J(phi), X > + < J(phi).dag, X.dag > )
+    # Subject to  [[ I otimes rho0,       X        ],
+    #              [      X.dag   ,   I otimes rho1]] >> 0
+    #              rho0, rho1 are density matrices
+    #              X is linear operator
+
+    import cvxpy as _cp
+
+    rho0 = _cp.Variable((smallDim, smallDim), name='rho0', hermitian=True)
+    rho1 = _cp.Variable((smallDim, smallDim), name='rho1', hermitian=True)
+    X = _cp.Variable((dim, dim), name='X', complex=True)
+    Y = _cp.real(X)
+    Z = _cp.imag(X)
+
+    K = J.real
+    L = J.imag
+    if hasattr(_cp, 'scalar_product'):
+        objective_expr = _cp.scalar_product(K, Y) + _cp.scalar_product(L, Z)
+    else:
+        Kf = K.flatten(order='F')
+        Yf = Y.flatten(order='F')
+        Lf = L.flatten(order='F')
+        Zf = Z.flatten(order='F')
+        objective_expr = Kf @ Yf + Lf @ Zf
+
+    objective = _cp.Maximize(objective_expr)
+
+    ident = _np.identity(smallDim, 'd')
+    kr_tau0 = _cp.kron(ident, _cp.imag(rho0))
+    kr_tau1 = _cp.kron(ident, _cp.imag(rho1))
+    kr_sig0 = _cp.kron(ident, _cp.real(rho0))
+    kr_sig1 = _cp.kron(ident, _cp.real(rho1))
+
+    block_11 = _cp.bmat([[kr_sig0 ,    Y   ],
+                         [   Y.T  , kr_sig1]])
+    block_21 = _cp.bmat([[kr_tau0 ,    Z   ],
+                         [   -Z.T , kr_tau1]])
+    block_12 = block_21.T
+    mat_joint = _cp.bmat([[block_11, block_12],
+                          [block_21, block_11]])
+    constraints = [
+        mat_joint >> 0,
+        rho0 >> 0,
+        rho1 >> 0,
+        _cp.trace(rho0) == 1.,
+        _cp.trace(rho1) == 1.
+    ]
+    prob = _cp.Problem(objective, constraints)
+    return prob, [X, rho0, rho1]
 
 
 def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J(b)|)

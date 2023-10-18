@@ -44,7 +44,7 @@ class RandomCircuitTest(BaseCase):
 
 class LayerSamplerTester(BaseCase):
 
-    def test_edgrab(self):
+    def test_edgegrab(self):
 
         n = 4
         qs = ['Q'+str(i) for i in range(n)]
@@ -71,3 +71,27 @@ class LayerSamplerTester(BaseCase):
 
         l4 = _rc.sample_circuit_layer_by_edgegrab(pspec3, qubit_labels=q_set,  two_q_gate_density=0.25, one_q_gate_names=['Gxpi2',], 
                 gate_args_lists={'Gczr':[('-0.1',),('+0.1',)]})
+        
+    def test_qelimination(self):
+
+        n = 4
+        qs = ['Q'+str(i) for i in range(n)]
+        ring = [('Q'+str(i),'Q'+str(i+1)) for i in range(n-1)]
+
+        gateset1 =  ['Gcphase'] + ['Gc'+str(i) for i in range(24)]
+        gateset2 =  ['Gcphase'] + ['Gxpi2', 'Gzr']
+        gateset3 =  ['Gczr'] + ['Gxpi2', 'Gzr']
+
+        pspec1 = QPS(n, gateset1, availability={'Gcphase':ring}, qubit_labels=qs)
+        pspec2 = QPS(n, gateset2, availability={'Gcphase':ring}, qubit_labels=qs)
+        pspec3 = QPS(n, gateset3, availability={'Gczr':ring}, qubit_labels=qs)
+
+        q_set = ('Q0', 'Q1', 'Q2')
+
+        l1 = _rc.sample_circuit_layer_by_q_elimination(pspec1, qubit_labels=q_set, two_q_prob=0.5)
+
+        l2 = _rc.sample_circuit_layer_by_q_elimination(pspec2, qubit_labels=q_set, two_q_prob=0.5)
+
+        l3 = _rc.sample_circuit_layer_by_q_elimination(pspec3, qubit_labels=q_set, two_q_prob=0.5)
+
+        l4 = _rc.sample_circuit_layer_by_q_elimination(pspec3, qubit_labels=q_set, two_q_prob=0.5)

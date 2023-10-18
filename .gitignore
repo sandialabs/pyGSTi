@@ -10,6 +10,7 @@
 *.pyd
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
+test/test_packages/gst_checkpoints/*
 jupyter_notebooks/**/offline
 test/test_packages/offline
 hooks/etc/permissions.yml
@@ -47,6 +48,8 @@ jupyter_notebooks/Tutorials/tutorial_files/exampleMultiDataSetReport
 jupyter_notebooks/Tutorials/tutorial_files/exampleBriefReport
 jupyter_notebooks/Tutorials/tutorial_files/*.ipynb
 jupyter_notebooks/Tutorials/tutorial_files/tempTest
+jupyter_notebooks/Tutorials/tutorial_files/*checkpoints
+
 
 
 # Compiled source #

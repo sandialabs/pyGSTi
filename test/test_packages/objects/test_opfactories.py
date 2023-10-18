@@ -13,7 +13,6 @@ class XRotationOpFactory(pygsti.modelmembers.operations.OpFactory):
         pygsti.modelmembers.operations.OpFactory.__init__(self, dim, "densitymx")
         
     def create_object(self, args=None, sslbls=None):
-        assert(sslbls is None) # we don't use these, and they're only non-None when we're expected to use them
         assert(len(args) == 1)
         theta = float(args[0])/2.0
         print("INIT: theta = ", theta," sslbls=",sslbls)
@@ -69,7 +68,6 @@ class ParamXRotationOpFactory(pygsti.modelmembers.operations.OpFactory):
         pygsti.modelmembers.operations.OpFactory.__init__(self, dim, "densitymx")
         
     def create_object(self, args=None, sslbls=None):
-        assert(sslbls is None) # we don't use these, and they're only non-None when we're expected to use them
         assert(len(args) == 1)
         return XRotationOp( float(args[0]) ) #no need to set parameters of returned op - done by base class
 
