@@ -1415,7 +1415,7 @@ def _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, pre_povm
     #of the kite parameters, which show up as sets of empty rows in the jacobian.
     #We should identify which fiducial pairs those are and remove them from the 
     #search space.
-    printer.log('Removing useless fidcuial pairs with trivial sensitivity to the germ kite parameters. Sensitivity threshold is %.3f'%(sensitivity_threshold), 3)
+    printer.log('Removing useless fiducial pairs with trivial sensitivity to the germ kite parameters. Sensitivity threshold is %.3f'%(sensitivity_threshold), 3)
     printer.log('Number of fiducial pairs before filtering trivial ones: %d' %(len(allPairIndices)), 3)
     cleaned_pair_indices_list= filter_useless_fid_pairs(allPairIndices, elIndicesForPair, dPall, sensitivity_threshold)
     printer.log('Number of fiducial pairs after filtering trivial ones: %d' %(len(cleaned_pair_indices_list)), 3)
@@ -1677,7 +1677,7 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
     
     precomputed_jacobians : dict, optional (default None)
         An optional dictionary of precomputed jacobian dictionaries for the
-        germ fidcuials pair set. The keys are germs and the values are the dictionaries
+        germ fiducial pair set. The keys are germs and the values are the dictionaries
         corresponding that that germ-fiducial-pair set's jacobian.
 
     Returns
@@ -1817,7 +1817,7 @@ def get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuple
     #search space.
     
     #TODO: Add back this functionality for the parameter vector based FPR.
-    printer.log('Removing useless fidcuial pairs with trivial sensitivity to the vector of parameters.', 3)
+    printer.log('Removing useless fiducial pairs with trivial sensitivity to the vector of parameters.', 3)
     printer.log('Number of fiducial pairs before filtering trivial ones: %d' %(len(allPairIndices)), 3)
     
     #Directional derivative matrices with minimum eigenvalues below the evd_tol end up getting
