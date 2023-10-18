@@ -1102,7 +1102,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
                         goparams = goparams.copy()
                         goparams['comm'] = None
                     to_pickle['gaugeopt_argument_dicts'][lbl] = goparams
-                else:  # goparams is a list
+                elif isinstance(goparams, list):  # goparams is a list
                     new_goparams = []  # new list
                     for goparams_dict in goparams:
                         if 'comm' in goparams_dict:
@@ -1110,6 +1110,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
                             goparams_dict['comm'] = None
                         new_goparams.append(goparams_dict)
                     to_pickle['gaugeopt_argument_dicts'][lbl] = new_goparams
+                elif lbl == 'trivial_gauge_opt':
+                    to_pickle['gaugeopt_argument_dicts'][lbl] = None
         return to_pickle
 
     def _to_nice_serialization(self):
@@ -2500,8 +2502,6 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
     # if p is prob that box is red and there are N boxes, then prob of no red boxes is q = (1-p)^N ~= 1-p*N
     # and so probability of any red boxes is ~p*N.  Here `percentile` is the probability of seeing *any* red
     # boxes, i.e. ~p*N, so to compute the prob of a single box being red we compute `p = percentile/N`.
-
-    #print("DB2: ",twoDeltaLogL_threshold,redbox_threshold)
 
     assert(isinstance(mdc_objfn, _objfns.PoissonPicDeltaLogLFunction)), \
         "Can only use wildcard scaling with 'logl' objective!"
