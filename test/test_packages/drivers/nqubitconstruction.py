@@ -171,7 +171,7 @@ def nparams_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
                            independent1Qgates=True, ZZonly=False, verbosity=0):
     # noise can be either a seed or a random array that is long enough to use
 
-    printer = pygsti.obj.VerbosityPrinter.create_printer(verbosity)
+    printer = pygsti.baseobjs.VerbosityPrinter.create_printer(verbosity)
     printer.log("Computing parameters for a %d-qubit %s model" % (nQubits,geometry))
 
     qubitGraph = QubitGraph(nQubits, geometry)
@@ -247,10 +247,10 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
                           gateNoise=None, prepNoise=None, povmNoise=None, verbosity=0):
     # noise can be either a seed or a random array that is long enough to use
 
-    printer = pygsti.obj.VerbosityPrinter.create_printer(verbosity)
+    printer = pygsti.baseobjs.VerbosityPrinter.create_printer(verbosity)
     printer.log("Creating a %d-qubit %s model" % (nQubits,geometry))
 
-    mdl = pygsti.obj.ExplicitOpModel() # no preps/POVMs
+    mdl = pygsti.baseobjs.ExplicitOpModel() # no preps/POVMs
     # TODO: sparse prep & effect vecs... acton(...) analogue?
 
     #Full preps & povms -- maybe another option
@@ -316,8 +316,8 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
 
         
     #SPAM
-    basis1Q = pygsti.obj.Basis("pp", 2)
-    prepFactors = [pygsti.obj.TPSPAMVec(pygsti.construction.create_spam_vector("0", "Q0", basis1Q))
+    basis1Q = pygsti.baseobjs.Basis("pp", 2)
+    prepFactors = [pygsti.baseobjs.TPSPAMVec(pygsti.construction.create_spam_vector("0", "Q0", basis1Q))
                    for i in range(nQubits)]
     if prepNoise is not None:
         if isinstance(prepNoise,tuple): # use as (seed, strength)
@@ -327,12 +327,12 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         else:
             depolAmts = prepNoise[0:nQubits]
         for amt,vec in zip(depolAmts,prepFactors): vec.depolarize(amt) 
-    mdl.preps['rho0'] = pygsti.obj.TensorProdSPAMVec('prep', prepFactors)
+    mdl.preps['rho0'] = pygsti.baseobjs.TensorProdSPAMVec('prep', prepFactors)
     
     factorPOVMs = []
     for i in range(nQubits):
         effects = [(l, pygsti.construction.create_spam_vector(l, "Q0", basis1Q)) for l in ["0", "1"]]
-        factorPOVMs.append(pygsti.obj.TPPOVM(effects))
+        factorPOVMs.append(pygsti.baseobjs.TPPOVM(effects))
     if povmNoise is not None:
         if isinstance(povmNoise,tuple): # use as (seed, strength)
             seed,strength = povmNoise
@@ -341,7 +341,7 @@ def create_nqubit_gateset(nQubits, geometry="line", maxIdleWeight=1, maxhops=0,
         else:
             depolAmts = povmNoise[0:nQubits]
         for amt,povm in zip(depolAmts,factorPOVMs): povm.depolarize(amt) 
-    mdl.povms['Mdefault'] = pygsti.obj.TensorProdPOVM(factorPOVMs)
+    mdl.povms['Mdefault'] = pygsti.baseobjs.TensorProdPOVM(factorPOVMs)
         
     printer.log("DONE! - returning Model with dim=%d and gates=%s" % (mdl.dim, list(mdl.operations.keys())))
     return mdl
@@ -360,7 +360,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
         Composed = _objs.ComposedDenseOp
         Embedded = _objs.EmbeddedDenseOp
     
-    printer = pygsti.obj.VerbosityPrinter.create_printer(verbosity)
+    printer = pygsti.baseobjs.VerbosityPrinter.create_printer(verbosity)
     printer.log("*** Creating global idle ***")
     
     termgates = [] # gates to compose
@@ -387,7 +387,7 @@ def create_global_idle(qubitGraph, maxWeight, sparse=False, verbosity=0):
                 errbasis.append(basisEl)
 
             printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_inds,len(errbasis)), 3)
-            errbasis = pygsti.obj.Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
+            errbasis = pygsti.baseobjs.Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
             termErr = Lindblad(wtId, ham_basis=errbasis, nonham_basis=errbasis, cptp=True,
                                nonham_diagonal_only=True, truncate=True, mx_basis=wtBasis)
         
@@ -508,7 +508,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
         Embedded = _objs.EmbeddedDenseOp
         Static = _objs.StaticDenseOp
     
-    printer = pygsti.obj.VerbosityPrinter.create_printer(verbosity)
+    printer = pygsti.baseobjs.VerbosityPrinter.create_printer(verbosity)
     printer.log("*** Creating composed gate ***")
     
     #Factor1: target operation
@@ -522,7 +522,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
     #Factor2: idle_noise operation
     printer.log("Creating idle error factor",2)
     if apply_idle_noise_to == "all":
-        if isinstance(idle_noise, pygsti.obj.LinearOperator):
+        if isinstance(idle_noise, pygsti.baseobjs.LinearOperator):
             printer.log("Using supplied full idle gate",3)
             fullIdleErr = idle_noise
         elif idle_noise == True:
@@ -580,7 +580,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
                 
         errbasis = [basisEl_Id] + \
                    [ basisProductMatrix(err,sparse) for err in loc_noise_errinds]
-        errbasis = pygsti.obj.Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
+        errbasis = pygsti.baseobjs.Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
         
         #Construct one embedded Lindblad-gate using all `errbasis` terms
         ssLocQ = [tuple(['Q%d'%i for i in range(nLocal)])]
@@ -626,7 +626,7 @@ def create_composed_gate(targetOp, target_qubit_inds, qubitGraph, weight_maxhops
 
                 err_qubit_global_inds = possible_err_qubit_inds[list(err_qubit_local_inds)]
                 printer.log("Error on qubits %s -> error basis of length %d" % (err_qubit_global_inds,len(errbasis)), 4)
-                errbasis = pygsti.obj.Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
+                errbasis = pygsti.baseobjs.Basis(matrices=errbasis, sparse=sparse) #single element basis (plus identity)
                 termErr = Lindblad(wtId, ham_basis=errbasis,
                                    nonham_basis=errbasis, cptp=True,
                                    nonham_diagonal_only=True, truncate=True,

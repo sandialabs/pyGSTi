@@ -784,7 +784,7 @@ class Circuit(object):
         """
         assert(not self._static), \
             ("Cannot edit a read-only circuit!  "
-             "Set editable=True when calling pygsti.obj.Circuit to create editable circuit.")
+             "Set editable=True when calling pygsti.baseobjs.Circuit to create editable circuit.")
         from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
         cparser = _CircuitParser()
         chk, chk_labels, chk_occurrence, chk_compilable_inds = cparser.parse(value)
