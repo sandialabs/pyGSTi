@@ -54,7 +54,7 @@ class OutcomeLabelDict(_collections.OrderedDict):
         """
         return (val,) if isinstance(val, str) else tuple(val)
 
-    def __init__(self, items=[]):
+    def __init__(self, items=None):
         """
         Creates a new OutcomeLabelDict.
 
@@ -65,6 +65,8 @@ class OutcomeLabelDict(_collections.OrderedDict):
         """
         #** Note: if change __init__ signature, update __reduce__ below
         super(OutcomeLabelDict, self).__init__(items)
+        if items is None:
+            items = []
 
     def __getitem__(self, key):
         if not OutcomeLabelDict._strict:

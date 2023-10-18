@@ -115,12 +115,16 @@ def sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, zname='
 
 def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, two_q_gate_density=0.25,
                                    one_q_gate_type='haar',
-                                   two_q_gate_args_lists={'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}):
+                                   two_q_gate_args_lists=None):
     '''
     TODO: docstring
     Generates a forward circuits with benchmark depth d for non-clifford mirror randomized benchmarking.
-    The circuits alternate Haar-random 1q unitaries and layers of Gczr gates
+    The circuits alternate Haar-random 1q unitaries and layers of Gczr gates.
+
+    If two_q_gate_args_lists is None, then we set it to {'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}.
     '''
+    if two_q_gate_args_lists is None:
+        two_q_gate_args_lists = {'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}
     #choose length to be the number of (2Q layer, 1Q layer) blocks
     circuit = _cir.Circuit(layer_labels=[], line_labels=qubit_labels, editable=True)
     for a in range(length):
@@ -3421,8 +3425,8 @@ def _determine_sign(s_state, p_state, measurement):
 
 
 def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=None, layer_sampling = 'mixed1q2q', sampler='Qelimination',
-                             samplerargs=[], addlocal=False, lsargs=[],
-                              seed=None):
+                             samplerargs=None, addlocal=False, lsargs=None,
+                             seed=None):
     """
     Generates a "binary randomized benchmarking" (BiRB) circuit.
 
@@ -3493,7 +3497,11 @@ def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
         The circuit, when run without errors, produces an eigenstate of the target Pauli operator.  
     Int (Either 1 or -1)
         Specifies the sign of the target Pauli measurement.
-    """    
+    """
+    if lsargs is None:
+        lsargs = []
+    if samplerargs is None:
+        samplerargs = []
     if qubit_labels is not None: n = len(qubit_labels)
     else: 
         n = pspec.num_qubits

@@ -309,7 +309,9 @@ class ErrorRatesModel(SuccessFailModel):
         The gate name to be used for the 1-qubit idle gate (this should be
         set in `error_rates` to add idle errors.
     """
-    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict={}, idle_name='Gi'):
+    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict=None, idle_name='Gi'):
+        if alias_dict is None:
+            alias_dict = {}
         if state_space_labels is None:
             state_space_labels = ['Q%d' % i for i in range(num_qubits)]
         else:
@@ -461,9 +463,11 @@ class TwirledLayersModel(ErrorRatesModel):
         The gate name to be used for the 1-qubit idle gate (this should be
         set in `error_rates` to add idle errors.
     """
-    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict={}, idle_name='Gi'):
+    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict=None, idle_name='Gi'):
         ErrorRatesModel.__init__(self, error_rates, num_qubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idle_name=idle_name)
+        if alias_dict is None:
+            alias_dict = {}
 
     def _success_prob(self, circuit, cache):
         pvec = self._paramvec**2
@@ -564,12 +568,14 @@ class TwirledGatesModel(ErrorRatesModel):
         The gate name to be used for the 1-qubit idle gate (this should be
         set in `error_rates` to add idle errors.
     """
-    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict={}, idle_name='Gi'):
+    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict=None, idle_name='Gi'):
         """
         todo
         """
         ErrorRatesModel.__init__(self, error_rates, num_qubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idle_name=idle_name)
+        if alias_dict is None:
+            alias_dict = {}
 
     def _circuit_cache(self, circuit):
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
@@ -674,9 +680,11 @@ class AnyErrorCausesFailureModel(ErrorRatesModel):
         The gate name to be used for the 1-qubit idle gate (this should be
         set in `error_rates` to add idle errors.
     """
-    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict={}, idle_name='Gi'):
+    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict=None, idle_name='Gi'):
         ErrorRatesModel.__init__(self, error_rates, num_qubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idle_name=idle_name)
+        if alias_dict is None:
+            alias_dict = {}
 
     def _circuit_cache(self, circuit):
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)
@@ -756,9 +764,11 @@ class AnyErrorCausesRandomOutputModel(ErrorRatesModel):
         The gate name to be used for the 1-qubit idle gate (this should be
         set in `error_rates` to add idle errors.
     """
-    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict={}, idle_name='Gi'):
+    def __init__(self, error_rates, num_qubits, state_space_labels=None, alias_dict=None, idle_name='Gi'):
         ErrorRatesModel.__init__(self, error_rates, num_qubits, state_space_labels=state_space_labels,
                                  alias_dict=alias_dict, idle_name=idle_name)
+        if alias_dict is None:
+            alias_dict = {}
 
     def _circuit_cache(self, circuit):
         width, depth, alpha, one_over_2_width, inds_to_mult_by_layer = super()._circuit_cache(circuit)

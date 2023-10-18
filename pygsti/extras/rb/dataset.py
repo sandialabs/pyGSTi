@@ -94,7 +94,7 @@ class RBSummaryDataset(object):
     """
 
     def __init__(self, num_qubits, success_counts=None, total_counts=None, hamming_distance_counts=None,
-                 aux={}, finitecounts=True, descriptor=''):
+                 aux=None, finitecounts=True, descriptor=''):
         """
         # todo : update.
 
@@ -156,6 +156,8 @@ class RBSummaryDataset(object):
             A string that describes what the data is for.
 
         """
+        if aux is None:
+            aux = {}
         self.num_qubits = num_qubits
         self.finitecounts = finitecounts
         self.aux = _copy.deepcopy(aux)

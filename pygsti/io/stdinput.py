@@ -179,7 +179,7 @@ class StdInputParser(object):
         # print "DB: stack = ",self.exprStack
         return circuit_tuple, circuit_labels, occurrence_id, compilable_indices
 
-    def parse_dataline(self, s, lookup={}, expected_counts=-1, create_subcircuits=True,
+    def parse_dataline(self, s, lookup=None, expected_counts=-1, create_subcircuits=True,
                        line_labels=None):
         """
         Parse a data line (dataline in grammar)
@@ -211,6 +211,8 @@ class StdInputParser(object):
         """
 
         # get counts from end of s
+        if lookup is None:
+            lookup = {}
         parts = s.split()
         circuitStr = parts[0]
 

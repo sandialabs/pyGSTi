@@ -163,7 +163,7 @@ def compute_valid_inclass_corrections():
     return valid_inclass_corrections
 
 
-def populate_inclass_correction(inclass_correction={}):
+def populate_inclass_correction(inclass_correction=None):
     """
     Populates empty parts of an `inclass_correction` dictionary with auto values. This dictionary is an
     input to the .run_instability_detection() a StabilityAnalyzer. See the doctring of that method for
@@ -172,6 +172,8 @@ def populate_inclass_correction(inclass_correction={}):
     The auto inclass_correction is to default to a Bonferroni correction at all levels above the lowest
     level where a correction has been specified.
     """
+    if inclass_correction is None:
+        inclass_correction = {}
     autocorrection = 'Bonferroni'
     for key in ('dataset', 'circuit', 'outcome', 'spectrum'):
         if key not in inclass_correction:
@@ -469,7 +471,7 @@ class StabilityAnalyzer(object):
         s += " from tests at a global significance of {}%" .format(100 * self._significance[detectorkey])
         return s
 
-    def compute_spectra(self, frequencies='auto', freqpointers={}):
+    def compute_spectra(self, frequencies='auto', freqpointers=None):
         """"
         Generates and records power spectra. This is the first stage in instability detection
         and characterization with a StabilityAnalyzer.
@@ -521,6 +523,8 @@ class StabilityAnalyzer(object):
         None
 
         """
+        if freqpointers is None:
+            freqpointers = {}
         if isinstance(frequencies, str):
             assert(frequencies == 'auto')
             frequencies, freqpointers = _sig.compute_auto_frequencies(self.data, self.transform)
@@ -667,7 +671,7 @@ class StabilityAnalyzer(object):
 
         return numspectra
 
-    def same_frequencies(self, dictlabel={}):
+    def same_frequencies(self, dictlabel=None):
         """
         Checks whether all the "base" power spectra defined by `dictlabel` are all with respect to the same frequencies.
 
@@ -688,6 +692,8 @@ class StabilityAnalyzer(object):
         """
         # If there's no frequency pointers stored it's automatically true, becuase then all spectra
         # are for the frequencies stored as self._frequencies[0].
+        if dictlabel is None:
+            dictlabel = {}
         if len(self._freqpointers) == 0: return True
 
         iterator = []  # A list of list-like to iterate over to consider all the spectra in question.
@@ -951,7 +957,7 @@ class StabilityAnalyzer(object):
 
         return pvalue
 
-    def run_instability_detection(self, significance=0.05, freqstest=None, tests='auto', inclass_correction={},
+    def run_instability_detection(self, significance=0.05, freqstest=None, tests='auto', inclass_correction=None,
                                   betweenclass_weighting='auto', saveas='default', default=True, overwrite=False,
                                   verbosity=1):
         """
@@ -1020,6 +1026,8 @@ class StabilityAnalyzer(object):
         None
 
         """
+        if inclass_correction is None:
+            inclass_correction = {}
         if verbosity > 0: print("Running instability detection at {} significance...".format(significance), end='')
         if verbosity >= 1: print('\n')
 

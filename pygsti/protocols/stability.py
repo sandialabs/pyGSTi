@@ -204,8 +204,8 @@ class StabilityAnalysis(_proto.Protocol):
     """
 
     def __init__(self, significance=0.05, transform='auto', marginalize='auto', mergeoutcomes=None,
-                 constnumtimes='auto', ids=False, frequencies='auto', freqpointers={}, freqstest=None,
-                 tests='auto', inclass_correction={}, betweenclass_weighting='auto', estimator='auto',
+                 constnumtimes='auto', ids=False, frequencies='auto', freqpointers=None, freqstest=None,
+                 tests='auto', inclass_correction=None, betweenclass_weighting='auto', estimator='auto',
                  modelselector=None, verbosity=1, name=None):
         """
         Implements instability ("drift") detection and characterization on timeseries data from *any* set of
@@ -376,6 +376,10 @@ class StabilityAnalysis(_proto.Protocol):
         StabilityAnalysis
         """
         super().__init__(name)
+        if inclass_correction is None:
+            inclass_correction = {}
+        if freqpointers is None:
+            freqpointers = {}
         self.significance = significance
         self.transform = transform
         self.marginalize = marginalize
