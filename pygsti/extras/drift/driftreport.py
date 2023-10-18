@@ -104,10 +104,10 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
         """
         todo
         """
-        super(PowerSpectraPlot, self).__init__(ws, self._create, results,
-                                               spectrumlabel, detectorkey, showlegend, scale)
         if spectrumlabel is None:
             spectrumlabel = {}
+        super(PowerSpectraPlot, self).__init__(ws, self._create, results,
+                                               spectrumlabel, detectorkey, showlegend, scale)
 
     def _create(self, results, spectrumlabel, detectorkey, showlegend, scale):
 

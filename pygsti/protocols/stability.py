@@ -375,11 +375,11 @@ class StabilityAnalysis(_proto.Protocol):
         -------
         StabilityAnalysis
         """
-        super().__init__(name)
         if inclass_correction is None:
             inclass_correction = {}
         if freqpointers is None:
             freqpointers = {}
+        super().__init__(name)
         self.significance = significance
         self.transform = transform
         self.marginalize = marginalize
