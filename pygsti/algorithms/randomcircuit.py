@@ -777,8 +777,8 @@ def sample_circuit_layer_of_one_q_gates(pspec, qubit_labels=None, one_q_gate_nam
     return sampled_layer
 
 
-def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', samplerargs=[],
-                          addlocal=False, lsargs=[], rand_state=None):
+def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', samplerargs=None,
+                          addlocal=False, lsargs=None, rand_state=None):
     """
     Samples a random circuit of the specified length (or ~ twice this length).
 
@@ -849,6 +849,10 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
         A random circuit of length `length` (if not addlocal) or length 2*`length`+1 (if addlocal)
         with layers independently sampled using the specified sampling distribution.
     """
+    if samplerargs is None:
+        samplerargs = []
+    if lsargs is None:
+        lsargs = []
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
@@ -1342,8 +1346,8 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
 
 
 def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=None, sampler='Qelimination',
-                             samplerargs=[], addlocal=False, lsargs=[], randomizeout=True, cliffordtwirl=True,
-                             conditionaltwirl=True, citerations=20, compilerargs=[], partitioned=False, seed=None):
+                             samplerargs=None, addlocal=False, lsargs=None, randomizeout=True, cliffordtwirl=True,
+                             conditionaltwirl=True, citerations=20, compilerargs=None, partitioned=False, seed=None):
     """
     Generates a "direct randomized benchmarking" (DRB) circuit.
 
@@ -1467,6 +1471,12 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
         In both cases, the ith element of the tuple corresponds to the error-free outcome for the
         qubit on the ith wire of the output circuit.
     """
+    if samplerargs is None:
+        samplerargs = []
+    if compilerargs is None:
+        compilerargs = []
+    if lsargs is None:
+        lsargs = []
     if qubit_labels is not None: n = len(qubit_labels)
     else: n = pspec.num_qubits
 
@@ -2125,7 +2135,7 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
 
 
 def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_labels=None, randomizeout=False,
-                               citerations=20, compilerargs=[], interleaved_circuit=None, seed=None):
+                               citerations=20, compilerargs=None, interleaved_circuit=None, seed=None):
     """
     Generates a "Clifford randomized benchmarking" (CRB) circuit.
 
@@ -2223,7 +2233,8 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
         In both cases, the ith element of the tuple corresponds to the error-free outcome for the
         qubit on the ith wire of the output circuit.
     """
-    
+    if compilerargs is None:
+        compilerargs = []
     # Find the labels of the qubits to create the circuit for.
     if qubit_labels is not None: qubits = qubit_labels[:]  # copy this list
     else: qubits = pspec.qubit_labels[:]  # copy this list
@@ -2403,7 +2414,7 @@ def sample_one_q_clifford_layer_as_compiled_circuit(pspec, absolute_compilation,
 
 
 def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=None, sampler='Qelimination',
-                             samplerargs=[], localclifford=True, paulirandomize=True, seed=None):
+                             samplerargs=None, localclifford=True, paulirandomize=True, seed=None):
     """
     Generates a "mirror randomized benchmarking" (MRB) circuit.
 
@@ -2508,6 +2519,8 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
         In both cases, the ith element of the tuple corresponds to the error-free outcome for the
         qubit on the ith wire of the output circuit.
     """
+    if samplerargs is None:
+        samplerargs = []
     assert(length % 2 == 0), "The mirror rb length `length` must be even!"
     random_natives_circuit_length = length // 2
 

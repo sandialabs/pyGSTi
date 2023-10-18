@@ -90,7 +90,7 @@ class StdInputParser(object):
         """ Create a new standard-input parser object """
         pass
 
-    def parse_circuit(self, s, lookup={}, create_subcircuits=True):
+    def parse_circuit(self, s, lookup=None, create_subcircuits=True):
         """
         Parse a circuit from a string.
 
@@ -112,6 +112,8 @@ class StdInputParser(object):
         -------
         Circuit
         """
+        if lookup is None:
+            lookup = dict()
         circuit = None
         if self.use_global_parse_cache:
             circuit = _global_parse_cache[create_subcircuits].get(s, None)
@@ -132,7 +134,7 @@ class StdInputParser(object):
                 _global_parse_cache[create_subcircuits][s] = circuit
         return circuit
 
-    def parse_circuit_raw(self, s, lookup={}, create_subcircuits=True):
+    def parse_circuit_raw(self, s, lookup=None, create_subcircuits=True):
         """
         Parse a circuit's constituent pieces from a string.
 
@@ -168,6 +170,8 @@ class StdInputParser(object):
             is non-`None` only when there are explicit markers within the circuit string indicating
             the presence or absence of barriers.
         """
+        if lookup is None:
+            lookup = dict()
         self._circuit_parser.lookup = lookup
         circuit_tuple, circuit_labels, occurrence_id, compilable_indices = \
             self._circuit_parser.parse(s, create_subcircuits)

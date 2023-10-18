@@ -246,7 +246,7 @@ def compile_clifford(s, p, pspec=None, absolute_compilation=None, paulieq_compil
 
 def compile_symplectic(s, pspec=None, absolute_compilation=None, paulieq_compilation=None, qubit_labels=None,
                        iterations=20, algorithms=['ROGGE'], costfunction='2QGC:10:depth:1', paulirandomize=False,
-                       aargs={}, check=True, rand_state=None):
+                       aargs=None, check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate given in the symplectic representation.
 
@@ -352,6 +352,8 @@ def compile_symplectic(s, pspec=None, absolute_compilation=None, paulieq_compila
     Circuit
         A circuit implementing the input Clifford gate/circuit.
     """
+    if aargs is None:
+        aargs = dict()
     # The number of qubits the symplectic matrix is on.
     n = _np.shape(s)[0] // 2
     if pspec is not None:
@@ -1256,7 +1258,7 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
 
 
 def compile_cnot_circuit(s, pspec, compilation, qubit_labels=None, algorithm='COiCAGE', compile_to_native=False,
-                         check=True, aargs=[], rand_state=None):
+                         check=True, aargs=None, rand_state=None):
     """
     A CNOT circuit compiler.
 
@@ -1336,7 +1338,8 @@ def compile_cnot_circuit(s, pspec, compilation, qubit_labels=None, algorithm='CO
     Circuit
         A circuit that implements the same unitary as the CNOT circuit represented by `s`.
     """
-
+    if aargs is None:
+        aargs = []
     if qubit_labels is not None: qubits = list(qubit_labels)
     else: qubits = list(pspec.qubit_labels)
     n = len(qubits)
@@ -2927,7 +2930,7 @@ def _apply_hadamard_to_all_qubits(s, optype, qubit_labels):
     return sout, instructions
 
 
-def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', cargs=[], check=True, rand_state=None):
+def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', cargs=None, check=True, rand_state=None):
     """
     Finds circuits that partially (conditional on the input) implement the Clifford given by `s`.
 
@@ -2990,6 +2993,8 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
     Circuit
         The circuit C1 described above.
     """
+    if cargs is None:
+        cargs = []
     n = _np.shape(s)[0] // 2
 
     if qubit_labels is not None:

@@ -1,3 +1,4 @@
+# Question from Riley: can we delete this?
 """Canned routines for detecting and characterizing instability ("drift") using time-stamped data"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).

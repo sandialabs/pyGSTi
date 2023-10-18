@@ -526,10 +526,14 @@ class Benchmarker(object):
 
     #def get_predicted_summary_data(self, prediction, datatype, specindex, qubits=None):
 
-    def create_summary_data(self, predictions={}, verbosity=2, auxtypes=[]):
+    def create_summary_data(self, predictions=None, verbosity=2, auxtypes=None):
         """
         todo
         """
+        if predictions is None:
+            predictions = dict()
+        if auxtypes is None:
+            auxtypes = []
         assert(self.multids is not None), "Cannot generate summary data without a DataSet!"
         assert('standard' in self.multids.keys()), "Currently only works for standard dataset!"
         useds = 'standard'

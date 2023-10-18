@@ -714,7 +714,7 @@ class StabilityAnalyzer(object):
 
         return True
 
-    def averaging_allowed(self, dictlabel={}, checklevel=2):
+    def averaging_allowed(self, dictlabel=None, checklevel=2):
         """
         Checks whether we can average over the specified "base" power spectra.
 
@@ -741,6 +741,8 @@ class StabilityAnalyzer(object):
             True if the power spectra pass the tests for the validity of averaging over them.
 
         """
+        if dictlabel is None:
+            dictlabel = dict()
         if checklevel == 0:  # Does no checking if `checklevel` is 0.
             return True
         if checklevel >= 1:
@@ -858,11 +860,13 @@ class StabilityAnalyzer(object):
         else:
             return self._get_averaged_spectrum(dictlabel, returnfrequencies, checklevel)
 
-    def _get_averaged_spectrum(self, dictlabel={}, returnfrequencies=True, checklevel=2):
+    def _get_averaged_spectrum(self, dictlabel=None, returnfrequencies=True, checklevel=2):
         """
         A subroutine of the method `power_spectrum()`. See the docstring of that method for details.
 
         """
+        if dictlabel is None:
+            dictlabel = dict()
         # Check whether the requested averaging is allowed, with a check at the specified rigour level.
         assert(self.averaging_allowed(dictlabel, checklevel=checklevel)), "This averaging is not permissable! To do it \
             anyway, reduce `checklevel`."
@@ -887,7 +891,7 @@ class StabilityAnalyzer(object):
 
             return freq, spectrum
 
-    def maximum_power(self, dictlabel={}, freqsubset=None):
+    def maximum_power(self, dictlabel=None, freqsubset=None):
         """
         Returns the maximum power in a power spectrum.
 
@@ -905,6 +909,8 @@ class StabilityAnalyzer(object):
         float
             The maximal power in the spectrum.
         """
+        if dictlabel is None:
+            dictlabel = dict()
         spectrum = self.power_spectrum(dictlabel)
         if freqsubset is None:
             maxpower = _np.max(spectrum)
@@ -913,7 +919,7 @@ class StabilityAnalyzer(object):
 
         return maxpower
 
-    def maximum_power_pvalue(self, dictlabel={}, freqsubset=None, cutoff=0):
+    def maximum_power_pvalue(self, dictlabel=None, freqsubset=None, cutoff=0):
         """
         The p-value of the maximum power in a power spectrum.
 
@@ -935,6 +941,8 @@ class StabilityAnalyzer(object):
             The p-value of the maximal power in the specified spectrum.
 
         """
+        if dictlabel is None:
+            dictlabel = dict()
         maxpower = self.maximum_power(dictlabel=dictlabel, freqsubset=freqsubset)
         # future: update adjusted to True when the function allows it.
         dof = self.num_degrees_of_freedom(tuple(dictlabel.keys()), adjusted=False)
@@ -1471,7 +1479,7 @@ class StabilityAnalyzer(object):
 
         return circuits
 
-    def instability_indices(self, dictlabel={}, detectorkey=None):
+    def instability_indices(self, dictlabel=None, detectorkey=None):
         """
         Returns the frequency indices that instability has been detected at in the specified
         power spectrum
@@ -1492,6 +1500,8 @@ class StabilityAnalyzer(object):
             The instability frequency indices.
 
         """
+        if dictlabel is None:
+            dictlabel = dict()
         # If we're not given a detectorkey, we default to the standard detection results.
         if detectorkey is None: detectorkey = self._def_detection
 
@@ -1514,7 +1524,7 @@ class StabilityAnalyzer(object):
 
         return driftfreqinds
 
-    def instability_frequencies(self, dictlabel={}, detectorkey=None):
+    def instability_frequencies(self, dictlabel=None, detectorkey=None):
         """
         Returns the frequencies that instability has been detected at in the specified power spectrum.
         These frequencies are given in units of 1/t where 't' is the unit of the time stamps.
@@ -1535,6 +1545,8 @@ class StabilityAnalyzer(object):
             The instability frequencies
 
         """
+        if dictlabel is None:
+            dictlabel = dict()
         # If we're not given a detectorkey, we default to the standard detection results.
         if detectorkey is None: detectorkey = self._def_detection
         # Gets the drift indices, that we then jut need to convert to frequencies.
