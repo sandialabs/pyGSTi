@@ -73,7 +73,7 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
         # compute rate_threshold, so we know what to display
         all_obs_rates = []
         for typ in idtresults.pauli_fidpairs:
-            for dict_of_infos in idtresults.observed_rate_infos[typ]:
+            for dict_of_infos in idtresults.observed_rate_infos[typ].values():
                 for info_dict in dict_of_infos.values():
                     all_obs_rates.append(abs(info_dict["rate"]))
         all_obs_rates.sort(reverse=True)
@@ -101,7 +101,8 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
         nBelowThreshold = 0
         for typ in idtresults.pauli_fidpairs:  # keys == "types" of observed rates
             for fidpair, dict_of_infos in zip(
-                idtresults.pauli_fidpairs[typ], idtresults.observed_rate_infos[typ]
+                idtresults.pauli_fidpairs[typ].values(),
+                idtresults.observed_rate_infos[typ].values(),
             ):
                 for obsORoutcome, info_dict in dict_of_infos.items():
                     jac_row = info_dict["jacobian row"]
@@ -122,8 +123,8 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
 
         errlst = idtresults.error_list  # shorthand
         Ne = len(idtresults.error_list)
-        print(errlst)
-        print(Ne)
+        print("errlist: ", errlst)
+        print("Ne: ", Ne)
         # number of intrinsic rates for each type (ham, sto, aff)
 
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
@@ -139,19 +140,22 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
             )
             intrinsic_reln = ""
             for i, el in enumerate(jac_row):
-                print(i)
+                print("i: ", i)
+                print("el: ", el)
                 if abs(el) > 1e-6:
                     # get intrinsic name `iname` for i-th element:
                     if typ == "diffbasis":
                         if i < Ne:
                             iname = "H(%s)" % str(errlst[i]).strip()
                         else:
-                            iname = "A(%s)" % str(errlst[i - Ne]).strip()
+                            iname = "nonsense_diffbasis"
+                            # iname = "A(%s)" % str(errlst[i - Ne]).strip()
                     else:  # typ == "samebasis"
                         if i < Ne:
                             iname = "S(%s)" % str(errlst[i]).strip()
                         else:
-                            iname = "A(%s)" % str(errlst[i - Ne]).strip()
+                            iname = "nonsense"
+                            # iname = "A(%s)" % str(errlst[i - Ne]).strip()
 
                     if len(intrinsic_reln) == 0:
                         if el == 1.0:
@@ -247,7 +251,7 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
 
         # thresholding:
         all_obs_rates = []
-        for dict_of_infos in idtresults.observed_rate_infos[typ]:
+        for dict_of_infos in idtresults.observed_rate_infos[typ].values():
             for info_dict in dict_of_infos.values():
                 all_obs_rates.append(abs(info_dict["rate"]))
         all_obs_rates.sort(reverse=True)
@@ -271,7 +275,8 @@ class IdleTomographyObservedRatesForIntrinsicRateTable(_ws.WorkspaceTable):
         # print("DB: err list = ",idtresults.error_list, " LEN=",len(idtresults.error_list))
         # print("DB: Intrinsic index = ",intrinsicIndx)
         for fidpair, dict_of_infos in zip(
-            idtresults.pauli_fidpairs[typ], idtresults.observed_rate_infos[typ]
+            idtresults.pauli_fidpairs[typ].values(),
+            idtresults.observed_rate_infos[typ].values(),
         ):
             for obsORoutcome, info_dict in dict_of_infos.items():
                 jac_element = info_dict["jacobian row"][intrinsicIndx]
@@ -385,7 +390,13 @@ class IdleTomographyObservedRatePlot(_ws.WorkspacePlot):
         prepStr = fidpair[0].to_circuit(idtresults.prep_basis_strs)
         measStr = fidpair[1].to_circuit(idtresults.meas_basis_strs)
 
-        ifidpair = idtresults.pauli_fidpairs[typ].index(fidpair)
+        def find_key(input_dict, value):
+            for key, val in input_dict.items():
+                if val == value:
+                    return key
+            return
+
+        ifidpair = find_key(idtresults.pauli_fidpairs[typ], fidpair)
         info_dict = idtresults.observed_rate_infos[typ][ifidpair][obs_or_outcome]
         obs_rate = info_dict["rate"]
         data_pts = info_dict["data"]

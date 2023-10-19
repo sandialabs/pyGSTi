@@ -48,6 +48,12 @@ def anti_commute(mat1, mat2):
     return mat1 @ mat2 - mat2 @ mat1
 
 
+# NOTES ON THIS FACTOR OF TWO:
+# IF/WHEN IT REEMERGES WITH ADDITIONAL QUBITS AND/OR 
+# HIGHER DIMENSION PAULIS:
+# MAKE SURE THE INPUTS TO THESE FUNCTIONS ARE THE FULL PROCESS MATRICES
+# AND NOT THE "ABBREVIATED" PAULIS
+
 # Hamiltonian Error Generator
 def hamiltonian_error_generator(initial_state, indexed_pauli, identity):
     return 2 * (
@@ -89,9 +95,12 @@ def anti_symmetric_error_generator(initial_state, pauli_index_1, pauli_index_2):
         )
     )
 
-
+## TODO: Update this function to use 
+## #pauli_matrices = basisconstructors.pp_matrices_dict(2**numQubits, normalize=False)
+## as is now done elsewhere
 # Convert basis
 def convert_to_pauli(matrix, numQubits):
+    #pauli_matrices = basisconstructors.pp_matrices_dict(2**numQubits, normalize=False)
     pauliNames1Q = ["I", "X", "Y", "Z"]
     # Hard force to 1- or 2-qubit
     if numQubits == 1:
