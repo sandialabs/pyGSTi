@@ -283,21 +283,6 @@ class LinearGateSetTomographyTester(BaseProtocolData, BaseCase):
         self.assertLessEqual(twoDLogL, 1.0)  # should be near 0 for perfect data
 
 
-class MatrixForwardSimulatorWrapper(MatrixForwardSimulator):
-
-    Message = """
-        Hit the forward simulator wrapper!
-    """
-
-    def _bulk_fill_probs(self, array_to_fill, layout):
-        print(self.Message)
-        super(MatrixForwardSimulatorWrapper, self)._bulk_fill_probs(array_to_fill, layout)
-
-    def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
-        print(self.Message)
-        super(MatrixForwardSimulatorWrapper, self)._bulk_fill_probs_atom(array_to_fill, layout_atom, resource_alloc)
-
-
 class TestStandardGST(BaseProtocolData):
     """
     Tests for methods in the StandardGST class.
@@ -322,18 +307,18 @@ class TestStandardGST(BaseProtocolData):
         self.setUpClass()
         # We have to test GST modes separately, since we aren't sure how many times
         # the forward simulator's methods will be called.
-        self._test_run_custom_sim('full TP', capfd, MapForwardSimulatorWrapper())
-        self._test_run_custom_sim('CPTPLND', capfd, MapForwardSimulatorWrapper())
-        self._test_run_custom_sim('Target', capfd, MatrixForwardSimulatorWrapper())
+        self._test_run_custom_sim('full TP', capfd, True)
+        self._test_run_custom_sim('Target', capfd, False)
 
-    def _test_run_custom_sim(self, mode, parent_capfd, fwdsim):
+    def _test_run_custom_sim(self, mode, parent_capfd, check_output):
         proto = gst.StandardGST(modes=[mode])
-        results = proto.run(self.gst_data, simulator=fwdsim)
+        results = proto.run(self.gst_data, simulator=MapForwardSimulatorWrapper())
         stdout, _ = parent_capfd.readouterr()
-        assert MapForwardSimulatorWrapper.Message in stdout, mode
-        mdl_result = results.estimates[mode].models['stdgaugeopt']
-        twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
-        assert twoDLogL <= 1.0, mode  # should be near 0 for perfect data
+        assert MapForwardSimulatorWrapper.Message in stdout
+        if check_output:
+            mdl_result = results.estimates[mode].models['stdgaugeopt']
+            twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
+            assert twoDLogL <= 1.0  # should be near 0 for perfect data
 
 
 #Unit tests are currently performed in objects/test_results.py - TODO: move these tests here

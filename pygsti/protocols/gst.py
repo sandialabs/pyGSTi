@@ -1709,7 +1709,7 @@ class StandardGST(_proto.Protocol):
     #    data = _proto.ProtocolData(design, dataset)
     #    return self.run(data)
 
-    def run(self, data, memlimit=None, comm=None, checkpoint= None, checkpoint_path=None,
+    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None,
             disable_checkpointing=False, simulator=None):
         """
         Run this protocol on `data`.
@@ -1811,9 +1811,9 @@ class StandardGST(_proto.Protocol):
                 printer.show_progress(i, len(modes), prefix='-- Std Practice: ', suffix=' (%s) --' % mode)
                 if disable_checkpointing:
                     checkpoint_path = None
-                    checkpoint = None
+                    child_checkpoint = None
                 else:
-                    checkpoint = checkpoint.children[mode]
+                    child_checkpoint = checkpoint.children[mode]
                     #The line below is for compatibility with Python 3.8 and lower.
                     checkpoint_path = checkpoint_path_base.with_name(f"{checkpoint_path_base.stem}_{mode.replace(' ', '_')}")
                     #The line below only works for python 3.9+
@@ -1827,7 +1827,7 @@ class StandardGST(_proto.Protocol):
                                          mt_builder, self.badfit_options, verbosity=printer - 1, name=mode)
                     result = mdltest.run(data, memlimit, comm,
                                          disable_checkpointing=disable_checkpointing,
-                                         checkpoint=checkpoint,
+                                         checkpoint=child_checkpoint,
                                          checkpoint_path=checkpoint_path)
                     ret.add_estimates(result)
 
@@ -1839,7 +1839,7 @@ class StandardGST(_proto.Protocol):
                                          None, self.badfit_options, verbosity=printer - 1, name=mode)
                     result = mdltest.run(data, memlimit, comm,
                                          disable_checkpointing=disable_checkpointing,
-                                         checkpoint=checkpoint.children[mode],
+                                         checkpoint=child_checkpoint,
                                          checkpoint_path=checkpoint_path)
                     ret.add_estimates(result)
 
@@ -1865,7 +1865,7 @@ class StandardGST(_proto.Protocol):
                               self.optimizer, self.badfit_options, verbosity=printer - 1, name=mode)
                     result = gst.run(data, memlimit, comm,
                                      disable_checkpointing=disable_checkpointing,
-                                     checkpoint=checkpoint,
+                                     checkpoint=child_checkpoint,
                                      checkpoint_path=checkpoint_path)
                     ret.add_estimates(result)
 
