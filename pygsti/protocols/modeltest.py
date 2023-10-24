@@ -131,7 +131,8 @@ class ModelTest(_proto.Protocol):
     #    design = _StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, maxLengths)
     #    return self.run(_proto.ProtocolData(design, dataset))
 
-    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing= False):
+    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
+            simulator=None):
         """
         Run this protocol on `data`.
 
@@ -169,6 +170,8 @@ class ModelTest(_proto.Protocol):
         ModelEstimateResults
         """
         the_model = self.model_to_test
+        if simulator is not None:
+            the_model.sim = simulator
         target_model = self.target_model  # can be None; target model isn't necessary
 
         #Create profiler
@@ -266,6 +269,8 @@ class ModelTest(_proto.Protocol):
         models.update({('iteration %d estimate' % k): the_model for k in range(len(bulk_circuit_lists))})
         # TODO: come up with better key names? and must we have iteration_estimates?
         if target_model is not None:
+            if simulator is not None:
+                target_model.sim = simulator
             models['target'] = target_model
         ret.add_estimate(_Estimate(ret, models, parameters, extra_parameters=extra_parameters), estimate_key=self.name)
         
