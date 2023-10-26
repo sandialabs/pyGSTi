@@ -1,6 +1,5 @@
 from pygsti.data import simulate_data
 from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
-from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator
 from pygsti.modelpacks import smq1Q_XYI
 from pygsti.modelpacks.legacy import std1Q_XYI, std2Q_XYICNOT
 from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction
@@ -14,7 +13,6 @@ from pygsti.protocols.gst import GSTGaugeOptSuite
 from pygsti.tools import two_delta_logl
 from ..util import BaseCase
 import pytest
-import unittest
 
 
 class GSTUtilTester(BaseCase):
