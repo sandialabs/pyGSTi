@@ -35,7 +35,8 @@ def run_model_test(model_filename_or_object,
                    germs_list_or_filename, max_lengths, gauge_opt_params=None,
                    advanced_options=None, comm=None, mem_limit=None,
                    output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
-                   disable_checkpointing= False):
+                   disable_checkpointing=False,
+                   simulator=None):
     """
     Compares a :class:`Model`'s predictions to a `DataSet` using GST-like circuits.
 
@@ -185,7 +186,9 @@ def run_model_test(model_filename_or_object,
     proto.circuit_weights = advanced_options.get('circuit_weights', None)
     proto.unreliable_ops = advanced_options.get('unreliable_ops', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
 
-    results = proto.run(data, mem_limit, comm, checkpoint=checkpoint, checkpoint_path=checkpoint_path, disable_checkpointing=disable_checkpointing)
+    results = proto.run(data, mem_limit, comm,
+                        checkpoint=checkpoint, checkpoint_path=checkpoint_path, disable_checkpointing=disable_checkpointing,
+                        simulator=simulator)
     _output_to_pickle(results, output_pkl, comm)
     return results
 
@@ -306,7 +309,8 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
                           germs_list_or_filename, max_lengths, gauge_opt_params=None,
                           advanced_options=None, comm=None, mem_limit=None,
                           output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
-                          disable_checkpointing = False):
+                          disable_checkpointing=False,
+                          simulator=None):
     """
     Perform long-sequence GST (LSGST).
 
@@ -488,7 +492,9 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
     proto.circuit_weights = advanced_options.get('circuit_weights', None)
     proto.unreliable_ops = advanced_options.get('unreliable_ops', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
 
-    results = proto.run(data, mem_limit, comm, checkpoint=checkpoint, checkpoint_path= checkpoint_path, disable_checkpointing=disable_checkpointing)
+    results = proto.run(data, mem_limit, comm,
+                        checkpoint=checkpoint, checkpoint_path= checkpoint_path, disable_checkpointing=disable_checkpointing,
+                        simulator=simulator)
     _output_to_pickle(results, output_pkl, comm)
     return results
 
@@ -497,7 +503,8 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
                                lsgst_lists, gauge_opt_params=None,
                                advanced_options=None, comm=None, mem_limit=None,
                                output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
-                               disable_checkpointing = False):
+                               disable_checkpointing=False,
+                               simulator=None):
     """
     A more fundamental interface for performing end-to-end GST.
 
@@ -615,7 +622,9 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
     proto.circuit_weights = advanced_options.get('circuit_weights', None)
     proto.unreliable_ops = advanced_options.get('unreliable_ops', ['Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz'])
 
-    results = proto.run(data, mem_limit, comm, checkpoint=checkpoint, checkpoint_path=checkpoint_path, disable_checkpointing=disable_checkpointing)
+    results = proto.run(data, mem_limit, comm,
+                        checkpoint=checkpoint, checkpoint_path=checkpoint_path, disable_checkpointing=disable_checkpointing,
+                        simulator=simulator)
     _output_to_pickle(results, output_pkl, comm)
     return results
 
@@ -624,7 +633,8 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, p
                         meas_fiducial_list_or_filename, germs_list_or_filename, max_lengths,
                         modes=('full TP','CPTPLND','Target'), gaugeopt_suite='stdgaugeopt', gaugeopt_target=None,
                         models_to_test=None, comm=None, mem_limit=None, advanced_options=None, output_pkl=None,
-                        verbosity=2, checkpoint=None, checkpoint_path=None, disable_checkpointing = False):
+                        verbosity=2, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
+                        simulator=None):
     """
     Perform end-to-end GST analysis using standard practices.
 
@@ -791,7 +801,9 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, p
                                badfit_options=_get_badfit_options(advanced_options), verbosity=printer,
                                name=advanced_options.get('estimate_label', None))
 
-    results = proto.run(data, mem_limit, comm, checkpoint=checkpoint, checkpoint_path= checkpoint_path, disable_checkpointing=disable_checkpointing)
+    results = proto.run(data, mem_limit, comm,
+                        checkpoint=checkpoint, checkpoint_path= checkpoint_path, disable_checkpointing=disable_checkpointing,
+                        simulator=simulator)
     _output_to_pickle(results, output_pkl, comm)
     return results
 
