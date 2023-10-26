@@ -2983,7 +2983,8 @@ class ModelEstimateResults(_proto.ProtocolResults):
         self.estimates[estimate_key] = estimate
 
     def add_model_test(self, target_model, themodel,
-                       estimate_key='test', gaugeopt_keys="auto", verbosity=2):
+                       estimate_key='test', gaugeopt_keys="auto", verbosity=2,
+                       simulator=None):
         """
         Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
 
@@ -3030,7 +3031,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         from .modeltest import ModelTest as _ModelTest
         mdltest = _ModelTest(themodel, target_model, gaugeopt_suite,
                              objfn_builder, badfit_options, name=estimate_key, verbosity=verbosity)
-        test_result = mdltest.run(self.data)
+        test_result = mdltest.run(self.data, simulator=simulator)
         self.add_estimates(test_result)
 
     def view(self, estimate_keys, gaugeopt_keys=None):
