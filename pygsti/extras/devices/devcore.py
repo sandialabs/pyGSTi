@@ -10,6 +10,10 @@
 
 import numpy as _np
 
+import warnings
+warnings.warn("The pygsti.devices.devcore module is deprecated. See pygsti.devices.experimentaldevice instead.",
+              DeprecationWarning)
+
 from . import ibmq_algiers      # New system
 from . import ibmq_athens
 from . import ibmq_auckland     # New system
