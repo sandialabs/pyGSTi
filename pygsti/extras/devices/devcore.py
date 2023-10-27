@@ -10,25 +10,36 @@
 
 import numpy as _np
 
-
+from . import ibmq_algiers      # New system
 from . import ibmq_athens
+from . import ibmq_auckland     # New system
 from . import ibmq_belem
 from . import ibmq_bogota
+from . import ibmq_brisbane     # New system
 from . import ibmq_burlington
+from . import ibmq_cairo        # New system
 from . import ibmq_cambridge
 from . import ibmq_casablanca
 from . import ibmq_essex
 from . import ibmq_guadalupe
+from . import ibmq_hanoi        # New system
+from . import ibmq_kolkata      # New system
+from . import ibmq_lagos         # New system
 from . import ibmq_lima
 from . import ibmq_london
 from . import ibmq_manhattan
 from . import ibmq_melbourne
 from . import ibmq_montreal
+from . import ibmq_mumbai       # New system
+from . import ibmq_nairobi      # New system
+from . import ibmq_nazca        # New system
 from . import ibmq_ourense
+from . import ibmq_perth        # New system
 from . import ibmq_quito
 from . import ibmq_rome
 from . import ibmq_rueschlikon
 from . import ibmq_santiago
+from . import ibmq_sherbrooke   # New system
 from . import ibmq_sydney
 from . import ibmq_tenerife
 from . import ibmq_toronto
@@ -56,25 +67,36 @@ def basic_device_information(devname):
 
 
 def _get_dev_specs(devname):
-
-    if devname == 'ibmq_athens': dev = ibmq_athens
+    if devname == 'ibm_algiers' or devname == 'ibmq_algiers': dev = ibmq_algiers
+    elif devname == 'ibmq_athens': dev = ibmq_athens
+    elif devname == 'ibm_auckland' or devname == 'ibmq_auckland': dev = ibmq_auckland
     elif devname == 'ibmq_belem': dev = ibmq_belem
     elif devname == 'ibmq_bogota': dev = ibmq_bogota
+    elif devname == 'ibm_brisbane' or devname == 'ibmq_brisbane': dev = ibmq_brisbane
     elif devname == 'ibmq_burlington': dev = ibmq_burlington
+    elif devname == 'ibm_cairo' or devname == 'ibmq_cairo': dev = ibmq_cairo
     elif devname == 'ibmq_cambridge': dev = ibmq_cambridge
     elif devname == 'ibmq_casablanca': dev = ibmq_casablanca
     elif devname == 'ibmq_essex': dev = ibmq_essex
     elif devname == 'ibmq_guadalupe': dev = ibmq_guadalupe
+    elif devname == 'ibm_hanoi' or devname == 'ibmq_hanoi': dev = ibmq_hanoi
+    elif devname == 'ibm_kolkata' or devname == 'ibmq_kolkata': dev = ibmq_kolkata
+    elif devname == 'ibm_lagos' or devname == 'ibmq_lagos': dev = ibmq_lagos
     elif devname == 'ibmq_lima': dev = ibmq_lima
     elif devname == 'ibmq_london': dev = ibmq_london
     elif devname == 'ibmq_manhattan': dev = ibmq_manhattan
     elif devname == 'ibmq_melbourne' or devname == 'ibmq_16_melbourne': dev = ibmq_melbourne
     elif devname == 'ibmq_montreal': dev = ibmq_montreal
+    elif devname == 'ibm_mumbai' or devname == 'ibmq_mumbai': dev = ibmq_mumbai
+    elif devname == 'ibm_nairobi' or devname == 'ibmq_nairobi': dev = ibmq_nairobi
+    elif devname == 'ibm_nazco' or devname == 'ibmq_nazco': dev = ibmq_nazca
     elif devname == 'ibmq_ourense': dev = ibmq_ourense
+    elif devname == 'ibm_perth' or devname == 'ibmq_perth': dev = ibmq_perth
     elif devname == 'ibmq_quito': dev = ibmq_quito
     elif devname == 'ibmq_rome': dev = ibmq_rome
     elif devname == 'ibmq_rueschlikon': dev = ibmq_rueschlikon
     elif devname == 'ibmq_santiago': dev = ibmq_santiago
+    elif devname == 'ibm_sherbrooke' or devname == 'ibmq_sherbrooke': dev = ibmq_sherbrooke
     elif devname == 'ibmq_sydney': dev = ibmq_sydney
     elif devname == 'ibmq_tenerife': dev = ibmq_tenerife
     elif devname == 'ibmq_toronto': dev = ibmq_toronto
