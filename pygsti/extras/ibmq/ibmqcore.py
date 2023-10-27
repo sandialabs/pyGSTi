@@ -288,7 +288,7 @@ class IBMQExperiment(dict):
                         print('  - Failed to get job_id.')
                         self['job_ids'].append(None)
                     try:
-                        print('  - Queue position is {}'.format(self['qjob'][-1].queue_position()))
+                        print('  - Queue position is {}'.format(self['qjob'][-1].queue_info().position))
                     except:
                         print('  - Failed to get queue position {}'.format(batch_idx + 1))
                     submit_status = True
@@ -321,7 +321,7 @@ class IBMQExperiment(dict):
             status = qjob.status()
             print("Batch {}: {}".format(counter + 1, status))
             if status.name == 'QUEUED':
-                print('  - Queue position is {}'.format(qjob.queue_position()))
+                print('  - Queue position is {}'.format(qjob.queue_info().position))
 
         # Print unsubmitted for any entries in qobj but not qjob
         for counter in range(len(self['qjob']), len(self['qobj'])):
