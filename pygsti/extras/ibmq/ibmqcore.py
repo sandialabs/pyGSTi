@@ -21,14 +21,18 @@ try: import qiskit as _qiskit
 except: _qiskit = None
 
 # Most recent version of QisKit that this has been tested on:
-# qiskit.__qiskit_version_ =  {
-#   'qiskit-terra': '0.16.4',
-#   'qiskit-aer': '0.7.5',
-#   'qiskit-ignis': '0.5.2',
-#   'qiskit-ibmq-provider': '0.11.1',
-#   'qiskit-aqua': '0.8.2',
-#   'qiskit': '0.23.6'
+#qiskit.__qiskit_version__ = {
+#    'qiskit-terra': '0.25.3',
+#    'qiskit': '0.44.3',
+#    'qiskit-aer': None,
+#    'qiskit-ignis': None,
+#    'qiskit-ibmq-provider': '0.20.2',
+#    'qiskit-nature': None,
+#    'qiskit-finance': None,
+#    'qiskit-optimization': None,
+#    'qiskit-machine-learning': None
 #}
+#qiskit_ibm_provider.__version__ = '0.7.2'
 
 _attribute_to_json = ['remove_duplicates', 'randomized_order', 'circuits_per_batch', 'num_shots', 'job_ids']
 _attribute_to_pickle = ['pspec', 'pygsti_circuits', 'pygsti_openqasm_circuits',
