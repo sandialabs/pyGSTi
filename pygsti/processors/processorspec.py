@@ -330,7 +330,8 @@ class QuditProcessorSpec(ProcessorSpec):
 
         return cls(state['qudit_labels'], state['qudit_udims'], state['gate_names'], nonstd_gate_unitaries,
                    availability, geometry, state['prep_names'], state['povm_names'],
-                   state['instrument_names'], nonstd_preps, nonstd_povms, nonstd_instruments, state['aux_info'])
+                   [tuple(iname) for iname in state['instrument_names']],
+                   nonstd_preps, nonstd_povms, nonstd_instruments, state['aux_info'])
 
     @property
     def num_qudits(self):
