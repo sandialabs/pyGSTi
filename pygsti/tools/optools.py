@@ -87,7 +87,7 @@ def fidelity(a, b):
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
         F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(b, vec)).real  # vec^T * b * vec
-        return float(F)
+        return float(F[0, 0])
 
     evals, U = _np.linalg.eig(b)
     if len([ev for ev in evals if abs(ev) > 1e-8]) == 1:
@@ -95,7 +95,7 @@ def fidelity(a, b):
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
         F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(a, vec)).real  # vec^T * a * vec
-        return float(F)
+        return float(F[0, 0])
 
     #if _np.array_equal(a, b): return 1.0  # HACK - some cases when a and b are perfecty equal sqrtm(a) fails...
     sqrtA = _hack_sqrtm(a)  # _spl.sqrtm(a)
