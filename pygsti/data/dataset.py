@@ -28,6 +28,7 @@ from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSeriali
 from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti import models as _models
 
 # import scipy.special as _sps
 # import scipy.fftpack as _fft
@@ -1319,7 +1320,7 @@ class DataSet(_MongoSerializable):
         return opLabels
 
     def degrees_of_freedom(self, circuits=None, method="present_outcomes-1",
-                           aggregate_times=True):
+                           aggregate_times=True, model=None):
         """
         Returns the number of independent degrees of freedom in the data for the circuits in `circuits`.
 
@@ -1329,7 +1330,7 @@ class DataSet(_MongoSerializable):
             The list of circuits to count degrees of freedom for.  If `None`
             then all of the `DataSet`'s strings are used.
 
-        method : {'all_outcomes-1', 'present_outcomes-1', 'tuned'}
+        method : {'all_outcomes-1', 'present_outcomes-1', 'tuned', 'from model'}
             How the degrees of freedom should be computed. 'all_outcomes-1' takes
             the number of circuits and multiplies this by the *total* number of outcomes
             (the length of what is returned by `outcome_labels()`) minus one.
@@ -1337,7 +1338,7 @@ class DataSet(_MongoSerializable):
             present (usually = non-zero) outcomes recorded minus one. 'tuned' should
             be the most accurate, as it accounts for low-N "Poisson bump" behavior,
             but it is not the default because it is still under development. For
-            timestamped data, see `aggreate_times` below.
+            timestamped data, see `aggregate_times` below.
 
         aggregate_times : bool, optional
             Whether counts that occur at different times should be tallied separately.
@@ -1354,6 +1355,9 @@ class DataSet(_MongoSerializable):
         -------
         int
         """
+        if method == 'from model':
+            assert(isinstance(model, _models.Model)), "if 'from model' is used, a model must be given!"  
+
         if circuits is None:
             circuits = list(self.keys())
 
@@ -1377,33 +1381,54 @@ class DataSet(_MongoSerializable):
                 # subtract contribution from one (we choose lowest-contributing) outcome b/c sum constrained to == 1
             return LLR_expectation
 
+        def exp_llr_func(x):
+            if 0 < x < 1: 
+                f = ((5*x**4 - 6*x**3 + 6*x**2)*_np.log(2))/3 - (x**2*(x - 1)*_np.log(3) + 2*_np.log(x))*x
+            elif x <= 0:  
+                f=0
+            else: 
+                f = (x**2 - 1.61*x + 2.35)/(x**2 - (1.61+1/6)*x + 2.3)
+            return f
+        
         for opstr in circuits:
             dsRow = self[opstr]
-            cur_t = dsRow.time[0]
-            #cur_outcomes = set()  # holds *distinct* outcomes at current time
-            cur_outcomes = _defaultdict(lambda: 0)  # holds *distinct* outcomes at current time
-            for ol, t, rep in dsRow:
-                if aggregate_times or t == cur_t:
-                    #cur_outcomes.add(ol)
-                    cur_outcomes[ol] += rep
-                else:
-                    #assume final outcome at each time is constrained
-                    if method == 'all_outcomes-1': nOutcomes = Nout
-                    elif method == 'present_outcomes-1': nOutcomes = len(cur_outcomes)
-                    else:  # "tuned"
-                        nOutcomes = compute_tuned_expected_llr(cur_outcomes)
-                        nOutcomes += 1  # +1 to counteract -1 below, as this is already <LLR>
-                    nDOF += nOutcomes - 1
-                    #cur_outcomes = set([ol])
-                    cur_outcomes = _defaultdict(lambda: 0); cur_outcomes[ol] += rep
-                    cur_t = t
-            if method == 'all_outcomes-1': nOutcomes = Nout
-            elif method == 'present_outcomes-1': nOutcomes = len(cur_outcomes)
-            elif method == 'tuned':
-                nOutcomes = compute_tuned_expected_llr(cur_outcomes)
-                nOutcomes += 1  # +1 to counteract -1 below, as this is already <LLR>
-            else: raise ValueError("Invalid `method` argument: %s" % method)
-            nDOF += nOutcomes - 1  # last time stamp
+            if method == 'from model':
+                Ncounts = self[opstr].total 
+                probs = model.probabilities(opstr)
+                for outcome in probs.keys():
+                    if outcome not in self.olIndex: 
+                        pass
+                    elif dsRow[outcome] > 18:
+                        nDOF+=1 
+                    else: 
+                        nDOF += exp_llr_func(Ncounts * probs[outcome])
+                nDOF-=1
+            else:
+                cur_t = dsRow.time[0]
+                #cur_outcomes = set()  # holds *distinct* outcomes at current time
+                cur_outcomes = _defaultdict(lambda: 0)  # holds *distinct* outcomes at current time
+                for ol, t, rep in dsRow:
+                    if aggregate_times or t == cur_t:
+                        #cur_outcomes.add(ol)
+                        cur_outcomes[ol] += rep
+                    else:
+                        #assume final outcome at each time is constrained
+                        if method == 'all_outcomes-1': nOutcomes = Nout
+                        elif method == 'present_outcomes-1': nOutcomes = len(cur_outcomes)
+                        else:  # "tuned"
+                            nOutcomes = compute_tuned_expected_llr(cur_outcomes)
+                            nOutcomes += 1  # +1 to counteract -1 below, as this is already <LLR>
+                        nDOF += nOutcomes - 1
+                        #cur_outcomes = set([ol])
+                        cur_outcomes = _defaultdict(lambda: 0); cur_outcomes[ol] += rep
+                        cur_t = t
+                if method == 'all_outcomes-1': nOutcomes = Nout
+                elif method == 'present_outcomes-1': nOutcomes = len(cur_outcomes)
+                elif method == 'tuned':
+                    nOutcomes = compute_tuned_expected_llr(cur_outcomes)
+                    nOutcomes += 1  # +1 to counteract -1 below, as this is already <LLR>
+                else: raise ValueError("Invalid `method` argument: %s" % method)
+                nDOF += nOutcomes - 1  # last time stamp
         return nDOF
 
     def _collisionaction_update_circuit(self, circuit):

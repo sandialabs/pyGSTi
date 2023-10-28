@@ -107,6 +107,8 @@ def internal_gate_unitaries():
 
     return std_unitaries
 
+def internal_instruments():
+    std_instruments = {}
 
 def is_gate_this_standard_unitary(gate_unitary, standard_gate_name):
     """

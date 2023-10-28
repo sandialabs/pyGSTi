@@ -4035,7 +4035,7 @@ class Circuit(object):
                                     openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
 
                 else:
-                    assert gate.name.__str__() == 'Iz' or 'Ipc'  
+                    assert gate.name.__str__() == 'Iz' or 'Ipc', "Only mid-circuit Z basis measurement 'Iz' and parity check 'Ipc' supported at present."
                     if gate.name.__str__() == 'Iz':
                         q = gate.qubits[0] 
                         # classical_bit = num_IMs_used

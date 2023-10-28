@@ -344,7 +344,7 @@ def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=Non
     ds_gstrs = _tools.apply_aliases_to_circuits(circuits, aliases)
     np = model.num_modeltest_params
 
-    Ns = dataset.degrees_of_freedom(ds_gstrs)  # number of independent parameters in dataset
+    Ns = dataset.degrees_of_freedom(ds_gstrs, method="present_outcomes-1")  # number of independent parameters in dataset #CHANGE THIS BACK!!!!
     k = max(Ns - np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
     Nsig = (fitqty - k) / _np.sqrt(2 * k)
     if Ns <= np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, np))

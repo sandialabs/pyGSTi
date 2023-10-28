@@ -16,6 +16,7 @@ import json as _json
 import pickle as _pickle
 import os as _os
 import warnings as _warnings
+import datetime as _datetime
 
 try: import qiskit as _qiskit
 except: _qiskit = None
@@ -126,7 +127,7 @@ class IBMQExperiment(dict):
         self['pspec'] = pspec
         self['remove_duplicates'] = remove_duplicates
         self['randomized_order'] = randomized_order
-        self['seed'] = seed
+        self['seed'] = seed #Changed this 
         self['circuits_per_batch'] = circuits_per_batch
         self['num_shots'] = num_shots
         # Populated when submitting to IBM Q with .submit()
@@ -140,8 +141,9 @@ class IBMQExperiment(dict):
         if randomized_order:
             if remove_duplicates:
                 circuits = list(set(circuits))
-            _np.random.seed(seed)
-            _np.random.shuffle(circuits)
+            rng = _np.random.default_rng(seed)
+            rng.shuffle(circuits)
+            
         else:
             assert(not remove_duplicates), "Can only remove duplicates if randomizing order!"
 
@@ -253,11 +255,12 @@ class IBMQExperiment(dict):
             batch_iterator = enumerate(self['qobj'])
         elif backend_version >= 2:
             batch_iterator = enumerate(self['qiskit_QuantumCircuits'])
-        
+
+        start_time = _time.time() #Changed this 
         for batch_idx, batch in batch_iterator:
             if batch_idx < start or batch_idx >= stop:
                 continue
-
+                
             print("Submitting batch {}".format(batch_idx + 1))
             submit_status = False
             batch_waits = 0
@@ -319,6 +322,8 @@ class IBMQExperiment(dict):
                         print('{} '.format(step), end='')
                         _time.sleep(wait_time)
                     print()
+        end_time = _time.time() #Changed this 
+        print(end_time - start_time, 'seconds to submit jobs') #Changed this 
 
     def monitor(self):
         """
@@ -328,11 +333,13 @@ class IBMQExperiment(dict):
             status = qjob.status()
             print("Batch {}: {}".format(counter + 1, status))
             if status.name == 'QUEUED':
-                print('  - Queue position is {}'.format(qjob.queue_position(refresh=True))) #maybe refresh here? Could also make this whole thing autorefresh? Overall job monitoring could be more sophisticated 
+                print('  - Queue position is {}'.format(qjob.queue_position(refresh=True))) #Changed this
 
         # Print unsubmitted for any entries in qobj but not qjob
         for counter in range(len(self['qjob']), len(self['qobj'])):
             print("Batch {}: NOT SUBMITTED".format(counter + 1))
+            
+        print(_datetime.datetime.now().strftime('Last query: %H:%M:%S')) #Changed this 
 
     def retrieve_results(self):
         """
@@ -360,8 +367,9 @@ class IBMQExperiment(dict):
                 counts_data = labeled_counts[1]
                 ds.add_count_list(circ, outcome_labels, counts_data)
         self['data'] = _ProtocolData(self['edesign'], ds)
+        print('Finished retrieving results!') #Changed this 
 
-    def write(self, dirname=None):
+    def write(self, dirname=None, safe=True):
         """
         Writes to disk, storing both the pyGSTi DataProtocol object in pyGSTi's standard
         format and saving all of the IBM Q submission information stored in this object,
@@ -375,6 +383,9 @@ class IBMQExperiment(dict):
             overwritten if present.  If None, then the path this object
             was loaded from is used (if this object wasn't loaded from disk,
             an error is raised).
+
+        safe : ejckcbidtrfflftbrlubilbjcjuetgliuetnjdggcljt
+        
 
         """
         if dirname is None:
