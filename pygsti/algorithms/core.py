@@ -749,6 +749,89 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
     final_objfn : MDSObjectiveFunction
         The final iteration's objective function / store, which encapsulated the final objective
         function evaluated at the best-fit point (an "evaluated" model-dataSet-circuits store).
+
+    """
+    gst_iter_gen = iterative_gst_generator(dataset, start_model, circuit_lists,
+                      optimizer, iteration_objfn_builders, final_objfn_builders,
+                      resource_alloc, starting_index=0, verbosity=verbosity)
+
+    models = []
+    optimums = []
+
+    for i in range(len(circuit_lists)):
+        #then do the final iteration slightly differently since the generator should
+        #give three return values.
+        if i==len(circuit_lists)-1:
+            mdl_iter, opt_iter, final_objfn =  next(gst_iter_gen)
+        else:
+            mdl_iter, opt_iter =  next(gst_iter_gen)
+
+        models.append(mdl_iter)
+        optimums.append(opt_iter)
+        
+    return models, optimums, final_objfn
+
+def iterative_gst_generator(dataset, start_model, circuit_lists,
+                      optimizer, iteration_objfn_builders, final_objfn_builders,
+                      resource_alloc, starting_index=0, verbosity=0):
+    """
+    Performs Iterative Gate Set Tomography on the dataset.
+    Same as `run_iterative_gst`, except this function produces a
+    generator for producing the output for each iteration instead
+    of returning the lists of outputs all at once.
+
+    Parameters
+    ----------
+    dataset : DataSet
+        The data used to generate MLGST gate estimates
+
+    start_model : Model
+        The Model used as a starting point for the least-squares
+        optimization.
+
+    circuit_lists : list of lists of (tuples or Circuits)
+        The i-th element is a list of the circuits to be used in the i-th iteration
+        of the optimization.  Each element of these lists is a circuit, specifed as
+        either a Circuit object or as a tuple of operation labels (but all must be specified
+        using the same type).
+        e.g. [ [ (), ('Gx',) ], [ (), ('Gx',), ('Gy',) ], [ (), ('Gx',), ('Gy',), ('Gx','Gy') ]  ]
+
+    optimizer : Optimizer or dict
+        The optimizer to use, or a dictionary of optimizer parameters
+        from which a default optimizer can be built.
+
+    iteration_objfn_builders : list
+        List of ObjectiveFunctionBuilder objects defining which objective functions
+        should be optimizized (successively) on each iteration.
+
+    final_objfn_builders : list
+        List of ObjectiveFunctionBuilder objects defining which objective functions
+        should be optimizized (successively) on the final iteration.
+    
+    resource_alloc : ResourceAllocation
+        A resource allocation object containing information about how to
+        divide computation amongst multiple processors and any memory
+        limits that should be imposed.
+
+    
+    starting_index : int, optional (default 0)
+        Index of the iteration to start the optimization at. Primarily used
+        when warmstarting the iterative optimization from a checkpoint.
+    
+    verbosity : int, optional
+        How much detail to send to stdout.
+
+
+    Returns
+    -------
+    generator
+        Returns a generator which when queried the i-th time returns a tuple containing: 
+
+        - model: the model corresponding to the results of the i-th iteration.
+        - optimums : the final OptimizerResults from the i-th iteration.
+        - final_objfn : If the final iteration the MDSObjectiveFunction function / store, 
+          which encapsulated the final objective function evaluated at the best-fit point 
+          (an "evaluated" model-dataset-circuits store).
     """
     resource_alloc = _ResourceAllocation.cast(resource_alloc)
     optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
@@ -756,12 +839,10 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
     profiler = resource_alloc.profiler
     printer = VerbosityPrinter.create_printer(verbosity, comm)
 
-    models = []; optimums = []
     mdl = start_model.copy(); nIters = len(circuit_lists)
     tStart = _time.time()
     tRef = tStart
     final_objfn = None
-
     iteration_objfn_builders = [_objfns.ObjectiveFunctionBuilder.cast(ofb) for ofb in iteration_objfn_builders]
     final_objfn_builders = [_objfns.ObjectiveFunctionBuilder.cast(ofb) for ofb in final_objfn_builders]
 
@@ -775,10 +856,28 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
         ret = ()
         for artype, cnt in max_cnts.items(): ret += (artype,) * cnt
         return ret
-
+   
+    #These lines were previously in the loop below, but we should be able to move it out from there so we can use it
+    #in precomputing layouts:
+    method_names = optimizer.called_objective_methods
+    array_types = optimizer.array_types + \
+                _max_array_types([builder.compute_array_types(method_names, mdl.sim)
+                                  for builder in iteration_objfn_builders + final_objfn_builders])
+    
+    #precompute the COPA layouts. During the layout construction there are memory availability checks,
+    #So by doing it this way we should be able to reduce the number of instances of running out of memory before the end.
+    #The ModelDatasetCircuitsStore
+    printer.log('Precomputing CircuitOutcomeProbabilityArray layouts for each iteration.', 2)
+    precomp_layouts = []
+    for i, circuit_list in enumerate(circuit_lists):
+        printer.log(f'Layout for iteration {i}', 2)
+        precomp_layouts.append(mdl.sim.create_layout(circuit_list, dataset, resource_alloc, array_types, verbosity= printer - 1))
+    
     with printer.progress_logging(1):
-        for (i, circuitsToEstimate) in enumerate(circuit_lists):
+        for i in range(starting_index, len(circuit_lists)):
+            circuitsToEstimate = circuit_lists[i]
             extraMessages = []
+
             if isinstance(circuitsToEstimate, _CircuitList) and circuitsToEstimate.name:
                 extraMessages.append("(%s) " % circuitsToEstimate.name)
 
@@ -788,12 +887,9 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
             if circuitsToEstimate is None or len(circuitsToEstimate) == 0: continue
 
             mdl.basis = start_model.basis  # set basis in case of CPTP constraints (needed?)
-            method_names = optimizer.called_objective_methods
-            array_types = optimizer.array_types + \
-                _max_array_types([builder.compute_array_types(method_names, mdl.sim)
-                                  for builder in iteration_objfn_builders + final_objfn_builders])
             initial_mdc_store = _objfns.ModelDatasetCircuitsStore(mdl, dataset, circuitsToEstimate, resource_alloc,
-                                                                  array_types=array_types, verbosity=printer - 1)
+                                                                  array_types=array_types, verbosity=printer - 1, 
+                                                                  precomp_layout = precomp_layouts[i])
             mdc_store = initial_mdc_store
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
@@ -802,6 +898,7 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
                     first_iter_optimizer = _copy.deepcopy(optimizer)  # use a separate copy of optimizer, as it
                     first_iter_optimizer.fditer = optimizer.first_fditer  # is a persistent object (so don't modify!)
                     opt_result, mdc_store = run_gst_fit(mdc_store, first_iter_optimizer, obj_fn_builder, printer - 1)
+
                 else:
                     opt_result, mdc_store = run_gst_fit(mdc_store, optimizer, obj_fn_builder, printer - 1)
                 profiler.add_time('run_iterative_gst: iter %d %s-opt' % (i + 1, obj_fn_builder.name), tNxt)
@@ -823,20 +920,19 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
                 printer.log("Final optimization took %.1fs\n" % (tNxt - tRef), 2)
                 tRef = tNxt
 
-                models.append(mdc_store.model)  # don't copy so `mdc_store.model` *is* the final model, `models[-1]`
-
+                # don't copy so `mdc_store.model` *is* the final model, `models[-1]`
                 # send final objfn object back to caller to facilitate postproc  on the final (model, circuits, dataset)
                 # Note: initial_mdc_store is *not* an objective fn (it's just a store) so don't send it back.
                 if mdc_store is not initial_mdc_store:
                     final_objfn = mdc_store
-            else:
-                models.append(mdc_store.model.copy())
 
-            optimums.append(opt_result)
+                yield (mdc_store.model, opt_result, final_objfn)
+            else:
+                #If not the final iteration then only send back a copy of the model and the optimizer results
+                yield (mdc_store.model.copy(), opt_result)
 
     printer.log('Iterative GST Total Time: %.1fs' % (_time.time() - tStart))
     profiler.add_time('run_iterative_gst: total time', tStart)
-    return models, optimums, final_objfn
 
 
 def _do_runopt(objective, optimizer, printer):

@@ -33,7 +33,7 @@ except: _qiskit = None
 _attribute_to_json = ['remove_duplicates', 'randomized_order', 'circuits_per_batch', 'num_shots', 'job_ids']
 _attribute_to_pickle = ['pspec', 'pygsti_circuits', 'pygsti_openqasm_circuits',
                         'qiskit_QuantumCircuits', 'qiskit_QuantumCircuits_as_openqasm',
-                        'submit_time_calibration_data', 'qobj', 'qjob', 'batch_result_object'
+                        'submit_time_calibration_data', 'qobj', 'batch_result_object'
                         ]
 
 
@@ -295,9 +295,9 @@ class IBMQExperiment(dict):
                         print('  - Failed to get job_id.')
                         self['job_ids'].append(None)
                     try:
-                        print('  - Queue position is {}'.format(self['qjob'][-1].queue_position()))
+                        print('  - Queue position is {}'.format(self['qjob'][-1].queue_info().position))
                     except:
-                        print('  - Failed to get queue position {}'.format(batch_idx + 1))
+                        print('  - Failed to get queue position for batch {}'.format(batch_idx + 1))
                     submit_status = True
                 except Exception as ex:
                     template = "An exception of type {0} occurred. Arguments:\n{1!r}"
@@ -328,7 +328,7 @@ class IBMQExperiment(dict):
             status = qjob.status()
             print("Batch {}: {}".format(counter + 1, status))
             if status.name == 'QUEUED':
-                print('  - Queue position is {}'.format(qjob.queue_position(refresh=True))) #maybe refresh here? Could also make this whole thing autorefresh? Overall job monitoring could be more sophisticated 
+                print('  - Queue position is {}'.format(qjob.queue_info().position))
 
         # Print unsubmitted for any entries in qobj but not qjob
         for counter in range(len(self['qjob']), len(self['qobj'])):
@@ -346,9 +346,8 @@ class IBMQExperiment(dict):
         #get results from backend jobs and add to dict
         ds = _data.DataSet()
         for exp_idx, qjob in enumerate(self['qjob']):
-            print("Querying IBMQ for results objects for batch {}...".format(exp_idx+1)) #+ 1 here? 
-            batch_result = qjob.result() 
-            #results of qjob with associated exp_idx 
+            print("Querying IBMQ for results objects for batch {}...".format(exp_idx + 1))
+            batch_result = qjob.result()
             self['batch_result_object'].append(batch_result)
             #exp_dict['batch_data'] = []
             num_qubits_in_pspec = self['pspec'].num_qubits
@@ -394,7 +393,7 @@ class IBMQExperiment(dict):
                 _pickle.dump(self[atr], f)
 
     @classmethod
-    def from_dir(cls, dirname):
+    def from_dir(cls, dirname, provider=None):
         """
         Initialize a new IBMQExperiment object from `dirname`.
 
@@ -402,6 +401,9 @@ class IBMQExperiment(dict):
         ----------
         dirname : str
             The directory name.
+        
+        provider: IBMProvider
+            Provider used to retrieve qjob objects from job_ids
 
         Returns
         -------
@@ -419,6 +421,14 @@ class IBMQExperiment(dict):
                 except:
                     _warnings.warn("Couldn't unpickle {}, so skipping this attribute.".format(atr))
                     ret[atr] = None
+
+        if provider is None:
+            _warnings.warn("No provider specified, cannot retrieve IBM jobs")
+        else:
+            ret['qjob'] = []
+            for i, jid in enumerate(ret['job_ids']):
+                print(f"Loading job {i+1}/{len(ret['job_ids'])}...")
+                ret['qjob'].append(provider.backend.retrieve_job(jid))
 
         try:
             ret['data'] = _ProtocolData.from_dir(dirname)

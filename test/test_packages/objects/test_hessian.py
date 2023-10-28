@@ -131,7 +131,7 @@ class TestHessianMethods(BaseTestCase):
         edesign = proto.CircuitListsDesign([pygsti.circuits.CircuitList(circuit_struct)
                                             for circuit_struct in self.gss])
         data = proto.ProtocolData(edesign, self.ds)
-        res = proto.ModelEstimateResults(data, proto.StandardGST(modes="TP"))
+        res = proto.ModelEstimateResults(data, proto.StandardGST(modes="full TP"))
 
         #Add estimate for hessian-based CI --------------------------------------------------
         builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder()
@@ -366,7 +366,7 @@ class TestHessianMethods(BaseTestCase):
         edesign = proto.CircuitListsDesign([pygsti.circuits.CircuitList(circuit_struct)
                                             for circuit_struct in self.gss])
         data = proto.ProtocolData(edesign, self.ds)
-        res = proto.ModelEstimateResults(data, proto.StandardGST(modes="TP"))
+        res = proto.ModelEstimateResults(data, proto.StandardGST(modes="full TP"))
 
         res.add_estimate(
             proto.estimate.Estimate.create_gst_estimate(

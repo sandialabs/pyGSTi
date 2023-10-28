@@ -16,6 +16,7 @@ import os as _os
 import pickle as _pickle
 import time as _time
 import warnings as _warnings
+import pathlib as _pathlib
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
@@ -25,6 +26,7 @@ from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySeri
 from pygsti.protocols.estimate import Estimate as _Estimate
 from pygsti.protocols import protocol as _proto
 from pygsti.protocols.modeltest import ModelTest as _ModelTest
+from pygsti.protocols.modeltest import ModelTestCheckpoint as _ModelTestCheckpoint
 from pygsti import algorithms as _alg
 from pygsti import circuits as _circuits
 from pygsti import io as _io
@@ -41,6 +43,7 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.modelmembers import states as _states, povms as _povms
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
+from pygsti.circuits import Circuit
 
 
 #For results object:
@@ -1099,7 +1102,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
                         goparams = goparams.copy()
                         goparams['comm'] = None
                     to_pickle['gaugeopt_argument_dicts'][lbl] = goparams
-                else:  # goparams is a list
+                elif isinstance(goparams, list):  # goparams is a list
                     new_goparams = []  # new list
                     for goparams_dict in goparams:
                         if 'comm' in goparams_dict:
@@ -1107,6 +1110,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
                             goparams_dict['comm'] = None
                         new_goparams.append(goparams_dict)
                     to_pickle['gaugeopt_argument_dicts'][lbl] = new_goparams
+                elif lbl == 'trivial_gauge_opt':
+                    to_pickle['gaugeopt_argument_dicts'][lbl] = None
         return to_pickle
 
     def _to_nice_serialization(self):
@@ -1265,7 +1270,7 @@ class GateSetTomography(_proto.Protocol):
     #    design = GateSetTomographyDesign(target_model, circuit_lists)
     #    return self.run(_proto.ProtocolData(design, dataset))
 
-    def run(self, data, memlimit=None, comm=None):
+    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing = False):
         """
         Run this protocol on `data`.
 
@@ -1274,12 +1279,29 @@ class GateSetTomography(_proto.Protocol):
         data : ProtocolData
             The input data.
 
-        memlimit : int, optional
+        memlimit : int, optional (default None)
             A rough per-processor memory limit in bytes.
 
-        comm : mpi4py.MPI.Comm, optional
+        comm : mpi4py.MPI.Comm, optional (default None)
             When not ``None``, an MPI communicator used to run this protocol
             in parallel.
+
+        checkpoint : GateSetTomographyCheckpoint, optional (default None)
+            If specified use a previously generated checkpoint object to restart
+            or warm start this run part way through.
+
+        checkpoint_path : str, optional (default None)
+            A string for the path/name to use for writing intermediate checkpoint
+            files to disk. Format is {path}/{name}, without inclusion of the json
+            file extension. This {path}/{name} combination will have the latest
+            completed iteration number appended to it before writing it to disk.
+            If none, the value of {name} will be set to the name of the protocol
+            being run.
+
+        disable_checkpointing : bool, optional (default False)
+            When set to True checkpoint objects will not be constructed and written
+            to disk during the course of this protocol. It is strongly recommended
+            that this be kept set to False without good reason to disable the checkpoints.
 
         Returns
         -------
@@ -1315,17 +1337,90 @@ class GateSetTomography(_proto.Protocol):
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
         mdl_start = self.initial_model.retrieve_model(data.edesign, self.gaugeopt_suite.gaugeopt_target,
                                                       data.dataset, comm)
+        
+        if not disable_checkpointing:
+            #Set the checkpoint_path variable if None
+            if checkpoint_path is None:
+                checkpoint_path = _pathlib.Path('./gst_checkpoints/' + self.name)
+            else:
+                #cast this to a pathlib path with the file extension (suffix) dropped
+                checkpoint_path = _pathlib.Path(checkpoint_path).with_suffix('')
+            
+            #create the parent directory of the checkpoint if needed:
+            checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            #If there is no checkpoint we should start from with the seed model,
+            #otherwise we should seed the next iteration with the last iteration's result.
+            #If there is no checkpoint initialize mdl_lsgst_list and final_objfn to be empty, 
+            #otherwise re-initialize their values from the checkpoint   
+            if checkpoint is None:
+                seed_model = mdl_start.copy()
+                mdl_lsgst_list = []
+                checkpoint = GateSetTomographyCheckpoint()
+            elif isinstance(checkpoint, GateSetTomographyCheckpoint):
+                #if the checkpoint's last completed iteration is non-negative
+                #(i.e. the checkpoint actually has data in it)
+                if checkpoint.last_completed_iter >= 0:
+                    seed_model = checkpoint.mdl_list[-1]
+                #otherwise seed with target
+                else:
+                    seed_model = mdl_start.copy()
+                mdl_lsgst_list = checkpoint.mdl_list
+                final_objfn = checkpoint.final_objfn
+                #final_objfn initialized to None in the GateSetTomographyCheckpoint and will be overwritten
+                #during the loop below unless the last completed iteration is the final iteration
+                #in which case the loop should be skipped. If so I think it is ok that this gets
+                #left set to None. There looks to be some logic for handling this and it looks
+                #like the serialization routines effectively do this already, as the value
+                #of this is lost between writing and reading.
+            else:
+                NotImplementedError('The only currently valid checkpoint inputs are None and GateSetTomographyCheckpoint.')
+            
+            #note the last_completed_iter value is initialized to -1 so the below line 
+            # will have us correctly starting at 0 if this is a fresh checkpoint.
+            starting_idx = checkpoint.last_completed_iter + 1
+
+        else:
+            seed_model = mdl_start.copy()
+            mdl_lsgst_list = []
+            starting_idx = 0
 
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
-
+        
         #Run Long-sequence GST on data
-        mdl_lsgst_list, optimums_list, final_objfn = _alg.run_iterative_gst(
-            ds, mdl_start, bulk_circuit_lists, self.optimizer,
+        #Use the generator based version and query each of the intermediate results.
+        gst_iter_generator = _alg.iterative_gst_generator( 
+            ds, seed_model, bulk_circuit_lists, self.optimizer,
             self.objfn_builders.iteration_builders, self.objfn_builders.final_builders,
-            resource_alloc, printer)
+            resource_alloc, starting_idx, printer)
+
+        #The optima don't actually get used right now, so don't bother trying to
+        #checkpoint these.
+        optima_list = []
+
+        #Now loop through the generator and query the intermediate results:
+        #Do all but the last circuit list.
+        for i in range(starting_idx, len(bulk_circuit_lists)):
+            #then do the final iteration slightly differently since the generator should
+            #give three return values.
+            if i==len(bulk_circuit_lists)-1:
+                mdl_iter, opt_iter, final_objfn =  next(gst_iter_generator)
+            else:
+                mdl_iter, opt_iter =  next(gst_iter_generator)
+            mdl_lsgst_list.append(mdl_iter)
+            optima_list.append(opt_iter)
+
+            if not disable_checkpointing:
+                #update the checkpoint along the way:
+                checkpoint.mdl_list = mdl_lsgst_list
+                checkpoint.last_completed_iter += 1
+                checkpoint.last_completed_circuit_list = bulk_circuit_lists[i]
+                #write the updated checkpoint to disk:
+                if resource_alloc.comm_rank == 0:
+                    checkpoint.write(f'{checkpoint_path}_iteration_{i}.json')
 
         tnxt = _time.time(); profiler.add_time('GST: total iterative optimization', tref); tref = tnxt
-
+    
         #set parameters
         parameters = _collections.OrderedDict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
@@ -1337,7 +1432,7 @@ class GateSetTomography(_proto.Protocol):
         # Note: we associate 'final_cache' with the Estimate, which means we assume that *all*
         # of the models in the estimate can use same evaltree, have the same default prep/POVMs, etc.
 
-        #TODO: add qtys about fit from optimums_list
+        #TODO: add qtys about fit from optima_list
 
         ret = ModelEstimateResults(data, self)
 
@@ -1581,11 +1676,20 @@ class StandardGST(_proto.Protocol):
         be used.
     """
 
-    def __init__(self, modes="full TP,CPTP,Target", gaugeopt_suite='stdgaugeopt', target_model=None,
+    def __init__(self, modes=('full TP','CPTPLND','Target'), gaugeopt_suite='stdgaugeopt', target_model=None,
                  models_to_test=None, objfn_builders=None, optimizer=None, badfit_options=None, verbosity=2, name=None):
 
         super().__init__(name)
-        self.modes = modes.split(',')
+        if isinstance(modes, str):
+            if ',' in modes:
+                self.modes = modes.split(',')
+                _warnings.warn("The use of a comma-separated string as input for 'modes' is deprecated " 
+                            + " and may be removed in a future release. Please pass in a list or tuple"
+                                +" (or other iterable) of strings")
+            else:
+                self.modes = [modes] #Cast to a list for uniformity
+        else:
+            self.modes = modes
         self.models_to_test = models_to_test
         self.target_model = target_model
         self.gaugeopt_suite = GSTGaugeOptSuite.cast(gaugeopt_suite)
@@ -1614,7 +1718,7 @@ class StandardGST(_proto.Protocol):
     #    data = _proto.ProtocolData(design, dataset)
     #    return self.run(data)
 
-    def run(self, data, memlimit=None, comm=None):
+    def run(self, data, memlimit=None, comm=None, checkpoint= None, checkpoint_path=None, disable_checkpointing = False):
         """
         Run this protocol on `data`.
 
@@ -1629,6 +1733,23 @@ class StandardGST(_proto.Protocol):
         comm : mpi4py.MPI.Comm, optional
             When not ``None``, an MPI communicator used to run this protocol
             in parallel.
+
+        checkpoint : StandardGSTCheckpoint, optional (default None)
+            If specified use a previously generated checkpoint object to restart
+            or warm start this run part way through.
+
+        checkpoint_path : str, optional (default None)
+            A string for the path/name to use for writing intermediate checkpoint
+            files to disk. Format is {path}/{name}, without inclusion of the json
+            file extension. This {path}/{name} combination will have the latest
+            completed iteration number appended to it before writing it to disk.
+            If none, the value of {name} will be set to the name of the protocol
+            being run.
+        
+        disable_checkpointing : bool, optional (default False)
+            When set to True checkpoint objects will not be constructed and written
+            to disk during the course of this protocol. It is strongly recommended
+            that this be kept set to False without good reason to disable the checkpoints.
 
         Returns
         -------
@@ -1659,26 +1780,66 @@ class StandardGST(_proto.Protocol):
         else:
             target_model = None  # Usually this path leads to an error being raised below.
 
+        if not disable_checkpointing:
+            #Set the checkpoint_path variable if None
+            if checkpoint_path is None:
+                checkpoint_path_base = _pathlib.Path('./standard_gst_checkpoints/' + self.name)
+            else:
+                #cast this to a pathlib path with the file extension (suffix) dropped
+                checkpoint_path_base = _pathlib.Path(checkpoint_path).with_suffix('')
+
+            #If there is no checkpoint we should start from with the seed model,
+            #otherwise we should seed the next iteration with the last iteration's result.
+            #If there is no checkpoint initialize mdl_lsgst_list and final_objfn to be empty, 
+            #otherwise re-initialize their values from the checkpoint   
+            if checkpoint is None:
+                checkpoint = StandardGSTCheckpoint(modes)
+                #pre-populate the children of the StandardGSTCheckpoint
+                #with properly initialized checkpoint objects for each of
+                #the protocols.
+                child_dict = {}
+                for mode in modes:
+                    if mode == "Target" or mode in models_to_test:
+                        child_dict[mode] = _ModelTestCheckpoint(name = mode, parent = checkpoint)
+                    else:
+                        child_dict[mode] = GateSetTomographyCheckpoint(name = mode, parent = checkpoint)
+                checkpoint.children = child_dict
+            elif isinstance(checkpoint, StandardGSTCheckpoint):
+                pass
+            else:
+                NotImplementedError('The only currently valid checkpoint inputs are None and StandardGSTCheckpoint.')
+
         ret = ModelEstimateResults(data, self)
         with printer.progress_logging(1):
             for i, mode in enumerate(modes):
                 printer.show_progress(i, len(modes), prefix='-- Std Practice: ', suffix=' (%s) --' % mode)
-
+                if not disable_checkpointing:
+                    #pre python 3.9 compatible version.
+                    checkpoint_path = checkpoint_path_base.with_name(f"{checkpoint_path_base.stem}_{mode.replace(' ', '_')}")
+                    #The line below only works for python 3.9+
+                    #checkpoint_path = checkpoint_path_base.with_stem(f"{checkpoint_path_base.stem}_{mode.replace(' ', '_')}")
                 if mode == "Target":
                     if target_model is None:
                         raise ValueError(("Must specify `target_model` when creating this StandardGST, since one could"
                                           " not be inferred from the given experiment design."))
-
-                    model_to_test = target_model
-                    mdltest = _ModelTest(model_to_test, target_model, self.gaugeopt_suite,
+                    
+                    mdltest = _ModelTest(target_model, target_model, self.gaugeopt_suite,
                                          mt_builder, self.badfit_options, verbosity=printer - 1, name=mode)
-                    result = mdltest.run(data, memlimit, comm)
+                    if not disable_checkpointing:
+                        result = mdltest.run(data, memlimit, comm, checkpoint = checkpoint.children[mode],
+                                            checkpoint_path=checkpoint_path)
+                    else:
+                        result = mdltest.run(data, memlimit, comm, disable_checkpointing=True)
                     ret.add_estimates(result)
 
                 elif mode in models_to_test:
                     mdltest = _ModelTest(models_to_test[mode], target_model, self.gaugeopt_suite,
                                          None, self.badfit_options, verbosity=printer - 1, name=mode)
-                    result = mdltest.run(data, memlimit, comm)
+                    if not disable_checkpointing:
+                        result = mdltest.run(data, memlimit, comm, checkpoint = checkpoint.children[mode],
+                                            checkpoint_path=checkpoint_path)
+                    else:
+                        result = mdltest.run(data, memlimit, comm, disable_checkpointing=True)
                     ret.add_estimates(result)
 
                 else:
@@ -1699,7 +1860,11 @@ class StandardGST(_proto.Protocol):
                     initial_model = GSTInitialModel(initial_model, self.starting_point.get(mode, None))
                     gst = GST(initial_model, self.gaugeopt_suite, self.objfn_builders,
                               self.optimizer, self.badfit_options, verbosity=printer - 1, name=mode)
-                    result = gst.run(data, memlimit, comm)
+                    if not disable_checkpointing:
+                        result = gst.run(data, memlimit, comm, checkpoint = checkpoint.children[mode],
+                                        checkpoint_path=checkpoint_path)
+                    else:
+                        result = gst.run(data, memlimit, comm, disable_checkpointing=True)
                     ret.add_estimates(result)
 
         return ret
@@ -2338,8 +2503,6 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
     # and so probability of any red boxes is ~p*N.  Here `percentile` is the probability of seeing *any* red
     # boxes, i.e. ~p*N, so to compute the prob of a single box being red we compute `p = percentile/N`.
 
-    #print("DB2: ",twoDeltaLogL_threshold,redbox_threshold)
-
     assert(isinstance(mdc_objfn, _objfns.PoissonPicDeltaLogLFunction)), \
         "Can only use wildcard scaling with 'logl' objective!"
 
@@ -2936,6 +3099,156 @@ class ModelEstimateResults(_proto.ProtocolResults):
         s += "  " + "\n  ".join(list(self.estimates.keys())) + "\n"
         s += "\n"
         return s
+    
+class GateSetTomographyCheckpoint(_proto.ProtocolCheckpoint):
+    """
+    A class for storing intermediate results associated with running
+    a GateSetTomography protocol's run method to allow for restarting
+    that method partway through.
+
+    Parameters
+    ----------
+    mdl_list : list of models, optional (default None)
+        Current list of models for each of the completed iterations of the protocol.
+
+    last_completed_iter : int, optional (default -1)
+        Index of the last iteration what was successfully completed.
+
+    last_completed_circuit_list : list of Circuit objects, CircuitList or equivalent, optional (default None)
+        A list of Circuit objects corresponding to the last iteration successfully completed.
+    
+    final_objfn : ModelDatasetCircuitStore, optional (Default None)
+        A ModelDatasetCircuitStore object corresponding to the final evaluated objective function.
+        Not currently serialized or used during the warmstarting, so purely informational and may
+        not always be initialized.
+
+    name : str, optional (default None)
+        An optional name for the checkpoint. Note this is not necessarily the name used in the
+        automatic generation of filenames when written to disk.
+
+    parent : ProtocolCheckpoint, optional (default None)
+        When specified this checkpoint object is treated as the child of another ProtocolCheckpoint
+        object that acts as the parent. When present, the parent's `write` method supersedes
+        the child objects and is called when calling `write` on the child. Currently only used
+        in the implementation of StandardGSTCheckpoint.
+    """
+
+    def __init__(self, mdl_list = None, last_completed_iter = -1, 
+                 last_completed_circuit_list = None, final_objfn = None,
+                 name= None, parent = None):
+
+        self.mdl_list = mdl_list if mdl_list is not None else []
+        self.last_completed_iter = last_completed_iter
+        self.last_completed_circuit_list = last_completed_circuit_list if last_completed_circuit_list is not None else []
+        self.final_objfn = final_objfn
+
+        super().__init__(name, parent)
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'mdl_list': [mdl.to_nice_serialization() for mdl in self.mdl_list],
+                      'last_completed_iter': self.last_completed_iter,
+                      'last_completed_circuit_list': [ckt.str for ckt in self.last_completed_circuit_list],
+                      'final_objfn': self.final_objfn,
+                      'name': self.name
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        mdl_list = [_Model.from_nice_serialization(mdl) for mdl in state['mdl_list']]
+        last_completed_iter = state['last_completed_iter']
+        last_completed_circuit_list = [Circuit(ckt_str) for ckt_str in state['last_completed_circuit_list']]
+        final_objfn = state['final_objfn']
+        name = state['name']
+        return cls(mdl_list, last_completed_iter, last_completed_circuit_list, 
+                   final_objfn, name)
+    
+
+
+class StandardGSTCheckpoint(_proto.ProtocolCheckpoint):
+    """
+    A class for storing intermediate results associated with running
+    a StandardGST protocol's run method to allow for restarting
+    that method partway through. This class acts as a container
+    class for some set of child GateSetTomographyCheckpoint and
+    ModelTestCheckpoint objects for each of the sub-protocols run in
+    the course of the StandardGST protocol.
+
+    Parameters
+    ----------
+    modes : list of str, optional (default None)
+        A list of strings corresponding to the mode labels being run in the
+        StandardGST protocol object that generated this checkpoint.
+
+    children : dict, optional (default None)
+        A dictionary whose keys correspond to modes (i.e. the same elements as the
+        modes kwarg) and whose values are either GateSetTomographyCheckpoint
+        or ModelTestCheckpoint objects, depending on whichever is appropriate
+        for that mode.
+        
+    name : str, optional (default None)
+        An optional name for the checkpoint. Note this is not necessarily the name used in the
+        automatic generation of filenames when written to disk. 
+    """
+
+    def __init__(self, modes= None, children = None, name= None):
+        self.modes = modes
+        self.children = children if children is not None else {}
+        super().__init__(name)
+    
+    @property
+    def children(self):
+        return self._children
+    
+    @children.setter
+    def children(self, child_dict):
+        self._children = child_dict
+        #also initialize something for storing child types for use in
+        #hacky deserialization
+        self.child_types = {}
+        for mode, child in child_dict.items():
+            if isinstance(child, _ModelTestCheckpoint):
+                self.child_types[mode] = 'modeltest'
+            elif isinstance(child, GateSetTomographyCheckpoint):
+                self.child_types[mode] = 'gatesettomography'
+            else:
+                raise ValueError('StandardGSTCheckpoint currently only supports'\
+                                 +' child checkpoint types that are ModelTestCheckpoint'\
+                                 +' or GateSetTomographyCheckpoint objects.')
+            
+
+    def _to_nice_serialization(self):
+        state = super()._to_nice_serialization()
+        state.update({'modes': self.modes,
+                      'children': {mode: self.children[mode]._to_nice_serialization() for mode in self.modes},
+                      'child_types': self.child_types,
+                      'name': self.name
+                      })
+        return state
+
+    @classmethod
+    def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
+        modes = state['modes']
+        child_types = state['child_types']
+        #reinitialize the checkpoint objects for the children
+        child_serializations = state['children']
+        children = {}
+        for mode in modes:
+            if child_types[mode] == 'modeltest':
+                children[mode] = _ModelTestCheckpoint._from_nice_serialization(child_serializations[mode])
+            elif child_types[mode] == 'gatesettomography':
+                children[mode] = GateSetTomographyCheckpoint._from_nice_serialization(child_serializations[mode])
+            else:
+                raise ValueError('StandardGSTCheckpoint currently only supports'\
+                                 +' child checkpoint types that are ModelTestCheckpoint'\
+                                 +' or GateSetTomographyCheckpoint objects.')
+        name = state['name']
+        ret = cls(modes, children, name)
+        #relink the parents for each of the children so they point to the newly returned instance ret
+        for mode in modes:
+            ret.children[mode].parent = ret
+        return ret
 
 
 GSTDesign = GateSetTomographyDesign

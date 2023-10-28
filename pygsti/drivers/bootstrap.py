@@ -89,7 +89,7 @@ def create_bootstrap_dataset(input_data_set, generation_method, input_model=None
         if generation_method == 'parametric' else None
 
     for s in circuit_list:
-        nSamples = input_data_set[s].total
+        nSamples = int(input_data_set[s].total)
         if generation_method == 'parametric':
             ps = probs[s]  # SLOW: input_model.probabilities(s)
         elif generation_method == 'nonparametric':

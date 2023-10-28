@@ -733,7 +733,7 @@ class SummaryStatistics(_proto.Protocol):
                             bcache['success_counts'][depth].append(sampledSP)
 
                         ind = _np.random.randint(numcircuits)  # note: old code picked different random ints
-                        totalcounts = total_counts[depth][ind] if finitecounts else None  # need this if a new randint
+                        totalcounts = int(total_counts[depth][ind]) if finitecounts else None  # need this if a new randint
                         #sampledE = (energies[depth][ind]+1)/2
                         sampledHDcounts = hamming_distance_counts[depth][ind]
                         sampledHDpdf = _np.array(sampledHDcounts) / _np.sum(sampledHDcounts)

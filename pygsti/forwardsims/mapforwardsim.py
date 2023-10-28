@@ -11,8 +11,10 @@ Defines the MapForwardSimulator calculator class
 #***************************************************************************************************
 
 import importlib as _importlib
+import warnings as _warnings
 
 import numpy as _np
+from numpy import linalg as _nla
 
 from pygsti.forwardsims.distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
@@ -248,7 +250,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
             array_types, nprocs, num_params, len(circuits), default_natoms=2 * self.model.dim)  # heuristic?
-
+        printer.log(f'Num Param Processors {npp}')
+        
         printer.log("MapLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
                     (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)))
         printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
@@ -638,3 +641,72 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
                                              array_to_fill, dloglpp, logl_array_to_fill, loglpp)
+
+    
+    #Utility method for generating process matrices for circuits. Should not be used for forward
+    #simulation when using the MapForwardSimulator.
+    def product(self, circuit, scale=False):
+        """
+        Compute the product of a specified sequence of operation labels.
+
+        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
+        the first element of circuit can be thought of as the first gate operation
+        performed, which is on the far right of the product of matrices.
+
+        Parameters
+        ----------
+        circuit : Circuit or tuple of operation labels
+            The sequence of operation labels.
+
+        scale : bool, optional
+            When True, return a scaling factor (see below).
+
+        Returns
+        -------
+        product : numpy array
+            The product or scaled product of the operation matrices.
+        scale : float
+            Only returned when scale == True, in which case the
+            actual product == product * scale.  The purpose of this
+            is to allow a trace or other linear operation to be done
+            prior to the scaling.
+        """
+        _warnings.warn('Generating dense process matrix representations of circuits or gates \n'
+                       'can be inefficient and should be avoided for the purposes of forward \n'
+                       'simulation/calculation of circuit outcome probability distributions \n' 
+                       'when using the MapForwardSimulator.')
+        
+        # Smallness tolerances, used internally for conditional scaling required
+        # to control bulk products, their gradients, and their Hessians.
+        _PSMALL = 1e-100
+        
+        if scale:
+            scaledGatesAndExps = {}
+            scale_exp = 0
+            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
+            for lOp in circuit:
+                if lOp not in scaledGatesAndExps:
+                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal')
+                    ng = max(_nla.norm(opmx), 1.0)
+                    scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
+
+                gate, ex = scaledGatesAndExps[lOp]
+                H = _np.dot(gate, G)   # product of gates, starting with identity
+                scale_exp += ex   # scale and keep track of exponent
+                if H.max() < _PSMALL and H.min() > -_PSMALL:
+                    nG = max(_nla.norm(G), _np.exp(-scale_exp))
+                    G = _np.dot(gate, G / nG); scale_exp += _np.log(nG)  # LEXICOGRAPHICAL VS MATRIX ORDER
+                else: G = H
+
+            old_err = _np.seterr(over='ignore')
+            scale = _np.exp(scale_exp)
+            _np.seterr(**old_err)
+
+            return G, scale
+
+        else:
+            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
+            for lOp in circuit:
+                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal'), G)
+                # above line: LEXICOGRAPHICAL VS MATRIX ORDER
+            return G

@@ -396,7 +396,10 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             switchBd.mdl_target_and_final[d, i, :] = \
                 [[est.models['target'], est.models[l]] if (l in est.models) else NA
                  for l in gauge_opt_labels]
-            switchBd.goparams[d, i, :] = [est.goparameters.get(l, NA) for l in gauge_opt_labels]
+                 #Add some logic to allow for the value of the gaugeoptparams dict to be None
+                 #(so far this only shows up in certain ModelTest scenarios).
+            switchBd.goparams[d, i, :] = [est.goparameters.get(l, NA) if est.goparameters.get(l, NA) is not None
+                                                                    else NA for l in gauge_opt_labels]
 
             for iL, L in enumerate(swLs):  # allow different results to have different Ls
                 if L in loc_Ls:

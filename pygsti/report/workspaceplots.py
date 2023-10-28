@@ -2558,7 +2558,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
                 xd = yd = 16  # include identity in basis dimensions
         else:
             if projections.size == d2 - 1:  # == 4**nQubits - 1
-                projections = _np.concatenate(([0.0], projections)).reshape((4, projections.size // 4))
+                projections = _np.concatenate(([0.0], projections)).reshape((4, (projections.size+1) // 4))
                 eb_matrix = _np.concatenate(([0.0], eb_matrix)) if (eb_matrix is not None) else None
                 xlabel = "Q*"; ylabel = "Q1"
                 yd, xd = projections.shape
@@ -3638,19 +3638,22 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 
         if decay:
             lengths = _np.linspace(0, max(rb_r.depths), 200)
-            A = rb_r.fits[fitkey].estimates['a']
-            B = rb_r.fits[fitkey].estimates['b']
-            p = rb_r.fits[fitkey].estimates['p']
+            try:
+                A = rb_r.fits[fitkey].estimates['a']
+                B = rb_r.fits[fitkey].estimates['b']
+                p = rb_r.fits[fitkey].estimates['p']
 
-            data.append(go.Scatter(
-                x=lengths,
-                y=A + B * p**lengths,
-                mode='lines',
-                line=dict(width=1, color="rgb(120,120,120)"),
-                name='Fit, r = {:.2} +/- {:.1}'.format(rb_r.fits[fitkey].estimates['r'],
-                                                       rb_r.fits[fitkey].stds['r']),
-                showlegend=legend,
-            ))
+                data.append(go.Scatter(
+                    x=lengths,
+                    y=A + B * p**lengths,
+                    mode='lines',
+                    line=dict(width=1, color="rgb(120,120,120)"),
+                    name='Fit, r = {:.2} +/- {:.1}'.format(rb_r.fits[fitkey].estimates['r'],
+                                                        rb_r.fits[fitkey].stds['r']),
+                    showlegend=legend,
+                ))
+            except KeyError:
+                _warnings.warn(f'RB fit for {fitkey} likely failed, skipping plot...')
 
         if success_probabilities:
             all_success_probs_by_depth = [data_per_depth[depth] for depth in rb_r.depths]
