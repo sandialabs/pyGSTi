@@ -13,6 +13,7 @@ Sub-package holding model instrument objects.
 from .instrument import Instrument
 from .tpinstrument import TPInstrument
 from .tpinstrumentop import TPInstrumentOp
+from .embeddedinst import EmbeddedInst
 
 from pygsti.tools import optools as _ot
 
@@ -87,7 +88,7 @@ def convert(instrument, to_type, basis, ideal_instrument=None, flatten_structure
 
     to_type : {"full","TP","static","static unitary"}
         The type of parameterizaton to convert to.  See
-        :method:`Model.set_all_parameterizations` for more details.
+        :meth:`Model.set_all_parameterizations` for more details.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for `povm`.  Allowed values are Matrix-unit (std),

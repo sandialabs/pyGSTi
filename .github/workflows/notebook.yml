@@ -52,7 +52,7 @@ jobs:
     - name: Install package
       run: |
         python -m pip install --upgrade pip
-        # Installing with -e to keep installation local (for NOSE_NOPATH)
+        # Installing with -e to keep installation local
         # but still compile Cython extensions
         python -m pip install -e .[testing]
         python setup.py build_ext --inplace

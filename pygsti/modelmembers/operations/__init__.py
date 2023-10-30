@@ -249,7 +249,7 @@ def convert_errorgen(errorgen, to_type, basis, flatten_structure=False):
     raise ValueError("Could not convert error generator to type(s): %s\n%s" % (str(to_types), str(error_msgs)))
 
 
-def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=False):
+def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=False, cptp_truncation_tol = 1e-6):
     """
     Convert operation to a new type of parameterization.
 
@@ -264,7 +264,7 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
     to_type : {"full","full TP","static","static unitary","clifford",LINDBLAD}
         The type of parameterizaton to convert to.  "LINDBLAD" is a placeholder
         for the various Lindblad parameterization types.  See
-        :method:`Model.set_all_parameterizations` for more details.
+        :meth:`Model.set_all_parameterizations` for more details.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for `operation`.  Allowed values are Matrix-unit (std),
@@ -282,6 +282,14 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
         are separately converted, leaving the original operation's structure
         unchanged.  When `True`, composed and embedded operations are "flattened"
         into a single operation of the requested `to_type`.
+        
+    cptp_truncation_tol : float, optional (default 1e-6)
+        Tolerance used for conversion to CPTP parameterizations. When converting to
+        CPTP models negative eigenvalues of the choi matrix representation of a superoperator
+        are truncated, which can result in a change in the PTM for that operator. This tolerance
+        indicates the maximum amount of truncation induced deviation from the original operations
+        (measured by frobenius distance) we're willing to accept without marking the conversion
+        as failed.
 
     Returns
     -------
@@ -355,9 +363,11 @@ def convert(operation, to_type, basis, ideal_operation=None, flatten_structure=F
                     ret = ComposedOp([postfactor_op.copy(), ExpErrorgenOp(errorgen)]) \
                         if (postfactor_op is not None) else ExpErrorgenOp(errorgen)
 
-                if ret.dim <= 16:  # only do this for up to 2Q operations, otherwise to_dense is too expensive
-                    assert(_np.linalg.norm(operation.to_dense('HilbertSchmidt') - ret.to_dense('HilbertSchmidt'))
-                           < 1e-6), "Failure to create CPTP operation (maybe due the complex log's branch cut?)"
+                if ret.dim <= 81:  # only do this for up to 2-qutrit operations, otherwise to_dense is too expensive
+                                   #This should probably be a relative tolerance.
+                    op_diff = _np.linalg.norm(operation.to_dense('HilbertSchmidt') - ret.to_dense('HilbertSchmidt'))
+                    assert(op_diff< cptp_truncation_tol), "Failure to create CPTP operation, frobenius norm between original and converted operation large," \
+                                            + str(op_diff) + ", (maybe due the complex log's branch cut?)"
                 return ret
 
             else:

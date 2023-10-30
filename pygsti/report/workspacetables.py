@@ -1188,7 +1188,7 @@ class GatesVsTargetTable(WorkspaceTable):
                 display, virtual_ops, wildcard):
 
         opLabels = model.primitive_op_labels  # operation labels
-        instLabels = list(model.instruments.keys())  # requires an explicit model!
+        instLabels = list(model.instruments.keys())  # requires an explicit model! Why not .primitive_instrument_labels? 
         assert(isinstance(model, _models.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         colHeadings = ['Gate'] if (virtual_ops is None) else ['Gate or Germ']
@@ -1212,7 +1212,9 @@ class GatesVsTargetTable(WorkspaceTable):
         if virtual_ops is None:
             iterOver = opLabels
         else:
-            iterOver = opLabels + tuple((v for v in virtual_ops if len(v) > 1))
+            iterOver = opLabels + tuple((v for v in virtual_ops if len(v) > 1 and 'I' not in v.str)) 
+            #DRAFT--make it so it doesn't just skip these germs 
+            
 
         for gl in iterOver:
             #Note: gl may be a operation label (a string) or a Circuit
@@ -1420,7 +1422,7 @@ class ErrgenTable(WorkspaceTable):
 
             - "logG-logT" : errgen = log(gate) - log(target_op)
             - "logTiG" : errgen = log( dot(inv(target_op), gate) )
-            - "logTiG" : errgen = log( dot(gate, inv(target_op)) )
+            - "logGTi" : errgen = log( dot(gate, inv(target_op)) )
 
         Returns
         -------
@@ -1450,7 +1452,7 @@ class ErrgenTable(WorkspaceTable):
                 colHeadings.append('%sHamiltonian Projections' % basisPrefix)
             elif disp == "S":
                 colHeadings.append('%sStochastic Projections' % basisPrefix)
-            elif disp == "CA":
+            elif disp == "CA" or disp == "A":
                 colHeadings.append('%sActive\\Correlation Projections' % basisPrefix)
             else: raise ValueError("Invalid display element: %s" % disp)
 
@@ -1508,7 +1510,7 @@ class ErrgenTable(WorkspaceTable):
                 absMax = _np.max(_np.abs(info['S projections'].value))
                 add_max(stoProjsM, absMax)
 
-            if "CA" in display:
+            if "CA" in display or "A" in display:
                 absMax = _np.max(_np.abs(info['CA projections'].value))
                 add_max(caProjsM, absMax)
 
@@ -1559,7 +1561,7 @@ class ErrgenTable(WorkspaceTable):
                         row_data.append(info['S projections'])
                         row_formatters.append('Brackets')
 
-                elif disp == "CA":
+                elif disp == "CA" or disp == "A":
                     if display_as == "boxes":
                         T = "Captures %.1f%% of E.G." % (100 * info['CA projection power'].value)
                         caProjs, EB = info['CA projections'].value_and_errorbar
@@ -2439,7 +2441,7 @@ class GateEigenvalueTable(WorkspaceTable):
         if virtual_ops is None:
             iterOver = opLabels
         else:
-            iterOver = opLabels + tuple((v for v in virtual_ops if len(v) > 1))
+            iterOver = tuple((v for v in virtual_ops if len(v) > 1 and 'I' not in v.str)) #DRAFT--make better
 
         for gl in iterOver:
             #Note: gl may be a operation label (a string) or a Circuit
@@ -2748,7 +2750,7 @@ class FitComparisonTable(WorkspaceTable):
         Specifies the set of circuits used at each X.
 
     model_by_x : list of Models
-        `Model`s corresponding to each X value.
+        `Model` corresponding to each X value.
 
     dataset : DataSet
         The data set to compare each model against.
@@ -2793,7 +2795,7 @@ class FitComparisonTable(WorkspaceTable):
             Specifies the set of circuits used at each X.
 
         model_by_x : list of Models
-            `Model`s corresponding to each X value.
+            `Model` corresponding to each X value.
 
         dataset : DataSet
             The data set to compare each model against.
@@ -3522,8 +3524,7 @@ class SoftwareEnvTable(WorkspaceTable):
         from .._version import version as pygsti_version
         table.add_row(("pyGSTi version", str(pygsti_version)), (None, 'Verbatim'))
 
-        packages = ['numpy', 'scipy', 'matplotlib', 'ply', 'cvxopt', 'cvxpy',
-                    'nose', 'PIL', 'psutil']
+        packages = ['numpy', 'scipy', 'matplotlib', 'ply', 'cvxopt', 'cvxpy', 'PIL', 'psutil']
         for pkg in packages:
             table.add_row((pkg, _get_package_version(pkg)), (None, 'Verbatim'))
 

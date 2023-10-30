@@ -64,7 +64,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
     default_param : {"full", "TP", "CPTP", etc.}, optional
         Specifies the default gate and SPAM vector parameterization type.
-        Can be any value allowed by :method:`set_all_parameterizations`,
+        Can be any value allowed by :meth:`set_all_parameterizations`,
         which also gives a description of each parameterization type.
 
     prep_prefix: string, optional
@@ -89,8 +89,8 @@ class ExplicitOpModel(_mdl.OpModel):
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The circuit simulator used to compute any
-        requested probabilities, e.g. from :method:`probs` or
-        :method:`bulk_probs`.  The default value of `"auto"` automatically
+        requested probabilities, e.g. from :meth:`probs` or
+        :meth:`bulk_probs`.  The default value of `"auto"` automatically
         selects the simulation type, and is usually what you want. Other
         special allowed values are:
 
@@ -228,6 +228,38 @@ class ExplicitOpModel(_mdl.OpModel):
 
         return _op.EmbeddedOp(self.state_space, op_target_labels, op_val)
 
+    def _embed_instrument(self, inst_target_labels, inst_val, force=False):
+        """
+        Called by OrderedMemberDict._auto_embed to create an embedded-instrument
+        object that embeds `inst_val` into the sub-space of
+        `self.state_space` given by `inst_target_labels`.
+
+        Parameters
+        ----------
+        inst_target_labels : list
+            A list of `inst_val`'s target state space labels.
+
+        inst_val : LinearOperator
+            The instrument object to embed.  Note this should be a legitimate
+            Instrument-derived object and not just a numpy array.
+
+        force : bool, optional
+            Always wrap with an embedded Instrument, even if the
+            dimension of `inst_val` is the full model dimension.
+
+        Returns
+        -------
+        Instrument
+            An instrument of the full model dimension.
+        """
+        if self.state_space is None:
+            raise ValueError("Must set model state space before adding auto-embedded gates.")
+
+        if inst_val.state_space == self.state_space and not force:
+            return inst_val  # if gate operates on full dimension, no need to embed.
+
+        return _instrument.EmbeddedInst(self.state_space, inst_target_labels, inst_val)
+
     @property
     def default_gauge_group(self):
         """
@@ -340,7 +372,7 @@ class ExplicitOpModel(_mdl.OpModel):
             raise KeyError("Key %s has an invalid prefix" % label)
 
     def convert_members_inplace(self, to_type, categories_to_convert='all', labels_to_convert='all',
-                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False):
+                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, cptp_truncation_tol= 1e-6):
         """
         TODO: docstring -- like set_all_parameterizations but doesn't set default gauge group by default
         """
@@ -349,7 +381,7 @@ class ExplicitOpModel(_mdl.OpModel):
             for lbl, gate in self.operations.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
                     ideal = ideal_model.operations.get(lbl, None) if (ideal_model is not None) else None
-                    self.operations[lbl] = _op.convert(gate, to_type, self.basis, ideal, flatten_structure)
+                    self.operations[lbl] = _op.convert(gate, to_type, self.basis, ideal, flatten_structure, cptp_truncation_tol)
         if any([c in categories_to_convert for c in ('all', 'instruments')]):
             for lbl, inst in self.instruments.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
@@ -382,7 +414,7 @@ class ExplicitOpModel(_mdl.OpModel):
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
 
     def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
-                                  instrument_type="auto", ideal_model=None):
+                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6):
         """
         Convert all gates, states, and POVMs to a specific parameterization type.
 
@@ -416,6 +448,14 @@ class ExplicitOpModel(_mdl.OpModel):
             This may specify an ideal model of unitary gates and pure state vectors
             to be used as the *ideal* operation of each gate/SPAM operation, which
             is particularly useful as target for CPTP-based conversions.
+            
+        cptp_truncation_tol : float, optional (default 1e-6)
+            Tolerance used for conversion to CPTP parameterizations. When converting to
+            CPTP models negative eigenvalues of the choi matrix representation of a superoperator
+            are truncated, which can result in a change in the PTM for that operator. This tolerance
+            indicates the maximum amount of truncation induced deviation from the original operations
+            (measured by frobenius distance) we're willing to accept without marking the conversion
+            as failed.
 
         Returns
         -------
@@ -434,10 +474,10 @@ class ExplicitOpModel(_mdl.OpModel):
         ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
 
         try:
-            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model)
-            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model)
-            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model)
-            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model)
+            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
         except ValueError as e:
             raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
                 "try providing an ideal_model to avoid possible branch cuts.") from e
@@ -527,6 +567,8 @@ class ExplicitOpModel(_mdl.OpModel):
         return self.num_params - self.num_gauge_params
 
     @property
+
+    
     def num_gauge_params(self):
         """
         Return the number of gauge parameters in this model.
@@ -1504,7 +1546,7 @@ class ExplicitOpModel(_mdl.OpModel):
             # assume this is a kronecker product (check this in FUTURE?), so just fill extracted
             # unitary by fixing all non-extracted qudits (assumed identity-action on these) to 0
             # and looping over extracted ones:
-            U_extracted = _np.zeros((_np.product(extracted_udims), _np.product(extracted_udims)), complex)
+            U_extracted = _np.zeros((_np.prod(extracted_udims), _np.prod(extracted_udims)), complex)
             for ii, itup in enumerate(_itertools.product(*[range(ud) for ud in extracted_udims])):
                 i = _np.dot(extracted_inc, itup)
                 for jj, jtup in enumerate(_itertools.product(*[range(ud) for ud in extracted_udims])):
@@ -1565,10 +1607,12 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if all([udim == 2 for udim in all_udims]):
             return _QubitProcessorSpec(nqudits, list(gate_unitaries.keys()), gate_unitaries, availability,
-                                       qubit_labels=qudit_labels)
+                                       qubit_labels=qudit_labels,
+                                       instrument_names=list(self.instruments.keys()), nonstd_instruments=self.instruments)
         else:
             return _QuditProcessorSpec(qudit_labels, all_udims, list(gate_unitaries.keys()), gate_unitaries,
-                                       availability)
+                                       availability,
+                                       instrument_names=list(self.instruments.keys()), nonstd_instruments=self.instruments)
 
     def create_modelmember_graph(self):
         return _MMGraph({

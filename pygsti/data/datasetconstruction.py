@@ -298,7 +298,7 @@ def aggregate_dataset_outcomes(dataset, label_merge_dict, record_zero_counts=Tru
         if a two-qubit DataSet has outcome labels "00", "01", "10", and "11", and
         we want to ''aggregate out'' the second qubit, we could use label_merge_dict =
         {'0':['00','01'],'1':['10','11']}.  When doing this, however, it may be better
-        to use :function:`filter_dataset` which also updates the circuits.
+        to use :func:`filter_dataset` which also updates the circuits.
 
     record_zero_counts : bool, optional
         Whether zero-counts are actually recorded (stored) in the returned
@@ -360,7 +360,7 @@ def aggregate_dataset_outcomes(dataset, label_merge_dict, record_zero_counts=Tru
 
 def _create_qubit_merge_dict(num_qubits, qubits_to_keep):
     """
-    Creates a dictionary appropriate for use with :function:`aggregate_dataset_outcomes`.
+    Creates a dictionary appropriate for use with :func:`aggregate_dataset_outcomes`.
 
     The returned dictionary instructs `aggregate_dataset_outcomes` to aggregate all but
     the specified `qubits_to_keep` when the outcome labels are those of
@@ -386,7 +386,7 @@ def _create_qubit_merge_dict(num_qubits, qubits_to_keep):
 
 def _create_merge_dict(indices_to_keep, outcome_labels):
     """
-    Creates a dictionary appropriate for use with :function:`aggregate_dataset_outcomes`.
+    Creates a dictionary appropriate for use with :func:`aggregate_dataset_outcomes`.
 
     Each element of `outcome_labels` should be a n-character string (or a
     1-tuple of such a string).  The returned dictionary's keys will be all the

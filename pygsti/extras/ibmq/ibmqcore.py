@@ -33,7 +33,7 @@ except: _qiskit = None
 _attribute_to_json = ['remove_duplicates', 'randomized_order', 'circuits_per_batch', 'num_shots', 'job_ids']
 _attribute_to_pickle = ['pspec', 'pygsti_circuits', 'pygsti_openqasm_circuits',
                         'qiskit_QuantumCircuits', 'qiskit_QuantumCircuits_as_openqasm',
-                        'submit_time_calibration_data', 'qobj', 'qjob', 'batch_result_object'
+                        'submit_time_calibration_data', 'qobj', 'batch_result_object'
                         ]
 
 
@@ -43,20 +43,22 @@ def reverse_dict_key_bits(counts_dict):
         new_dict[key[::-1]] = counts_dict[key]
     return new_dict
 
-
-# NOTE: This is probably duplicative of some other code in pyGSTi
-def partial_trace(ordered_target_indices, input_dict):
-    output_dict = {}
-    for bitstring in input_dict.keys():
-        new_string = ''
+def to_labeled_counts(input_dict, ordered_target_indices, num_qubits_in_pspec): 
+    outcome_labels = []
+    counts_data = []
+    for bitstring, count in input_dict.items():
+        new_label = []
+        term_string = ''
+        term_bits = bitstring[:num_qubits_in_pspec][::-1]
+        mid_bits = bitstring[num_qubits_in_pspec:][::-1]
         for index in ordered_target_indices:
-            new_string += bitstring[index]
-        try:
-            output_dict[new_string] += input_dict[bitstring]
-        except:
-            output_dict[new_string] = input_dict[bitstring]
-    return output_dict
-
+            term_string += term_bits[index]
+        for bit in mid_bits:
+            new_label.append('p'+bit)
+        new_label.append(term_string)
+        outcome_labels.append(tuple(new_label))
+        counts_data.append(count)
+    return outcome_labels, counts_data
 
 def q_list_to_ordered_target_indices(q_list, num_qubits):
     if q_list is None:
@@ -71,7 +73,7 @@ def q_list_to_ordered_target_indices(q_list, num_qubits):
 
 class IBMQExperiment(dict):
 
-    def __init__(self, edesign, pspec, remove_duplicates=True, randomized_order=True, circuits_per_batch=75,
+    def __init__(self, edesign, pspec, ancilla_label=None,remove_duplicates=True, randomized_order=True, seed=None, circuits_per_batch=75,
                  num_shots=1024):
         """
         A object that converts pyGSTi ExperimentDesigns into jobs to be submitted to IBM Q, submits these
@@ -87,8 +89,8 @@ class IBMQExperiment(dict):
             A QubitProcessorSpec that represents the IBM Q device being used. This can be created using the
             extras.devices.create_processor_spec(). The ProcessorSpecs qubit ordering *must* correspond
             to that of the IBM device (which will be the case if you create it using that function).
-             I.e., pspecs qubits should be labelled Q0 through Qn-1 and the labelling of the qubits
-             should agree with IBM's labelling.
+            I.e., pspecs qubits should be labelled Q0 through Qn-1 and the labelling of the qubits
+            should agree with IBM's labelling.
 
         remove_duplicates: bool, optional
             If true, each distinct circuit in `edesign` is run only once. If false, if a circuit is
@@ -97,6 +99,9 @@ class IBMQExperiment(dict):
         randomized_order: bool, optional
             Whether or not to randomize the order of the circuits in `edesign` before turning them
             into jobs to be submitted to IBM Q.
+
+        seed: int or None, optional
+            Seed to be used in randomization. 
 
         circuits_per_batch: int, optional
             The circuits in edesign are divded into batches, each containing at most this many
@@ -121,6 +126,7 @@ class IBMQExperiment(dict):
         self['pspec'] = pspec
         self['remove_duplicates'] = remove_duplicates
         self['randomized_order'] = randomized_order
+        self['seed'] = seed
         self['circuits_per_batch'] = circuits_per_batch
         self['num_shots'] = num_shots
         # Populated when submitting to IBM Q with .submit()
@@ -134,6 +140,7 @@ class IBMQExperiment(dict):
         if randomized_order:
             if remove_duplicates:
                 circuits = list(set(circuits))
+            _np.random.seed(seed)
             _np.random.shuffle(circuits)
         else:
             assert(not remove_duplicates), "Can only remove duplicates if randomizing order!"
@@ -162,7 +169,7 @@ class IBMQExperiment(dict):
             #openqasm_circuit_ids = []
             for circ_idx, circ in enumerate(circuit_batch):
                 pygsti_openqasm_circ = circ.convert_to_openqasm(num_qubits=pspec.num_qubits,
-                                                                standard_gates_version='x-sx-rz')
+                                                                standard_gates_version='x-sx-rz', ancilla_label=ancilla_label)
                 qiskit_qc = _qiskit.QuantumCircuit.from_qasm_str(pygsti_openqasm_circ)
 
                 self['pygsti_openqasm_circuits'][batch_idx].append(pygsti_openqasm_circ)
@@ -288,9 +295,9 @@ class IBMQExperiment(dict):
                         print('  - Failed to get job_id.')
                         self['job_ids'].append(None)
                     try:
-                        print('  - Queue position is {}'.format(self['qjob'][-1].queue_position()))
+                        print('  - Queue position is {}'.format(self['qjob'][-1].queue_info().position))
                     except:
-                        print('  - Failed to get queue position {}'.format(batch_idx + 1))
+                        print('  - Failed to get queue position for batch {}'.format(batch_idx + 1))
                     submit_status = True
                 except Exception as ex:
                     template = "An exception of type {0} occurred. Arguments:\n{1!r}"
@@ -321,7 +328,7 @@ class IBMQExperiment(dict):
             status = qjob.status()
             print("Batch {}: {}".format(counter + 1, status))
             if status.name == 'QUEUED':
-                print('  - Queue position is {}'.format(qjob.queue_position()))
+                print('  - Queue position is {}'.format(qjob.queue_info().position))
 
         # Print unsubmitted for any entries in qobj but not qjob
         for counter in range(len(self['qjob']), len(self['qobj'])):
@@ -339,16 +346,18 @@ class IBMQExperiment(dict):
         #get results from backend jobs and add to dict
         ds = _data.DataSet()
         for exp_idx, qjob in enumerate(self['qjob']):
-            print("Querying IBMQ for results objects for batch {}...".format(exp_idx))
+            print("Querying IBMQ for results objects for batch {}...".format(exp_idx + 1))
             batch_result = qjob.result()
             self['batch_result_object'].append(batch_result)
             #exp_dict['batch_data'] = []
-            for i, circ in enumerate(self['pygsti_circuits'][exp_idx]):
+            num_qubits_in_pspec = self['pspec'].num_qubits
+            for i, circ in enumerate(self['pygsti_circuits'][exp_idx]): 
                 ordered_target_indices = [self['pspec'].qubit_labels.index(q) for q in circ.line_labels]
-                counts_data = partial_trace(ordered_target_indices, reverse_dict_key_bits(batch_result.get_counts(i)))
-                #exp_dict['batch_data'].append(counts_data)
-                ds.add_count_dict(circ, counts_data)
-
+                #assumes qubit labeling of the form 'Q0' not '0' 
+                labeled_counts = to_labeled_counts(batch_result.get_counts(i), ordered_target_indices, num_qubits_in_pspec)
+                outcome_labels = labeled_counts[0]
+                counts_data = labeled_counts[1]
+                ds.add_count_list(circ, outcome_labels, counts_data)
         self['data'] = _ProtocolData(self['edesign'], ds)
 
     def write(self, dirname=None):
@@ -384,7 +393,7 @@ class IBMQExperiment(dict):
                 _pickle.dump(self[atr], f)
 
     @classmethod
-    def from_dir(cls, dirname):
+    def from_dir(cls, dirname, provider=None):
         """
         Initialize a new IBMQExperiment object from `dirname`.
 
@@ -392,6 +401,9 @@ class IBMQExperiment(dict):
         ----------
         dirname : str
             The directory name.
+        
+        provider: IBMProvider
+            Provider used to retrieve qjob objects from job_ids
 
         Returns
         -------
@@ -409,6 +421,14 @@ class IBMQExperiment(dict):
                 except:
                     _warnings.warn("Couldn't unpickle {}, so skipping this attribute.".format(atr))
                     ret[atr] = None
+
+        if provider is None:
+            _warnings.warn("No provider specified, cannot retrieve IBM jobs")
+        else:
+            ret['qjob'] = []
+            for i, jid in enumerate(ret['job_ids']):
+                print(f"Loading job {i+1}/{len(ret['job_ids'])}...")
+                ret['qjob'].append(provider.backend.retrieve_job(jid))
 
         try:
             ret['data'] = _ProtocolData.from_dir(dirname)

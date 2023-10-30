@@ -142,7 +142,7 @@ class MeasOptimizeIntegerFiducialsExtendedModelTester(
 # test_fiducial_list
 #
 
-# XXX class names prefixed with "Test" will be picked up by nose
+# XXX class names prefixed with "Test" will be picked up by pytest
 class _TestFiducialListBase(object):
     def setUp(self):
         super(_TestFiducialListBase, self).setUp()

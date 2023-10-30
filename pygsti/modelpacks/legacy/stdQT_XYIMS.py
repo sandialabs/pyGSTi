@@ -253,7 +253,7 @@ def target_model(parameterization_type="full", sim_type="auto"):
     ----------
     parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
         The gate and SPAM vector parameterization type. See
-        :function:`Model.set_all_parameterizations` for all allowed values.
+        :func:`Model.set_all_parameterizations` for all allowed values.
 
     sim_type : {"auto", "matrix", "map", "termorder:X" }
         The simulator type to be used for model calculations (leave as

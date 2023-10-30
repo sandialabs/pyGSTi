@@ -81,7 +81,7 @@ def model_with_lgst_circuit_estimates(
         Defaults to dimension of `target_model`.
 
     verbosity : int, optional
-        Verbosity value to send to run_lgst(...) call.
+        Verbosity value to send to `run_lgst(...)` call.
 
     Returns
     -------
@@ -158,7 +158,7 @@ def direct_lgst_model(circuit_to_estimate, circuit_label, dataset,
         Defaults to dimension of `target_model`.
 
     verbosity : int, optional
-        Verbosity value to send to run_lgst(...) call.
+        Verbosity value to send to `run_lgst(...)` call.
 
     Returns
     -------

@@ -170,7 +170,7 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
     @classmethod
     def create_from(cls, objective='logl', freq_weighted_chi2=False):
         """
-        Creates common :class:`ObjectiveFunctionBuilder`s from a few arguments.
+        Creates common :class:`ObjectiveFunctionBuilder` from a few arguments.
 
         Parameters
         ----------
@@ -524,7 +524,7 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -637,8 +637,8 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         Compute the derivatives of the least-squares vector together with the vector itself.
 
-        This is sometimes more computationally efficient than calling :method:`dlsvec` and
-        :method:`lsvec` separately, as the former call may require computing the latter.
+        This is sometimes more computationally efficient than calling :meth:`dlsvec` and
+        :meth:`lsvec` separately, as the former call may require computing the latter.
 
         Parameters
         ----------
@@ -1129,7 +1129,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -1306,7 +1306,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
     def dlsvec_percircuit(self, paramvec=None):
         """
-        Compute the jacobian of the sqrt(per-circuit) values given by :method:`lsvec_percircuit`.
+        Compute the jacobian of the sqrt(per-circuit) values given by :meth:`lsvec_percircuit`.
 
         This jacobian is primarily useful for interfacing with a least-squares optimizer.
 
@@ -1335,7 +1335,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
         When the objective function's layout is distributed, each processor only holds a
         portion of the objective function terms, and this function returns only the
-        sum of these local terms.  See :method:`fn` for the global objective function value.
+        sum of these local terms.  See :meth:`fn` for the global objective function value.
 
 
         Parameters
@@ -1416,7 +1416,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         Compute an approximate Hessian of this objective function.
 
-        This is typically much less expensive than :method:`hessian` and
+        This is typically much less expensive than :meth:`hessian` and
         does not require that `enable_hessian=True` was set upon initialization.
         It computes an approximation to the Hessian that only utilizes the
         information in the Jacobian. Derivatives are takes with respect to model
@@ -1443,7 +1443,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
     #    Compute the amount of memory needed to perform evaluations of this objective function.
     #
     #    This number includes both intermediate and final results, and assumes
-    #    that the types of evauations given by :method:`_evaltree_subcalls`
+    #    that the types of evauations given by :meth:`_evaltree_subcalls`
     #    are required.
     #
     #    Parameters
@@ -1759,7 +1759,7 @@ class RawChi2Function(RawObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -1866,7 +1866,7 @@ class RawChi2Function(RawObjectiveFunction):
         """
         Alternate computation of the 2nd derivatives of the terms of this objective function.
 
-        This should give exactly the same results as :method:`hterms`, but may be a little faster.
+        This should give exactly the same results as :meth:`hterms`, but may be a little faster.
 
         Parameters
         ----------
@@ -2014,7 +2014,7 @@ class RawChi2Function(RawObjectiveFunction):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`_weights`.
+            The weights, as computed by :meth:`_weights`.
 
         Returns
         -------
@@ -2039,7 +2039,7 @@ class RawChi2Function(RawObjectiveFunction):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`_weights`.
+            The weights, as computed by :meth:`_weights`.
 
         Returns
         -------
@@ -2435,7 +2435,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`_weights`.
+            The weights, as computed by :meth:`_weights`.
 
         Returns
         -------
@@ -2456,7 +2456,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`_weights`.
+            The weights, as computed by :meth:`_weights`.
 
         Returns
         -------
@@ -2617,7 +2617,7 @@ class RawCustomWeightedChi2Function(RawChi2Function):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`_weights`.
+            The weights, as computed by :meth:`_weights`.
 
         Returns
         -------
@@ -2638,7 +2638,7 @@ class RawCustomWeightedChi2Function(RawChi2Function):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`_weights`.
+            The weights, as computed by :meth:`_weights`.
 
         Returns
         -------
@@ -2882,7 +2882,7 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             self.fmin = None
 
     def _intermediates(self, probs, counts, total_counts, freqs):
-        """ Intermediate values used by both terms(...) and dterms(...) """
+        """ Intermediate values used by both `terms(...)` and `dterms(...)` """
         # Quantities depending on data only (not probs): could be computed once and
         # passed in as arguments to this (and other) functions?
         freqs_nozeros = _np.where(counts == 0, 1.0, freqs)
@@ -2986,7 +2986,7 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -3240,7 +3240,7 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
             self.regtype = "pfratio"
 
     def _intermediates(self, probs, counts, total_counts, freqs):
-        """ Intermediate values used by both terms(...) and dterms(...) """
+        """ Intermediate values used by both `terms(...)` and `dterms(...)` """
         # Quantities depending on data only (not probs): could be computed once and
         # passed in as arguments to this (and other) functions?
         freqs_nozeros = _np.where(counts == 0, 1.0, freqs)
@@ -3417,7 +3417,7 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -3486,8 +3486,8 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
         """
         Compute the derivatives of the least-squares vector together with the vector itself.
 
-        This is sometimes more computationally efficient than calling :method:`dlsvec` and
-        :method:`lsvec` separately, as the former call may require computing the latter.
+        This is sometimes more computationally efficient than calling :meth:`dlsvec` and
+        :meth:`lsvec` separately, as the former call may require computing the latter.
 
         Parameters
         ----------
@@ -3761,7 +3761,7 @@ class RawMaxLogLFunction(RawObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -3830,8 +3830,8 @@ class RawMaxLogLFunction(RawObjectiveFunction):
         """
         Compute the derivatives of the least-squares vector together with the vector itself.
 
-        This is sometimes more computationally efficient than calling :method:`dlsvec` and
-        :method:`lsvec` separately, as the former call may require computing the latter.
+        This is sometimes more computationally efficient than calling :meth:`dlsvec` and
+        :meth:`lsvec` separately, as the former call may require computing the latter.
 
         Parameters
         ----------
@@ -4561,7 +4561,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         -------
         numpy.ndarray
         """
-        omitted_probs = 1.0 - _np.array([_np.sum(probs[self.layout.indices_for_index(i)])
+        omitted_probs = 1.0 - _np.array([probs[self.layout.indices_for_index(i)].sum()
                                          for i in self.indicesOfCircuitsWithOmittedData])
         return self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
 
@@ -4609,12 +4609,12 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
     def _omitted_prob_first_dterms(self, probs):
         """
-        Compute the derivative of the first-terms vector returned by :method:`_omitted_prob_first_terms`.
+        Compute the derivative of the first-terms vector returned by :meth:`_omitted_prob_first_terms`.
 
         This derivative is just with respect to the *probabilities*, not the
         model parameters, as it anticipates a final dot product with the jacobian
         of the computed probabilities with respect to the model parameters (see
-        :method:`_update_dterms_for_omitted_probs`).
+        :meth:`_update_dterms_for_omitted_probs`).
 
         Parameters
         ----------
@@ -4731,7 +4731,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -5056,7 +5056,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         """
         Compute an approximate Hessian of this objective function.
 
-        This is typically much less expensive than :method:`hessian` and
+        This is typically much less expensive than :meth:`hessian` and
         does not require that `enable_hessian=True` was set upon initialization.
         It computes an approximation to the Hessian that only utilizes the
         information in the Jacobian. Derivatives are takes with respect to model
@@ -5778,7 +5778,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -5917,7 +5917,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -6085,7 +6085,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -6538,7 +6538,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not

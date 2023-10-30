@@ -103,8 +103,8 @@ def first_order_gauge_action_matrix(clifford_superop_mx, target_sslbls, model_st
             gen2_expanded = _embed(gen2, gen2_sslbls, action_space)  # embed gen2 into action_space
             gen2_expanded *= scale  # so that gen2_expanded is an embedded *dual* generator
             if _sps.issparse(gen2_expanded):
-                flat_gen2_expanded = gen2_expanded.reshape((1, _np.product(gen2_expanded.shape)))
-                flat_gauge_action_deriv = gauge_action_deriv.reshape((_np.product(gauge_action_deriv.shape), 1))
+                flat_gen2_expanded = gen2_expanded.reshape((1, _np.prod(gen2_expanded.shape)))
+                flat_gauge_action_deriv = gauge_action_deriv.reshape((_np.prod(gauge_action_deriv.shape), 1))
                 val = flat_gen2_expanded.dot(flat_gauge_action_deriv)[0, 0]  # Note: gen2 is a *dual* generator
             else:
                 val = _np.vdot(gen2_expanded.flat, gauge_action_deriv.flat)

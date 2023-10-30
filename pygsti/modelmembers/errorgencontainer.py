@@ -44,7 +44,7 @@ class ErrorGeneratorContainer(object):
             essentially converts the coefficient into a rate that is
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
-            This is the value returned by :method:`error_rates`.
+            This is the value returned by :meth:`error_rates`.
 
         Returns
         -------
@@ -65,7 +65,7 @@ class ErrorGeneratorContainer(object):
 
     def errorgen_coefficient_labels(self):
         """
-        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+        The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
 
         Returns
         -------
@@ -79,7 +79,7 @@ class ErrorGeneratorContainer(object):
         """
         The weighted coefficients of this operation's error generator in terms of "standard" error generators.
 
-        Constructs a 1D array of all the coefficients returned by :method:`errorgen_coefficients`,
+        Constructs a 1D array of all the coefficients returned by :meth:`errorgen_coefficients`,
         weighted so that different error generators can be weighted differently when a
         `errorgen_penalty_factor` is used in an objective function.
 
@@ -93,7 +93,7 @@ class ErrorGeneratorContainer(object):
 
     def errorgen_coefficients_array_deriv_wrt_params(self):
         """
-        The jacobian of :method:`errogen_coefficients_array` with respect to this operation's parameters.
+        The jacobian of :meth:`errogen_coefficients_array` with respect to this operation's parameters.
 
         Returns
         -------
@@ -167,11 +167,11 @@ class ErrorGeneratorContainer(object):
         logscale_nonham : bool, optional
             Whether or not the values in `lindblad_term_dict` for non-hamiltonian
             error generators should be interpreted as error *rates* (of an
-            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
+            "equivalent" depolarizing channel, see :meth:`errorgen_coefficients`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
             the corresponding value given in `lindblad_term_dict`.  This is what is
-            performed by the function :method:`set_error_rates`.
+            performed by the function :meth:`set_error_rates`.
 
         truncate : bool, optional
             Whether to allow adjustment of the errogen coefficients in
@@ -193,7 +193,7 @@ class ErrorGeneratorContainer(object):
 
         Values are set so that the contributions of the resulting channel's
         error rate are given by the values in `lindblad_term_dict`.  See
-        :method:`error_rates` for more details.
+        :meth:`error_rates` for more details.
 
         Parameters
         ----------
@@ -247,7 +247,7 @@ class ErrorMapContainer(object):
             essentially converts the coefficient into a rate that is
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
-            This is the value returned by :method:`error_rates`.
+            This is the value returned by :meth:`error_rates`.
 
         Returns
         -------
@@ -268,7 +268,7 @@ class ErrorMapContainer(object):
 
     def errorgen_coefficient_labels(self):
         """
-        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+        The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
 
         Returns
         -------
@@ -282,7 +282,7 @@ class ErrorMapContainer(object):
         """
         The weighted coefficients of this operation's error generator in terms of "standard" error generators.
 
-        Constructs a 1D array of all the coefficients returned by :method:`errorgen_coefficients`,
+        Constructs a 1D array of all the coefficients returned by :meth:`errorgen_coefficients`,
         weighted so that different error generators can be weighted differently when a
         `errorgen_penalty_factor` is used in an objective function.
 
@@ -296,7 +296,7 @@ class ErrorMapContainer(object):
 
     def errorgen_coefficients_array_deriv_wrt_params(self):
         """
-        The jacobian of :method:`errogen_coefficients_array` with respect to this operation's parameters.
+        The jacobian of :meth:`errogen_coefficients_array` with respect to this operation's parameters.
 
         Returns
         -------
@@ -371,7 +371,7 @@ class NoErrorGeneratorInterface(object):
             essentially converts the coefficient into a rate that is
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
-            This is the value returned by :method:`error_rates`.
+            This is the value returned by :meth:`error_rates`.
 
         Returns
         -------
@@ -419,11 +419,11 @@ class NoErrorGeneratorInterface(object):
         logscale_nonham : bool, optional
             Whether or not the values in `lindblad_term_dict` for non-hamiltonian
             error generators should be interpreted as error *rates* (of an
-            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
+            "equivalent" depolarizing channel, see :meth:`errorgen_coefficients`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
             the corresponding value given in `lindblad_term_dict`.  This is what is
-            performed by the function :method:`set_error_rates`.
+            performed by the function :meth:`set_error_rates`.
 
         truncate : bool, optional
             Whether to allow adjustment of the errogen coefficients in
@@ -440,7 +440,7 @@ class NoErrorGeneratorInterface(object):
 
     def errorgen_coefficient_labels(self):
         """
-        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+        The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
 
         Returns
         -------
@@ -454,7 +454,7 @@ class NoErrorGeneratorInterface(object):
         """
         The weighted coefficients of this operation's error generator in terms of "standard" error generators.
 
-        Constructs a 1D array of all the coefficients returned by :method:`errorgen_coefficients`,
+        Constructs a 1D array of all the coefficients returned by :meth:`errorgen_coefficients`,
         weighted so that different error generators can be weighted differently when a
         `errorgen_penalty_factor` is used in an objective function.
 
@@ -468,7 +468,7 @@ class NoErrorGeneratorInterface(object):
 
     def errorgen_coefficients_array_deriv_wrt_params(self):
         """
-        The jacobian of :method:`errogen_coefficients_array` with respect to this operation's parameters.
+        The jacobian of :meth:`errogen_coefficients_array` with respect to this operation's parameters.
 
         Returns
         -------

@@ -37,7 +37,7 @@ class StateSpace(_NicelySerializable):
         ----------
         obj : StateSpace or int or list
             Either an already-built state space object or an integer specifying the number of qubits,
-            or a list of labels as would be provided to the first argument of :method:`ExplicitStateSpace.__init__`.
+            or a list of labels as would be provided to the first argument of :meth:`ExplicitStateSpace.__init__`.
 
         Returns
         -------
@@ -575,6 +575,26 @@ class StateSpace(_NicelySerializable):
         else:
             return False  # this state space is not equal to anything that isn't another state space
 
+    @property
+    def state_space_labels(self):
+        """
+        Return a tuple corresponding to the concatenation of the
+        constituent state space labels within each tensor product
+        block of this `StateSpace` object.
+
+        Returns
+        -------
+        flattened_state_space_label_list : tuple
+            A tuple containing a flattened list of all of the state
+            space labels appearing within the tensor product blocks
+            of this `StateSpace` objects label list.
+        """
+        flattened_state_space_label_list = []
+        for blk in self.tensor_product_blocks_labels:
+            for lbl in blk:
+                flattened_state_space_label_list.append(lbl)
+        return tuple(flattened_state_space_label_list)
+
 
 class QuditSpace(StateSpace):
     """
@@ -610,7 +630,7 @@ class QuditSpace(StateSpace):
         """
         Integer Hilbert (unitary operator) space dimension of this quantum state space.
         """
-        return _np.product(self.qudit_udims)
+        return _np.prod(self.qudit_udims)
 
     @property
     def dim(self):
@@ -622,7 +642,7 @@ class QuditSpace(StateSpace):
         """
         The number of qubits in this quantum state space.
         """
-        return len(self.qubit_labels)
+        return len(self.qudit_labels)
 
     @property
     def num_tensor_product_blocks(self):
@@ -961,8 +981,9 @@ class ExplicitStateSpace(StateSpace):
     udims : int or iterable, optional
         The dimension of each state space label as an integer, tuple of
         integers, or list or tuples of integers to match the structure
-        of `label_list` (i.e., if `label_list=('Q0','Q1')` then `dims` should
-        be a tuple of 2 integers).  Values specify unitary evolution state-space
+        of `label_list`. e.g., if `label_list=('Q0','Q1')` then `udims` should
+        be a tuple of 2 integers, or if label_list='Q0' then `udims` should be an
+        integer.  Values specify unitary evolution state-space
         dimensions, i.e. 2 for a qubit, 3 for a qutrit, etc.  If None, then the
         dimensions are inferred, if possible, from the following naming rules:
 
@@ -1060,17 +1081,17 @@ class ExplicitStateSpace(StateSpace):
         self.tpb_dims = []
         self.tpb_udims = []
         for iTPB, tpbLabels in enumerate(self.labels):
-            float_prod = _np.product(_np.array([self.label_dims[lbl] for lbl in tpbLabels], 'd'))
+            float_prod = _np.prod(_np.array([self.label_dims[lbl] for lbl in tpbLabels], 'd'))
             if float_prod >= float(_sys.maxsize):  # too many qubits to hold dimension in an integer
                 self.tpb_dims.append(_np.inf)
             else:
-                self.tpb_dims.append(int(_np.product([self.label_dims[lbl] for lbl in tpbLabels])))
+                self.tpb_dims.append(int(_np.prod([self.label_dims[lbl] for lbl in tpbLabels])))
 
-            float_prod = _np.product(_np.array([self.label_udims[lbl] for lbl in tpbLabels], 'd'))
+            float_prod = _np.prod(_np.array([self.label_udims[lbl] for lbl in tpbLabels], 'd'))
             if float_prod >= float(_sys.maxsize):  # too many qubits to hold dimension in an integer
                 self.tpb_udims.append(_np.inf)
             else:
-                self.tpb_udims.append(int(_np.product([self.label_udims[lbl] for lbl in tpbLabels])))
+                self.tpb_udims.append(int(_np.prod([self.label_udims[lbl] for lbl in tpbLabels])))
 
             self.tpb_index.update({lbl: iTPB for lbl in tpbLabels})
 
@@ -1252,7 +1273,6 @@ class ExplicitStateSpace(StateSpace):
         return ' + '.join(
             ['*'.join(["%s(%d%s)" % (lbl, self.label_dims[lbl], 'c' if (self.label_types[lbl] == 'C') else '')
                        for lbl in tpb]) for tpb in self.labels])
-
 
 def default_space_for_dim(dim):
     """

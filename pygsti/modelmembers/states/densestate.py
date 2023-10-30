@@ -45,7 +45,7 @@ class DenseStateInterface(object):
         Return the array used to identify this state within its range of possible values.
 
         For instance, if the state is a pure state, this returns a complex pure-state
-        vector regardless of the evolution type.  The related :method:`to_dense`
+        vector regardless of the evolution type.  The related :meth:`to_dense`
         method, in contrast, returns the dense representation of the state, which
         varies by evolution type.
 
@@ -181,8 +181,10 @@ class DenseState(DenseStateInterface, _State):
         return self._rep.base
 
     def _ptr_has_changed(self):
-        """ Derived classes should override this function to handle rep updates
-            when the `_ptr` property is changed. """
+        """ 
+        Derived classes should override this function to handle rep updates
+        when the `_ptr` property is changed. 
+        """
         self._rep.base_has_changed()
 
     def to_dense(self, on_space='minimal', scratch=None):
@@ -210,7 +212,8 @@ class DenseState(DenseStateInterface, _State):
         return self._rep.to_dense(on_space)  # both types of possible state reps implement 'to_dense'
 
     def to_memoized_dict(self, mmg_memo):
-        """Create a serializable dict with references to other objects in the memo.
+        """
+        Create a serializable dict with references to other objects in the memo.
 
         Parameters
         ----------
@@ -224,7 +227,7 @@ class DenseState(DenseStateInterface, _State):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
@@ -242,8 +245,11 @@ class DenseState(DenseStateInterface, _State):
         return cls(vec, basis, mm_dict['evotype'], state_space)
 
     def _is_similar(self, other, rtol, atol):
-        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
-            the same local structure, i.e., not considering parameter values or submembers """
+        """ 
+        Returns True if `other` model member (which it guaranteed to be the same type as self) has
+        the same local structure, i.e., not considering parameter values or submembers. 
+        """
+        
         return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape
 
 
@@ -281,12 +287,16 @@ class DensePureState(DenseStateInterface, _State):
 
     @property
     def _ptr(self):
-        """Gives a handle/pointer to the base numpy array that this object can be accessed as"""
+        """
+        Gives a handle/pointer to the base numpy array that this object can be accessed as.
+        """
         return self._rep.base if self._reptype == 'pure' else self._purevec
 
     def _ptr_has_changed(self):
-        """ Derived classes should override this function to handle rep updates
-            when the `_ptr` property is changed. """
+        """
+        Derived classes should override this function to handle rep updates
+        when the `_ptr` property is changed. 
+        """
         if self._reptype == 'superket':
             self._rep.base[:] = _bt.change_basis(_ot.state_to_dmvec(self._purevec), 'std', self._basis)
         self._rep.base_has_changed()
@@ -318,7 +328,8 @@ class DensePureState(DenseStateInterface, _State):
         return self._rep.to_dense(on_space)  # both types of possible state reps implement 'to_dense'
 
     def to_memoized_dict(self, mmg_memo):
-        """Create a serializable dict with references to other objects in the memo.
+        """
+        Create a serializable dict with references to other objects in the memo.
 
         Parameters
         ----------
@@ -332,13 +343,13 @@ class DensePureState(DenseStateInterface, _State):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
 
         mm_dict['dense_state_vector'] = self._encodemx(self.to_dense('Hilbert'))
-        mm_dict['basis'] = self._basis.to_nice_serialization()
+        mm_dict['basis'] = self._basis.to_nice_serialization() if (self._basis is not None) else None
 
         return mm_dict
 
@@ -350,6 +361,8 @@ class DensePureState(DenseStateInterface, _State):
         return cls(vec, basis, mm_dict['evotype'], state_space)
 
     def _is_similar(self, other, rtol, atol):
-        """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
-            the same local structure, i.e., not considering parameter values or submembers """
+        """ 
+        Returns True if `other` model member (which it guaranteed to be the same type as self) has
+        the same local structure, i.e., not considering parameter values or submembers 
+        """
         return self._ptr.shape == other._ptr.shape  # similar (up to params) if have same data shape

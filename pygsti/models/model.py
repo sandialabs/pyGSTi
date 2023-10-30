@@ -110,7 +110,7 @@ class Model(_NicelySerializable):
         """
         The parameter count to use when testing this model against data.
 
-        Often times, this is the same as :method:`num_params`, but there are times
+        Often times, this is the same as :meth:`num_params`, but there are times
         when it can convenient or necessary to use a parameter count different than
         the actual number of parameters in this model.
 
@@ -609,6 +609,7 @@ class OpModel(Model):
         raise NotImplementedError("Derived Model classes should implement _iter_parameterized_objs")
         #return # default is to have no parameterized objects
 
+    #TODO: Make this work with param interposers.
     def _check_paramvec(self, debug=False):
         if debug: print("---- Model._check_paramvec ----")
 
@@ -1643,7 +1644,7 @@ class OpModel(Model):
 
         If `True`, then the two models are the same except for, perhaps, being
         at different parameter-space points (i.e. having different parameter vectors).
-        Similar models, A and B, can be made equivalent (see :method:`is_equivalent`) by
+        Similar models, A and B, can be made equivalent (see :meth:`is_equivalent`) by
         calling `modelA.from_vector(modelB.to_vector())`.
 
         Parameters

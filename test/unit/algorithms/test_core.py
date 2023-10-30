@@ -410,3 +410,38 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
                                         resource_alloc=None
                                         )
         # TODO assert correctness
+
+    #Add a test for the new generator method.
+    #run_iterative_gst uses this under the hood, so we really only need to separately
+    #test starting at a different starting index in the fits.
+
+    def test_iterative_gst_generator_starting_index(self):
+        generator = core.iterative_gst_generator(
+            self.ds, self.mdl_clgst, self.lsgstStrings,
+            optimizer={'tol': 1e-5},
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=['logl'],
+            resource_alloc=None, starting_index=0, verbosity=0
+        )
+
+        models = []
+
+        for _ in range(len(self.lsgstStrings)):
+            models.append(next(generator)[0])
+
+        #now make a new generator starting from a different index
+        #with a start model corresponding to the model in models for
+        #that index.
+        generator1 = core.iterative_gst_generator(
+            self.ds, models[0], self.lsgstStrings,
+            optimizer={'tol': 1e-5},
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=['logl'],
+            resource_alloc=None, starting_index=1, verbosity=0
+        )
+        models1= []
+        for _ in range(1,len(self.lsgstStrings)):
+            models1.append(next(generator1)[0])
+
+        #Make sure we get the same result in both cases.
+        self.assertArraysAlmostEqual(models[-1].to_vector(), models1[-1].to_vector())

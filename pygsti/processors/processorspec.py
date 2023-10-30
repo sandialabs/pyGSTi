@@ -24,6 +24,8 @@ from pygsti.tools import basistools as _bt
 from pygsti.baseobjs import qubitgraph as _qgraph
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.modelmembers.operations import LinearOperator as _LinearOp
+from pygsti.modelmembers.operations import FullArbitraryOp as _FullOp
 
 
 class ProcessorSpec(_NicelySerializable):
@@ -201,33 +203,40 @@ class QuditProcessorSpec(ProcessorSpec):
             return (obj.to_nice_serialization() if isinstance(obj, _NicelySerializable)
                     else (obj if isinstance(obj, str) else self._encodemx(obj)))
 
+        # NicelySerializable is commented out while ModelMembers inherit from it but do not implement
+        # a non-base to_nice_serialization() method
         def _serialize_povm_effect(obj):
-            if isinstance(obj, _NicelySerializable) or isinstance(obj, str): return obj
+            if isinstance(obj, str): return obj
+            #if isinstance(obj, _NicelySerializable): return obj.to_nice_serialization()
             if isinstance(obj, (list, tuple)): return [_serialize_state(v) for v in obj]
             if isinstance(obj, _np.ndarray): return [_serialize_state(obj)]  # turn into list!
             raise ValueError("Cannot serialize POVM effect specifier of type %s!" % str(type(obj)))
 
         def _serialize_povm(obj):
-            if isinstance(obj, _NicelySerializable) or isinstance(obj, str): return obj
+            if isinstance(obj, str): return obj
+            #if isinstance(obj, _NicelySerializable): return obj.to_nice_serialization()
             if isinstance(obj, dict): return {k: _serialize_povm_effect(v) for k, v in obj.items()}
             raise ValueError("Cannot serialize POVM specifier of type %s!" % str(type(obj)))
 
         def _serialize_instrument_member(obj):
-            if isinstance(obj, _NicelySerializable) or isinstance(obj, str): return obj
+            if isinstance(obj, str): return obj
+            #if isinstance(obj, _NicelySerializable): return obj.to_nice_serialization()
             if isinstance(obj, (list, tuple)):
                 assert(all([isinstance(rank1op_spec, (list, tuple)) and len(rank1op_spec) == 2
                            for rank1op_spec in obj]))
                 return [(_serialize_state(espec), _serialize_state(rspec)) for espec, rspec in obj]
+            if isinstance(obj, _LinearOp): return [_serialize_state(obj.to_dense())]
             raise ValueError("Cannot serialize Instrument member specifier of type %s!" % str(type(obj)))
 
         def _serialize_instrument(obj):
-            if isinstance(obj, _NicelySerializable) or isinstance(obj, str): return obj
+            if isinstance(obj, str): return obj
+            #if isinstance(obj, _NicelySerializable): return obj.to_nice_serialization()
             if isinstance(obj, dict): return {k: _serialize_instrument_member(v) for k, v in obj.items()}
             raise ValueError("Cannot serialize Instrument specifier of type %s!" % str(type(obj)))
 
         nonstd_preps = {k: _serialize_state(obj) for k, obj in self.nonstd_preps.items()}
         nonstd_povms = {k: _serialize_povm(obj) for k, obj in self.nonstd_povms.items()}
-        nonstd_instruments = {k: _serialize_instrument(obj) for k, obj in self.nonstd_instruments.items()}
+        nonstd_instruments = {':'.join(k): _serialize_instrument(obj) for k, obj in self.nonstd_instruments.items()}
 
         state.update({'qudit_labels': list(self.qudit_labels),
                       'qudit_udims': list(self.qudit_udims),
@@ -284,7 +293,13 @@ class QuditProcessorSpec(ProcessorSpec):
             elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
                 return _NicelySerializable.from_nice_serialization(obj)
             elif isinstance(obj, list):
-                return [(_unserialize_state(espec), _unserialize_state(rspec)) for espec, rspec in obj]
+                if len(obj) == 2:
+                    return [(_unserialize_state(espec), _unserialize_state(rspec)) for espec, rspec in obj]
+                else:
+                    # TODO: Not quite right parameterization
+                    # Problem is linking everything properly...
+                    # Really should build a mmg for the pspec or something
+                    return _FullOp(_unserialize_state(obj[0]))
             raise ValueError("Cannot unserialize Instrument member specifier of type %s!" % str(type(obj)))
 
         def _unserialize_instrument(obj):
@@ -296,7 +311,7 @@ class QuditProcessorSpec(ProcessorSpec):
 
         nonstd_preps = {k: _unserialize_state(obj) for k, obj in state.get('nonstd_preps', {}).items()}
         nonstd_povms = {k: _unserialize_povm(obj) for k, obj in state.get('nonstd_povms', {}).items()}
-        nonstd_instruments = {k: _unserialize_instrument(obj) for k, obj in state.get('nonstd_instruments', {}).items()}
+        nonstd_instruments = {tuple(k.split(':')): _unserialize_instrument(obj) for k, obj in state.get('nonstd_instruments', {}).items()}
 
         return nonstd_gate_unitaries, nonstd_preps, nonstd_povms, nonstd_instruments
 
@@ -1106,7 +1121,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
         gate_inverse[`name1`] = `name2` and gate_inverse[`name2`] = `name1`
 
         1-qubit gates are not computed by this method, as they are be computed by the method
-        :method:`compute_one_qubit_gate_relations`.
+        :meth:`compute_one_qubit_gate_relations`.
 
         Returns
         -------

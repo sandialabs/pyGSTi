@@ -212,7 +212,7 @@ class Circuit(object):
         to a Label objects.  For example, any of the following are allowed:
 
         - `['Gx','Gx']` : X gate on each of 2 layers
-        - `[Label('Gx'),Label('Gx')] : same as above
+        - `[Label('Gx'),Label('Gx')]` : same as above
         - `[('Gx',0),('Gy',0)]` : X then Y on qubit 0 (2 layers)
         - `[[('Gx',0),('Gx',1)],[('Gy',0),('Gy',1)]]` : parallel X then Y on qubits 0 & 1
 
@@ -362,7 +362,7 @@ class Circuit(object):
             to a Label objects.  For example, any of the following are allowed:
 
             - `['Gx','Gx']` : X gate on each of 2 layers
-            - `[Label('Gx'),Label('Gx')] : same as above
+            - `[Label('Gx'),Label('Gx')]` : same as above
             - `[('Gx',0),('Gy',0)]` : X then Y on qubit 0 (2 layers)
             - `[[('Gx',0),('Gx',1)],[('Gy',0),('Gy',1)]]` : parallel X then Y on qubits 0 & 1
 
@@ -665,7 +665,7 @@ class Circuit(object):
         The name of this circuit.
 
         Note: the name is *not* a part of the hashed value.
-        The name is used to name the :class:`CircuitLabel` returned from :method:`to_label`.
+        The name is used to name the :class:`CircuitLabel` returned from :meth:`to_label`.
         """
         return self._name
 
@@ -1257,7 +1257,7 @@ class Circuit(object):
         lines : str/int, slice, or list/tuple of strs/ints, optional
             Which lines should have new layers (blank circuit space)
             inserted into them.  A single or multiple line-labels can be
-            specified, similarly as in :method:`extract_labels`.  The default
+            specified, similarly as in :meth:`extract_labels`.  The default
             value `None` stands for *all* lines.
 
         Returns
@@ -1290,7 +1290,7 @@ class Circuit(object):
         lines : str/int, slice, or list/tuple of strs/ints, optional
             Which lines should have new layers (blank circuit space)
             inserted into them.  A single or multiple line-labels can be
-            specified, similarly as in :method:`extract_labels`.  The default
+            specified, similarly as in :meth:`extract_labels`.  The default
             value `None` stands for *all* lines.
 
         Returns
@@ -1345,7 +1345,7 @@ class Circuit(object):
         lines : str/int, slice, or list/tuple of strs/ints, optional
             Which lines should have new layers (blank circuit space)
             inserted into them.  A single or multiple line-labels can be
-            specified, similarly as in :method:`extract_labels`.  The default
+            specified, similarly as in :meth:`extract_labels`.  The default
             value `None` stands for *all* lines.
 
         Returns
@@ -1647,11 +1647,11 @@ class Circuit(object):
         ----------
         layers : int, slice, or list/tuple of ints
             Defines the horizontal dimension of the region to clear.  See
-            :method:`extract_labels` for details.
+            :meth:`extract_labels` for details.
 
         lines : str/int, slice, or list/tuple of strs/ints
             Defines the vertical dimension of the region to clear.  See
-            :method:`extract_labels` for details.
+            :meth:`extract_labels` for details.
 
         clear_straddlers : bool, optional
             Whether or not gates which straddle cleared and non-cleared lines
@@ -1673,7 +1673,7 @@ class Circuit(object):
         Parameters
         ----------
         layers : int, slice, or list/tuple of ints
-            The layer index or indices to delete.  See :method:`extract_labels`
+            The layer index or indices to delete.  See :meth:`extract_labels`
             for details.
 
         Returns
@@ -1700,7 +1700,7 @@ class Circuit(object):
         Parameters
         ----------
         lines : str/int, slice, or list/tuple of strs/ints
-            The line label(s) to delete.  See :method:`extract_labels` for details.
+            The line label(s) to delete.  See :meth:`extract_labels` for details.
 
         delete_straddlers : bool, optional
             Whether or not gates which straddle deleted and non-deleted lines
@@ -1781,7 +1781,7 @@ class Circuit(object):
 
         Create a Circuit from a python string where each operation label is
         represented as a **single** character, starting with 'A' and continuing
-        down the alphabet.  This performs the inverse of :method:`to_pythonstr`.
+        down the alphabet.  This performs the inverse of :meth:`to_pythonstr`.
 
         Parameters
         ----------
@@ -1973,7 +1973,7 @@ class Circuit(object):
         """
         Attempt to replace repeated sub-circuits with :class:`CircuitLabel` objects.
 
-        More or less the reverse of :method:`expand_subcircuits`, this method
+        More or less the reverse of :meth:`expand_subcircuits`, this method
         attempts to collapse repetitions of the same labels into single
         :class:`CircuitLabel` labels within this circuit.
 
@@ -2135,7 +2135,7 @@ class Circuit(object):
         Append a circuit to the end of this circuit, returning a copy.
 
         This circuit must satisfy the requirements of
-        :method:`insert_circuit()`. See that method for more details.
+        :meth:`insert_circuit()`. See that method for more details.
 
         Parameters
         ----------
@@ -2153,7 +2153,7 @@ class Circuit(object):
         Append a circuit to the end of this circuit.
 
         This circuit must satisfy the requirements of
-        :method:`insert_circuit()`. See that method for more details.
+        :meth:`insert_circuit()`. See that method for more details.
 
         Parameters
         ----------
@@ -2171,7 +2171,7 @@ class Circuit(object):
         Prefix a circuit to the beginning of this circuit, returning a copy.
 
         This circuit must satisfy the requirements of the
-        :method:`insert_circuit()`. See that method for more details.
+        :meth:`insert_circuit()`. See that method for more details.
 
         Parameters
         ----------
@@ -2189,7 +2189,7 @@ class Circuit(object):
         Prefix a circuit to the beginning of this circuit.
 
         This circuit must satisfy the requirements of the
-        :method:`insert_circuit()`. See that method for more details.
+        :meth:`insert_circuit()`. See that method for more details.
 
         Parameters
         ----------
@@ -2938,8 +2938,8 @@ class Circuit(object):
             one_q_gate_relations[name1,name2] = name3, name1 -> name3 and name2 -> self.identity, the
             identity name in the circuit. Moreover, this is still implemented when there are self.identity
             gates between these 1-qubit gates, and it is implemented iteratively in the sense that if there
-            is a sequence of 1-qubit gates with names name1, name2, name3, ... and there are relations
-            for all of (name1,name2) -> name12, (name12,name3) -> name123 etc then the entire sequence of
+            is a sequence of 1-qubit gates with names `name1, name2, name3, ...` and there are relations
+            for all of `(name1,name2) -> name12`, `(name12,name3) -> name123` etc then the entire sequence of
             1-qubit gates will be compressed into a single possibly non-idle 1-qubit gate followed by
             idle gates in place of the previous 1-qubit gates.  Note that `None` can be used as `name3`
             to signify that the result is the identity (no gate labels).
@@ -3023,7 +3023,7 @@ class Circuit(object):
         Shift all gates forward (left) as far as is possible.
 
         This operation is performed without any knowledge of what any of the
-        gates are.  One of the steps of :method:`depth_compression()`.
+        gates are.  One of the steps of :meth:`depth_compression()`.
 
         Returns
         -------
@@ -3110,7 +3110,7 @@ class Circuit(object):
             one_q_gate_relations[name1,name2] = name3, name1 -> name3 and name2 -> self.identity, the
             identity name in the circuit. Moreover, this is still implemented when there are self.identity
             gates between these 1-qubit gates, and it is implemented iteratively in the sense that if there
-            is a sequence of 1-qubit gates with names name1, name2, name3, ... and there are relations
+            is a sequence of 1-qubit gates with names `name1, name2, name3, ...` and there are relations
             for all of (name1,name2) -> name12, (name12,name3) -> name123 etc then the entire sequence of
             1-qubit gates will be compressed into a single possibly non-idle 1-qubit gate followed by
             idle gates in place of the previous 1-qubit gates.
@@ -3244,7 +3244,7 @@ class Circuit(object):
         """
         The number of circuit layers.
 
-        In simple circuits, this is the same as the depth (given by :method:`depth`).
+        In simple circuits, this is the same as the depth (given by :meth:`depth`).
         For circuits containing sub-circuit blocks, this gives the number of
         top-level layers in this circuit.
 
@@ -3261,7 +3261,7 @@ class Circuit(object):
 
         This is the number of layers in simple circuits. For circuits containing
         sub-circuit blocks, this includes the full depth of these blocks.  If you
-        just want the number of top-level layers, use :method:`num_layers`.
+        just want the number of top-level layers, use :meth:`num_layers`.
 
         Returns
         -------
@@ -3720,7 +3720,7 @@ class Circuit(object):
         gatename_conversion : dict, optional
             A dictionary mapping gate names contained in this circuit to the corresponding
             gate names used in the rendered quil.  If None, a standard set of conversions
-            is used (see :function:`standard_gatenames_quil_conversions`).
+            is used (see :func:`standard_gatenames_quil_conversions`).
 
         qubit_conversion : dict, optional
             If not None, a dictionary converting the qubit labels in the circuit to the
@@ -3872,7 +3872,7 @@ class Circuit(object):
                             gatename_conversion=None, qubit_conversion=None,
                             block_between_layers=True,
                             block_between_gates=False,
-                            gateargs_map=None):  # TODO
+                            gateargs_map=None, ancilla_label=None):  # TODO
         """
         Converts this circuit to an openqasm string.
 
@@ -3917,13 +3917,18 @@ class Circuit(object):
             this dictionary need not be specified, and an automatic conversion to the standard
             openqasm format will be implemented.
 
+        ancilla_label : string or int, optional 
+            If not None, a string indicating the qubit label of the ancilla used for mid-circuit 
+            measurement. If a string, should be of the form 'Qi' for integer i. Currently does 
+            not support multi-ancillae mid-circuit measurement. 
+
         Returns
         -------
         str
             An openqasm string.
         """
 
-        # create standard conversations.
+        # create standard conversations. #Update ancilla conversion to be cleaner--it doesn't work for all stupidity 
         if gatename_conversion is None:
             gatename_conversion, gateargs_map = _itgs.standard_gatenames_openqasm_conversions(standard_gates_version)
         if qubit_conversion is None:
@@ -3934,24 +3939,31 @@ class Circuit(object):
                 if all([q[0] == 'Q' for q in self.line_labels]):
                     standardtype = True
                     qubit_conversion = {llabel: int(llabel[1:]) for llabel in self.line_labels}
+                    if ancilla_label != None:
+                        qubit_conversion[ancilla_label] = int(ancilla_label[1:])
             if all([isinstance(q, int) for q in self.line_labels]):
                 qubit_conversion = {q: q for q in self.line_labels}
                 standardtype = True
+                if ancilla_label != None:
+                    qubit_conversion[ancilla_label] = ancilla_label
             if not standardtype:
                 raise ValueError(
                     "No standard qubit labelling conversion is available! Please provide `qubit_conversion`.")
-
+        #Make sure that 'Qi' and i both work!
         if num_qubits is None:
             num_qubits = len(self.line_labels)
+            if ancilla_label != None: 
+                num_qubits += 1
 
         # if gateargs_map is None:
         #     gateargs_map = {}
 
         #Currently only using 'Iz' as valid intermediate measurement ('IM') label.
         #Todo:  Expand to all intermediate measurements.
-        if 'Iz' in self.str:
+        if 'Iz' or 'Ipc' in self.str:
             # using_IMs = True
-            num_IMs = self.str.count('Iz')
+            num_IMs = self.expand_subcircuits().str.count('Iz')
+            num_IMs += self.expand_subcircuits().str.count('Ipc')
         else:
             # using_IMs = False
             num_IMs = 0
@@ -3959,6 +3971,8 @@ class Circuit(object):
 
         # Init the openqasm string.
         openqasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\n'
+        # Include a delay instruction
+        openqasm += 'opaque delay(t) q;\n\n'
 
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
         # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
@@ -3981,7 +3995,7 @@ class Circuit(object):
                 assert(len(gate_qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
 
                 # Find the openqasm for the gate.
-                if gate.name.__str__() != 'Iz':
+                if gate.name.__str__() != 'Iz' and gate.name.__str__() != 'Ipc':
                     openqasmlist_for_gate = gatename_conversion.get(gate.name, None)
 
                     if openqasmlist_for_gate is None:
@@ -4013,16 +4027,28 @@ class Circuit(object):
                             openqasm_for_gate += ';\n'
                             if block_between_gates:
                                 openqasm_for_gate += 'barrier '
-                                for q in self.line_labels[:-1]:
-                                    openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                                openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+                                if ancilla_label is None: 
+                                    for q in self.line_labels[:-1]:
+                                        openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                    openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+                                else:
+                                    for q in self.line_labels:
+                                        openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                    openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
 
                 else:
-                    assert len(gate.qubits) == 1
-                    q = gate.qubits[0]
-                    # classical_bit = num_IMs_used
-                    openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
-                    num_IMs_used += 1
+                    assert gate.name.__str__() == 'Iz' or 'Ipc'  
+                    if gate.name.__str__() == 'Iz':
+                        q = gate.qubits[0] 
+                        # classical_bit = num_IMs_used
+                        openqasm_for_gate = "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), num_IMs_used)
+                    else:
+                        assert ancilla_label is not None, "Parity check 'Ipc' requires an ancilla, did you forget to set 'ancilla_label'?"
+                        openqasm_for_gate = ""
+                        for control in gate_qubits:
+                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[control]), qubit_conversion[ancilla_label])
+                        openqasm_for_gate += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[ancilla_label]), num_IMs_used)   
+                    num_IMs_used += 1 
 
                 # Add the openqasm for the gate to the openqasm string.
                 openqasm += openqasm_for_gate
@@ -4037,7 +4063,9 @@ class Circuit(object):
             if not block_between_gates:
                 for q in self.line_labels:
                     if q not in qubits_used:
-                        openqasm += 'id' + ' q[' + str(qubit_conversion[q]) + '];\n'
+                        # Delay 0 works because of the barrier
+                        # In OpenQASM3, this should probably be a stretch instead
+                        openqasm += 'delay(0)' + ' q[' + str(qubit_conversion[q]) + '];\n'
 
             # Add in a barrier after every circuit layer if block_between_layers==True.
             # Including barriers is critical for QCVV testing, circuits should usually
@@ -4047,17 +4075,21 @@ class Circuit(object):
             # where pragma blocks should be.
             if block_between_layers:
                 openqasm += 'barrier '
-                for q in self.line_labels[:-1]:
-                    openqasm += 'q[{0}], '.format(str(qubit_conversion[q]))
-                openqasm += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+                if ancilla_label is None: 
+                    for q in self.line_labels[:-1]:
+                        openqasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                    openqasm += 'q[{0}];\n'.format(str(qubit_conversion[self.line_labels[-1]]))
+                else:
+                    for q in self.line_labels:
+                        openqasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                    openqasm += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
                 # openqasm += ';'
 
         # Add in a measurement at the end.
         for q in self.line_labels:
             # openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), str(qubit_conversion[q]))
             openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]),
-                                                              str(num_IMs_used + qubit_conversion[q]))
-
+                                                              str(num_IMs + qubit_conversion[q]))
         return openqasm
 
     def simulate(self, model, return_all_outcomes=False):
@@ -4380,7 +4412,7 @@ class CompressedCircuit(object):
     @staticmethod
     def expand_op_label_tuple(compressed_op_labels):
         """
-        Expand a compressed tuple (created with :method:`compress_op_label_tuple`) into a tuple of operation labels.
+        Expand a compressed tuple (created with :meth:`compress_op_label_tuple`) into a tuple of operation labels.
 
         Parameters
         ----------

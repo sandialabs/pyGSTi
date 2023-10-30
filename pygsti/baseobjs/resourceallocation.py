@@ -257,8 +257,8 @@ class ResourceAllocation(object):
         nbytes = num_elements * _np.dtype(dtype).itemsize
         self.allocated_memory += nbytes
         if self.mem_limit is not None and self.allocated_memory > self.mem_limit:
-            raise MemoryError("User-supplied memory limit of %.2fGB has been exceeded!"
-                              % (self.mem_limit / (1024.0**3)))
+            raise MemoryError("User-supplied memory limit of %.2fGB has been exceeded! Allocation of %.2fGB requested."
+                              % (self.mem_limit / (1024.0**3), self.allocated_memory / (1024.0**3)))
         yield
         self.allocated_memory -= nbytes
 
@@ -321,7 +321,7 @@ class ResourceAllocation(object):
                 #OLD: gathered_data = gather_comm.allgather(local)  # could change this to Allgatherv (?)
                 slices = gather_comm.allgather(slice_of_global if participating else None)
                 shapes = gather_comm.allgather(local.shape if participating else (0,))
-                sizes = [_np.product(shape) for shape in shapes]
+                sizes = [_np.prod(shape) for shape in shapes]
                 gathered_data = _np.empty(sum(sizes), dtype=local.dtype)
                 gather_comm.Allgatherv(local.flatten() if participating
                                        else _np.empty(0, dtype=local.dtype), (gathered_data, sizes))
@@ -331,7 +331,7 @@ class ResourceAllocation(object):
                 slices = gather_comm.gather(slice_of_global if participating else None, root=0)
 
                 if gather_comm.rank == 0:
-                    sizes = [_np.product(shape) for shape in shapes]
+                    sizes = [_np.prod(shape) for shape in shapes]
                     gathered_data = _np.empty(sum(sizes), dtype=local.dtype)
                     recvbuf = (gathered_data, sizes)
                 else:
@@ -510,7 +510,7 @@ class ResourceAllocation(object):
         """
         A simplified sum over quantities on different processors that doesn't use shared memory.
 
-        The shared memory usage of :method:`allreduce_sum` can be overkill when just summing a single
+        The shared memory usage of :meth:`allreduce_sum` can be overkill when just summing a single
         scalar quantity.  This method provides a way to easily sum a quantity across all the processors
         in this :class:`ResourceAllocation` object using a unit resource allocation.
 
