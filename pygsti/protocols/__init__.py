@@ -20,3 +20,4 @@ from .stability import *
 from .vb import *
 from .vbdataframe import *
 from .birbmcm import *
+import birb

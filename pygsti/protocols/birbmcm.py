@@ -6,7 +6,7 @@ from pygsti.processors import CliffordCompilationRules as CCR
 
 import copy as _copy
 
-import birb
+from pygsti.protocols import birb
 
 import numpy as _np
 
