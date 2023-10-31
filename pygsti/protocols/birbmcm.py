@@ -19,6 +19,20 @@ def outcome_energy(outcome, measurement, sign):
             energy = -1*energy
     return sign*energy
 
+def ibm_no_reset_modification(outcome, reset):
+    if len(reset) == 0:
+        return 1
+    mcm_results = [int(o) for o in outcome[:len(reset)]]
+    modifier = np.sum(np.array(mcm_results)*np.array(reset))
+    return (-1)**modifier
+
+def loqs_no_reset_modifier(bitstring, circuit_resets):
+    if circuit_resets == None:
+        return 1
+    mcm_bitstring = bitstrin[:len(circuit_resets)]
+    modifier = np.sum(np.array(mcm_bitstring)*np.array(circuit_results))
+    return (-1)**modifier
+
 def sample_rb_mcm_circuit_layer_by_edgegrab(pspec, qubit_labels=None, mcm_labels = None, two_q_gate_density=0.25, mcm_density = .25, one_q_gate_names=None, loqs = False, mcm_only_layers = False, gate_args_lists=None, rand_state=None):
     
     assert(mcm_labels is not None), 'Need MCM labels.'
