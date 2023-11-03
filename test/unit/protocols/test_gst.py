@@ -310,7 +310,7 @@ class TestStandardGST(BaseProtocolData):
 
     def _test_run_custom_sim(self, mode, parent_capfd, check_output):
         proto = gst.StandardGST(modes=[mode])
-        results = proto.run(self.gst_data, simulator=MapForwardSimulatorWrapper())
+        results = proto.run(self.gst_data, simulator=MapForwardSimulatorWrapper)
         stdout, _ = parent_capfd.readouterr()
         assert MapForwardSimulatorWrapper.Message in stdout
         if check_output:

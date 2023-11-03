@@ -71,7 +71,7 @@ class ModelTestTester(LongSequenceBasePlain):
             self.mdl_guess, self.ds, self.pspec, self.fiducials,
             self.fiducials, self.germs, self.maxLens,
             advanced_options=dict(objective='chi2', profile=2),
-            simulator=MapForwardSimulatorWrapper()
+            simulator=MapForwardSimulatorWrapper
         )
         stdout, _ = capfd.readouterr()
         assert MapForwardSimulatorWrapper.Message in stdout
