@@ -33,7 +33,7 @@ def loqs_no_reset_modifier(bitstring, circuit_resets):
     modifier = _np.sum(_np.array(mcm_bitstring)*_np.array(circuit_results))
     return (-1)**modifier
 
-def sample_rb_mcm_circuit_layer_by_edgegrab(pspec, qubit_labels=None, mcm_labels = None, two_q_gate_density=0.25, mcm_density = .25, one_q_gate_names=None, loqs = False, mcm_only_layers = False, gate_args_lists=None, rand_state=None):
+def sample_rb_mcm_mixed_layer_by_edgegrab(pspec, qubit_labels=None, mcm_labels = None, two_q_gate_density=0.25, mcm_density = .25, one_q_gate_names=None, loqs = False, mcm_only_layers = False, gate_args_lists=None, rand_state=None):
     
     assert(mcm_labels is not None), 'Need MCM labels.'
     if gate_args_lists is None: gate_args_lists = {}
@@ -138,7 +138,7 @@ def sample_rb_mcm_circuit_layer_by_edgegrab(pspec, qubit_labels=None, mcm_labels
     
     return {'mixed-layer': [sampled_layer]}, num_mcms, mcm_locs
 
-def sample_rb_mcm_circuit_layer_with_1Q_gates_by_edgegrab(pspec, qubit_labels=None, mcm_labels = None, two_q_gate_density=0.25, mcm_density = .25, one_q_gate_names=None, loqs = True, mcm_only_layers = True, gate_args_lists=None, rand_state=None):
+def sample_rb_mcm_circuit_layer_with_1Q_gates(pspec, mixed_layer_sampler = sample_rb_mcm_mixed_layer_by_edgegrab ,qubit_labels=None, mcm_labels = None, two_q_gate_density=0.25, mcm_density = .25, one_q_gate_names=None, loqs = True, mcm_only_layers = True, gate_args_lists=None, rand_state=None):
     
     assert(mcm_labels is not None), 'Need MCM labels.'
     if gate_args_lists is None: gate_args_lists = {}
@@ -157,7 +157,7 @@ def sample_rb_mcm_circuit_layer_with_1Q_gates_by_edgegrab(pspec, qubit_labels=No
     num_qubits = len(qubits)
     if num_qubits == 1:
         mcm_only_layers = True
-    mixed_layers, mcms, mcm_locs = sample_rb_mcm_circuit_layer_by_edgegrab(pspec, qubit_labels=qubit_labels, 
+    mixed_layers, mcms, mcm_locs = mixed_layer_sampler(pspec, qubit_labels=qubit_labels, 
                                                                       mcm_labels = mcm_labels, two_q_gate_density=two_q_gate_density, mcm_density = mcm_density, 
                                                                       one_q_gate_names=one_q_gate_names, loqs = loqs,
                                                                                 mcm_only_layers = mcm_only_layers,        
@@ -351,7 +351,7 @@ def process_measure_layer(native_measure_layer, qubit_pointers, new_qubit_labels
         labels = [Label(label[0], qubit_pointers[label[1]][-1]) for label in native_measure_layer[0]]
         return _cir.Circuit([labels], line_labels = new_qubit_labels)
 
-def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_gate_density, mcm_density, loqs, debug = True, layer_sampler = sample_rb_mcm_circuit_layer_with_1Q_gates_by_edgegrab, include_identity = True, mcm_only_layers = True, mcm_reset = True, seed = None):
+def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_gate_density, mcm_density, loqs, debug = True, layer_sampler = sample_rb_mcm_circuit_layer_with_1Q_gates, include_identity = True, mcm_only_layers = True, mcm_reset = True, seed = None):
     
     rand_state = _np.random.RandomState(seed) # new change...
     
