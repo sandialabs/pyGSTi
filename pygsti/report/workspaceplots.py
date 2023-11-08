@@ -51,7 +51,7 @@ else:
 #from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
 
 def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
-                   prec=0, hover_label_fn=None, hover_labels=None):
+                   prec=0, hover_label_fn=None, hover_labels=None, num_dof=None):
     """
     Create a color box plot.
 
@@ -97,7 +97,7 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
     """
 
     masked_data = _np.ma.array(plt_data, mask=_np.isnan(plt_data))
-    heatmapArgs = {'z': colormap.normalize(masked_data),
+    heatmapArgs = {'z': colormap.normalize(masked_data, num_dof),
                    'colorscale': colormap.create_plotly_colorscale(),
                    'showscale': colorbar, 'hoverinfo': 'none',
                    'zmin': colormap.hmin, 'zmax': colormap.hmax}
@@ -168,7 +168,7 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
 
 def _nested_color_boxplot(plt_data_list_of_lists, colormap,
                           colorbar=False, box_label_size=0, prec=0,
-                          hover_label_fn=None):
+                          hover_label_fn=None, num_dof_list_of_lists=None):
     """
     Creates a "nested" color box plot.
 
@@ -218,15 +218,20 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     nCols = len(plt_data_list_of_lists[0])
 
     data = _np.zeros((elRows * nRows + (nRows - 1), elCols * nCols + (nCols - 1)))
+    numdof = _np.zeros((elRows * nRows + (nRows - 1), elCols * nCols + (nCols - 1)))
     for i in range(1, nRows):
         data[(elRows + 1) * i - 1:(elRows + 1) * i, :] = _np.nan
+        numdof[(elRows + 1) * i - 1:(elRows + 1) * i, :] = _np.nan
     for j in range(1, nCols):
         data[:, (elCols + 1) * j - 1:(elCols + 1) * j] = _np.nan
+        numdof[:, (elCols + 1) * j - 1:(elCols + 1) * j] = _np.nan
 
     for i in range(nRows):
         for j in range(nCols):
             data[(elRows + 1) * i:(elRows + 1) * (i + 1) - 1, (elCols + 1)
                  * j:(elCols + 1) * (j + 1) - 1] = plt_data_list_of_lists[i][j]
+            numdof[(elRows + 1) * i:(elRows + 1) * (i + 1) - 1, (elCols + 1)
+                 * j:(elCols + 1) * (j + 1) - 1] = num_dof_list_of_lists[i][j]
 
     xtics = []; ytics = []
     for i in range(nRows): ytics.append(float((elRows + 1) * i) - 0.5 + 0.5 * float(elRows))
@@ -247,7 +252,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
         hoverLabels = None
 
     fig = _color_boxplot(data, colormap, colorbar, box_label_size,
-                         prec, None, hoverLabels)
+                         prec, None, hoverLabels, numdof)
 
     #Layout updates: add tic marks (but not labels - leave that to user)
     fig.plotlyfig['layout']['xaxis'].update(tickvals=xtics)
@@ -257,7 +262,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
 
 def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
                             colormap, colorbar=False, box_labels=True, prec=0, hover_info=True,
-                            sum_up=False, scale=1.0, bgcolor='white'):
+                            sum_up=False, scale=1.0, bgcolor='white', sub_num_dofs=None):
     """
     A helper function for generating typical nested color box plots used in pyGSTi.
 
@@ -335,6 +340,7 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
 
     # flip so [0,0] el of original sub_mxs is at *top*-left (FLIP)
     sub_mxs = [[_np.flipud(subMx) for subMx in row] for row in sub_mxs]
+    sub_num_dofs = [[_np.flipud(subMx) for subMx in row] for row in sub_num_dofs]
     #inner_ylabels = list(reversed(inner_ylabels))
 
     #FUTURE: to restore "invert" functionality, make PlaquetteGridCircuitStructure invertible
@@ -430,7 +436,7 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
 
         boxLabelSize = 8 if box_labels else 0  # do not scale (OLD: 8*scale)
         fig = _nested_color_boxplot(sub_mxs, colormap, colorbar, boxLabelSize,
-                                    prec, hover_label_fn)
+                                    prec, hover_label_fn, sub_num_dofs)
 
         xBoxes = nXs * (nIXs + 1) - 1
         yBoxes = nYs * (nIYs + 1) - 1
@@ -533,7 +539,8 @@ def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_su
 
 def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
                            colorbar=False, box_labels=True, prec='compact', hover_info=True,
-                           sum_up=False, invert=False, scale=1.0, bgcolor="white", addl_hover_submxs=None):
+                           sum_up=False, invert=False, scale=1.0, bgcolor="white", addl_hover_submxs=None,
+                           sub_num_dofs=None):
     """
     A wrapper around :func:`_summable_color_boxplot` for creating color box plots displaying circuits.
 
@@ -611,7 +618,7 @@ def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
 
     return _summable_color_boxplot(sub_mxs, circuit_structure.used_xs, circuit_structure.used_ys,
                                    circuit_structure.xlabel, circuit_structure.ylabel, colormap, colorbar,
-                                   box_labels, prec, hover_info, sum_up, scale, bgcolor)
+                                   box_labels, prec, hover_info, sum_up, scale, bgcolor, sub_num_dofs)
 
 
 def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
@@ -1790,9 +1797,11 @@ class ColorBoxPlot(WorkspacePlot):
             for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
                 if (submatrices is not None) and lbl in submatrices:
                     addl_subMxs = submatrices[lbl]  # ever useful?
+                    sub_num_dofs = None
                 else:
                     addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
                                                  addl_mx_fn, dataset, addl_extra_arg)
+                    sub_num_dofs = Piper -- TODO -- #HERE: compute number of degrees of freedom for each circuit with model, dataset, etc
                 addl_hover_info[lbl] = addl_subMxs
 
             if colormapType == "linlog":
@@ -1844,7 +1853,7 @@ class ColorBoxPlot(WorkspacePlot):
                 newfig = _circuit_color_boxplot(circuit_struct, subMxs, colormap,
                                                 colorbar, box_labels, prec,
                                                 hover_info, sum_up, invert,
-                                                scale, bgcolor, addl_hover_info)
+                                                scale, bgcolor, addl_hover_info, sub_num_dofs)
 
             elif typ == "scatter":
                 newfig = _circuit_color_scatterplot(circuit_struct, subMxs, colormap,

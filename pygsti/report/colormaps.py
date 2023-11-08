@@ -418,7 +418,7 @@ class LinlogColormap(Colormap):
         return cmap
 
     @smart_cached
-    def normalize(self, value):
+    def normalize(self, value, num_dof=None):
         """
         Scale value to a value between self.hmin and self.hmax (heatmap endpoints).
 
@@ -448,8 +448,10 @@ class LinlogColormap(Colormap):
             value = _np.ma.array(value.filled(1e100),
                                  mask=_np.ma.getmask(value))
 
+        N = max(self.N, 1)  # don't divide by N == 0 (if there are no boxes)
         lin_norm_value = _vnorm(value, self.vmin, self.vmax)
-        norm_trans = _vnorm(self.trans, self.vmin, self.vmax)
+        per_box_trans = _np.ceil(_chi2.ppf(1 - self.percentile / N, num_dof))
+        norm_trans = _vnorm(per_box_trans, self.vmin, self.vmax)
         log10_norm_trans = _np.ma.log10(norm_trans)
         with _np.errstate(divide='ignore'):
             # Ignore the division-by-zero error that occurs when 0 is passed to
