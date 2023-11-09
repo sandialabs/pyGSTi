@@ -33,6 +33,104 @@ def loqs_no_reset_modifier(bitstring, circuit_resets):
     modifier = _np.sum(_np.array(mcm_bitstring)*_np.array(circuit_results))
     return (-1)**modifier
 
+def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_labels = None, one_q_gate_names = None, loqs = False, gate_args_lists = None, rand_state = None, two_q_gate_density = .25, mcm_probability = .25, mcm_count = 1):
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+    if gate_args_lists is None: gate_args_lists = {}
+    if qubit_labels is None: 
+        qubits = list(pspec.qubit_labels[:])
+    else:
+        assert(isinstance(qubit_labels, (list, tuple))), "SubsetQs must be a list or a tuple!"
+        qubits = list(qubit_labels[:])  # copy this list
+    
+    assert(mcm_count <= len(qubit_labels) and mcm_probability > 0) # Can't add more MCMs than you have qubits    
+    assert(mcm_labels is not None), 'Need MCM labels.'
+    
+    sampled_layer = []
+    if loqs == True:
+        pre_layer, post_layer = [], []
+
+    num_mcms = 0
+    mcm_locs = []
+    edgelist = pspec.compute_2Q_connectivity().edges()
+    edgelist = [e for e in edgelist if all([q in qubits for q in e])]
+    selectededges = []
+    
+    include_mcms = (rand_state.random() <= mcm_probability) # Decide if you are going to include the MCMs
+    if include_mcms is True: 
+        mcm_qubits = rand_state.choice(qubits, mcm_count, replace = False)
+    else:
+        mcm_qubits = []
+    
+    if include_mcms is True:
+        edgelist = [edge for edge in edgelist if any([q in mcm_qubits for q in edge])]
+    
+    # Pick out an independent set of edges
+    while len(edgelist) > 0:
+        edge = edgelist[rand_state.randint(0, len(edgelist))]
+        selectededges.append(edge)
+        # Delete all edges containing these qubits.
+        edgelist = [e for e in edgelist if not any([q in e for q in edge])]
+        
+    num2Qgates = len(selectededges)
+    if len(qubits) > 1:
+        mean_two_q_gates = len(qubits) * two_q_gate_density / 2
+    else:
+        mean_two_q_gates = 0
+    
+    assert(num2Qgates >= mean_two_q_gates), "Device may have insufficient connectivity! Reduce your MCM count or two-qubit gate density!"
+
+    if mean_two_q_gates > 0:
+        twoQprob = mean_two_q_gates / num2Qgates
+    else:
+        twoQprob = 0
+        
+    unusedqubits = _copy.copy(qubits)
+    for q in mcm_qubits:
+        mcm_locs.append(q)
+        gate_label = Label(mcm_labels['mcm'], q)
+        sampled_layer.append(gate_label)
+            
+        if loqs == True:
+            pregate_label = Label(mcm_labels['pre'], q)
+            postgate_label = Label(mcm_labels['post'], q)
+            pre_layer.append(pregate_label)
+            post_layer.append(postgate_label)
+            
+        del unusedqubits[unusedqubits.index(q)]   
+    
+    ops_on_qubits = pspec.compute_ops_on_qubits()
+    for edge in selectededges:
+        if bool(rand_state.binomial(1, twoQprob)):
+            # The two-qubit gates on that edge.
+            possibleops = ops_on_qubits[edge]
+            argless_gate_label = possibleops[rand_state.randint(0, len(possibleops))]
+            if argless_gate_label.name not in gate_args_lists.keys():
+                sampled_layer.append(argless_gate_label)
+            else:
+                possibleargs = gate_args_lists[argless_gate_label.name]
+                args = possibleargs[rand_state.randint(0, len(possibleargs))]
+                sampled_layer.append(_lbl.Label(argless_gate_label.name, edge, args=args))
+
+            for q in edge:
+                del unusedqubits[unusedqubits.index(q)]
+    
+    if one_q_gate_names is None or len(one_q_gate_names) > 0:
+        for q in unusedqubits:
+            if one_q_gate_names is None:
+                possibleops = ops_on_qubits[(q,)]
+            else:
+                print(one_q_gate_names)
+                print(ops_on_qubits[(q,)])
+                possibleops = [gate_lbl for gate_lbl in ops_on_qubits[(q,)] if gate_lbl.name in one_q_gate_names]
+            gate_label = possibleops[rand_state.randint(0, len(possibleops))]
+            sampled_layer.append(gate_label)
+
+    if loqs == True:
+        return {'pre-layers': [pre_layer], 'post-layers': [post_layer], 'mixed-layer': [sampled_layer]}, num_mcms, mcm_locs
+    
+    return {'mixed-layer': [sampled_layer]}, num_mcms, mcm_locs
+
 def sample_rb_mcm_mixed_layer_by_edgegrab(pspec, qubit_labels=None, mcm_labels = None, two_q_gate_density=0.25, mcm_density = .25, one_q_gate_names=None, loqs = False, mcm_only_layers = False, gate_args_lists=None, rand_state=None):
     
     assert(mcm_labels is not None), 'Need MCM labels.'
@@ -59,11 +157,10 @@ def sample_rb_mcm_mixed_layer_by_edgegrab(pspec, qubit_labels=None, mcm_labels =
     edgelist = [e for e in edgelist if all([q in qubits for q in e])]
     selectededges = []
 
-    # Go through until all qubits have been assigned a gate.
+    # Pick out an independent set of edges
     while len(edgelist) > 0:
 
-        # edge = edgelist[rand_state.randint(0, len(edgelist))]
-        edge = edgelist[_np.random.randint(0, len(edgelist))]
+        edge = edgelist[rand_state.randint(0, len(edgelist))]
         selectededges.append(edge)
         # Delete all edges containing these qubits.
         edgelist = [e for e in edgelist if not any([q in e for q in edge])]
