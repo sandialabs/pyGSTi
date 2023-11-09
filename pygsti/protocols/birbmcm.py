@@ -33,17 +33,20 @@ def loqs_no_reset_modifier(bitstring, circuit_resets):
     modifier = _np.sum(_np.array(mcm_bitstring)*_np.array(circuit_results))
     return (-1)**modifier
 
+def compute_twoQ_prob(mean_two_q_gates: float, mcm_probability: float, two_q_gate_density: float, num2Qgates_no_mcms: int, num2Qgates_w_mcms: int):
+    no_mcm_prob = 1 - mcm_probability
+    return (mean_two_q_gates - mcm_probability*two_q_gate_density*num2Qgates_w_mcms) / (no_mcm_prob * num2Qgates_no_mcms)
+
 def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_labels = None, one_q_gate_names = None, loqs = False, gate_args_lists = None, rand_state = None, two_q_gate_density = .25, mcm_probability = .25, mcm_count = 1):
     if rand_state is None:
         rand_state = _np.random.RandomState()
     if gate_args_lists is None: gate_args_lists = {}
-    if qubit_labels is None: 
-        qubits = list(pspec.qubit_labels[:])
+    if qubit_labels is None:
+        qubits = list(pspec.qubit_labels[:])  # copy this list
     else:
         assert(isinstance(qubit_labels, (list, tuple))), "SubsetQs must be a list or a tuple!"
         qubits = list(qubit_labels[:])  # copy this list
-    
-    assert(mcm_count <= len(qubit_labels) and mcm_probability > 0) # Can't add more MCMs than you have qubits    
+    assert(mcm_count <= len(qubits) and mcm_probability > 0) # Can't add more MCMs than you have qubits    
     assert(mcm_labels is not None), 'Need MCM labels.'
     
     sampled_layer = []
@@ -62,31 +65,33 @@ def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_la
     else:
         mcm_qubits = []
     
-    if include_mcms is True:
-        edgelist = [edge for edge in edgelist if any([q in mcm_qubits for q in edge])]
-    
     # Pick out an independent set of edges
     while len(edgelist) > 0:
         edge = edgelist[rand_state.randint(0, len(edgelist))]
         selectededges.append(edge)
         # Delete all edges containing these qubits.
         edgelist = [e for e in edgelist if not any([q in e for q in edge])]
-        
-    num2Qgates = len(selectededges)
+    
     if len(qubits) > 1:
         mean_two_q_gates = len(qubits) * two_q_gate_density / 2
     else:
         mean_two_q_gates = 0
+        
+    selectededges_minus_mcms = [edge for edge in selectededges if not any([q in mcm_qubits for q in edge])]
+    num2Qgates_no_mcms = len(selectededges)
+    num2Qgates_w_mcms = len(selectededges_minus_mcms)
     
-    assert(num2Qgates >= mean_two_q_gates), "Device may have insufficient connectivity! Reduce your MCM count or two-qubit gate density!"
-
     if mean_two_q_gates > 0:
-        twoQprob = mean_two_q_gates / num2Qgates
+        twoQprob = compute_twoQ_prob(mean_two_q_gates, mcm_probability, two_q_gate_density, num2Qgates_no_mcms, num2Qgates_w_mcms)
     else:
         twoQprob = 0
+    
+    assert(twoQprob < 1), 'Device may have insufficient connectivity. Reduce your MCM or two-qubit gate density.'
+    print(twoQprob)
         
     unusedqubits = _copy.copy(qubits)
     for q in mcm_qubits:
+        q = str(q)
         mcm_locs.append(q)
         gate_label = Label(mcm_labels['mcm'], q)
         sampled_layer.append(gate_label)
