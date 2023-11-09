@@ -542,8 +542,9 @@ class _SimpleCompLayerRules(_LayerRules):
         -------
         LinearOperator
         """
-        if layerlbl in caches['complete-layers']: return caches['complete-layers'][layerlbl]
-        components = layerlbl.components
+        lbl = _Lbl(layerlbl) if isinstance(layerlbl, list) else layerlbl
+        if lbl in caches['complete-layers']: return caches['complete-layers'][lbl]
+        components = lbl.components
         use_global_idle = self._use_global_idle
         add_global_idle = self._add_global_idle_to_all_layers
         add_padded_idle = self._add_padded_idle
@@ -585,7 +586,7 @@ class _SimpleCompLayerRules(_LayerRules):
             model._init_virtual_obj(ret)  # so ret's gpindices get set - I don't think this is needed...
 
         if self.use_op_caching:
-            caches['complete-layers'][layerlbl] = ret  # cache the final label value
+            caches['complete-layers'][lbl] = ret  # cache the final label value
         return ret
 
     def _layer_component_operation(self, model, complbl, cache):
