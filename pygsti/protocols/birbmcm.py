@@ -33,9 +33,9 @@ def loqs_no_reset_modifier(bitstring, circuit_resets):
     modifier = _np.sum(_np.array(mcm_bitstring)*_np.array(circuit_results))
     return (-1)**modifier
 
-def compute_twoQ_prob(mean_two_q_gates: float, mcm_probability: float, two_q_gate_density: float, num2Qgates_no_mcms: int, num2Qgates_w_mcms: int):
+def compute_twoQ_prob(mean_two_q_gates: float, mcm_probability: float, p_2q_mcms: float, num2Qedges_mcms: int, num2Qedges: int):
     no_mcm_prob = 1 - mcm_probability
-    return (mean_two_q_gates - mcm_probability*two_q_gate_density*num2Qgates_w_mcms) / (no_mcm_prob * num2Qgates_no_mcms)
+    return (mean_two_q_gates - mcm_probability*p_2q_mcms*num2Qedges_mcms) / (no_mcm_prob * num2Qedges)
 
 def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_labels = None, one_q_gate_names = None, loqs = False, gate_args_lists = None, rand_state = None, two_q_gate_density = .25, mcm_probability = .25, mcm_count = 1):
     if rand_state is None:
@@ -62,6 +62,7 @@ def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_la
     include_mcms = (rand_state.random() <= mcm_probability) # Decide if you are going to include the MCMs
     if include_mcms is True: 
         mcm_qubits = rand_state.choice(qubits, mcm_count, replace = False)
+        mcm_qubits = [str(qubit) for qubit in mcm_qubits]
     else:
         mcm_qubits = []
     
@@ -76,22 +77,24 @@ def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_la
         mean_two_q_gates = len(qubits) * two_q_gate_density / 2
     else:
         mean_two_q_gates = 0
-        
-    selectededges_minus_mcms = [edge for edge in selectededges if not any([q in mcm_qubits for q in edge])]
-    num2Qgates_no_mcms = len(selectededges)
-    num2Qgates_w_mcms = len(selectededges_minus_mcms)
-    
+    num2Qedges = len(selectededges)
+    num2Qedges_mcms = max(0, num2Qedges - mcm_count) # this is conservative
+    if num2Qedges_mcms > 0:
+        p_2q_mcms = min(1, mean_two_q_gates / num2Qedges_mcms)
+    else:
+        p_2q_mcms = 0
     if mean_two_q_gates > 0:
-        twoQprob = compute_twoQ_prob(mean_two_q_gates, mcm_probability, two_q_gate_density, num2Qgates_no_mcms, num2Qgates_w_mcms)
+        if include_mcms is True:
+            twoQprob = p_2q_mcms
+        else:
+            twoQprob = compute_twoQ_prob(mean_two_q_gates, mcm_probability, p_2q_mcms, num2Qedges_mcms, num2Qedges)
     else:
         twoQprob = 0
     
-    assert(twoQprob < 1), 'Device may have insufficient connectivity. Reduce your MCM or two-qubit gate density.'
-    print(twoQprob)
+    assert(0 <= twoQprob <= 1), 'Device may have insufficient connectivity. Reduce your MCM or two-qubit gate density.'
         
     unusedqubits = _copy.copy(qubits)
     for q in mcm_qubits:
-        q = str(q)
         mcm_locs.append(q)
         gate_label = Label(mcm_labels['mcm'], q)
         sampled_layer.append(gate_label)
