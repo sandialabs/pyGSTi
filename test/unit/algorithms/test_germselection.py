@@ -373,4 +373,11 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
                                    assume_real=True, float_type=np.double,  verbosity=1, 
                                    force=pc.list_random_circuits_onelen(fixtures.opLabels, length=7, count=2, seed=_SEED))
                                    
-        
+                                   
+                                   
+class NotebookRegressionTester(GermSelectionData, BaseCase):
+
+    def test_broken_notebook_line(self):
+        liteGerms = germsel.find_germs(self.target_model, randomize=False, algorithm='greedy', verbosity=1,
+                                       assume_real=True, float_type=np.double)
+        # TODO assert correctness
