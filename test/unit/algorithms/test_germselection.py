@@ -1,6 +1,8 @@
 import numpy as np
 
 import pygsti.circuits as pc
+from pygsti.circuits import Circuit
+from pygsti.baseobjs import Label
 from pygsti.algorithms import germselection as germsel
 from pygsti.modelmembers.operations import StaticArbitraryOp
 from . import fixtures
@@ -15,11 +17,12 @@ class GermSelectionData(object):
     def setUpClass(cls):
         super(GermSelectionData, cls).setUpClass()
         # XXX are these acceptible test fixtures?
-        cls.good_germs = fixtures.germs
+        cls.good_germs = fixtures.robust_germs
         cls.germ_set = cls.good_germs + \
             pc.list_random_circuits_onelen(fixtures.opLabels, 4, 1, seed=_SEED) + \
             pc.list_random_circuits_onelen(fixtures.opLabels, 5, 1, seed=_SEED) + \
             pc.list_random_circuits_onelen(fixtures.opLabels, 6, 1, seed=_SEED)
+        cls.target_model = fixtures.fullTP_model
 
     def setUp(self):
         super(GermSelectionData, self).setUp()
@@ -193,7 +196,8 @@ class SlackGermSetOptimizationTester(GermSelectionData, BaseCase):
         # TODO assert correctness
 
     def test_optimize_integer_germs_slack_force_strings(self):
-        forceStrs = pc.to_circuits([('Gx',), ('Gy')])
+        forceStrs = [Circuit([Label('Gxpi2',0)], line_labels = (0,)),
+                    Circuit([Label('Gypi2',0)], line_labels = (0,))]
         finalGerms = germsel.find_germs_integer_slack(
             self.mdl_target_noisy, self.germ_set, fixed_slack=0.1,
             force=forceStrs, verbosity=4,
@@ -202,7 +206,7 @@ class SlackGermSetOptimizationTester(GermSelectionData, BaseCase):
     def test_optimize_integer_germs_slack_max_iterations(self):
         finalGerms = germsel.find_germs_integer_slack(
             self.mdl_target_noisy, self.germ_set, fixed_slack=0.1,
-            max_iter=1, verbosity=4,
+            max_iter=1, verbosity=4
         )
         self.assertEqual(finalGerms, self.germ_set)
 
@@ -256,7 +260,8 @@ class GRASPGermSetOptimizationTester(GermSelectionWithNeighbors, BaseCase):
         # TODO assert correctness
 
     def test_grasp_germ_set_optimization_force_strings(self):
-        forceStrs = pc.to_circuits([('Gx',), ('Gy')])
+        forceStrs = [Circuit([Label('Gxpi2',0)], line_labels = (0,)),
+                    Circuit([Label('Gypi2',0)], line_labels = (0,))]
         soln = germsel.find_germs_grasp(
             self.neighbors, self.germ_set, alpha=0.1, force=forceStrs,
             **self.options
@@ -287,7 +292,8 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
         # TODO assert correctness
 
     def test_build_up_force_strings(self):
-        forceStrs = pc.to_circuits([('Gx',), ('Gy')])
+        forceStrs = [Circuit([Label('Gxpi2',0)], line_labels = (0,)),
+                    Circuit([Label('Gypi2',0)], line_labels = (0,))]
         germs = germsel.find_germs_depthfirst(
             self.neighbors, self.germ_set, force=forceStrs, **self.options
         )
@@ -314,7 +320,8 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
         # TODO assert correctness
 
     def test_build_up_breadth_force_strings(self):
-        forceStrs = pc.to_circuits([('Gx',), ('Gy')])
+        forceStrs = [Circuit([Label('Gxpi2',0)], line_labels = (0,)),
+                    Circuit([Label('Gypi2',0)], line_labels = (0,))]
         germs = germsel.find_germs_breadthfirst(
             self.neighbors, self.germ_set, force=forceStrs, **self.options
         )
@@ -335,7 +342,7 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
     
     def test_greedy_low_rank_update(self):
         # TODO assert correctness
-        germs = germsel.find_germs(std.target_model(), seed=2017, 
+        germs = germsel.find_germs(self.target_model, seed=2017, 
                                    candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                    randomize=False, algorithm='greedy', mode='compactEVD',
                                    assume_real=True, float_type=np.double,  verbosity=1)
@@ -343,15 +350,15 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
     def test_forced_germs_none(self):
         # TODO assert correctness
         #make sure that the germ selection doesn't die with force is None
-        germs_compactEVD = germsel.find_germs(std.target_model(), seed=2017, 
+        germs_compactEVD = germsel.find_germs(self.target_model, seed=2017, 
                                    candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                    randomize=False, algorithm='greedy', mode='compactEVD',
                                    assume_real=True, float_type=np.double,  verbosity=1, force=None)
-        germs_allJac = germsel.find_germs(std.target_model(), seed=2017, 
+        germs_allJac = germsel.find_germs(self.target_model, seed=2017, 
                                    candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                    randomize=False, algorithm='greedy', mode='all-Jac',
                                    assume_real=True, float_type=np.double,  verbosity=1, force=None)
-        germs_singleJac = germsel.find_germs(std.target_model(), seed=2017, 
+        germs_singleJac = germsel.find_germs(self.target_model, seed=2017, 
                                    candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                    randomize=False, algorithm='greedy', mode='single-Jac',
                                    assume_real=True, float_type=np.double,  verbosity=1, force=None)
@@ -360,7 +367,7 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
         #TODO assert correctness
         #make sure that the germ selection doesn't die when the list of forced germs includes circuits
         #outside the initially specified candidate set.
-        germs = germsel.find_germs(std.target_model(), seed=2017, 
+        germs = germsel.find_germs(self.target_model, seed=2017, 
                                    candidate_germ_counts={3: 'all upto', 4: 10, 5:10, 6:10},
                                    randomize=False, algorithm='greedy', mode='compactEVD',
                                    assume_real=True, float_type=np.double,  verbosity=1, 
