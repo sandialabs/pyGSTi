@@ -63,6 +63,7 @@ def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_la
     if include_mcms is True: 
         mcm_qubits = rand_state.choice(qubits, mcm_count, replace = False)
         mcm_qubits = [str(qubit) for qubit in mcm_qubits]
+        num_mcms += mcm_count
     else:
         mcm_qubits = []
     
@@ -92,7 +93,8 @@ def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_la
         twoQprob = 0
     
     assert(0 <= twoQprob <= 1), 'Device may have insufficient connectivity. Reduce your MCM or two-qubit gate density.'
-        
+
+    selectededges = [edge for edge in selectededges if not any([q in mcm_qubits for q in edge])] #verify this works in the 3Q case
     unusedqubits = _copy.copy(qubits)
     for q in mcm_qubits:
         mcm_locs.append(q)
@@ -139,8 +141,7 @@ def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_la
     
     return {'mixed-layer': [sampled_layer]}, num_mcms, mcm_locs
 
-def sample_rb_mcm_mixed_layer_by_edgegrab(pspec, qubit_labels=None, mcm_labels = None, two_q_gate_density=0.25, mcm_density = .25, one_q_gate_names=None, loqs = False, mcm_only_layers = False, gate_args_lists=None, rand_state=None):
-    
+def sample_rb_mcm_mixed_layer_by_edgegrab(pspec, qubit_labels=None, mcm_labels = None, two_q_gate_density=0.25, one_q_gate_names=None, loqs = False, gate_args_lists=None, rand_state=None, mcm_only_layers = False, mcm_density = .25):
     assert(mcm_labels is not None), 'Need MCM labels.'
     if gate_args_lists is None: gate_args_lists = {}
         
@@ -243,7 +244,7 @@ def sample_rb_mcm_mixed_layer_by_edgegrab(pspec, qubit_labels=None, mcm_labels =
     
     return {'mixed-layer': [sampled_layer]}, num_mcms, mcm_locs
 
-def sample_rb_mcm_circuit_layer_with_1Q_gates(pspec, mixed_layer_sampler = sample_rb_mcm_mixed_layer_by_edgegrab ,qubit_labels=None, mcm_labels = None, two_q_gate_density=0.25, mcm_density = .25, one_q_gate_names=None, loqs = True, mcm_only_layers = True, gate_args_lists=None, rand_state=None):
+def sample_rb_mcm_circuit_layer_with_1Q_gates(pspec, mixed_layer_sampler = sample_rb_mcm_mixed_layer_by_edgegrab, mixed_layer_sampler_kwargs = {'mcm_density': .25, 'mcm_only_layers': True}, qubit_labels=None, mcm_labels = None, two_q_gate_density=0.25, one_q_gate_names=None, loqs = True, mcm_only_layers = True, gate_args_lists=None, rand_state=None):
     
     assert(mcm_labels is not None), 'Need MCM labels.'
     if gate_args_lists is None: gate_args_lists = {}
@@ -256,17 +257,10 @@ def sample_rb_mcm_circuit_layer_with_1Q_gates(pspec, mixed_layer_sampler = sampl
     if rand_state is None:
         rand_state = _np.random.RandomState()
         
-    assert(two_q_gate_density + mcm_density <= 1), 'You cannot have more than 100\% MCMs and 2Q gates.'
-    
-    
     num_qubits = len(qubits)
     if num_qubits == 1:
         mcm_only_layers = True
-    mixed_layers, mcms, mcm_locs = mixed_layer_sampler(pspec, qubit_labels=qubit_labels, 
-                                                                      mcm_labels = mcm_labels, two_q_gate_density=two_q_gate_density, mcm_density = mcm_density, 
-                                                                      one_q_gate_names=one_q_gate_names, loqs = loqs,
-                                                                                mcm_only_layers = mcm_only_layers,        
-                                                                      gate_args_lists=gate_args_lists, rand_state=rand_state)
+    mixed_layers, mcms, mcm_locs = mixed_layer_sampler(pspec, qubit_labels=qubit_labels, mcm_labels = mcm_labels, two_q_gate_density=two_q_gate_density, one_q_gate_names=one_q_gate_names, loqs = loqs, gate_args_lists=gate_args_lists, rand_state=rand_state, **mixed_layer_sampler_kwargs)
     
     unused_qubits = _np.setdiff1d(qubits, mcm_locs)
     gates = {q: 'Gc{}'.format(_np.random.choice(_np.arange(0,24))) for q in unused_qubits}
@@ -456,7 +450,7 @@ def process_measure_layer(native_measure_layer, qubit_pointers, new_qubit_labels
         labels = [Label(label[0], qubit_pointers[label[1]][-1]) for label in native_measure_layer[0]]
         return _cir.Circuit([labels], line_labels = new_qubit_labels)
 
-def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_gate_density, mcm_density, loqs, debug = True, layer_sampler = sample_rb_mcm_circuit_layer_with_1Q_gates, include_identity = True, mcm_only_layers = True, mcm_reset = True, seed = None):
+def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_gate_density, loqs, debug = True, layer_sampler = sample_rb_mcm_circuit_layer_with_1Q_gates, layer_sampler_kwargs = {'mixed_layer_sampler': sample_rb_mcm_mixed_layer_by_edgegrab, 'mixed_layer_sampler_kwargs': {'mcm_density': .25, 'mcm_only_layers': True}}, include_identity = True, mcm_reset = True, seed = None):
     
     rand_state = _np.random.RandomState(seed) # new change...
     
@@ -478,8 +472,8 @@ def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_ga
     mcm_count = 0
     for i in range(length):
         layer, mcms, mcm_locs = layer_sampler(pspec, qubit_labels=None, mcm_labels = mcm_labels,
-                                              two_q_gate_density=two_q_gate_density, mcm_density = mcm_density, loqs = loqs,
-                                              mcm_only_layers = mcm_only_layers, rand_state = rand_state)
+                                              two_q_gate_density=two_q_gate_density, loqs = loqs,
+                                              rand_state = rand_state, **layer_sampler_kwargs)
         
         # if loqs == True: 
         #    mcm_count += mcms
