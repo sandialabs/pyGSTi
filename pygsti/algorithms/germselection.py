@@ -1121,8 +1121,9 @@ def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
     #sanity check to confirm everything we're casting is actually real!
     if (float_type is _np.double) or (float_type is _np.single):
         #might as well use eps as the threshold here too.
-        if _np.any(_np.imag(SuperOp)>eps):
+        if _np.any(_np.abs(_np.imag(SuperOp))>eps):
             print(f'eps {eps}')
+            print(f'{_np.imag(SuperOp)[_np.abs(_np.imag(SuperOp))>eps]}')
             print(f'_np.imag(SuperOp)>eps: {_np.imag(SuperOp)}', flush = True)
             raise ValueError("Attempting to cast a twirling superoperator with non-trivial imaginary component to a real-valued data type.")
         #cast just the real part to specified float type.
