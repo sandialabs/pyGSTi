@@ -95,7 +95,7 @@ class OpBase(object):
             pass  # ok if some classes don't implement this
 
 
-class LinearOpTester(OpBase, BaseCase):
+class LinearOpTester(BaseCase):
     n_params = 0
 
     @staticmethod
@@ -108,8 +108,13 @@ class LinearOpTester(OpBase, BaseCase):
         rep = evotype.create_dense_superop_rep(None, np.identity(dim, 'd'), state_space)
         return op.LinearOperator(rep, evotype)
 
+    def setUp(self):
+        ExplicitOpModel._strict = False
+        self.gate = self.build_gate()
+
     def test_raise_on_invalid_method(self):
-        T = FullGaugeGroupElement(np.array([[0, 1], [1, 0]], 'd'))
+        mat = np.kron(np.array([[0, 1], [1, 0]], 'd'), np.eye(2))
+        T = FullGaugeGroupElement(mat)
         with self.assertRaises(NotImplementedError):
             self.gate.transform_inplace(T)
         with self.assertRaises(NotImplementedError):
