@@ -1055,7 +1055,6 @@ def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
     wrtEvals, wrtEvecs = _np.linalg.eig(wrt)
     wrtEvecsInv = _np.linalg.inv(wrtEvecs)
     
-    
     #calculate the dimensions of the eigenspaces:
     subspace_idx_list=[]
     subspace_eval_list=[]
@@ -1124,7 +1123,11 @@ def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
         if _np.any(_np.abs(_np.imag(SuperOp))>eps):
             print(f'eps {eps}')
             print(f'{_np.imag(SuperOp)[_np.abs(_np.imag(SuperOp))>eps]}')
-            print(f'_np.imag(SuperOp)>eps: {_np.imag(SuperOp)}', flush = True)
+            print(f'wrtEvals {wrtEvals}')
+            print(f'wrtEvecs {wrtEvecs}')
+            print(f'wrtInvEvecs {wrtInvEvecs}')
+            
+            #print(f'_np.imag(SuperOp)>eps: {_np.imag(SuperOp)}', flush = True)
             raise ValueError("Attempting to cast a twirling superoperator with non-trivial imaginary component to a real-valued data type.")
         #cast just the real part to specified float type.
         SuperOp=SuperOp.real.astype(float_type)
