@@ -1050,10 +1050,16 @@ def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
     #(that makes sense because otherwise the projected derivative would become complex
     #So we should be able to cast it back to the specified float_type just before returning it.
     SuperOp = _np.zeros((dim**2, dim**2), dtype=_np.cdouble)
-
+        
+    #Replace this with schur decomposition?
     # Get spectrum and eigenvectors of wrt
-    wrtEvals, wrtEvecs = _np.linalg.eig(wrt)
-    wrtEvecsInv = _np.linalg.inv(wrtEvecs)
+    #wrtEvals, wrtEvecs = _np.linalg.eig(wrt)
+    #wrtEvecsInv = _np.linalg.inv(wrtEvecs)
+    schur_form, wrtEvecs = _sla.schur(wrt, output = 'complex')
+    #schur_form should be an upper triangular matrix, with the
+    #eigenvalues we want on the diagonal.
+    wrtEvals = _np.diag(schur_form)
+    wrtEvecsInv = wrtEvecs.conj().T
     
     #calculate the dimensions of the eigenspaces:
     subspace_idx_list=[]
