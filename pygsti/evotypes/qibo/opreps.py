@@ -13,6 +13,7 @@ Operation representation classes for the `qibo` evolution type.
 import itertools as _itertools
 import copy as _copy
 from functools import partial as _partial
+import warnings as _warnings
 
 import numpy as _np
 from scipy.sparse.linalg import LinearOperator
@@ -32,31 +33,36 @@ from ...tools import optools as _ot
 try:
     import qibo as _qibo
 
-    std_qibo_creation_fns = {  # functions that create the desired op given qubit indices & gate args
-        'Gi': _qibo.gates.I,
-        'Gxpi2': _partial(_qibo.gates.RX, theta=_np.pi / 2, trainable=False),
-        'Gypi2': _partial(_qibo.gates.RY, theta=_np.pi / 2, trainable=False),
-        'Gzpi2': _partial(_qibo.gates.RZ, theta=_np.pi / 2, trainable=False),
-        'Gxpi': _qibo.gates.X,
-        'Gypi': _qibo.gates.Y,
-        'Gzpi': _qibo.gates.Z,
-        'Gxmpi2': _partial(_qibo.gates.RX, theta=-_np.pi / 2, trainable=False),
-        'Gympi2': _partial(_qibo.gates.RY, theta=-_np.pi / 2, trainable=False),
-        'Gzmpi2': _partial(_qibo.gates.RZ, theta=-_np.pi / 2, trainable=False),
-        'Gh': _qibo.gates.H,
-        'Gp': _qibo.gates.S,
-        'Gpdag': _partial(_qibo.gates.U1, theta=-_np.pi / 2, trainable=False),
-        'Gt': _qibo.gates.T,
-        'Gtdag': _partial(_qibo.gates.U1, theta=-_np.pi / 4, trainable=False),
-        'Gcphase': _qibo.gates.CZ,
-        'Gcnot': _qibo.gates.CNOT,
-        'Gswap': _qibo.gates.SWAP,
-        #'Gzr': _qibo.gates.RZ,  # takes (q, theta)
-        #'Gczr': _qibo.gates.CRZ,  # takes (q0, q1, theta)
-        'Gx': _partial(_qibo.gates.RX, theta=_np.pi / 2, trainable=False),
-        'Gy': _partial(_qibo.gates.RY, theta=_np.pi / 2, trainable=False),
-        'Gz': _partial(_qibo.gates.RZ, theta=_np.pi / 2, trainable=False)
-    }
+    from packaging import version
+    if version.parse(_qibo.__version__) != version.parse("0.1.7"):
+        _warnings.warn('Qibo interface is deprecated and will be removed in 0.9.13')
+        _qibo = None
+    else:
+        std_qibo_creation_fns = {  # functions that create the desired op given qubit indices & gate args
+            'Gi': _qibo.gates.I,
+            'Gxpi2': _partial(_qibo.gates.RX, theta=_np.pi / 2, trainable=False),
+            'Gypi2': _partial(_qibo.gates.RY, theta=_np.pi / 2, trainable=False),
+            'Gzpi2': _partial(_qibo.gates.RZ, theta=_np.pi / 2, trainable=False),
+            'Gxpi': _qibo.gates.X,
+            'Gypi': _qibo.gates.Y,
+            'Gzpi': _qibo.gates.Z,
+            'Gxmpi2': _partial(_qibo.gates.RX, theta=-_np.pi / 2, trainable=False),
+            'Gympi2': _partial(_qibo.gates.RY, theta=-_np.pi / 2, trainable=False),
+            'Gzmpi2': _partial(_qibo.gates.RZ, theta=-_np.pi / 2, trainable=False),
+            'Gh': _qibo.gates.H,
+            'Gp': _qibo.gates.S,
+            'Gpdag': _partial(_qibo.gates.U1, theta=-_np.pi / 2, trainable=False),
+            'Gt': _qibo.gates.T,
+            'Gtdag': _partial(_qibo.gates.U1, theta=-_np.pi / 4, trainable=False),
+            'Gcphase': _qibo.gates.CZ,
+            'Gcnot': _qibo.gates.CNOT,
+            'Gswap': _qibo.gates.SWAP,
+            #'Gzr': _qibo.gates.RZ,  # takes (q, theta)
+            #'Gczr': _qibo.gates.CRZ,  # takes (q0, q1, theta)
+            'Gx': _partial(_qibo.gates.RX, theta=_np.pi / 2, trainable=False),
+            'Gy': _partial(_qibo.gates.RY, theta=_np.pi / 2, trainable=False),
+            'Gz': _partial(_qibo.gates.RZ, theta=_np.pi / 2, trainable=False)
+        }
 except (ImportError, AttributeError):  # AttributeError if an early version of qibo without some of the above gates
     _qibo = None
 

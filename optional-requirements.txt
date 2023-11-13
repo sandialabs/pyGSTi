@@ -10,5 +10,5 @@ cython
 cvxopt
 cvxpy
 seaborn
-qibo
+qibo==0.1.7
 packaging
