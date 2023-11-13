@@ -247,10 +247,14 @@ class RawTVDFunctionTester(RawObjectiveFunctionTesterBase, BaseCase):
         self.skipTest("Derivatives for RawTVDFunction aren't implemented yet.")
 
 
-class TimeIndependentMDSObjectiveFunctionTester(ObjectiveFunctionData):
+class TimeIndependentMDSObjectiveFunctionTesterBase(ObjectiveFunctionData):
     """
     Tests for methods in the TimeIndependentMDSObjectiveFunction class.
     """
+
+    @staticmethod
+    def build_objfns(cls):
+        raise NotImplementedError()
 
     @classmethod
     def setUpClass(cls):
@@ -332,7 +336,7 @@ class TimeIndependentMDSObjectiveFunctionTester(ObjectiveFunctionData):
             self.assertArraysAlmostEqual(hessian / norm, fd_hessian / norm, places=3)
 
 
-class Chi2FunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
+class Chi2FunctionTester(TimeIndependentMDSObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = True
     enable_hessian_tests = False
 
@@ -341,7 +345,7 @@ class Chi2FunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
                 for penalties in self.penalty_dicts]
 
 
-class ChiAlphaFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
+class ChiAlphaFunctionTester(TimeIndependentMDSObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = True
     enable_hessian_tests = False
 
@@ -349,7 +353,7 @@ class ChiAlphaFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase
         return [_objfns.ChiAlphaFunction.create_from(self.model, self.dataset, self.circuits, {'fmin': 1e-4}, None, method_names=('terms', 'dterms'))]
 
 
-class FreqWeightedChi2FunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
+class FreqWeightedChi2FunctionTester(TimeIndependentMDSObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = True
     enable_hessian_tests = False
 
@@ -357,7 +361,7 @@ class FreqWeightedChi2FunctionTester(TimeIndependentMDSObjectiveFunctionTester, 
         return [_objfns.FreqWeightedChi2Function.create_from(self.model, self.dataset, self.circuits, None, None, method_names=('terms', 'dterms'))]
 
 
-class PoissonPicDeltaLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
+class PoissonPicDeltaLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = True
     enable_hessian_tests = True
 
@@ -367,7 +371,7 @@ class PoissonPicDeltaLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTeste
                 for penalties in self.penalty_dicts]
 
 
-class DeltaLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
+class DeltaLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = False
     enable_hessian_tests = False
 
@@ -375,7 +379,7 @@ class DeltaLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCas
         return [_objfns.DeltaLogLFunction.create_from(self.model, self.dataset, self.circuits, None, None, method_names=('terms', 'dterms'))]
 
 
-class MaxLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
+class MaxLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = False
     enable_hessian_tests = False
 
@@ -383,7 +387,7 @@ class MaxLogLFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase)
         return [_objfns.MaxLogLFunction.create_from(self.model, self.dataset, self.circuits, None, None, method_names=('terms', 'dterms'))]
 
 
-class TVDFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
+class TVDFunctionTester(TimeIndependentMDSObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = True
     enable_hessian_tests = False
 
@@ -394,10 +398,14 @@ class TVDFunctionTester(TimeIndependentMDSObjectiveFunctionTester, BaseCase):
         self.skipTest("Derivatives for TVDFunction aren't implemented yet.")
 
 
-class TimeDependentMDSObjectiveFunctionTester(ObjectiveFunctionData):
+class TimeDependentMDSObjectiveFunctionTesterBase(ObjectiveFunctionData):
     """
     Tests for methods in the TimeDependentMDSObjectiveFunction class.
     """
+
+    @staticmethod
+    def build_objfns(cls):
+        raise NotImplementedError() 
 
     def setUp(self):
         super().setUp()
@@ -415,7 +423,7 @@ class TimeDependentMDSObjectiveFunctionTester(ObjectiveFunctionData):
             #TODO: add validation
 
 
-class TimeDependentChi2FunctionTester(TimeDependentMDSObjectiveFunctionTester, BaseCase):
+class TimeDependentChi2FunctionTester(TimeDependentMDSObjectiveFunctionTesterBase, BaseCase):
     """
     Tests for methods in the TimeDependentChi2Function class.
     """
@@ -424,7 +432,7 @@ class TimeDependentChi2FunctionTester(TimeDependentMDSObjectiveFunctionTester, B
         return [_objfns.TimeDependentChi2Function.create_from(self.model, self.dataset, self.circuits, method_names=('lsvec', 'dlsvec'))]
 
 
-class TimeDependentPoissonPicLogLFunctionTester(TimeDependentMDSObjectiveFunctionTester, BaseCase):
+class TimeDependentPoissonPicLogLFunctionTester(TimeDependentMDSObjectiveFunctionTesterBase, BaseCase):
     """
     Tests for methods in the TimeDependentPoissonPicLogLFunction class.
     """
