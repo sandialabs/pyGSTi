@@ -5,6 +5,7 @@ import pygsti.objectivefns.objectivefns as _objfns
 from pygsti.objectivefns.wildcardbudget import PrimitiveOpsWildcardBudget as _PrimitiveOpsWildcardBudget
 from . import smqfixtures
 from ..util import BaseCase
+import unittest
 
 
 class ObjectiveFunctionData(object):
@@ -82,34 +83,14 @@ class ObjectiveFunctionBuilderTester(ObjectiveFunctionData, BaseCase):
         self.assertTrue(isinstance(fn, builder.cls_to_build))
 
 
-#BASE CLASS - no testing
-#class ObjectiveFunctionTester(BaseCase):
-#    """
-#    Tests for methods in the ObjectiveFunction class.
-#    """
-#
-#    @classmethod
-#    def setUpClass(cls):
-#        pass #TODO
-#
-#    @classmethod
-#    def tearDownClass(cls):
-#        pass #TODO
-#
-#    def setUp(self):
-#        pass #TODO
-#
-#    def tearDown(self):
-#        pass #TODO
-#
-#    def test_get_chi2k_distributed_qty(self):
-#        raise NotImplementedError() #TODO: test chi2k_distributed_qty
-
-
-class RawObjectiveFunctionTester(object):
+class RawObjectiveFunctionTesterBase(object):
     """
     Tests for methods in the RawObjectiveFunction class.
     """
+
+    @staticmethod
+    def build_objfns(cls):
+        raise NotImplementedError()
 
     @classmethod
     def setUpClass(cls):
@@ -187,7 +168,7 @@ class RawObjectiveFunctionTester(object):
                 # h(terms) = 2 * (dsvec**2 + lsvec * hlsvec)
 
 
-class RawChi2FunctionTester(RawObjectiveFunctionTester, BaseCase):
+class RawChi2FunctionTester(RawObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = True
 
     @staticmethod
@@ -196,7 +177,7 @@ class RawChi2FunctionTester(RawObjectiveFunctionTester, BaseCase):
         return [_objfns.RawChi2Function({'min_prob_clip_for_weighting': 1e-6}, resource_alloc)]
 
 
-class RawChiAlphaFunctionTester(RawObjectiveFunctionTester, BaseCase):
+class RawChiAlphaFunctionTester(RawObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = True
 
     @staticmethod
@@ -211,7 +192,7 @@ class RawChiAlphaFunctionTester(RawObjectiveFunctionTester, BaseCase):
         self.skipTest("Hessian for RawChiAlphaFunction isn't implemented yet.")
 
 
-class RawFreqWeightedChi2FunctionTester(RawObjectiveFunctionTester, BaseCase):
+class RawFreqWeightedChi2FunctionTester(RawObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = True
 
     @staticmethod
@@ -220,7 +201,7 @@ class RawFreqWeightedChi2FunctionTester(RawObjectiveFunctionTester, BaseCase):
         return [_objfns.RawFreqWeightedChi2Function({'min_freq_clip_for_weighting': 1e-4}, resource_alloc)]
 
 
-class RawPoissonPicDeltaLogLFunctionTester(RawObjectiveFunctionTester, BaseCase):
+class RawPoissonPicDeltaLogLFunctionTester(RawObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = True
 
     @staticmethod
@@ -231,7 +212,7 @@ class RawPoissonPicDeltaLogLFunctionTester(RawObjectiveFunctionTester, BaseCase)
                                                         'pfratio_derivpt': 0.1, 'fmin': 1e-4}, resource_alloc)]
 
 
-class RawDeltaLogLFunctionTester(RawObjectiveFunctionTester, BaseCase):
+class RawDeltaLogLFunctionTester(RawObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = False
 
     @staticmethod
@@ -242,7 +223,7 @@ class RawDeltaLogLFunctionTester(RawObjectiveFunctionTester, BaseCase):
                                              resource_alloc)]
 
 
-class RawMaxLogLFunctionTester(RawObjectiveFunctionTester, BaseCase):
+class RawMaxLogLFunctionTester(RawObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = False
 
     @staticmethod
@@ -251,7 +232,7 @@ class RawMaxLogLFunctionTester(RawObjectiveFunctionTester, BaseCase):
         return [_objfns.RawMaxLogLFunction({}, resource_alloc)]
 
 
-class RawTVDFunctionTester(RawObjectiveFunctionTester, BaseCase):
+class RawTVDFunctionTester(RawObjectiveFunctionTesterBase, BaseCase):
     computes_lsvec = True
 
     @staticmethod
