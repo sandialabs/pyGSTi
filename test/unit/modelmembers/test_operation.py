@@ -103,8 +103,9 @@ class LinearOpTester(OpBase, BaseCase):
         dim = 4
         evotype = Evotype.cast('default')
         state_space = statespace.default_space_for_dim(dim)
-        rep = evotype.create_dense_superop_rep(np.identity(dim, 'd'), state_space)
-        #rep = evotype.create_dense_superop_rep(None, np.identity(dim, 'd'), state_space)
+        # rep = evotype.create_dense_superop_rep(np.identity(dim, 'd'), state_space)
+        #   ^ Original, failing line. My fix below.
+        rep = evotype.create_dense_superop_rep(None, np.identity(dim, 'd'), state_space)
         return op.LinearOperator(rep, evotype)
 
     def test_raise_on_invalid_method(self):
