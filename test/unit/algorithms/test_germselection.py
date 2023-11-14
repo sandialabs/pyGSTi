@@ -375,9 +375,12 @@ class GreedyGermSelectionTester(GermSelectionWithNeighbors, BaseCase):
                                    
                                    
                                    
-class NotebookRegressionTester(GermSelectionData, BaseCase):
+class EndToEndGermSelectionTester(GermSelectionData, BaseCase):
 
-    def test_broken_notebook_line(self):
+    #This line from our tutorial notebook previously revealed some numerical precision
+    #related bugs, and so should be a worthwhile addition to the test suite since it has_key
+    #previously proven to be useful as such.
+    def lite_germ_selection_end_to_end_test(self):
         liteGerms = germsel.find_germs(self.target_model, randomize=False, algorithm='greedy', verbosity=1,
                                        assume_real=True, float_type=np.double)
         # TODO assert correctness
