@@ -1,3 +1,4 @@
+## user-exposure: low (EGN)
 """
 Clifford circuit, CNOT circuit, and stabilizer state/measurement generation compilation routines
 """

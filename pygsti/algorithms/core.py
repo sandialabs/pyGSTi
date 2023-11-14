@@ -1,3 +1,4 @@
+## user-exposure: high (EGN - for "old"-style GST API e.g. run_gst_fit)
 """
 Core GST algorithms
 """
