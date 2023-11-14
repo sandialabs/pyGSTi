@@ -15,7 +15,6 @@ import re as _re
 import subprocess as _sp
 import tempfile as _tf
 import numpy as _np
-import warnings as _warnings
 
 from .. import basereps as _basereps
 from . import _get_densitymx_mode, _get_nshots
@@ -24,11 +23,6 @@ from pygsti.baseobjs.outcomelabeldict import OutcomeLabelDict as _OutcomeLabelDi
 
 try:
     import qibo as _qibo
-
-    from packaging import version
-    if version.parse(_qibo.__version__) != version.parse("0.1.7"):
-        _warnings.warn('Qibo interface is deprecated and will be removed in 0.9.13!')
-        _qibo = None
 except ImportError:
     _qibo = None
 
