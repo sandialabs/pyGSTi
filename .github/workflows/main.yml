@@ -22,7 +22,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [windows-2019] #[ubuntu-20.04, windows-2019, macos-11]
+        os: [ubuntu-20.04, windows-2019, macos-11]
         python-version: [3.7, 3.8, 3.9, '3.10']
 
     steps:
@@ -68,7 +68,7 @@ jobs:
       if: ${{matrix.os == 'windows-2019'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       python -m pytest -n auto --dist loadscope test/unit/algorithms
+       python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
     - name: Run unit tests MacOS  
       if: ${{matrix.os == 'macos-11'}}
       run: |
