@@ -1038,9 +1038,32 @@ def _num_non_spam_gauge_params(model):
 # so SOP is op_dim^2 x op_dim^2 and acts on vectorized *gates*
 # Recall vectorizing identity (when vec(.) concats rows as flatten does):
 #     vec( A * X * B ) = A tensor B^T * vec( X )
-def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
-    """Return super operator for doing a perfect twirl with respect to wrt.
+def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble, tol=1e-12):
     """
+    Return super operator for doing a perfect twirl with respect to wrt.
+        
+    Parameters
+    ---------
+    wrt : numpy.ndarray
+        Superoperator to construct a twirling superduperoperator with
+        respect to.
+        
+    eps : float
+        Tolerance used for evaluating whether two eigenvalues are degenerate.
+        
+    float_type : numpy dtype (optional, default numpy.cdouble)
+        When specified return the resulting superduperoperator as an ndarray
+        with this dtype.
+        
+    tol : float (optional, default 1e-12)
+       
+    Returns
+    -------
+    SuperOp : ndarray
+        SuperOp (really a superduperoperator) is dim^2 x dim^2 matrix that acts on
+        vectorized superoperators to perform a projection onto the commutant of wrt.
+    """
+    
     assert wrt.shape[0] == wrt.shape[1]  # only square matrices allowed
     dim = wrt.shape[0]
     
@@ -1058,7 +1081,7 @@ def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
     
     # Get spectrum and eigenvectors of wrt
     # May as well use the same eps here too.
-    if _np.linalg.norm(wrt_commutator) < eps:
+    if _np.linalg.norm(wrt_commutator) < tol*(dim**0.5):
         schur_form, wrtEvecs = _sla.schur(wrt, output = 'complex')
         #schur_form should be an upper triangular matrix, with the
         #eigenvalues we want on the diagonal.
@@ -1137,13 +1160,6 @@ def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
     if (float_type is _np.double) or (float_type is _np.single):
         #might as well use eps as the threshold here too.
         if _np.any(_np.abs(_np.imag(SuperOp))>eps):
-            print(f'eps {eps}')
-            print(f'{_np.imag(SuperOp)[_np.abs(_np.imag(SuperOp))>eps]}')
-            print(f'wrtEvals {wrtEvals}')
-            print(f'wrtEvecs {wrtEvecs}')
-            print(f'wrtEvecsInv {wrtEvecsInv}')
-            
-            #print(f'_np.imag(SuperOp)>eps: {_np.imag(SuperOp)}', flush = True)
             raise ValueError("Attempting to cast a twirling superoperator with non-trivial imaginary component to a real-valued data type.")
         #cast just the real part to specified float type.
         SuperOp=SuperOp.real.astype(float_type)
