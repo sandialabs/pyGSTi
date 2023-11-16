@@ -49,10 +49,11 @@ def anti_commute(mat1, mat2):
 
 
 # NOTES ON THIS FACTOR OF TWO:
-# IF/WHEN IT REEMERGES WITH ADDITIONAL QUBITS AND/OR 
+# IF/WHEN IT REEMERGES WITH ADDITIONAL QUBITS AND/OR
 # HIGHER DIMENSION PAULIS:
 # MAKE SURE THE INPUTS TO THESE FUNCTIONS ARE THE FULL PROCESS MATRICES
 # AND NOT THE "ABBREVIATED" PAULIS
+
 
 # Hamiltonian Error Generator
 def hamiltonian_error_generator(initial_state, indexed_pauli, identity):
@@ -95,12 +96,13 @@ def anti_symmetric_error_generator(initial_state, pauli_index_1, pauli_index_2):
         )
     )
 
-## TODO: Update this function to use 
+
+## TODO: Update this function to use
 ## #pauli_matrices = basisconstructors.pp_matrices_dict(2**numQubits, normalize=False)
 ## as is now done elsewhere
 # Convert basis
 def convert_to_pauli(matrix, numQubits):
-    #pauli_matrices = basisconstructors.pp_matrices_dict(2**numQubits, normalize=False)
+    # pauli_matrices = basisconstructors.pp_matrices_dict(2**numQubits, normalize=False)
     pauliNames1Q = ["I", "X", "Y", "Z"]
     # Hard force to 1- or 2-qubit
     if numQubits == 1:
@@ -346,7 +348,7 @@ def dict_to_jacobian(coef_dict, classification, numQubits):
 # -----------------------------------------------------------------------------
 
 
-#def idle_tomography_fidpairs(
+# def idle_tomography_fidpairs(
 #    nqubits,
 #    maxweight=2,
 #    include_hamiltonian=True,
@@ -356,7 +358,7 @@ def dict_to_jacobian(coef_dict, classification, numQubits):
 #    ham_tmpl="auto",
 #    preferred_prep_basis_signs=("+", "+", "+"),
 #    preferred_meas_basis_signs=("+", "+", "+"),
-#):
+# ):
 #    """
 #    Construct a list of Pauli-basis fiducial pairs for idle tomography.
 #
@@ -509,6 +511,7 @@ def dict_to_jacobian(coef_dict, classification, numQubits):
 #
 #    return fidpairs
 
+
 def idle_tomography_fidpairs(nqubits):
     """
     Construct a list of Pauli-basis fiducial pairs for idle tomography.
@@ -528,24 +531,28 @@ def idle_tomography_fidpairs(nqubits):
         a list of (prep,meas) 2-tuples of NQPauliState objects, each of
         length `nqubits`, representing the fiducial pairs.
     """
-    
-    pauli_strings = ['I', 'X', 'Y', 'Z']
-    nq_pauli_strings = list(product(pauli_strings, repeat=nqubits))[1:] #skip the all identity string
-    
-    #we also want all possible combinations of sign for each the pauli
-    #observable on each qubit. The NQPauliState expects these to be either 0
-    #for + or 1 for -.
-    signs = list(product([0,1], repeat=nqubits))
-    
+
+    pauli_strings = ["I", "X", "Y", "Z"]
+    nq_pauli_strings = list(product(pauli_strings, repeat=nqubits))[
+        1:
+    ]  # skip the all identity string
+
+    # we also want all possible combinations of sign for each the pauli
+    # observable on each qubit. The NQPauliState expects these to be either 0
+    # for + or 1 for -.
+    signs = list(product([0, 1], repeat=nqubits))
+
     fidpairs = []
     for prep_string, meas_string in product(nq_pauli_strings, repeat=2):
         for sign in signs:
-            fidpairs.append((_pobjs.NQPauliState(prep_string, sign),
-                             _pobjs.NQPauliState(meas_string, signs[0])))
-    
-    
-    return fidpairs
+            fidpairs.append(
+                (
+                    _pobjs.NQPauliState(prep_string, sign),
+                    _pobjs.NQPauliState(meas_string, signs[0]),
+                )
+            )
 
+    return fidpairs
 
 
 def preferred_signs_from_paulidict(pauli_basis_dict):
@@ -1448,6 +1455,9 @@ def do_idle_tomography(
             )
         ]
     )
+
+    # TODO: update intrinsic rates to match dictionary form from idtreport
+    # TODO: i.e. "hamiltonian": list, etc.
     intrinsic_rates = _np.dot(full_jacobian_inv, obs_err_rates)
 
     return _IdleTomographyResults(
