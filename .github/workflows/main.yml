@@ -63,17 +63,17 @@ jobs:
       if: ${{matrix.os == 'ubuntu-20.04'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       python -m pytest -n auto --cov=pygsti test/unit
+       python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
     - name: Run unit tests windows  
       if: ${{matrix.os == 'windows-2019'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       python -m pytest -n auto --cov=pygsti test/unit
+       python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
     - name: Run unit tests MacOS  
       if: ${{matrix.os == 'macos-11'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       python -m pytest -n auto --cov=pygsti test/unit
+       python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
     
   
   push: # Push to stable "beta" branch on successful build
