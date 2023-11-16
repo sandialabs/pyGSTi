@@ -3995,7 +3995,7 @@ class Circuit(object):
                 assert(len(gate_qubits) <= 2), 'Gates on more than 2 qubits given; this is currently not supported!'
 
                 # Find the openqasm for the gate.
-                if gate.name.__str__() != 'Iz' and gate.name.__str__() != 'Ipc':
+                if gate.name.__str__() != 'Iz' and gate.name.__str__() != 'Ipc' and gate.name.__str__() != 'Ipc_swap':
                     openqasmlist_for_gate = gatename_conversion.get(gate.name, None)
 
                     if openqasmlist_for_gate is None:
@@ -4037,7 +4037,7 @@ class Circuit(object):
                                     openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
 
                 else:
-                    assert gate.name.__str__() == 'Iz' or 'Ipc', "Only mid-circuit Z basis measurement 'Iz' and parity check 'Ipc' supported at present."
+                    assert gate.name.__str__() == 'Iz' or 'Ipc' or 'Ipc_swap', "Only mid-circuit Z basis measurement 'Iz' and parity check 'Ipc' supported at present."
                     if gate.name.__str__() == 'Iz':
                         q = gate.qubits[0] 
                         # classical_bit = num_IMs_used
@@ -4045,9 +4045,52 @@ class Circuit(object):
                     else:
                         assert ancilla_label is not None, "Parity check 'Ipc' requires an ancilla, did you forget to set 'ancilla_label'?"
                         openqasm_for_gate = ""
-                        for control in gate_qubits:
-                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[control]), qubit_conversion[ancilla_label])
-                        openqasm_for_gate += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[ancilla_label]), num_IMs_used)   
+                        if gate.name.__str__() == 'Ipc_swap':
+                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[1]]), qubit_conversion[ancilla_label])
+                            openqasm_for_gate += 'barrier '
+                            for q in self.line_labels:
+                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[0]]), str(qubit_conversion[gate_qubits[1]]))
+                            openqasm_for_gate += 'barrier '
+                            for q in self.line_labels:
+                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[1]]), str(qubit_conversion[gate_qubits[0]]))
+                            openqasm_for_gate += 'barrier '
+                            for q in self.line_labels:
+                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[0]]), str(qubit_conversion[gate_qubits[1]]))
+                            openqasm_for_gate += 'barrier '
+                            for q in self.line_labels:
+                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[1]]), qubit_conversion[ancilla_label])
+                            openqasm_for_gate += 'barrier '
+                            for q in self.line_labels:
+                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[0]]), str(qubit_conversion[gate_qubits[1]]))
+                            openqasm_for_gate += 'barrier '
+                            for q in self.line_labels:
+                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[1]]), str(qubit_conversion[gate_qubits[0]]))
+                            openqasm_for_gate += 'barrier '
+                            for q in self.line_labels:
+                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[0]]), str(qubit_conversion[gate_qubits[1]]))
+                            openqasm_for_gate += 'barrier '
+                            for q in self.line_labels:
+                                openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            openqasm_for_gate += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[ancilla_label]), num_IMs_used) 
+                        else: 
+                            for control in gate_qubits:
+                                openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[control]), qubit_conversion[ancilla_label])
+                            openqasm_for_gate += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[ancilla_label]), num_IMs_used)
                     num_IMs_used += 1 
 
                 # Add the openqasm for the gate to the openqasm string.

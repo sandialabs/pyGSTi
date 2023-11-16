@@ -157,6 +157,13 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
     #Note: subMxs[y-index][x-index] is proper usage
     return subMxs
 
+def _compute_sub_dofs(gss, model, sub_mx_creation_fn, dataset):
+    circ_dof_dict = dataset.degrees_of_freedom(method = "from model", model=model, per_circuit=True)
+    max_dof = circ_dof_dict[max(circ_dof_dict)]
+    subdofs = [[sub_mx_creation_fn(gss.plaquette(x, y, True), x, y, circ_dof_dict)
+               for x in gss.used_xs] for y in gss.used_ys]
+    return max_dof, subdofs
+
 
 @smart_cached
 def dscompare_llr_matrices(gsplaq, dscomparator):
@@ -344,7 +351,7 @@ def rated_n_sigma(dataset, model, circuits, objfn_builder, np=None, wildcard=Non
     ds_gstrs = _tools.apply_aliases_to_circuits(circuits, aliases)
     np = model.num_modeltest_params
 
-    Ns = dataset.degrees_of_freedom(ds_gstrs, method="present_outcomes-1")  # number of independent parameters in dataset #CHANGE THIS BACK!!!!
+    Ns = dataset.degrees_of_freedom(ds_gstrs, method="from model", model=model)  # number of independent parameters in dataset
     k = max(Ns - np, 1)  # expected chi^2 or 2*(logL_ub-logl) mean
     Nsig = (fitqty - k) / _np.sqrt(2 * k)
     if Ns <= np: _warnings.warn("Max-model params (%d) <= model params (%d)!  Using k == 1." % (Ns, np))

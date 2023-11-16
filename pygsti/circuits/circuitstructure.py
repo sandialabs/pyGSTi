@@ -161,6 +161,32 @@ class CircuitPlaquette(_NicelySerializable):
             raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))
         return ret
 
+
+    def elementvec_to_matrix_simple(self, elementvec):
+        """
+        Form a matrix of values corresponding to this plaquette from an element vector.
+
+        An element vector holds individual-outcome elements (e.g. the bulk probabilities
+        computed by a model).
+
+        Parameters
+        ----------
+        elementvec : numpy array
+            An array containting the values to use when constructing a
+            matrix of values for this plaquette.  This array may contain more
+            values than are needed by this plaquette.  Indices into this array
+            are given by `elindices_lookup`.
+
+        Returns
+        -------
+        numpy array
+        """
+        ret = _np.nan * _np.ones((self.num_rows, self.num_cols), 'd')
+        for (i, j), opstr in self.elements.items():
+            ret[i, j] = elementvec[opstr]
+        
+        return ret
+
     def process_circuits(self, processor_fn, updated_aliases=None):
         """
         Create a new plaquette with circuits manipulated according to `processor_fn`.

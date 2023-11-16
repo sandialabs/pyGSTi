@@ -162,7 +162,7 @@ class Colormap(object):
         # Perceived brightness calculation from http://alienryderflex.com/hsp.html
         return _np.sqrt(0.299 * r**2 + 0.587 * g**2 + 0.114 * b**2)
 
-    def normalize(self, value):
+    def normalize(self, value, value_dofs=None):
         """
         Normalize value as it would be prior to linearly interpolating onto the [0,1] range of the color map.
 
@@ -225,7 +225,7 @@ class Colormap(object):
                              for z, (r, g, b) in self.rgb_colors]
         return plotly_colorscale
 
-    def interpolate_color(self, value):
+    def interpolate_color(self, value, value_dof=None):
         """
         Retrieves the color at a particular colormap value.
 
@@ -242,7 +242,7 @@ class Colormap(object):
         str
             A string representation of the plotly color of the form `"rgb(R,G,B)"`.
         """
-        normalized_value = self.normalize(value)
+        normalized_value = self.normalize(value, value_dof)
 
         for i, (val, color) in enumerate(self.rgb_colors[:-1]):
             next_val, next_color = self.rgb_colors[i + 1]
@@ -278,7 +278,7 @@ class Colormap(object):
         from .mpl_colormaps import mpl_make_linear_cmap as _mpl_make_linear_cmap
         norm = _mpl_make_linear_norm(self.hmin, self.hmax)
         cmap = _mpl_make_linear_cmap(self.rgb_colors)
-        return norm, cmap
+        return norm, cm0p
 
 
 class LinlogColormap(Colormap):
@@ -418,7 +418,7 @@ class LinlogColormap(Colormap):
         return cmap
 
     @smart_cached
-    def normalize(self, value):
+    def normalize(self, value, value_dofs=None):
         """
         Scale value to a value between self.hmin and self.hmax (heatmap endpoints).
 
@@ -426,6 +426,10 @@ class LinlogColormap(Colormap):
         ----------
         value : float or numpy.ndarray
             The value to normalize.
+
+        value_dofs : float or numpy.ndarray, optional
+            The number of degrees of freedom to use in calculating the transition point for 
+            the value. Must be the same shape as value. 
 
         Returns
         -------
@@ -448,8 +452,16 @@ class LinlogColormap(Colormap):
             value = _np.ma.array(value.filled(1e100),
                                  mask=_np.ma.getmask(value))
 
+        N = max(self.N, 1)  # don't divide by N == 0 (if there are no boxes)
+
         lin_norm_value = _vnorm(value, self.vmin, self.vmax)
-        norm_trans = _vnorm(self.trans, self.vmin, self.vmax)
+
+        if value_dofs is None:
+            norm_trans = _vnorm(self.trans, self.vmin, self.vmax)
+        else: 
+            per_box_trans = _np.ceil(_chi2.ppf(1 - self.percentile / N, value_dofs))
+            norm_trans = _vnorm(per_box_trans, self.vmin, self.vmax)
+
         log10_norm_trans = _np.ma.log10(norm_trans)
         with _np.errstate(divide='ignore'):
             # Ignore the division-by-zero error that occurs when 0 is passed to
@@ -462,13 +474,14 @@ class LinlogColormap(Colormap):
                 lin_norm_value = _np.ma.array(lin_norm_value.filled(1e100),
                                               mask=_np.ma.getmask(lin_norm_value))
 
-            if norm_trans == 1.0:
-                #then transition is at highest possible normalized value (1.0)
-                # and the call to greater(...) below will always be True.
-                # To avoid the False-branch getting div-by-zero errors, set:
-                log10_norm_trans = 1.0  # because it's never used.
+            if value_dofs is not None and not isinstance(value_dofs, (int, float)): 
+                log10_norm_trans[log10_norm_trans==0.0] = 1.0
+            else:
+                if norm_trans == 1.0: 
+                    log10_norm_trans = 1.0
 
-            off = 0.1  # offset to narrow the range of valid values to 0 (white) is never used for data
+            #off = 0.1  # offset to narrow the range of valid values to 0 (white) is never used for data
+            off = 0 # TODO: Reset this!
             in_0_to_1 = lin_norm_value / norm_trans  # this is in range [0,1] where lin_norm_value <= norm_trans
             return_value = _np.ma.where(_np.ma.greater(norm_trans, lin_norm_value),
                                         # map = [0,1] -> [off/(1+off), 1] -> [off/(2*(1+off)), 0.5]
@@ -477,7 +490,6 @@ class LinlogColormap(Colormap):
                                          - _np.ma.log10(lin_norm_value))
                                         / (2 * log10_norm_trans) + 0.5)
             return_value = return_value.filled(_np.nan)  # replace masked values with NaNs for color mapping
-
         if return_value.shape == ():
             return return_value.item()
         else:

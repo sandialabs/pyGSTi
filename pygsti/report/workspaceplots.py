@@ -51,7 +51,7 @@ else:
 #from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
 
 def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
-                   prec=0, hover_label_fn=None, hover_labels=None):
+                   prec=0, hover_label_fn=None, hover_labels=None, data_dofs = None):
     """
     Create a color box plot.
 
@@ -90,6 +90,10 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
         Strings specifying the hover labels for each element of `plt_data`.
         E.g. `hover_labels[i,j]` is the string for the i-th row (y-value)
         and j-th column (x-value) of the plot.
+    
+    data_dofs : numpy array, optional 
+        A 2D array containing the degrees of freedom associated with the values 
+        to be plotted.
 
     Returns
     -------
@@ -97,7 +101,7 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
     """
 
     masked_data = _np.ma.array(plt_data, mask=_np.isnan(plt_data))
-    heatmapArgs = {'z': colormap.normalize(masked_data),
+    heatmapArgs = {'z': colormap.normalize(masked_data, data_dofs),
                    'colorscale': colormap.create_plotly_colorscale(),
                    'showscale': colorbar, 'hoverinfo': 'none',
                    'zmin': colormap.hmin, 'zmax': colormap.hmax}
@@ -168,7 +172,7 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
 
 def _nested_color_boxplot(plt_data_list_of_lists, colormap,
                           colorbar=False, box_label_size=0, prec=0,
-                          hover_label_fn=None):
+                          hover_label_fn=None, dofs_list_of_lists=None):
     """
     Creates a "nested" color box plot.
 
@@ -203,6 +207,11 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
         computes the hover label for the each element of `plt_data`.  Cannot
         be used with `hoverLabels`.
 
+    dofs_list_of_lists : list of lists of numpy arrays, optional
+        A complete square 2D list of lists, such that each element is a
+        2D numpy array of the same size. Should be the same shape as 
+        plt_data_list_of_lists. 
+
     Returns
     -------
     plotly.Figure
@@ -217,16 +226,37 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     nRows = len(plt_data_list_of_lists)
     nCols = len(plt_data_list_of_lists[0])
 
-    data = _np.zeros((elRows * nRows + (nRows - 1), elCols * nCols + (nCols - 1)))
-    for i in range(1, nRows):
-        data[(elRows + 1) * i - 1:(elRows + 1) * i, :] = _np.nan
-    for j in range(1, nCols):
-        data[:, (elCols + 1) * j - 1:(elCols + 1) * j] = _np.nan
+    if dofs_list_of_lists is not None: 
+        assert (_np.shape(dofs_list_of_lists)==_np.shape(plt_data_list_of_lists)), "data and associated degrees of freedom must have the same shape!"  
 
-    for i in range(nRows):
-        for j in range(nCols):
-            data[(elRows + 1) * i:(elRows + 1) * (i + 1) - 1, (elCols + 1)
-                 * j:(elCols + 1) * (j + 1) - 1] = plt_data_list_of_lists[i][j]
+        data = _np.zeros((elRows * nRows + (nRows - 1), elCols * nCols + (nCols - 1)))
+        dofs = _np.zeros((elRows * nRows + (nRows - 1), elCols * nCols + (nCols - 1)))
+        for i in range(1, nRows):
+            data[(elRows + 1) * i - 1:(elRows + 1) * i, :] = _np.nan
+            dofs[(elRows + 1) * i - 1:(elRows + 1) * i, :] = _np.nan
+        for j in range(1, nCols):
+            data[:, (elCols + 1) * j - 1:(elCols + 1) * j] = _np.nan
+            dofs[:, (elCols + 1) * j - 1:(elCols + 1) * j] = _np.nan
+
+        for i in range(nRows):
+            for j in range(nCols):
+                data[(elRows + 1) * i:(elRows + 1) * (i + 1) - 1, (elCols + 1)
+                    * j:(elCols + 1) * (j + 1) - 1] = plt_data_list_of_lists[i][j]
+                dofs[(elRows + 1) * i:(elRows + 1) * (i + 1) - 1, (elCols + 1)
+                    * j:(elCols + 1) * (j + 1) - 1] = dofs_list_of_lists[i][j]  
+        
+    else:
+        data = _np.zeros((elRows * nRows + (nRows - 1), elCols * nCols + (nCols - 1)))
+        dofs = None
+        for i in range(1, nRows):
+            data[(elRows + 1) * i - 1:(elRows + 1) * i, :] = _np.nan
+        for j in range(1, nCols):
+            data[:, (elCols + 1) * j - 1:(elCols + 1) * j] = _np.nan
+
+        for i in range(nRows):
+            for j in range(nCols):
+                data[(elRows + 1) * i:(elRows + 1) * (i + 1) - 1, (elCols + 1)
+                    * j:(elCols + 1) * (j + 1) - 1] = plt_data_list_of_lists[i][j]
 
     xtics = []; ytics = []
     for i in range(nRows): ytics.append(float((elRows + 1) * i) - 0.5 + 0.5 * float(elRows))
@@ -247,7 +277,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
         hoverLabels = None
 
     fig = _color_boxplot(data, colormap, colorbar, box_label_size,
-                         prec, None, hoverLabels)
+                         prec, None, hoverLabels, dofs)
 
     #Layout updates: add tic marks (but not labels - leave that to user)
     fig.plotlyfig['layout']['xaxis'].update(tickvals=xtics)
@@ -257,7 +287,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
 
 def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
                             colormap, colorbar=False, box_labels=True, prec=0, hover_info=True,
-                            sum_up=False, scale=1.0, bgcolor='white'):
+                            sum_up=False, scale=1.0, bgcolor='white', sub_dofs = None):
     """
     A helper function for generating typical nested color box plots used in pyGSTi.
 
@@ -320,6 +350,9 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
         Background color for this plot.  Can be common color names, e.g.
         `"black"`, or string RGB values, e.g. `"rgb(255,128,0)"`.
 
+    sub_dofs : list, optional  
+         A list of lists of 2D numpy.ndarrays with associated values of degrees of freedom. 
+
     Returns
     -------
     plotly.Figure
@@ -335,6 +368,8 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
 
     # flip so [0,0] el of original sub_mxs is at *top*-left (FLIP)
     sub_mxs = [[_np.flipud(subMx) for subMx in row] for row in sub_mxs]
+    if sub_dofs is not None: 
+        sub_dofs = [[_np.flipud(subdof) for subdof in row] for row in sub_dofs]
     #inner_ylabels = list(reversed(inner_ylabels))
 
     #FUTURE: to restore "invert" functionality, make PlaquetteGridCircuitStructure invertible
@@ -430,7 +465,7 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
 
         boxLabelSize = 8 if box_labels else 0  # do not scale (OLD: 8*scale)
         fig = _nested_color_boxplot(sub_mxs, colormap, colorbar, boxLabelSize,
-                                    prec, hover_label_fn)
+                                    prec, hover_label_fn, sub_dofs)
 
         xBoxes = nXs * (nIXs + 1) - 1
         yBoxes = nYs * (nIYs + 1) - 1
@@ -533,7 +568,7 @@ def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_su
 
 def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
                            colorbar=False, box_labels=True, prec='compact', hover_info=True,
-                           sum_up=False, invert=False, scale=1.0, bgcolor="white", addl_hover_submxs=None):
+                           sum_up=False, invert=False, scale=1.0, bgcolor="white", addl_hover_submxs=None, sub_dofs=None):
     """
     A wrapper around :func:`_summable_color_boxplot` for creating color box plots displaying circuits.
 
@@ -593,6 +628,9 @@ def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
         hover-info of the corresponding boxes.  The keys of this dictionary
         are used as labels within the hover-info text.
 
+    sub_dofs : list, optional  
+         A list of lists of 2D numpy.ndarrays with associated values of degrees of freedom. 
+
     Returns
     -------
     plotly.Figure
@@ -603,20 +641,24 @@ def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
     if addl_hover_submxs is None:
         addl_hover_submxs = {}
 
+    addl_sub_dof = {'effective d.o.f.': sub_dofs}
+
+    addl_hover_submxs_add = {**addl_sub_dof, **addl_hover_submxs}
+
     # Note: invert == True case not handled yet
     assert(invert is False), "`invert=True` is no longer supported."
 
     if hover_info:
-        hover_info = _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_submxs)
+        hover_info = _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_submxs_add)
 
     return _summable_color_boxplot(sub_mxs, circuit_structure.used_xs, circuit_structure.used_ys,
                                    circuit_structure.xlabel, circuit_structure.ylabel, colormap, colorbar,
-                                   box_labels, prec, hover_info, sum_up, scale, bgcolor)
+                                   box_labels, prec, hover_info, sum_up, scale, bgcolor, sub_dofs)
 
 
 def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
                                colorbar=False, hover_info=True, sum_up=False,
-                               ylabel="", scale=1.0, addl_hover_submxs=None):
+                               ylabel="", scale=1.0, addl_hover_submxs=None, sub_dofs=None):
     """
     Similar to :func:`_circuit_color_boxplot` except a scatter plot is created.
 
@@ -657,6 +699,9 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
         hover-info of the corresponding boxes.  The keys of this dictionary
         are used as labels within the hover-info text.
 
+    sub_dofs : list, optional  
+         A list of lists of 2D numpy.ndarrays with associated values of degrees of freedom. 
+
     Returns
     -------
     plotly.Figure
@@ -671,12 +716,13 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     if hover_info:
         hover_info = _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_submxs)
 
-    xs = []; ys = []; texts = []
+    xs = []; ys = []; subdofs =[]; texts = []
     gstrs = set()  # to eliminate duplicate strings
     for ix, x in enumerate(g.used_xs):
         for iy, y in enumerate(g.used_ys):
             plaq = g.plaquette(x, y, empty_if_missing=True)
             if sum_up:
+                assert value_dofs is None, "per circuit degrees of freedom do not work with summable plots"
                 if plaq.base not in gstrs:
                     tot = sum([sub_mxs[iy][ix][iiy][iix] for iiy, iix, _ in plaq])
                     xs.append(len(plaq.base))  # x-coord is len of *base* string
@@ -692,12 +738,15 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
                     if opstr in gstrs: continue  # skip duplicates
                     xs.append(len(opstr))
                     ys.append(sub_mxs[iy][ix][iiy][iix])
+                    subdofs.append(sub_dofs[iy][ix][iiy][iix])
                     gstrs.add(opstr)
                     if hover_info:
                         if callable(hover_info):
                             texts.append(hover_info(sub_mxs[iy][ix][iiy][iix], iy, ix, iiy, iix))
+                            texts.append(hover_info(sub_dofs[iy][ix][iiy][iix], iy, ix, iiy, iix))
                         else:
                             texts.append(str(sub_mxs[iy][ix][iiy][iix]))
+                            texts.append(str(sub_dofs[iy][ix][iiy][iix]))
 
     #This GL version works, but behaves badly, sometimes failing to render...
     #trace = go.Scattergl(x=xs, y=ys, mode="markers",
@@ -705,9 +754,14 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     #                            color=[colormap.interpolate_color(y) for y in ys],
     #                            #colorscale=colormap.create_plotly_colorscale(),  #doesn't seem to work properly in GL?
     #                            line=dict(width=1)))
+    
+    colors = []
+    for i in range(len(ys)):
+        colors.append(colormap.interpolate_color(ys[i],subdofs[i]))
+
     trace = go.Scatter(x=xs, y=ys, mode="markers",
                        marker=dict(size=8,
-                                   color=[colormap.interpolate_color(y) for y in ys],
+                                   color=colors,
                                    colorscale=colormap.create_plotly_colorscale(),
                                    line=dict(width=1)))
 
@@ -1783,8 +1837,10 @@ class ColorBoxPlot(WorkspacePlot):
             #TODO: propagate mdc_store down into compute_sub_mxs?
             if (submatrices is not None) and ptyp in submatrices:
                 subMxs = submatrices[ptyp]  # "custom" type -- all mxs precomputed by user
+                subdofs = None
             else:
                 subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model, mx_fn, dataset, extra_arg)
+                max_dof, subdofs = self._ccompute(_ph._compute_sub_dofs, circuit_struct, model, _mx_fn_from_elements_simple, dataset)
 
             addl_hover_info = _collections.OrderedDict()
             for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
@@ -1795,29 +1851,15 @@ class ColorBoxPlot(WorkspacePlot):
                                                  addl_mx_fn, dataset, addl_extra_arg)
                 addl_hover_info[lbl] = addl_subMxs
 
-            if colormapType == "linlog":
-                if dataset is None:
-                    _warnings.warn("No dataset specified: using DOF-per-element == 1")
-                    element_dof = 1
-                else:
-                    #element_dof = len(dataset.outcome_labels) - 1
-                    #Instead of the above, which doesn't work well when there are circuits with different
-                    # outcomes, the line below just takes the average degrees of freedom per circuit
-                    element_dof = dataset.degrees_of_freedom(circuits) / len(circuits)
-
-                n_boxes, dof_per_box = _ph._compute_num_boxes_dof(subMxs, sum_up, element_dof)
-                # NOTE: currently dof_per_box is constant, and takes the total
-                # number of outcome labels in the DataSet, which can be incorrect
-                # when different sequences have different outcome labels.
-
             if len(subMxs) > 0:
                 dataMax = max([(0 if (mx is None or _np.all(_np.isnan(mx))) else _np.nanmax(mx))
                                for subMxRow in subMxs for mx in subMxRow])
             else: dataMax = 0
 
             if colormapType == "linlog":
-                colormap = _colormaps.LinlogColormap(0, dataMax, n_boxes,
-                                                     linlg_pcntle, dof_per_box, linlog_color)
+                colormap = _colormaps.LinlogColormap(0, dataMax, len(circuits), 
+                                                     linlg_pcntle, max_dof, linlog_color) 
+                                                     
             elif colormapType == "manuallinlog":
                 colormap = _colormaps.LinlogColormap.set_manual_transition_point(
                     0, dataMax, linlog_trans, linlog_color)
@@ -1844,12 +1886,12 @@ class ColorBoxPlot(WorkspacePlot):
                 newfig = _circuit_color_boxplot(circuit_struct, subMxs, colormap,
                                                 colorbar, box_labels, prec,
                                                 hover_info, sum_up, invert,
-                                                scale, bgcolor, addl_hover_info)
+                                                scale, bgcolor, addl_hover_info, subdofs)
 
             elif typ == "scatter":
                 newfig = _circuit_color_scatterplot(circuit_struct, subMxs, colormap,
                                                     colorbar, hover_info, sum_up, ytitle,
-                                                    scale, addl_hover_info)
+                                                    scale, addl_hover_info, subdofs)
             elif typ == "histogram":
                 newfig = _circuit_color_histogram(circuit_struct, subMxs, colormap,
                                                   ytitle, scale)
@@ -1899,6 +1941,8 @@ class ColorBoxPlot(WorkspacePlot):
 def _mx_fn_from_elements(plaq, x, y, extra):
     return plaq.elementvec_to_matrix(extra[0], extra[1], mergeop=extra[2])
 
+def _mx_fn_from_elements_simple(plaq, x, y, extra):
+    return plaq.elementvec_to_matrix_simple(extra)
 
 def _mx_fn_blank(plaq, x, y, unused):
     return _np.nan * _np.zeros((plaq.num_rows, plaq.num_cols), 'd')

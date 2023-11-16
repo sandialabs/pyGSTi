@@ -57,8 +57,8 @@ class EmbeddedInst(_Instrument):
         member_ops = {}
         for outcome_label, gate in instrument_to_embed.items():
             new_outcome_label = str(outcome_label)
-            for qubit_label in target_labels:
-                new_outcome_label += ':' + str(qubit_label)      
+            #for qubit_label in target_labels:
+                #new_outcome_label += ':' + str(qubit_label)      
             member_ops[new_outcome_label] = _eop(state_space, target_labels, gate, allocated_to_parent=allocated_to_parent)
 
         _Instrument.__init__(self, member_ops)
