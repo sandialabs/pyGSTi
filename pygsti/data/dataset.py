@@ -1320,7 +1320,7 @@ class DataSet(_MongoSerializable):
         return opLabels
 
     def degrees_of_freedom(self, circuits=None, method="present_outcomes-1",
-                           aggregate_times=True, model=None):
+                           aggregate_times=True, model=None, per_circuit=False):
         """
         Returns the number of independent degrees of freedom in the data for the circuits in `circuits`.
 
@@ -1361,8 +1361,11 @@ class DataSet(_MongoSerializable):
         if circuits is None:
             circuits = list(self.keys())
 
+        circ_dof_cont = _OrderedDict()
         nDOF = 0
         Nout = len(self.olIndex)
+        if model is not None: 
+            model.sim = 'map'
 
         def compute_tuned_expected_llr(cur_outcomes):
             contribs = []  # LLR_expectation = 0.0
@@ -1392,6 +1395,7 @@ class DataSet(_MongoSerializable):
         
         for opstr in circuits:
             dsRow = self[opstr]
+            circ_dof = 0
             if method == 'from model':
                 Ncounts = self[opstr].total 
                 probs = model.probabilities(opstr)
@@ -1399,10 +1403,14 @@ class DataSet(_MongoSerializable):
                     if outcome not in self.olIndex: 
                         pass
                     elif dsRow[outcome] > 18:
-                        nDOF+=1 
+                        circ_dof += 1
                     else: 
-                        nDOF += exp_llr_func(Ncounts * probs[outcome])
-                nDOF-=1
+                        circ_dof += exp_llr_func(Ncounts * probs[outcome]) 
+                circ_dof_cont[opstr] = circ_dof - 1
+                if per_circuit:
+                    nDOF = circ_dof_cont
+                else: 
+                    nDOF = sum(circ_dof_cont.values())
             else:
                 cur_t = dsRow.time[0]
                 #cur_outcomes = set()  # holds *distinct* outcomes at current time
@@ -1429,6 +1437,10 @@ class DataSet(_MongoSerializable):
                     nOutcomes += 1  # +1 to counteract -1 below, as this is already <LLR>
                 else: raise ValueError("Invalid `method` argument: %s" % method)
                 nDOF += nOutcomes - 1  # last time stamp
+
+        if model is not None: 
+            model.sim = 'matrix'
+
         return nDOF
 
     def _collisionaction_update_circuit(self, circuit):
