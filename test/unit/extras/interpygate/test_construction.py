@@ -4,6 +4,7 @@ from scipy.interpolate import LinearNDInterpolator as _linND
 
 import pygsti
 import pygsti.extras.interpygate as interp
+from pygsti.extras.interpygate.core import use_csaps as USE_CSAPS
 from pygsti.tools.basistools import change_basis
 from pygsti.modelpacks import smq1Q_XY
 from pathlib import Path
@@ -88,6 +89,7 @@ class SingleQubitGate(interp.PhysicalProcess):
 
 
 class InterpygateConstructionTester(BaseCase):
+
     @classmethod
     def setUpClass(cls):
         super(InterpygateConstructionTester, cls).setUpClass()
@@ -101,7 +103,6 @@ class InterpygateConstructionTester(BaseCase):
         cls.arg_indices = [0,1]
 
         cls.gate_process = SingleQubitGate(num_params = 3,num_params_evaluated_as_group = 1)
-        
         
     def test_target(self):
         test = self.target_op.create_target_gate([0,np.pi/4])
@@ -120,13 +121,14 @@ class InterpygateConstructionTester(BaseCase):
         op.from_vector([1])
         self.assertArraysAlmostEqual(op, self.static_target)
 
-        opfactory_spline = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
-                                self.target_op, self.gate_process, argument_ranges=self.arg_ranges, 
-                                parameter_ranges=self.param_ranges, argument_indices=self.arg_indices, 
-                                interpolator_and_args='spline')
-        op = opfactory_spline.create_op([0,np.pi/4])
-        op.from_vector([1])
-        self.assertArraysAlmostEqual(op, self.static_target)
+        if USE_CSAPS: 
+            opfactory_spline = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
+                                    self.target_op, self.gate_process, argument_ranges=self.arg_ranges, 
+                                    parameter_ranges=self.param_ranges, argument_indices=self.arg_indices, 
+                                    interpolator_and_args='spline')
+            op = opfactory_spline.create_op([0,np.pi/4])
+            op.from_vector([1])
+            self.assertArraysAlmostEqual(op, self.static_target)
 
         interpolator_and_args = (_linND, {'rescale': True})
         opfactory_custom = opfactory_spline = interp.InterpolatedOpFactory.create_by_interpolating_physical_process(
