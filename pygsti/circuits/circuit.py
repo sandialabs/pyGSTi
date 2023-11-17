@@ -871,7 +871,7 @@ class Circuit(object):
                              +" either explicitly by setting the line_labels or by num_lines kwarg, or implicitly from specifying"\
                              +" layer labels with non-None state-space labels. Circuits with '*' line labels can be used, but"\
                              +" only in conjunction with other circuits with '*' line labels (and vice-versa for circuits with"\
-                             +" standard line labels.")
+                             +" standard line labels).")
 
         if self._str is None or x._str is None:
             s = None
