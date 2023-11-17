@@ -840,9 +840,38 @@ class Circuit(object):
         return x.__add__(self)
 
     def __add__(self, x):
+        """
+        Method for adding circuits, or labels to circuits.
+
+        Parameters
+        ----------
+        x : `Circuit` or tuple of `Label` objects
+            `Circuit` to add to this `Circuit`, or a tuple of Labels to add to this
+            Circuit. Note: If `x` is a `Circuit` it must have line labels that are
+            compatible with this it is being added to. In other words, if `x` uses
+            the default '*' placeholder as its line label and this Circuit does not,
+            and vice versa, a ValueError will be raised.
+
+        Returns
+        -------
+        Circuit
+        """
+
         if not isinstance(x, Circuit):
             assert(all([isinstance(l, _Label) for l in x])), "Only Circuits and Label-tuples can be added to Circuits!"
             return Circuit._fastinit(self.layertup + x, self.line_labels, editable=False)
+        
+        #check that the line labels are compatible between circuits.
+        #i.e. raise error if adding circuit with * line label to one with
+        #standard line labels.
+        if (x.line_labels == ('*',) and self.line_labels !=('*',)) or (x.line_labels != ('*',) and self.line_labels ==('*',)):
+            raise ValueError("Adding circuits with incompatible line labels. This likely means that one of the circuits being"\
+                             +" added has a line label of '*' while the other circuit does not. The '*' line label is a placeholder"\
+                             +" value that is used when a Circuit is initialized without specifying the line labels,"\
+                             +" either explicitly by setting the line_labels or by num_lines kwarg, or implicitly from specifying"\
+                             +" layer labels with non-None state-space labels. Circuits with '*' line labels can be used, but"\
+                             +" only in conjunction with other circuits with '*' line labels (and vice-versa for circuits with"\
+                             +" standard line labels.")
 
         if self._str is None or x._str is None:
             s = None
