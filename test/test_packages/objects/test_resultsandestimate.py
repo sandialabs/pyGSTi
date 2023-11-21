@@ -13,11 +13,11 @@ class ResultsEstimateTestCase(BaseTestCase):
 
     @unittest.skip("need to update legacyio.py")
     def test_load_old_results(self):
-        #pygsti.obj.results.enable_old_python_results_unpickling()
+        #pygsti.baseobjs.results.enable_old_python_results_unpickling()
         with pygsti.io.enable_old_object_unpickling():
             with open(compare_files + "/pygsti0.9.6.results.pkl", 'rb') as f:
                 results = pickle.load(f)
-        #pygsti.obj.results.disable_old_python_results_unpickling()
+        #pygsti.baseobjs.results.disable_old_python_results_unpickling()
         #pygsti.io.disable_old_object_unpickling()
         with open(temp_files + "/repickle_old_results.pkl", 'wb') as f:
             #pickle.dump(results.estimates['TP'].models['single'], f) # Debug

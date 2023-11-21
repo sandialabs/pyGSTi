@@ -222,7 +222,7 @@ class TestWorkspace(ReportBaseCase):
 
         weirdGS = pygsti.models.modelconstruction.create_explicit_model_from_expressions(
             [('Q0','Q1')],['Gi'], ["I(Q0)"])
-        #weirdGS.preps['rho1'] = pygsti.obj.ComplementSPAMVec(weirdGS.preps['rho0'],[]) #num_params not implemented!
+        #weirdGS.preps['rho1'] = pygsti.baseobjs.ComplementSPAMVec(weirdGS.preps['rho0'],[]) #num_params not implemented!
         weirdGS.povms['Mtensor'] = pygsti.modelmembers.povms.TensorProductPOVM([self.mdl.povms['Mdefault'], self.mdl.povms['Mdefault']])
         tbls.append( w.MetadataTable(weirdGS, params) )
 
@@ -671,9 +671,9 @@ class TestWorkspace(ReportBaseCase):
         gss = pygsti.circuits.PlaquetteGridCircuitStructure(plaquettes, [1, 2], germs, 'L', 'germ')
         gss2 = gss.copy()
         
-        #cls = type('DummyClass', pygsti.obj.LsGermsStructure.__bases__, dict(pygsti.obj.LsGermsStructure.__dict__))
+        #cls = type('DummyClass', pygsti.baseobjs.LsGermsStructure.__bases__, dict(pygsti.baseobjs.LsGermsStructure.__dict__))
         #gss3.__class__ = cls  # mimic a non-LsGermsStructure object when we don't actually have any currently (HACK)
-        #assert(not isinstance(gss3, pygsti.obj.LsGermsStructure))
+        #assert(not isinstance(gss3, pygsti.baseobjs.LsGermsStructure))
 
         pygsti.report.workspaceplots._circuit_color_boxplot(
             gss, mxs, colormap, sum_up=True)

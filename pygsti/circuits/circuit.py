@@ -784,7 +784,7 @@ class Circuit(object):
         """
         assert(not self._static), \
             ("Cannot edit a read-only circuit!  "
-             "Set editable=True when calling pygsti.obj.Circuit to create editable circuit.")
+             "Set editable=True when calling pygsti.baseobjs.Circuit to create editable circuit.")
         from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
         cparser = _CircuitParser()
         chk, chk_labels, chk_occurrence, chk_compilable_inds = cparser.parse(value)
@@ -3959,6 +3959,8 @@ class Circuit(object):
 
         # Init the openqasm string.
         openqasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\n'
+        # Include a delay instruction
+        openqasm += 'opaque delay(t) q;\n\n'
 
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
         # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
@@ -4037,7 +4039,9 @@ class Circuit(object):
             if not block_between_gates:
                 for q in self.line_labels:
                     if q not in qubits_used:
-                        openqasm += 'id' + ' q[' + str(qubit_conversion[q]) + '];\n'
+                        # Delay 0 works because of the barrier
+                        # In OpenQASM3, this should probably be a stretch instead
+                        openqasm += 'delay(0)' + ' q[' + str(qubit_conversion[q]) + '];\n'
 
             # Add in a barrier after every circuit layer if block_between_layers==True.
             # Including barriers is critical for QCVV testing, circuits should usually

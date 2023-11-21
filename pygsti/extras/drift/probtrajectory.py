@@ -402,7 +402,7 @@ def probsdict_negloglikelihood(probs, clickstreams, minp=0., maxp=1.):
 
 
 def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.999999, method='Nelder-Mead',
-                  return_opt_output=False, options={}, verbosity=1):
+                  return_opt_output=False, options=None, verbosity=1):
     """
     Implements maximum likelihood estimation over a model for a time-resolved probabilities trajectory,
     and returns the maximum likelihood model.
@@ -450,6 +450,8 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
         optout
             The output of the optimizer.
     """
+    if options is None:
+        options = dict()
     maxlprobtrajectory = probtrajectory.copy()
 
     def objfunc(parameterslist):
