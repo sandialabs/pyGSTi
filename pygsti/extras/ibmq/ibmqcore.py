@@ -8,8 +8,7 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from ... import data as _data
-from ...protocols import ProtocolData as _ProtocolData
+from contextlib import contextmanager
 import numpy as _np
 import time as _time
 import json as _json
@@ -19,6 +18,9 @@ import warnings as _warnings
 
 try: import qiskit as _qiskit
 except: _qiskit = None
+
+from ... import data as _data
+from ...protocols import ProtocolData as _ProtocolData
 
 # Most recent version of QisKit that this has been tested on:
 #qiskit.__qiskit_version__ = {
@@ -34,7 +36,7 @@ except: _qiskit = None
 #}
 #qiskit_ibm_provider.__version__ = '0.7.2'
 
-_attribute_to_json = ['remove_duplicates', 'randomized_order', 'circuits_per_batch', 'num_shots', 'job_ids']
+_attribute_to_json = ['remove_duplicates', 'randomized_order', 'circuits_per_batch', 'num_shots', 'job_ids', 'seed']
 _attribute_to_pickle = ['pspec', 'pygsti_circuits', 'pygsti_openqasm_circuits',
                         'qiskit_QuantumCircuits', 'qiskit_QuantumCircuits_as_openqasm',
                         'submit_time_calibration_data', 'qobj', 'batch_result_object'
@@ -72,11 +74,20 @@ def q_list_to_ordered_target_indices(q_list, num_qubits):
             output.append(int(q[1:]))
         return output
 
+@contextmanager
+def checkpointed_ibmq(*args, **kwargs):
+    """Checkpointing context manager for IBMQExperiment.
+    """
+    exp = IBMQExperiment.from_dir(*args, **kwargs)
+    try:
+        yield exp
+    finally:
+        exp.write()
 
 class IBMQExperiment(dict):
 
     def __init__(self, edesign, pspec, remove_duplicates=True, randomized_order=True, circuits_per_batch=75,
-                 num_shots=1024):
+                 num_shots=1024, seed=None):
         """
         A object that converts pyGSTi ExperimentDesigns into jobs to be submitted to IBM Q, submits these
         jobs to IBM Q and receives the results.
@@ -109,6 +120,12 @@ class IBMQExperiment(dict):
 
         num_shots: int, optional
             The number of samples from / repeats of each circuit.
+        
+        seed: int, optional
+            Seed for RNG during order randomization of circuits.
+
+        checkpoint_dirname: str, optional
+            Name of checkpoint directory. If None, no checkpointing is used.
 
         Returns
         -------
@@ -120,6 +137,9 @@ class IBMQExperiment(dict):
             IBM Q).
 
         """
+        rand_state = _np.random.RandomState(seed)
+
+        self.dirty_attributes = {}
 
         self['edesign'] = edesign
         self['pspec'] = pspec
@@ -127,6 +147,7 @@ class IBMQExperiment(dict):
         self['randomized_order'] = randomized_order
         self['circuits_per_batch'] = circuits_per_batch
         self['num_shots'] = num_shots
+        self['seed'] = seed
         # Populated when submitting to IBM Q with .submit()
         self['qjob'] = None
         self['job_ids'] = None
@@ -138,7 +159,7 @@ class IBMQExperiment(dict):
         if randomized_order:
             if remove_duplicates:
                 circuits = list(set(circuits))
-            _np.random.shuffle(circuits)
+            rand_state.shuffle(circuits)
         else:
             assert(not remove_duplicates), "Can only remove duplicates if randomizing order!"
 
@@ -152,7 +173,7 @@ class IBMQExperiment(dict):
         self['qobj'] = []
 
         batch_idx = 0
-        for circ_idx, circ in enumerate(circuits):
+        for circ in circuits:
             self['pygsti_circuits'][batch_idx].append(circ)
             if len(self['pygsti_circuits'][batch_idx]) == circuits_per_batch:
                 batch_idx += 1
@@ -163,8 +184,7 @@ class IBMQExperiment(dict):
         #start = _time.time()
         for batch_idx, circuit_batch in enumerate(self['pygsti_circuits']):
             print("Constructing job for circuit batch {} of {}".format(batch_idx + 1, num_batches))
-            #openqasm_circuit_ids = []
-            for circ_idx, circ in enumerate(circuit_batch):
+            for circ in circuit_batch:
                 pygsti_openqasm_circ = circ.convert_to_openqasm(num_qubits=pspec.num_qubits,
                                                                 standard_gates_version='x-sx-rz')
                 qiskit_qc = _qiskit.QuantumCircuit.from_qasm_str(pygsti_openqasm_circ)
@@ -177,6 +197,18 @@ class IBMQExperiment(dict):
                 total_num += 1
 
             self['qobj'].append(_qiskit.compiler.assemble(self['qiskit_QuantumCircuits'][batch_idx], shots=num_shots))
+    
+    def __getitem__(self, __key):
+        # It is not guaranteed that a __getitem__ will result in the returned attribute value being modified
+        # However, that is almost always the case internally, so this is the "safer" option
+        # with the downside that accessing dict elements will mark them as dirty even if not changed
+        self.dirty_attributes[__key] = True
+        return super().__getitem__(__key)
+
+    def __setitem__(self, __key, __value):
+        # Keep track of which items we've explicitly modified
+        self.dirty_attributes[__key] = True
+        return super().__setitem__(__key, __value)
 
     def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True,
                wait_time=1, wait_steps=10):
@@ -361,6 +393,9 @@ class IBMQExperiment(dict):
         format and saving all of the IBM Q submission information stored in this object,
         written into the subdirectory 'ibmqexperiment'.
 
+        If an existing IBMQExperiment is in the specified directory, only "dirty", i.e. modified,
+        attributes will be rewritten to file.
+
         Parameters
         ----------
         dirname : str
@@ -374,18 +409,21 @@ class IBMQExperiment(dict):
         if dirname is None:
             dirname = self['edesign']._loaded_from
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
-
-        self['data'].write(dirname)
-
-        dict_to_json = {atr: self[atr] for atr in _attribute_to_json}
-
+        
+        if self.dirty_attributes.get('data', False):
+            self['data'].write(dirname)
+        
         _os.mkdir(dirname + '/ibmqexperiment')
+
+        # Dump JSON items regardless of dirty (cheaper than load/diff/rewrite)
+        dict_to_json = {atr: self[atr] for atr in _attribute_to_json}
         with open(dirname + '/ibmqexperiment/meta.json', 'w') as f:
             _json.dump(dict_to_json, f, indent=4)
 
         for atr in _attribute_to_pickle:
-            with open(dirname + '/ibmqexperiment/{}.pkl'.format(atr), 'wb') as f:
-                _pickle.dump(self[atr], f)
+            if self.dirty_attributes.get(atr, False):
+                with open(dirname + '/ibmqexperiment/{}.pkl'.format(atr), 'wb') as f:
+                    _pickle.dump(self[atr], f)
 
     @classmethod
     def from_dir(cls, dirname, provider=None):
