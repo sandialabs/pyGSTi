@@ -713,8 +713,12 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     if addl_hover_submxs is None:
         addl_hover_submxs = {}
 
+    addl_sub_dof = {'effective d.o.f.': sub_dofs}
+
+    addl_hover_submxs_add = {**addl_sub_dof, **addl_hover_submxs}
+
     if hover_info:
-        hover_info = _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_submxs)
+        hover_info = _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_submxs_add)
 
     xs = []; ys = []; subdofs =[]; texts = []
     gstrs = set()  # to eliminate duplicate strings
@@ -722,7 +726,7 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
         for iy, y in enumerate(g.used_ys):
             plaq = g.plaquette(x, y, empty_if_missing=True)
             if sum_up:
-                assert value_dofs is None, "per circuit degrees of freedom do not work with summable plots"
+                assert sub_dofs is None, "per circuit degrees of freedom do not work with summable plots"
                 if plaq.base not in gstrs:
                     tot = sum([sub_mxs[iy][ix][iiy][iix] for iiy, iix, _ in plaq])
                     xs.append(len(plaq.base))  # x-coord is len of *base* string
@@ -743,10 +747,9 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
                     if hover_info:
                         if callable(hover_info):
                             texts.append(hover_info(sub_mxs[iy][ix][iiy][iix], iy, ix, iiy, iix))
-                            texts.append(hover_info(sub_dofs[iy][ix][iiy][iix], iy, ix, iiy, iix))
                         else:
                             texts.append(str(sub_mxs[iy][ix][iiy][iix]))
-                            texts.append(str(sub_dofs[iy][ix][iiy][iix]))
+
 
     #This GL version works, but behaves badly, sometimes failing to render...
     #trace = go.Scattergl(x=xs, y=ys, mode="markers",
