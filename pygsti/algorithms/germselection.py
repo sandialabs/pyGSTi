@@ -1907,6 +1907,18 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
     }
 
     initN = 1
+
+    #Compute initial score (before adding any germs beyond the initial set)
+    if len(goodGerms) > 0:
+        worstScore = _scoring.CompositeScore(-1.0e100, 0, None)  # worst of all models
+        for k, currentDDD in enumerate(currentDDDList):
+            nonAC_kwargs['germ_lengths'] = _np.array([len(germ) for germ in goodGerms])
+            worstScore = max(worstScore, compute_composite_germ_set_score(
+                partial_deriv_dagger_deriv=currentDDD[None, :, :], init_n=initN,
+                **nonAC_kwargs))
+        printer.log("Initial germ score = " + str(worstScore), 4)
+        initN = worstScore.N
+
     while _np.any(weights == 0):
         printer.log("Outer iteration: %d of %d amplified, %d germs" %
                     (initN, numNonGaugeParams, len(goodGerms)), 2)
