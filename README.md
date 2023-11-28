@@ -4,7 +4,8 @@
 
 ![master build](https://github.com/pyGSTio/pyGSTi/workflows/Build%20and%20run%20tests/badge.svg?branch=master)
 ![develop build](https://github.com/pyGSTio/pyGSTi/workflows/Build%20and%20run%20tests/badge.svg?branch=develop)
-![beta build](https://github.com/pyGSTio/pyGSTi/workflows/Build%20and%20run%20tests/badge.svg?branch=develop)
+![beta build](https://github.com/pyGSTio/pyGSTi/workflows/Build%20and%20run%20tests%20extras/badge.svg?branch=beta)
+![notebooks on beta](https://github.com/pyGSTio/pyGSTi/workflows/Build%20and%20run%20notebook%20regression/badge.svg?branch=beta)
 
 pyGSTi
 ------
