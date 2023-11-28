@@ -10,7 +10,7 @@
 *.pyd
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
-test/test_packages/gst_checkpoints/*
+*_checkpoints/
 jupyter_notebooks/**/offline
 test/test_packages/offline
 hooks/etc/permissions.yml
