@@ -1,3 +1,4 @@
+## user-exposure : minimal (Used internally in certain combinatorial optimization problems, but also less frequently nowadays)
 """
 Functions to facilitate using GRASP.
 """

@@ -1,3 +1,4 @@
+## user-exposure: low (Tentative, probably only used in RB internals, but check with Jordan)
 """
 Functions for analyzing RB data
 """

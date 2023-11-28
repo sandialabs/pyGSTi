@@ -1,3 +1,4 @@
+## user-exposure: low (CIO - manually gauge optimizing models is typically an advanced use case)
 """
 GST gauge optimization algorithms
 """
