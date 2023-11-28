@@ -8,19 +8,17 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from contextlib import contextmanager
 import numpy as _np
+import pathlib as _pathlib
 import time as _time
-import json as _json
-import pickle as _pickle
-import os as _os
 import warnings as _warnings
 
 try: import qiskit as _qiskit
 except: _qiskit = None
 
-from ... import data as _data
-from ...protocols import ProtocolData as _ProtocolData
+from ... import data as _data, io as _io
+from ...protocols import ProtocolData as _ProtocolData, HasProcessorSpec as _HasPSpec
+from ...protocols.protocol import _TreeNode
 
 # Most recent version of QisKit that this has been tested on:
 #qiskit.__qiskit_version__ = {
@@ -36,55 +34,8 @@ from ...protocols import ProtocolData as _ProtocolData
 #}
 #qiskit_ibm_provider.__version__ = '0.7.2'
 
-_attribute_to_json = ['remove_duplicates', 'randomized_order', 'circuits_per_batch', 'num_shots', 'job_ids', 'seed']
-_attribute_to_pickle = ['pspec', 'pygsti_circuits', 'pygsti_openqasm_circuits',
-                        'qiskit_QuantumCircuits', 'qiskit_QuantumCircuits_as_openqasm',
-                        'submit_time_calibration_data', 'qobj', 'batch_result_object'
-                        ]
 
-
-def reverse_dict_key_bits(counts_dict):
-    new_dict = {}
-    for key in counts_dict.keys():
-        new_dict[key[::-1]] = counts_dict[key]
-    return new_dict
-
-
-# NOTE: This is probably duplicative of some other code in pyGSTi
-def partial_trace(ordered_target_indices, input_dict):
-    output_dict = {}
-    for bitstring in input_dict.keys():
-        new_string = ''
-        for index in ordered_target_indices:
-            new_string += bitstring[index]
-        try:
-            output_dict[new_string] += input_dict[bitstring]
-        except:
-            output_dict[new_string] = input_dict[bitstring]
-    return output_dict
-
-
-def q_list_to_ordered_target_indices(q_list, num_qubits):
-    if q_list is None:
-        return list(range(num_qubits))
-    else:
-        output = []
-        for q in q_list:
-            assert q[0] == 'Q'
-            output.append(int(q[1:]))
-        return output
-
-@contextmanager
-def checkpointed_ibmq(*args, **kwargs):
-    """Checkpointing context manager for IBMQExperiment.
-    """
-    exp = IBMQExperiment.from_dir(*args, **kwargs)
-    try:
-        yield exp
-    finally:
-        exp.write()
-
-class IBMQExperiment(dict):
+class IBMQExperiment(_TreeNode, _HasPSpec):
 
     def __init__(self, edesign, pspec, remove_duplicates=True, randomized_order=True, circuits_per_batch=75,
                  num_shots=1024, seed=None):
@@ -137,81 +88,113 @@ class IBMQExperiment(dict):
             IBM Q).
 
         """
-        rand_state = _np.random.RandomState(seed)
+        _TreeNode.__init__(self, edesign._dirs)
+        _HasPSpec.__init__(self, pspec)
 
-        self.dirty_attributes = {}
-
-        self['edesign'] = edesign
-        self['pspec'] = pspec
-        self['remove_duplicates'] = remove_duplicates
-        self['randomized_order'] = randomized_order
-        self['circuits_per_batch'] = circuits_per_batch
-        self['num_shots'] = num_shots
-        self['seed'] = seed
+        self.edesign = edesign
+        self.processor_spec = pspec # Must be called processor_spec for _HasPSpec class
+        self.remove_duplicates = remove_duplicates
+        self.randomized_order = randomized_order
+        self.circuits_per_batch = circuits_per_batch
+        self.num_shots = num_shots
+        self.seed = seed
+        # Populated with transpiling to IBMQ with .transpile()
+        self.pygsti_circuit_batches = []
+        self.qasm_circuit_batches = []
+        self.qiskit_circuit_batches = []
         # Populated when submitting to IBM Q with .submit()
-        self['qjob'] = None
-        self['job_ids'] = None
+        self.qjobs = []
+        self.job_ids = []
+        self.submit_time_calibration_data = []
         # Populated when grabbing results from IBM Q with .retrieve_results()
-        self['batch_result_object'] = None
-        self['data'] = None
+        self.batch_result_objects = []
+        self.data = None
 
-        circuits = edesign.all_circuits_needing_data.copy()
-        if randomized_order:
-            if remove_duplicates:
-                circuits = list(set(circuits))
-            rand_state.shuffle(circuits)
-        else:
-            assert(not remove_duplicates), "Can only remove duplicates if randomizing order!"
+        # If not in this list, will be automatically dumped to meta.json
+        # 'none' means it will not be read in, 'reset' means it will come back in as None
+        # Several of these could be stored in the meta.json but are kept external for easy chkpts
+        self.auxfile_types['edesign'] = 'none'
+        self.auxfile_types['data'] = 'reset'
+        # self.processor_spec is handled by _HasPSpec base class
+        self.auxfile_types['pygsti_circuit_batches'] = 'list:text-circuit-list'
+        self.auxfile_types['qasm_circuit_batches'] = 'list:json'
+        self.auxfile_types['qiskit_circuit_batches'] = 'none'
+        self.auxfile_types['qjobs'] = 'none'
+        self.auxfile_types['job_ids'] = 'json'
+        self.auxfile_types['submit_time_calibration_data'] = 'list:json'
+        self.auxfile_types['batch_result_objects'] = 'none'
 
-        num_batches = int(_np.ceil(len(circuits) / circuits_per_batch))
+    def transpile(self, dirname=None):
+        """Transpile pyGSTi circuits into Qiskit circuits for submission to IBMQ.
 
-        self['pygsti_circuits'] = [[] for i in range(num_batches)]
-        self['pygsti_openqasm_circuits'] = [[] for i in range(num_batches)]
-        self['qiskit_QuantumCircuits'] = [[] for i in range(num_batches)]
-        self['qiskit_QuantumCircuits_as_openqasm'] = [[] for i in range(num_batches)]
-        self['submit_time_calibration_data'] = []
-        self['qobj'] = []
+        Parameters
+        ----------
+        dirname: str, optional
+            If provided, the root directory (i.e. same as passed to write()
+            and from_dir()) to use for checkpointing
+        """
+        num_batches = int(_np.ceil(len(circuits) / self.circuits_per_batch))
+        
+        if self.pygsti_circuit_batches is None:
+            self.pygsti_circuit_batches = []
+            rand_state = _np.random.RandomState(self.seed)
 
-        batch_idx = 0
-        for circ in circuits:
-            self['pygsti_circuits'][batch_idx].append(circ)
-            if len(self['pygsti_circuits'][batch_idx]) == circuits_per_batch:
-                batch_idx += 1
+            circuits = self.edesign.all_circuits_needing_data.copy()
+            if self.randomized_order:
+                if self.remove_duplicates:
+                    circuits = list(set(circuits))
+                rand_state.shuffle(circuits)
+            else:
+                assert(not self.remove_duplicates), "Can only remove duplicates if randomizing order!"
+
+            for batch_idx in range(num_batches):
+                start = batch_idx*self.circuits_per_batch
+                end = min(len(circuits), (batch_idx+1)*self.circuits_per_batch)
+                self.pygsti_circuit_batches[batch_idx] = circuits[start:end]
+            
+            if dirname is not None:
+                exp_dir = _pathlib.Path(dirname) / 'ibmqexperiment'
+                exp_dir.mkdir(parents=True, exist_ok=True)
+
+                # Checkpoint by writing this member as .write() would
+                _io.metadir._write_auxfile_member(exp_dir, 'pygsti_circuit_batches',
+                                                  self.auxfile_types['pygsti_circuit_batches'],
+                                                  self.pygsti_circuit_batches)
 
         #create Qiskit quantum circuit for each circuit defined in experiment list
-        total_num = 0
+        self.qasm_circuit_batches = [] if self.qasm_circuit_batches is None else self.qasm_circuit_batches
+        self.qiskit_circuit_batches = [] if self.qiskit_circuit_batches is None else self.qiskit_circuit_batches
 
-        #start = _time.time()
-        for batch_idx, circuit_batch in enumerate(self['pygsti_circuits']):
-            print("Constructing job for circuit batch {} of {}".format(batch_idx + 1, num_batches))
-            for circ in circuit_batch:
-                pygsti_openqasm_circ = circ.convert_to_openqasm(num_qubits=pspec.num_qubits,
+        if len(self.qiskit_circuit_batches):
+            print(f'Already completed transpilation of {len(self.qiskit_circuit_batches)}/{num_batches} circuit batches')
+
+        for batch_idx in range(len(self.qiskit_circuit_batches, num_batches)):
+            print(f"Transpiling circuit batch {batch_idx+1}/{num_batches}")
+            batch = []
+            batch_strs = []
+            for circ in self.pygsti_circuit_batches[batch_idx]:
+                pygsti_openqasm_circ = circ.convert_to_openqasm(num_qubits=self.pspec.num_qubits,
                                                                 standard_gates_version='x-sx-rz')
+                batch_strs.append(pygsti_openqasm_circ)
+
                 qiskit_qc = _qiskit.QuantumCircuit.from_qasm_str(pygsti_openqasm_circ)
-
-                self['pygsti_openqasm_circuits'][batch_idx].append(pygsti_openqasm_circ)
-                self['qiskit_QuantumCircuits'][batch_idx].append(qiskit_qc)
-                self['qiskit_QuantumCircuits_as_openqasm'][batch_idx].append(qiskit_qc.qasm())
-
-                #print(batch_idx, circ_idx, len(submitted_openqasm_circuits), total_num)
-                total_num += 1
-
-            self['qobj'].append(_qiskit.compiler.assemble(self['qiskit_QuantumCircuits'][batch_idx], shots=num_shots))
-    
-    def __getitem__(self, __key):
-        # It is not guaranteed that a __getitem__ will result in the returned attribute value being modified
-        # However, that is almost always the case internally, so this is the "safer" option
-        # with the downside that accessing dict elements will mark them as dirty even if not changed
-        self.dirty_attributes[__key] = True
-        return super().__getitem__(__key)
-
-    def __setitem__(self, __key, __value):
-        # Keep track of which items we've explicitly modified
-        self.dirty_attributes[__key] = True
-        return super().__setitem__(__key, __value)
+                batch.append(qiskit_qc)
+            
+            self.qasm_circuit_batches.append(batch_strs)
+            self.qiskit_circuit_batches.append(batch)
+            
+            if dirname is not None:
+                exp_dir = _pathlib.Path(dirname) / 'ibmqexperiment'
+            
+                # Checkpoint by writing this member as .write() would
+                # Here, we go to a lower level than pygsti_circuit_batches and write each list entry as they are completed
+                subtypes = self.auxfile_types['qasm_circuit_batches'].split(':')
+                assert subtypes[0] == 'list', "Checkpointing of qasm_circuit_batches only possible when auxfile_type is list:<subtype>"
+                subtype = ':'.join(subtypes[1:])
+                _io.metadir._write_auxfile_member(exp_dir, f'qasm_circuit_batches{batch_idx}', subtype, batch_strs)
 
     def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True,
-               wait_time=1, wait_steps=10):
+               wait_time=1, wait_steps=10, dirname=None):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
         used to create this object.
@@ -249,85 +232,88 @@ class IBMQExperiment(dict):
         -------
         None
         """
+        assert len(self.qiskit_circuit_batches) == len(self.pygsti_circuit_batches), \
+            "Transpilation missing! Either run .transpile() first, or if loading from file, " + \
+            "use the regen_qiskit_circs=True option in from_dir()."
         
         #Get the backend version
         backend_version = ibmq_backend.version
         
         total_waits = 0
-        self['qjob'] = [] if self['qjob'] is None else self['qjob']
-        self['job_ids'] = [] if self['job_ids'] is None else self['job_ids']
+        self.qjobs = [] if self.qjobs is None else self.qjobs
+        self.job_ids = [] if self.job_ids is None else self.job_ids
 
         # Set start and stop to submit the next unsubmitted jobs if not specified
         if start is None:
-            start = len(self['qjob'])
+            start = len(self.qjobs)
 
-        if stop is not None:
-            stop = min(stop, len(self['qobj']))
-        elif ignore_job_limit:
-            stop = len(self['qobj'])
-        else:
+        stop = len(self.qiskit_circuit_batches) if stop is None else min(stop, len(self.qiskit_circuit_batches))
+        if not ignore_job_limit:
             job_limit = ibmq_backend.job_limit()
             allowed_jobs = job_limit.maximum_jobs - job_limit.active_jobs
-            if start + allowed_jobs < len(self['qobj']):
+            if start + allowed_jobs < stop:
                 print(f'Given job limit and active jobs, only {allowed_jobs} can be submitted')
 
-            stop = min(start + allowed_jobs, len(self['qobj']))
+            stop = min(start + allowed_jobs, stop)
         
-        #if the backend version is 1 I believe this should correspond to the use of the legacy
-        #qiskit-ibmq-provider API which supports passing in Qobj objects for specifying experiments
-        #if the backend version is 2 I believe this should correspond to the new API in qiskit-ibm-provider.
-        #This new API doesn't support passing in Qobjs into the run method for backends, so we need
-        #to pass in the list of QuantumCircuit objects directly.
-        if backend_version == 1:
-            batch_iterator = enumerate(self['qobj'])
-        elif backend_version >= 2:
-            batch_iterator = enumerate(self['qiskit_QuantumCircuits'])
-        
-        for batch_idx, batch in batch_iterator:
+        for batch_idx, batch in self.qiskit_circuit_batches:
             if batch_idx < start or batch_idx >= stop:
                 continue
 
-            print("Submitting batch {}".format(batch_idx + 1))
+            print(f"Submitting batch {batch_idx + 1}")
             submit_status = False
             batch_waits = 0
             while not submit_status:
                 try:
-                    backend_properties = ibmq_backend.properties()
-                    #If using a simulator backend then backend_properties is None
+                    #If submitting to a real device, get calibration data
                     if not ibmq_backend.simulator:
-                        self['submit_time_calibration_data'].append(backend_properties.to_dict())
-                    #if using the new API we need to pass in the number of shots.
+                        backend_properties = ibmq_backend.properties()
+                        self.submit_time_calibration_data.append(backend_properties.to_dict())
+                    
                     if backend_version == 1:
-                        self['qjob'].append(ibmq_backend.run(batch))
+                        # If using qiskit-ibmq-provider API, assemble into Qobj first
+                        qobj = _qiskit.compiler.assemble(batch, shots=self.num_shots)
+                        self.qjobs.append(ibmq_backend.run(qobj))
                     else:
-                        self['qjob'].append(ibmq_backend.run(batch, shots = self['num_shots']))
+                        # Newer qiskit-ibm-provider can take list of Qiskit circuits directly
+                        self.qjobs.append(ibmq_backend.run(batch, shots = self.num_shots))
                         
-                    status = self['qjob'][-1].status()
+                    status = self.qjobs[-1].status()
                     initializing = True
                     initializing_steps = 0
                     while initializing:
                         if status.name == 'INITIALIZING' or status.name == 'VALIDATING':
-                            #print(status)
-                            status = self['qjob'][-1].status()
-                            print('  - {} (query {})'.format(status, initializing_steps))
-                            _time.sleep(1)
+                            status = self.qjobs[-1].status()
+                            print(f'  - {status} (query {initializing_steps})')
+                            _time.sleep(wait_time)
                             initializing_steps += 1
                         else:
                             initializing = False
-                    #print("   -Done intializing.  Job status is {}".format(status.name))
-                    #print(status)
+
                     try:
-                        job_id = self['qjob'][-1].job_id()
-                        print('  - Job ID is {}'.format(job_id))
-                        self['job_ids'].append(job_id)
+                        job_id = self.qjobs.job_id()
+                        print(f'  - Job ID is {job_id}')
+                        self.job_ids.append(job_id)
                     except:
                         print('  - Failed to get job_id.')
-                        self['job_ids'].append(None)
+                        self.job_ids.append(None)
+                    
                     try:
-                        print('  - Queue position is {}'.format(self['qjob'][-1].queue_info().position))
+                        print(f'  - Queue position is {self.qjobs[-1].queue_info().position)}')
                     except:
-                        print('  - Failed to get queue position for batch {}'.format(batch_idx + 1))
+                        print(f'  - Failed to get queue position for batch {batch_idx + 1}')
                     submit_status = True
+
+                    # Checkpoint calibration and job id data
+                    if dirname is not None:
+                        p = _pathlib.Path(dirname)
+                        
+                        exp_dir = p / 'ibmqexperiment'
+                        # Write as .write() would for checkpointing
+                        _io.metadir._write_auxfile_member(exp_dir, 'job_ids', 'json', self.job_ids)
+                        _io.metadir._write_auxfile_member(exp_dir, 'submit_time_calibration_data', 'json',
+                                                          self.submit_time_calibration_data)
+
                 except Exception as ex:
                     template = "An exception of type {0} occurred. Arguments:\n{1!r}"
                     message = template.format(type(ex).__name__, ex.args)
@@ -353,15 +339,18 @@ class IBMQExperiment(dict):
         """
         Queries IBM Q for the status of the jobs.
         """
-        for counter, qjob in enumerate(self['qjob']):
+        assert len(self.qjobs) == len(self.job_ids), \
+            "Mismatch between jobs and job ids! If loading from file, use the regen_jobs=True option in from_dir()."
+        
+        for counter, qjob in enumerate(self.qjobs):
             status = qjob.status()
-            print("Batch {}: {}".format(counter + 1, status))
+            print(f"Batch {counter + 1}: {status}")
             if status.name == 'QUEUED':
-                print('  - Queue position is {}'.format(qjob.queue_info().position))
+                print(f'  - Queue position is {qjob.queue_info().position}')
 
         # Print unsubmitted for any entries in qobj but not qjob
-        for counter in range(len(self['qjob']), len(self['qobj'])):
-            print("Batch {}: NOT SUBMITTED".format(counter + 1))
+        for counter in range(len(self.qjobs), len(self.qiskit_circuit_batches)):
+            print(f"Batch {counter + 1}: NOT SUBMITTED")
 
     def retrieve_results(self):
         """
@@ -371,30 +360,52 @@ class IBMQExperiment(dict):
         was a GST experiment, it can input into a GST protocol object that will
         analyze the data).
         """
-        self['batch_result_object'] = []
+        assert len(self.qjobs) == len(self.job_ids), \
+            "Mismatch between jobs and job ids! If loading from file, use the regen_jobs=True option in from_dir()."
+        
+        def reverse_dict_key_bits(counts_dict):
+            new_dict = {}
+            for key in counts_dict.keys():
+                new_dict[key[::-1]] = counts_dict[key]
+            return new_dict
+
+        # NOTE: This is probably duplicative of some other code in pyGSTi
+        def partial_trace(ordered_target_indices, input_dict):
+            output_dict = {}
+            for bitstring in input_dict.keys():
+                new_string = ''
+                for index in ordered_target_indices:
+                    new_string += bitstring[index]
+                try:
+                    output_dict[new_string] += input_dict[bitstring]
+                except:
+                    output_dict[new_string] = input_dict[bitstring]
+            return output_dict
+
         #get results from backend jobs and add to dict
+        self.batch_result_objects = []
         ds = _data.DataSet()
-        for exp_idx, qjob in enumerate(self['qjob']):
-            print("Querying IBMQ for results objects for batch {}...".format(exp_idx + 1))
+        for exp_idx, qjob in enumerate(self.qjobs):
+            print(f"Querying IBMQ for results objects for batch {exp_idx + 1}...")
             batch_result = qjob.result()
-            self['batch_result_object'].append(batch_result)
-            #exp_dict['batch_data'] = []
-            for i, circ in enumerate(self['pygsti_circuits'][exp_idx]):
-                ordered_target_indices = [self['pspec'].qubit_labels.index(q) for q in circ.line_labels]
+            self.batch_result_objects.append(batch_result)
+
+            # TODO: Checkpoint
+
+            for i, circ in enumerate(self.pygsti_circuit_batches[exp_idx]):
+                ordered_target_indices = [self.processor_spec.qubit_labels.index(q) for q in circ.line_labels]
                 counts_data = partial_trace(ordered_target_indices, reverse_dict_key_bits(batch_result.get_counts(i)))
-                #exp_dict['batch_data'].append(counts_data)
                 ds.add_count_dict(circ, counts_data)
 
-        self['data'] = _ProtocolData(self['edesign'], ds)
+        self.data = _ProtocolData(self['edesign'], ds)
+
+        # TODO: Checkpoint
 
     def write(self, dirname=None):
         """
         Writes to disk, storing both the pyGSTi DataProtocol object in pyGSTi's standard
         format and saving all of the IBM Q submission information stored in this object,
         written into the subdirectory 'ibmqexperiment'.
-
-        If an existing IBMQExperiment is in the specified directory, only "dirty", i.e. modified,
-        attributes will be rewritten to file.
 
         Parameters
         ----------
@@ -407,26 +418,26 @@ class IBMQExperiment(dict):
 
         """
         if dirname is None:
-            dirname = self['edesign']._loaded_from
+            dirname = self.edesign._loaded_from
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
         
-        if self.dirty_attributes.get('data', False):
-            self['data'].write(dirname)
+        dirname = _pathlib.Path(dirname)
+
+        self.edesign.write(dirname)
         
-        _os.mkdir(dirname + '/ibmqexperiment')
+        if self.data is not None:
+            self.data.write(dirname, edesign_already_written=True)
 
-        # Dump JSON items regardless of dirty (cheaper than load/diff/rewrite)
-        dict_to_json = {atr: self[atr] for atr in _attribute_to_json}
-        with open(dirname + '/ibmqexperiment/meta.json', 'w') as f:
-            _json.dump(dict_to_json, f, indent=4)
+        exp_dir = dirname / 'ibmqexperiment'
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _io.metadir.write_obj_to_meta_based_dir(self, exp_dir, 'auxfile_types')
 
-        for atr in _attribute_to_pickle:
-            if self.dirty_attributes.get(atr, False):
-                with open(dirname + '/ibmqexperiment/{}.pkl'.format(atr), 'wb') as f:
-                    _pickle.dump(self[atr], f)
+        # Handle nonstandard serializations
+        # TODO: batch_result_objs?
 
     @classmethod
-    def from_dir(cls, dirname, provider=None):
+    def from_dir(cls, dirname, regen_qiskit_circs=False,
+                 regen_runtime_jobs=False, provider=None):
         """
         Initialize a new IBMQExperiment object from `dirname`.
 
@@ -435,37 +446,68 @@ class IBMQExperiment(dict):
         dirname : str
             The directory name.
         
+        regen_qiskit_circs: bool, optional
+            Whether to recreate the Qiskit circuits from the transpiled
+            OpenQASM strings. Defaults to False. You should set this to True
+            if you would like to call submit().
+        
+        regen_runtime_jobs: bool, optional
+            Whether to recreate the RuntimeJobs from IBMQ based on the job ides.
+            Defaults to False. You should set this to True if you would like to
+            call monitor() or retrieve_results().
+
         provider: IBMProvider
-            Provider used to retrieve qjob objects from job_ids
+            Provider used to retrieve RuntimeJobs from IBMQ based on job_ids
+            (if lazy_qiskit_load is False)
 
         Returns
         -------
         IBMQExperiment
         """
-        ret = cls.__new__(cls)
-        with open(dirname + '/ibmqexperiment/meta.json', 'r') as f:
-            from_json = _json.load(f)
-        ret.update(from_json)
+        p = _pathlib.Path(dirname)
+        edesign = _io.read_edesign_from_dir(dirname)
+        
+        exp_dir = p / 'ibmqexperiment'
+        attributes_from_meta = _io.load_meta_based_dir(exp_dir)
+        
+        ret = cls(edesign, None)
+        ret.__dict__.update(attributes_from_meta)
 
-        for atr in _attribute_to_pickle:
-            with open(dirname + '/ibmqexperiment/{}.pkl'.format(atr), 'rb') as f:
-                try:
-                    ret[atr] = _pickle.load(f)
-                except:
-                    _warnings.warn("Couldn't unpickle {}, so skipping this attribute.".format(atr))
-                    ret[atr] = None
-
-        if provider is None:
-            _warnings.warn("No provider specified, cannot retrieve IBM jobs")
-        else:
-            ret['qjob'] = []
-            for i, jid in enumerate(ret['job_ids']):
-                print(f"Loading job {i+1}/{len(ret['job_ids'])}...")
-                ret['qjob'].append(provider.backend.retrieve_job(jid))
-
+        # Handle nonstandard serialization
         try:
-            ret['data'] = _ProtocolData.from_dir(dirname)
+            data = _ProtocolData.from_dir(p, preloaded_edesign=edesign)
+            ret.data = data
         except:
             pass
 
+        ret.qiskit_circuit_batches = []
+        ret.qjobs = []
+        if regen_qiskit_circs:
+            # Regenerate Qiskit circuits
+            for batch_strs in attributes_from_meta['qasm_circuit_batches']:
+                batch = [_qiskit.QuantumCircuit.from_qasm_str(bs) for bs in batch_strs]
+                ret.qiskit_circuit_batches.append(batch)
+        
+        if regen_runtime_jobs:
+            # Regenerate RuntimeJobs (if have provider)
+            if provider is None:
+                _warnings.warn("No provider specified, cannot retrieve IBM jobs")
+            else:
+                ret._retrieve_jobs(provider)
+        
+        # Handle nonstandard serializations
+        # TODO: batch_result_objs?
+        
         return ret
+
+    def _retrieve_jobs(self, provider):
+        """Retrieves RuntimeJobs from IBMQ based on job_ids.
+
+        Parameters
+        ----------
+        provider: IBMProvider
+            Provider used to retrieve RuntimeJobs from IBMQ based on job_ids
+        """
+        for i, jid in enumerate(self.job_ids):
+            print(f"Loading job {i+1}/{len(self.job_ids)}...")
+            self.qjobs.append(provider.backend.retrieve_job(jid))
