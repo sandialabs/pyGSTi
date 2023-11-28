@@ -30,7 +30,8 @@
 * Removed Python 3.7 support and added Python 3.11 support (#374)
 
 ### Deprecated
-* The `qibo` evotype (in preparation for removing Qibo integration in pyGSTi 0.9.13) (#363)
+* The `pygsti.algorithms.directx` module
+* The `qibo` evotype (#363)
 
 ## [0.9.11.2] - 2023-08-11
 

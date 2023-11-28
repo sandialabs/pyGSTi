@@ -10,6 +10,8 @@ Functions for generating Direct-(LGST, MC2GST, MLGST) models
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import warnings as _warnings
+_warnings.warn("pygsti.algorithms.directx is deprecated and will be removed in pyGSTi 0.9.13")
 
 from pygsti.algorithms import core as _core
 from pygsti import baseobjs as _baseobjs
