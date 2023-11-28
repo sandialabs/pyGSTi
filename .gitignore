@@ -10,7 +10,6 @@
 *.pyd
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
-test/test_packages/gst_checkpoints/*
 jupyter_notebooks/**/offline
 test/test_packages/offline
 hooks/etc/permissions.yml
@@ -25,6 +24,11 @@ doc/autoapi
 doc/build
 .venv*
 
+# Protocol Checkpointing #
+##########################
+*gst_checkpoints*
+*model_test_checkpoints*
+*standard_gst_checkpoints*
 
 # Test Metadata #
 #################
