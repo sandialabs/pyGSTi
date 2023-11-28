@@ -37,7 +37,129 @@ def compute_twoQ_prob(mean_two_q_gates: float, mcm_probability: float, p_2q_mcms
     no_mcm_prob = 1 - mcm_probability
     return (mean_two_q_gates - mcm_probability*p_2q_mcms*num2Qedges_mcms) / (no_mcm_prob * num2Qedges)
 
-def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_labels = None, one_q_gate_names = None, loqs = False, gate_args_lists = None, rand_state = None, two_q_gate_density = .25, mcm_probability = .25, mcm_count = 1):
+def sample_rb_mcm_mixed_layer_fixed_mcm_count_and_twoQ_gate_count(pspec, qubit_labels = None, mcm_labels = None, one_q_gate_names = None, loqs = False, gate_args_lists = None, rand_state = None, twoQ_probability = .25, mcm_probability = .25, mcm_count = 1, twoQ_count = 1, debug = False):
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+    if gate_args_lists is None: gate_args_lists = {}
+    if qubit_labels is None:
+        qubits = list(pspec.qubit_labels[:])  # copy this list
+    else:
+        assert(isinstance(qubit_labels, (list, tuple))), "SubsetQs must be a list or a tuple!"
+        qubits = list(qubit_labels[:])  # copy this list
+    assert(mcm_count <= len(qubits) or mcm_probability == 0) # Can't add more MCMs than you have qubits  
+    assert(2*twoQ_count <= len(qubits) or twoQ_probability == 0), f'You don\'t have enough qubits to add {twoQ_count} two-qubit gates.'
+    assert(mcm_labels is not None), 'Need MCM labels.'
+    
+    sampled_layer = []
+    if loqs == True:
+        pre_layer, post_layer = [], []
+
+    num_mcms = 0
+    mcm_locs = []
+    edgelist = pspec.compute_2Q_connectivity().edges()
+    edgelist = [e for e in edgelist if all([q in qubits for q in e])]
+    selectededges = []
+    
+    include_mcms = (rand_state.random() <= mcm_probability) # Decide if you are going to include the MCMs
+    if include_mcms is True: 
+        mcm_qubits = rand_state.choice(qubits, mcm_count, replace = False)
+        mcm_qubits = [str(qubit) for qubit in mcm_qubits]
+        num_mcms += mcm_count
+    else:
+        mcm_qubits = []
+    if debug:
+        print(f'We included MCMs: {include_mcms}')
+    
+    # Pick out an independent set of edges
+    while len(edgelist) > 0:
+        edge = edgelist[rand_state.randint(0, len(edgelist))]
+        selectededges.append(edge)
+        # Delete all edges containing these qubits.
+        edgelist = [e for e in edgelist if not any([q in e for q in edge])]
+    if debug:
+        print(selectededges)
+    if len(qubits) > 1:
+        mean_two_q_gates = twoQ_count * twoQ_probability
+    else:
+        mean_two_q_gates = 0
+    if debug:
+        print(f'Mean 2Q gate count: {mean_two_q_gates}')
+    num2Qedges = len(selectededges)
+    num2Qedges_mcms = max(0, num2Qedges - mcm_count) # this is conservative
+    if debug:
+        print(f'Number of 2Q edges without MCMs: {num2Qedges_mcms}')
+    if num2Qedges_mcms > 0:
+        p_2q_mcms = twoQ_probability
+    else:
+        p_2q_mcms = 0
+    if debug:
+        print(f'Prob 2Q with MCMs: {p_2q_mcms}')
+    if mean_two_q_gates > 0:
+        if include_mcms is True:
+            twoQprob = p_2q_mcms
+        elif include_mcms is False and p_2q_mcms == 0:
+            twoQprob = 1 / (1 - mcm_probability) * twoQ_probability
+        else:
+            twoQprob = twoQ_probability
+    else:
+        twoQprob = 0
+    if debug == True:   
+        print(f'Adjusted 2Q gate prob: {twoQprob}')
+    
+    assert(0 <= twoQprob <= 1), 'Device may have insufficient connectivity. Reduce your MCM or two-qubit gate density.'
+
+    selectededges = [edge for edge in selectededges if not any([q in mcm_qubits for q in edge])] #verify this works in the 3Q case
+    unusedqubits = _copy.copy(qubits)
+    for q in mcm_qubits:
+        mcm_locs.append(q)
+        gate_label = Label(mcm_labels['mcm'], q)
+        sampled_layer.append(gate_label)
+            
+        if loqs == True:
+            pregate_label = Label(mcm_labels['pre'], q)
+            postgate_label = Label(mcm_labels['post'], q)
+            pre_layer.append(pregate_label)
+            post_layer.append(postgate_label)
+            
+        del unusedqubits[unusedqubits.index(q)]   
+    
+    ops_on_qubits = pspec.compute_ops_on_qubits()
+    edges = []
+    edge_indices = None
+    # Decide if you are going to add any 2Q gates
+    if bool(rand_state.binomial(1, twoQprob)): edge_indices = rand_state.choice(len(selectededges), twoQ_count, replace = False)
+    if edge_indices is not None: edges = _np.array(selectededges)[edge_indices]
+    for edge in edges:
+        edge = tuple(edge)
+        possibleops = ops_on_qubits[edge]
+        argless_gate_label = possibleops[rand_state.randint(0, len(possibleops))]
+        if argless_gate_label.name not in gate_args_lists.keys():
+            sampled_layer.append(argless_gate_label)
+        else:
+            possibleargs = gate_args_lists[argless_gate_label.name]
+            args = possibleargs[rand_state.randint(0, len(possibleargs))]
+            sampled_layer.append(_lbl.Label(argless_gate_label.name, edge, args=args))
+
+        for q in edge:
+            del unusedqubits[unusedqubits.index(q)]
+    
+    if one_q_gate_names is None or len(one_q_gate_names) > 0:
+        for q in unusedqubits:
+            if one_q_gate_names is None:
+                possibleops = ops_on_qubits[(q,)]
+            else:
+                print(one_q_gate_names)
+                print(ops_on_qubits[(q,)])
+                possibleops = [gate_lbl for gate_lbl in ops_on_qubits[(q,)] if gate_lbl.name in one_q_gate_names]
+            gate_label = possibleops[rand_state.randint(0, len(possibleops))]
+            sampled_layer.append(gate_label)
+
+    if loqs == True:
+        return {'pre-layers': [pre_layer], 'post-layers': [post_layer], 'mixed-layer': [sampled_layer]}, num_mcms, mcm_locs
+    
+    return {'mixed-layer': [sampled_layer]}, num_mcms, mcm_locs
+
+def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_labels = None, one_q_gate_names = None, loqs = False, gate_args_lists = None, rand_state = None, two_q_gate_density = .25, mcm_probability = .25, mcm_count = 1, debug = False):
     if rand_state is None:
         rand_state = _np.random.RandomState()
     if gate_args_lists is None: gate_args_lists = {}
@@ -66,6 +188,8 @@ def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_la
         num_mcms += mcm_count
     else:
         mcm_qubits = []
+    if debug:
+        print(include_mcms)
     
     # Pick out an independent set of edges
     while len(edgelist) > 0:
@@ -73,13 +197,18 @@ def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_la
         selectededges.append(edge)
         # Delete all edges containing these qubits.
         edgelist = [e for e in edgelist if not any([q in e for q in edge])]
-    
+    if debug:
+        print(selectededges)
     if len(qubits) > 1:
         mean_two_q_gates = len(qubits) * two_q_gate_density / 2
     else:
         mean_two_q_gates = 0
+    if debug:
+        print(f'Mean 2Q gates: {mean_two_q_gates}')
     num2Qedges = len(selectededges)
     num2Qedges_mcms = max(0, num2Qedges - mcm_count) # this is conservative
+    if debug:
+        print(num2Qedges_mcms)
     if num2Qedges_mcms > 0:
         p_2q_mcms = min(1, mean_two_q_gates / num2Qedges_mcms)
     else:
@@ -91,6 +220,8 @@ def sample_rb_mcm_mixed_layer_fixed_mcm_count(pspec, qubit_labels = None, mcm_la
             twoQprob = compute_twoQ_prob(mean_two_q_gates, mcm_probability, p_2q_mcms, num2Qedges_mcms, num2Qedges)
     else:
         twoQprob = 0
+    if debug:    
+        print(twoQprob)
     
     assert(0 <= twoQprob <= 1), 'Device may have insufficient connectivity. Reduce your MCM or two-qubit gate density.'
 
@@ -244,7 +375,7 @@ def sample_rb_mcm_mixed_layer_by_edgegrab(pspec, qubit_labels=None, mcm_labels =
     
     return {'mixed-layer': [sampled_layer]}, num_mcms, mcm_locs
 
-def sample_rb_mcm_circuit_layer_with_1Q_gates(pspec, mixed_layer_sampler = sample_rb_mcm_mixed_layer_by_edgegrab, mixed_layer_sampler_kwargs = {'mcm_density': .25, 'mcm_only_layers': True}, qubit_labels=None, mcm_labels = None, two_q_gate_density=0.25, one_q_gate_names=None, loqs = True, mcm_only_layers = True, gate_args_lists=None, rand_state=None):
+def sample_rb_mcm_circuit_layer_with_1Q_gates(pspec, mixed_layer_sampler = sample_rb_mcm_mixed_layer_by_edgegrab, mixed_layer_sampler_kwargs = {'mcm_density': .25, 'mcm_only_layers': True, 'two_q_gate_density': .25}, qubit_labels=None, mcm_labels = None, one_q_gate_names=None, loqs = True, mcm_only_layers = True, gate_args_lists=None, rand_state=None):
     
     assert(mcm_labels is not None), 'Need MCM labels.'
     if gate_args_lists is None: gate_args_lists = {}
@@ -260,7 +391,7 @@ def sample_rb_mcm_circuit_layer_with_1Q_gates(pspec, mixed_layer_sampler = sampl
     num_qubits = len(qubits)
     if num_qubits == 1:
         mcm_only_layers = True
-    mixed_layers, mcms, mcm_locs = mixed_layer_sampler(pspec, qubit_labels=qubit_labels, mcm_labels = mcm_labels, two_q_gate_density=two_q_gate_density, one_q_gate_names=one_q_gate_names, loqs = loqs, gate_args_lists=gate_args_lists, rand_state=rand_state, **mixed_layer_sampler_kwargs)
+    mixed_layers, mcms, mcm_locs = mixed_layer_sampler(pspec, qubit_labels=qubit_labels, mcm_labels = mcm_labels, one_q_gate_names=one_q_gate_names, loqs = loqs, gate_args_lists=gate_args_lists, rand_state=rand_state, **mixed_layer_sampler_kwargs)
     
     unused_qubits = _np.setdiff1d(qubits, mcm_locs)
     gates = {q: 'Gc{}'.format(rand_state.choice(_np.arange(0,24))) for q in unused_qubits}
@@ -414,7 +545,7 @@ def process_measure_layer(native_measure_layer, qubit_pointers, new_qubit_labels
         labels = [Label(label[0], qubit_pointers[label[1]][-1]) for label in native_measure_layer[0]]
         return _cir.Circuit([labels], line_labels = new_qubit_labels)
 
-def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_gate_density, loqs, debug = True, layer_sampler = sample_rb_mcm_circuit_layer_with_1Q_gates, layer_sampler_kwargs = {'mixed_layer_sampler': sample_rb_mcm_mixed_layer_by_edgegrab, 'mixed_layer_sampler_kwargs': {'mcm_density': .25, 'mcm_only_layers': True}}, include_identity = True, mcm_reset = True, seed = None):
+def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, loqs, debug = True, layer_sampler = sample_rb_mcm_circuit_layer_with_1Q_gates, layer_sampler_kwargs = {'mixed_layer_sampler': sample_rb_mcm_mixed_layer_by_edgegrab, 'mixed_layer_sampler_kwargs': {'mcm_density': .25, 'mcm_only_layers': True, 'two_q_gate_density': .5}}, include_identity = True, mcm_reset = True, seed = None):
     
     rand_state = _np.random.RandomState(seed)
     
@@ -436,7 +567,7 @@ def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_ga
     mcm_count = 0
     for i in range(length):
         layer, mcms, mcm_locs = layer_sampler(pspec, qubit_labels=None, mcm_labels = mcm_labels,
-                                              two_q_gate_density=two_q_gate_density, loqs = loqs,
+                                              loqs = loqs,
                                               rand_state = rand_state, **layer_sampler_kwargs)
  
         mcm_count += mcms
@@ -470,12 +601,18 @@ def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_ga
     rand_pauli, rand_sign, pauli_circuit = birb.sample_random_pauli(n = n + mcm_count, pspec = big_pspec, absolute_compilation = big_compilations['absolute'], circuit = True, include_identity = include_identity, rand_state = rand_state)
     s_pauli_circuit, p_pauli_circuit = _symp.symplectic_rep_of_clifford_circuit(pauli_circuit, pspec = big_pspec)
     current_pauli = rand_pauli
-    #if debug: print(f'The initial Pauli: {rand_pauli}')
+    '''if debug: 
+        print(f'The initial Pauli is {current_pauli}.')
+        print(f'It has sign {rand_sign}.\n')
+        print(f'The full Pauli is: {rand_pauli}')'''
 
     # Sample the stablizer
     
     s_inputstate, p_inputstate, s_init_layer, p_init_layer, prep_circuit = birb.sample_stabilizer(rand_pauli, rand_sign, rand_state)
     prep_circuit = birb.compose_initial_cliffords(prep_circuit)
+    '''if debug:
+        print(f'This is the initial state: \n{s_inputstate}')
+        print(f'It has a phase matrix of: {p_inputstate}')'''
     
     # build the initial layer of the blown up circuit
     initial_circuit = _cir.Circuit([[(prep_circuit[i], new_qubit_labels[i]) for i in range(len(new_qubit_labels))]])
@@ -491,6 +628,9 @@ def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_ga
     # forward simulate the Pauli in order to build both.
     
     layer_count = 0
+    
+    if debug: print(f'Initial state: {[_symp.pauli_z_measurement(s_current, p_current, qubit)[0] for qubit in range(n+mcm_count)]}')
+
     for layer in layers:
         # Here we build an expanded circuit layer (with and without MCMs). We also determine which qubits were measured, and
         # how we ought to match up native qubits with qubits in the expanded picture.
@@ -518,7 +658,7 @@ def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_ga
         
         native_layer_circuits = {key: _cir.Circuit(layer[key], line_labels = qubit_labels) for key in layer}
         
-        #if debug:
+        # if debug:
         #    print(f'These are the native layer circuits: \n{native_layer_circuits}')
         
         unmeasured_qubits = _np.setdiff1d(unmeasured_qubits, meas_qubits)
@@ -530,10 +670,9 @@ def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_ga
         
         current_pauli = [i[0] for i in _symp.find_pauli_layer(p_pauli_circuit, [j for j in range(n+mcm_count)])]
         active_paulis = [current_pauli[i] for i in meas_qubits]
-        #if debug:
-        #    print(f'This is the current pauli: {current_pauli}')
-        #    print(active_paulis)
-        # print('This is the Pauli {} after layer {}'.format(current_pauli, layer_count))
+        '''if debug:
+            print(f'This is the pauli before the layer: {current_pauli}')'''
+            
         
         # generate the measurement layer for the non-blown up circuit
         # og_meas_qubits tells me which qubits were measured
@@ -541,7 +680,6 @@ def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_ga
         # We then need to go from that entry in the current Pauli to a Z Pauli.
         
         native_measure_circuit = pauli_to_z(active_paulis, og_meas_qubits, qubit_labels, rand_state)
-        # if debug: print(f'The native measure circut: \n {native_measure_circuit}')
         full_pre_measure_circuit = native_measure_circuit.copy(editable = True)
         full_pre_measure_circuit.append_circuit_inplace(native_layer_circuits['pre-oneq-layers'])
         full_pre_measure_circuit = full_pre_measure_circuit.parallelize()
@@ -624,6 +762,10 @@ def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_ga
         
         native_circuit.append_circuit_inplace(prep_layer)
         
+        '''if debug: print(f'After the layer you have the following Pauli: {[i[0] for i in _symp.find_pauli_layer(p_pauli_circuit, [j for j in range(n+mcm_count)])]}')'''
+        if debug: print(f'Current state after the layer: {[_symp.pauli_z_measurement(s_current, p_current, qubit)[0] for qubit in range(n+mcm_count)]}')
+
+        
     # Need to add a measurement layer to handle any qubits that have not been hit by a MCM
     
     current_pauli = [i[0] for i in _symp.find_pauli_layer(p_pauli_circuit, [j for j in range(n+mcm_count)])]
@@ -638,9 +780,11 @@ def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_ga
     native_circuit.append_circuit_inplace(native_measure_circuit)
     # Needed because we are using LoQs!!! Use the first line if you want noisy final measurements (that are the same as your MCMs)
     if loqs is True:
-        #final_measurements = _cir.Circuit([[Label(mcm_labels['pre'], qubit) for qubit in qubit_labels],
-        #                                  [Label(mcm_labels['mcm'], qubit) for qubit in qubit_labels]], line_labels = qubit_labels)
-        final_measurements = _cir.Circuit([[Label(mcm_labels['mcm'], qubit) for qubit in qubit_labels]], line_labels = qubit_labels)
+        if 'pre_final' in mcm_labels:
+            final_measurements = _cir.Circuit([[Label(mcm_labels['pre_final'], qubit) for qubit in qubit_labels],
+                                          [Label(mcm_labels['mcm'], qubit) for qubit in qubit_labels]], line_labels = qubit_labels)
+        else:
+            final_measurements = _cir.Circuit([[Label(mcm_labels['mcm'], qubit) for qubit in qubit_labels]], line_labels = qubit_labels)
     
         native_circuit.append_circuit_inplace(final_measurements)
     
@@ -662,7 +806,9 @@ def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_ga
     no_mcm_circuit.append_circuit_inplace(measure_circuit)
     
     # On if you want M error: 
-    # expanded_final_measurements = _cir.Circuit([[Label(mcm_labels['pre'], 'Q{}'.format(active_qubit)) for active_qubit in active_qubits], [Label(mcm_labels['mcm'], 'Q{}'.format(active_qubit)) for active_qubit in active_qubits]], line_labels = new_qubit_labels)
+    if 'pre_final' in mcm_labels:
+        expanded_final_measurements = _cir.Circuit([[Label(mcm_labels['pre_final'], 'Q{}'.format(active_qubit)) for active_qubit in active_qubits], [Label(mcm_labels['mcm'], 'Q{}'.format(active_qubit)) for active_qubit in active_qubits]], line_labels = new_qubit_labels)
+        
     # Otherwise just use this: 
     expanded_final_measurements = _cir.Circuit([[Label(mcm_labels['mcm'], 'Q{}'.format(active_qubit)) for active_qubit in active_qubits]], line_labels = new_qubit_labels)
     expanded_circuit.append_circuit_inplace(expanded_final_measurements)
@@ -682,11 +828,14 @@ def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_ga
     print(f'This is the final measurement: {measurement}')
     print(f'It came from this Pauli: {current_pauli}')'''
           
-    # if debug: print(f'Current Pauli: {current_pauli}')
+    if debug: print(f'The pre-measurement pauli: {current_pauli}')
     sign = birb.determine_sign(s_final_state, p_final_state, measurement)
+    if debug: print(f'Measurement Sign: {sign}')
+    if debug: print(f'Final state: {[_symp.pauli_z_measurement(s_final_state, p_final_state, qubit)[0] for qubit in range(n+mcm_count)]}')
+
     
-    if debug:
-        return expanded_circuit, native_circuit, rand_pauli, measurement, measurement_order, sign, no_mcm_circuit, mcm_count, check_circuit, s_final_state, p_final_state, reset_matters, qubit_pointers
+    # if debug:
+    #    return expanded_circuit, native_circuit, rand_pauli, measurement, measurement_order, sign, no_mcm_circuit, mcm_count, check_circuit, s_final_state, p_final_state, reset_matters, qubit_pointers
     '''if mcm_reset is False:
         print(f'This is the initial pauli: {rand_pauli}')
         print(f'Here\'s the reset logic: {reset_matters}')
@@ -738,7 +887,7 @@ def quick_process_rbmcm_layer(circuit_layers: dict, layer_order: list, qubit_poi
     no_mcm_circuit.done_editing()
     return no_mcm_circuit, new_qubit_pointers, new_next_available_qubit, measured_qubits, measurement
 
-def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, two_q_gate_density, loqs, debug = True, layer_sampler = sample_rb_mcm_circuit_layer_with_1Q_gates, layer_sampler_kwargs = {'mixed_layer_sampler': sample_rb_mcm_mixed_layer_by_edgegrab, 'mixed_layer_sampler_kwargs': {'mcm_density': .25, 'mcm_only_layers': True}}, include_identity = True, mcm_reset = True, seed = None):
+def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, loqs, debug = True, layer_sampler = sample_rb_mcm_circuit_layer_with_1Q_gates, layer_sampler_kwargs = {'mixed_layer_sampler': sample_rb_mcm_mixed_layer_by_edgegrab, 'mixed_layer_sampler_kwargs': {'mcm_density': .25, 'mcm_only_layers': True, 'two_q_gate_density': .5}}, include_identity = True, mcm_reset = True, seed = None):
     
     rand_state = _np.random.RandomState(seed)
     
@@ -760,7 +909,7 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
     mcm_count = 0
     for i in range(length):
         layer, mcms, mcm_locs = layer_sampler(pspec, qubit_labels=None, mcm_labels = mcm_labels,
-                                              two_q_gate_density=two_q_gate_density, loqs = loqs,
+                                              loqs = loqs,
                                               rand_state = rand_state, **layer_sampler_kwargs)
         
         # if loqs == True: 
@@ -807,7 +956,11 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
     
     s_inputstate, p_inputstate, s_init_layer, p_init_layer, prep_circuit = birb.sample_stabilizer(rand_pauli, rand_sign, rand_state)
     prep_circuit = birb.compose_initial_cliffords(prep_circuit)
-    
+    '''if debug:
+        print(f'This is the initial state: \n{s_inputstate}')
+        print(f'This is its phase matrix: {p_inputstate}')
+        print([_symp.pauli_z_measurement(s_inputstate, p_inputstate, qubit)[0] for qubit in range(n+mcm_count)])'''
+
     
     # Begin to create the BiRB+MCM circuit
     native_circuit = _cir.Circuit([[(prep_circuit[i], qubit_labels[i]) for i in range(len(qubit_labels))]], line_labels = qubit_labels, editable = True)
@@ -833,10 +986,16 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
     '''
     
     # Now we begin to add the benchmark layers
-    if debug: 
+    '''if debug: 
         print(f'The initial Pauli is {current_pauli}.')
         print(f'It has sign {rand_sign}.\n')
         print(f'The full Pauli is: {rand_pauli}')
+        print(f'The initial state is: \n{s_current_state}')
+        print(f'Its phase matrix is: {p_current_state}')
+        print([_symp.pauli_z_measurement(s_current_state, p_current_state, qubit)[0] for qubit in range(n)])'''
+    
+    if debug: print(f'Initial state: {[_symp.pauli_z_measurement(s_current_state, p_current_state, qubit)[0] for qubit in range(n)]}')
+
     layer_count = 0
     for layer in layers:
         '''
@@ -844,18 +1003,7 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
         '''
         no_mcm_mixed_layer_circuit, new_qubit_pointers, new_next_available_qubit, measured_qubits, measurement = quick_process_rbmcm_layer(layer, layer_order, qubit_pointers = qubit_pointers, next_available_qubit = next_available_qubit, mcm_labels = mcm_labels, current_pauli = current_pauli)
         
-        if debug: 
-            current_state = [_symp.pauli_z_measurement(s_current_state, p_current_state, qubit)[0] for qubit in range(n)]
-            print(f'At the start of layer {layer_count} we have the following state: {current_state}')
-            print(f'It should be (anti-)stabilized by {current_pauli}.')
-        
-            '''print('We just processed the layer. Here are the results: \n')
-            print(f'The new layer: \n{new_layer}')
-            print(f'The new no mcm layer: \n{new_no_mcm_layer}')
-            print(f'The new qubit_pointers: \n{new_qubit_pointers}')
-            print(f'The new next available_qubit: \n{new_next_available_qubit}')
-            print(f'The meas qubits: \n{meas_qubits}')
-            print(f'The og meas qubits: \n{og_meas_qubits}')'''
+
         
         native_layer_circuits = {key: _cir.Circuit(layer[key], line_labels = qubit_labels) for key in layer}
         
@@ -872,7 +1020,7 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
         # measured qubits tells us which qubits were measured
         
         native_measure_circuit = pauli_to_z(measured_paulis, measured_qubits, qubit_labels, rand_state)
-        # if debug: print(f'The native measure circut: \n {native_measure_circuit}')
+        '''if debug: print(f'The native measure prep circut: \n {native_measure_circuit}')'''
         full_pre_measure_circuit = native_measure_circuit.copy(editable = True)
         full_pre_measure_circuit.append_circuit_inplace(native_layer_circuits['pre-oneq-layers'])
         full_pre_measure_circuit = full_pre_measure_circuit.parallelize()
@@ -895,7 +1043,7 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
         if debug: 
             current_state = [_symp.pauli_z_measurement(s_current_state, p_current_state, qubit)[0] for qubit in range(n)]
             print(f'After the pre-mixed layer we have the following state: {current_state}')
-            print(f'It should be (anti-)stabilized by {current_pauli}.')
+            #print(f'It should be (anti-)stabilized by {current_pauli}.')
         
         # Update final Pauli with the correct Z Pauli (and identity) entries
         for qubit in measured_qubits:
@@ -909,11 +1057,11 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
         
         # Determine the sign of the measurement (i.e., does the signless measurement stabilize or antistabilize your state)?
         sign = birb.determine_sign(s_current_state, p_current_state, measurement)
-        if debug: 
+        '''if debug: 
             print(f'We are peforming the following measurement: {measurement}')
             print(f'It has sign {sign}')
         
-            '''print(f'Sign: {sign}')
+            print(f'Sign: {sign}')
             print(f'Measurement: {measurement}')
             print(f'S matrix: \n{s_current_state}')
             print(f'P matrix: {p_current_state}')
@@ -933,10 +1081,11 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
         
         # Determine if a reset modification is necessary - You modified this and likely screwed it up (current_pauli --> rand_pauli)
         next_pauli_slice = {i: int(new_qubit_pointers[f'Q{i}'][-1][1:]) for i in measured_qubits}
-        if debug: 
-            print(f'These is the next Pauli indices: {next_pauli_slice}')
+        '''if debug: 
+            print(f'These are the next Pauli indices: {next_pauli_slice}')
             print(f'This is the current Pauli: {current_pauli}')
-            print(f'These are the actual Pauli entries: {[current_pauli[next_pauli_slice[i]] for i in next_pauli_slice]}')
+            print(f'This is the original Pauli: {rand_pauli}')
+            print(f'These are the next Pauli entries: {[rand_pauli[next_pauli_slice[i]] for i in next_pauli_slice]}')'''
         if mcm_reset == False:
             pauli_slice = [rand_pauli[next_pauli_slice[i]] for i in next_pauli_slice]
             reset_matters = reset_matters + [True if P != 'I' else False for P in pauli_slice] # [True if rand_pauli[int(qubit_pointers['Q{}'.format(i)][-1][1:])] != 'I' else False for i in og_meas_qubits]
@@ -950,7 +1099,7 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
         s_no_mcm_mixed_layer, p_no_mcm_mixed_layer = _symp.symplectic_rep_of_clifford_circuit(no_mcm_mixed_layer_circuit, pspec = pspec)
         s_no_mcm_mixed_layer_inverse, p_no_mcm_mixed_layer_inverse = _symp.inverse_clifford(s_no_mcm_mixed_layer, p_no_mcm_mixed_layer)
         
-        # push the Pauli through
+        # push the Pauli through - so the Pauli will be correct on non-measured qubits and I or Z on measured qubits
         s_pauli_circuit, p_pauli_circuit = _symp.compose_cliffords(s_no_mcm_mixed_layer_inverse, p_no_mcm_mixed_layer_inverse, s_pauli_circuit, p_pauli_circuit)
         s_pauli_circuit, p_pauli_circuit = _symp.compose_cliffords(s_pauli_circuit, p_pauli_circuit, s_no_mcm_mixed_layer, p_no_mcm_mixed_layer)
         current_pauli = [i[0] for i in _symp.find_pauli_layer(p_pauli_circuit, [f'Q{j}' for j in range(n)])]
@@ -963,20 +1112,20 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
         s_current_state, p_current_state = _symp.apply_clifford_to_stabilizer_state(s_no_mcm_mixed_layer, p_no_mcm_mixed_layer, s_current_state, p_current_state)
         
         if debug: 
-            print(f'This is the layer without MCMs: \n{no_mcm_mixed_layer_circuit}')
+            #print(f'This is the layer without MCMs: \n{no_mcm_mixed_layer_circuit}')
             current_state = [_symp.pauli_z_measurement(s_current_state, p_current_state, qubit)[0] for qubit in range(n)]
-            print(f'After the mixed layer we have the following state: {current_state}')
-            print(f'It should be (anti-)stabilized by {measurement}.')
+            print(f'After the mixed layer and prior to measuring we have the following state: {current_state}')
+            print(f'It should be (anti-)stabilized by {current_pauli}.')
         
         # perform the "measurements" and update the state and the Pauli - This is new. You probably messed it up!!
         # Is this reseting the measured qubits into the |0> state?
         # print(f'This is the measurement: {measurement}')
         # print(f'This is the recorded sign: {sign}')
         for qubit in measured_qubits:
-            # print(f'We are measuring qubit {qubit} in layer {layer_count}')
+            #print(f'We are measuring qubit {qubit} in layer {layer_count}')
             measurement_outcome = _symp.pauli_z_measurement(s_current_state, p_current_state, qubit)
             #print(f'We measure a |0> with probability {measurement_outcome[0]}')      
-            s_current_state, p_current_state = measurement_outcome[2], measurement_outcome[4]
+            s_current_state, p_current_state = measurement_outcome[2], measurement_outcome[4] # This doesn't do what you want it to. It takes |01>+|10> to either |01> or |10>. You need it to take you to |10>+|00>.
             if measurement_outcome[0] == 0: # Then the current state is stabilized by -Z_qubit
                 #print(f'We measured a 1 deterministically on qubit {qubit} on layer {layer_count}')
                 s_x, p_x = _np.identity(2*n, _np.int64), _np.zeros(2*n, _np.int64)
@@ -993,12 +1142,13 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
         if debug:        
             current_state = [_symp.pauli_z_measurement(s_current_state, p_current_state, qubit)[0] for qubit in range(n)]
             print(f'After the measurement we have the following state: {current_state}')
-            print(f'It should be (anti-)stabilized by {current_pauli}.')
+        #    print(f'It should be (anti-)stabilized by {current_pauli}.')
+        #    print(f'It has an s of: {s_current_state}')
+        #    print(f'It has a p of: {p_current_state}')
+        # We may nhave a sign issue, i.e., we may have a post-measurement state that is anti-stabilized by the current pauli. Do we assume that it is stabilized?
         
         pauli_circuit = _cir.Circuit([[(current_pauli[i], qubit_labels[i]) for i in range(n)]], line_labels = qubit_labels, editable = True)
         s_pauli_circuit, p_pauli_circuit = _symp.symplectic_rep_of_clifford_circuit(pauli_circuit, pspec = pspec)
-        
-        
         
         # now we deal with the post-measurement layers
         
@@ -1033,7 +1183,9 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
         if debug:
             current_state = [_symp.pauli_z_measurement(s_current_state, p_current_state, qubit)[0] for qubit in range(n)]
             print(f'After the post-measurement layer we have the following state: {current_state}')
-            print(f'It should be (anti-)stabilized by {current_pauli}.\n')
+        #    print(f'It should be (anti-)stabilized by {current_pauli}.\n')
+        #    print(f'It has an s of: {s_current_state}')
+        #    print(f'It has a p of: {p_current_state}')
         
         # update qubit_pointers
         qubit_pointers = new_qubit_pointers
@@ -1050,7 +1202,7 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
     if debug:
         current_state = [_symp.pauli_z_measurement(s_current_state, p_current_state, qubit)[0] for qubit in range(n)]
         print(f'Prior to the pre-final measurement layer, we have the following state: {current_state}')
-        print(f'It should be (anti-)stabilized by {current_pauli}.')
+        #print(f'It should be (anti-)stabilized by {current_pauli}.')
     
     # generate the final pre-measurement layer
     
@@ -1074,7 +1226,7 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
     if debug:
         current_state = [_symp.pauli_z_measurement(s_current_state, p_current_state, qubit)[0] for qubit in range(n)]
         print(f'Prior to the final measurement we have the state: {current_state}')
-        print(f'It should be (anti-)stabilized by {current_pauli}.')
+        #print(f'It should be (anti-)stabilized by {current_pauli}.')
     
     # the current state should now be stabilized by some Z-type Pauli / the current Pauli should be a Z-type Pauli
     final_measurement = [i[0] for i in _symp.find_pauli_layer(p_pauli_circuit, [f'Q{j}' for j in range(n)])]
@@ -1093,8 +1245,12 @@ def quick_create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, tw
     measurement_phases.append(sign)
     
     # append the final measurement layer if you are using LoQs
-    if loqs == True:
-        final_measurement_circuit = _cir.Circuit([[Label(mcm_labels['mcm'], qubit) for qubit in qubit_labels]], line_labels = qubit_labels)
+    if loqs is True:
+        if 'pre_final' in mcm_labels:
+            final_measurement_circuit = _cir.Circuit([[Label(mcm_labels['pre_final'], qubit) for qubit in qubit_labels],
+                                          [Label(mcm_labels['mcm'], qubit) for qubit in qubit_labels]], line_labels = qubit_labels)
+        else:
+            final_measurement_circuit = _cir.Circuit([[Label(mcm_labels['mcm'], qubit) for qubit in qubit_labels]], line_labels = qubit_labels)
         native_circuit.append_circuit_inplace(final_measurement_circuit)
         
     # compute the overall sign of the total measurement
