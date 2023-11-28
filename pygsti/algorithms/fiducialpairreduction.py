@@ -155,10 +155,24 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
     #tol = 0.5 #fraction of expected amplification that must be observed to call a parameter "amplified"
     if prep_povm_tuples == "first":
         firstRho = list(target_model.preps.keys())[0]
+        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
         firstPOVM = list(target_model.povms.keys())[0]
+        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
         prep_povm_tuples = [(firstRho, firstPOVM)]
-    prep_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
-                        for prepLbl, povmLbl in prep_povm_tuples]
+        #I think using the state space labels for firstRho and firstPOVM as the
+        #circuit labels should work most of the time (new stricter line_label enforcement means
+        # we need to enforce compatibility here), but this might break for
+        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
+        #Time will tell...
+    #if not we still need to extract state space labels for all of these to meet new circuit
+    #label handling requirements.
+    else:
+        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+
+    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
+                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
+                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
 
     def _get_derivs(length):
         """ Compute all derivative info: get derivative of each `<E_i|germ^exp|rho_j>`
@@ -305,7 +319,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
     return listOfAllPairs
 
 def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_fiducials,
-                                            germs, pre_povm_tuples="first",
+                                            germs, prep_povm_tuples="first",
                                             search_mode="random", constrain_to_tp=True,
                                             n_random=100, min_iterations=None, base_loweig_tol= 1e-1,
                                             seed=None ,verbosity=0, num_soln_returned=1, type_soln_returned='best', retry_for_smaller=True,
@@ -350,7 +364,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
     germs : list of Circuits
         The germ circuits that are repeated to amplify errors.
 
-    pre_povm_tuples : list or "first", optional
+    prep_povm_tuples : list or "first", optional
         A list of `(prepLabel, povmLabel)` tuples to consider when
         checking for completeness.  Usually this should be left as the special
         (and default) value "first", which considers the first prep and POVM
@@ -414,18 +428,32 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
     """
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
-
-    if pre_povm_tuples == "first":
-        firstRho = list(target_model.preps.keys())[0]
-        firstPOVM = list(target_model.povms.keys())[0]
-        pre_povm_tuples = [(firstRho, firstPOVM)]
     
+    if prep_povm_tuples == "first":
+        firstRho = list(target_model.preps.keys())[0]
+        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
+        firstPOVM = list(target_model.povms.keys())[0]
+        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
+        prep_povm_tuples = [(firstRho, firstPOVM)]
+        #I think using the state space labels for firstRho and firstPOVM as the
+        #circuit labels should work most of the time (new stricter line_label enforcement means
+        # we need to enforce compatibility here), but this might break for
+        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
+        #Time will tell...
+    #if not we still need to extract state space labels for all of these to meet new circuit
+    #label handling requirements.
+    else:
+        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+
     #brief intercession to calculate the number of degrees of freedom for the povm.
-    num_effects= len(list(target_model.povms[pre_povm_tuples[0][1]].keys()))
+    num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
     dof_per_povm= num_effects-1
+
+    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
+                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
+                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
        
-    pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
-                       for prepLbl, povmLbl in pre_povm_tuples]
     
 
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
@@ -449,7 +477,8 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
             gsGerm = target_model.copy()
             gsGerm.set_all_parameterizations("static")
             germMx = gsGerm.sim.product(germ)
-            gsGerm.operations["Ggerm"] = _EigenvalueParamDenseOp(
+            #give this state space labels equal to the line_labels of 
+            gsGerm.operations['Ggerm'] = _EigenvalueParamDenseOp(
                 germMx, True, constrain_to_tp)
 
             printer.show_progress(i, len(germs),
@@ -458,11 +487,12 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
 
             #Determine which fiducial-pair indices to iterate over
             #initial run
-            candidate_solution_list, bestFirstEval = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
+            candidate_solution_list, bestFirstEval = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, prep_povm_tuples,
                                                                     gsGerm, 1, mem_limit,
                                                                     printer, search_mode, seed, n_random, dof_per_povm,
                                                                     min_iterations, base_loweig_tol, candidate_set_seed=None,
-                                                                    num_soln_returned=num_soln_returned, type_soln_returned=type_soln_returned)
+                                                                    num_soln_returned=num_soln_returned, type_soln_returned=type_soln_returned,
+                                                                    germ_circuit=germ)
                                                                    
             #the algorithm isn't guaranteed to actually find the requested number of solutions, so check how many there actually are
             #by checking the length of the list of returned eigenvalues. 
@@ -482,11 +512,12 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
                 for candidate_solution in candidate_solution_list.values():
                     #now do a seeded run for each of the candidate solutions returned in the initial run:
                     #for these internal runs just return a single solution. 
-                    reducedPairlist, bestFirstEval = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
+                    reducedPairlist, bestFirstEval = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, prep_povm_tuples,
                                                                             gsGerm, 1, mem_limit,
                                                                             printer, search_mode, seed, n_random, dof_per_povm,
                                                                             min_iterations, base_loweig_tol, candidate_set_seed=candidate_solution,
-                                                                            num_soln_returned= 1, type_soln_returned='best')
+                                                                            num_soln_returned= 1, type_soln_returned='best',
+                                                                            germ_circuit=germ)
                     #This should now return a dictionary with a single entry. Append that entry to a running list which we'll process at the end.
                     updated_solns.append(list(reducedPairlist.values())[0])
 
@@ -523,7 +554,7 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
     return pairListDict
     
 def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials, meas_fiducials,
-                                                germs, pre_povm_tuples="first", constrain_to_tp=True,
+                                                germs, prep_povm_tuples="first", constrain_to_tp=True,
                                                 inv_trace_tol= 10, initial_seed_mode='random',
                                                 evd_tol=1e-10, sensitivity_threshold=1e-10, seed=None ,verbosity=0, check_complete_fid_set=True,
                                                 mem_limit=None):
@@ -567,7 +598,7 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
     germs : list of Circuits
         The germ circuits that are repeated to amplify errors.
 
-    pre_povm_tuples : list or "first", optional
+    prep_povm_tuples : list or "first", optional
         A list of `(prepLabel, povmLabel)` tuples to consider when
         checking for completeness.  Usually this should be left as the special
         (and default) value "first", which considers the first prep and POVM
@@ -630,17 +661,30 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
-    if pre_povm_tuples == "first":
+    if prep_povm_tuples == "first":
         firstRho = list(target_model.preps.keys())[0]
+        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
         firstPOVM = list(target_model.povms.keys())[0]
-        pre_povm_tuples = [(firstRho, firstPOVM)]
+        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
+        prep_povm_tuples = [(firstRho, firstPOVM)]
+        #I think using the state space labels for firstRho and firstPOVM as the
+        #circuit labels should work most of the time (new stricter line_label enforcement means
+        # we need to enforce compatibility here), but this might break for
+        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
+        #Time will tell...
+    #if not we still need to extract state space labels for all of these to meet new circuit
+    #label handling requirements.
+    else:
+        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
     
     #brief intercession to calculate the number of degrees of freedom for the povm.
-    num_effects= len(list(target_model.povms[pre_povm_tuples[0][1]].keys()))
+    num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
     dof_per_povm= num_effects-1
-       
-    pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
-                       for prepLbl, povmLbl in pre_povm_tuples]
+
+    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
+                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
+                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
 
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
     
@@ -667,12 +711,13 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
 
             #Determine which fiducial-pair indices to iterate over
             #initial run
-            candidate_solution_list, best_score = _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, pre_povm_tuples,
+            candidate_solution_list, best_score = _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, prep_povm_tuples,
                                                                     gsGerm, 1, mem_limit,
                                                                     printer, seed, dof_per_povm,
                                                                     inv_trace_tol, initial_seed_mode=initial_seed_mode,
                                                                     check_complete_fid_set=check_complete_fid_set, evd_tol=evd_tol,
-                                                                    sensitivity_threshold=sensitivity_threshold)
+                                                                    sensitivity_threshold=sensitivity_threshold,
+                                                                    germ_circuit= germ)
             
             #print some output about the minimum eigenvalue acheived.
             printer.log('Score Achieved: ' + str(best_score), 2)
@@ -691,7 +736,7 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
 
 def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, meas_fiducials,
                                                   germs, max_lengths,
-                                                  pre_povm_tuples="first",
+                                                  prep_povm_tuples="first",
                                                   search_mode="random", constrain_to_tp=True,
                                                   trunc_scheme="whole germ powers",
                                                   n_random=100, min_iterations=None, base_loweig_tol= 1e-1, seed=None,
@@ -746,7 +791,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
     max_lengths: list of int
         The germ powers (number of repetitions) to be used to amplify errors.
 
-    pre_povm_tuples : list or "first", optional
+    prep_povm_tuples : list or "first", optional
         A list of `(prepLabel, povmLabel)` tuples to consider when
         checking for completeness.  Usually this should be left as the special
         (and default) value "first", which considers the first prep and POVM
@@ -805,16 +850,28 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
     
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
-    if pre_povm_tuples == "first":
+    if prep_povm_tuples == "first":
         firstRho = list(target_model.preps.keys())[0]
+        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
         firstPOVM = list(target_model.povms.keys())[0]
-        pre_povm_tuples = [(firstRho, firstPOVM)]
+        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
+        prep_povm_tuples = [(firstRho, firstPOVM)]
+        #I think using the state space labels for firstRho and firstPOVM as the
+        #circuit labels should work most of the time (new stricter line_label enforcement means
+        # we need to enforce compatibility here), but this might break for
+        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
+        #Time will tell...
+    #if not we still need to extract state space labels for all of these to meet new circuit
+    #label handling requirements.
+    else:
+        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
 
-    pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
-                       for prepLbl, povmLbl in pre_povm_tuples]
+    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
+                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
+                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
+    
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
-    low_eigvals = {}
-    #base_loweig_threshold = 1e-2  # HARDCODED
     
     #Check whether the user has passed in a candidate set as a seed from a previous run of
     #per-germ FPR.
@@ -881,11 +938,11 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
             else:
                 candidate_set_seed= None
             
-            goodPairList, _ = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
+            goodPairList, _ = _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, prep_povm_tuples,
                                                                 gsGerm, power, mem_limit,
                                                                 printer, search_mode, seed, n_random,
                                                                 min_iterations, base_loweig_tol, candidate_set_seed,
-                                                                num_soln_returned=1, type_soln_returned='best')
+                                                                num_soln_returned=1, type_soln_returned='best', germ_circuit = germ)
                                                                 
             #This should now return a dictionary with a single entry. pull that entry out.
             goodPairList= list(goodPairList.values())[0]
@@ -900,7 +957,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
     return pairListDict
 
 def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials, germs,
-                        test_lengths=(256, 2048), pre_povm_tuples="first", tol=0.75,
+                        test_lengths=(256, 2048), prep_povm_tuples="first", tol=0.75,
                         verbosity=0, mem_limit=None):
     """
     Tests a set of global or per-germ fiducial pairs.
@@ -936,7 +993,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
         A tuple of integers specifying the germ-power lengths to use when
         checking for amplificational completeness.
 
-    pre_povm_tuples : list or "first", optional
+    prep_povm_tuples : list or "first", optional
         A list of `(prepLabel, povmLabel)` tuples to consider when
         checking for completeness.  Usually this should be left as the special
         (and default) value "first", which considers the first prep and POVM
@@ -958,12 +1015,26 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
-    if pre_povm_tuples == "first":
+    if prep_povm_tuples == "first":
         firstRho = list(target_model.preps.keys())[0]
+        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
         firstPOVM = list(target_model.povms.keys())[0]
-        pre_povm_tuples = [(firstRho, firstPOVM)]
-    pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
-                       for prepLbl, povmLbl in pre_povm_tuples]
+        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
+        prep_povm_tuples = [(firstRho, firstPOVM)]
+        #I think using the state space labels for firstRho and firstPOVM as the
+        #circuit labels should work most of the time (new stricter line_label enforcement means
+        # we need to enforce compatibility here), but this might break for
+        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
+        #Time will tell...
+    #if not we still need to extract state space labels for all of these to meet new circuit
+    #label handling requirements.
+    else:
+        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+
+    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
+                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
+                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
 
     def _get_derivs(length):
         """ Compute all derivative info: get derivative of each `<E_i|germ^exp|rho_j>`
@@ -975,7 +1046,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
             pairList = fid_pairs[germ] if isinstance(fid_pairs, dict) else fid_pairs
             circuits += _gsc.create_circuits("pp[0]+p[0]+expGerm+p[1]+pp[1]",
                                              p=[(prep_fiducials[i], meas_fiducials[j]) for i, j in pairList],
-                                             pp=pre_povm_tuples, expGerm=expGerm, order=['p', 'pp'])
+                                             pp=prep_povm_tuples, expGerm=expGerm, order=['p', 'pp'])
         circuits = _remove_duplicates(circuits)
 
         resource_alloc = _baseobjs.ResourceAllocation(comm=None, mem_limit=mem_limit)
@@ -1023,10 +1094,11 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
 
 
 # Helper function for per_germ and per_germ_power FPR
-def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples,
+def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, prep_povm_tuples,
                                  gsGerm, power, mem_limit, printer, search_mode, seed, n_random, dof_per_povm,
                                  min_iterations=1, lowest_eigenval_tol=1e-1,
-                                 candidate_set_seed=None, num_soln_returned=1, type_soln_returned='best'):
+                                 candidate_set_seed=None, num_soln_returned=1, type_soln_returned='best',
+                                 germ_circuit = None):
     #Get dP-matrix for full set of fiducials, where
     # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
     #   j is similar, and derivs are wrt the "eigenvalues" of the germ
@@ -1048,17 +1120,18 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
     
     min_pairs_needed= ceil((gsGerm.num_params/(nPossiblePairs*dof_per_povm))*nPossiblePairs)
     printer.log('Minimum Number of Pairs Needed for this Germ: %d'%(min_pairs_needed), 2)    
+    line_labels = germ_circuit.line_labels if germ_circuit is not None else 'auto'
 
     lst = _gsc.create_circuits(
         "pp[0]+f0+germ*power+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
-        germ=_circuits.Circuit('Ggerm'), pp=pre_povm_tuples, power=power,
+        germ=_circuits.Circuit(['Ggerm'], line_labels=line_labels), pp=prep_povm_tuples, power=power,
         order=('f0', 'f1', 'pp'))
 
     resource_alloc = _baseobjs.ResourceAllocation(comm=None, mem_limit=mem_limit)
     layout = gsGerm.sim.create_layout(lst, None, resource_alloc, array_types=('ep',), verbosity=0)
 
     elIndicesForPair = [[] for i in range(len(prep_fiducials) * len(meas_fiducials))]
-    nPrepPOVM = len(pre_povm_tuples)
+    nPrepPOVM = len(prep_povm_tuples)
     for k in range(len(prep_fiducials) * len(meas_fiducials)):
         for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):
             # "original" indices into lst for k-th fiducial pair
@@ -1249,7 +1322,6 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                 # subset of the total fiducial pairs.
                 elementIndicesToTest = _np.concatenate([elIndicesForPair[i] for i in pairIndicesToTest])
                 dP = _np.take(dPall, elementIndicesToTest, axis=0)  # subset_of_num_elements x num_params
-                #print('Rank of candidate set: ', _np.linalg.matrix_rank(dP))
                 
                 spectrum = _np.abs(_np.linalg.eigvalsh(_np.dot(dP, dP.T)))
                 current_rank= _np.count_nonzero(spectrum>1e-10)
@@ -1282,8 +1354,8 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
                                 try:
                                     bestPairs.pop(bestFirstEval[-1])
                                 except KeyError as err:
-                                    print("trying to drop the element from bestPairs with key: ", bestFirstEval[-1])
-                                    print("current keys in this dictionary: ", bestPairs.keys())
+                                    printer.log(f"Trying to drop the element from bestPairs with key: {bestFirstEval[-1]}", 3)
+                                    printer.log(f"Current keys in this dictionary: {bestPairs.keys()}", 3)
                                     
                                     #This seems to be happening when there are multiple entries with virtually
                                     #identical values for the keys. 
@@ -1328,10 +1400,11 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, pre_povm_tuples
 # This version uses a greedy style algorithm and an
 # alternative objective function which leverages the performance enhancements
 # utilized for the germ selection algorithm using low-rank updates.
-def _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, pre_povm_tuples,
+def _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, prep_povm_tuples,
                                  gsGerm, power, mem_limit, printer, seed, dof_per_povm,
                                  inv_trace_tol=10, initial_seed_mode= 'random',
-                                 check_complete_fid_set= True, evd_tol=1e-10, sensitivity_threshold= 1e-10):
+                                 check_complete_fid_set= True, evd_tol=1e-10, sensitivity_threshold= 1e-10,
+                                 germ_circuit = None):
     #Get dP-matrix for full set of fiducials, where
     # P_ij = <E_i|germ^exp|rho_j>, i = composite EVec & fiducial index,
     #   j is similar, and derivs are wrt the "eigenvalues" of the germ
@@ -1352,17 +1425,18 @@ def _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, pre_povm
     
     min_pairs_needed= ceil((gsGerm.num_params/(nPossiblePairs*dof_per_povm))*nPossiblePairs)
     printer.log('Minimum Number of Pairs Needed for this Germ: %d'%(min_pairs_needed), 2)
-    
+    line_labels = germ_circuit.line_labels if germ_circuit is not None else 'auto'
+
     lst = _gsc.create_circuits(
         "pp[0]+f0+germ*power+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
-        germ=_circuits.Circuit('Ggerm'), pp=pre_povm_tuples, power=power,
+        germ=_circuits.Circuit(['Ggerm'], line_labels=line_labels), pp=prep_povm_tuples, power=power,
         order=('f0', 'f1', 'pp'))
 
     resource_alloc = _baseobjs.ResourceAllocation(comm=None, mem_limit=mem_limit)
     layout = gsGerm.sim.create_layout(lst, None, resource_alloc, array_types=('ep',), verbosity=0)
 
     elIndicesForPair = [[] for i in range(len(prep_fiducials) * len(meas_fiducials))]
-    nPrepPOVM = len(pre_povm_tuples)
+    nPrepPOVM = len(prep_povm_tuples)
     for k in range(len(prep_fiducials) * len(meas_fiducials)):
         for o in range(k * nPrepPOVM, (k + 1) * nPrepPOVM):
             # "original" indices into lst for k-th fiducial pair
@@ -1586,7 +1660,7 @@ def filter_useless_fid_pairs(fiducial_indices, element_map, complete_jacobian, s
 #about the amplificational properties of the germ set as a whole.
 
 def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials, meas_fiducials,
-                                                   germ_vector_spanning_set=None, germs=None, pre_povm_tuples="first",
+                                                   germ_vector_spanning_set=None, germs=None, prep_povm_tuples="first",
                                                    mem_limit=None, inv_trace_tol= 10, initial_seed_mode='greedy',
                                                    evd_tol=1e-10, seed=None ,verbosity=0, float_type = _np.cdouble,
                                                    germ_set_spanning_kwargs = None, precomputed_jacobians = None):
@@ -1633,7 +1707,7 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
         If passed in and germ_vector_spanning_set is None then we'll use this
         in the calculation of the germ vector spanning set.
 
-    pre_povm_tuples : list or "first", optional
+    prep_povm_tuples : list or "first", optional
         A list of `(prepLabel, povmLabel)` tuples to consider when
         checking for completeness.  Usually this should be left as the special
         (and default) value "first", which considers the first prep and POVM
@@ -1711,17 +1785,30 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
                                                                  verbosity=verbosity,
                                                                  **used_kwargs)
 
-    if pre_povm_tuples == "first":
+    if prep_povm_tuples == "first":
         firstRho = list(target_model.preps.keys())[0]
+        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
         firstPOVM = list(target_model.povms.keys())[0]
-        pre_povm_tuples = [(firstRho, firstPOVM)]
-    
+        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
+        prep_povm_tuples = [(firstRho, firstPOVM)]
+        #I think using the state space labels for firstRho and firstPOVM as the
+        #circuit labels should work most of the time (new stricter line_label enforcement means
+        # we need to enforce compatibility here), but this might break for
+        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
+        #Time will tell...
+    #if not we still need to extract state space labels for all of these to meet new circuit
+    #label handling requirements.
+    else:
+        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+
     #brief intercession to calculate the number of degrees of freedom for the povm.
-    num_effects= len(list(target_model.povms[pre_povm_tuples[0][1]].keys()))
+    num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
     dof_per_povm= num_effects-1
-       
-    pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
-                       for prepLbl, povmLbl in pre_povm_tuples]
+
+    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
+                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
+                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
 
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
     
@@ -1733,7 +1820,7 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
     printer.log("------  Per Germ Global Fiducial Pair Reduction --------")
     with printer.progress_logging(1):
         for i, (germ, germ_vector_list) in enumerate(germ_vector_spanning_set.items()):
-            candidate_solution_list, best_score = get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuples,
+            candidate_solution_list, best_score = get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, prep_povm_tuples,
                                                                     target_model, germ, germ_vector_list, mem_limit,
                                                                     printer, dof_per_povm, inv_trace_tol, 
                                                                     initial_seed_mode=initial_seed_mode, evd_tol=evd_tol,
@@ -1754,7 +1841,7 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
 
     return pairListDict
     
-def get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuples,
+def get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, prep_povm_tuples,
                                  target_model, germ, germ_vector_list, mem_limit, printer, dof_per_povm, 
                                  inv_trace_tol=10, initial_seed_mode= 'greedy', evd_tol=1e-10, 
                                  float_type = _np.cdouble, dprobs_dict = None):                      
@@ -1782,8 +1869,7 @@ def get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuple
     
     allPairIndices = list(range(nPossiblePairs))
 
-    print('Current Germ: ')
-    print(germ)
+    printer.log(f'Current Germ: {germ}', 2)
     
     printer.log('Number of possible pairs: %d'%(nPossiblePairs), 3)
     
@@ -1797,10 +1883,10 @@ def get_per_germ_fid_pairs_global(prep_fiducials, meas_fiducials, pre_povm_tuple
     #loops over a number of pairs between min_pairs_needed and up to and not including the number of possible pairs
     min_pairs_needed= ceil((num_germ_vecs/(nPossiblePairs*dof_per_povm))*nPossiblePairs)
     printer.log('Minimum Number of Pairs Needed for this Germ: %d'%(min_pairs_needed), 2)
-    
+
     lst = _gsc.create_circuits(
         "pp[0]+f0+germ*power+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
-        germ=germ, pp=pre_povm_tuples, power=1,
+        germ=germ, pp=prep_povm_tuples, power=1,
         order=('f0', 'f1', 'pp'))
     
     printer.log('Constructing Directional Derivatives for Full Fiducial Set' , 2)
@@ -2054,9 +2140,7 @@ def _compute_bulk_directional_ddd_compact(model, circuits, vec_mat, eps,
                 
                 #now calculate the direction derivative matrix.
                 directional_deriv = jac@vec_mat
-                #print('directional deriv shape: ' + str(directional_deriv.shape))
-                direc_deriv_gram = directional_deriv.T@directional_deriv
-                #print('directional deriv gram shape: ' + str(direc_deriv_gram.shape))                                        
+                direc_deriv_gram = directional_deriv.T@directional_deriv                                        
                 #now take twirledDerivDerivDagger and construct its compact EVD.
                 e, U= compact_EVD(direc_deriv_gram, evd_tol)
                 e_list.append(e)
@@ -2117,7 +2201,7 @@ def _make_spam_static(model):
 #write a helper function for precomputing the jacobian dictionaries from bulk_dprobs
 #which can then be passed into the construction of the compactEVD caches.
 
-def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, pre_povm_tuples = 'first', comm=None, mem_limit=None):
+def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, prep_povm_tuples = 'first', comm=None, mem_limit=None, verbosity = 0):
     """
     Function for precomputing the jacobian dictionaries from bulk_dprobs
     for a model with its SPAM parameters frozen, as needed for certain
@@ -2136,7 +2220,7 @@ def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, pre_pov
     meas_fiducials : list of Circuits
         A list of measurement fiducial circuits.
         
-    pre_povm_tuples : str or list of tuples (default 'first')
+    prep_povm_tuples : str or list of tuples (default 'first')
         Either a string or list of tuples. When a list of tuples
         these correspond to native state prep and native POVM pairs.
         When the special keyword argument 'first' is passed in the first
@@ -2160,14 +2244,29 @@ def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, pre_pov
     """
     resource_alloc = _baseobjs.ResourceAllocation(comm= comm, mem_limit = mem_limit)
     
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm= comm)
+
     #construct the list of circuits
-    if pre_povm_tuples == "first":
+    if prep_povm_tuples == "first":
         firstRho = list(model.preps.keys())[0]
+        prep_ssl = [model.preps[firstRho].state_space.state_space_labels]
         firstPOVM = list(model.povms.keys())[0]
-        pre_povm_tuples = [(firstRho, firstPOVM)]
-        
-    pre_povm_tuples = [(_circuits.Circuit((prepLbl,)), _circuits.Circuit((povmLbl,)))
-                       for prepLbl, povmLbl in pre_povm_tuples]
+        POVM_ssl = [model.povms[firstPOVM].state_space.state_space_labels]
+        prep_povm_tuples = [(firstRho, firstPOVM)]
+        #I think using the state space labels for firstRho and firstPOVM as the
+        #circuit labels should work most of the time (new stricter line_label enforcement means
+        # we need to enforce compatibility here), but this might break for
+        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
+        #Time will tell...
+    #if not we still need to extract state space labels for all of these to meet new circuit
+    #label handling requirements.
+    else:
+        prep_ssl = [model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        POVM_ssl = [model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+
+    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
+                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
+                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
         
     #freeze the SPAM model parameters:
     static_spam_model = _make_spam_static(model)
@@ -2175,12 +2274,11 @@ def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, pre_pov
     jacobian_dicts = {}
         
     for germ in germs:       
-        if comm is None or comm.Get_rank() ==0:
-            print('Current germ:', germ, flush=True)
+        printer.log(f'Current germ: {germ}', 1)
          
         lst = _gsc.create_circuits(
             "pp[0]+f0+germ*power+f1+pp[1]", f0=prep_fiducials, f1=meas_fiducials,
-            germ=germ, pp=pre_povm_tuples, power=1,
+            germ=germ, pp=prep_povm_tuples, power=1,
             order=('f0', 'f1', 'pp'))
         
         #calculate the dprobs dictionary in bulk.
