@@ -868,21 +868,13 @@ class Circuit(object):
         if ('*',) in combined_labels and len(combined_labels) > 1:
             # raise the error
             msg = f"Adding circuits with incompatible line labels: {combined_labels}."  \
-                    + "The problem is that one of these labels uses the placeholder value of '*', while the other label does not."\
-                    + "The placeholder value arises when when a Circuit is initialized without specifying the line labels,"\
+                    +" The problem is that one of these labels uses the placeholder value of '*', while the other label does not."\
+                    +" The placeholder value arises when when a Circuit is initialized without specifying the line labels,"\
                     +" either explicitly by setting the line_labels or by num_lines kwarg, or implicitly from specifying"\
                     +" layer labels with non-None state-space labels. Circuits with '*' line labels can be used, but"\
                     +" only in conjunction with other circuits with '*' line labels (and vice-versa for circuits with"\
                     +" standard line labels)." 
             raise ValueError(msg)
-        #if (x.line_labels == ('*',) and self.line_labels !=('*',)) or (x.line_labels != ('*',) and self.line_labels ==('*',)):
-        #    raise ValueError("Adding circuits with incompatible line labels. This likely means that one of the circuits being"\
-        #                     +" added has a line label of '*' while the other circuit does not. The '*' line label is a placeholder"\
-        #                     +" value that is used when a Circuit is initialized without specifying the line labels,"\
-        #                     +" either explicitly by setting the line_labels or by num_lines kwarg, or implicitly from specifying"\
-        #                     +" layer labels with non-None state-space labels. Circuits with '*' line labels can be used, but"\
-        #                     +" only in conjunction with other circuits with '*' line labels (and vice-versa for circuits with"\
-        #                     +" standard line labels).")
 
         if self._str is None or x._str is None:
             s = None

@@ -153,26 +153,7 @@ def find_sufficient_fiducial_pairs(target_model, prep_fiducials, meas_fiducials,
     #like)
 
     #tol = 0.5 #fraction of expected amplification that must be observed to call a parameter "amplified"
-    if prep_povm_tuples == "first":
-        firstRho = list(target_model.preps.keys())[0]
-        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
-        firstPOVM = list(target_model.povms.keys())[0]
-        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
-        prep_povm_tuples = [(firstRho, firstPOVM)]
-        #I think using the state space labels for firstRho and firstPOVM as the
-        #circuit labels should work most of the time (new stricter line_label enforcement means
-        # we need to enforce compatibility here), but this might break for
-        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
-        #Time will tell...
-    #if not we still need to extract state space labels for all of these to meet new circuit
-    #label handling requirements.
-    else:
-        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-
-    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
-                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
-                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
+    prep_povm_tuples = _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs = False)
 
     def _get_derivs(length):
         """ Compute all derivative info: get derivative of each `<E_i|germ^exp|rho_j>`
@@ -429,33 +410,8 @@ def find_sufficient_fiducial_pairs_per_germ(target_model, prep_fiducials, meas_f
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
     
-    if prep_povm_tuples == "first":
-        firstRho = list(target_model.preps.keys())[0]
-        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
-        firstPOVM = list(target_model.povms.keys())[0]
-        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
-        prep_povm_tuples = [(firstRho, firstPOVM)]
-        #I think using the state space labels for firstRho and firstPOVM as the
-        #circuit labels should work most of the time (new stricter line_label enforcement means
-        # we need to enforce compatibility here), but this might break for
-        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
-        #Time will tell...
-    #if not we still need to extract state space labels for all of these to meet new circuit
-    #label handling requirements.
-    else:
-        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-
-    #brief intercession to calculate the number of degrees of freedom for the povm.
-    num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
-    dof_per_povm= num_effects-1
-
-    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
-                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
-                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
-       
-    
-
+    prep_povm_tuples, dof_per_povm = _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs = True)
+           
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
     
     if min_iterations is None:
@@ -661,30 +617,7 @@ def find_sufficient_fiducial_pairs_per_germ_greedy(target_model, prep_fiducials,
 
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
-    if prep_povm_tuples == "first":
-        firstRho = list(target_model.preps.keys())[0]
-        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
-        firstPOVM = list(target_model.povms.keys())[0]
-        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
-        prep_povm_tuples = [(firstRho, firstPOVM)]
-        #I think using the state space labels for firstRho and firstPOVM as the
-        #circuit labels should work most of the time (new stricter line_label enforcement means
-        # we need to enforce compatibility here), but this might break for
-        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
-        #Time will tell...
-    #if not we still need to extract state space labels for all of these to meet new circuit
-    #label handling requirements.
-    else:
-        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-    
-    #brief intercession to calculate the number of degrees of freedom for the povm.
-    num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
-    dof_per_povm= num_effects-1
-
-    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
-                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
-                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
+    prep_povm_tuples, dof_per_povm = _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs=True)
 
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
     
@@ -850,26 +783,7 @@ def find_sufficient_fiducial_pairs_per_germ_power(target_model, prep_fiducials, 
     
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
-    if prep_povm_tuples == "first":
-        firstRho = list(target_model.preps.keys())[0]
-        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
-        firstPOVM = list(target_model.povms.keys())[0]
-        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
-        prep_povm_tuples = [(firstRho, firstPOVM)]
-        #I think using the state space labels for firstRho and firstPOVM as the
-        #circuit labels should work most of the time (new stricter line_label enforcement means
-        # we need to enforce compatibility here), but this might break for
-        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
-        #Time will tell...
-    #if not we still need to extract state space labels for all of these to meet new circuit
-    #label handling requirements.
-    else:
-        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-
-    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
-                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
-                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
+    prep_povm_tuples = _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs=False)
     
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
     
@@ -1015,26 +929,7 @@ def test_fiducial_pairs(fid_pairs, target_model, prep_fiducials, meas_fiducials,
     """
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
 
-    if prep_povm_tuples == "first":
-        firstRho = list(target_model.preps.keys())[0]
-        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
-        firstPOVM = list(target_model.povms.keys())[0]
-        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
-        prep_povm_tuples = [(firstRho, firstPOVM)]
-        #I think using the state space labels for firstRho and firstPOVM as the
-        #circuit labels should work most of the time (new stricter line_label enforcement means
-        # we need to enforce compatibility here), but this might break for
-        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
-        #Time will tell...
-    #if not we still need to extract state space labels for all of these to meet new circuit
-    #label handling requirements.
-    else:
-        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-
-    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
-                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
-                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
+    prep_povm_tuples = _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs=False)
 
     def _get_derivs(length):
         """ Compute all derivative info: get derivative of each `<E_i|germ^exp|rho_j>`
@@ -1785,30 +1680,7 @@ def find_sufficient_fiducial_pairs_per_germ_global(target_model, prep_fiducials,
                                                                  verbosity=verbosity,
                                                                  **used_kwargs)
 
-    if prep_povm_tuples == "first":
-        firstRho = list(target_model.preps.keys())[0]
-        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
-        firstPOVM = list(target_model.povms.keys())[0]
-        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
-        prep_povm_tuples = [(firstRho, firstPOVM)]
-        #I think using the state space labels for firstRho and firstPOVM as the
-        #circuit labels should work most of the time (new stricter line_label enforcement means
-        # we need to enforce compatibility here), but this might break for
-        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
-        #Time will tell...
-    #if not we still need to extract state space labels for all of these to meet new circuit
-    #label handling requirements.
-    else:
-        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-
-    #brief intercession to calculate the number of degrees of freedom for the povm.
-    num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
-    dof_per_povm= num_effects-1
-
-    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
-                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
-                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
+    prep_povm_tuples, dof_per_povm = _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs=True)
 
     pairListDict = {}  # dict of lists of 2-tuples: one pair list per germ
     
@@ -2201,7 +2073,8 @@ def _make_spam_static(model):
 #write a helper function for precomputing the jacobian dictionaries from bulk_dprobs
 #which can then be passed into the construction of the compactEVD caches.
 
-def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, prep_povm_tuples = 'first', comm=None, mem_limit=None, verbosity = 0):
+def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, prep_povm_tuples = 'first', comm=None, 
+                           mem_limit=None, verbosity = 0):
     """
     Function for precomputing the jacobian dictionaries from bulk_dprobs
     for a model with its SPAM parameters frozen, as needed for certain
@@ -2247,26 +2120,7 @@ def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, prep_po
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm= comm)
 
     #construct the list of circuits
-    if prep_povm_tuples == "first":
-        firstRho = list(model.preps.keys())[0]
-        prep_ssl = [model.preps[firstRho].state_space.state_space_labels]
-        firstPOVM = list(model.povms.keys())[0]
-        POVM_ssl = [model.povms[firstPOVM].state_space.state_space_labels]
-        prep_povm_tuples = [(firstRho, firstPOVM)]
-        #I think using the state space labels for firstRho and firstPOVM as the
-        #circuit labels should work most of the time (new stricter line_label enforcement means
-        # we need to enforce compatibility here), but this might break for
-        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
-        #Time will tell...
-    #if not we still need to extract state space labels for all of these to meet new circuit
-    #label handling requirements.
-    else:
-        prep_ssl = [model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-        POVM_ssl = [model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
-
-    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
-                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
-                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
+    prep_povm_tuples = _set_up_prep_POVM_tuples(model, prep_povm_tuples, return_meas_dofs=False)
         
     #freeze the SPAM model parameters:
     static_spam_model = _make_spam_static(model)
@@ -2286,3 +2140,36 @@ def compute_jacobian_dicts(model, germs, prep_fiducials, meas_fiducials, prep_po
         jacobian_dicts[germ] = dprobs_dict
         
     return jacobian_dicts
+
+#helper function for configuring the list of circuit tuples needed for prep-POVM pairs used in FPR.
+def _set_up_prep_POVM_tuples(target_model, prep_povm_tuples, return_meas_dofs= False):
+
+    if prep_povm_tuples == "first":
+        firstRho = list(target_model.preps.keys())[0]
+        prep_ssl = [target_model.preps[firstRho].state_space.state_space_labels]
+        firstPOVM = list(target_model.povms.keys())[0]
+        POVM_ssl = [target_model.povms[firstPOVM].state_space.state_space_labels]
+        prep_povm_tuples = [(firstRho, firstPOVM)]
+        #I think using the state space labels for firstRho and firstPOVM as the
+        #circuit labels should work most of the time (new stricter line_label enforcement means
+        # we need to enforce compatibility here), but this might break for
+        #ImplicitModels? Not sure how those handle the state space labels for preps and povms
+        #Time will tell...
+    #if not we still need to extract state space labels for all of these to meet new circuit
+    #label handling requirements.
+    else:
+        prep_ssl = [target_model.preps[lbl_tup[0]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+        POVM_ssl = [target_model.povms[lbl_tup[1]].state_space.state_space_labels for lbl_tup in prep_povm_tuples]
+
+    #brief intercession to calculate the number of degrees of freedom for the povm.
+    num_effects= len(list(target_model.povms[prep_povm_tuples[0][1]].keys()))
+    dof_per_povm= num_effects-1
+
+    prep_povm_tuples = [(_circuits.Circuit([prepLbl], line_labels=prep_ssl[i]), 
+                        _circuits.Circuit([povmLbl], line_labels=POVM_ssl[i]))
+                       for i, (prepLbl, povmLbl) in enumerate(prep_povm_tuples)]
+    
+    if return_meas_dofs:
+        return prep_povm_tuples, dof_per_povm
+    else:
+        return prep_povm_tuples
