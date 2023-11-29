@@ -5,7 +5,7 @@ name: Build and run tests
 
 on:
   push:
-    branches-ignore: [ "beta" ]
+    branches-ignore: [ "beta", "user-exposure-tagging" ]
   # Hacky way to only run pull requests from forked repositories (assumes : is not used in branch names unless forked)
   # https://github.community/t/how-to-trigger-an-action-on-push-or-pull-request-but-not-both/16662/10
   pull_request:
