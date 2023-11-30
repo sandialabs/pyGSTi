@@ -671,7 +671,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
         # min/max
         m = -M
 
-        def _get_plot_info(qubits, rate_dict):
+        def _get_plot_info(qubits, rate_dict, disp):
             wt = len(qubits)  # the weight of the errors
             basisLblLookup = {
                 _pobjs.NQPauliOp("".join(tup)): i
@@ -687,7 +687,10 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                 ylabels = ["X", "Y", "Z"]
                 values = values.reshape((3, 3))
             else:
-                xlabels = list(_itertools.product(["X", "Y", "Z"], repeat=wt))
+                if disp in "HS":
+                    xlabels = list(_itertools.product(["X", "Y", "Z"], repeat=wt))
+                else:
+                    xlabels= list(_itertools.combinations(["X", "Y", "Z"],2))
                 ylabels = [""]
                 values = values.reshape((1, len(values)))
             return values, xlabels, ylabels
@@ -701,7 +704,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
 
             for disp in display:
                 if disp == "H" and ky in ham_rates:
-                    values, xlabels, ylabels = _get_plot_info(ky, ham_rates[ky])
+                    values, xlabels, ylabels = _get_plot_info(ky, ham_rates[ky], disp)
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws,
@@ -720,7 +723,26 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                         row_formatters.append("Brackets")
 
                 if disp == "S" and ky in sto_rates:
-                    values, xlabels, ylabels = _get_plot_info(ky, sto_rates[ky])
+                    values, xlabels, ylabels = _get_plot_info(ky, sto_rates[ky], disp)
+                    if display_as == "boxes":
+                        fig = _wp.MatrixPlot(
+                            self.ws,
+                            values,
+                            m,
+                            M,
+                            xlabels,
+                            ylabels,
+                            box_labels=True,
+                            prec="compacthp",
+                        )
+                        row_data.append(fig)
+                        row_formatters.append("Figure")
+                    else:
+                        row_data.append(values)
+                        row_formatters.append("Brackets")
+
+                if disp == "C" and ky in aff_rates:
+                    values, xlabels, ylabels = _get_plot_info(ky, aff_rates[ky], disp)
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws,
@@ -739,7 +761,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                         row_formatters.append("Brackets")
 
                 if disp == "A" and ky in aff_rates:
-                    values, xlabels, ylabels = _get_plot_info(ky, aff_rates[ky])
+                    values, xlabels, ylabels = _get_plot_info(ky, aff_rates[ky], disp)
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws,
