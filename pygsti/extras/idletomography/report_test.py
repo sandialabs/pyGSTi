@@ -8,28 +8,12 @@ from pygsti.extras import idletomography as idt
 
 from pygsti.extras.idletomography.pauliobjs import NQPauliState
 
-huh = [
-    (NQPauliState("X", (1,)), NQPauliState("X", (1,))),
-    (NQPauliState("X", (1,)), NQPauliState("Y", (1,))),
-    (NQPauliState("X", (1,)), NQPauliState("Z", (1,))),
-    (NQPauliState("Y", (1,)), NQPauliState("X", (1,))),
-    (NQPauliState("Y", (1,)), NQPauliState("Y", (1,))),
-    (NQPauliState("Y", (1,)), NQPauliState("Z", (1,))),
-    (NQPauliState("Z", (1,)), NQPauliState("X", (1,))),
-    (NQPauliState("Z", (1,)), NQPauliState("Y", (1,))),
-    (NQPauliState("Z", (1,)), NQPauliState("Z", (1,))),
-    (NQPauliState("X", (-1,)), NQPauliState("X", (1,))),
-    (NQPauliState("X", (-1,)), NQPauliState("Y", (1,))),
-    (NQPauliState("X", (-1,)), NQPauliState("Z", (1,))),
-    (NQPauliState("Y", (-1,)), NQPauliState("X", (1,))),
-    (NQPauliState("Y", (-1,)), NQPauliState("Y", (1,))),
-    (NQPauliState("Y", (-1,)), NQPauliState("Z", (1,))),
-    (NQPauliState("Z", (-1,)), NQPauliState("X", (1,))),
-    (NQPauliState("Z", (-1,)), NQPauliState("Y", (1,))),
-    (NQPauliState("Z", (-1,)), NQPauliState("Z", (1,))),
-]
+from pygsti.extras.idletomography.idtcore import idle_tomography_fidpairs
+n_qubits = 2
 
-n_qubits = 1
+fid_pairs = idle_tomography_fidpairs(2)
+print(fid_pairs)
+
 gates = ["Gi", "Gx", "Gy", "Gcnot"]
 max_lengths = [1, 2, 4, 8]
 
@@ -44,7 +28,7 @@ idle_experiments = idt.make_idle_tomography_list(
     max_lengths,
     paulidicts,
     maxweight=1,
-    force_fid_pairs=huh,
+    force_fid_pairs=fid_pairs,
 )
 
 print(len(idle_experiments), "idle tomography experiments for %d qubits" % n_qubits)
@@ -55,8 +39,8 @@ for ckt in idle_experiments:
     new_ckt = ckt.copy(editable=True)
     for i, lbl in enumerate(ckt):
         if lbl == Label(()):
-            # new_ckt[i] = [Label(("Gi", i)) for i in range(n_qubits)]
-            new_ckt[i] = Label(("Gi", 0))
+            new_ckt[i] = [Label(("Gi", i)) for i in range(n_qubits)]
+            #new_ckt[i] = Label(("Gi", 0))
     updated_ckt_list.append(new_ckt)
 
 
@@ -75,8 +59,8 @@ results = idt.do_idle_tomography(
     max_lengths,
     paulidicts,
     maxweight=1,
-    advanced_options={"jacobian mode": "together", "pauli_fidpairs": huh},
-    idle_string="Gi:0",
+    advanced_options={"jacobian mode": "together", "pauli_fidpairs": fid_pairs},
+    idle_string="[Gi:0Gi:1]",
 )
 
 

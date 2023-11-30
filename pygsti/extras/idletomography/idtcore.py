@@ -533,15 +533,15 @@ def idle_tomography_fidpairs(nqubits):
         length `nqubits`, representing the fiducial pairs.
     """
 
-    pauli_strings = ["I", "X", "Y", "Z"]
+    pauli_strings = ["X", "Y", "Z"]
     nq_pauli_strings = list(product(pauli_strings, repeat=nqubits))[
-        1:
+        :
     ]  # skip the all identity string
 
     # we also want all possible combinations of sign for each the pauli
     # observable on each qubit. The NQPauliState expects these to be either 0
     # for + or 1 for -.
-    signs = list(product([0, 1], repeat=nqubits))
+    signs = list(product([-1, 1], repeat=nqubits))
 
     fidpairs = []
     for prep_string, meas_string in product(nq_pauli_strings, repeat=2):
@@ -1278,7 +1278,7 @@ def do_idle_tomography(
         GiStr = _Circuit(idle_string, num_lines=nqubits)
 
     hamiltonian_jacobian_coefs = build_class_jacobian("H", nqubits)
-    # print(hamiltonian_jacobian_coefs)
+    print(hamiltonian_jacobian_coefs)
     hamiltonian_jacobian, hamiltonian_index_list = dict_to_jacobian(hamiltonian_jacobian_coefs, "H", nqubits)
     stochastic_jacobian_coefs = build_class_jacobian("S", nqubits)
     stochastic_jacobian, stochastic_index_list = dict_to_jacobian(stochastic_jacobian_coefs, "S", nqubits)
@@ -1294,6 +1294,7 @@ def do_idle_tomography(
     # print(anti_symmetric_jacobian_coefs)
     error_gen_index_list = {"hamiltonian": [], "stochastic":[], "correlation":[], "anti-symmetric":[]}
     error_gen_index_list['hamiltonian'] += (''.join(['H', str(key)]) for key in hamiltonian_index_list.keys())
+    print(error_gen_index_list)
     error_gen_index_list['stochastic'] += (''.join(['S', str(key)]) for key in stochastic_index_list.keys())
     error_gen_index_list['correlation'] += (''.join(['C', str(key[0]), ',', str(key[1])]) for key in correlation_index_list.keys())
     error_gen_index_list['anti-symmetric'] += (''.join(['A', str(key[0]), ',', str(key[1])]) for key in anti_symmetric_index_list.keys())
@@ -1464,6 +1465,8 @@ def do_idle_tomography(
         ]
     )
 
+    print(error_gen_index_list)
+    print(sum([len(val) for val in error_gen_index_list.values()]))
 
     ##FIXME -- I think this only works for one qubit because of err[0] so we will come back to this
     intrinsic_rate_list = _np.dot(full_jacobian_inv, obs_err_rates)

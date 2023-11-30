@@ -116,7 +116,7 @@ class NQPauliState(object):
         assert("I" not in string_rep), "'I' cannot be in a NQPauliState"
         self.rep = string_rep
         if signs is None:
-            signs = (0,) * len(self.rep)
+            signs = (1,) * len(self.rep)
         self.signs = signs
 
     def __len__(self):
