@@ -65,11 +65,11 @@ if mode_flag == "u":
     for ckt in idle_experiments:
         new_ckt = ckt.copy(editable=True)
         for i, lbl in enumerate(ckt):
-            print(i, lbl)
+            # print(i, lbl)
             if lbl == Label(()):
                 new_ckt[i] = [Label(("Gi", i)) for i in range(n_qubits)]
                 # new_ckt[i] = Label(('Gi', ))
-        print(new_ckt)
+        # print(new_ckt)
         updated_ckt_list.append(new_ckt)
 elif mode_flag == "u1" or mode_flag == "us":
     from pygsti.baseobjs import Label
@@ -78,11 +78,11 @@ elif mode_flag == "u1" or mode_flag == "us":
     for ckt in idle_experiments:
         new_ckt = ckt.copy(editable=True)
         for i, lbl in enumerate(ckt):
-            print(i, lbl)
+            # print(i, lbl)
             if lbl == Label(()):
                 # new_ckt[i] = [Label(("Gi", i)) for i in range(n_qubits)]
                 new_ckt[i] = Label(("Gi", 0))
-        print(new_ckt)
+        # print(new_ckt)
         updated_ckt_list.append(new_ckt)
 elif "o" in mode_flag:
     updated_ckt_list = idle_experiments
@@ -95,7 +95,7 @@ mdl_datagen = pygsti.models.create_crosstalk_free_model(
 ds = pygsti.data.simulate_data(
     mdl_datagen, updated_ckt_list, 100000, seed=8675309, sample_error="none"
 )
-print(ds)
+# print(ds)
 
 if mode_flag == "u":
     results = idt.do_idle_tomography(
@@ -155,9 +155,10 @@ elif mode_flag == "u1":
         maxweight=1,
         idle_string="Gi:0",
     )
-
+quit()
 print(results.observed_rate_infos)
 print(results.intrinsic_rates)
+quit()
 
 idt.create_idletomography_report(
     results, "../IDTTestReport", "Test idle tomography example report", auto_open=True

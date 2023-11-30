@@ -329,16 +329,17 @@ def dict_to_jacobian(coef_dict, classification, numQubits):
         )
         quit()
     row_index_list = {v: k for (k, v) in dict(enumerate(pauliDictProduct)).items()}
-    print(row_index_list)
+    # print(row_index_list)
     col_index_list = {v: k for (k, v) in dict(enumerate(index_list)).items()}
-    print(col_index_list)
+    # print(col_index_list)
     output_jacobian = _np.zeros((len(pauliDictProduct), len(index_list)))
     for coef in coef_dict:
         output_jacobian[row_index_list[coef[0]]][col_index_list[coef[1]]] = coef_dict[
             coef
         ]
-    print(output_jacobian)
-    return output_jacobian
+    # print(output_jacobian)
+    # print(col_index_list)
+    return output_jacobian, col_index_list
 
 
 # -----------------------------------------------------------------------------
@@ -1271,18 +1272,24 @@ def do_idle_tomography(
 
     hamiltonian_jacobian_coefs = build_class_jacobian("H", nqubits)
     # print(hamiltonian_jacobian_coefs)
-    hamiltonian_jacobian = dict_to_jacobian(hamiltonian_jacobian_coefs, "H", nqubits)
+    hamiltonian_jacobian, hamiltonian_index_list = dict_to_jacobian(hamiltonian_jacobian_coefs, "H", nqubits)
     stochastic_jacobian_coefs = build_class_jacobian("S", nqubits)
-    stochastic_jacobian = dict_to_jacobian(stochastic_jacobian_coefs, "S", nqubits)
+    stochastic_jacobian, stochastic_index_list = dict_to_jacobian(stochastic_jacobian_coefs, "S", nqubits)
     # print(stochastic_jacobian_coefs)
     correlation_jacobian_coefs = build_class_jacobian("C", nqubits)
-    correlation_jacobian = dict_to_jacobian(correlation_jacobian_coefs, "C", nqubits)
+    correlation_jacobian, correlation_index_list = dict_to_jacobian(correlation_jacobian_coefs, "C", nqubits)
     # print(correlation_jacobian_coefs)
     anti_symmetric_jacobian_coefs = build_class_jacobian("A", nqubits)
-    anti_symmetric_jacobian = dict_to_jacobian(
+    anti_symmetric_jacobian, anti_symmetric_index_list = dict_to_jacobian(
         anti_symmetric_jacobian_coefs, "A", nqubits
     )
+    # print(hamiltonian_jacobian_coefs)
     # print(anti_symmetric_jacobian_coefs)
+    error_gen_index_list = {"hamiltonian": [], "stochastic":[], "correlation":[], "anti-symmetric":[]}
+    error_gen_index_list['hamiltonian'] += (''.join(['H', str(key)]) for key in hamiltonian_index_list.keys())
+    error_gen_index_list['stochastic'] += (''.join(['S', str(key)]) for key in stochastic_index_list.keys())
+    error_gen_index_list['correlation'] += (''.join(['C', str(key[0]), ',', str(key[1])]) for key in correlation_index_list.keys())
+    error_gen_index_list['anti-symmetric'] += (''.join(['A', str(key[0]), ',', str(key[1])]) for key in anti_symmetric_index_list.keys())
 
     full_jacobian = _np.hstack(
         (
@@ -1438,6 +1445,7 @@ def do_idle_tomography(
         observed_rate_infos["diffbasis"] = obs_infos
         printer.log("Completed Hamiltonian.", 1)
 
+
     obs_err_rates = _np.concatenate(
         [
             _np.array(
@@ -1448,7 +1456,16 @@ def do_idle_tomography(
             )
         ]
     )
-    intrinsic_rates = _np.dot(full_jacobian_inv, obs_err_rates)
+
+
+    ##FIXME -- I think this only works for one qubit because of err[0] so we will come back to this
+    intrinsic_rate_list = _np.dot(full_jacobian_inv, obs_err_rates)
+    # intrinsic_rates = {k: [v for v in error_gen_index_list[k]] for k in error_gen_index_list.keys()}
+    print(error_gen_index_list)
+    intrinsic_rates = {v: 0 for k in error_gen_index_list.keys() for v in error_gen_index_list[k]}
+    for key, err in zip(intrinsic_rates.keys(), intrinsic_rate_list):
+        intrinsic_rates[key] = err
+    print(intrinsic_rates)
 
     return _IdleTomographyResults(
         dataset,
