@@ -155,10 +155,8 @@ elif mode_flag == "u1":
         maxweight=1,
         idle_string="Gi:0",
     )
-quit()
 print(results.observed_rate_infos)
 print(results.intrinsic_rates)
-quit()
 
 idt.create_idletomography_report(
     results, "../IDTTestReport", "Test idle tomography example report", auto_open=True

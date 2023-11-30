@@ -124,7 +124,7 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
         errlst = idtresults.error_list  # shorthand
         Ne = len(idtresults.error_list)
         print("errlist: ", errlst)
-        print("Ne: ", Ne)
+        # print("Ne: ", Ne)
         # number of intrinsic rates for each type (ham, sto, aff)
 
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
@@ -140,22 +140,9 @@ class IdleTomographyObservedRatesTable(_ws.WorkspaceTable):
             )
             intrinsic_reln = ""
             for i, el in enumerate(jac_row):
-                print("i: ", i)
-                print("el: ", el)
                 if abs(el) > 1e-6:
-                    # get intrinsic name `iname` for i-th element:
-                    if typ == "diffbasis":
-                        if i < Ne:
-                            iname = "H(%s)" % str(errlst[i]).strip()
-                        else:
-                            iname = "nonsense_diffbasis"
-                            # iname = "A(%s)" % str(errlst[i - Ne]).strip()
-                    else:  # typ == "samebasis"
-                        if i < Ne:
-                            iname = "S(%s)" % str(errlst[i]).strip()
-                        else:
-                            iname = "nonsense"
-                            # iname = "A(%s)" % str(errlst[i - Ne]).strip()
+                    temp_name = list(idtresults.intrinsic_rates.keys())[i]
+                    iname = temp_name[0] + "(" + temp_name[1:] + ")"
 
                     if len(intrinsic_reln) == 0:
                         if el == 1.0:
@@ -587,7 +574,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
     A table of all the intrinsic rates found by idle tomography.
     """
 
-    def __init__(self, ws, idtresults, display=("H", "S", "A"), display_as="boxes"):
+    def __init__(self, ws, idtresults, display=("H", "S", "C", "A"), display_as="boxes"):
         """
         Create a IdleTomographyIntrinsicErrorsTable.
 
@@ -615,38 +602,49 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
         super(IdleTomographyIntrinsicErrorsTable, self).__init__(
             ws, self._create, idtresults, display, display_as
         )
-
+    def reform_intrinsic_rates(self, idtresults):
+        intrinsic_rates_new = {"hamiltonian": [], "stochastic":[], "correlation":[],"anti-symmetric":[]}
+        for key, val in idtresults.intrinsic_rates.items():
+            if "H" in key:
+                intrinsic_rates_new["hamiltonian"].append(val[0])
+            elif "S" in key: 
+                intrinsic_rates_new["stochastic"].append(val[0])
+            elif "C" in key: 
+                intrinsic_rates_new["correlation"].append(val[0])
+            elif "A" in key: 
+                intrinsic_rates_new["anti-symmetric"].append(val[0])
+        return intrinsic_rates_new
     def _create(self, idtresults, display, display_as):
         colHeadings = ["Qubits"]
-
-        irname = {"H": "hamiltonian", "S": "stochastic", "A": "affine"}
-        display = [
-            disp for disp in display if irname[disp] in idtresults.intrinsic_rates
-        ]
 
         for disp in display:
             if disp == "H":
                 colHeadings.append("Hamiltonian")
             elif disp == "S":
                 colHeadings.append("Stochastic")
+            elif disp == "C":
+                colHeadings.append("Pauli Correlation")
             elif disp == "A":
-                colHeadings.append("Affine")
+                colHeadings.append("Anti-Symmetric")
             else:
                 raise ValueError("Invalid display element: %s" % disp)
 
         assert display_as == "boxes" or display_as == "numbers"
         table = _reporttable.ReportTable(colHeadings, (None,) * len(colHeadings))
 
+        self.intrinsic_rates = self.reform_intrinsic_rates(idtresults)
+
         def process_rates(typ):
             """Process list of intrinsic rates, binning into rates for different sets of qubits"""
             rates = _collections.defaultdict(dict)
             for err, value in zip(
-                idtresults.error_list, idtresults.intrinsic_rates[typ]
+                idtresults.error_list, self.intrinsic_rates[typ]
             ):
                 qubits = [
                     i for i, P in enumerate(err.rep) if P != "I"
                 ]  # (in sorted order)
                 op = _pobjs.NQPauliOp("".join([P for P in err.rep if P != "I"]))
+                ##FIXME THIS PROBLABY BASJDF ONE QUBIT WORKS MAYBE
                 rates[tuple(qubits)][op] = value
             return rates
 
@@ -655,15 +653,19 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
         ham_rates = sto_rates = aff_rates = {}  # defaults
         if "H" in display:
             ham_rates = process_rates("hamiltonian")
-            M = max(M, max(_np.abs(idtresults.intrinsic_rates["hamiltonian"])))
+            M = max(M, max(_np.abs(self.intrinsic_rates["hamiltonian"])))
             all_keys.update(ham_rates.keys())
         if "S" in display:
             sto_rates = process_rates("stochastic")
-            M = max(M, max(_np.abs(idtresults.intrinsic_rates["stochastic"])))
+            M = max(M, max(_np.abs(self.intrinsic_rates["stochastic"])))
             all_keys.update(sto_rates.keys())
+        if "C" in display:
+            cor_rates = process_rates("correlation")
+            M = max(M, max(_np.abs(self.intrinsic_rates["correlation"])))
+            all_keys.update(cor_rates.keys())
         if "A" in display:
-            aff_rates = process_rates("affine")
-            M = max(M, max(_np.abs(idtresults.intrinsic_rates["affine"])))
+            aff_rates = process_rates("anti-symmetric")
+            M = max(M, max(_np.abs(self.intrinsic_rates["anti-symmetric"])))
             all_keys.update(aff_rates.keys())
 
         # min/max
