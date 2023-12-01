@@ -1658,12 +1658,9 @@ class FreeformDesign(ExperimentDesign):
         edesign = ExperimentDesign.from_dir(dirname, parent=parent, name=name, quick_load=quick_load)
 
         # Convert back to circuits
-        edesign.aux_info = {_circuits.Circuit(k, check=False, expand_subcircuits=False): v for k,v in edesign.aux_info.items()}
+        edesign.aux_info = {_circuits.Circuit(k, check=False): v for k,v in edesign.aux_info.items()}
         
-        # Reset all_circuits_needing_data (which were not saved for space savings) from aux_info keys
-        edesign.all_circuits_needing_data = list(edesign.aux_info.keys())
-
-        return cls.from_edesign(edesign)
+        return cls(edesign.aux_info, edesign.qubit_labels)
 
     @classmethod
     def from_dataframe(cls, df, qubit_labels=None):
@@ -1760,7 +1757,7 @@ class FreeformDesign(ExperimentDesign):
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         return FreeformDesign(mapped_circuits, mapped_qubit_labels)
     
-     def write(self, dirname=None, parent=None):
+    def write(self, dirname=None, parent=None):
         """
         Write this experiment design to a directory.
 
@@ -1782,8 +1779,10 @@ class FreeformDesign(ExperimentDesign):
         None
         """
         # Convert circuits to string for then-jsonable serialization
-        self.aux_info = {str(k):v for k,v in self.aux_info.items()}
+        aux_info = self.aux_info
+        self.aux_info = {repr(k)[8:-1]: v for k,v in self.aux_info.items()}
         super().write(dirname, parent)
+        self.aux_info = aux_info
 
 
 class ProtocolData(_TreeNode, _MongoSerializable):
