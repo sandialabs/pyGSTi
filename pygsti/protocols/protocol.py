@@ -1656,8 +1656,11 @@ class FreeformDesign(ExperimentDesign):
         ExperimentDesign
         """
         edesign = ExperimentDesign.from_dir(dirname, parent=parent, name=name, quick_load=quick_load)
+
+        # Convert back to circuits
+        edesign.aux_info = {_circuits.Circuit(k, check=False, expand_subcircuits=False): v for k,v in edesign.aux_info.items()}
         
-        # Reset circuits (which were not saved for space savings) from aux_info keys
+        # Reset all_circuits_needing_data (which were not saved for space savings) from aux_info keys
         edesign.all_circuits_needing_data = list(edesign.aux_info.keys())
 
         return cls.from_edesign(edesign)
@@ -1723,7 +1726,8 @@ class FreeformDesign(ExperimentDesign):
         
         # Don't save all_circuits_needing_data, it's redundant with aux_info keys
         self.auxfile_types['all_circuits_needing_data'] = 'reset'
-        self.auxfile_types['aux_info'] = 'circuit-str-json'
+        # Currently not jsonable, but will be fixed in write()
+        self.auxfile_types['aux_info'] = 'json'
 
     def _truncate_to_circuits_inplace(self, circuits_to_keep):
         truncated_aux_info = {k: v for k, v in self.aux_info.items() if k in circuits_to_keep}
@@ -1755,6 +1759,31 @@ class FreeformDesign(ExperimentDesign):
         mapped_circuits = [c.map_state_space_labels(mapper) for c in self.all_circuits_needing_data]
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         return FreeformDesign(mapped_circuits, mapped_qubit_labels)
+    
+     def write(self, dirname=None, parent=None):
+        """
+        Write this experiment design to a directory.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory to write into.  This directory will have
+            an 'edesign' subdirectory, which will be created if needed and
+            overwritten if present.  If None, then the path this object
+            was loaded from is used (if this object wasn't loaded from disk,
+            an error is raised).
+
+        parent : ExperimentDesign, optional
+            The parent experiment design, when a parent is writing this
+            design as a sub-experiment-design.  Otherwise leave as None.
+
+        Returns
+        -------
+        None
+        """
+        # Convert circuits to string for then-jsonable serialization
+        self.aux_info = {str(k):v for k,v in self.aux_info.items()}
+        super().write(dirname, parent)
 
 
 class ProtocolData(_TreeNode, _MongoSerializable):
