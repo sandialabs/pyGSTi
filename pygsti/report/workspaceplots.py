@@ -16,6 +16,7 @@ import warnings as _warnings
 import numpy as _np
 import plotly
 import plotly.graph_objs as go
+import textwrap
 import scipy as _scipy
 from scipy.stats import chi2 as _chi2
 
@@ -538,6 +539,8 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
 
     return fig
 
+def wrap_text(s, width=80, max_lines=10):
+    return "<br>".join(textwrap.wrap(s,width=width, break_long_words=False, max_lines=max_lines))
 
 def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_submxs):
     if sum_up:
@@ -548,7 +551,7 @@ def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_su
             txt = plaq.summary_label()
             txt += "<br>value: %g" % val
             for lbl, addl_subMxs in addl_hover_submxs.items():
-                txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix]))
+                txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix])) #wrap this string
             return txt
 
     else:
@@ -561,7 +564,7 @@ def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_su
             txt = plaq.element_label(iiy, iix)  # note: *row* index = iiy
             txt += ("<br>value: %g" % val)
             for lbl, addl_subMxs in addl_hover_submxs.items():
-                txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][iiy][iix]))
+                txt += "<br>%s: %s" % (lbl, wrap_text(str(addl_subMxs[iy][ix][iiy][iix]))) #wrap this string
             return txt
     return hover_label_fn
 
