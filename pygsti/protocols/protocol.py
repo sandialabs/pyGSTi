@@ -1626,6 +1626,43 @@ class FreeformDesign(ExperimentDesign):
     """
 
     @classmethod
+    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
+        """
+        Initialize a new ExperimentDesign object from `dirname`.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory name (under which there is a 'edesign'
+            subdirectory).
+
+        parent : ExperimentDesign, optional
+            The parent design object, if there is one.  Primarily used
+            internally - if in doubt, leave this as `None`.
+
+        name : str, optional
+            The sub-name of the design object being loaded, i.e. the
+            key of this data object beneath `parent`.  Only used when
+            `parent` is not None.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of the potentially long
+            circuit lists.  This can be useful when loading takes a long time
+            and all the information of interest lies elsewhere, e.g. in an
+            encompassing results object.
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        edesign = ExperimentDesign.from_dir(dirname, parent=parent, name=name, quick_load=quick_load)
+        
+        # Reset circuits (which were not saved for space savings) from aux_info keys
+        edesign.all_circuits_needing_data = list(edesign.aux_info.keys())
+
+        return cls.from_edesign(edesign)
+
+    @classmethod
     def from_dataframe(cls, df, qubit_labels=None):
         """
         Create a FreeformDesign from a pandas dataframe.
@@ -1683,7 +1720,10 @@ class FreeformDesign(ExperimentDesign):
         else:
             self.aux_info = {c: None for c in circuits}
         super().__init__(circuits, qubit_labels)
-        self.auxfile_types['aux_info'] = 'pickle'
+        
+        # Don't save all_circuits_needing_data, it's redundant with aux_info keys
+        self.auxfile_types['all_circuits_needing_data'] = 'reset'
+        self.auxfile_types['aux_info'] = 'circuit-str-json'
 
     def _truncate_to_circuits_inplace(self, circuits_to_keep):
         truncated_aux_info = {k: v for k, v in self.aux_info.items() if k in circuits_to_keep}
