@@ -8,8 +8,10 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import json as _json
 import numpy as _np
 import pathlib as _pathlib
+import pickle as _pickle
 import time as _time
 import warnings as _warnings
 
@@ -372,7 +374,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             return output_dict
 
         if len(self.batch_results):
-            print(f'Already retrieved results of {len(self.qiskit_circuit_batches)}/{num_batches} circuit batches')
+            print(f'Already retrieved results of {len(self.batch_results)}/{len(self.qiskit_circuit_batches)} circuit batches')
 
         #get results from backend jobs and add to dict
         ds = _data.DataSet()
@@ -455,12 +457,37 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         p = _pathlib.Path(dirname)
         edesign = _io.read_edesign_from_dir(dirname)
         
-        exp_dir = p / 'ibmqexperiment'
-        attributes_from_meta = _io.load_meta_based_dir(exp_dir)
-        
-        ret = cls(edesign, None)
-        ret.__dict__.update(attributes_from_meta)
-        ret.edesign = edesign
+        try:
+            exp_dir = p / 'ibmqexperiment'
+            attributes_from_meta = _io.load_meta_based_dir(exp_dir)
+
+            ret = cls(edesign, None)
+            ret.__dict__.update(attributes_from_meta)
+            ret.edesign = edesign
+        except KeyError:
+            _warnings.warn("Failed to load ibmqexperiment, falling back to old serialization format logic")
+
+            ret = cls(edesign, None)
+            with open(p / 'ibmqexperiment/meta.json', 'r') as f:
+                from_json = _json.load(f)
+            ret.__dict__.update(from_json)
+
+            # Old keys to new class members
+            key_attr_map = {
+                'pspec': ('processor_spec', None),
+                'pygsti_circuits': ('pygsti_circuit_batches', []),
+                'pygsti_openqasm_circuits': ('qasm_circuit_batches', []),
+                'submit_time_calibration_data': ('submit_time_calibration_data', []),
+                'batch_result_object': ('batch_results', [])
+            }
+
+            for key, (attr, def_val) in key_attr_map.items():
+                with open(p / f'ibmqexperiment/{key}.pkl', 'rb') as f:
+                    try:
+                        setattr(ret, attr, _pickle.load(f))
+                    except:
+                        _warnings.warn(f"Couldn't unpickle {key}, so setting {attr} to {def_val}.")
+                        setattr(ret, attr, def_val)
 
         # Handle nonstandard serialization
         try:
@@ -472,7 +499,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         # Regenerate Qiskit circuits
         ret.qiskit_circuit_batches = []
         if regen_qiskit_circs:
-            for batch_strs in attributes_from_meta['qasm_circuit_batches']:
+            for batch_strs in ret.qasm_circuit_batches:
                 batch = [_qiskit.QuantumCircuit.from_qasm_str(bs) for bs in batch_strs]
                 ret.qiskit_circuit_batches.append(batch)
         
