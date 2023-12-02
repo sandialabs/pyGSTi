@@ -10,6 +10,7 @@ Serialization routines to/from a meta.json based directory
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import datetime as _dt
 import numpy as _np
 import scipy.sparse as _sps
 import importlib as _importlib
@@ -22,6 +23,13 @@ try:
     from bson.objectid import ObjectId as _ObjectId
 except ImportError:
     _ObjectId = None
+
+try:
+    # If available, use bson's JSON converter utilities
+    # Allows us to serialize datetime objects, for example
+    from bson import json_util as _json_util
+except ImportError:
+    _json_util=None
 
 from pygsti.io import readers as _load
 from pygsti.io import writers as _write
@@ -146,7 +154,10 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
     ret = {}
 
     with open(str(root_dir / 'meta.json'), 'r') as f:
-        meta = _json.load(f)
+        if _json_util is not None:
+            meta = _json.load(f, object_hook=_json_util.object_hook)
+        else:
+            meta = _json.load(f)
 
         #Convert lists => tuples, as we prefer immutable tuples
         #for key in meta:
@@ -302,7 +313,10 @@ def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
             val = _np.load(pth)
         elif typ == 'json':
             with open(str(pth), 'r') as f:
-                val = _json.load(f)
+                if _json_util is not None:
+                    val = _json.load(f, object_hook=_json_util.object_hook)
+                else:
+                    val = _json.load(f)
         elif typ == 'pickle':
             with open(str(pth), 'rb') as f:
                 val = _pickle.load(f)
@@ -386,7 +400,10 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
 
     with open(str(root_dir / 'meta.json'), 'w') as f:
         _check_jsonable(meta)
-        _json.dump(meta, f)
+        if _json_util is not None:
+            _json.dump(meta, f, indent=4, default=_json_util.default)
+        else:
+            _json.dump(meta, f, indent=4)
 
 
 def _write_auxfile_member(root_dir, filenm, typ, val):
@@ -451,7 +468,10 @@ def _write_auxfile_member(root_dir, filenm, typ, val):
         elif typ == 'json':
             with open(str(pth), 'w') as f:
                 _check_jsonable(val)
-                _json.dump(val, f, indent=4)
+                if _json_util is not None:
+                    _json.dump(val, f, indent=4, default=_json_util.default)
+                else:
+                    _json.dump(val, f, indent=4)
         elif typ == 'pickle':
             with open(str(pth), 'wb') as f:
                 _pickle.dump(val, f)
@@ -475,7 +495,10 @@ def _cls_from_meta_json(dirname):
     class
     """
     with open(str(_pathlib.Path(dirname) / 'meta.json'), 'r') as f:
-        meta = _json.load(f)
+        if _json_util is not None:
+            meta = _json.load(f, object_hook=_json_util.object_hook)
+        else:
+            meta = _json.load(f)
     return _class_for_name(meta['type'])  # class of object to create
 
 
@@ -501,7 +524,10 @@ def _obj_to_meta_json(obj, dirname):
     meta = {'type': _full_class_name(obj)}
     with open(str(_pathlib.Path(dirname) / 'meta.json'), 'w') as f:
         _check_jsonable(meta)
-        _json.dump(meta, f)
+        if _json_util is not None:
+            _json.dump(meta, f, indent=4, default=_json_util.default)
+        else:
+            _json.dump(meta, f, indent=4)
 
 
 def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attributes=(),
@@ -633,7 +659,10 @@ def write_dict_to_json_or_pkl_files(d, dirname):
             jsonable = _to_jsonable(val)
             _check_jsonable(jsonable)
             with open(dirname / (key + '.json'), 'w') as f:
-                _json.dump(jsonable, f)
+                if _json_util is not None:
+                    _json.dump(jsonable, f, indent=4, default=_json_util.default)
+                else:
+                    _json.dump(jsonable, f, indent=4)
         except Exception as e:
             fn = str(dirname / (key + '.json'))
             _warnings.warn("Could not write %s (falling back on pickle format):\n" % fn + str(e))
@@ -673,6 +702,8 @@ def _check_jsonable(x):
         doesn't contain dicts with non-string-valued keys """
     if x is None or isinstance(x, (float, int, str)):
         pass  # no problem
+    elif _json_util is not None and isinstance(x, _dt.datetime):
+        pass # No problem for datetime.datetime so long as we have bson.json_utils
     elif isinstance(x, (tuple, list)):
         for i, v in enumerate(x):
             try:
