@@ -1,4 +1,4 @@
-""" Exteneral Device Specifications Sub-package """
+""" Specification of IBM Q Nairobi """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 # Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain rights
@@ -8,5 +8,22 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from .devcore import *
-from .experimentaldevice import ExperimentalDevice
+qubits = ['Q' + str(x) for x in range(7)]
+
+two_qubit_gate = 'Gcnot'
+
+edgelist = [('Q1', 'Q0'),
+            ('Q0', 'Q1'),
+            ('Q2', 'Q1'),
+            ('Q1', 'Q2'),
+            ('Q1', 'Q3'),
+            ('Q3', 'Q1'),
+            ('Q3', 'Q5'),
+            ('Q5', 'Q3'),
+            ('Q4', 'Q5'),
+            ('Q5', 'Q4'),
+            ('Q6', 'Q5'),
+            ('Q5', 'Q6'),
+            ]
+
+spec_format = 'ibmq_v2019'

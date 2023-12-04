@@ -57,8 +57,13 @@ class EmbeddedOp(_LinearOperator):
             "Embedded operation's state space has a different number of components than the number of target labels!"
 
         evotype = operation_to_embed._evotype
+        rep = self._create_rep_object(evotype, state_space)
 
-        #Create representation
+        _LinearOperator.__init__(self, rep, evotype)
+        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
+        if self._rep_type == 'dense': self._update_denserep()
+
+    def _create_rep_object(self, evotype, state_space):
         #Create representation object
         rep_type_order = ('dense', 'embedded') if evotype.prefer_dense_reps else ('embedded', 'dense')
         rep = None
@@ -82,16 +87,17 @@ class EmbeddedOp(_LinearOperator):
 
         if rep is None:
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
-
-        _LinearOperator.__init__(self, rep, evotype)
-        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
-        if self._rep_type == 'dense': self._update_denserep()
+        return rep
 
     def _update_denserep(self):
         """Performs additional update for the case when we use a dense underlying representation."""
         self._rep.base.flags.writeable = True
         self._rep.base[:, :] = self.to_dense(on_space='minimal')
         self._rep.base.flags.writeable = False
+
+    def _update_submember_state_spaces(self, old_parent_state_space, new_parent_state_space):
+        self._rep = self._create_rep_object(self.evotype, new_parent_state_space)  # update representation
+        # No need to update submembers
 
     def __getstate__(self):
         # Don't pickle 'instancemethod' or parent (see modelmember implementation)

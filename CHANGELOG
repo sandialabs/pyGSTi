@@ -1,5 +1,38 @@
 # CHANGELOG
 
+## [0.9.12] - 2023-11-28
+
+### Added
+* Checkpointing for GST experiments (#347)
+* Binary randomized benchmarking (BiRB) protocol (#348)
+* Utility module for generating UML graphs of pyGSTi class inheritance structure (#353)
+* Support for non-standard POVMs and qudits in write_empty_protocol_data (#370)
+* Experimental support for updating model state spaces (#375)
+
+### Fixed
+* Numpy deprecation warnings (#325)
+* Updated deprecated code in the README (#325)
+* Finish migration of tests to pytest (#344, #362)
+* Bugfixes for instruments in pspecs (#349)
+* Remove mutable defaults (#357)
+* Reparameterize model member dicts with model (#365, #367)
+* Compute product of editable circuit (#368)
+* Error handling for single-parameter wildcard with no CVXPY (#375)
+
+### Changed
+* Enhances EmbeddingOpFactory to be used to create target-qubit-dependent operation factories (#338)
+* More efficient use of CVXPY when computing the diamond norm (#345)
+* Improved (germ-aware) global fiducial pair reduction (#350)
+* MPI-enabled Fisher information matrix calculation (#350)
+* Report compatibility with the `MapForwardSimulator` (#350)
+* Introduced new `ExperimentDevice` in `pygsti.extras.devices` as a replacement for (now legacy) device config files (#359)
+* Refactored and improved unit test performance (#372)
+* Removed Python 3.7 support and added Python 3.11 support (#374)
+
+### Deprecated
+* The `pygsti.algorithms.directx` module
+* The `qibo` evotype (#363)
+
 ## [0.9.11.2] - 2023-08-11
 
 ### Fixed
