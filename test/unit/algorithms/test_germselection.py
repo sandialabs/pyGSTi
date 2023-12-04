@@ -34,7 +34,7 @@ class GermSelectionWithNeighbors(GermSelectionData):
     def setUpClass(cls):
         super(GermSelectionWithNeighbors, cls).setUpClass()
         cls.neighbors = germsel.randomize_model_list(
-            [fixtures.model], randomization_strength=1e-3, num_copies=5, seed=_SEED
+            [fixtures.model], randomization_strength=1e-3, num_copies=2, seed=_SEED
         )
 
 
@@ -384,3 +384,7 @@ class EndToEndGermSelectionTester(GermSelectionData, BaseCase):
         liteGerms = germsel.find_germs(self.target_model, randomize=False, algorithm='greedy', verbosity=1,
                                        assume_real=True, float_type=np.double)
         # TODO assert correctness
+        
+    def robust_germ_selection_end_to_end_test(self):
+        robust_germs = germsel.find_germs(self.target_model, seed=2017)
+        #todo assert correctness

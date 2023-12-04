@@ -238,3 +238,12 @@ class EndToEndFiducialOptimizationTester(FiducialSelectionStdModel, BaseCase):
         # TODO assert correctness
         # for now at least check it is not None
         self.assertTrue(fiducials is not None)
+        
+    def test_find_fiducials_end_to_end_default(self):
+        prepFiducials, measFiducials = fs.find_fiducials(self.model)
+        
+    def find_fiducials_omit_operations(self):
+        target_model_idle = mc.create_explicit_model_from_expressions([('Q0',)], ['Gi','Gx','Gy'],
+                                                                     ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"])
+        omitIdentityPrepFids, omitIdentityMeasFids = fs.find_fiducials(target_model_idle, omit_identity=False,
+                                                                           ops_to_omit=['Gi'])
