@@ -341,8 +341,8 @@
                         }
                     },
                     "block_data": [
-                        3.5018351752820525e-05,
-                        -0.004703283582598337,
+                        -0.002392297968733617,
+                        -0.0010993832456226817,
                         1e-10
                     ]
                 },
@@ -379,8 +379,8 @@
                         }
                     },
                     "block_data": [
-                        0.00027725656557637027,
-                        0.0002772565655035313,
+                        0.001397080623475753,
+                        0.0013970806234757547,
                         1.0000000000000001e-20
                     ]
                 }
@@ -461,7 +461,33 @@
                 "(1+0j)",
                 "0j"
             ],
-            "basis": null
+            "basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": false,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "ExplicitStateSpace",
+                    "version": 0,
+                    "labels": [
+                        [
+                            0
+                        ]
+                    ],
+                    "unitary_space_dimensions": [
+                        [
+                            2
+                        ]
+                    ],
+                    "types": [
+                        [
+                            "Q"
+                        ]
+                    ]
+                }
+            }
         },
         "3": {
             "module": "pygsti.modelmembers.states.composedstate",
@@ -618,8 +644,8 @@
                         }
                     },
                     "block_data": [
-                        0.0022727444446271096,
-                        -0.0027091511602519557,
+                        -0.0005117886364257781,
+                        0.000417614321894487,
                         1e-10
                     ]
                 },
@@ -656,8 +682,8 @@
                         }
                     },
                     "block_data": [
-                        0.0002772565655020993,
-                        0.0002772565655067049,
+                        0.0013970806234757552,
+                        0.0013970806234757614,
                         1.0000000000000001e-20
                     ]
                 }
@@ -738,7 +764,33 @@
                 "(1+0j)",
                 "0j"
             ],
-            "basis": null
+            "basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": false,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "ExplicitStateSpace",
+                    "version": 0,
+                    "labels": [
+                        [
+                            0
+                        ]
+                    ],
+                    "unitary_space_dimensions": [
+                        [
+                            2
+                        ]
+                    ],
+                    "types": [
+                        [
+                            "Q"
+                        ]
+                    ]
+                }
+            }
         },
         "7": {
             "module": "pygsti.modelmembers.povms.staticpureeffect",
@@ -807,7 +859,33 @@
                 "0j",
                 "(1+0j)"
             ],
-            "basis": null
+            "basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": false,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "ExplicitStateSpace",
+                    "version": 0,
+                    "labels": [
+                        [
+                            0
+                        ]
+                    ],
+                    "unitary_space_dimensions": [
+                        [
+                            2
+                        ]
+                    ],
+                    "types": [
+                        [
+                            "Q"
+                        ]
+                    ]
+                }
+            }
         },
         "9": {
             "module": "pygsti.modelmembers.povms.staticpureeffect",
@@ -1132,9 +1210,9 @@
                         }
                     },
                     "block_data": [
-                        0.0003229872830259371,
-                        0.0014627926429403846,
-                        -0.0005313398009142532
+                        0.00037569266829932317,
+                        0.0009723413046069363,
+                        -0.0005446562629096661
                     ]
                 },
                 {
@@ -1170,9 +1248,9 @@
                         }
                     },
                     "block_data": [
-                        0.007237381896863544,
-                        0.0062550551997301055,
-                        0.006255055197345088
+                        0.01069416858863745,
+                        0.011295681368452047,
+                        0.011295681368452206
                     ]
                 }
             ]
@@ -1453,9 +1531,9 @@
                         }
                     },
                     "block_data": [
-                        0.0015845894116076611,
-                        0.0009540296234095221,
-                        0.0006531368407524896
+                        0.0011540971870026174,
+                        -0.00034724913007079853,
+                        0.0007264123453060293
                     ]
                 },
                 {
@@ -1491,9 +1569,9 @@
                         }
                     },
                     "block_data": [
-                        0.007177203359173835,
-                        0.006020230364946556,
-                        0.00717720335650472
+                        0.011293342801181131,
+                        0.010425498351708848,
+                        0.011293342801181194
                     ]
                 }
             ]

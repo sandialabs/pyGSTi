@@ -5,7 +5,7 @@ mpl_logger.setLevel(logging.WARNING)
 import unittest
 import pygsti
 import numpy as np
-from pygsti.modelpacks.legacy import std1Q_XYI
+from pygsti.modelpacks import smq1Q_XY
 
 from ..testutils import BaseTestCase
 
@@ -78,30 +78,29 @@ class ContinuousGatesTestCase(BaseTestCase):
         nQubits = 1
 
         #Create some sequences:
-        smq1Q_XYI = pygsti.modelpacks.stdtarget.stdmodule_to_smqmodule(std1Q_XYI)
         maxLens = [1]
-        seqStructs = pygsti.circuits.make_lsgst_structs(
-            smq1Q_XYI.target_model(), smq1Q_XYI.prepStrs, smq1Q_XYI.effectStrs, smq1Q_XYI.germs, maxLens)
+        seqStructs = pygsti.circuits.create_lsgst_circuit_lists(
+            smq1Q_XY.target_model(), smq1Q_XY.prep_fiducials(), smq1Q_XY.meas_fiducials(), smq1Q_XY.germs(lite=True), maxLens)
 
         #Add random X-rotations via label arguments
         np.random.seed(1234)
         def sub_Gxrots(circuit):
-            ret = circuit.replace_layer( ('Gx',0), ('Gxrot',0,';',np.pi/2 + 0.02*(np.random.random()-0.5)) )
+            ret = circuit.replace_layer( ('Gxpi2',0), ('Gxrot',0,';',np.pi/2 + 0.02*(np.random.random()-0.5)) )
             return ret
         ss0 = seqStructs[0].copy()
         ss1 = ss0.process_circuits(sub_Gxrots)
         allStrs = pygsti.tools.remove_duplicates(ss0[:] + ss1[:])
 
         print(len(allStrs),"sequences ")
-        self.assertEqual(len(allStrs), 209)  # Was 167 when process_circuits acted on *list* rather than individual plaquettes
+        self.assertEqual(len(allStrs), 146)  # Was 167 when process_circuits acted on *list* rather than individual plaquettes
 
         #Generate some data for these sequences (simulates an implicit model with factory)
-        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gi','Gx','Gy'))
+        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gxpi2','Gypi2'))
         mdl_datagen = pygsti.models.create_crosstalk_free_model(pspec, ideal_gate_type='H+S', ideal_spam_type='H+S')
 
         mdl_datagen.factories['layers'][('Gxrot', 0)] = ParamXRotationOpFactory()
         print(mdl_datagen.num_params, "model params")
-        self.assertEqual(mdl_datagen.num_params, 32)
+        self.assertEqual(mdl_datagen.num_params, 26)
 
         np.random.seed(4567)
         datagen_vec = 0.001 * np.random.random(mdl_datagen.num_params)

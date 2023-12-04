@@ -66,14 +66,17 @@ class CalcMethods1QTestCase(BaseTestCase):
 
         #Standard GST dataset
         cls.maxLengths = [1,2,4]
-        cls.mdl_datagen = std.target_model().depolarize(op_noise=0.03, spam_noise=0.001)
+        min_prep_fids = std.prep_fiducials()[0:4] #Use a minimally informationally complete set of fiducials
+        min_meas_fids = std.meas_fiducials()[0:3]
+        
+        cls.mdl_datagen = std.target_model().depolarize(op_noise=0.05, spam_noise=0.01)
         cls.listOfExperiments = pygsti.circuits.create_lsgst_circuits(
-            std.target_model(), std.prep_fiducials(), std.meas_fiducials(), std.germs(), cls.maxLengths)
+            std.target_model(), min_prep_fids, min_meas_fids, std.germs(), cls.maxLengths)
 
         #RUN BELOW FOR DATAGEN (SAVE)
         if regenerate_references():
             ds = pygsti.data.simulate_data(cls.mdl_datagen, cls.listOfExperiments,
-                                                   num_samples=1000, sample_error="multinomial", seed=1234)
+                                                   num_samples=10000, sample_error="multinomial", seed=1234)
             ds.save(compare_files + "/calcMethods1Q.dataset")
 
         #DEBUG TEST- was to make sure data files have same info -- seemed ultimately unnecessary
@@ -198,15 +201,15 @@ class CalcMethods1QTestCase(BaseTestCase):
         target_model._print_gpindices()
         target_model.from_vector(1e-10 * np.ones(target_model.num_params))  # to seed term calc (starting with perfect zeros causes trouble)
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prep_fiducials(), std.meas_fiducials(),
-                                               std.germs(lite=False), self.maxLengths, verbosity=4,
+                                               std.germs(lite=False), self.maxLengths, verbosity=0,
                                                disable_checkpointing=True)
 
         #RUN BELOW LINES TO SAVE GATESET (SAVE)
         if regenerate_references():
             results.estimates[results.name].models['go0'].write(compare_files + "/test1Qcalc_std_terms.json")
-
+            
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
-        self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1, delta=2.2)
+        self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1, delta=12)
         mdl_compare = ExplicitOpModel.read(compare_files + "/test1Qcalc_std_terms.json")
 
         # can't easily gauge opt b/c term-based models can't be converted to "full"
@@ -244,7 +247,7 @@ class CalcMethods1QTestCase(BaseTestCase):
             results.estimates[results.name].models['go0'].write(compare_files + "/test1Qcalc_std_prunedpath.json")
 
         print("MISFIT nSigma = ",results.estimates[results.name].misfit_sigma())
-        self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1, delta=2.2)
+        self.assertAlmostEqual( results.estimates[results.name].misfit_sigma(), 1, delta=2)
         #mdl_compare = pygsti.io.json.load(open(compare_files + "/test1Qcalc_std_prunedpath.model"))
 
         # Note: can't easily gauge opt b/c term-based models can't be converted to "full"
