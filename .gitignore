@@ -23,6 +23,7 @@ doc/_autosummary
 doc/autoapi
 doc/build
 .venv*
+*.pyc*
 
 # Protocol Checkpointing #
 ##########################
