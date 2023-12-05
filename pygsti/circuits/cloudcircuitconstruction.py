@@ -1337,7 +1337,7 @@ def _get_candidates_for_core(model, core_qubits, candidate_counts, seed_start):
     return candidate_germs
 
 
-@_deprecated_fn("Use pygsti.circuits.create_standard_cloudnoise_circuits(...).")
+@_deprecated_fn("Use pygsti.circuits.create_cloudnoise_circuits(...).")
 def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_edges, max_idle_weight=1, maxhops=0,
                                        extra_weight_1_hops=0, extra_gate_weight=0, parameterization="H+S",
                                        verbosity=0, cache=None, idle_only=False,

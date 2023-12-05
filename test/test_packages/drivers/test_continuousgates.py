@@ -79,8 +79,11 @@ class ContinuousGatesTestCase(BaseTestCase):
 
         #Create some sequences:
         maxLens = [1]
+        #use minimally IC set of prep and measurement fiducials
+        min_prep_fids = smq1Q_XY.prep_fiducials()[0:4] #Use a minimally informationally complete set of fiducials
+        min_meas_fids = smq1Q_XY.meas_fiducials()[0:3]
         seqStructs = pygsti.circuits.create_lsgst_circuit_lists(
-            smq1Q_XY.target_model(), smq1Q_XY.prep_fiducials(), smq1Q_XY.meas_fiducials(), smq1Q_XY.germs(lite=True), maxLens)
+            smq1Q_XY.target_model(), min_prep_fids, min_meas_fids, smq1Q_XY.germs(lite=True), maxLens)
 
         #Add random X-rotations via label arguments
         np.random.seed(1234)
@@ -92,7 +95,7 @@ class ContinuousGatesTestCase(BaseTestCase):
         allStrs = pygsti.tools.remove_duplicates(ss0[:] + ss1[:])
 
         print(len(allStrs),"sequences ")
-        self.assertEqual(len(allStrs), 146)  # Was 167 when process_circuits acted on *list* rather than individual plaquettes
+        self.assertEqual(len(allStrs), 47)  # Was 167 when process_circuits acted on *list* rather than individual plaquettes
 
         #Generate some data for these sequences (simulates an implicit model with factory)
         pspec = pygsti.processors.QubitProcessorSpec(nQubits, ('Gxpi2','Gypi2'))
@@ -105,7 +108,7 @@ class ContinuousGatesTestCase(BaseTestCase):
         np.random.seed(4567)
         datagen_vec = 0.001 * np.random.random(mdl_datagen.num_params)
         mdl_datagen.from_vector(datagen_vec)
-        ds = pygsti.data.simulate_data(mdl_datagen, allStrs, 1000, seed=1234)
+        ds = pygsti.data.simulate_data(mdl_datagen, allStrs, 10000, seed=1234)
 
         #Run GST
         mdl = pygsti.models.create_crosstalk_free_model(pspec, ideal_gate_type='H+S', ideal_spam_type='H+S')
