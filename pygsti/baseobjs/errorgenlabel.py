@@ -1,3 +1,4 @@
+## user-exposure: low (EGN - using these objects directly is uncommon and power-user functionality.  Ensuring they can be created from simple strings/tuples however may be "high" exposure)
 """
 Defines the ElementaryErrorgenLabel class and supporting functionality.
 """

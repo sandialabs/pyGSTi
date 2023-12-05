@@ -1,3 +1,4 @@
+## user-exposure: minimal (EGN - these should just be subroutines of higher-level api functions)
 # encoding: utf-8
 # cython: profile=False
 # cython: linetrace=False

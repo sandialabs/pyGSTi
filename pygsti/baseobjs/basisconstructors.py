@@ -1,3 +1,4 @@
+## user-exposure: low (EGN - most current access to basis functionality should be through the Basis object; this may be used in old code however, and so deprecating these might be a good idea)
 """
 Functions for creating the standard sets of matrices in the standard, Pauli, Gell-Mann, and qutrit bases
 """

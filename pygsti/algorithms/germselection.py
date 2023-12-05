@@ -1,4 +1,4 @@
-## user-exposure: high (CIO - users use these functions for building GST experiment designs)
+## user-exposure: high (CIO, EGN - users use these functions for building GST experiment designs)
 """
 Functions for selecting a complete set of germs for a GST analysis.
 """

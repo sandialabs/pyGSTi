@@ -1,4 +1,4 @@
-## user-exposure: minimal (CIO- used internally in a number of experiment design related combinatorial optimization routines)
+## user-exposure: minimal (CIO, EGN - used internally in a number of experiment design related combinatorial optimization routines)
 """
 Common functions used in scoring germ and fiducial sets.
 """

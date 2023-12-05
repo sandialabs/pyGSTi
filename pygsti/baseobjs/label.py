@@ -1,3 +1,4 @@
+## user-exposure: low (EGN - using these objects directly is uncommon, though their ability to act like and be created from strings & tuples is utilized by even novice users perhaps unknowingly)
 """
 Defines the Label class
 """

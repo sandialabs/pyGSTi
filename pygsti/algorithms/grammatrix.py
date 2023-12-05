@@ -1,4 +1,4 @@
-## user-exposure: minimal (CIO - Only presently utilized in creation of gram matrix spectrum plots in reports)
+## user-exposure: minimal (CIO, EGN - Only presently utilized in creation of gram matrix spectrum plots in reports)
 """
 Utility functions related to Gram matrix construction.
 """

@@ -1,3 +1,4 @@
+## user-exposure: minimal (EGN - this is unadvertized functionality and not used by anyone but Erik currently.)
 """
 Defines the MongoSerializable class
 """

@@ -1,4 +1,4 @@
-## user-exposure: low (Tentative, probably only used in RB internals, but check with Timothy or Jordan)
+## user-exposure: low (??, EGN Tentative, probably only used in RB internals, but check with Timothy or Jordan)
 """
 circuit mirroring functions.
 """

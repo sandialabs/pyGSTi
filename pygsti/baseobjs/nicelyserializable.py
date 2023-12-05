@@ -1,3 +1,4 @@
+## user-exposure: low (EGN - this is a base class for many others but not used directly by end users.)
 """
 Defines the NicelySerializable class
 """

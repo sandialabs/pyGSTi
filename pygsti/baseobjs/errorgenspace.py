@@ -1,3 +1,4 @@
+## user-exposure: low (EGN - using these objects directly is uncommon and power-user functionality.)
 """
 Defines the ErrorgenSpace class and supporting functionality.
 """

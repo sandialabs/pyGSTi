@@ -1,3 +1,4 @@
+## user-exposure: high (EGN - not necessarily used a lot, but the purpose of the objects herein is to give end users access to advance protocol options)
 """
 Utilities for defining advanced low-level parameterizations for various pyGSTi operations
 """
