@@ -14,6 +14,7 @@ from pygsti.forwardsims import ForwardSimulator as _ForwardSimulator
 from quimb.tensor import Tensor as _Tensor
 from quimb.tensor import TensorNetwork as _TensorNetwork
 import numpy as _np
+from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout as _CircuitOutcomeProbabilityArrayLayout
 
 
 
@@ -119,6 +120,64 @@ class TensorForwardSimulator(_ForwardSimulator):
                 
     #def _compute_circuit_outcome_probability_derivatives(self, array_to_fill, circuit, outcomes, param_slice,
     #                                                     resource_alloc):
+    #Overide default derivative_dimensions behavior so that it is equal to the number of model parameters
+    #down the line we should update this for compatibility with distributable layouts where this may not be
+    #the case for MPI compatibility.
+    def create_layout(self, circuits, dataset=None, resource_alloc=None,
+                      array_types=(), derivative_dimensions=None, verbosity=0):
+        """
+        Constructs an circuit-outcome-probability-array (COPA) layout for `circuits` and `dataset`.
+
+        Parameters
+        ----------
+        circuits : list
+            The circuits whose outcome probabilities should be computed.
+
+        dataset : DataSet
+            The source of data counts that will be compared to the circuit outcome
+            probabilities.  The computed outcome probabilities are limited to those
+            with counts present in `dataset`.
+
+        resource_alloc : ResourceAllocation
+            A available resources and allocation information.  These factors influence how
+            the layout (evaluation strategy) is constructed.
+
+        array_types : tuple, optional
+            A tuple of string-valued array types, as given by
+            :method:`CircuitOutcomeProbabilityArrayLayout.allocate_local_array`.  These types determine
+            what types of arrays we anticipate computing using this layout (and forward simulator).  These
+            are used to check available memory against the limit (if it exists) within `resource_alloc`.
+            The array types also determine the number of derivatives that this layout is able to compute.
+            So, for example, if you ever want to compute derivatives or Hessians of element arrays then
+            `array_types` must contain at least one `'ep'` or `'epp'` type, respectively or the layout
+            will not allocate needed intermediate storage for derivative-containing types.  If you don't
+            care about accurate memory limits, use `('e',)` when you only ever compute probabilities and
+            never their derivatives, and `('e','ep')` or `('e','ep','epp')` if you need to compute
+            Jacobians or Hessians too.
+
+        derivative_dimensions : tuple, optional
+            A tuple containing, optionally, the parameter-space dimension used when taking first
+            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
+            respectively.
+
+        verbosity : int or VerbosityPrinter
+            Determines how much output to send to stdout.  0 means no output, higher
+            integers mean more output.
+
+        Returns
+        -------
+        CircuitOutcomeProbabilityArrayLayout
+        """
+        
+        if derivative_dimensions is None:
+            if 'epp' in array_types:
+                derivative_dimensions = (self.model.num_params,self.model.num_params)
+            else:
+                derivative_dimensions = (self.model.num_params,)
+        
+        return _CircuitOutcomeProbabilityArrayLayout.create_from(circuits, self.model, dataset, derivative_dimensions,
+                                                                 resource_alloc=resource_alloc)
                                                          
                                                          
                                                             

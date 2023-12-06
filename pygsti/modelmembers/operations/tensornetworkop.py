@@ -11,10 +11,12 @@ The TensorNetworkOp class and supporting functionality.
 #***************************************************************************************************
 
 from pygsti.modelmembers import ModelMember as _ModelMember
+from pygsti.modelmembers.povms import POVM as _POVM
 from quimb.tensor import Tensor as _Tensor
 from quimb.tensor import TensorNetwork as _TensorNetwork
 from quimb.tensor import rand_uuid
 import numpy as _np
+import collections as _collections
 
 
 #Add a parent class that the rest of the tensor network operations will subclass off of.
@@ -161,6 +163,113 @@ class LPDOTensorEffect(LPDOTensorOp):
     
     def __init__(self, tensor_array_list, index_tags, state_space, evotype, site_tags= None):
         super().__init__(tensor_array_list, index_tags, state_space, evotype, site_tags)
+        
+        
+class TensorNetworkPOVM(_POVM):
+    def __init__(self, state_space=None, evotype=None, rep=None, items=[]):
+        super().__init__(state_space, evotype, rep, items)
+        self.init_gpindices()
+    
+    def submembers(self):
+        """
+        Returns a sequence of any sub-ModelMember objects contained in this one.
+
+        Sub-members are processed by other :class:`ModelMember` methods
+        (e.g. `unlink_parent` and `set_gpindices`) as though the parent
+        object is *just* a container for these sub-members and has no
+        parameters of its own.  Member objects that contain other members
+        *and* possess their own independent parameters should implement
+        the appropriate `ModelMember` functions (usually just
+        `allocate_gpindices`, using the base implementation as a reference).
+
+        Returns
+        -------
+        list or tuple
+        """
+        return tuple(self.values())
+    
+    def simplify_effects(self, prefix=""):
+        """
+        Creates a dictionary of simplified effect vectors.
+
+        Returns a dictionary of effect POVMEffects that belong to the POVM's parent
+        `Model` - that is, whose `gpindices` are set to all or a subset of
+        this POVM's gpindices.  Such effect vectors are used internally within
+        computations involving the parent `Model`.
+
+        Parameters
+        ----------
+        prefix : str
+            A string, usually identitying this POVM, which may be used
+            to prefix the simplified gate keys.
+
+        Returns
+        -------
+        OrderedDict of POVMEffects
+        """
+        if prefix: prefix = prefix + "_"
+        simplified = _collections.OrderedDict()
+        for lbl, effect in self.items():
+            simplified[prefix + lbl] = effect
+
+        return simplified
+    @property
+    def num_params(self):
+        """
+        Get the number of independent parameters which specify this POVM.
+
+        Returns
+        -------
+        int
+           the number of independent parameters.
+        """
+        return len(self.gpindices_as_array())
+    
+    def to_vector(self):
+        """
+        Extract a vector of the underlying gate parameters from this POVM.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        v = np.empty(self.num_params, 'd')
+        for (lbl, effect), effect_local_inds in zip(self.items(), self._submember_rpindices):
+            #if lbl == self.complement_label: continue
+            v[effect_local_inds] = effect.to_vector()
+        return v
+    
+    def from_vector(self, v, close=False, dirty_value=True):
+        """
+        Initialize this POVM using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of POVM parameters.  Length
+            must == num_params().
+
+        close : bool, optional
+            Whether `v` is close to this POVM's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
+
+        Returns
+        -------
+        None
+        """
+        for (lbl, effect), effect_local_inds in zip(self.items(), self._submember_rpindices):
+            #if lbl == self.complement_label: continue
+            effect.from_vector(v[effect_local_inds], close, dirty_value)
+        #if self.complement_label:  # re-init Ec
+        #    self[self.complement_label]._construct_vector()
+    
     
 
        
