@@ -7,7 +7,7 @@ import unittest
 import numpy as np
 
 import pygsti
-from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.modelpacks import smq1Q_XY as std
 # Inherit setup from here
 from .reportBaseCase import ReportBaseCase
 from ..testutils import compare_files, temp_files
