@@ -4,6 +4,7 @@ import pygsti.algorithms.fiducialselection as fs
 import pygsti.circuits as pc
 from pygsti.circuits import Circuit
 from pygsti.baseobjs import Label
+import pygsti.models.modelconstruction as mc
 from . import fixtures
 from ..util import BaseCase
 
