@@ -439,9 +439,14 @@ class GatesTable(WorkspaceTable):
                     row_data.append(op.to_dense('HilbertSchmidt'))
                     row_formatters.append('Brackets')
                 elif display_as == "boxes":
-                    fig = _wp.GateMatrixPlot(self.ws, op.to_dense(on_space='HilbertSchmidt'),
-                                             colorbar=False,
-                                             mx_basis=basis)
+                    if lbl in instLabels:
+                        fig = _wp.GateMatrixPlot(self.ws, op.to_dense(on_space='HilbertSchmidt'), color_min=-0.5, color_max=0.5,
+                                                colorbar=True,
+                                                mx_basis=basis)
+                    else:
+                        fig = _wp.GateMatrixPlot(self.ws, op.to_dense(on_space='HilbertSchmidt'),
+                                                colorbar=True,
+                                                mx_basis=basis)
 
                     row_data.append(fig)
                     row_formatters.append('Figure')
@@ -559,7 +564,20 @@ class ChoiTable(WorkspaceTable):
             models = [models]
 
         opLabels = models[0].primitive_op_labels  # use labels of 1st model
+        instLabels = list(models[0].instruments.keys())  # requires an explicit model!
+
         assert(isinstance(models[0], _models.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
+
+        label_op_tups = []
+        for gl in opLabels:
+            # may want to gracefully handle index error here?
+            tup_of_ops = tuple([model.operations[gl] for model in models])
+            label_op_tups.append((gl, None, tup_of_ops))
+        for il in instLabels:
+            for comp_lbl in models[0].instruments[il].keys():
+                tup_of_ops = tuple([model.instruments[il][comp_lbl] for model in models]
+                                   )  # may want to gracefully handle index error here?
+                label_op_tups.append((il, comp_lbl, tup_of_ops))
 
         if titles is None:
             titles = [''] * len(models)
@@ -567,13 +585,26 @@ class ChoiTable(WorkspaceTable):
         qtysList = []
         for model in models:
             opLabels = model.primitive_op_labels  # operation labels
+            instLabels = list(model.instruments.keys())
+            inst_op_tups = []
+            for il in instLabels:
+                for comp_lbl in models[0].instruments[il].keys():
+                    tup_of_ops = tuple([model.instruments[il][comp_lbl] for model in models]
+                                    )  # may want to gracefully handle index error here?
+                    inst_op_tups.append((il, comp_lbl, tup_of_ops))
             #qtys_to_compute = []
             if 'matrix' in display or 'boxplot' in display:
                 choiMxs = [_ev(_reportables.Choi_matrix(model, gl)) for gl in opLabels]
+                for il in instLabels:
+                    for comp_lbl in model.instruments[il].keys():
+                        choiMxs += [_ev(_reportables.Choi_matrix(model, il, comp_lbl))]
             else:
                 choiMxs = None
             if 'eigenvalues' in display or 'barplot' in display:
                 evals = [_ev(_reportables.Choi_evals(model, gl), confidence_region_info) for gl in opLabels]
+                for il in instLabels:
+                    for comp_lbl in model.instruments[il].keys():
+                        evals += [_ev(_reportables.Choi_evals(model, il, comp_lbl), confidence_region_info)]
             else:
                 evals = None
             qtysList.append((choiMxs, evals))
@@ -603,9 +634,10 @@ class ChoiTable(WorkspaceTable):
 
         table = _ReportTable(colHeadings, formatters, confidence_region_info=confidence_region_info)
 
-        for i, gl in enumerate(opLabels):
+        i=0
+        for lbl, comp_lbl, per_model_ops in label_op_tups: 
             #Note: currently, we don't use confidence region...
-            row_data = [gl]
+            row_data = [lbl if (comp_lbl is None) else (lbl + '.' + comp_lbl)]
             row_formatters = [None]
 
             for disp in display:
@@ -644,6 +676,7 @@ class ChoiTable(WorkspaceTable):
                         row_formatters.append('Figure')
 
             table.add_row(row_data, row_formatters)
+            i+=1
         table.finish()
         return table
 
