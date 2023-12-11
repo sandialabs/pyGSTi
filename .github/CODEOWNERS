@@ -1,23 +1,42 @@
-# This is a comment.
-# Each line is a file pattern followed by one or more owners.
-
 ## Global owners (default to pyGSTi maintainers) ##
 # These will also be owners for everything below
 # so they can approve minor PRs without adding
 # undue burden on volunteer code owners
-*       @sserita @coreyostrove @rileyjmurray
+*       @pygsti-maintainers
 
-## Instruments/QILGST owners ##
-pygsti/modelmembers/instruments/ @pcwysoc @sserita @coreyostrove @rileyjmurray
+
+## Drift analysis ##
+pygsti/protocols/stability.py @tjproct @pygsti-maintainers
+pygsti/report/section/drift.py @tjproct @pygsti-maintainers
+pygsti/report/templates/drift_html_report/ @tjproct @pygsti-maintainers
+
+## Instruments owners ##
+pygsti/modelmembers/instruments/ @pcwysoc @pygsti-maintainers
+
+## RB owners ##
+pygsti/algorithms/compilers.py @jordanh6 @tjproct @pygsti-maintainers
+pygsti/algorithms/mirroring.py @jordanh6 @tjproct @pygsti-maintainers
+pygsti/algorithms/randomcircuit.py @jordanh6 @tjproct @pygsti-maintainers
+pygsti/algorithms/rbfit.py @jordanh6 @tjproct @pygsti-maintainers
+pygsti/extras/rb.py @jordanh6 @tjproct @pygsti-maintainers # Should this just be deprecated and removed?
+pygsti/protocols/rb.py @jordanh6 @tjproct @pygsti-maintainers
+pygsti/tools/rbtheory.py @jordanh6 @tjproct @pygsti-maintainers
+pygsti/tools/rbtools.py @jordanh6 @tjproct @pygsti-maintainers
+pygsti/tools/symplectic.py @jordanh6 @tjproct @pygsti-maintainers
 
 ## Reporting owners ##
 # Specifically just for workspace plots/tables
-pygsti/report/workspace*.py @pcwysoc @sserita @coreyostrove @rileyjmurray
+pygsti/report/workspace*.py @pcwysoc @pygsti-maintainers
+
+
 
 ## Tutorial owners ##
 # In addition to general tutorial owners,
 # we will also have specific tutorials be owned
-# by topics they own above
-jupyter_notebooks/ @sserita @coreyostrove @rileyjmurray
-jupyter_notebooks/Tutorials/objects/advanced/Instruments.ipynb @pcwysoc @sserita @coreyostrove @rileyjmurray
-jupyter_notebooks/Tutorials/reporting/ @pcwysoc @sserita @coreyostrove @rileyjmurray
+# by topics owners are responsible for above
+jupyter_notebooks/ @pygsti-maintainers
+jupyter_notebooks/**/*RB-*.ipynb @jordanh6 @tjproct @pygsti-maintainers
+jupyter_notebooks/Tutorials/algorithms/MirrorCircuitBenchmarks.ipynb @jordanh6 @tjproct @pygsti-maintainers
+jupyter_notebooks/Tutorials/algorithms/DriftCharacterization.ipynb @tjproct @pygsti-maintainers
+jupyter_notebooks/Tutorials/objects/advanced/Instruments.ipynb @pcwysoc @pygsti-maintainers
+jupyter_notebooks/Tutorials/reporting/ @pcwysoc @pygsti-maintainers
