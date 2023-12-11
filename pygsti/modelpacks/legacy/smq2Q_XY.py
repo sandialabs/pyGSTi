@@ -13,7 +13,7 @@ I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from pygsti.modelpacks._modelpack import GSTModelPack
+from pygsti.modelpacks.legacy._modelpack import GSTModelPack
 
 
 class _Module(GSTModelPack):

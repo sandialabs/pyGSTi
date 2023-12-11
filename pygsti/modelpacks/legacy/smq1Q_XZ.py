@@ -12,7 +12,7 @@ Variables for working with the a model containing X(pi/2) and Z(pi/2) gates.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from pygsti.modelpacks._modelpack import GSTModelPack
+from pygsti.modelpacks.legacy._modelpack import GSTModelPack
 
 
 class _Module(GSTModelPack):

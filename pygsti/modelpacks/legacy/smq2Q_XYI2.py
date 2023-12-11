@@ -14,7 +14,7 @@ Variables for working with the a model containing Idle, X(pi/2) and Y(pi/2) gate
 
 from collections import OrderedDict
 
-from pygsti.modelpacks._modelpack import GSTModelPack, RBModelPack
+from pygsti.modelpacks.legacy._modelpack import GSTModelPack, RBModelPack
 
 
 class _Module(GSTModelPack, RBModelPack):

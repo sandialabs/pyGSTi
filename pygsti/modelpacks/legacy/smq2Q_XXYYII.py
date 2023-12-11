@@ -15,7 +15,7 @@ I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE.
 
 from collections import OrderedDict
 
-from pygsti.modelpacks._modelpack import GSTModelPack, RBModelPack
+from pygsti.modelpacks.legacy._modelpack import GSTModelPack, RBModelPack
 
 
 class _Module(GSTModelPack, RBModelPack):

@@ -10,4 +10,4 @@ Preset definitions for working with well-known common models
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-from ._modelpack import ModelPack, GSTModelPack, RBModelPack
+from .modelpack import ModelPack, GSTModelPack, RBModelPack
