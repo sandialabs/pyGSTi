@@ -1,5 +1,23 @@
 # This is a comment.
 # Each line is a file pattern followed by one or more owners.
 
-# Global owners
+## Global owners (default to pyGSTi maintainers) ##
+# These will also be owners for everything below
+# so they can approve minor PRs without adding
+# undue burden on volunteer code owners
 *       @sserita @coreyostrove @rileyjmurray
+
+## Instruments/QILGST owners ##
+pygsti/modelmembers/instruments/ @pcwysoc @sserita @coreyostrove @rileyjmurray
+
+## Reporting owners ##
+# Specifically just for workspace plots/tables
+pygsti/report/workspace*.py @pcwysoc @sserita @coreyostrove @rileyjmurray
+
+## Tutorial owners ##
+# In addition to general tutorial owners,
+# we will also have specific tutorials be owned
+# by topics they own above
+jupyter_notebooks/ @sserita @coreyostrove @rileyjmurray
+jupyter_notebooks/Tutorials/objects/advanced/Instruments.ipynb @pcwysoc @sserita @coreyostrove @rileyjmurray
+jupyter_notebooks/Tutorials/reporting/ @pcwysoc @sserita @coreyostrove @rileyjmurray
