@@ -2,31 +2,31 @@
 # These will also be owners for everything below
 # so they can approve minor PRs without adding
 # undue burden on volunteer code owners
-*       @sandialabs/pygsti-maintainers
+*       @sandialabs/pygsti-maintainers @sandialabs/pygsti-gatekeepers
 
 
 ## Drift analysis ##
-pygsti/protocols/stability.py @tjproct @sandialabs/pygsti-maintainers
-pygsti/report/section/drift.py @tjproct @sandialabs/pygsti-maintainers
-pygsti/report/templates/drift_html_report/ @tjproct @sandialabs/pygsti-maintainers
+pygsti/protocols/stability.py @tjproct @sandialabs/pygsti-gatekeepers
+pygsti/report/section/drift.py @tjproct @sandialabs/pygsti-gatekeepers
+pygsti/report/templates/drift_html_report/ @tjproct @sandialabs/pygsti-gatekeepers
 
 ## Instruments owners ##
-pygsti/modelmembers/instruments/ @pcwysoc @sandialabs/pygsti-maintainers
+pygsti/modelmembers/instruments/ @pcwysoc @sandialabs/pygsti-gatekeepers
 
 ## RB owners ##
-pygsti/algorithms/compilers.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
-pygsti/algorithms/mirroring.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
-pygsti/algorithms/randomcircuit.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
-pygsti/algorithms/rbfit.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
-pygsti/extras/rb.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers # Should this just be deprecated and removed?
-pygsti/protocols/rb.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
-pygsti/tools/rbtheory.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
-pygsti/tools/rbtools.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
-pygsti/tools/symplectic.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
+pygsti/algorithms/compilers.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/algorithms/mirroring.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/algorithms/randomcircuit.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/algorithms/rbfit.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/extras/rb.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers # Should this just be deprecated and removed?
+pygsti/protocols/rb.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/tools/rbtheory.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/tools/rbtools.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/tools/symplectic.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
 
 ## Reporting owners ##
 # Specifically just for workspace plots/tables
-pygsti/report/workspace*.py @pcwysoc @sandialabs/pygsti-maintainers
+pygsti/report/workspace*.py @pcwysoc @sandialabs/pygsti-gatekeepers
 
 
 
@@ -34,9 +34,9 @@ pygsti/report/workspace*.py @pcwysoc @sandialabs/pygsti-maintainers
 # In addition to general tutorial owners,
 # we will also have specific tutorials be owned
 # by topics owners are responsible for above
-jupyter_notebooks/ @sandialabs/pygsti-maintainers
-jupyter_notebooks/**/*RB-*.ipynb @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
-jupyter_notebooks/Tutorials/algorithms/MirrorCircuitBenchmarks.ipynb @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
-jupyter_notebooks/Tutorials/algorithms/DriftCharacterization.ipynb @tjproct @sandialabs/pygsti-maintainers
-jupyter_notebooks/Tutorials/objects/advanced/Instruments.ipynb @pcwysoc @sandialabs/pygsti-maintainers
-jupyter_notebooks/Tutorials/reporting/ @pcwysoc @sandialabs/pygsti-maintainers
+jupyter_notebooks/ @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/**/*RB-*.ipynb @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/Tutorials/algorithms/MirrorCircuitBenchmarks.ipynb @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/Tutorials/algorithms/DriftCharacterization.ipynb @tjproct @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/Tutorials/objects/advanced/Instruments.ipynb @pcwysoc @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/Tutorials/reporting/ @pcwysoc @sandialabs/pygsti-gatekeepers
