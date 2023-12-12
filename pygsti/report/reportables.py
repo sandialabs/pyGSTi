@@ -2598,6 +2598,7 @@ def evaluate_instrumentfn_by_name(name, model, target_model, inst_label,
         fn = Instrument_infidelity
     elif name == "diamond":
         fn = Instrument_half_diamond_norm
+        #confidence_region_info = None
     else:
         return _ReportableQty(_np.nan)
 
