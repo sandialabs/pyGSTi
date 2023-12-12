@@ -45,7 +45,7 @@ from ...protocols.protocol import _TreeNode
 class IBMQExperiment(_TreeNode, _HasPSpec):
 
     def __init__(self, edesign, pspec, remove_duplicates=True, randomized_order=True, circuits_per_batch=75,
-                 num_shots=1024, seed=None):
+                 num_shots=1024, seed=None, checkpoint_path=None, disable_checkpointing=False):
         """
         A object that converts pyGSTi ExperimentDesigns into jobs to be submitted to IBM Q, submits these
         jobs to IBM Q and receives the results.
@@ -82,17 +82,23 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         seed: int, optional
             Seed for RNG during order randomization of circuits.
 
-        checkpoint_dirname: str, optional
-            Name of checkpoint directory. If None, no checkpointing is used.
+        checkpoint_path: str, optional
+            A string for the path to use for writing intermediate checkpoint
+            files to disk. This should match the `dirname` kwarg used in
+            serialization, i.e. `from_dir()` or `write()`.
+            If None, will attempt to use load location for `edesign`.
+
+        disable_checkpointing : bool, optional (default False)
+            When set to True checkpoint objects will not be constructed and written
+            to disk during the course of this protocol. It is strongly recommended
+            that this be kept set to False without good reason to disable the checkpoints.
 
         Returns
         -------
         IBMQExperiment
-            An object containing jobs to be submitted to IBM Q, which can then be submitted
-            using the methods .submit() and whose results can be grabbed from IBM Q using
-            the method .retrieve_results(). This object has dictionary-like access for all of
-            the objects it contains (e.g., ['qobj'] is a list of the objects to be submitted to
-            IBM Q).
+            An object containing jobs to be submitted to IBM Q created by `.transpile()`,
+            which can then be submitted using the methods `.submit()` and whose results
+            can be grabbed from IBM Q using the method `.retrieve_results()`.
 
         """
         _TreeNode.__init__(self, edesign._dirs)
@@ -101,12 +107,13 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         _HasPSpec.__init__(self, pspec)
 
         self.edesign = edesign
-        self.processor_spec = pspec # Must be called processor_spec for _HasPSpec class
         self.remove_duplicates = remove_duplicates
         self.randomized_order = randomized_order
         self.circuits_per_batch = circuits_per_batch
         self.num_shots = num_shots
         self.seed = seed
+        self.checkpoint_path = checkpoint_path if checkpoint_path is not None else self.edesign._loaded_from
+        self.disable_checkpointing = disable_checkpointing
         # Populated with transpiling to IBMQ with .transpile()
         self.pygsti_circuit_batches = []
         self.qasm_circuit_batches = []
@@ -137,15 +144,15 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             # Fall back to pickles if we do not have bson to deal with datetime.datetime
             self.auxfile_types['submit_time_calibration_data'] = 'pickle'
             self.auxfile_types['batch_results'] = 'pickle'
+        
+        if not disable_checkpointing:
+            if self.checkpoint_path is None:
+                raise SyntaxError("Default checkpointing is enabled, either provide " + \
+                                  "`checkpoint_path` or `disable_checkpointing=True` (not recommended).")
+            self.write(self.checkpoint_path)
 
-    def transpile(self, dirname=None):
+    def transpile(self):
         """Transpile pyGSTi circuits into Qiskit circuits for submission to IBMQ.
-
-        Parameters
-        ----------
-        dirname: str, optional
-            If provided, the root directory (i.e. same as passed to write()
-            and from_dir()) to use for checkpointing
         """
         circuits = self.edesign.all_circuits_needing_data.copy()
         num_batches = int(_np.ceil(len(circuits) / self.circuits_per_batch))
@@ -165,7 +172,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 end = min(len(circuits), (batch_idx+1)*self.circuits_per_batch)
                 self.pygsti_circuit_batches.append(circuits[start:end])
             
-            self._write_checkpoint(dirname)
+            if not self.disable_checkpointing:
+                self._write_checkpoint()
 
         if len(self.qiskit_circuit_batches):
             print(f'Already completed transpilation of {len(self.qiskit_circuit_batches)}/{num_batches} circuit batches')
@@ -185,10 +193,11 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             self.qasm_circuit_batches.append(batch_strs)
             self.qiskit_circuit_batches.append(batch)
             
-            self._write_checkpoint(dirname)
+            if not self.disable_checkpointing:
+                self._write_checkpoint()
 
     def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True,
-               wait_time=1, wait_steps=10, dirname=None):
+               wait_time=1, wait_steps=10):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
         used to create this object.
@@ -320,7 +329,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                     print()
                 finally:
                     # Checkpoint calibration and job id data
-                    self._write_checkpoint(dirname)
+                    if not self.disable_checkpointing:
+                        self._write_checkpoint()
 
     def monitor(self):
         """
@@ -343,7 +353,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         for counter in range(len(self.qjobs), len(self.qiskit_circuit_batches)):
             print(f"Batch {counter + 1}: NOT SUBMITTED")
 
-    def retrieve_results(self, dirname=None):
+    def retrieve_results(self):
         """
         Gets the results of the completed jobs from IBM Q, and processes
         them into a pyGSTi DataProtocol object (stored as the key 'data'),
@@ -384,7 +394,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             batch_result = qjob.result()
             self.batch_results.append(batch_result.to_dict())
 
-            self._write_checkpoint(dirname)
+            if not self.disable_checkpointing:
+                self._write_checkpoint()
 
             for i, circ in enumerate(self.pygsti_circuit_batches[exp_idx]):
                 ordered_target_indices = [self.processor_spec.qubit_labels.index(q) for q in circ.line_labels]
@@ -393,8 +404,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
         self.data = _ProtocolData(self.edesign, ds)
 
-        if dirname is not None:
-            self.data.write(dirname, edesign_already_written=True)
+        if not self.disable_checkpointing:
+            self.data.write(self.checkpoint_path, edesign_already_written=True)
 
     def write(self, dirname=None):
         """
@@ -413,8 +424,9 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
         """
         if dirname is None:
-            dirname = self.edesign._loaded_from
-            if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
+            dirname = self.checkpoint_path
+            if dirname is None:
+                raise ValueError("`dirname` must be given because there's no checkpoint or default edesign directory")
         
         dirname = _pathlib.Path(dirname)
 
@@ -513,7 +525,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         
         return ret
     
-    def _write_checkpoint(self, dirname):
+    def _write_checkpoint(self, dirname=None):
         """Write only the ibmqexperiment part of .write().
         
         Parameters
@@ -525,10 +537,10 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             was loaded from is used (if this object wasn't loaded from disk,
             an error is raised).
         """
-        if dirname is not None:
-            exp_dir = _pathlib.Path(dirname) / 'ibmqexperiment'
-            exp_dir.mkdir(parents=True, exist_ok=True)
-            _io.metadir.write_obj_to_meta_based_dir(self, exp_dir, 'auxfile_types')
+        dirname = dirname if dirname is not None else self.checkpoint_path
+        exp_dir = _pathlib.Path(dirname) / 'ibmqexperiment'
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        _io.metadir.write_obj_to_meta_based_dir(self, exp_dir, 'auxfile_types')
 
     def _retrieve_jobs(self, provider):
         """Retrieves RuntimeJobs from IBMQ based on job_ids.
