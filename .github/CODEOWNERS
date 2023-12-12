@@ -14,15 +14,15 @@ pygsti/report/templates/drift_html_report/ @tjproct @sandialabs/pygsti-maintaine
 pygsti/modelmembers/instruments/ @pcwysoc @sandialabs/pygsti-maintainers
 
 ## RB owners ##
-pygsti/algorithms/compilers.py @jordanh6 @tjproct @sandialabs/pygsti-maintainers
-pygsti/algorithms/mirroring.py @jordanh6 @tjproct @sandialabs/pygsti-maintainers
-pygsti/algorithms/randomcircuit.py @jordanh6 @tjproct @sandialabs/pygsti-maintainers
-pygsti/algorithms/rbfit.py @jordanh6 @tjproct @sandialabs/pygsti-maintainers
-pygsti/extras/rb.py @jordanh6 @tjproct @sandialabs/pygsti-maintainers # Should this just be deprecated and removed?
-pygsti/protocols/rb.py @jordanh6 @tjproct @sandialabs/pygsti-maintainers
-pygsti/tools/rbtheory.py @jordanh6 @tjproct @sandialabs/pygsti-maintainers
-pygsti/tools/rbtools.py @jordanh6 @tjproct @sandialabs/pygsti-maintainers
-pygsti/tools/symplectic.py @jordanh6 @tjproct @sandialabs/pygsti-maintainers
+pygsti/algorithms/compilers.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
+pygsti/algorithms/mirroring.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
+pygsti/algorithms/randomcircuit.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
+pygsti/algorithms/rbfit.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
+pygsti/extras/rb.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers # Should this just be deprecated and removed?
+pygsti/protocols/rb.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
+pygsti/tools/rbtheory.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
+pygsti/tools/rbtools.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
+pygsti/tools/symplectic.py @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
 
 ## Reporting owners ##
 # Specifically just for workspace plots/tables
@@ -35,8 +35,8 @@ pygsti/report/workspace*.py @pcwysoc @sandialabs/pygsti-maintainers
 # we will also have specific tutorials be owned
 # by topics owners are responsible for above
 jupyter_notebooks/ @sandialabs/pygsti-maintainers
-jupyter_notebooks/**/*RB-*.ipynb @jordanh6 @tjproct @sandialabs/pygsti-maintainers
-jupyter_notebooks/Tutorials/algorithms/MirrorCircuitBenchmarks.ipynb @jordanh6 @tjproct @sandialabs/pygsti-maintainers
+jupyter_notebooks/**/*RB-*.ipynb @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
+jupyter_notebooks/Tutorials/algorithms/MirrorCircuitBenchmarks.ipynb @sandialabs/pygsti-rb @sandialabs/pygsti-maintainers
 jupyter_notebooks/Tutorials/algorithms/DriftCharacterization.ipynb @tjproct @sandialabs/pygsti-maintainers
 jupyter_notebooks/Tutorials/objects/advanced/Instruments.ipynb @pcwysoc @sandialabs/pygsti-maintainers
 jupyter_notebooks/Tutorials/reporting/ @pcwysoc @sandialabs/pygsti-maintainers
