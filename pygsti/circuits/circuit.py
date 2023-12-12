@@ -864,10 +864,26 @@ class Circuit(object):
             assert(all([isinstance(l, _Label) for l in x])), "Only Circuits and Label-tuples can be added to Circuits!"
             return Circuit._fastinit(self.layertup + x, self.line_labels, editable=False)
         
+        #Add special line label handling to deal with the special global idle circuits (which have no line labels
+        # associated with them typically).
+        #Check if a the circuit or labels being added are all global idles, if so inherit the
+        #line labels from the circuit being added to. Otherwise, enforce compatibility.
+        layertup_x = x.layertup if isinstance(x, Circuit) else x
+        gbl_idle_x= all([lbl == _Label(()) for lbl in layertup_x])
+        gbl_idle_self= all([lbl == _Label(()) for lbl in self.layertup])
+
+        if not (gbl_idle_x or gbl_idle_self):
+            combined_labels = {x.line_labels, self.line_labels}
+        elif not gbl_idle_x and gbl_idle_self:
+            combined_labels = {x.line_labels}
+        elif gbl_idle_x and not gbl_idle_self:    
+            combined_labels = {self.line_labels}
+        else: #both are all global idles so it doesn't matter which we take.
+            combined_labels = {self.line_labels}
+
         #check that the line labels are compatible between circuits.
         #i.e. raise error if adding circuit with * line label to one with
         #standard line labels.
-        combined_labels = {x.line_labels, self.line_labels}
         if ('*',) in combined_labels and len(combined_labels) > 1:
             # raise the error
             msg = f"Adding circuits with incompatible line labels: {combined_labels}."  \
@@ -889,8 +905,18 @@ class Circuit(object):
                 s = (mystr + xstr) if xstr != "{}" else mystr
             else: s = xstr
 
-        added_labels = tuple([l for l in x.line_labels if l not in self.line_labels])
-        new_line_labels = self.line_labels + added_labels
+        #try to return the line labels as the contents of combined labels in
+        #sorted order. If there is a TypeError raised this is probably because
+        #we're mixing integer and string labels, in which case we'll just return
+        #the new labels in whatever arbirary order is obtained by casting a set to
+        #a tuple.
+        #unpack all of the different sets of labels and make sure there are no duplicates
+        combined_labels_unpacked = {el for tup in combined_labels for el in tup}
+        try:
+            new_line_labels = tuple(sorted(list(combined_labels_unpacked)))
+        except TypeError:
+            new_line_labels = tuple(combined_labels_unpacked)
+
         if s is not None:
             s += _op_seq_str_suffix(new_line_labels, occurrence_id=None)  # don't maintain occurrence_id
 
