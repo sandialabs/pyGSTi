@@ -112,7 +112,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         self.circuits_per_batch = circuits_per_batch
         self.num_shots = num_shots
         self.seed = seed
-        self.checkpoint_path = checkpoint_path if checkpoint_path is not None else self.edesign._loaded_from
+        self.checkpoint_path = str(checkpoint_path) if checkpoint_path is not None else self.edesign._loaded_from
         self.disable_checkpointing = disable_checkpointing
         # Populated with transpiling to IBMQ with .transpile()
         self.pygsti_circuit_batches = []
