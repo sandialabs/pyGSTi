@@ -1454,7 +1454,11 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         """
         Write this experiment design to a directory.
 
-        This is exactly the same 
+        This is the same as ExperimentDesign writing, except the user can
+        opt out of saving the all_circuits_needing_data. This is intended
+        to be used when all_circuits_needing_data is simply the union of
+        the subdesign all_circuits_needing_data, thus saving on disk space
+        and load times.
 
         Parameters
         ----------
