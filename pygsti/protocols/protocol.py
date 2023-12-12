@@ -1403,6 +1403,88 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         mapped_sub_designs = {key: child.map_qubit_labels(mapper) for key, child in self._vals.items()}
         return CombinedExperimentDesign(mapped_sub_designs, mapped_circuits, mapped_qubit_labels, self._dirs)
 
+    @classmethod
+    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
+        """
+        Initialize a new ExperimentDesign object from `dirname`.
+        
+        This is specialized for CombinedExperimentDesign so that it can reset
+        all_circuits_needing_data in case that was skipped in write().
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory name (under which there is a 'edesign'
+            subdirectory).
+
+        parent : ExperimentDesign, optional
+            The parent design object, if there is one.  Primarily used
+            internally - if in doubt, leave this as `None`.
+
+        name : str, optional
+            The sub-name of the design object being loaded, i.e. the
+            key of this data object beneath `parent`.  Only used when
+            `parent` is not None.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of the potentially long
+            circuit lists.  This can be useful when loading takes a long time
+            and all the information of interest lies elsewhere, e.g. in an
+            encompassing results object.
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        ret = ExperimentDesign.from_dir(dirname=dirname, parent=parent, name=name, quick_load=quick_load)
+
+        if ret.auxfile_types['all_circuits_needing_data'] == 'reset':
+            all_circuits = []
+            for des in ret.sub_designs.values():
+                    all_circuits.extend(des.all_circuits_needing_data)
+            _lt.remove_duplicates_in_place(all_circuits)
+
+            ret.all_circuits_needing_data = all_circuits
+            ret.auxfile_types['all_circuits_needing_data'] = ret.old_all_circuits_type
+            del ret.old_all_circuits_type
+        
+        return ret
+
+    def write(self, dirname=None, parent=None, skip_all_circuits=False):
+        """
+        Write this experiment design to a directory.
+
+        This is exactly the same 
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory to write into.  This directory will have
+            an 'edesign' subdirectory, which will be created if needed and
+            overwritten if present.  If None, then the path this object
+            was loaded from is used (if this object wasn't loaded from disk,
+            an error is raised).
+
+        parent : ExperimentDesign, optional
+            The parent experiment design, when a parent is writing this
+            design as a sub-experiment-design.  Otherwise leave as None.
+        
+        skip_all_circuits : bool, optional
+            If True (not the default), then this will skip writing
+            all_circuits_needing_data. This is intended to be used
+            when all_circuits_needing_data is just the union of the 
+            subdesigns as a space-saving mechanism.
+
+        Returns
+        -------
+        None
+        """
+        if skip_all_circuits:
+            self.old_all_circuits_type = self.auxfile_types['all_circuits_needing_data']
+            self.auxfile_types['all_circuits_needing_data'] = 'reset'
+        
+        ExperimentDesign.write(self, dirname=dirname, parent=parent)
+
 
 class SimultaneousExperimentDesign(ExperimentDesign):
     """
