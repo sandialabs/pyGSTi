@@ -604,7 +604,7 @@ class ChoiTable(WorkspaceTable):
                 evals = [_ev(_reportables.Choi_evals(model, gl), confidence_region_info) for gl in opLabels]
                 for il in instLabels:
                     for comp_lbl in model.instruments[il].keys():
-                        evals += [_ev(_reportables.Choi_evals(model, il, comp_lbl), None)]
+                        evals += [_ev(_reportables.Choi_evals(model, il, comp_lbl), confidence_region_info)]
             else:
                 evals = None
             qtysList.append((choiMxs, evals))

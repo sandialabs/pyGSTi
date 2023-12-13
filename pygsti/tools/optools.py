@@ -280,7 +280,7 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
     prob, vars = _diamond_norm_model(dim, smallDim, J)
 
     try:
-        prob.solve(verbose=True, solver='CVXOPT')
+        prob.solve(solver='CVXOPT')
     except _cvxpy.error.SolverError as e:
         _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
         return (-2, _np.zeros((dim, dim))) if return_x else -2

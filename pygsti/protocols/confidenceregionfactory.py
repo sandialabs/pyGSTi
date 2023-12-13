@@ -879,8 +879,7 @@ class ConfidenceRegionFactoryView(object):
             seScaleFctr = -_stats.norm.ppf((1.0 - confidence_level / 100.0) / 2.0)
             assert(_np.isclose(C1, seScaleFctr**2))
 
-            # save quadratic form Q s.t. xT*Q*x = 1 gives confidence region using C1, i.e. a
-            #  region appropriate for generating 1-D confidence intervals.
+            # save quadratic form Q s.t. xT*Q*x = 1 gives confidence region using C1, i.e. a region appropriate for generating 1-D confidence intervals.
             if inv_projected_hessian is not None:
                 self.invRegionQuadcForm = inv_projected_hessian * C1
             else:
@@ -897,8 +896,7 @@ class ConfidenceRegionFactoryView(object):
             C1 = _stats.ncx2.ppf(confidence_level / 100.0, 1, non_mark_radius_sq)
             Ck = _stats.ncx2.ppf(confidence_level / 100.0, n_non_gauge_params, non_mark_radius_sq)
 
-            # save quadratic form Q s.t. xT*Q*x = 1 gives confidence region using C1, i.e. a
-            #  region appropriate for generating 1-D confidence intervals.
+            # save quadratic form Q s.t. xT*Q*x = 1 gives confidence region using C1, i.e. a region appropriate for generating 1-D confidence intervals.
             if inv_projected_hessian is not None:
                 self.invRegionQuadcForm = inv_projected_hessian * C1
                 self.invRegionQuadcForm /= _np.sqrt(n_non_gauge_params)  # make a *worst case* non-mark. region...
@@ -1064,12 +1062,19 @@ class ConfidenceRegionFactoryView(object):
                 all_gpindices.extend(range(mdl.num_params))
             else:
                 # copy objects because we add eps to them below
-                typ, lbl = dependency
-                if typ == "gate": modelObj = mdl.operations[lbl]
-                elif typ == "prep": modelObj = mdl.preps[lbl]
-                elif typ == "povm": modelObj = mdl.povms[lbl]
-                elif typ == "instrument": modelObj = mdl.instruments[lbl]
-                else: raise ValueError("Invalid dependency type: %s" % typ)
+                if len(dependency) == 3: 
+                    typ, lbl, inst_lbl = dependency 
+                else: 
+                    typ, lbl = dependency
+                    inst_lbl = None
+                if inst_lbl is not None: 
+                    if typ == "gate": modelObj = mdl.instruments[lbl][inst_lbl]
+                else: 
+                    if typ == "gate": modelObj = mdl.operations[lbl]
+                    elif typ == "prep": modelObj = mdl.preps[lbl]
+                    elif typ == "povm": modelObj = mdl.povms[lbl]
+                    elif typ == "instrument": modelObj = mdl.instruments[lbl]
+                    else: raise ValueError("Invalid dependency type: %s" % typ)
                 all_gpindices.extend(modelObj.gpindices_as_array())
 
         vec0 = mdl.to_vector()
