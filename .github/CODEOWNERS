@@ -11,15 +11,15 @@ pygsti/report/section/drift.py @tjproct @sandialabs/pygsti-gatekeepers
 pygsti/report/templates/drift_html_report/ @tjproct @sandialabs/pygsti-gatekeepers
 
 ## Model member owners ##
-pygsti/modelmembers/ @rjmurr @sandialabs/pygsti-gatekeepers
+pygsti/modelmembers/ @rileyjmurray @sandialabs/pygsti-gatekeepers
 pygsti/modelmembers/instruments/ @sandialabs/pygsti-mcm @sandialabs/pygsti-gatekeepers
 
 ## Modelpack owners ##
 pygsti/modelpacks/ @kmrudin @sandialabs/pygsti-gatekeepers
 
 ## Optimizer owners ##
-pygsti/objectivefns @rjmurr @sandialabs/pygsti-gatekeepers
-pygsti/optimize @rjmurr @sandialabs/pygsti-gatekeepers
+pygsti/objectivefns @rileyjmurray @sandialabs/pygsti-gatekeepers
+pygsti/optimize @rileyjmurray @sandialabs/pygsti-gatekeepers
 
 ## RB owners ##
 pygsti/algorithms/compilers.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
