@@ -120,7 +120,7 @@ class ExperimentDesignTester(BaseCase):
             self.assertEqual(edesign.auxfile_types, loaded_edesign.auxfile_types)
             self.assertEqual(edesign._vals.keys(), loaded_edesign._vals.keys())
 
-            if isinstance(edesign, (pygsti.protocols.CombinedExperimentDesign, pygsti.protocols.FreeformDesign)):
+            if isinstance(edesign, (pygsti.protocols.CanCreateAllCircuitsDesign)):
                 # We also need to test that all_circuits_needing_data is not dumped by default
                 self.assertTrue(not (root / 'edesign' / 'all_circuits_needing_data.txt').exists())
 
