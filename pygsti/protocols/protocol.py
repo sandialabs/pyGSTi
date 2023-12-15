@@ -1822,7 +1822,10 @@ class FreeformDesign(CanCreateAllCircuitsDesign):
     def to_dataframe(self, pivot_valuename=None, pivot_value="Value", drop_columns=False):
         cdict = _NamedDict('Circuit', None)
         for cir, info in self.aux_info.items():
-            cdict[cir.str] = _NamedDict('ValueName', 'category', items=info)
+            try:
+                cdict[cir.str] = _NamedDict('ValueName', 'category', items=info)
+            except TypeError:
+                raise TypeError("Failed to cast to dataframe. Ensure that aux_info values are dicts!")
         df = cdict.to_dataframe()
         return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=True)
 
