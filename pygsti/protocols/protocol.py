@@ -1274,13 +1274,16 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         """
         ret = super().from_dir(dirname=dirname, parent=parent, name=name, quick_load=quick_load)
 
-        if ret.skip_writing_all_circuits:
+        if ret.auxfile_types['all_circuits_needing_data'] == 'reset':
             all_circuits = []
             for des in ret._vals.values():
                     all_circuits.extend(des.all_circuits_needing_data)
             _lt.remove_duplicates_in_place(all_circuits)
 
             ret.all_circuits_needing_data = all_circuits
+
+            ret.auxfile_types['all_circuits_needing_data'] = ret.old_all_circuits_type
+            del ret.old_all_circuits_type
         
         return ret
 
@@ -1313,7 +1316,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
 
     def __init__(self, sub_designs, all_circuits=None, qubit_labels=None, sub_design_dirs=None,
-                 interleave=False, skip_writing_all_circuits=False):
+                 interleave=False):
         """
         Create a new CombinedExperimentDesign object.
 
@@ -1346,15 +1349,6 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             Whether the circuits of the `sub_designs` should be interleaved to
             form the circuit ordering of this experiment design.
 
-        skip_writing_all_circuits : bool, optional
-            If True, all_circuits_needing_data will be skipped during `write()`
-            and regenerated as the union of `all_circuits_needing_data` from
-            `sub_designs` upon reading with `from_dir()`.
-            This can have save space on disk and cut down on read/write times,
-            but the user needs to guarantee that `all_circuits_needing_data`
-            is initialized as the union of sublists and remains unmodified,
-            so this is False by default.
-
         Returns
         -------
         CombinedExperimentDesign
@@ -1380,10 +1374,6 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
                 qubit_labels = first
 
         super().__init__(all_circuits, qubit_labels, sub_designs, sub_design_dirs)
-
-        self.skip_writing_all_circuits = skip_writing_all_circuits
-        if self.skip_writing_all_circuits:
-            self.auxfile_types['all_circuits_needing_data'] = 'reset'
 
     def _create_subdata(self, sub_name, dataset):
         """
@@ -1460,6 +1450,45 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         mapped_sub_designs = {key: child.map_qubit_labels(mapper) for key, child in self._vals.items()}
         return CombinedExperimentDesign(mapped_sub_designs, mapped_circuits, mapped_qubit_labels, self._dirs)
+
+    def write(self, dirname=None, parent=None):
+        """
+        Write this experiment design to a directory.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory to write into.  This directory will have
+            an 'edesign' subdirectory, which will be created if needed and
+            overwritten if present.  If None, then the path this object
+            was loaded from is used (if this object wasn't loaded from disk,
+            an error is raised).
+
+        parent : ExperimentDesign, optional
+            The parent experiment design, when a parent is writing this
+            design as a sub-experiment-design.  Otherwise leave as None.
+
+        Returns
+        -------
+        None
+        """
+        all_subcircuits = []
+        for des in self._vals.values():
+            all_subcircuits.extend(des.all_circuits_needing_data)
+        _lt.remove_duplicates_in_place(all_subcircuits)
+        
+        # If equal, we can just regenerate from subdesigns on load (saves space and time)
+        # This is not set equality so that we don't do this just in case interleave is ever implemented
+        if all_subcircuits == self.all_circuits_needing_data:
+            self.old_all_circuits_type = self.auxfile_types['all_circuits_needing_data']
+            self.auxfile_types['all_circuits_needing_data'] = 'reset'
+        
+        super().write(dirname=dirname, parent=parent)
+
+        # Undo auxfile_type modifications if we made them
+        if self.auxfile_types['all_circuits_needing_data'] == 'reset':
+            self.auxfile_types['all_circuits_needing_data'] = self.old_all_circuits_type
+            del self.old_all_circuits_type
 
 
 class SimultaneousExperimentDesign(ExperimentDesign):
@@ -1713,12 +1742,18 @@ class FreeformDesign(ExperimentDesign):
         -------
         ExperimentDesign
         """
-        edesign = ExperimentDesign.from_dir(dirname, parent=parent, name=name, quick_load=quick_load)
+        ret = super().from_dir(dirname, parent=parent, name=name, quick_load=quick_load)
 
         # Convert back to circuits
-        edesign.aux_info = {_circuits.Circuit(k, check=False): v for k,v in edesign.aux_info.items()}
-        
-        return cls(edesign.aux_info, edesign.qubit_labels)
+        ret.aux_info = {_circuits.Circuit(k, check=False): v for k,v in ret.aux_info.items()}
+
+        if ret.auxfile_types['all_circuits_needing_data'] == 'reset':
+            ret.all_circuits_needing_data = list(ret.aux_info.keys())
+
+            ret.auxfile_types['all_circuits_needing_data'] = ret.old_all_circuits_type
+            del ret.old_all_circuits_type
+
+        return ret
 
     @classmethod
     def from_dataframe(cls, df, qubit_labels=None):
@@ -1779,9 +1814,7 @@ class FreeformDesign(ExperimentDesign):
             self.aux_info = {c: None for c in circuits}
         super().__init__(circuits, qubit_labels)
         
-        # Don't save all_circuits_needing_data, it's redundant with aux_info keys
-        self.auxfile_types['all_circuits_needing_data'] = 'reset'
-        # Currently not jsonable, but will be fixed in write()
+        # Currently not jsonable due to Circuits, but will be fixed in write()
         self.auxfile_types['aux_info'] = 'json'
 
     def _truncate_to_circuits_inplace(self, circuits_to_keep):
@@ -1836,11 +1869,22 @@ class FreeformDesign(ExperimentDesign):
         -------
         None
         """
+        # Check if all_circuits_needing_data are just aux_info keys
+        # If yes, do not write them and regenerate on load
+        if self.all_circuits_needing_data == list(self.aux_info.keys()):
+            self.old_all_circuits_type = self.auxfile_types['all_circuits_needing_data']
+            self.auxfile_types['all_circuits_needing_data'] = 'reset'
+
         # Convert circuits to string for then-jsonable serialization
         aux_info = self.aux_info
         self.aux_info = {repr(k)[8:-1]: v for k,v in self.aux_info.items()}
         super().write(dirname, parent)
         self.aux_info = aux_info
+
+        # Undo auxfile_type modificiations if we made them
+        if self.auxfile_types['all_circuits_needing_data'] == 'reset':
+            self.auxfile_types['all_circuits_needing_data'] = self.old_all_circuits_type
+            del self.old_all_circuits_type
 
 
 class ProtocolData(_TreeNode, _MongoSerializable):

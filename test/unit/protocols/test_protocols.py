@@ -89,6 +89,52 @@ class ExperimentDesignTester(BaseCase):
         self.assertTrue(all([a == b for a,b in zip(edesign3['subdir2'].all_circuits_needing_data, self.gst_design.circuit_lists[1])]))
 
     def test_map_edesign_sslbls(self):
+        edesigns = self._get_tester_edesigns()
+        for edesign in edesigns:
+            print("Testing edesign of type: ", str(type(edesign)))
+            orig_qubits = edesign.qubit_labels
+            for c in edesign.all_circuits_needing_data:
+                self.assertTrue(set(c.line_labels).issubset(orig_qubits))
+
+            if orig_qubits == (0,):
+                mapper = {0: 4}; mapped_qubits = (4,)
+            if orig_qubits == (1,):
+                mapper = {1: 5}; mapped_qubits = (5,)
+            if orig_qubits == (0,1):
+                mapper = {0:4, 1: 5}; mapped_qubits = (4,5)
+            mapped_edesign = edesign.map_qubit_labels(mapper)
+            self.assertEqual(mapped_edesign.qubit_labels, mapped_qubits)
+            for c in mapped_edesign.all_circuits_needing_data:
+                self.assertTrue(set(c.line_labels).issubset(mapped_qubits))
+
+    @with_temp_path
+    def test_serialization(self, root_path):
+        edesigns = self._get_tester_edesigns()
+        for i, edesign in enumerate(edesigns):
+            print("Testing edesign of type: ", str(type(edesign)))
+            root = pathlib.Path(root_path) / str(i)
+            edesign.write(root)
+            loaded_edesign = type(edesign).from_dir(root)
+            # TODO: We don't have good edesign equality
+            self.assertEqual(set(edesign.all_circuits_needing_data), set(loaded_edesign.all_circuits_needing_data))
+            self.assertEqual(edesign.auxfile_types, loaded_edesign.auxfile_types)
+            self.assertEqual(edesign._vals.keys(), loaded_edesign._vals.keys())
+
+            if isinstance(edesign, (pygsti.protocols.CombinedExperimentDesign, pygsti.protocols.FreeformDesign)):
+                # We also need to test that all_circuits_needing_data is not dumped by default
+                self.assertTrue(not (root / 'edesign' / 'all_circuits_needing_data.txt').exists())
+
+                root2 = pathlib.Path(root_path) / f'{i}_2'
+                edesign.all_circuits_needing_data = []
+                edesign.write(root2)
+                loaded_edesign = type(edesign).from_dir(root2)
+                # TODO: We don't have good edesign equality
+                self.assertEqual(set(edesign.all_circuits_needing_data), set(loaded_edesign.all_circuits_needing_data))
+                self.assertEqual(edesign.auxfile_types, loaded_edesign.auxfile_types)
+                self.assertEqual(edesign._vals.keys(), loaded_edesign._vals.keys())
+                self.assertTrue((root2 / 'edesign' / 'all_circuits_needing_data.txt').exists())
+    
+    def _get_tester_edesigns(self):
         #Create a bunch of experiment designs:
         from pygsti.protocols import ExperimentDesign, CircuitListsDesign, CombinedExperimentDesign, \
             SimultaneousExperimentDesign, FreeformDesign, StandardGSTDesign, GateSetTomographyDesign, \
@@ -118,7 +164,6 @@ class ExperimentDesignTester(BaseCase):
                           "paulieq": CCR.create_standard(pspec1Q, "paulieq", ("1Qcliffords", "allcnots"), verbosity=0),
                           }
 
-
         edesigns = []
         edesigns.append(ExperimentDesign(circuits_on0))
         edesigns.append(CircuitListsDesign([circuits_on0, circuits_on0b]))
@@ -134,19 +179,4 @@ class ExperimentDesignTester(BaseCase):
         edesigns.append(MirrorRBDesign(pspec1Q, depths=[0,2,4], circuits_per_depth=4,
                                        clifford_compilations=compilations1Q))
 
-        for edesign in edesigns:
-            print("Testing edesign of type: ", str(type(edesign)))
-            orig_qubits = edesign.qubit_labels
-            for c in edesign.all_circuits_needing_data:
-                self.assertTrue(set(c.line_labels).issubset(orig_qubits))
-
-            if orig_qubits == (0,):
-                mapper = {0: 4}; mapped_qubits = (4,)
-            if orig_qubits == (1,):
-                mapper = {1: 5}; mapped_qubits = (5,)
-            if orig_qubits == (0,1):
-                mapper = {0:4, 1: 5}; mapped_qubits = (4,5)
-            mapped_edesign = edesign.map_qubit_labels(mapper)
-            self.assertEqual(mapped_edesign.qubit_labels, mapped_qubits)
-            for c in mapped_edesign.all_circuits_needing_data:
-                self.assertTrue(set(c.line_labels).issubset(mapped_qubits))
+        return edesigns
