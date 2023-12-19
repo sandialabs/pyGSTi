@@ -24,6 +24,8 @@ from pygsti.baseobjs.advancedoptions import GSTAdvancedOptions as _GSTAdvancedOp
 from pygsti.models.model import Model as _Model
 from pygsti.models.modelconstruction import _create_explicit_model, create_explicit_model
 from pygsti.protocols.gst import _load_pspec_or_model
+from pygsti.forwardsims import ForwardSimCastable
+from typing import Optional
 
 ROBUST_SUFFIX_LIST = [".robust", ".Robust", ".robust+", ".Robust+"]
 DEFAULT_BAD_FIT_THRESHOLD = 2.0
@@ -36,7 +38,7 @@ def run_model_test(model_filename_or_object,
                    advanced_options=None, comm=None, mem_limit=None,
                    output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
                    disable_checkpointing=False,
-                   simulator=None):
+                   simulator: Optional[ForwardSimCastable]=None):
     """
     Compares a :class:`Model`'s predictions to a `DataSet` using GST-like circuits.
 
@@ -138,6 +140,11 @@ def run_model_test(model_filename_or_object,
         When set to True checkpoint objects will not be constructed and written
         to disk during the course of this protocol. It is strongly recommended
         that this be kept set to False without good reason to disable the checkpoints.
+
+    simulator : ForwardSimCastable or None
+        Ignored if None. If not None, then we call
+            fwdsim = ForwardSimulator.cast(simulator),
+        and we set the .sim attribute of every Model we encounter to fwdsim.
 
     Returns
     -------
@@ -310,7 +317,7 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
                           advanced_options=None, comm=None, mem_limit=None,
                           output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
                           disable_checkpointing=False,
-                          simulator=None):
+                          simulator: Optional[ForwardSimCastable]=None):
     """
     Perform long-sequence GST (LSGST).
 
@@ -443,10 +450,16 @@ def run_long_sequence_gst(data_filename_or_set, target_model_filename_or_object,
         completed iteration number appended to it before writing it to disk.
         If none, the value of {name} will be set to the name of the protocol
         being run.
+
     disable_checkpointing : bool, optional (default False)
         When set to True checkpoint objects will not be constructed and written
         to disk during the course of this protocol. It is strongly recommended
         that this be kept set to False without good reason to disable the checkpoints.
+
+    simulator : ForwardSimCastable or None
+        Ignored if None. If not None, then we call
+            fwdsim = ForwardSimulator.cast(simulator),
+        and we set the .sim attribute of every Model we encounter to fwdsim.
 
     Returns
     -------
@@ -504,7 +517,7 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
                                advanced_options=None, comm=None, mem_limit=None,
                                output_pkl=None, verbosity=2, checkpoint=None, checkpoint_path=None,
                                disable_checkpointing=False,
-                               simulator=None):
+                               simulator: Optional[ForwardSimCastable]=None):
     """
     A more fundamental interface for performing end-to-end GST.
 
@@ -589,7 +602,12 @@ def run_long_sequence_gst_base(data_filename_or_set, target_model_filename_or_ob
         When set to True checkpoint objects will not be constructed and written
         to disk during the course of this protocol. It is strongly recommended
         that this be kept set to False without good reason to disable the checkpoints.
-        
+
+    simulator : ForwardSimCastable or None
+        Ignored if None. If not None, then we call
+            fwdsim = ForwardSimulator.cast(simulator),
+        and we set the .sim attribute of every Model we encounter to fwdsim.
+
     Returns
     -------
     Results
@@ -634,7 +652,7 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, p
                         modes=('full TP','CPTPLND','Target'), gaugeopt_suite='stdgaugeopt', gaugeopt_target=None,
                         models_to_test=None, comm=None, mem_limit=None, advanced_options=None, output_pkl=None,
                         verbosity=2, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
-                        simulator=None):
+                        simulator: Optional[ForwardSimCastable]=None):
     """
     Perform end-to-end GST analysis using standard practices.
 
@@ -757,6 +775,11 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, p
         When set to True checkpoint objects will not be constructed and written
         to disk during the course of this protocol. It is strongly recommended
         that this be kept set to False without good reason to disable the checkpoints.
+
+    simulator : ForwardSimCastable or None
+        Ignored if None. If not None, then we call
+            fwdsim = ForwardSimulator.cast(simulator),
+        and we set the .sim attribute of every Model we encounter to fwdsim.
 
     Returns
     -------

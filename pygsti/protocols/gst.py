@@ -20,6 +20,7 @@ import pathlib as _pathlib
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
+from typing import Optional
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -44,6 +45,7 @@ from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAl
 from pygsti.modelmembers import states as _states, povms as _povms
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.circuits import Circuit
+from pygsti.forwardsims import ForwardSimCastable
 
 
 #For results object:
@@ -1258,7 +1260,7 @@ class GateSetTomography(_proto.Protocol):
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
 
     def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
-            simulator=None):
+            simulator: Optional[ForwardSimCastable]=None):
         """
         Run this protocol on `data`.
 
@@ -1290,6 +1292,11 @@ class GateSetTomography(_proto.Protocol):
             When set to True checkpoint objects will not be constructed and written
             to disk during the course of this protocol. It is strongly recommended
             that this be kept set to False without good reason to disable the checkpoints.
+
+        simulator : ForwardSimCastable or None
+            Ignored if None. If not None, then we call
+                fwdsim = ForwardSimulator.cast(simulator),
+            and we set the .sim attribute of every Model we encounter to fwdsim.
 
         Returns
         -------
@@ -1712,7 +1719,7 @@ class StandardGST(_proto.Protocol):
     #    return self.run(data)
 
     def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None,
-            disable_checkpointing=False, simulator=None):
+            disable_checkpointing=False, simulator: Optional[ForwardSimCastable]=None):
         """
         Run this protocol on `data`.
 
@@ -1744,6 +1751,11 @@ class StandardGST(_proto.Protocol):
             When set to True checkpoint objects will not be constructed and written
             to disk during the course of this protocol. It is strongly recommended
             that this be kept set to False without good reason to disable the checkpoints.
+
+        simulator : ForwardSimCastable or None
+            Ignored if None. If not None, then we call
+                fwdsim = ForwardSimulator.cast(simulator),
+            and we set the .sim attribute of every Model we encounter to fwdsim.
 
         Returns
         -------
@@ -2988,7 +3000,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
     def add_model_test(self, target_model, themodel,
                        estimate_key='test', gaugeopt_keys="auto", verbosity=2,
-                       simulator=None):
+                       simulator: Optional[ForwardSimCastable]=None):
         """
         Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
 
@@ -3014,6 +3026,11 @@ class ModelEstimateResults(_proto.ProtocolResults):
 
         verbosity : int, optional
             Level of detail printed to stdout.
+
+        simulator : ForwardSimCastable or None
+            Ignored if None. If not None, then we call
+                fwdsim = ForwardSimulator.cast(simulator),
+            and we set the .sim attribute of every Model we encounter to fwdsim.
 
         Returns
         -------

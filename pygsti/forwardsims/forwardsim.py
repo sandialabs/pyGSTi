@@ -54,14 +54,21 @@ class ForwardSimulator(_NicelySerializable):
             return obj
         elif isinstance(obj, type) and issubclass(obj, ForwardSimulator):
             return obj()
-        elif obj == "auto":
-            return _MapFSim() if (num_qubits is None or num_qubits > 2) else _MatrixFSim()
-        elif obj == "map":
-            return _MapFSim()
-        elif obj == "matrix":
-            return _MatrixFSim()
+        elif isinstance(obj, str):
+            if obj == "auto":
+                return _MapFSim() if (num_qubits is None or num_qubits > 2) else _MatrixFSim()
+            elif obj == "map":
+                return _MapFSim()
+            elif obj == "matrix":
+                return _MatrixFSim()
+        elif isinstance(obj, callable):
+            out_obj = obj()
+            if isinstance(out_obj, ForwardSimulator):
+                return out_obj
+            else:
+                raise ValueError(f'Argument {obj} cannot be cast to a ForwardSimulator.')
         else:
-            raise ValueError("Cannot convert %s to a forward simulator!" % str(obj))
+            raise ValueError(f'Argument {obj} cannot be cast to a ForwardSimulator.')
 
     @classmethod
     def _array_types_for_method(cls, method_name):

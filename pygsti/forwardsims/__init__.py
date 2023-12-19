@@ -15,3 +15,13 @@ from .mapforwardsim import SimpleMapForwardSimulator, MapForwardSimulator
 from .matrixforwardsim import SimpleMatrixForwardSimulator, MatrixForwardSimulator
 from .termforwardsim import TermForwardSimulator
 from .weakforwardsim import WeakForwardSimulator
+from typing import Optional, Union, Callable, Literal
+
+
+ForwardSimCastable =  Union[
+    ForwardSimulator,
+    Callable[[], ForwardSimulator],
+    Literal['map'],
+    Literal['matrix'],
+    Literal['auto']
+]
