@@ -83,7 +83,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         Dictionary whose keys are operation label "aliases" and whose values are circuits
         corresponding to what that operation label should be expanded into before querying
         the dataset.  Defaults to the empty dictionary (no aliases defined)
-        e.g. op_label_aliases['Gx^3'] = pygsti.obj.Circuit(['Gx','Gx','Gx'])
+        e.g. op_label_aliases['Gx^3'] = pygsti.baseobjs.Circuit(['Gx','Gx','Gx'])
 
     guess_model_for_gauge : Model, optional
         A model used to compute a gauge transformation that is applied to

@@ -67,7 +67,7 @@ def _create_standard_costfunction(name):
 
 
 def compile_clifford(s, p, pspec=None, absolute_compilation=None, paulieq_compilation=None,
-                     qubit_labels=None, iterations=20, algorithm='ROGGE', aargs=[],
+                     qubit_labels=None, iterations=20, algorithm='ROGGE', aargs=None,
                      costfunction='2QGC:10:depth:1', prefixpaulis=False, paulirandomize=False,
                      rand_state=None):
     """
@@ -185,6 +185,8 @@ def compile_clifford(s, p, pspec=None, absolute_compilation=None, paulieq_compil
     Circuit
         A circuit implementing the input Clifford gate/circuit.
     """
+    if aargs is None:
+        aargs = []
     assert(_symp.check_valid_clifford(s, p)), "Input is not a valid Clifford!"
     n = _np.shape(s)[0] // 2
 
@@ -245,8 +247,8 @@ def compile_clifford(s, p, pspec=None, absolute_compilation=None, paulieq_compil
 
 
 def compile_symplectic(s, pspec=None, absolute_compilation=None, paulieq_compilation=None, qubit_labels=None,
-                       iterations=20, algorithms=['ROGGE'], costfunction='2QGC:10:depth:1', paulirandomize=False,
-                       aargs={}, check=True, rand_state=None):
+                       iterations=20, algorithms=None, costfunction='2QGC:10:depth:1', paulirandomize=False,
+                       aargs=None, check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate given in the symplectic representation.
 
@@ -293,9 +295,9 @@ def compile_symplectic(s, pspec=None, absolute_compilation=None, paulieq_compila
         each algorithm specified that is a randomized algorithm.
 
     algorithms : list of strings, optional
-        Specifies the algorithms used. If more than one algorithm is specified, then all the algorithms
-        are implemented and the lowest "cost" circuit obtained from all the algorithms (and iterations of
-        those algorithms, if randomized) is returned.
+        Specifies the algorithms used. Defaults to ['ROGGE']. If more than one algorithm is specified,
+        then all the algorithms are implemented and the lowest "cost" circuit obtained from all the
+        algorithms (and iterations of those algorithms, if randomized) is returned.
 
         The allowed elements of this list are:
 
@@ -352,6 +354,10 @@ def compile_symplectic(s, pspec=None, absolute_compilation=None, paulieq_compila
     Circuit
         A circuit implementing the input Clifford gate/circuit.
     """
+    if aargs is None:
+        aargs = dict()
+    if algorithms is None:
+        algorithms = ['ROGGE']
     # The number of qubits the symplectic matrix is on.
     n = _np.shape(s)[0] // 2
     if pspec is not None:
@@ -992,7 +998,7 @@ def _compile_symplectic_using_ag_algorithm(s, pspec=None, qubit_labels=None, cno
 
 
 def _compile_symplectic_using_riag_algoritm(s, pspec, paulieq_compilation, qubit_labels=None, iterations=20,
-                                            cnotalg='COiCAGE', cargs=[], costfunction='2QGC:10:depth:1',
+                                            cnotalg='COiCAGE', cargs=None, costfunction='2QGC:10:depth:1',
                                             check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the RIAG algorithm.
@@ -1072,6 +1078,8 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, paulieq_compilation, qubit
     Circuit
         A circuit implementing the input symplectic matrix.
     """
+    if cargs is None:
+        cargs = []
     # If the costfunction is a string, create the relevant "standard" costfunction function.
     if isinstance(costfunction, str): costfunction = _create_standard_costfunction(costfunction)
 
@@ -1109,7 +1117,7 @@ def _compile_symplectic_using_riag_algoritm(s, pspec, paulieq_compilation, qubit
     return bestcircuit
 
 
-def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg='COCAGE', cargs=[],
+def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg='COCAGE', cargs=None,
                                             check=True, rand_state=None):
     """
     Creates a :class:`Circuit` that implements a Clifford gate using the IAG algorithm.
@@ -1152,6 +1160,8 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
     Circuit
         A circuit that implements a Clifford that is represented by the symplectic matrix `s`.
     """
+    if cargs is None:
+        cargs = []
     assert(pspec is not None), "`pspec` cannot be None with this algorithm!"
     n = _np.shape(s)[0] // 2
 
@@ -1256,7 +1266,7 @@ def _compile_symplectic_using_iag_algorithm(s, pspec, qubit_labels=None, cnotalg
 
 
 def compile_cnot_circuit(s, pspec, compilation, qubit_labels=None, algorithm='COiCAGE', compile_to_native=False,
-                         check=True, aargs=[], rand_state=None):
+                         check=True, aargs=None, rand_state=None):
     """
     A CNOT circuit compiler.
 
@@ -1336,7 +1346,8 @@ def compile_cnot_circuit(s, pspec, compilation, qubit_labels=None, algorithm='CO
     Circuit
         A circuit that implements the same unitary as the CNOT circuit represented by `s`.
     """
-
+    if aargs is None:
+        aargs = []
     if qubit_labels is not None: qubits = list(qubit_labels)
     else: qubits = list(pspec.qubit_labels)
     n = len(qubits)
@@ -2016,7 +2027,7 @@ def _compile_cnot_circuit_using_oicage_algorithm(s, pspec, qubitorder, qubit_lab
 
 def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilation, qubit_labels=None,
                              iterations=20, paulirandomize=False,
-                             algorithm='COiCAGE', aargs=[], costfunction='2QGC:10:depth:1',
+                             algorithm='COiCAGE', aargs=None, costfunction='2QGC:10:depth:1',
                              rand_state=None):
     """
     Generates a circuit to create the stabilizer state from the standard input state `|0,0,0,...>`.
@@ -2108,6 +2119,8 @@ def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilat
     Circuit
         A circuit that creates the specified stabilizer state from `|0,0,0,...>`
     """
+    if aargs is None:
+        aargs = []
     assert(_symp.check_valid_clifford(s, p)), "The input s and p are not a valid clifford."
 
     if qubit_labels is None: qubit_labels = pspec.qubit_labels
@@ -2191,7 +2204,7 @@ def compile_stabilizer_state(s, p, pspec, absolute_compilation, paulieq_compilat
 
 def compile_stabilizer_measurement(s, p, pspec, absolute_compilation, paulieq_compilation, qubit_labels=None,
                                    iterations=20, paulirandomize=False,
-                                   algorithm='COCAGE', aargs=[], costfunction='2QGC:10:depth:1', rand_state=None):
+                                   algorithm='COCAGE', aargs=None, costfunction='2QGC:10:depth:1', rand_state=None):
     """
     Generates a circuit to map the stabilizer state to the standard state `|0,0,0,...>`.
 
@@ -2285,6 +2298,8 @@ def compile_stabilizer_measurement(s, p, pspec, absolute_compilation, paulieq_co
     Circuit
         A circuit that maps the specified stabilizer state to `|0,0,0,...>`
     """
+    if aargs is None:
+        aargs = []
     assert(_symp.check_valid_clifford(s, p)), "The input s and p are not a valid clifford."
 
     if qubit_labels is not None: qubit_labels = qubit_labels
@@ -2927,7 +2942,7 @@ def _apply_hadamard_to_all_qubits(s, optype, qubit_labels):
     return sout, instructions
 
 
-def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', cargs=[], check=True, rand_state=None):
+def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', cargs=None, check=True, rand_state=None):
     """
     Finds circuits that partially (conditional on the input) implement the Clifford given by `s`.
 
@@ -2990,6 +3005,8 @@ def compile_conditional_symplectic(s, pspec, qubit_labels=None, calg='COiCAGE', 
     Circuit
         The circuit C1 described above.
     """
+    if cargs is None:
+        cargs = []
     n = _np.shape(s)[0] // 2
 
     if qubit_labels is not None:

@@ -163,7 +163,7 @@ def compute_valid_inclass_corrections():
     return valid_inclass_corrections
 
 
-def populate_inclass_correction(inclass_correction={}):
+def populate_inclass_correction(inclass_correction=None):
     """
     Populates empty parts of an `inclass_correction` dictionary with auto values. This dictionary is an
     input to the .run_instability_detection() a StabilityAnalyzer. See the doctring of that method for
@@ -172,6 +172,8 @@ def populate_inclass_correction(inclass_correction={}):
     The auto inclass_correction is to default to a Bonferroni correction at all levels above the lowest
     level where a correction has been specified.
     """
+    if inclass_correction is None:
+        inclass_correction = {}
     autocorrection = 'Bonferroni'
     for key in ('dataset', 'circuit', 'outcome', 'spectrum'):
         if key not in inclass_correction:
@@ -469,7 +471,7 @@ class StabilityAnalyzer(object):
         s += " from tests at a global significance of {}%" .format(100 * self._significance[detectorkey])
         return s
 
-    def compute_spectra(self, frequencies='auto', freqpointers={}):
+    def compute_spectra(self, frequencies='auto', freqpointers=None):
         """"
         Generates and records power spectra. This is the first stage in instability detection
         and characterization with a StabilityAnalyzer.
@@ -521,6 +523,8 @@ class StabilityAnalyzer(object):
         None
 
         """
+        if freqpointers is None:
+            freqpointers = {}
         if isinstance(frequencies, str):
             assert(frequencies == 'auto')
             frequencies, freqpointers = _sig.compute_auto_frequencies(self.data, self.transform)
@@ -667,7 +671,7 @@ class StabilityAnalyzer(object):
 
         return numspectra
 
-    def same_frequencies(self, dictlabel={}):
+    def same_frequencies(self, dictlabel=None):
         """
         Checks whether all the "base" power spectra defined by `dictlabel` are all with respect to the same frequencies.
 
@@ -688,6 +692,8 @@ class StabilityAnalyzer(object):
         """
         # If there's no frequency pointers stored it's automatically true, becuase then all spectra
         # are for the frequencies stored as self._frequencies[0].
+        if dictlabel is None:
+            dictlabel = {}
         if len(self._freqpointers) == 0: return True
 
         iterator = []  # A list of list-like to iterate over to consider all the spectra in question.
@@ -714,7 +720,7 @@ class StabilityAnalyzer(object):
 
         return True
 
-    def averaging_allowed(self, dictlabel={}, checklevel=2):
+    def averaging_allowed(self, dictlabel=None, checklevel=2):
         """
         Checks whether we can average over the specified "base" power spectra.
 
@@ -741,6 +747,8 @@ class StabilityAnalyzer(object):
             True if the power spectra pass the tests for the validity of averaging over them.
 
         """
+        if dictlabel is None:
+            dictlabel = dict()
         if checklevel == 0:  # Does no checking if `checklevel` is 0.
             return True
         if checklevel >= 1:
@@ -858,11 +866,13 @@ class StabilityAnalyzer(object):
         else:
             return self._get_averaged_spectrum(dictlabel, returnfrequencies, checklevel)
 
-    def _get_averaged_spectrum(self, dictlabel={}, returnfrequencies=True, checklevel=2):
+    def _get_averaged_spectrum(self, dictlabel=None, returnfrequencies=True, checklevel=2):
         """
         A subroutine of the method `power_spectrum()`. See the docstring of that method for details.
 
         """
+        if dictlabel is None:
+            dictlabel = dict()
         # Check whether the requested averaging is allowed, with a check at the specified rigour level.
         assert(self.averaging_allowed(dictlabel, checklevel=checklevel)), "This averaging is not permissable! To do it \
             anyway, reduce `checklevel`."
@@ -887,7 +897,7 @@ class StabilityAnalyzer(object):
 
             return freq, spectrum
 
-    def maximum_power(self, dictlabel={}, freqsubset=None):
+    def maximum_power(self, dictlabel=None, freqsubset=None):
         """
         Returns the maximum power in a power spectrum.
 
@@ -905,6 +915,8 @@ class StabilityAnalyzer(object):
         float
             The maximal power in the spectrum.
         """
+        if dictlabel is None:
+            dictlabel = dict()
         spectrum = self.power_spectrum(dictlabel)
         if freqsubset is None:
             maxpower = _np.max(spectrum)
@@ -913,7 +925,7 @@ class StabilityAnalyzer(object):
 
         return maxpower
 
-    def maximum_power_pvalue(self, dictlabel={}, freqsubset=None, cutoff=0):
+    def maximum_power_pvalue(self, dictlabel=None, freqsubset=None, cutoff=0):
         """
         The p-value of the maximum power in a power spectrum.
 
@@ -935,6 +947,8 @@ class StabilityAnalyzer(object):
             The p-value of the maximal power in the specified spectrum.
 
         """
+        if dictlabel is None:
+            dictlabel = dict()
         maxpower = self.maximum_power(dictlabel=dictlabel, freqsubset=freqsubset)
         # future: update adjusted to True when the function allows it.
         dof = self.num_degrees_of_freedom(tuple(dictlabel.keys()), adjusted=False)
@@ -943,7 +957,7 @@ class StabilityAnalyzer(object):
 
         return pvalue
 
-    def run_instability_detection(self, significance=0.05, freqstest=None, tests='auto', inclass_correction={},
+    def run_instability_detection(self, significance=0.05, freqstest=None, tests='auto', inclass_correction=None,
                                   betweenclass_weighting='auto', saveas='default', default=True, overwrite=False,
                                   verbosity=1):
         """
@@ -1012,6 +1026,8 @@ class StabilityAnalyzer(object):
         None
 
         """
+        if inclass_correction is None:
+            inclass_correction = {}
         if verbosity > 0: print("Running instability detection at {} significance...".format(significance), end='')
         if verbosity >= 1: print('\n')
 
@@ -1471,7 +1487,7 @@ class StabilityAnalyzer(object):
 
         return circuits
 
-    def instability_indices(self, dictlabel={}, detectorkey=None):
+    def instability_indices(self, dictlabel=None, detectorkey=None):
         """
         Returns the frequency indices that instability has been detected at in the specified
         power spectrum
@@ -1492,6 +1508,8 @@ class StabilityAnalyzer(object):
             The instability frequency indices.
 
         """
+        if dictlabel is None:
+            dictlabel = dict()
         # If we're not given a detectorkey, we default to the standard detection results.
         if detectorkey is None: detectorkey = self._def_detection
 
@@ -1514,7 +1532,7 @@ class StabilityAnalyzer(object):
 
         return driftfreqinds
 
-    def instability_frequencies(self, dictlabel={}, detectorkey=None):
+    def instability_frequencies(self, dictlabel=None, detectorkey=None):
         """
         Returns the frequencies that instability has been detected at in the specified power spectrum.
         These frequencies are given in units of 1/t where 't' is the unit of the time stamps.
@@ -1535,6 +1553,8 @@ class StabilityAnalyzer(object):
             The instability frequencies
 
         """
+        if dictlabel is None:
+            dictlabel = dict()
         # If we're not given a detectorkey, we default to the standard detection results.
         if detectorkey is None: detectorkey = self._def_detection
         # Gets the drift indices, that we then jut need to convert to frequencies.
