@@ -59,6 +59,8 @@ class ForwardSimulator(_NicelySerializable):
                 return _MapFSim()
             elif obj == "matrix":
                 return _MatrixFSim()
+            else:
+                raise ValueError(f'Unrecognized string argument, {obj}')
         elif isinstance(obj, callable):
             out_obj = obj()
             if isinstance(out_obj, ForwardSimulator):
