@@ -52,8 +52,6 @@ class ForwardSimulator(_NicelySerializable):
 
         if isinstance(obj, ForwardSimulator):
             return obj
-        elif isinstance(obj, type) and issubclass(obj, ForwardSimulator):
-            return obj()
         elif isinstance(obj, str):
             if obj == "auto":
                 return _MapFSim() if (num_qubits is None or num_qubits > 2) else _MatrixFSim()
