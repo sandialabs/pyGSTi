@@ -12,6 +12,7 @@ pygsti/report/templates/drift_html_report/ @tjproct @sandialabs/pygsti-gatekeepe
 
 ## Forward simulators ##
 pygsti/forwardsims @rileyjmurray @sandialabs/pygsti-gatekeepers
+pygsti/forwardsims/termforwardsim* @adhumu @sandialabs/pygsti-gatekeepers
 
 ## IBMQ interface ##
 pygsti/extras/devices @sandialabs/pygsti-ibmq @sandialabs/pygsti-gatekeepers
