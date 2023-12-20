@@ -69,11 +69,11 @@ class ModelTestTester(LongSequenceBasePlain):
     def test_model_test_advanced_options(self, capfd: pytest.LogCaptureFixture):
         self.setUp()
         result = ls.run_model_test(
-            self.mdl_guess, self.ds, self.pspec, self.fiducials,
-            self.fiducials, self.germs, self.maxLens,
-            advanced_options=dict(objective='chi2', profile=2),
-            simulator=MapForwardSimulatorWrapper
-        )
+                    self.mdl_guess, self.ds, self.pspec, self.prep_fids,
+                    self.meas_fids, self.germs, self.maxLens,
+                    advanced_options=dict(objective='chi2', profile=2),
+                    simulator=MapForwardSimulatorWrapper
+                )
         stdout, _ = capfd.readouterr()
         assert MapForwardSimulatorWrapper.Message in stdout
         # TODO assert correctness
