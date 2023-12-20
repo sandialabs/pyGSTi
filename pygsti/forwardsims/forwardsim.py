@@ -21,6 +21,7 @@ from pygsti.baseobjs import outcomelabeldict as _ld
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import slicetools as _slct
+from typing import Callable
 
 
 class ForwardSimulator(_NicelySerializable):
@@ -61,7 +62,7 @@ class ForwardSimulator(_NicelySerializable):
                 return _MatrixFSim()
             else:
                 raise ValueError(f'Unrecognized string argument, {obj}')
-        elif isinstance(obj, callable):
+        elif isinstance(obj, Callable):
             out_obj = obj()
             if isinstance(out_obj, ForwardSimulator):
                 return out_obj
