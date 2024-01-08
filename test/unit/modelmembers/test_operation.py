@@ -220,12 +220,6 @@ class MutableDenseOpBase(DenseOpBase):
         self.gate.rotate([0.01, 0.02, 0.03], 'gm')
         # TODO assert correctness
 
-    #REMOVED - we don't have compose methods anymore
-    #def test_compose(self):
-    #    cgate = self.gate.compose(self.gate)
-    #    # TODO assert correctness
-
-
 class ImmutableDenseOpBase(DenseOpBase):
     def test_raises_on_set_value(self):
         M = np.asarray(self.gate)  # gate as a matrix
@@ -326,28 +320,6 @@ class FullOpTester(MutableDenseOpBase, BaseCase):
     def build_gate():
         return create_operation("X(pi/8,Q0)", [('Q0',)], "gm", parameterization="full")
 
-    #REMOVED - we don't support .compose methods anymore
-    #def test_composition(self):
-    #    gate_linear = LinearlyParamOpTester.build_gate()
-    #    gate_tp = TPOpTester.build_gate()
-    #    gate_static = StaticOpTester.build_gate()
-    #
-    #    c = op.compose(self.gate, self.gate, "gm", "full")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, self.gate))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-    #
-    #    c = op.compose(self.gate, gate_tp, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_tp))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-    #
-    #    c = op.compose(self.gate, gate_static, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_static))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-    #
-    #    c = op.compose(self.gate, gate_linear, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_linear))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-
     def test_convert_to_linear(self):
         converted = op.convert(self.gate, "linear", "gm")
         self.assertArraysAlmostEqual(converted.to_dense(), self.gate.to_dense())
@@ -394,26 +366,6 @@ class LinearlyParamOpTester(MutableDenseOpBase, BaseCase):
             op.LinearlyParamArbitraryOp(baseMx, np.array([1.0 + 1j, 1.0]), parameterToBaseIndicesMap,
                                         real=True)  # must be real
 
-    #REMOVED - we don't support .compose methods anymore
-    #def test_composition(self):
-    #    gate_full = FullOpTester.build_gate()
-    #
-    #    c = op.compose(self.gate, gate_full, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_full))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-    #
-    #    #c = op.compose(self.gate, gate_tp, "gm")
-    #    #self.assertArraysAlmostEqual(c, np.dot(self.gate,gate_tp) )
-    #    #self.assertEqual(type(c), op.FullTPOp)
-    #
-    #    #c = op.compose(self.gate, gate_static, "gm")
-    #    #self.assertArraysAlmostEqual(c, np.dot(self.gate,gate_static) )
-    #    #self.assertEqual(type(c), op.LinearlyParamArbitraryOp)
-    #
-    #    #c = op.compose(self.gate, self.gate, "gm")
-    #    #self.assertArraysAlmostEqual(c, np.dot(self.gate,self.gate) )
-    #    #self.assertEqual(type(c), op.LinearlyParamArbitraryOp)
-
     def test_build_from_scratch(self):
         # TODO what is actually being tested here?
         baseMx = np.zeros((4, 4))
@@ -438,27 +390,6 @@ class TPOpTester(MutableDenseOpBase, BaseCase):
     def build_gate():
         return create_operation("Y(pi/4,Q0)", [('Q0',)], "gm", parameterization="full TP")
 
-    #REMOVED - we don't support .compose methods anymore
-    #def test_composition(self):
-    #    gate_full = FullOpTester.build_gate()
-    #    gate_static = StaticOpTester.build_gate()
-    #
-    #    c = op.compose(self.gate, gate_full, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_full))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-    #
-    #    c = op.compose(self.gate, self.gate, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, self.gate))
-    #    self.assertEqual(type(c), op.FullTPOp)
-    #
-    #    c = op.compose(self.gate, gate_static, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_static))
-    #    self.assertEqual(type(c), op.FullTPOp)
-    #
-    #    #c = op.compose(self.gate, gate_linear, "gm")
-    #    #self.assertArraysAlmostEqual(c, np.dot(self.gate,gate_linear) )
-    #    #self.assertEqual(type(c), op.FullTPOp)
-
     def test_convert(self):
         conv = op.convert(self.gate, "full", "gm")
         conv = op.convert(self.gate, "full TP", "gm")
@@ -480,6 +411,49 @@ class TPOpTester(MutableDenseOpBase, BaseCase):
         with self.assertRaises(ValueError):
             self.gate[0][1:2] = [0]
 
+class AffineShiftOpTester(DenseOpBase, BaseCase):
+    n_params = 3
+
+    @staticmethod
+    def build_gate():
+        mat = np.array([[1,0,0,0],[.1, 1, 0, 0], [.1, 0, 1, 0], [.1, 0, 0, 1]])
+        return op.AffineShiftOp(mat)
+
+    def test_set_dense(self):
+        M = np.asarray(self.gate)  # gate as a matrix
+        self.gate.set_dense(M)
+
+    def test_transform(self):
+        gate_copy = self.gate.copy()
+        T = FullGaugeGroupElement(np.identity(4, 'd'))
+        gate_copy.transform_inplace(T)
+        self.assertArraysAlmostEqual(gate_copy, self.gate)
+
+    def test_element_accessors(self):
+        e1 = self.gate[1, 1]
+        e2 = self.gate[1][1]
+        self.assertAlmostEqual(e1, e2)
+
+        s1 = self.gate[1, :]
+        s2 = self.gate[1]
+        s3 = self.gate[1][:]
+        a1 = self.gate[:]
+        self.assertArraysAlmostEqual(s1, s2)
+        self.assertArraysAlmostEqual(s1, s3)
+
+        s4 = self.gate[2:4, 1]
+
+    def test_set_elements(self):
+        gate_copy = self.gate.copy()
+
+        #allowed sets:
+        gate_copy[1,0] = 2
+        gate_copy[2,0] = 2
+
+        #unallowed sets:
+        with self.assertRaises(ValueError):
+            gate_copy[1,1] = 2 
+
 
 class StaticOpTester(ImmutableDenseOpBase, BaseCase):
     n_params = 0
@@ -487,27 +461,6 @@ class StaticOpTester(ImmutableDenseOpBase, BaseCase):
     @staticmethod
     def build_gate():
         return create_operation("Z(pi/3,Q0)", [('Q0',)], "gm", parameterization="static")
-
-    #REMOVED - we don't support .compose methods anymore
-    #def test_compose(self):
-    #    gate_full = FullOpTester.build_gate()
-    #    gate_tp = TPOpTester.build_gate()
-    #
-    #    c = op.compose(self.gate, gate_full, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_full))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-    #
-    #    c = op.compose(self.gate, gate_tp, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_tp))
-    #    self.assertEqual(type(c), op.FullTPOp)
-    #
-    #    c = op.compose(self.gate, self.gate, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, self.gate))
-    #    self.assertEqual(type(c), op.StaticArbitraryOp)
-    #
-    #    #c = op.compose(self.gate, gate_linear, "gm")
-    #    #self.assertArraysAlmostEqual(c, np.dot(self.gate,gate_linear) )
-    #    #self.assertEqual(type(c), op.LinearlyParamArbitraryOp)
 
     def test_convert(self):
         conv = op.convert(self.gate, "static", "gm")
@@ -827,7 +780,6 @@ class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):
         return inst['plus']
 
     def test_vector_conversion(self):
-        #with self.assertRaises(ValueError):
         self.gate.to_vector()  # now to_vector is allowed
 
     def test_deriv_wrt_params(self):
