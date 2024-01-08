@@ -24,8 +24,8 @@ class ProtectedArray(object):
     input_array : numpy.ndarray
         The base array.
 
-    indices_to_protect : int, tuple, list or nested list/tuple, optional
-        A list or tuple of length `input_array.shape`, specifying
+    indices_to_protect : int or list of tuples, optional
+        A list of length `input_array.shape`, specifying
         the indices to protect along each axis.  Values may be
         integers, slices, or lists of integers,
         e.g. `(0, slice(None, None, None))`.
@@ -54,30 +54,33 @@ class ProtectedArray(object):
 
         #otherwise use the value passed into indices to protect to construct
         #a mask.
+        #add in support for multiple sets of indices to protect
+        #by allowing a nested iterable format. Do this by forcing
+        #everything into this format and then looping over the nested
+        #submembers.
         elif indices_to_protect is not None:
-            if not isinstance(indices_to_protect, (list, tuple)):
-                indices_to_protect = (indices_to_protect,)
-
-            #add in support for multiple sets of indices to protect
-            #by allowing a nested iterable format. Do this by forcing
-            #everything into this format and then looping over the nested
-            #submembers.
-            #check if a nested list/tuple, if not make it one.
-            if not any(isinstance(elem, (list, tuple)) for elem in indices_to_protect):
-                indices_to_protect = [indices_to_protect]
-
+            if isinstance(indices_to_protect, int):
+                indices_to_protect= [(indices_to_protect,)]
+            #if this is a list go through and wrap any integers
+            #at the top level in a tuple.
+            elif isinstance(indices_to_protect, (list, tuple)):
+                #check whether this is a single-level tuple/list corresponding
+                #containing only ints and/or slices. If so wrap this in a list.
+                if all([isinstance(idx, (int, slice)) for idx in indices_to_protect]):
+                    indices_to_protect = [indices_to_protect]
+                
+                #add some logic for mixing of unwrapped top-level ints and tuples/lists.
+                indices_to_protect = [tuple(indices) if isinstance(indices, (list, tuple)) else (indices,) for indices in indices_to_protect]
             #initialize an empty mask
             self.protected_index_mask = _np.zeros(input_array.shape , dtype= _np.bool_)
-            
+
             #now loop over the nested subelements and add them to the mask:
             for indices in indices_to_protect:
                 assert(len(indices) <= len(self.base.shape))
                 self.protected_index_mask[indices]=1
-
         #otherwise set the mask to all zeros.
         else:
             self.protected_index_mask = _np.zeros(input_array.shape , dtype= _np.bool_)
-
         #Note: no need to set self.base.flags.writeable = True anymore,
         # since this flag can only apply to a data owner as of numpy 1.16 or so.
         # Instead, we just copy the data whenever we return a readonly array.
