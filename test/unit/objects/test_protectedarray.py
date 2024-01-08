@@ -22,7 +22,7 @@ class ProtectedArrayTester(BaseCase):
         self.assertTrue(np.all(s1.protected_index_mask == np.array([1, 1, 0])))
 
     def test_construction_from_mask_and_invalid_set(self):
-        mask = np.eye(2, dtype=np.bool_)
+        mask = np.eye(3, dtype=np.bool_)
         pa1 = pa.ProtectedArray(np.zeros((3,3)), protected_index_mask= mask)
         #check that accessing a protected element of this raises an
         #exception
