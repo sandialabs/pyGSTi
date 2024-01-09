@@ -22,10 +22,12 @@ from pygsti.tools import symplectic as _symplectic
 from pygsti.tools import optools as _ot
 from pygsti.tools import basistools as _bt
 from pygsti.baseobjs import qubitgraph as _qgraph
+from pygsti.models.memberdict import OrderedMemberDict as _OrderedMemberDict
 from pygsti.baseobjs.label import Label as _Lbl
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.modelmembers.operations import LinearOperator as _LinearOp
 from pygsti.modelmembers.operations import FullArbitraryOp as _FullOp
+from pygsti.modelmembers.instruments import Instrument as _Inst
 
 
 class ProcessorSpec(_NicelySerializable):
@@ -306,12 +308,17 @@ class QuditProcessorSpec(ProcessorSpec):
             if isinstance(obj, str): return obj
             elif isinstance(obj, dict) and "module" in obj:  # then a NicelySerializable object
                 return _NicelySerializable.from_nice_serialization(obj)
-            elif isinstance(obj, dict): return {k: _unserialize_instrument_member(v) for k, v in obj.items()}
+            elif isinstance(obj, dict): return _Inst({k: _unserialize_instrument_member(v) for k, v in obj.items()})
             raise ValueError("Cannot unserialize Instrument specifier of type %s!" % str(type(obj)))
 
         nonstd_preps = {k: _unserialize_state(obj) for k, obj in state.get('nonstd_preps', {}).items()}
         nonstd_povms = {k: _unserialize_povm(obj) for k, obj in state.get('nonstd_povms', {}).items()}
-        nonstd_instruments = {tuple(k.split(':')): _unserialize_instrument(obj) for k, obj in state.get('nonstd_instruments', {}).items()}
+        def flagfn(typ): return {'auto_embed': True, 'match_parent_statespace': True,
+                                 'match_parent_evotype': True, 'cast_to_type': typ}
+        
+        nonstd_instruments = _OrderedMemberDict(None, 'full', 'I', flagfn("instrument"))
+        for k, obj in state.get('nonstd_instruments', {}).items(): 
+            nonstd_instruments[_Lbl(tuple(k.split(':')))] = _unserialize_instrument(obj)
 
         return nonstd_gate_unitaries, nonstd_preps, nonstd_povms, nonstd_instruments
 
