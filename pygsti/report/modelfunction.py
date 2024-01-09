@@ -163,7 +163,7 @@ def opfn_factory(fn):
     """
     Creates a class that evaluates `fn(gate,basis,...)`.
 
-    Hhere `gate` is a single operation matrix, `basis` describes what basis it's
+    Here `gate` is a single operation matrix, `basis` describes what basis it's
     in, and `...` are additional arguments (see below).
 
     Parameters

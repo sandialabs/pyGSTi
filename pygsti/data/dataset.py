@@ -1393,20 +1393,26 @@ class DataSet(_MongoSerializable):
                 f = (x**2 - 1.61*x + 2.35)/(x**2 - (1.61+1/6)*x + 2.3)
             return f
         
+        keyerrors = 0
         for opstr in circuits:
             dsRow = self[opstr]
             circ_dof = 0
             if method == 'from model':
                 Ncounts = self[opstr].total 
-                probs = model.probabilities(opstr)
-                for outcome in probs.keys():
-                    if outcome not in self.olIndex: 
-                        pass
-                    elif dsRow[outcome] > 18:
-                        circ_dof += 1
-                    else: 
-                        circ_dof += exp_llr_func(Ncounts * probs[outcome]) 
-                circ_dof_cont[opstr] = circ_dof - 1
+                try: 
+                    probs = model.probabilities(opstr)
+                except KeyError: 
+                    probs = None
+                    keyerrors += 1 
+                if probs is not None: 
+                    for outcome in probs.keys():
+                            if outcome not in self.olIndex: 
+                                pass
+                            elif dsRow[outcome] > 18:
+                                circ_dof += 1
+                            else: 
+                                circ_dof += exp_llr_func(Ncounts * probs[outcome]) 
+                    circ_dof_cont[opstr] = circ_dof - 1
                 if per_circuit:
                     nDOF = circ_dof_cont
                 else: 
@@ -1440,6 +1446,9 @@ class DataSet(_MongoSerializable):
 
         if model is not None: 
             model.sim = 'matrix'
+        
+        if keyerrors != 0:
+                    _warnings.warn(f'The dataset includes circuits the model cannot calculate probabilities for (e.g. the model does not include instruments for an instrument-containing dataset). Skipping {keyerrors} circuits in calculation of degrees of freedom.')
 
         return nDOF
 

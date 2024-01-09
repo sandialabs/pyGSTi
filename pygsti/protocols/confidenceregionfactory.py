@@ -1038,7 +1038,6 @@ class ConfidenceRegionFactoryView(object):
             Only returned when return_fn_val == True. Value of fnOfOp
             at the gate specified by op_label.
         """
-
         nParams = self.model.num_params
         f0 = fn_obj.evaluate(self.model)  # function value at "base point"
 
