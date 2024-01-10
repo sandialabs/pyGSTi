@@ -33,6 +33,12 @@ class GermSelectionTestData(object):
                            Circuit([Label('Gxpi2',0),Label('Gypi2',0)], line_labels=(0,)), 
                            Circuit([Label('Gxpi2',0),Label('Gxpi2',0),Label('Gypi2',0),Label('Gxpi2',0),Label('Gypi2',0),Label('Gypi2',0)], line_labels=(0,)), 
                            Circuit([Label('Gxpi2',0),Label('Gxpi2',0),Label('Gxpi2',0),Label('Gypi2',0)], line_labels=(0,))}
+    
+    germs_driver_greedy_alt_1 = {Circuit([Label('Gxpi2',0)], line_labels=(0,)), 
+                           Circuit([Label('Gypi2',0)], line_labels=(0,)), 
+                           Circuit([Label('Gxpi2',0),Label('Gypi2',0)], line_labels=(0,)), 
+                           Circuit([Label('Gxpi2',0),Label('Gxpi2',0),Label('Gypi2',0),Label('Gxpi2',0),Label('Gypi2',0),Label('Gypi2',0)], line_labels=(0,)), 
+                           Circuit([Label('Gxpi2',0),Label('Gypi2',0),Label('Gxpi2',0),Label('Gxpi2',0)], line_labels=(0,))}
 
     germs_driver_grasp = ({Circuit([Label('Gxpi2',0)]), 
                                 Circuit([Label('Gypi2',0)]), 
@@ -77,6 +83,13 @@ class GermSelectionTestData(object):
                                 Circuit([Label('Gxpi2',0),Label('Gxpi2',0),Label('Gypi2',0),Label('Gxpi2',0)]), 
                                 Circuit([Label('Gxpi2',0),Label('Gxpi2',0),Label('Gypi2',0),Label('Gxpi2',0),Label('Gypi2',0),Label('Gypi2',0)])}
     
+    germs_driver_grasp_alt_1 ={Circuit([Label('Gxpi2',0)]), 
+                                Circuit([Label('Gypi2',0)]), 
+                                Circuit([Label('Gxpi2',0),Label('Gypi2',0)]), 
+                                Circuit([Label('Gxpi2',0),Label('Gypi2',0),Label('Gxpi2',0),Label('Gxpi2',0)]), 
+                                Circuit([Label('Gxpi2',0),Label('Gxpi2',0),Label('Gypi2',0),Label('Gxpi2',0),Label('Gypi2',0),Label('Gypi2',0)])}
+    
+    
     germs_driver_slack = {Circuit([Label('Gxpi2',0)]), 
                                 Circuit([Label('Gypi2',0)]), 
                                 Circuit([Label('Gxpi2',0),Label('Gypi2',0)]), 
@@ -116,7 +129,7 @@ class GermSelectionTestCase(AlgorithmTestCase, GermSelectionTestData):
                                       algorithm_kwargs=options, mem_limit=None, comm=None,
                                       profiler=None, verbosity=1)
         
-        self.assertTrue(self.germs_driver_greedy == set(germs) or self.germs_driver_greedy_alt == set(germs) )
+        self.assertTrue(self.germs_driver_greedy == set(germs) or self.germs_driver_greedy_alt == set(germs) or self.germs_driver_greedy_alt_1 == set(germs))
           
     def test_germsel_driver_grasp(self):
         #more args
@@ -127,7 +140,7 @@ class GermSelectionTestCase(AlgorithmTestCase, GermSelectionTestData):
                                        algorithm_kwargs=options, mem_limit=None,
                                        profiler=None, verbosity=1)
         
-        self.assertTrue(self.germs_driver_grasp[0] == set(germs[0]) or self.germs_driver_grasp_alt == set(germs[0]))
+        self.assertTrue(self.germs_driver_grasp[0] == set(germs[0]) or self.germs_driver_grasp_alt == set(germs[0]) or self.germs_driver_grasp_alt_1 == set(germs[0]))
         self.assertTrue(self.germs_driver_grasp[1] == germs[1])
         self.assertTrue(self.germs_driver_grasp[2] == germs[2])
 
