@@ -142,6 +142,7 @@ class GermSelectionTestCase(AlgorithmTestCase, GermSelectionTestData):
         
         self.assertTrue(self.germs_driver_grasp[0] == set(germs[0]) or self.germs_driver_grasp_alt == set(germs[0]) or self.germs_driver_grasp_alt_1 == set(germs[0]))
         self.assertTrue(self.germs_driver_grasp[1] == germs[1])
+        print(f'{germs[2]=}')
         self.assertTrue(self.germs_driver_grasp[2] == germs[2])
 
     def test_germsel_driver_slack(self):
