@@ -27,17 +27,17 @@ jobs:
         python-version: [3.8,'3.11']
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Set up installation environment (Ubuntu or Windows)
       if: ${{matrix.os == 'ubuntu-latest' || matrix.os == 'windows-latest'}}
       run: |
         ./.github/ci-scripts/before_install.sh
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: ${{ matrix.python-version }}
     - name: Cache pip packages
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}-${{ hashFiles('**/*requirements.txt') }}
@@ -66,27 +66,7 @@ jobs:
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
-    
-  
-  push: # Push to stable "beta" branch on successful build
 
-    runs-on: ubuntu-latest
-
-    # Only run on "develop" branch if tests pass
-    needs: build
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.PYGSTI_TOKEN }}
-    - name: Merge changes to beta branch
-      run: |
-        git config --global user.name 'PyGSTi'
-        git config --global user.email 'pygsti@noreply.github.com'
-        git checkout beta
-        git merge --ff-only ${GITHUB_SHA} && git push origin beta
 
 
 
