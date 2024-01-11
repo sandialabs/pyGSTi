@@ -19,17 +19,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-11]
+        os: [macos-latest]
         python-version: [3.8, 3.9, '3.10', '3.11']
 
     steps:
     - uses: actions/checkout@v2
-    - name: Set up installation environment (Ubuntu or Windows)
-      if: ${{matrix.os == 'ubuntu-20.04' || matrix.os == 'windows-2019'}}
-      run: |
-        ./.github/ci-scripts/before_install.sh
     - name: Set up installation environment (MacOS)
-      if: ${{matrix.os == 'macos-11'}}
       run: |
         ./.github/ci-scripts/before_install_macos.sh
     - name: Set up Python ${{ matrix.python-version }}
@@ -50,24 +45,13 @@ jobs:
         python setup.py build_ext --inplace
         # python -m pip freeze  # this isn't relevant anymore since pip install builds a wheel separately
     - name: Lint with flake8
-      if: ${{matrix.os != 'windows-2019'}}
       run: |
         # Critical errors, exit on failure
         flake8 . --count --show-source --statistics --config=.flake8-critical
         # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
         flake8 . --exit-zero --statistics
-    - name: Run unit tests ubuntu
-      if: ${{matrix.os == 'ubuntu-20.04'}}
-      run: |
-       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
-    - name: Run unit tests windows  
-      if: ${{matrix.os == 'windows-2019'}}
-      run: |
-       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
     - name: Run unit tests MacOS  
-      if: ${{matrix.os == 'macos-11'}}
+      if: ${{matrix.os == 'macos-latest'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        python -m pytest -n auto --dist loadscope --cov=pygsti test/unit

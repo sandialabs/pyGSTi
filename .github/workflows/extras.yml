@@ -21,17 +21,17 @@ jobs:
     strategy:
       fail-fast: false # Finish all tests even if one fails
       matrix:
-        os: [ubuntu-20.04, windows-2019, macos-11]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: [3.8, 3.9, '3.10', '3.11']
         
     steps:
     - uses: actions/checkout@v2
     - name: Set up installation environment (Ubuntu or Windows)
-      if: ${{matrix.os == 'ubuntu-20.04' || matrix.os == 'windows-2019'}}
+      if: ${{matrix.os == 'ubuntu-latest' || matrix.os == 'windows-latest'}}
       run: |
         ./.github/ci-scripts/before_install.sh
     - name: Set up installation environment (MacOS)
-      if: ${{matrix.os == 'macos-11'}}
+      if: ${{matrix.os == 'macos-latest'}}
       run: |
         ./.github/ci-scripts/before_install_macos.sh
     - name: Set up Python ${{ matrix.python-version }}
@@ -51,17 +51,17 @@ jobs:
         python -m pip install -e .[testing]
         python setup.py build_ext --inplace
     - name: Run test_packages Ubuntu
-      if: ${{matrix.os == 'ubuntu-20.04'}}
+      if: ${{matrix.os == 'ubuntu-latest'}}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages
     - name: Run test_packages Windows
-      if: ${{matrix.os == 'windows-2019'}}
+      if: ${{matrix.os == 'windows-latest'}}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages
     - name: Run test_packages MacOS
-      if: ${{matrix.os == 'macos-11'}}
+      if: ${{matrix.os == 'macos-latest'}}
 
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
