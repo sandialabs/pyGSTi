@@ -1,0 +1,1720 @@
+{
+    "module": "pygsti.models.cloudnoisemodel",
+    "class": "CloudNoiseModel",
+    "version": 0,
+    "state_space": {
+        "module": "pygsti.baseobjs.statespace",
+        "class": "QubitSpace",
+        "version": 0,
+        "qudit_labels": [
+            0
+        ],
+        "qudit_udims": [
+            2
+        ],
+        "qubit_labels": [
+            0
+        ]
+    },
+    "parameter_labels": [
+        [
+            "layers:rho0",
+            "X Hamiltonian error coefficient"
+        ],
+        [
+            "layers:rho0",
+            "Y Hamiltonian error coefficient"
+        ],
+        [
+            "layers:rho0",
+            "Z Hamiltonian error coefficient"
+        ],
+        [
+            "layers:rho0",
+            "sqrt(X stochastic coefficient)"
+        ],
+        [
+            "layers:rho0",
+            "sqrt(Y stochastic coefficient)"
+        ],
+        [
+            "layers:rho0",
+            "sqrt(Z stochastic coefficient)"
+        ],
+        [
+            "layers:Mdefault",
+            "X Hamiltonian error coefficient"
+        ],
+        [
+            "layers:Mdefault",
+            "Y Hamiltonian error coefficient"
+        ],
+        [
+            "layers:Mdefault",
+            "Z Hamiltonian error coefficient"
+        ],
+        [
+            "layers:Mdefault",
+            "sqrt(X stochastic coefficient)"
+        ],
+        [
+            "layers:Mdefault",
+            "sqrt(Y stochastic coefficient)"
+        ],
+        [
+            "layers:Mdefault",
+            "sqrt(Z stochastic coefficient)"
+        ],
+        [
+            "cloudnoise:Gidle",
+            "X Hamiltonian error coefficient"
+        ],
+        [
+            "cloudnoise:Gidle",
+            "Y Hamiltonian error coefficient"
+        ],
+        [
+            "cloudnoise:Gidle",
+            "Z Hamiltonian error coefficient"
+        ],
+        [
+            "cloudnoise:Gidle",
+            "sqrt(X stochastic coefficient)"
+        ],
+        [
+            "cloudnoise:Gidle",
+            "sqrt(Y stochastic coefficient)"
+        ],
+        [
+            "cloudnoise:Gidle",
+            "sqrt(Z stochastic coefficient)"
+        ],
+        [
+            [
+                "cloudnoise:Gxpi2",
+                0
+            ],
+            "X Hamiltonian error coefficient"
+        ],
+        [
+            [
+                "cloudnoise:Gxpi2",
+                0
+            ],
+            "Y Hamiltonian error coefficient"
+        ],
+        [
+            [
+                "cloudnoise:Gxpi2",
+                0
+            ],
+            "Z Hamiltonian error coefficient"
+        ],
+        [
+            [
+                "cloudnoise:Gxpi2",
+                0
+            ],
+            "sqrt(X stochastic coefficient)"
+        ],
+        [
+            [
+                "cloudnoise:Gxpi2",
+                0
+            ],
+            "sqrt(Y stochastic coefficient)"
+        ],
+        [
+            [
+                "cloudnoise:Gxpi2",
+                0
+            ],
+            "sqrt(Z stochastic coefficient)"
+        ],
+        [
+            [
+                "cloudnoise:Gypi2",
+                0
+            ],
+            "X Hamiltonian error coefficient"
+        ],
+        [
+            [
+                "cloudnoise:Gypi2",
+                0
+            ],
+            "Y Hamiltonian error coefficient"
+        ],
+        [
+            [
+                "cloudnoise:Gypi2",
+                0
+            ],
+            "Z Hamiltonian error coefficient"
+        ],
+        [
+            [
+                "cloudnoise:Gypi2",
+                0
+            ],
+            "sqrt(X stochastic coefficient)"
+        ],
+        [
+            [
+                "cloudnoise:Gypi2",
+                0
+            ],
+            "sqrt(Y stochastic coefficient)"
+        ],
+        [
+            [
+                "cloudnoise:Gypi2",
+                0
+            ],
+            "sqrt(Z stochastic coefficient)"
+        ]
+    ],
+    "parameter_bounds": null,
+    "basis": {
+        "module": "pygsti.baseobjs.basis",
+        "class": "BuiltinBasis",
+        "version": 0,
+        "name": "pp",
+        "sparse": false,
+        "state_space": {
+            "module": "pygsti.baseobjs.statespace",
+            "class": "QubitSpace",
+            "version": 0,
+            "qudit_labels": [
+                0
+            ],
+            "qudit_udims": [
+                2
+            ],
+            "qubit_labels": [
+                0
+            ]
+        }
+    },
+    "evotype": "densitymx",
+    "layer_rules": {
+        "module": "pygsti.models.cloudnoisemodel",
+        "class": "CloudNoiseLayerRules",
+        "version": 0,
+        "error_composition_mode": "gates",
+        "implied_global_idle_label": "Gidle",
+        "single_qubit_idle_layer_labels": {},
+        "implicit_idle_mode": "add_global",
+        "qubit_labels": [
+            0
+        ]
+    },
+    "simulator": {
+        "module": "pygsti.forwardsims.matrixforwardsim",
+        "class": "MatrixForwardSimulator",
+        "version": 0,
+        "mode": "time_independent"
+    },
+    "modelmembers": {
+        "0": {
+            "module": "pygsti.modelmembers.operations.lindbladerrorgen",
+            "class": "LindbladErrorgen",
+            "submembers": [],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        0
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+            ],
+            "relative_submember_parameter_indices": [],
+            "parameter_labels": [
+                "X Hamiltonian error coefficient",
+                "Y Hamiltonian error coefficient",
+                "Z Hamiltonian error coefficient",
+                "sqrt(X stochastic coefficient)",
+                "sqrt(Y stochastic coefficient)",
+                "sqrt(Z stochastic coefficient)"
+            ],
+            "parameter_bounds": null,
+            "rep_type": "sparse superop",
+            "matrix_basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": true,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "QubitSpace",
+                    "version": 0,
+                    "qudit_labels": [
+                        0
+                    ],
+                    "qudit_udims": [
+                        2
+                    ],
+                    "qubit_labels": [
+                        0
+                    ]
+                }
+            },
+            "coefficient_blocks": [
+                {
+                    "module": "pygsti.modelmembers.operations.lindbladcoefficients",
+                    "class": "LindbladCoefficientBlock",
+                    "version": 0,
+                    "block_type": "ham",
+                    "parameterization_mode": "elements",
+                    "basis_element_labels": [
+                        "X",
+                        "Y",
+                        "Z"
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "PP",
+                        "sparse": true,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "QubitSpace",
+                            "version": 0,
+                            "qudit_labels": [
+                                0
+                            ],
+                            "qudit_udims": [
+                                2
+                            ],
+                            "qubit_labels": [
+                                0
+                            ]
+                        }
+                    },
+                    "block_data": [
+                        7.72826621612374e-07,
+                        8.826411906361165e-07,
+                        3.6488598390137225e-07
+                    ]
+                },
+                {
+                    "module": "pygsti.modelmembers.operations.lindbladcoefficients",
+                    "class": "LindbladCoefficientBlock",
+                    "version": 0,
+                    "block_type": "other_diagonal",
+                    "parameterization_mode": "cholesky",
+                    "basis_element_labels": [
+                        "X",
+                        "Y",
+                        "Z"
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "PP",
+                        "sparse": true,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "QubitSpace",
+                            "version": 0,
+                            "qudit_labels": [
+                                0
+                            ],
+                            "qudit_udims": [
+                                2
+                            ],
+                            "qubit_labels": [
+                                0
+                            ]
+                        }
+                    },
+                    "block_data": [
+                        3.7871245643054834e-13,
+                        5.6823315916368216e-15,
+                        1.3603114740334453e-13
+                    ]
+                }
+            ]
+        },
+        "1": {
+            "module": "pygsti.modelmembers.operations.experrorgenop",
+            "class": "ExpErrorgenOp",
+            "submembers": [
+                0
+            ],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        0
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+            ],
+            "relative_submember_parameter_indices": [
+                [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    5
+                ]
+            ],
+            "parameter_labels": null,
+            "parameter_bounds": null
+        },
+        "2": {
+            "module": "pygsti.modelmembers.states.computationalstate",
+            "class": "ComputationalBasisState",
+            "submembers": [],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "QubitSpace",
+                "version": 0,
+                "qudit_labels": [
+                    0
+                ],
+                "qudit_udims": [
+                    2
+                ],
+                "qubit_labels": [
+                    0
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [],
+            "relative_submember_parameter_indices": [],
+            "parameter_labels": null,
+            "parameter_bounds": null,
+            "zvals": [
+                0
+            ],
+            "basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": false,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "QubitSpace",
+                    "version": 0,
+                    "qudit_labels": [
+                        0
+                    ],
+                    "qudit_udims": [
+                        2
+                    ],
+                    "qubit_labels": [
+                        0
+                    ]
+                }
+            }
+        },
+        "3": {
+            "module": "pygsti.modelmembers.states.composedstate",
+            "class": "ComposedState",
+            "submembers": [
+                1,
+                2
+            ],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "QubitSpace",
+                "version": 0,
+                "qudit_labels": [
+                    0
+                ],
+                "qudit_udims": [
+                    2
+                ],
+                "qubit_labels": [
+                    0
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [
+                0,
+                1,
+                2,
+                3,
+                4,
+                5
+            ],
+            "relative_submember_parameter_indices": [
+                [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    5
+                ],
+                []
+            ],
+            "parameter_labels": null,
+            "parameter_bounds": null,
+            "memberdict_types": [
+                "prep_blks|layers"
+            ],
+            "memberdict_labels": [
+                "rho0"
+            ]
+        },
+        "4": {
+            "module": "pygsti.modelmembers.operations.lindbladerrorgen",
+            "class": "LindbladErrorgen",
+            "submembers": [],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        0
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [
+                6,
+                7,
+                8,
+                9,
+                10,
+                11
+            ],
+            "relative_submember_parameter_indices": [],
+            "parameter_labels": [
+                "X Hamiltonian error coefficient",
+                "Y Hamiltonian error coefficient",
+                "Z Hamiltonian error coefficient",
+                "sqrt(X stochastic coefficient)",
+                "sqrt(Y stochastic coefficient)",
+                "sqrt(Z stochastic coefficient)"
+            ],
+            "parameter_bounds": null,
+            "rep_type": "sparse superop",
+            "matrix_basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": true,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "QubitSpace",
+                    "version": 0,
+                    "qudit_labels": [
+                        0
+                    ],
+                    "qudit_udims": [
+                        2
+                    ],
+                    "qubit_labels": [
+                        0
+                    ]
+                }
+            },
+            "coefficient_blocks": [
+                {
+                    "module": "pygsti.modelmembers.operations.lindbladcoefficients",
+                    "class": "LindbladCoefficientBlock",
+                    "version": 0,
+                    "block_type": "ham",
+                    "parameterization_mode": "elements",
+                    "basis_element_labels": [
+                        "X",
+                        "Y",
+                        "Z"
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "PP",
+                        "sparse": true,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "QubitSpace",
+                            "version": 0,
+                            "qudit_labels": [
+                                0
+                            ],
+                            "qudit_udims": [
+                                2
+                            ],
+                            "qubit_labels": [
+                                0
+                            ]
+                        }
+                    },
+                    "block_data": [
+                        9.331401019825216e-07,
+                        6.513781432265773e-07,
+                        3.9720257772615416e-07
+                    ]
+                },
+                {
+                    "module": "pygsti.modelmembers.operations.lindbladcoefficients",
+                    "class": "LindbladCoefficientBlock",
+                    "version": 0,
+                    "block_type": "other_diagonal",
+                    "parameterization_mode": "cholesky",
+                    "basis_element_labels": [
+                        "X",
+                        "Y",
+                        "Z"
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "PP",
+                        "sparse": true,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "QubitSpace",
+                            "version": 0,
+                            "qudit_labels": [
+                                0
+                            ],
+                            "qudit_udims": [
+                                2
+                            ],
+                            "qubit_labels": [
+                                0
+                            ]
+                        }
+                    },
+                    "block_data": [
+                        6.220952383833288e-13,
+                        1.003851283110079e-13,
+                        3.227360791155552e-13
+                    ]
+                }
+            ]
+        },
+        "5": {
+            "module": "pygsti.modelmembers.operations.experrorgenop",
+            "class": "ExpErrorgenOp",
+            "submembers": [
+                4
+            ],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        0
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [
+                6,
+                7,
+                8,
+                9,
+                10,
+                11
+            ],
+            "relative_submember_parameter_indices": [
+                [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    5
+                ]
+            ],
+            "parameter_labels": null,
+            "parameter_bounds": null
+        },
+        "6": {
+            "module": "pygsti.modelmembers.povms.computationalpovm",
+            "class": "ComputationalBasisPOVM",
+            "submembers": [],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "QubitSpace",
+                "version": 0,
+                "qudit_labels": [
+                    0
+                ],
+                "qudit_udims": [
+                    2
+                ],
+                "qubit_labels": [
+                    0
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [],
+            "relative_submember_parameter_indices": [],
+            "parameter_labels": null,
+            "parameter_bounds": null,
+            "nqubits": 1,
+            "qubit_filter": null
+        },
+        "7": {
+            "module": "pygsti.modelmembers.povms.composedpovm",
+            "class": "ComposedPOVM",
+            "submembers": [
+                5,
+                6
+            ],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        0
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [
+                6,
+                7,
+                8,
+                9,
+                10,
+                11
+            ],
+            "relative_submember_parameter_indices": [
+                [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    5
+                ],
+                []
+            ],
+            "parameter_labels": null,
+            "parameter_bounds": null,
+            "matrix_basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": false,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "ExplicitStateSpace",
+                    "version": 0,
+                    "labels": [
+                        [
+                            0
+                        ]
+                    ],
+                    "unitary_space_dimensions": [
+                        [
+                            2
+                        ]
+                    ],
+                    "types": [
+                        [
+                            "Q"
+                        ]
+                    ]
+                }
+            },
+            "memberdict_types": [
+                "povm_blks|layers"
+            ],
+            "memberdict_labels": [
+                "Mdefault"
+            ]
+        },
+        "8": {
+            "module": "pygsti.modelmembers.operations.composedop",
+            "class": "ComposedOp",
+            "submembers": [],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "QubitSpace",
+                "version": 0,
+                "qudit_labels": [
+                    0
+                ],
+                "qudit_udims": [
+                    2
+                ],
+                "qubit_labels": [
+                    0
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [],
+            "relative_submember_parameter_indices": [],
+            "parameter_labels": null,
+            "parameter_bounds": null,
+            "memberdict_types": [
+                "operation_blks|gates",
+                "operation_blks|layers"
+            ],
+            "memberdict_labels": [
+                "Gidle",
+                "Gidle"
+            ]
+        },
+        "9": {
+            "module": "pygsti.modelmembers.operations.staticstdop",
+            "class": "StaticStandardOp",
+            "submembers": [],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "QubitSpace",
+                "version": 0,
+                "qudit_labels": [
+                    0
+                ],
+                "qudit_udims": [
+                    2
+                ],
+                "qubit_labels": [
+                    0
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [],
+            "relative_submember_parameter_indices": [],
+            "parameter_labels": null,
+            "parameter_bounds": null,
+            "name": "Gxpi2",
+            "basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": false,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "QubitSpace",
+                    "version": 0,
+                    "qudit_labels": [
+                        0
+                    ],
+                    "qudit_udims": [
+                        2
+                    ],
+                    "qubit_labels": [
+                        0
+                    ]
+                }
+            },
+            "memberdict_types": [
+                "operation_blks|gates"
+            ],
+            "memberdict_labels": [
+                "Gxpi2"
+            ]
+        },
+        "10": {
+            "module": "pygsti.modelmembers.operations.staticstdop",
+            "class": "StaticStandardOp",
+            "submembers": [],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "QubitSpace",
+                "version": 0,
+                "qudit_labels": [
+                    0
+                ],
+                "qudit_udims": [
+                    2
+                ],
+                "qubit_labels": [
+                    0
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [],
+            "relative_submember_parameter_indices": [],
+            "parameter_labels": null,
+            "parameter_bounds": null,
+            "name": "Gypi2",
+            "basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": false,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "QubitSpace",
+                    "version": 0,
+                    "qudit_labels": [
+                        0
+                    ],
+                    "qudit_udims": [
+                        2
+                    ],
+                    "qubit_labels": [
+                        0
+                    ]
+                }
+            },
+            "memberdict_types": [
+                "operation_blks|gates"
+            ],
+            "memberdict_labels": [
+                "Gypi2"
+            ]
+        },
+        "11": {
+            "module": "pygsti.modelmembers.operations.staticstdop",
+            "class": "StaticStandardOp",
+            "submembers": [],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "QubitSpace",
+                "version": 0,
+                "qudit_labels": [
+                    0,
+                    1
+                ],
+                "qudit_udims": [
+                    2,
+                    2
+                ],
+                "qubit_labels": [
+                    0,
+                    1
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [],
+            "relative_submember_parameter_indices": [],
+            "parameter_labels": null,
+            "parameter_bounds": null,
+            "name": "Gcnot",
+            "basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": false,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "QubitSpace",
+                    "version": 0,
+                    "qudit_labels": [
+                        0,
+                        1
+                    ],
+                    "qudit_udims": [
+                        2,
+                        2
+                    ],
+                    "qubit_labels": [
+                        0,
+                        1
+                    ]
+                }
+            },
+            "memberdict_types": [
+                "operation_blks|gates"
+            ],
+            "memberdict_labels": [
+                "Gcnot"
+            ]
+        },
+        "12": {
+            "module": "pygsti.modelmembers.operations.lindbladerrorgen",
+            "class": "LindbladErrorgen",
+            "submembers": [],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        0
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [
+                12,
+                13,
+                14,
+                15,
+                16,
+                17
+            ],
+            "relative_submember_parameter_indices": [],
+            "parameter_labels": [
+                "X Hamiltonian error coefficient",
+                "Y Hamiltonian error coefficient",
+                "Z Hamiltonian error coefficient",
+                "sqrt(X stochastic coefficient)",
+                "sqrt(Y stochastic coefficient)",
+                "sqrt(Z stochastic coefficient)"
+            ],
+            "parameter_bounds": null,
+            "rep_type": "sparse superop",
+            "matrix_basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": true,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "QubitSpace",
+                    "version": 0,
+                    "qudit_labels": [
+                        0
+                    ],
+                    "qudit_udims": [
+                        2
+                    ],
+                    "qubit_labels": [
+                        0
+                    ]
+                }
+            },
+            "coefficient_blocks": [
+                {
+                    "module": "pygsti.modelmembers.operations.lindbladcoefficients",
+                    "class": "LindbladCoefficientBlock",
+                    "version": 0,
+                    "block_type": "ham",
+                    "parameterization_mode": "elements",
+                    "basis_element_labels": [
+                        "X",
+                        "Y",
+                        "Z"
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "PP",
+                        "sparse": true,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "QubitSpace",
+                            "version": 0,
+                            "qudit_labels": [
+                                0
+                            ],
+                            "qudit_udims": [
+                                2
+                            ],
+                            "qubit_labels": [
+                                0
+                            ]
+                        }
+                    },
+                    "block_data": [
+                        8.691273895612258e-07,
+                        4.3617342389567937e-07,
+                        8.021476420801591e-07
+                    ]
+                },
+                {
+                    "module": "pygsti.modelmembers.operations.lindbladcoefficients",
+                    "class": "LindbladCoefficientBlock",
+                    "version": 0,
+                    "block_type": "other_diagonal",
+                    "parameterization_mode": "cholesky",
+                    "basis_element_labels": [
+                        "X",
+                        "Y",
+                        "Z"
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "PP",
+                        "sparse": true,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "QubitSpace",
+                            "version": 0,
+                            "qudit_labels": [
+                                0
+                            ],
+                            "qudit_udims": [
+                                2
+                            ],
+                            "qubit_labels": [
+                                0
+                            ]
+                        }
+                    },
+                    "block_data": [
+                        2.0668899831001604e-14,
+                        4.959835154405407e-13,
+                        4.964348198501293e-13
+                    ]
+                }
+            ]
+        },
+        "13": {
+            "module": "pygsti.modelmembers.operations.experrorgenop",
+            "class": "ExpErrorgenOp",
+            "submembers": [
+                12
+            ],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        0
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [
+                12,
+                13,
+                14,
+                15,
+                16,
+                17
+            ],
+            "relative_submember_parameter_indices": [
+                [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    5
+                ]
+            ],
+            "parameter_labels": null,
+            "parameter_bounds": null,
+            "memberdict_types": [
+                "operation_blks|cloudnoise"
+            ],
+            "memberdict_labels": [
+                "Gidle"
+            ]
+        },
+        "14": {
+            "module": "pygsti.modelmembers.operations.lindbladerrorgen",
+            "class": "LindbladErrorgen",
+            "submembers": [],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        0
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [
+                18,
+                19,
+                20,
+                21,
+                22,
+                23
+            ],
+            "relative_submember_parameter_indices": [],
+            "parameter_labels": [
+                "X Hamiltonian error coefficient",
+                "Y Hamiltonian error coefficient",
+                "Z Hamiltonian error coefficient",
+                "sqrt(X stochastic coefficient)",
+                "sqrt(Y stochastic coefficient)",
+                "sqrt(Z stochastic coefficient)"
+            ],
+            "parameter_bounds": null,
+            "rep_type": "sparse superop",
+            "matrix_basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": true,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "QubitSpace",
+                    "version": 0,
+                    "qudit_labels": [
+                        0
+                    ],
+                    "qudit_udims": [
+                        2
+                    ],
+                    "qubit_labels": [
+                        0
+                    ]
+                }
+            },
+            "coefficient_blocks": [
+                {
+                    "module": "pygsti.modelmembers.operations.lindbladcoefficients",
+                    "class": "LindbladCoefficientBlock",
+                    "version": 0,
+                    "block_type": "ham",
+                    "parameterization_mode": "elements",
+                    "basis_element_labels": [
+                        "X",
+                        "Y",
+                        "Z"
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "PP",
+                        "sparse": true,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "QubitSpace",
+                            "version": 0,
+                            "qudit_labels": [
+                                0
+                            ],
+                            "qudit_udims": [
+                                2
+                            ],
+                            "qubit_labels": [
+                                0
+                            ]
+                        }
+                    },
+                    "block_data": [
+                        2.1879210567408857e-07,
+                        9.24867628615565e-07,
+                        4.421407554041766e-07
+                    ]
+                },
+                {
+                    "module": "pygsti.modelmembers.operations.lindbladcoefficients",
+                    "class": "LindbladCoefficientBlock",
+                    "version": 0,
+                    "block_type": "other_diagonal",
+                    "parameterization_mode": "cholesky",
+                    "basis_element_labels": [
+                        "X",
+                        "Y",
+                        "Z"
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "PP",
+                        "sparse": true,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "QubitSpace",
+                            "version": 0,
+                            "qudit_labels": [
+                                0
+                            ],
+                            "qudit_udims": [
+                                2
+                            ],
+                            "qubit_labels": [
+                                0
+                            ]
+                        }
+                    },
+                    "block_data": [
+                        8.268555132420273e-13,
+                        3.577143129529955e-15,
+                        3.3961729260599574e-14
+                    ]
+                }
+            ]
+        },
+        "15": {
+            "module": "pygsti.modelmembers.operations.experrorgenop",
+            "class": "ExpErrorgenOp",
+            "submembers": [
+                14
+            ],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        0
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [
+                18,
+                19,
+                20,
+                21,
+                22,
+                23
+            ],
+            "relative_submember_parameter_indices": [
+                [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    5
+                ]
+            ],
+            "parameter_labels": null,
+            "parameter_bounds": null,
+            "memberdict_types": [
+                "operation_blks|cloudnoise"
+            ],
+            "memberdict_labels": [
+                "Gxpi2:0"
+            ]
+        },
+        "16": {
+            "module": "pygsti.modelmembers.operations.lindbladerrorgen",
+            "class": "LindbladErrorgen",
+            "submembers": [],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        0
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [
+                24,
+                25,
+                26,
+                27,
+                28,
+                29
+            ],
+            "relative_submember_parameter_indices": [],
+            "parameter_labels": [
+                "X Hamiltonian error coefficient",
+                "Y Hamiltonian error coefficient",
+                "Z Hamiltonian error coefficient",
+                "sqrt(X stochastic coefficient)",
+                "sqrt(Y stochastic coefficient)",
+                "sqrt(Z stochastic coefficient)"
+            ],
+            "parameter_bounds": null,
+            "rep_type": "sparse superop",
+            "matrix_basis": {
+                "module": "pygsti.baseobjs.basis",
+                "class": "BuiltinBasis",
+                "version": 0,
+                "name": "pp",
+                "sparse": true,
+                "state_space": {
+                    "module": "pygsti.baseobjs.statespace",
+                    "class": "QubitSpace",
+                    "version": 0,
+                    "qudit_labels": [
+                        0
+                    ],
+                    "qudit_udims": [
+                        2
+                    ],
+                    "qubit_labels": [
+                        0
+                    ]
+                }
+            },
+            "coefficient_blocks": [
+                {
+                    "module": "pygsti.modelmembers.operations.lindbladcoefficients",
+                    "class": "LindbladCoefficientBlock",
+                    "version": 0,
+                    "block_type": "ham",
+                    "parameterization_mode": "elements",
+                    "basis_element_labels": [
+                        "X",
+                        "Y",
+                        "Z"
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "PP",
+                        "sparse": true,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "QubitSpace",
+                            "version": 0,
+                            "qudit_labels": [
+                                0
+                            ],
+                            "qudit_udims": [
+                                2
+                            ],
+                            "qubit_labels": [
+                                0
+                            ]
+                        }
+                    },
+                    "block_data": [
+                        4.735527880151513e-08,
+                        6.748809435823302e-07,
+                        5.946247799344488e-07
+                    ]
+                },
+                {
+                    "module": "pygsti.modelmembers.operations.lindbladcoefficients",
+                    "class": "LindbladCoefficientBlock",
+                    "version": 0,
+                    "block_type": "other_diagonal",
+                    "parameterization_mode": "cholesky",
+                    "basis_element_labels": [
+                        "X",
+                        "Y",
+                        "Z"
+                    ],
+                    "basis": {
+                        "module": "pygsti.baseobjs.basis",
+                        "class": "BuiltinBasis",
+                        "version": 0,
+                        "name": "PP",
+                        "sparse": true,
+                        "state_space": {
+                            "module": "pygsti.baseobjs.statespace",
+                            "class": "QubitSpace",
+                            "version": 0,
+                            "qudit_labels": [
+                                0
+                            ],
+                            "qudit_udims": [
+                                2
+                            ],
+                            "qubit_labels": [
+                                0
+                            ]
+                        }
+                    },
+                    "block_data": [
+                        2.844197299577539e-13,
+                        1.8769744083832633e-15,
+                        3.152071033894737e-13
+                    ]
+                }
+            ]
+        },
+        "17": {
+            "module": "pygsti.modelmembers.operations.experrorgenop",
+            "class": "ExpErrorgenOp",
+            "submembers": [
+                16
+            ],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "ExplicitStateSpace",
+                "version": 0,
+                "labels": [
+                    [
+                        0
+                    ]
+                ],
+                "unitary_space_dimensions": [
+                    [
+                        2
+                    ]
+                ],
+                "types": [
+                    [
+                        "Q"
+                    ]
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [
+                24,
+                25,
+                26,
+                27,
+                28,
+                29
+            ],
+            "relative_submember_parameter_indices": [
+                [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    5
+                ]
+            ],
+            "parameter_labels": null,
+            "parameter_bounds": null,
+            "memberdict_types": [
+                "operation_blks|cloudnoise"
+            ],
+            "memberdict_labels": [
+                "Gypi2:0"
+            ]
+        },
+        "18": {
+            "module": "pygsti.modelmembers.operations.embeddedop",
+            "class": "EmbeddedOp",
+            "submembers": [
+                9
+            ],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "QubitSpace",
+                "version": 0,
+                "qudit_labels": [
+                    0
+                ],
+                "qudit_udims": [
+                    2
+                ],
+                "qubit_labels": [
+                    0
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [],
+            "relative_submember_parameter_indices": [
+                []
+            ],
+            "parameter_labels": null,
+            "parameter_bounds": null,
+            "target_labels": [
+                0
+            ],
+            "memberdict_types": [
+                "operation_blks|layers"
+            ],
+            "memberdict_labels": [
+                "Gxpi2:0"
+            ]
+        },
+        "19": {
+            "module": "pygsti.modelmembers.operations.embeddedop",
+            "class": "EmbeddedOp",
+            "submembers": [
+                10
+            ],
+            "state_space": {
+                "module": "pygsti.baseobjs.statespace",
+                "class": "QubitSpace",
+                "version": 0,
+                "qudit_labels": [
+                    0
+                ],
+                "qudit_udims": [
+                    2
+                ],
+                "qubit_labels": [
+                    0
+                ]
+            },
+            "evotype": "densitymx",
+            "model_parameter_indices": [],
+            "relative_submember_parameter_indices": [
+                []
+            ],
+            "parameter_labels": null,
+            "parameter_bounds": null,
+            "target_labels": [
+                0
+            ],
+            "memberdict_types": [
+                "operation_blks|layers"
+            ],
+            "memberdict_labels": [
+                "Gypi2:0"
+            ]
+        }
+    },
+    "processor_spec": {
+        "module": "pygsti.processors.processorspec",
+        "class": "QubitProcessorSpec",
+        "version": 0,
+        "gate_names": [
+            "Gidle",
+            "Gxpi2",
+            "Gypi2",
+            "Gcnot"
+        ],
+        "nonstd_gate_unitaries": {},
+        "availability": {
+            "Gidle": [
+                null
+            ],
+            "Gxpi2": "all-edges",
+            "Gypi2": "all-edges",
+            "Gcnot": "all-edges"
+        },
+        "prep_names": [
+            "rho0"
+        ],
+        "nonstd_preps": {},
+        "povm_names": [
+            "Mdefault"
+        ],
+        "nonstd_povms": {},
+        "instrument_names": [],
+        "nonstd_instruments": {},
+        "geometry": {
+            "module": "pygsti.baseobjs.qubitgraph",
+            "class": "QubitGraph",
+            "version": 0,
+            "node_names": [
+                0
+            ],
+            "directed": true,
+            "direction_names": null,
+            "edges": []
+        },
+        "aux_info": {},
+        "qubit_labels": [
+            0
+        ],
+        "symplectic_reps": {}
+    },
+    "error_composition_mode": "gates"
+}

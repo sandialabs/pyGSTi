@@ -24,7 +24,13 @@ doc/_autosummary
 doc/autoapi
 doc/build
 .venv*
+*.pyc*
 
+# Protocol Checkpointing #
+##########################
+*gst_checkpoints*
+*model_test_checkpoints*
+*standard_gst_checkpoints*
 
 # Test Metadata #
 #################

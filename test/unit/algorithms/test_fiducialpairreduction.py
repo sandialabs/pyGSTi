@@ -70,8 +70,6 @@ class FindSufficientFiducialPairsPerGermBase(object):
             min_iterations=1, verbosity=0
         )
         
-        print(fiducial_pairs)
-        
         self.assertTrue(fiducial_pairs == self.fiducial_pairs_per_germ or fiducial_pairs == self.fiducial_pairs_per_germ_alt)
 
     def test_find_sufficient_fiducial_pairs_per_germ_random(self):
@@ -79,8 +77,6 @@ class FindSufficientFiducialPairsPerGermBase(object):
             self.model, self.preps, self.effects, self.germs,
             search_mode='random', n_random=10, seed=_SEED
         )
-        
-        print(fiducial_pairs)
         
         self.assertTrue(fiducial_pairs == self.fiducial_pairs_per_germ_random or fiducial_pairs == self.fiducial_pairs_per_germ_random_alt)
 

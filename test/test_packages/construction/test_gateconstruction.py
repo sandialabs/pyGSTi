@@ -11,7 +11,7 @@ class GateConstructionTestCase(BaseTestCase):
         #1-off check (unrelated to fast acton) - showing that CNOT gate convention is CNOT(control,target)
         # so for CNOT:1:2 gates, 1 is the *control* and 2 is the *target*
         from pygsti.modelpacks.legacy import std2Q_XYICNOT
-        std_cnot = pygsti.tools.process_mx_to_unitary(pygsti.tools.change_basis(std2Q_XYICNOT.target_model().operations['Gcnot'], 'pp', 'std'))
+        std_cnot = pygsti.tools.std_process_mx_to_unitary(pygsti.tools.change_basis(std2Q_XYICNOT.target_model().operations['Gcnot'], 'pp', 'std'))
         state_10 = pygsti.tools.dmvec_to_state(pygsti.tools.change_basis(std2Q_XYICNOT.target_model().povms['Mdefault']['10'], "pp", "std"))
 
         # if first qubit is control, CNOT should leave 00 & 01 (first 2 rows/cols) alone:
