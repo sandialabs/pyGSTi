@@ -1,3 +1,4 @@
+## user-exposure: minimal (EGN - parallel to fastopcalc.pyx)
 """Python implementations of common polynomial operations"""
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).

@@ -1,3 +1,4 @@
+## user-exposure: low (EGN - I expect never used directly, but functionality accessed as the base class for TP maps.)
 """
 Defines the ProtectedArray class
 """

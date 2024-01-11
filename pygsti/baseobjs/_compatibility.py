@@ -1,3 +1,4 @@
+## user-exposure: minimal (EGN - internal use only; module already begins with underscore)
 """
 Tools for general compatibility.
 """

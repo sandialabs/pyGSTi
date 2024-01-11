@@ -1,3 +1,4 @@
+## user-exposure: minimal, forsaken (EGN - we don't use this anymore and never really did)
 """
 Functions for generating Direct-(LGST, MC2GST, MLGST) models
 """

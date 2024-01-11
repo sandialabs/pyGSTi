@@ -1,3 +1,4 @@
+## user-exposure: low (EGN - not used direclty except by power users, though conversions from names like geometry='line' is used by many uses.)
 """
 Defines the QubitGraph class and supporting functions
 """

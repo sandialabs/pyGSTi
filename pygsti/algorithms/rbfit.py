@@ -1,3 +1,4 @@
+## user-exposure: low (??, EGN Tentative, probably only used in RB internals, but check with Jordan; FitResults may be independently used by Users extracting RB parameters from RB results)
 """
 Functions for analyzing RB data
 """

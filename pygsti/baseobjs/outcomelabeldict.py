@@ -1,3 +1,4 @@
+## user-exposure: low (EGN - using these objects directly is power-user functionality, though the ability of an OutcomeLabelDict to act like a normal dict is "high" exposure.)
 """
 Defines the OutcomeLabelDict class
 """

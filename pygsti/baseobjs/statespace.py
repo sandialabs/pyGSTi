@@ -1,3 +1,4 @@
+## user-exposure: low (EGN - used directly only by power users.  Created implicitly by conversion from integers to QubitSpaces, etc.)
 """
 Defines OrderedDict-derived classes used to store specific pyGSTi objects
 """

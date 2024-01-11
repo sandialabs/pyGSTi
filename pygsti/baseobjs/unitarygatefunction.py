@@ -1,3 +1,4 @@
+## user-exposure: minimal (EGN - only power users creating their own continuously parameterized gates would make use of this class.)
 """
 Defines the UnitaryGateFunction class and supporting functionality.
 """

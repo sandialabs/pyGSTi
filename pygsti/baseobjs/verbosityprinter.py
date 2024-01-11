@@ -1,3 +1,4 @@
+## user-exposure: low (EGN - almost always created internally by casting from an integer.)
 """
 Defines the VerbosityPrinter class, used for logging output.
 """

@@ -1,3 +1,4 @@
+## user-exposure: minimal (EGN - we don't even use these in the pygsti code except maybe in a few rare cases.)
 """
 Defines GST exception classes
 """

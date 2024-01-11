@@ -1,3 +1,4 @@
+## user-exposure: high (CIO, EGN - users use these functions for building GST experiment designs)
 """
 Functions for selecting a complete set of fiducials for a GST analysis.
 """

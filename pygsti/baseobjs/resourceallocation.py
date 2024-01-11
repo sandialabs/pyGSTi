@@ -1,3 +1,4 @@
+## user-exposure: minimal (EGN - internal use only.)
 """
 Resource allocation manager
 """

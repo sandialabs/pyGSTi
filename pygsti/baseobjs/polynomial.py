@@ -1,3 +1,4 @@
+## user-exposure: minimal (EGN - only used by "TermForwardSimulator" and under the hood even there.)
 """
 Defines the Polynomial class
 """

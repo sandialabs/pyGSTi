@@ -1,3 +1,4 @@
+## user-exposure: high (EGN - in particular Basis.cast and access to Basis attributes)
 """
 Defines the Basis object and supporting functions
 """

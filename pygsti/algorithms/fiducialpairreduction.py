@@ -1,3 +1,4 @@
+## user-exposure: high (EGN - users use these functions for building GST experiment designs)
 """
 Functions for reducing the number of required fiducial pairs for analysis.
 """

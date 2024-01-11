@@ -1,3 +1,4 @@
+## user-exposure: low (??, EGN Tentative, probably only used in RB internals, but check with Jordan)
 """
 Random circuit sampling functions.
 """
