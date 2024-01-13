@@ -1,11 +1,14 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: Build and run tests
+name: Build and run tests (no MacOS, low/high Python versions only)
 
 on:
   push:
-    branches: [ "develop", "master" ]
+    # Intended to be fast checks on non-main branches
+    branches-ignore: [ "beta", "develop", "master" ]
+  # Hacky way to only run pull requests from forked repositories (assumes : is not used in branch names unless forked)
+  # https://github.community/t/how-to-trigger-an-action-on-push-or-pull-request-but-not-both/16662/10
   pull_request:
     branches: [ "**:**" ]
   # Allow running manually from Actions tab
@@ -21,7 +24,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python-version: [3.8, 3.9, '3.10', '3.11']
+        python-version: [3.8,'3.11']
 
     steps:
     - uses: actions/checkout@v4
@@ -63,27 +66,7 @@ jobs:
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
-    
-  
-  push: # Push to stable "beta" branch on successful build
 
-    runs-on: ubuntu-latest
-
-    # Only run on "develop" branch if tests pass
-    needs: build
-    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
-
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
-        token: ${{ secrets.PYGSTI_TOKEN }}
-    - name: Merge changes to beta branch
-      run: |
-        git config --global user.name 'PyGSTi'
-        git config --global user.email 'pygsti@noreply.github.com'
-        git checkout beta
-        git merge --ff-only ${GITHUB_SHA} && git push origin beta
 
 
 
