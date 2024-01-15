@@ -9,7 +9,7 @@ Defines the ForwardSimulator calculator class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+from __future__ import annotations
 import collections as _collections
 import warnings as _warnings
 
@@ -21,6 +21,7 @@ from pygsti.baseobjs import outcomelabeldict as _ld
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import slicetools as _slct
+from typing import Union, Callable, Literal
 
 
 class ForwardSimulator(_NicelySerializable):
@@ -44,22 +45,40 @@ class ForwardSimulator(_NicelySerializable):
         The model this forward simulator will use to compute circuit outcome probabilities.
     """
 
+    Castable = Union[
+        'ForwardSimulator',
+        Callable[[], 'ForwardSimulator'],
+        Literal['map'],
+        Literal['matrix'],
+        Literal['auto']
+    ]
+    # ^ Define a type alias we can reference elsewhere in our code.
+
     @classmethod
-    def cast(cls, obj, num_qubits=None):
+    def cast(cls, obj : ForwardSimulator.Castable, num_qubits=None):
         """ num_qubits only used if `obj == 'auto'` """
         from .matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
         from .mapforwardsim import MapForwardSimulator as _MapFSim
 
         if isinstance(obj, ForwardSimulator):
             return obj
-        elif obj == "auto":
-            return _MapFSim() if (num_qubits is None or num_qubits > 2) else _MatrixFSim()
-        elif obj == "map":
-            return _MapFSim()
-        elif obj == "matrix":
-            return _MatrixFSim()
+        elif isinstance(obj, str):
+            if obj == "auto":
+                return _MapFSim() if (num_qubits is None or num_qubits > 2) else _MatrixFSim()
+            elif obj == "map":
+                return _MapFSim()
+            elif obj == "matrix":
+                return _MatrixFSim()
+            else:
+                raise ValueError(f'Unrecognized string argument, {obj}')
+        elif isinstance(obj, Callable):
+            out_obj = obj()
+            if isinstance(out_obj, ForwardSimulator):
+                return out_obj
+            else:
+                raise ValueError(f'Argument {obj} cannot be cast to a ForwardSimulator.')
         else:
-            raise ValueError("Cannot convert %s to a forward simulator!" % str(obj))
+            raise ValueError(f'Argument {obj} cannot be cast to a ForwardSimulator.')
 
     @classmethod
     def _array_types_for_method(cls, method_name):
@@ -337,9 +356,10 @@ class ForwardSimulator(_NicelySerializable):
 
         derivative_dimensions : tuple, optional
             A tuple containing, optionally, the parameter-space dimension used when taking first
-            and second derivatives with respect to the cirucit outcome probabilities.  This must be
+            and second derivatives with respect to the cirucit outcome probabilities.  This should
             have minimally 1 or 2 elements when `array_types` contains `'ep'` or `'epp'` types,
-            respectively.
+            respectively. If `array_types` contains either of these strings and derivative_dimensions
+            is None on input then we automatically set derivative_dimensions based on self.model.
 
         verbosity : int or VerbosityPrinter
             Determines how much output to send to stdout.  0 means no output, higher
@@ -349,37 +369,15 @@ class ForwardSimulator(_NicelySerializable):
         -------
         CircuitOutcomeProbabilityArrayLayout
         """
+        if derivative_dimensions is None:
+            if 'epp' in array_types:
+                derivative_dimensions = (self.model.num_params, self.model.num_params)
+            elif 'ep' in array_types:
+                derivative_dimensions = (self.model.num_params)
+            else:
+                derivative_dimensions = tuple()
         return _CircuitOutcomeProbabilityArrayLayout.create_from(circuits, self.model, dataset, derivative_dimensions,
                                                                  resource_alloc=resource_alloc)
-
-    #TODO UPDATE
-    #def bulk_prep_probs(self, eval_tree, comm=None, mem_limit=None):
-    #    """
-    #    Performs initial computation needed for bulk_fill_probs and related calls.
-    #
-    #    For example, as computing probability polynomials. This is usually coupled with
-    #    the creation of an evaluation tree, but is separated from it because this
-    #    "preparation" may use `comm` to distribute a computationally intensive task.
-    #
-    #    Parameters
-    #    ----------
-    #    eval_tree : EvalTree
-    #        The evaluation tree used to define a list of circuits and hold (cache)
-    #        any computed quantities.
-    #
-    #    comm : mpi4py.MPI.Comm, optional
-    #        When not None, an MPI communicator for distributing the computation
-    #        across multiple processors.  Distribution is performed over
-    #        subtrees of `eval_tree` (if it is split).
-    #
-    #    mem_limit : int
-    #        Rough memory limit in bytes.
-    #
-    #    Returns
-    #    -------
-    #    None
-    #    """
-    #    pass  # default is to have no pre-computed quantities (but not an error to call this fn)
 
     def bulk_probs(self, circuits, clip_to=None, resource_alloc=None, smartc=None):
         """
@@ -642,7 +640,7 @@ class ForwardSimulator(_NicelySerializable):
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
                 self.model.from_vector(vec, close=True)
-                self._bulk_fill_probs_block(probs2, layout, resource_alloc)
+                self._bulk_fill_probs_block(probs2, layout)
                 array_to_fill[:, iFinal] = (probs2 - probs) / eps
         self.model.from_vector(orig_vec, close=True)
 
