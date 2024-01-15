@@ -259,6 +259,11 @@ class TestGateSetTomography(BaseProtocolData):
         twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
         assert twoDLogL <= 1.0  # should be near 0 for perfect data
 
+        for estimate in results.estimates.values():
+            for model in estimate.models.values():
+                assert isinstance(model, MapForwardSimulatorWrapper)
+        pass
+
 
 class LinearGateSetTomographyTester(BaseProtocolData, BaseCase):
     """
@@ -317,6 +322,10 @@ class TestStandardGST(BaseProtocolData):
             mdl_result = results.estimates[mode].models['stdgaugeopt']
             twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset)
             assert twoDLogL <= 1.0  # should be near 0 for perfect data
+        for estimate in results.estimates.values():
+            for model in estimate.models.values():
+                assert isinstance(model, MapForwardSimulatorWrapper)
+        pass
 
 
 #Unit tests are currently performed in objects/test_results.py - TODO: move these tests here

@@ -24,7 +24,7 @@ from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits import Circuit
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from pygsti.forwardsims import ForwardSimCastable
+from pygsti.forwardsims import ForwardSimulator
 
 
 class ModelTest(_proto.Protocol):
@@ -134,7 +134,7 @@ class ModelTest(_proto.Protocol):
     #    return self.run(_proto.ProtocolData(design, dataset))
 
     def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
-            simulator: Optional[ForwardSimCastable]=None):
+            simulator: Optional[ForwardSimulator.Castable]=None):
         """
         Run this protocol on `data`.
 
@@ -167,7 +167,7 @@ class ModelTest(_proto.Protocol):
             to disk during the course of this protocol. It is strongly recommended
             that this be kept set to False without good reason to disable the checkpoints.
 
-        simulator : ForwardSimCastable or None
+        simulator : ForwardSimulator.Castable or None
             Ignored if None. If not None, then we call
                 fwdsim = ForwardSimulator.cast(simulator),
             and we set the .sim attribute of every Model we encounter to fwdsim.

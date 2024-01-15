@@ -9,7 +9,7 @@ Defines the ForwardSimulator calculator class
 # in compliance with the License.  You may obtain a copy of the License at
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
-
+from __future__ import annotations
 import collections as _collections
 import warnings as _warnings
 
@@ -21,7 +21,7 @@ from pygsti.baseobjs import outcomelabeldict as _ld
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.tools import slicetools as _slct
-from typing import Callable
+from typing import Union, Callable, Literal
 
 
 class ForwardSimulator(_NicelySerializable):
@@ -45,8 +45,17 @@ class ForwardSimulator(_NicelySerializable):
         The model this forward simulator will use to compute circuit outcome probabilities.
     """
 
+    Castable = Union[
+        'ForwardSimulator',
+        Callable[[], 'ForwardSimulator'],
+        Literal['map'],
+        Literal['matrix'],
+        Literal['auto']
+    ]
+    # ^ Define a type alias we can reference elsewhere in our code.
+
     @classmethod
-    def cast(cls, obj, num_qubits=None):
+    def cast(cls, obj : ForwardSimulator.Castable, num_qubits=None):
         """ num_qubits only used if `obj == 'auto'` """
         from .matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
         from .mapforwardsim import MapForwardSimulator as _MapFSim
