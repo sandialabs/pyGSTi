@@ -53,7 +53,7 @@ FLOATSIZE = 8  # TODO: better way?
 
 
 def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=None, op_label_aliases=None,
-             guess_model_for_gauge=None, svd_truncate_to=None, verbosity=0, all_assertions=False):
+             guess_model_for_gauge=None, svd_truncate_to=None, verbosity=0, check=True):
     """
     Performs Linear-inversion Gate Set Tomography on the dataset.
 
@@ -102,7 +102,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
     verbosity : int, optional
         How much detail to send to stdout.
 
-    all_assertions : bool, optional
+    check : bool, optional
         Specifies whether we perform computationally expensive assertion checks.
         Computationally cheap assertions will always be checked.
 
@@ -197,7 +197,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                          "or decrease svd_truncate_to" % (rankAB, ABMat_p.shape[0]))
 
     invABMat_p = _np.dot(Pjt, _np.dot(_np.diag(1.0 / s), Pj))  # (trunc,trunc)
-    if all_assertions:
+    if check:
         assert(_np.linalg.norm(_np.linalg.inv(ABMat_p) - invABMat_p) < 1e-8)
     assert(len((_np.isnan(invABMat_p)).nonzero()[0]) == 0)
 
