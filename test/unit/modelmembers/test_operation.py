@@ -3,7 +3,6 @@ import pickle
 import sys
 import numpy as np
 import scipy.sparse as sps
-
 import pygsti.modelmembers.operations as op
 import pygsti.tools.internalgates as itgs
 import pygsti.tools.lindbladtools as lt
@@ -22,7 +21,7 @@ from ..util import BaseCase, needs_cvxpy
 SKIP_DIAMONDIST_ON_WIN = True
 
 
-class OpBase(object):
+class OpBase:
     def setUp(self):
         ExplicitOpModel._strict = False
         self.gate = self.build_gate()

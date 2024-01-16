@@ -10,7 +10,7 @@
 
 import numpy as _np
 import numpy.random as _rnd
-from scipy import convolve as _convolve
+from numpy import convolve as _convolve
 from scipy.fftpack import dct as _dct
 from scipy.fftpack import fft as _fft
 from scipy.fftpack import idct as _idct

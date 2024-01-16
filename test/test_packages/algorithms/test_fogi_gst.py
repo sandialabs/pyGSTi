@@ -2,7 +2,7 @@ import unittest
 import numpy as np
 
 import pygsti
-from pygsti.modelpacks import smq1Q_XYI as std
+from pygsti.modelpacks import smq1Q_XY as std
 from pygsti.baseobjs import Basis, CompleteElementaryErrorgenBasis
 from pygsti.processors import QubitProcessorSpec
 from pygsti.models import create_crosstalk_free_model
@@ -152,7 +152,7 @@ class FOGIGSTTestCase(object):
         else:
             pspec = self.create_pspec()
             circuits = pygsti.circuits.create_cloudnoise_circuits(
-                pspec, [1,], [(), ('Gxpi2',), ('Gypi2',), ('Gxpi2','Gxpi2')], 
+                pspec, [1,], [('Gxpi2',), ('Gypi2',), ('Gxpi2','Gxpi2')], 
                 max_idle_weight=0, extra_gate_weight=1, maxhops=1)
             print(len(circuits))
             edesign = pygsti.protocols.GSTDesign(pspec, circuits)
