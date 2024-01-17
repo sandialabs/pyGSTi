@@ -534,9 +534,7 @@ def idle_tomography_fidpairs(nqubits):
     """
 
     pauli_strings = ["X", "Y", "Z"]
-    nq_pauli_strings = list(product(pauli_strings, repeat=nqubits))[
-        :
-    ]  # skip the all identity string
+    nq_pauli_strings = list(product(pauli_strings, repeat=nqubits))  # skip the all identity string
 
     # we also want all possible combinations of sign for each the pauli
     # observable on each qubit. The NQPauliState expects these to be either 0
@@ -1131,7 +1129,10 @@ def compute_observed_err_rate(
                     cnt0 += cnt  # [0] b/c outcomes are actually 1-tuples
                 else:
                     cnt1 += cnt
+            #total = _np.abs(cnt0) + _np.abs(cnt1)
             exptn = float(cnt0 - cnt1) / total
+            #I think fp might stand for 'frequency plus' and is supposed to
+            #be the frequency of the plus outcome.
             fp = 0.5 + 0.5 * float(cnt0 - cnt1 + 1) / (total + 2)
 
         # <ZZ> = 00 count - 01 count - 10 count + 11 count (* minus_sign)
@@ -1149,12 +1150,18 @@ def compute_observed_err_rate(
             raise NotImplementedError(
                 "Expectation values of weight > 2 observables are not implemented!"
             )
-
-        wt = _np.sqrt(total) / _np.sqrt(fp * (1.0 - fp))
+        
         f = 0.5 + 0.5 * exptn
-        err = 2 * _np.sqrt(
-            f * (1.0 - f) / total
-        )  # factor of 2 b/c expectation is addition of 2 terms
+
+        #The issue here is that the frequency can be outside the range [0,1].
+        #If it is then the weight calculation fails, in this case just do OLS.
+        if not (fp > 1 or fp < 0): #standard binomial/multinomial case
+            wt = _np.sqrt(total) / _np.sqrt(fp * (1.0 - fp))
+            err = 2 * _np.sqrt(f * (1.0 - f) / total)  # factor of 2 b/c expectation is addition of 2 terms
+        else: #set the weight and error to None.
+            wt = None
+            err = None
+
         return exptn, wt, err
 
     # Get data to fit and weights to use in fitting
@@ -1169,9 +1176,11 @@ def compute_observed_err_rate(
         errbars.append(err)
 
     # curvefit -> slope
-    coeffs = _np.polyfit(
-        max_lengths, data_to_fit, fit_order, w=wts
-    )  # when fit_order = 1 = line
+    #check that the weights are not all None (if they are this is non-CP and use OLS)
+    if all([elem is not None for elem in wts]):
+        coeffs = _np.polyfit(max_lengths, data_to_fit, fit_order, w=wts)  # when fit_order = 1 = line
+    else:
+        coeffs = _np.polyfit(max_lengths, data_to_fit, fit_order)  # when fit_order = 1 = line
     if fit_order == 1:
         slope = coeffs[0]
     elif fit_order == 2:
@@ -1278,7 +1287,7 @@ def do_idle_tomography(
         GiStr = _Circuit(idle_string, num_lines=nqubits)
 
     hamiltonian_jacobian_coefs = build_class_jacobian("H", nqubits)
-    print(hamiltonian_jacobian_coefs)
+    #print(hamiltonian_jacobian_coefs)
     hamiltonian_jacobian, hamiltonian_index_list = dict_to_jacobian(hamiltonian_jacobian_coefs, "H", nqubits)
     stochastic_jacobian_coefs = build_class_jacobian("S", nqubits)
     stochastic_jacobian, stochastic_index_list = dict_to_jacobian(stochastic_jacobian_coefs, "S", nqubits)
@@ -1294,7 +1303,7 @@ def do_idle_tomography(
     # print(anti_symmetric_jacobian_coefs)
     error_gen_index_list = {"hamiltonian": [], "stochastic":[], "correlation":[], "anti-symmetric":[]}
     error_gen_index_list['hamiltonian'] += (''.join(['H', str(key)]) for key in hamiltonian_index_list.keys())
-    print(error_gen_index_list)
+    #print(error_gen_index_list)
     error_gen_index_list['stochastic'] += (''.join(['S', str(key)]) for key in stochastic_index_list.keys())
     error_gen_index_list['correlation'] += (''.join(['C', str(key[0]), ',', str(key[1])]) for key in correlation_index_list.keys())
     error_gen_index_list['anti-symmetric'] += (''.join(['A', str(key[0]), ',', str(key[1])]) for key in anti_symmetric_index_list.keys())
@@ -1465,17 +1474,26 @@ def do_idle_tomography(
         ]
     )
 
-    print(error_gen_index_list)
-    print(sum([len(val) for val in error_gen_index_list.values()]))
+    #print(error_gen_index_list)
+    #print(sum([len(val) for val in error_gen_index_list.values()]))
 
     ##FIXME -- I think this only works for one qubit because of err[0] so we will come back to this
     intrinsic_rate_list = _np.dot(full_jacobian_inv, obs_err_rates)
     # intrinsic_rates = {k: [v for v in error_gen_index_list[k]] for k in error_gen_index_list.keys()}
-    print(error_gen_index_list)
+    #print(error_gen_index_list)
+    intrinsic_rates = {}
+    #for k in error_gen_index_list.keys():
+        #for v in error_gen_index_list[k]:
+            #print(f'{k=}')
+            #print(f'{v=}')
+            
     intrinsic_rates = {v: 0 for k in error_gen_index_list.keys() for v in error_gen_index_list[k]}
-    for key, err in zip(intrinsic_rates.keys(), intrinsic_rate_list):
-        intrinsic_rates[key] = err
-    print(intrinsic_rates)
+    for key, i in zip(intrinsic_rates.keys(), range(intrinsic_rate_list.shape[0])):
+        with _np.printoptions(precision=10):
+            print(f'{key}:  {intrinsic_rate_list[i]}')
+        intrinsic_rates[key] = intrinsic_rate_list[i]
+    #with _np.printoptions(precision=10):
+        #print(intrinsic_rates)
 
     return _IdleTomographyResults(
         dataset,
