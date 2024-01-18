@@ -1,7 +1,7 @@
 import numpy as np
 from pygsti.baseobjs import Basis
 
-np.set_printoptions(precision=1, linewidth=1000)
+np.set_printoptions(precision=4, linewidth=1000)
 
 import pygsti
 from pygsti.extras import idletomography as idt
@@ -41,7 +41,7 @@ if n_qubits == 1:
     fid_pairs = huh
 
 gates = ["Gi", "Gx", "Gy", "Gcnot"]
-max_lengths = [1, 2, 4, 8]
+max_lengths = [1, 2]
 
 pspec = pygsti.processors.QubitProcessorSpec(
     n_qubits, gates, geometry="line", nonstd_gate_unitaries={(): 1}
@@ -80,7 +80,7 @@ else:
         updated_ckt_list.append(new_ckt)
 
 err_str = 'HXHYSZ'
-term_dict = {('C', 'X', 'Y'): .01}
+term_dict = {('C', 'X', 'Y'): .02}
 # state_space = QubitSpace(n_qubits)
 # test_error_gen = LindbladErrorgen.from_elementary_errorgens(term_dict, state_space=state_space, parameterization='GLND')
 # test_error_gen.to_dense()
@@ -96,11 +96,10 @@ term_dict = {('C', 'X', 'Y'): .01}
 # noise_model._rebuild_paramvec()
 
 mdl_datagen = pygsti.models.create_crosstalk_free_model(
-    pspec, lindblad_error_coeffs={"Gi": term_dict},lindblad_parameterization='GLND',
-)
+        pspec, lindblad_error_coeffs={"Gi": term_dict}, lindblad_parameterization='GLND')
 # Error models! Random with right CP constraints from Taxonomy paper
 ds = pygsti.data.simulate_data(
-    mdl_datagen, updated_ckt_list, 100000, seed=8675309, sample_error="none"
+    mdl_datagen, updated_ckt_list, 1, seed=8675309, sample_error="none"
 )
 
 if n_qubits == 2:
@@ -125,8 +124,8 @@ else:
     )
 
 
-print(results.observed_rate_infos)
-print(results.intrinsic_rates)
+#print(f'{results.observed_rate_infos=}')
+#print(f'{results.intrinsic_rates=}')
 
 output_str = "../1qTestReports/" + err_str
 name_str = "Test idle tomography example report: 1q, " + err_str
@@ -138,4 +137,4 @@ idt.create_idletomography_report(
 results.error_list
 # ws = pygsti.report.Workspace()
 # ws.init_notebook_mode(autodisplay=True)
-print(results)
+#print(results)
