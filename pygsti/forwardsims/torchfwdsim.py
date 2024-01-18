@@ -70,9 +70,18 @@ class TorchForwardSimulator(ForwardSimulator):
             op_labels  = spc.circuit_without_povm[1:]
             povm_label = spc.povm_label
 
-            rhorep  = self.model.circuit_layer_operator(prep_label, typ='prep')._rep
-            povmrep = self.model.circuit_layer_operator(povm_label, typ='povm')._rep
-            opreps = [self.model.circuit_layer_operator(ol, 'op')._rep for ol in op_labels]
+            # function calls that eventually reach
+            #   ExplicitLayerRules.prep_layer_operator,
+            #   ExplicitLayerRules.povm_layer_operator,
+            #   ExplicitLayerRules.operation_layer_operator
+            # for self.model._layer_rules as the ExplicitLayerRules object.
+            rho = self.model.circuit_layer_operator(prep_label, typ='prep')
+            povm = self.model.circuit_layer_operator(povm_label, typ='povm')
+            ops = [self.model.circuit_layer_operator(ol, 'op') for ol in op_labels]
+
+            rhorep  = rho._rep
+            povmrep = povm._rep
+            opreps = [op._rep for op in ops]
             
             rhorep = propagate_staterep(rhorep, opreps)
 
@@ -82,7 +91,5 @@ class TorchForwardSimulator(ForwardSimulator):
                 array_to_fill[indices] = [erep.probability(rhorep) for erep in ereps]  # outcome probabilities
             else:
                 raise NotImplementedError()
-                # using spc.effect_labels ensures returned probabilities are in same order as spc_outcomes
-                array_to_fill[indices] = povmrep.probabilities(rhorep, None, spc.effect_labels)
         pass
 
