@@ -637,12 +637,8 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
         def process_rates(typ):
             """Process list of intrinsic rates, binning into rates for different sets of qubits"""
             rates = _collections.defaultdict(dict)
-            for err, value in zip(
-                idtresults.error_list, self.intrinsic_rates[typ]
-            ):
-                qubits = [
-                    i for i, P in enumerate(err.rep) if P != "I"
-                ]  # (in sorted order)
+            for err, value in zip(idtresults.error_list, self.intrinsic_rates[typ]):
+                qubits = [i for i, P in enumerate(err.rep) if P != "I"]  # (in sorted order)
                 op = _pobjs.NQPauliOp("".join([P for P in err.rep if P != "I"]))
                 ##FIXME THIS PROBLABY BASJDF ONE QUBIT WORKS MAYBE
                 rates[tuple(qubits)][op] = value
@@ -742,7 +738,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                         row_formatters.append("Brackets")
 
                 if disp == "C" and ky in aff_rates:
-                    values, xlabels, ylabels = _get_plot_info(ky, aff_rates[ky], disp)
+                    values, xlabels, ylabels = _get_plot_info(ky, cor_rates[ky], disp)
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws,
