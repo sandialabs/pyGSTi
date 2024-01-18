@@ -125,7 +125,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             Provider used to retrieve RuntimeJobs from IBMQ based on job_ids
             (if lazy_qiskit_load is False)
         
-        checkpoint_path: str, optional
+        new_checkpoint_path: str, optional
             A string for the path to use for writing intermediate checkpoint
             files to disk. If None, this defaults to using the same checkpoint
             as the serialized IBMQExperiment object. If provided, this will be
@@ -196,14 +196,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 ret._retrieve_jobs(provider)
         
         # Update checkpoint path if requested
-        if checkpoint_path is not None:
-            ret.checkpoint_path = checkpoint_path
-            if _pathlib.Path(ret.checkpoint_path).exists():
-                msg = "Checkpoint path already exists! If trying to load an existing checkpoint," \
-                    +" use .from_dir({checkpoint_path}) instead. Otherwise, choose a different" \
-                    +" checkpoint path, remove the existing checkpoint, or move the existing" \
-                    +" checkpoint to a different directory."
-                raise RuntimeError(msg)
+        if new_checkpoint_path is not None:
+            ret.checkpoint_path = new_checkpoint_path
             if not ret.disable_checkpointing:
                 ret.write(ret.checkpoint_path)
         
@@ -211,7 +205,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
     def __init__(self, edesign, pspec, remove_duplicates=True, randomized_order=True, circuits_per_batch=75,
                  num_shots=1024, seed=None, checkpoint_path=None, disable_checkpointing=False):
-        _TreeNode.__init__(self, edesign._dirs, edesign._vals)
+        _TreeNode.__init__(self, {}, {})
 
         self.auxfile_types = {}
         _HasPSpec.__init__(self, pspec)
@@ -256,12 +250,6 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             self.auxfile_types['batch_results'] = 'pickle'
         
         if not self.disable_checkpointing:
-            if _pathlib.Path(self.checkpoint_path).exists():
-                msg = "Checkpoint path already exists! If trying to load an existing checkpoint," \
-                    +" use .from_dir({checkpoint_path}) instead. Otherwise, choose a different" \
-                    +" checkpoint path, remove the existing checkpoint, or move the existing" \
-                    +" checkpoint to a different directory."
-                raise RuntimeError(msg)
             self.write(self.checkpoint_path)
         
     def monitor(self):

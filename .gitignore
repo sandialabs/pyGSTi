@@ -11,6 +11,7 @@
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
 *_checkpoints/
+*_checkpoint/
 jupyter_notebooks/**/offline
 test/test_packages/offline
 hooks/etc/permissions.yml
