@@ -742,7 +742,7 @@ class IdleTomographyIntrinsicErrorsTable(_ws.WorkspaceTable):
                         row_formatters.append("Brackets")
 
                 if disp == "C" and ky in aff_rates:
-                    values, xlabels, ylabels = _get_plot_info(ky, aff_rates[ky], disp)
+                    values, xlabels, ylabels = _get_plot_info(ky, cor_rates[ky], disp)
                     if display_as == "boxes":
                         fig = _wp.MatrixPlot(
                             self.ws,

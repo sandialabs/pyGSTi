@@ -13,10 +13,12 @@ from pygsti.modelpacks import smq1Q_XYI
 from pygsti.extras.idletomography.pauliobjs import NQPauliState
 
 from pygsti.extras.idletomography.idtcore import idle_tomography_fidpairs
-n_qubits = 1
+n_qubits = 2
 
 fid_pairs = idle_tomography_fidpairs(n_qubits)
 print(fid_pairs)
+print(len(fid_pairs))
+
 if n_qubits == 1:
     huh = [
             (NQPauliState("X", (1,)), NQPauliState("X", (1,))),
@@ -79,8 +81,8 @@ else:
                 new_ckt[i] = Label(("Gi", 0))
         updated_ckt_list.append(new_ckt)
 
-err_str = 'HXHYSZ'
-term_dict = {('C', 'X', 'Y'): .02}
+err_str = 'HX'
+term_dict = {('H', 'X'): .001}
 # state_space = QubitSpace(n_qubits)
 # test_error_gen = LindbladErrorgen.from_elementary_errorgens(term_dict, state_space=state_space, parameterization='GLND')
 # test_error_gen.to_dense()

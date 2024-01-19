@@ -119,20 +119,26 @@ def convert_to_pauli(matrix, numQubits):
 # Return: hamiltonian error and coef dictionary
 def gather_hamiltonian_jacobian_coefs(pauliDict, numQubits, printFlag=True):
     parities = [1, -1]
+    parities = list(product([1, -1], repeat=numQubits))
     hamiltonianErrorOutputs = dict()
     identKey = "I" * numQubits
     ident = pauliDict[identKey]
 
     pauliDictProduct = list(
         _itertools.product(
-            [key for key in pauliDict.keys() if key != identKey],
+            [key for key in pauliDict.keys() if "I" not in key],
             [key for key in pauliDict.keys() if key != identKey],
         )
     )
+    paulis1Q = basisconstructors.pp_matrices_dict(2, normalize=False)
     for pauliPair in pauliDictProduct:
         for parity in parities:
-            inputStateName = str(parity)[:-1] + pauliPair[0]
-            inputState = parity * pauliDict[pauliPair[0]]
+            inputStateName = "".join([str(parity[i])[:-1] + pauliPair[0][i] for i in range(len(pauliPair[0]))])
+            inputStateItems = [parity[i] * paulis1Q[pauliPair[0][i]] for i in range(len(pauliPair[0]))]
+            while len(inputStateItems) >= 2:
+                inputState = _np.kron(inputStateItems[0], inputStateItems[1])
+                inputStateItems[1] = inputState
+                inputStateItems.pop(0)
             indexedPauli = pauliDict[pauliPair[1]]
             inputState = ident / 2 + inputState / 2
 
@@ -141,9 +147,10 @@ def gather_hamiltonian_jacobian_coefs(pauliDict, numQubits, printFlag=True):
             )
             decomposition = convert_to_pauli(process_matrix, numQubits)
             for element in decomposition:
-                hamiltonianErrorOutputs[
-                    ((inputStateName, element[1]), pauliPair[1])
-                ] = element[0]
+                if "I" not in element[1]:
+                    hamiltonianErrorOutputs[
+                        ((str(inputStateName), element[1]), pauliPair[1])
+                    ] = element[0]
     if printFlag:
         for key in hamiltonianErrorOutputs:
             print(key, "\n", hamiltonianErrorOutputs[key])
@@ -262,6 +269,7 @@ def gather_anti_symmetric_jacobian_coefs(pauliDict, numQubits, printFlag=False):
 
 def build_class_jacobian(classification, numQubits):
     pauli_matrices = basisconstructors.pp_matrices_dict(2**numQubits, normalize=False)
+    print(len(pauli_matrices))
     identKey = "I" * numQubits
 
     # classification within ["H", "S", "C", "A"]
@@ -306,13 +314,16 @@ def build_class_jacobian(classification, numQubits):
 def dict_to_jacobian(coef_dict, classification, numQubits):
     pauli_matrices = basisconstructors.pp_matrices_dict(2**numQubits, normalize=False)
     identKey = "I" * numQubits
-    initial_states = [key for key in pauli_matrices.keys() if key != identKey] + [
-        str("-" + key) for key in pauli_matrices.keys() if key != identKey
-    ]
+    parities = list(product([1, -1], repeat=numQubits))
+    paulis1Q = basisconstructors.pp_matrices_dict(2, normalize=False)
+    pauliKeys = [key for key in paulis1Q.keys() if "I" not in key] + ["-" + key for key in paulis1Q.keys() if "I" not in key]
+    
+    initial_states = ["".join(pair) for pair in _itertools.product(pauliKeys, repeat=numQubits)]
+
     pauliDictProduct = list(
         _itertools.product(
             initial_states,
-            [key for key in pauli_matrices.keys() if key != identKey],
+            [key for key in pauli_matrices.keys() if "I" not in key],
         )
     )
 
@@ -331,14 +342,16 @@ def dict_to_jacobian(coef_dict, classification, numQubits):
         )
         quit()
     row_index_list = {v: k for (k, v) in dict(enumerate(pauliDictProduct)).items()}
-    # print(row_index_list)
     col_index_list = {v: k for (k, v) in dict(enumerate(index_list)).items()}
     # print(col_index_list)
     output_jacobian = _np.zeros((len(pauliDictProduct), len(index_list)))
     for coef in coef_dict:
-        output_jacobian[row_index_list[coef[0]]][col_index_list[coef[1]]] = coef_dict[
-            coef
-        ]
+        row_index_coef = row_index_list.get(coef[0])
+        col_index_coef = col_index_list.get(coef[1])
+        if row_index_coef:
+            output_jacobian[row_index_coef][col_index_coef] = coef_dict[
+                coef
+            ]
     # print(output_jacobian)
     # print(col_index_list)
     return output_jacobian, col_index_list
@@ -547,7 +560,7 @@ def idle_tomography_fidpairs(nqubits):
             fidpairs.append(
                 (
                     _pobjs.NQPauliState(prep_string, sign),
-                    _pobjs.NQPauliState(meas_string, signs[0]),
+                    _pobjs.NQPauliState(meas_string, signs[-1]),
                 )
             )
 
@@ -1285,15 +1298,25 @@ def do_idle_tomography(
         GiStr = _Circuit(idle_string, line_labels=line_labels)
     else:
         GiStr = _Circuit(idle_string, num_lines=nqubits)
-
+    ## TODO: Jacobian building shouldn't generate terms for preps in things like IZ or measure in things like XI
+    ## Can I just pass experiment design fiducial pairs to the jacobian building? (this is the better way)
     hamiltonian_jacobian_coefs = build_class_jacobian("H", nqubits)
-    #print(hamiltonian_jacobian_coefs)
+    # print(hamiltonian_jacobian_coefs)
+    
     hamiltonian_jacobian, hamiltonian_index_list = dict_to_jacobian(hamiltonian_jacobian_coefs, "H", nqubits)
+    # print(hamiltonian_jacobian_coefs)
+    # print(hamiltonian_index_list)
+    # print(hamiltonian_jacobian)
+    # print(hamiltonian_jacobian.shape)
+
     stochastic_jacobian_coefs = build_class_jacobian("S", nqubits)
     stochastic_jacobian, stochastic_index_list = dict_to_jacobian(stochastic_jacobian_coefs, "S", nqubits)
     # print(stochastic_jacobian_coefs)
     correlation_jacobian_coefs = build_class_jacobian("C", nqubits)
     correlation_jacobian, correlation_index_list = dict_to_jacobian(correlation_jacobian_coefs, "C", nqubits)
+    # print(correlation_index_list)
+    # print(len(correlation_index_list))
+    # quit()
     # print(correlation_jacobian_coefs)
     anti_symmetric_jacobian_coefs = build_class_jacobian("A", nqubits)
     anti_symmetric_jacobian, anti_symmetric_index_list = dict_to_jacobian(
