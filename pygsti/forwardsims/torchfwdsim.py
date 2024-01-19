@@ -22,18 +22,12 @@ except ImportError:
     ENABLED = False
 
 from pygsti.forwardsims.forwardsim import ForwardSimulator
-from pygsti.forwardsims.forwardsim import _bytes_for_array_types
-from pygsti.layouts.maplayout import MapCOPALayout
-from pygsti.baseobjs.verbosityprinter import VerbosityPrinter
-from pygsti.tools import sharedmemtools as _smt
-from pygsti.tools import slicetools as _slct
-from pygsti.tools.matrixtools import _fas
 
 # Below: imports only needed for typehints
 from pygsti.circuits import Circuit
 from pygsti.baseobjs.resourceallocation import ResourceAllocation
 ExplicitOpModel = TypeVar('ExplicitOpModel')
-# ^ declare to avoid circular reference (pygsti.models.explicitmodel.ExplicitOpModel)
+# ^ declare to avoid circular references
 
 
 
@@ -49,11 +43,22 @@ class TorchForwardSimulator(ForwardSimulator):
     A forward simulator that leverages automatic differentiation in PyTorch.
     (The current work-in-progress implementation has no Torch functionality whatsoever.)
     """
-
-    def __init__(self, model: Optional[ExplicitOpModel] = None):
-        if model is not None:
-            assert isinstance(model, ExplicitOpModel)
-        super().__init__(model)
+    def __init__(self, model = None):
+        from pygsti.models.torchmodel import TorchOpModel as OpModel
+        from pygsti.models.torchmodel import TorchLayerRules as LayerRules
+        if model is None or isinstance(OpModel):
+            self.model = model
+        elif isinstance(model, ExplicitOpModel):
+            # cast to TorchOpModel
+            # torch_model = TorchForwardSimulator.OpModel.__new__(TorchForwardSimulator.OpModel)
+            # torch_model.__set_state__(model.__get_state__())
+            # self.model = torch_model
+            model._sim = self
+            model._layer_rules = LayerRules()
+            self.model = model
+        else:
+            raise ValueError("Unknown type.")
+        super(ForwardSimulator, self).__init__(model)
 
     def _compute_circuit_outcome_probabilities(
             self, array_to_fill: np.ndarray, circuit: Circuit,
@@ -71,10 +76,10 @@ class TorchForwardSimulator(ForwardSimulator):
             povm_label = spc.povm_label
 
             # function calls that eventually reach
-            #   ExplicitLayerRules.prep_layer_operator,
-            #   ExplicitLayerRules.povm_layer_operator,
-            #   ExplicitLayerRules.operation_layer_operator
-            # for self.model._layer_rules as the ExplicitLayerRules object.
+            #   TorchLayerRules.prep_layer_operator,
+            #   TorchLayerRules.povm_layer_operator,
+            #   TorchLayerRules.operation_layer_operator
+            # for self.model._layer_rules as the TorchLayerRules object.
             rho = self.model.circuit_layer_operator(prep_label, typ='prep')
             povm = self.model.circuit_layer_operator(povm_label, typ='povm')
             ops = [self.model.circuit_layer_operator(ol, 'op') for ol in op_labels]
