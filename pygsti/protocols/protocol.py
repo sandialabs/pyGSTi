@@ -1012,6 +1012,102 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
         return ExperimentDesign(mapped_circuits, mapped_qubit_labels, mapped_children, self._dirs)
 
 
+class CanCreateAllCircuitsDesign(ExperimentDesign):
+    """A type of ExperimentDesign that can create
+    all_circuits_needing_data from subdesigns or other information.
+    
+    In cases where all_circuits_needing_data *can* be recreated,
+    i.e. it has not been modified by the user in some unexpected way,
+    this class will ensure that all_circuits_needing_data is skipped
+    during serialization and regenerated during deserialization.
+    """
+    def _create_all_circuits_needing_data(self):
+        """Create all_circuits_needing_data for other information.
+
+        This interface is needed to ensure that all_circuits_needing_data
+        can be regenerated consistently during construction and deserialization.
+        """
+        raise NotImplementedError("Derived classes should implement this")
+    
+    @classmethod
+    def from_dir(cls, dirname, parent=None, name=None, quick_load=False):
+        """
+        Initialize a new ExperimentDesign object from `dirname`.
+
+        This is specialized to regenerate all_circuits_needing_data
+        if it was not serialized.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory name (under which there is a 'edesign'
+            subdirectory).
+
+        parent : ExperimentDesign, optional
+            The parent design object, if there is one.  Primarily used
+            internally - if in doubt, leave this as `None`.
+
+        name : str, optional
+            The sub-name of the design object being loaded, i.e. the
+            key of this data object beneath `parent`.  Only used when
+            `parent` is not None.
+
+        quick_load : bool, optional
+            Setting this to True skips the loading of the potentially long
+            circuit lists.  This can be useful when loading takes a long time
+            and all the information of interest lies elsewhere, e.g. in an
+            encompassing results object.
+
+        Returns
+        -------
+        ExperimentDesign
+        """
+        ret = super().from_dir(dirname, parent=parent, name=name, quick_load=quick_load)
+
+        if ret.auxfile_types['all_circuits_needing_data'] == 'reset':
+            ret.all_circuits_needing_data = ret._create_all_circuits_needing_data()
+
+            ret.auxfile_types['all_circuits_needing_data'] = ret.old_all_circuits_type
+            del ret.old_all_circuits_type
+        
+        return ret
+
+    def write(self, dirname=None, parent=None):
+        """
+        Write this experiment design to a directory.
+
+        This is specialized to skip writing all_circuits_needing_data
+        if it can be regenerated from other class information.
+
+        Parameters
+        ----------
+        dirname : str
+            The *root* directory to write into.  This directory will have
+            an 'edesign' subdirectory, which will be created if needed and
+            overwritten if present.  If None, then the path this object
+            was loaded from is used (if this object wasn't loaded from disk,
+            an error is raised).
+
+        parent : ExperimentDesign, optional
+            The parent experiment design, when a parent is writing this
+            design as a sub-experiment-design.  Otherwise leave as None.
+
+        Returns
+        -------
+        None
+        """
+        initial_circuits = self._create_all_circuits_needing_data()
+        if self.all_circuits_needing_data == initial_circuits:
+            self.old_all_circuits_type = self.auxfile_types['all_circuits_needing_data']
+            self.auxfile_types['all_circuits_needing_data'] = 'reset'
+        
+        super().write(dirname=dirname, parent=parent)
+
+        if self.auxfile_types['all_circuits_needing_data'] == 'reset':
+            self.auxfile_types['all_circuits_needing_data'] = self.old_all_circuits_type
+            del self.old_all_circuits_type
+
+
 class CircuitListsDesign(ExperimentDesign):
     """
     Experiment design specification that is comprised of multiple circuit lists.
@@ -1200,7 +1296,7 @@ class CircuitListsDesign(ExperimentDesign):
                                   self.nested, remove_duplicates=False)  # no need to remove duplicates
 
 
-class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the same dataset
+class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple designs on the same dataset
     """
     An experiment design that combines the specifications of one or more "sub-designs".
 
@@ -1236,8 +1332,33 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
 
     interleave : bool, optional
         Whether the circuits of the `sub_designs` should be interleaved to
-        form the circuit ordering of this experiment design.
+        form the circuit ordering of this experiment design. DEPRECATED
     """
+
+    def _create_all_circuits_needing_data(self, subdesigns=None):
+        """Create all_circuits_needing_data for other information.
+
+        This interface is needed to ensure that all_circuits_needing_data
+        can be regenerated consistently during construction and deserialization.
+
+        Parameters
+        ----------
+        subdesigns: list of ExperimentDesigns, optional
+            List of subdesigns to use. If not provided, will use self._vals.values()
+            as the subdesigns. Primarily used during initialization when self._vals
+            is not set yet.
+        
+        Returns
+        -------
+        all_circuits: list of Circuits
+            Union of all_circuits_needing_data from subdesigns without duplicates
+        """
+        subdesigns = self._vals if subdesigns is None else subdesigns
+        all_circuits = []
+        for des in subdesigns.values():
+            all_circuits.extend(des.all_circuits_needing_data)
+        _lt.remove_duplicates_in_place(all_circuits)  # Maybe don't always do this?
+        return all_circuits
 
     @classmethod
     def from_edesign(cls, edesign, name):
@@ -1309,14 +1430,11 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         if not isinstance(sub_designs, dict):
             sub_designs = {("**%d" % i): des for i, des in enumerate(sub_designs)}
 
-        if all_circuits is None:
-            all_circuits = []
-            if not interleave:
-                for des in sub_designs.values():
-                    all_circuits.extend(des.all_circuits_needing_data)
-            else:
-                raise NotImplementedError("Interleaving not implemented yet")
-            _lt.remove_duplicates_in_place(all_circuits)  # Maybe don't always do this?
+        if interleave:
+            raise NotImplementedError("Interleaving not implemented and will be removed in 0.9.13")
+
+        all_circuits = self._create_all_circuits_needing_data(sub_designs) if all_circuits is None \
+            else all_circuits
 
         if qubit_labels is None and len(sub_designs) > 0:
             first = sub_designs[list(sub_designs.keys())[0]].qubit_labels
@@ -1611,7 +1729,7 @@ class SimultaneousExperimentDesign(ExperimentDesign):
         return SimultaneousExperimentDesign(mapped_edesigns, mapped_circuits, mapped_qubit_labels)
 
 
-class FreeformDesign(ExperimentDesign):
+class FreeformDesign(CanCreateAllCircuitsDesign):
     """
     Experiment design holding an arbitrary circuit list and meta data.
 
@@ -1624,6 +1742,19 @@ class FreeformDesign(ExperimentDesign):
         The qubits that this experiment design applies to. If None, the
         line labels of the first circuit is used.
     """
+    
+    def _create_all_circuits_needing_data(self):
+        """Create all_circuits_needing_data for other information.
+
+        This interface is needed to ensure that all_circuits_needing_data
+        can be regenerated consistently during construction and deserialization.
+        
+        Returns
+        -------
+        list of Circuits
+            Keys of self.aux_info
+        """
+        return list(self.aux_info.keys())
 
     @classmethod
     def from_dataframe(cls, df, qubit_labels=None):
@@ -1677,13 +1808,11 @@ class FreeformDesign(ExperimentDesign):
             raise ValueError("Cannot convert a %s to a %s!" % (str(type(edesign)), str(cls)))
 
     def __init__(self, circuits, qubit_labels=None):
-        if isinstance(circuits, dict):
-            self.aux_info = circuits.copy()
-            circuits = list(circuits.keys())
-        else:
-            self.aux_info = {c: None for c in circuits}
-        super().__init__(circuits, qubit_labels)
-        self.auxfile_types['aux_info'] = 'pickle'
+        self.aux_info = circuits.copy() if isinstance(circuits, dict) else {c: None for c in circuits}
+        
+        super().__init__(self._create_all_circuits_needing_data(), qubit_labels)
+        
+        self.auxfile_types['aux_info'] = 'circuit-str-json'
 
     def _truncate_to_circuits_inplace(self, circuits_to_keep):
         truncated_aux_info = {k: v for k, v in self.aux_info.items() if k in circuits_to_keep}
@@ -1693,7 +1822,10 @@ class FreeformDesign(ExperimentDesign):
     def to_dataframe(self, pivot_valuename=None, pivot_value="Value", drop_columns=False):
         cdict = _NamedDict('Circuit', None)
         for cir, info in self.aux_info.items():
-            cdict[cir.str] = _NamedDict('ValueName', 'category', items=info)
+            try:
+                cdict[cir.str] = _NamedDict('ValueName', 'category', items=info)
+            except TypeError:
+                raise TypeError("Failed to cast to dataframe. Ensure that aux_info values are dicts!")
         df = cdict.to_dataframe()
         return _process_dataframe(df, pivot_valuename, pivot_value, drop_columns, preserve_order=True)
 

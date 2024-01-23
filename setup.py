@@ -58,11 +58,13 @@ extras = {
         'flake8'
     ],
     'interpygate': ['csaps'],
+    'serialization': ['bson'],
     'testing': [
         'pytest',
         'pytest-xdist',
         'pytest-cov',
         'nbval',
+        'bson',
         'csaps',
         'cvxopt<=1.3.0.1',
         'cvxpy',

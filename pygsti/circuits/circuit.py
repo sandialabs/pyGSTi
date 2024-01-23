@@ -4021,7 +4021,7 @@ class Circuit(object):
         # Init the openqasm string.
         openqasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\n'
         # Include a delay instruction
-        openqasm += 'opaque delay(t) q;\n\n'
+        #openqasm += 'opaque delay(t) q;\n\n' # SS 01-22-24: Is this necessary? CHeck with Megan/Tim/Kenny
 
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
         # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
@@ -4102,7 +4102,8 @@ class Circuit(object):
                     if q not in qubits_used:
                         # Delay 0 works because of the barrier
                         # In OpenQASM3, this should probably be a stretch instead
-                        openqasm += 'delay(0)' + ' q[' + str(qubit_conversion[q]) + '];\n'
+                        #openqasm += 'delay(0)' + ' q[' + str(qubit_conversion[q]) + '];\n'
+                        pass
 
             # Add in a barrier after every circuit layer if block_between_layers==True.
             # Including barriers is critical for QCVV testing, circuits should usually
