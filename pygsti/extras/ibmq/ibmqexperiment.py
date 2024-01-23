@@ -328,7 +328,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             self.data.write(self.checkpoint_path, edesign_already_written=True)
 
     def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True,
-               wait_time=1, wait_steps=10):
+               wait_time=5, max_attempts=10):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
         used to create this object.
@@ -397,12 +397,17 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             print(f"Submitting batch {batch_idx + 1}")
             submit_status = False
             batch_waits = 0
-            while not submit_status:
+            while not submit_status and batch_waits < max_attempts:
                 try:
                     #If submitting to a real device, get calibration data
-                    if not ibmq_backend.simulator:
-                        backend_properties = ibmq_backend.properties()
-                        self.submit_time_calibration_data.append(backend_properties.to_dict())
+                    try:
+                        if not ibmq_backend.simulator:
+                            backend_properties = ibmq_backend.properties()
+                            self.submit_time_calibration_data.append(backend_properties.to_dict())
+                    except AttributeError:
+                        # We can't get the properties or check if simulator
+                        # Possible this is a fake backend, append empty submit data
+                        self.submit_time_calibration_data.append({})
                     
                     if backend_version == 1:
                         # If using qiskit-ibmq-provider API, assemble into Qobj first
@@ -453,15 +458,15 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                     batch_waits += 1
                     print("This batch has failed {0} times and there have been {1} total failures".format(
                         batch_waits, total_waits))
-                    print('Waiting ', end='')
-                    for step in range(wait_steps):
-                        print('{} '.format(step), end='')
-                        _time.sleep(wait_time)
-                    print()
+                    print('Waiting', end='')
+                    _time.sleep(wait_time)
                 finally:
                     # Checkpoint calibration and job id data
                     if not self.disable_checkpointing:
                         self._write_checkpoint()
+            
+            if submit_status is False:
+                raise RuntimeError("Ran out of max attempts and job was still not submitted successfully")
 
     def transpile(self):
         """Transpile pyGSTi circuits into Qiskit circuits for submission to IBMQ.
