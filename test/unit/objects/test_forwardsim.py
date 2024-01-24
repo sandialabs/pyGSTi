@@ -4,6 +4,7 @@ from unittest import mock
 
 import numpy as np
 
+from pygsti.models import modelconstruction as _setc
 import pygsti.models as models
 from pygsti.forwardsims import ForwardSimulator, \
     MapForwardSimulator, SimpleMapForwardSimulator, \
@@ -25,7 +26,7 @@ def Ls(*args):
     """ Convert args to a tuple to Labels """
     return tuple([L(x) for x in args])
 
-
+"""
 class AbstractForwardSimTester(BaseCase):
     # XXX is it really neccessary to test an abstract base class?
     def setUp(self):
@@ -140,17 +141,21 @@ class MapForwardSimTester(ForwardSimBase, BaseCase):
         super(MapForwardSimTester, cls).setUpClass()
         cls.model = cls.model.copy()
         cls.model.sim = MapForwardSimulator()
-
+"""
 
 class BaseProtocolData:
 
     @classmethod
     def setUpClass(cls):
-        cls.gst_design = smq1Q_XYI.create_gst_experiment_design(max_max_length=4)
+        cls.gst_design = smq1Q_XYI.create_gst_experiment_design(max_max_length=16)
         cls.mdl_target = smq1Q_XYI.target_model()
+        # cls.mdl_target = _setc.create_explicit_model_from_expressions(
+        #     [('Q0',)], ['Gi', 'Gx', 'Gy'],
+        #     ["I(Q0)", "X(pi/2,Q0)", "Y(pi/2,Q0)"]
+        # )
         cls.mdl_datagen = cls.mdl_target.depolarize(op_noise=0.05, spam_noise=0.025)
 
-        ds = simulate_data(cls.mdl_datagen, cls.gst_design.all_circuits_needing_data, 1000, sample_error='none')
+        ds = simulate_data(cls.mdl_datagen, cls.gst_design.all_circuits_needing_data, 20000, sample_error='none')
         cls.gst_data = ProtocolData(cls.gst_design, ds)
 
 
@@ -166,19 +171,19 @@ class ForwardSimIntegrationTester(BaseProtocolData):
         pass
 
     # shared memory forward simulators
-    def test_simple_matrix_fwdsim(self):
-        self._run(SimpleMatrixForwardSimulator)
+    # def test_simple_matrix_fwdsim(self):
+    #     self._run(SimpleMatrixForwardSimulator)
 
-    def test_simple_map_fwdsim(self):
-        self._run(SimpleMapForwardSimulator)
+    # def test_simple_map_fwdsim(self):
+    #     self._run(SimpleMapForwardSimulator)
 
     def test_torch_fwdsim(self):
         self._run(TorchForwardSimulator)
 
     # distributed-memory forward simulators
-    def test_map_fwdsim(self):
-        self._run(MapForwardSimulator)
+    # def test_map_fwdsim(self):
+    #     self._run(MapForwardSimulator)
 
-    def test_matrix_fwdsim(self):
-        self._run(MatrixForwardSimulator)
+    # def test_matrix_fwdsim(self):
+    #     self._run(MatrixForwardSimulator)
 

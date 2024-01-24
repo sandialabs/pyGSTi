@@ -135,7 +135,9 @@ class TorchLayerRules(_LayerRules):
     """ Directly copy the implementation of ExplicitLayerRules """
 
     def prep_layer_operator(self, model: TorchOpModel, layerlbl: _Label, caches: dict) -> _state.State:
-        return model.preps[layerlbl]
+        prep = model.preps[layerlbl]
+        print(f'prep is of type {type(prep)}')
+        return prep
 
     def povm_layer_operator(self, model: TorchOpModel, layerlbl: _Label, caches: dict) -> Union[_povm.POVM, _povm.POVMEffect]:
         if layerlbl in caches['povm-layers']:
