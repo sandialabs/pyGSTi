@@ -114,31 +114,67 @@ class TorchForwardSimulator(ForwardSimulator):
             # In reality, we find that ...
             #   ExplicitLayerRules gets called instead.
             #
-            #   I tried setting self.model._layer_rules to a TorchLayerRules object.
-            #   It looks like that setting of self.model_layer_rules is getting overridden
-            #   in a casting method that replaces a ForwardSimulator's .model field after
-            #   that ForwardSimulator has been constructed. If I try to bypass this
-            #   by defining a custom setter method for self._model then I run into 
-            #   obscure errors.
-            #
             # I think all of this stems from the fact that TorchLayerRules is associated
             # with a TorchOpModel (which subclasses ExplicitOpModel), and the testing
             # codepath I have uses an ExplicitOpModel rather than a TorchOpModel.
 
             rho = self.model.circuit_layer_operator(prep_label, typ='prep')
+            # ^ <class 'pygsti.modelmembers.states.tpstate.TPState'>
+            #   <class 'pygsti.modelmembers.states.densestate.DenseState'>
+            #   <class 'pygsti.modelmembers.states.densestate.DenseStateInterface'>
+            #   <class 'pygsti.modelmembers.states.state.State'>
+            #   <class 'pygsti.modelmembers.modelmember.ModelMember'>
             povm = self.model.circuit_layer_operator(povm_label, typ='povm')
+            # ^ OrderedDict, keyed by strings, with values of types
+            #   <class 'pygsti.modelmembers.povms.fulleffect.FullPOVMEffect'>
+            #   <class 'pygsti.modelmembers.povms.conjugatedeffect.ConjugatedStatePOVMEffect'>
+            #   <class 'pygsti.modelmembers.povms.conjugatedeffect.DenseEffectInterface'>
+            #   <class 'pygsti.modelmembers.povms.effect.POVMEffect'>
+            #   <class 'pygsti.modelmembers.modelmember.ModelMember'>
             ops = [self.model.circuit_layer_operator(ol, 'op') for ol in op_labels]
+            # ^ For reasons that I don't understand, this is OFTEN an empty list in the first
+            #   step of iterative GST. When it's nonempty, it contains things like ...
+            #     <class 'pygsti.modelmembers.operations.fulltpop.FullTPOp'>
+            #     <class 'pygsti.modelmembers.operations.denseop.DenseOperator'>
+            #     <class 'pygsti.modelmembers.operations.denseop.DenseOperatorInterface'>
+            #     <class 'pygsti.modelmembers.operations.krausop.KrausOperatorInterface'>
+            #     <class 'pygsti.modelmembers.operations.linearop.LinearOperator'>
+            #     <class 'pygsti.modelmembers.modelmember.ModelMember'>
 
             rhorep  = rho._rep
+            # ^ If the default Evotype is densitymx (as usual),
+            #   then rhorep is a ...
+            #     <class 'pygsti.evotypes.densitymx.statereps.StateRepDense'>
+            #     <class 'pygsti.evotypes.densitymx.statereps.StateRep'>
+            #     <class 'pygsti.evotypes.basereps_cython.StateRep'>
+            #     <class 'object'>
+            # ^ If we change the default Evotype to densitymx_slow,
+            #   then rhorep is a ...
+            #     <class 'pygsti.evotypes.densitymx_slow.statereps.StateRepDense'>
+            #     <class 'pygsti.evotypes.densitymx_slow.statereps.StateRep'>
+            #     <class 'pygsti.evotypes.basereps_cython.StateRep'>
+            #     <class 'object'>
+            # Note that in both cases we subclass basereps_cython.StateRep.
             povmrep = povm._rep
+            # ^ None
             opreps = [op._rep for op in ops]
+            # ^ list of ...
+            #   <class 'pygsti.evotypes.densitymx.opreps.OpRepDenseSuperop'>
+            #   <class 'pygsti.evotypes.densitymx.opreps.OpRep'>
+            #   <class 'pygsti.evotypes.basereps_cython.OpRep'>
+            #   <class 'object'>
             
             rhorep = propagate_staterep(rhorep, opreps)
-            # rhorep = self.calclib.propagate_staterep(rhorep, opreps)
+            # ^ That function call is simplified from the original, below.
+            #   rhorep = self.calclib.propagate_staterep(rhorep, opreps)
 
             indices = [outcome_to_index[o] for o in spc_outcomes]
             if povmrep is None:
-                ereps = [self.model.circuit_layer_operator(elabel, 'povm')._rep for elabel in spc.full_effect_labels]
+                ereps = []
+                for  elabel in spc.full_effect_labels:
+                    effect = self.model.circuit_layer_operator(elabel, 'povm')
+                    erep = effect._rep
+                    ereps.append(erep)
                 array_to_fill[indices] = [erep.probability(rhorep) for erep in ereps]  # outcome probabilities
             else:
                 raise NotImplementedError()
@@ -164,3 +200,39 @@ class TorchForwardSimulator(ForwardSimulator):
         # and this is done by the parent model which will cause _set_evotype to be called.
         return state
     """
+
+
+"""
+Running GST produces the following traceback if I set a breakpoint inside the
+loop over expanded_circuit_outcomes.items() in self._compute_circuit_outcome_probabilities(...).
+
+I think something's happening where accessing the objects here (via the debugger)
+makes some object set "self.dirty=True" for the ComplementPOVMEffect.
+
+    pyGSTi/pygsti/forwardsims/forwardsim.py:562: in _bulk_fill_probs_block
+        self._compute_circuit_outcome_probabilities(array_to_fill[element_indices], circuit,
+    pyGSTi/pygsti/forwardsims/torchfwdsim.py:177: in _compute_circuit_outcome_probabilities
+        if povmrep is None:
+    pyGSTi/pygsti/forwardsims/torchfwdsim.py:177: in <listcomp>
+        if povmrep is None:
+    pyGSTi/pygsti/models/model.py:1479: in circuit_layer_operator
+        self._clean_paramvec()
+    pyGSTi/pygsti/models/model.py:679: in _clean_paramvec
+        clean_obj(obj, lbl)
+    pyGSTi/pygsti/models/model.py:675: in clean_obj
+        clean_obj(subm, _Label(lbl.name + ":%d" % i, lbl.sslbls))
+    pyGSTi/pygsti/models/model.py:676: in clean_obj
+        clean_single_obj(obj, lbl)
+    pyGSTi/pygsti/models/model.py:666: in clean_single_obj
+        w = obj.to_vector()
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+    self = <pygsti.modelmembers.povms.complementeffect.ComplementPOVMEffect object at 0x2a79e31f0>
+
+        def to_vector(self):
+            '''<Riley removed comment block>'''
+    >       raise ValueError(("ComplementPOVMEffect.to_vector() should never be called"
+                            " - use TPPOVM.to_vector() instead"))
+    E       ValueError: ComplementPOVMEffect.to_vector() should never be called - use TPPOVM.to_vector() instead
+
+"""
