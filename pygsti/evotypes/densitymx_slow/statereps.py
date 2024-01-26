@@ -25,7 +25,7 @@ except ImportError:
     _fastcalc = None
 
 
-class StateRep(_basereps.StateRep):
+class StateRep:
     def __init__(self, data, state_space):
         #vec = _np.asarray(vec, dtype='d')
         assert(data.dtype == _np.dtype('d'))

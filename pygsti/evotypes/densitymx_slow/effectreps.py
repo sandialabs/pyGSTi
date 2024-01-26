@@ -18,7 +18,7 @@ from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import matrixtools as _mt
 
 
-class EffectRep(_basereps.EffectRep):
+class EffectRep:
     def __init__(self, state_space):
         self.state_space = _StateSpace.cast(state_space)
 

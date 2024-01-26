@@ -26,7 +26,7 @@ from ...tools import matrixtools as _mt
 from ...tools import optools as _ot
 
 
-class OpRep(_basereps.OpRep):
+class OpRep:
     def __init__(self, state_space):
         self.state_space = state_space
 
