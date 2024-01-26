@@ -26,10 +26,8 @@ except ImportError:
 
 """
 Riley note:
-    I know we're in the densitymx_slow staterep, but signs point to the underlying representation
-    here being as a superket, not a density matrix. I certainly don't see anything in *this* file
-    which imposes a density matrix requirement. Maybe there's something in the associated 
-    opreps.py or effectreps.py?
+    These classes are actually used for representing superkets,
+    not density matrices.
 """
 
 class StateRep:
