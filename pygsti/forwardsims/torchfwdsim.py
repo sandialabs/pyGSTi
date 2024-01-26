@@ -42,9 +42,11 @@ Proposal:
 """
 
 def propagate_staterep(staterep, operationreps):
-    ret = staterep.actionable_staterep()
-    for oprep in operationreps:
-        ret = oprep.acton(ret)
+    superket = staterep.base
+    superops = [oprep.base for oprep in operationreps]
+    for superop in superops:
+        superket = superop @ superket
+    ret = type(staterep)(superket, staterep.state_space, None)
     return ret
 
 
@@ -161,6 +163,8 @@ class TorchForwardSimulator(ForwardSimulator):
             #     <class 'pygsti.evotypes.densitymx_slow.statereps.StateRepDense'>
             #     <class 'pygsti.evotypes.densitymx_slow.statereps.StateRep'>.
             povmrep = povm._rep
+            if povmrep is not None:
+                raise NotImplementedError()
             # ^ None
             opreps = [op._rep for op in ops]
             # ^ list of ...
@@ -172,37 +176,27 @@ class TorchForwardSimulator(ForwardSimulator):
             # would change in the natural way.
             
             rhorep = propagate_staterep(rhorep, opreps)
-            # ^ That function call is simplified from the original, below.
-            #   rhorep = self.calclib.propagate_staterep(rhorep, opreps)
+            for i, elabel in enumerate(spc.full_effect_labels):
+                effect = self.model.circuit_layer_operator(elabel, 'povm')
+                # ^ If we called effect = self.model._circuit_layer_operator(elabel, 'povm')
+                #   then we could skip a call to self.model._cleanparamvec. For some reason
+                #   reaching this code scope in the debugger ends up setting some model member
+                #   to "dirty" and results in an error when we try to clean it. SO, bypassing
+                #   that call to self.model._cleanparamvec, we would see the following class
+                #   inheritance structure of the returned object.
+                #
+                #    <class 'pygsti.modelmembers.povms.fulleffect.FullPOVMEffect'>
+                #    <class 'pygsti.modelmembers.povms.conjugatedeffect.ConjugatedStatePOVMEffect'>
+                #    <class 'pygsti.modelmembers.povms.conjugatedeffect.DenseEffectInterface'>
+                #    <class 'pygsti.modelmembers.povms.effect.POVMEffect'>
+                #    <class 'pygsti.modelmembers.modelmember.ModelMember'>
+                erep = effect._rep
+                # ^ <class 'pygsti.evotypes.densitymx.effectreps.EffectRepConjugatedState'>
+                #   <class 'pygsti.evotypes.densitymx.effectreps.EffectRep'>
+                # If we set the default evotypes to densitymx_slow then the first two classes
+                # would change in the natural way.
+                array_to_fill[i] = erep.probability(rhorep)
 
-            indices = [outcome_to_index[o] for o in spc_outcomes]
-            if povmrep is None:
-                ereps = []
-                for  elabel in spc.full_effect_labels:
-                    effect = self.model.circuit_layer_operator(elabel, 'povm')
-                    # ^ If we called effect = self.model._circuit_layer_operator(elabel, 'povm')
-                    #   then we could skip a call to self.model._cleanparamvec. For some reason
-                    #   reaching this code scope in the debugger ends up setting some model member
-                    #   to "dirty" and results in an error when we try to clean it. SO, bypassing
-                    #   that call to self.model._cleanparamvec, we would see the following class
-                    #   inheritance structure of the returned object.
-                    #
-                    #    <class 'pygsti.modelmembers.povms.fulleffect.FullPOVMEffect'>
-                    #    <class 'pygsti.modelmembers.povms.conjugatedeffect.ConjugatedStatePOVMEffect'>
-                    #    <class 'pygsti.modelmembers.povms.conjugatedeffect.DenseEffectInterface'>
-                    #    <class 'pygsti.modelmembers.povms.effect.POVMEffect'>
-                    #    <class 'pygsti.modelmembers.modelmember.ModelMember'>
-                    erep = effect._rep
-                    # ^ <class 'pygsti.evotypes.densitymx.effectreps.EffectRepConjugatedState'>
-                    #   <class 'pygsti.evotypes.densitymx.effectreps.EffectRep'>
-                    #   <class 'pygsti.evotypes.basereps_cython.EffectRep'>
-                    #   <class 'object'>
-                    # If we set the default evotypes to densitymx_slow then the first two classes
-                    # would change in the natural way.
-                    ereps.append(erep)
-                array_to_fill[indices] = [erep.probability(rhorep) for erep in ereps]  # outcome probabilities
-            else:
-                raise NotImplementedError()
         pass
 
 
