@@ -17,6 +17,12 @@ from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import matrixtools as _mt
 
 
+"""
+Riley note:
+    These classes are actually used for representing linear operators that
+    act on superkets, not linear operators that act on density matrices.
+"""
+
 class EffectRep:
     def __init__(self, state_space):
         self.state_space = _StateSpace.cast(state_space)

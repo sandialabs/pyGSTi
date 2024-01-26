@@ -24,6 +24,11 @@ from ...tools import lindbladtools as _lbt
 from ...tools import matrixtools as _mt
 from ...tools import optools as _ot
 
+"""
+Riley note:
+    These classes are actually used for representing linear operators that
+    act on superkets, not linear operators that act on density matrices.
+"""
 
 class OpRep:
     def __init__(self, state_space):
