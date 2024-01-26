@@ -17,7 +17,6 @@ import scipy.sparse as _sps
 from scipy.sparse.linalg import LinearOperator
 
 from .statereps import StateRepDense as _StateRepDense
-from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import basistools as _bt
 from ...tools import internalgates as _itgs

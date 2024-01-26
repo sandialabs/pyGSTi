@@ -14,7 +14,6 @@ import functools as _functools
 
 import numpy as _np
 
-from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import basistools as _bt
 from ...tools import optools as _ot
