@@ -32,6 +32,14 @@ ExplicitOpModel = TypeVar('ExplicitOpModel')
 # ^ declare to avoid circular references
 
 
+"""
+Proposal:
+   There are lots of places where we use np.dot in the codebase.
+   I think we're much better off replacing with the @ operator
+   unless we're using the "out" keyword of np.dot. Reason being:
+   different classes of ndarray-like objects (like pytorch Tensors!)
+   overload @ in whatever way that they need.
+"""
 
 def propagate_staterep(staterep, operationreps):
     ret = staterep.actionable_staterep()
@@ -191,33 +199,12 @@ class TorchForwardSimulator(ForwardSimulator):
                     #   <class 'object'>
                     # If we set the default evotypes to densitymx_slow then the first two classes
                     # would change in the natural way.
-
                     ereps.append(erep)
                 array_to_fill[indices] = [erep.probability(rhorep) for erep in ereps]  # outcome probabilities
             else:
                 raise NotImplementedError()
         pass
 
-    # We need these if we want to use mapforwardsim_calc_densitymx. But I don't know why we'd
-    # want to use a density matrix representation with mapforwardsim. TODO: ask Corey about this.
-    """
-    def _set_evotype(self, evotype):
-        if evotype is not None:
-            try:
-                self.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_" + evotype.name)
-            except ImportError:
-                self.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic")
-        else:
-            self.calclib = None
-
-
-    def __getstate__(self):
-        state = super(TorchForwardSimulator, self).__getstate__()
-        if 'calclib' in state: del state['calclib']
-        #Note: I don't think we need to implement __setstate__ since the model also needs to be reset,
-        # and this is done by the parent model which will cause _set_evotype to be called.
-        return state
-    """
 
 
 """
