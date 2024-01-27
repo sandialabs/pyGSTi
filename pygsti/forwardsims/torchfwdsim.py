@@ -103,17 +103,15 @@ class TorchForwardSimulator(ForwardSimulator):
             self, array_to_fill: np.ndarray, circuit: Circuit,
             outcomes: Tuple[Tuple[str]], resource_alloc: ResourceAllocation, time=None
         ):
-        from pygsti.modelmembers import states as _state
         expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
-        outcome_to_index = {outc: i for i, outc in enumerate(outcomes)}
         if time is not None:
             raise NotImplementedError()
-        for spc, spc_outcomes in expanded_circuit_outcomes.items():
+        for spc in expanded_circuit_outcomes:
             # ^ spc is a SeparatePOVMCircuit
             # Note: `spc.circuit_without_povm` *always* begins with a prep label.
             prep_label = spc.circuit_without_povm[0]
             op_labels  = spc.circuit_without_povm[1:]
-            povm_label = spc.povm_label
+            effect_labels = spc.full_effect_labels
 
             # Up next, ideally, ...
             #   we'd have function calls that reach
@@ -129,73 +127,56 @@ class TorchForwardSimulator(ForwardSimulator):
             # codepath I have uses an ExplicitOpModel rather than a TorchOpModel.
 
             rho = self.model.circuit_layer_operator(prep_label, typ='prep')
-            # ^ <class 'pygsti.modelmembers.states.tpstate.TPState'>
-            #   <class 'pygsti.modelmembers.states.densestate.DenseState'>
-            #   <class 'pygsti.modelmembers.states.densestate.DenseStateInterface'>
-            #   <class 'pygsti.modelmembers.states.state.State'>
-            #   <class 'pygsti.modelmembers.modelmember.ModelMember'>
-            povm = self.model.circuit_layer_operator(povm_label, typ='povm')
-            # ^ OrderedDict, keyed by strings, with values of types
-            #   <class 'pygsti.modelmembers.povms.fulleffect.FullPOVMEffect'>
-            #   <class 'pygsti.modelmembers.povms.conjugatedeffect.ConjugatedStatePOVMEffect'>
-            #   <class 'pygsti.modelmembers.povms.conjugatedeffect.DenseEffectInterface'>
-            #   <class 'pygsti.modelmembers.povms.effect.POVMEffect'>
-            #   <class 'pygsti.modelmembers.modelmember.ModelMember'>
+            """ ^
+            <class 'pygsti.modelmembers.states.tpstate.TPState'>
+            <class 'pygsti.modelmembers.states.densestate.DenseState'>
+            <class 'pygsti.modelmembers.states.densestate.DenseStateInterface'>
+            <class 'pygsti.modelmembers.states.state.State'>
+            <class 'pygsti.modelmembers.modelmember.ModelMember'>
+            """
             ops = [self.model.circuit_layer_operator(ol, 'op') for ol in op_labels]
-            # ^ For reasons that I don't understand, this is OFTEN an empty list in the first
-            #   step of iterative GST. When it's nonempty, it contains things like ...
-            #     <class 'pygsti.modelmembers.operations.fulltpop.FullTPOp'>
-            #     <class 'pygsti.modelmembers.operations.denseop.DenseOperator'>
-            #     <class 'pygsti.modelmembers.operations.denseop.DenseOperatorInterface'>
-            #     <class 'pygsti.modelmembers.operations.krausop.KrausOperatorInterface'>
-            #     <class 'pygsti.modelmembers.operations.linearop.LinearOperator'>
-            #     <class 'pygsti.modelmembers.modelmember.ModelMember'>
+            """ ^ For reasons that I don't understand, this is OFTEN an empty list
+            in the first step of iterative GST. When it's nonempty, it contains ...
+        
+            <class 'pygsti.modelmembers.operations.fulltpop.FullTPOp'>
+            <class 'pygsti.modelmembers.operations.denseop.DenseOperator'>
+            <class 'pygsti.modelmembers.operations.denseop.DenseOperatorInterface'>
+            <class 'pygsti.modelmembers.operations.krausop.KrausOperatorInterface'>
+            <class 'pygsti.modelmembers.operations.linearop.LinearOperator'>
+            <class 'pygsti.modelmembers.modelmember.ModelMember'>
+            """
+            effects = [self.model.circuit_layer_operator(el, 'povm') for el in effect_labels]
+            """ ^ If we called effect = self.model._circuit_layer_operator(elabel, 'povm')
+            then we could skip a call to self.model._cleanparamvec. For some reason
+            reaching this code scope in the debugger ends up setting some model member
+            to "dirty" and results in an error when we try to clean it. SO, bypassing
+            that call to self.model._cleanparamvec, we would see the following class
+            inheritance structure of the returned object.
+                
+            <class 'pygsti.modelmembers.povms.fulleffect.FullPOVMEffect'>
+            <class 'pygsti.modelmembers.povms.conjugatedeffect.ConjugatedStatePOVMEffect'>
+            <class 'pygsti.modelmembers.povms.conjugatedeffect.DenseEffectInterface'>
+            <class 'pygsti.modelmembers.povms.effect.POVMEffect'>
+            <class 'pygsti.modelmembers.modelmember.ModelMember'>
+            """
 
             rhorep  = rho._rep
-            # ^ If the default Evotype is densitymx (as usual),
-            #   then rhorep is a ...
-            #     <class 'pygsti.evotypes.densitymx.statereps.StateRepDense'>
-            #     <class 'pygsti.evotypes.densitymx.statereps.StateRep'>
-            #     <class 'pygsti.evotypes.basereps_cython.StateRep'>
-            #     <class 'object'>
-            # ^ If we change the default Evotype to densitymx_slow,
-            #   then the first two classes change to
-            #     <class 'pygsti.evotypes.densitymx_slow.statereps.StateRepDense'>
-            #     <class 'pygsti.evotypes.densitymx_slow.statereps.StateRep'>.
-            povmrep = povm._rep
-            if povmrep is not None:
-                raise NotImplementedError()
-            # ^ None
             opreps = [op._rep for op in ops]
-            # ^ list of ...
-            #   <class 'pygsti.evotypes.densitymx.opreps.OpRepDenseSuperop'>
-            #   <class 'pygsti.evotypes.densitymx.opreps.OpRep'>
-            #   <class 'pygsti.evotypes.basereps_cython.OpRep'>
-            #   <class 'object'>
-            # If we set the default evotypes to densitymx_slow then the first two classes
-            # would change in the natural way.
-            
-            rhorep = propagate_staterep(rhorep, opreps)
-            for i, elabel in enumerate(spc.full_effect_labels):
-                effect = self.model.circuit_layer_operator(elabel, 'povm')
-                # ^ If we called effect = self.model._circuit_layer_operator(elabel, 'povm')
-                #   then we could skip a call to self.model._cleanparamvec. For some reason
-                #   reaching this code scope in the debugger ends up setting some model member
-                #   to "dirty" and results in an error when we try to clean it. SO, bypassing
-                #   that call to self.model._cleanparamvec, we would see the following class
-                #   inheritance structure of the returned object.
-                #
-                #    <class 'pygsti.modelmembers.povms.fulleffect.FullPOVMEffect'>
-                #    <class 'pygsti.modelmembers.povms.conjugatedeffect.ConjugatedStatePOVMEffect'>
-                #    <class 'pygsti.modelmembers.povms.conjugatedeffect.DenseEffectInterface'>
-                #    <class 'pygsti.modelmembers.povms.effect.POVMEffect'>
-                #    <class 'pygsti.modelmembers.modelmember.ModelMember'>
-                erep = effect._rep
-                # ^ <class 'pygsti.evotypes.densitymx.effectreps.EffectRepConjugatedState'>
-                #   <class 'pygsti.evotypes.densitymx.effectreps.EffectRep'>
-                # If we set the default evotypes to densitymx_slow then the first two classes
-                # would change in the natural way.
-                array_to_fill[i] = erep.probability(rhorep)
+            effectreps = [effect._rep for effect in effects]
+            """ ^ the ._rep fields for states, ops, and effects return
+                <class 'pygsti.evotypes.densitymx[_slow].statereps.StateRepDense'>
+                <class 'pygsti.evotypes.densitymx[_slow].statereps.StateRep'>
+                <class 'pygsti.evotypes.densitymx[_slow].opreps.OpRepDenseSuperop'>
+                <class 'pygsti.evotypes.densitymx[_slow].opreps.OpRep'>  
+                <class 'pygsti.evotypes.densitymx[_slow].effectreps.EffectRepConjugatedState'>
+                <class 'pygsti.evotypes.densitymx[_slow].effectreps.EffectRep'>
+            """
+            superket = rhorep.base
+            superops = [orep.base for orep in opreps]
+            povm_mat = np.row_stack([erep.state_rep.base for erep in effectreps])
+            for superop in superops:
+                superket = superop @ superket
+            array_to_fill[:] = povm_mat @ superket
 
         pass
 
