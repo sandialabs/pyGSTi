@@ -41,14 +41,6 @@ Proposal:
    overload @ in whatever way that they need.
 """
 
-def propagate_staterep(staterep, operationreps):
-    superket = staterep.base
-    superops = [oprep.base for oprep in operationreps]
-    for superop in superops:
-        superket = superop @ superket
-    ret = type(staterep)(superket, staterep.state_space, None)
-    return ret
-
 
 class TorchForwardSimulator(ForwardSimulator):
     """
