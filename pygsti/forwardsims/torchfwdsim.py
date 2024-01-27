@@ -66,6 +66,8 @@ class TorchForwardSimulator(ForwardSimulator):
         expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
         if time is not None:
             raise NotImplementedError()
+        if len(expanded_circuit_outcomes) > 1:
+            raise ValueError("We're only able to write to array_to_fill once.")
         for spc in expanded_circuit_outcomes:
             # ^ spc is a SeparatePOVMCircuit
             # Note: `spc.circuit_without_povm` *always* begins with a prep label.
