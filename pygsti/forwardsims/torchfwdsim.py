@@ -56,48 +56,8 @@ class TorchForwardSimulator(ForwardSimulator):
     (The current work-in-progress implementation has no Torch functionality whatsoever.)
     """
     def __init__(self, model = None):
-        from pygsti.models.torchmodel import TorchOpModel as OpModel
-        from pygsti.models.torchmodel import TorchLayerRules as LayerRules
-        if model is None or isinstance(OpModel):
-            # self._model = model
-            self.model = model
-        elif isinstance(model, ExplicitOpModel):
-            # cast to TorchOpModel
-            # torch_model = TorchForwardSimulator.OpModel.__new__(TorchForwardSimulator.OpModel)
-            # torch_model.__set_state__(model.__get_state__())
-            # self.model = torch_model
-            model._sim = self
-            model._layer_rules = LayerRules()
-            # self._model = model
-            self.model = model
-        else:
-            raise ValueError("Unknown type.")
+        self.model = model
         super(ForwardSimulator, self).__init__(model)
-
-    # I have some commented-out functions below. Here's context for why I wanted them.
-    #
-    #       My _compute_circuit_outcome_probabilities function gets representations of
-    #       the prep state, operators, and povm by calling functions attached to self.model.
-    #       Those functions trace back to a LayerRules object that's associated with the model.
-    #
-    # I tried to use the functions below to make sure that my custom "TorchLayerRules" class
-    # was used instead of the ExplicitLayerRules class (where the latter is what's
-    # getting executed in my testing pipeline). But when I made this change I got
-    # all sorts of obscure errors.
-    """
-    @property
-    def model(self):
-        return self._model
-
-    @model.setter
-    def model(self, model):
-        # from pygsti.models.torchmodel import TorchLayerRules as LayerRules
-        # from pygsti.models.explicitmodel import ExplicitOpModel
-        # if isinstance(model, ExplicitOpModel):
-        #     model._layer_rules = LayerRules()
-        self._model = model
-        return
-    """
 
     def _compute_circuit_outcome_probabilities(
             self, array_to_fill: np.ndarray, circuit: Circuit,
@@ -112,19 +72,6 @@ class TorchForwardSimulator(ForwardSimulator):
             prep_label = spc.circuit_without_povm[0]
             op_labels  = spc.circuit_without_povm[1:]
             effect_labels = spc.full_effect_labels
-
-            # Up next, ideally, ...
-            #   we'd have function calls that reach
-            #       TorchLayerRules.prep_layer_operator,
-            #       TorchLayerRules.povm_layer_operator,
-            #       TorchLayerRules.operation_layer_operator
-            #   for self.model._layer_rules as the TorchLayerRules object.
-            # In reality, we find that ...
-            #   ExplicitLayerRules gets called instead.
-            #
-            # I think all of this stems from the fact that TorchLayerRules is associated
-            # with a TorchOpModel (which subclasses ExplicitOpModel), and the testing
-            # codepath I have uses an ExplicitOpModel rather than a TorchOpModel.
 
             rho = self.model.circuit_layer_operator(prep_label, typ='prep')
             """ ^
@@ -171,6 +118,7 @@ class TorchForwardSimulator(ForwardSimulator):
                 <class 'pygsti.evotypes.densitymx[_slow].effectreps.EffectRepConjugatedState'>
                 <class 'pygsti.evotypes.densitymx[_slow].effectreps.EffectRep'>
             """
+
             superket = rhorep.base
             superops = [orep.base for orep in opreps]
             povm_mat = np.row_stack([erep.state_rep.base for erep in effectreps])
