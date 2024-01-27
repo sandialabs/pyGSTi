@@ -51,6 +51,11 @@ class TorchForwardSimulator(ForwardSimulator):
         self.model = model
         super(ForwardSimulator, self).__init__(model)
 
+    def _bulk_fill_probs_block(self, array_to_fill, layout):
+        for element_indices, circuit, outcomes in layout.iter_unique_circuits():
+            self._compute_circuit_outcome_probabilities(array_to_fill[element_indices], circuit,
+                                                        outcomes, layout.resource_alloc(), time=None)
+
     def _compute_circuit_outcome_probabilities(
             self, array_to_fill: np.ndarray, circuit: Circuit,
             outcomes: Tuple[Tuple[str]], resource_alloc: ResourceAllocation, time=None
