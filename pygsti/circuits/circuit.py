@@ -3933,6 +3933,7 @@ class Circuit(object):
                             gatename_conversion=None, qubit_conversion=None,
                             block_between_layers=True,
                             block_between_gates=False,
+                            include_delay_on_idle=True,
                             gateargs_map=None):  # TODO
         """
         Converts this circuit to an openqasm string.
@@ -3969,6 +3970,17 @@ class Circuit(object):
             When `True`, add in a barrier after every circuit layer.  Including such barriers
             can be important for QCVV testing, as this can help reduce the "behind-the-scenes"
             compilation (beyond necessary conversion to native instructions) experience by the circuit.
+        
+        block_between_gates: bool, optional
+            When `True`, add in a barrier after every gate (effectively serializing the circuit).
+            Defaults to False.
+        
+        include_delay_on_idle: bool, optional
+            When `True`, includes a delay operation on implicit idles in each layer, as per
+            Qiskit's OpenQASM 2.0 convention after the deprecation of the id operation.
+            Defaults to True, which is commensurate with legacy usage of this function.
+            However, this can now be set to False to avoid this behaviour if generating
+            actually valid OpenQASM (with no opaque delay instruction) is desired.
 
         gateargs_map : dict, optional
             If not None, a dict that maps strings (representing pyGSTi standard gate names) to
@@ -4020,8 +4032,10 @@ class Circuit(object):
 
         # Init the openqasm string.
         openqasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\n'
-        # Include a delay instruction
-        openqasm += 'opaque delay(t) q;\n\n'
+
+        if include_delay_on_idle:
+            # Include a delay instruction
+            openqasm += 'opaque delay(t) q;\n\n'
 
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
         # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
@@ -4097,7 +4111,7 @@ class Circuit(object):
                 qubits_used.extend(gate_qubits)
 
             # All gates that don't have a non-idle gate acting on them get an idle in the layer.
-            if not block_between_gates:
+            if not block_between_gates and include_delay_on_idle:
                 for q in self.line_labels:
                     if q not in qubits_used:
                         # Delay 0 works because of the barrier
