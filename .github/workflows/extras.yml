@@ -35,11 +35,11 @@ jobs:
       run: |
         ./.github/ci-scripts/before_install_macos.sh
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Cache pip packages
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}-${{ hashFiles('**/*requirements.txt') }}

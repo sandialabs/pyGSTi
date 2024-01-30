@@ -859,8 +859,8 @@ class ModelDatasetCircuitsStore(object):
         # probabilities (and other results) are stored in arrays - this makes sense
         # because it understands how to make this layout amenable to fast computation.
         if precomp_layout is None:
-            self.layout = model.sim.create_layout(bulk_circuit_list, dataset, self.resource_alloc,
-                                                  array_types, verbosity=verbosity)  # a CircuitProbabilityArrayLayout
+            self.layout = model.sim.create_layout(bulk_circuit_list, dataset, self.resource_alloc, array_types,
+                                                  derivative_dimensions=None, verbosity=verbosity)  # a CircuitProbabilityArrayLayout
         else:
             self.layout = precomp_layout
         self.array_types = array_types
