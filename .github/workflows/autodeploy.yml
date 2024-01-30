@@ -27,7 +27,7 @@ jobs:
         with:
           fetch-depth: 0  # to fetch all branches and *tags* (needed to get version number correctly)
   
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         name: Install Python
         with:
           python-version: '3.10'
@@ -53,7 +53,7 @@ jobs:
         with:
           fetch-depth: 0  # to fetch all branches and *tags* (needed to get version number correctly)
 
-      - uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         name: Install Python
         with:
           python-version: '3.10'
