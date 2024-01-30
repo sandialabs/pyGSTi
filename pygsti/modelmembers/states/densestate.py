@@ -265,13 +265,14 @@ class DensePureState(DenseStateInterface, _State):
             else _statespace.StateSpace.cast(state_space)
         evotype = _Evotype.cast(evotype)
         basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
-
-        #Try to create a dense pure rep.  If this fails, see if a dense superkey rep
+        
+        #Try to create a dense pure rep.  If this fails, see if a dense superket rep
         # can be created, as this type of rep can also hold arbitrary pure states.
         try:
             rep = evotype.create_pure_state_rep(purevec, basis, state_space)
             self._reptype = 'pure'
-            self._purevec = self._basis = None
+            self._purevec = None
+            self._basis = basis #this was previously being set as None, not sure why.
         except Exception:
             if len(purevec) == basis.dim and _np.linalg.norm(purevec.imag) < 1e-10:
                 # Special case when a *superket* was provided instead of a purevec
@@ -349,8 +350,7 @@ class DensePureState(DenseStateInterface, _State):
         mm_dict = super().to_memoized_dict(mmg_memo)
 
         mm_dict['dense_state_vector'] = self._encodemx(self.to_dense('Hilbert'))
-        mm_dict['basis'] = self._basis.to_nice_serialization()
-
+        mm_dict['basis'] = self._basis.to_nice_serialization() if (self._basis is not None) else None
         return mm_dict
 
     @classmethod

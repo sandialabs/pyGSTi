@@ -202,7 +202,12 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
         else:
             #Typical case of germs repeated to maxLen using Rfn
             for germ in germ_list:
-                if maxLen > germ_length_limits.get(germ, 1e100): continue
+                if maxLen == max_length_list[0] and maxLen > germ_length_limits.get(germ, 1e100):
+                    maxLen_thisgerm = germ_length_limits[germ]  # IndexError should not occur here!
+                elif maxLen > germ_length_limits.get(germ, 1e100):
+                    continue
+                else:
+                    maxLen_thisgerm = maxLen
 
                 if rndm is None:
                     fiducialPairsThisIter = fiducialPairs[germ]
@@ -232,7 +237,7 @@ def _create_raw_lsgst_lists(op_label_src, prep_strs, effect_strs, germ_list, max
 
                 lst += _gsc.create_circuits("f[0]+R(germ,N)+f[1]",
                                             f=fiducialPairsThisIter,
-                                            germ=germ, N=maxLen,
+                                            germ=germ, N=maxLen_thisgerm,
                                             R=Rfn, order=('f',))
         if nest:
             lsgst_list += lst  # add new strings to running list
@@ -566,9 +571,14 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
             #Typical case of germs repeated to maxLen using r_fn
             for ii, germ in enumerate(germs):
                 if germ == empty_germ: continue  # handled specially above
-                if maxLen > germ_length_limits.get(germ, 1e100): continue
+                if maxLen == max_lengths[0] and maxLen > germ_length_limits.get(germ, 1e100):
+                    maxLen_thisgerm = germ_length_limits[germ]  # IndexError should not occur here!
+                elif maxLen > germ_length_limits.get(germ, 1e100):
+                    continue
+                else:
+                    maxLen_thisgerm = maxLen
 
-                germ_power = truncFn(germ, maxLen)
+                germ_power = truncFn(germ, maxLen_thisgerm)
                 power = len(germ_power) // len(germ)  # this *could* be the germ power
                 if germ_power != germ * power:
                     power = None  # Signals there is no well-defined power
@@ -579,7 +589,7 @@ def create_lsgst_circuit_lists(op_label_src, prep_fiducials, meas_fiducials, ger
                 # Switch on fidpair dicts with germ or (germ, L) keys
                 key = germ
                 if fidpair_germ_power_keys:
-                    key = (germ, maxLen)
+                    key = (germ, maxLen_thisgerm)
 
                 if rndm is None:
                     fiducialPairsThisIter = fidPairDict.get(key, allPossiblePairs) \

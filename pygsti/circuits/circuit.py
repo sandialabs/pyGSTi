@@ -434,6 +434,9 @@ class Circuit(object):
         from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
         layer_labels_objs = None  # layer_labels elements as Label objects (only if needed)
         if isinstance(layer_labels, str):
+            if stringrep is None:  # then take the given string as the initial string rep
+                stringrep = layer_labels
+                check = False  # no need to check whether this matches since we're parsing it now (below)
             cparser = _CircuitParser(); cparser.lookup = None
             layer_labels, chk_labels, chk_occurrence, chk_compilable_inds = cparser.parse(layer_labels)
             if chk_labels is not None:
@@ -784,7 +787,7 @@ class Circuit(object):
         """
         assert(not self._static), \
             ("Cannot edit a read-only circuit!  "
-             "Set editable=True when calling pygsti.obj.Circuit to create editable circuit.")
+             "Set editable=True when calling pygsti.baseobjs.Circuit to create editable circuit.")
         from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
         cparser = _CircuitParser()
         chk, chk_labels, chk_occurrence, chk_compilable_inds = cparser.parse(value)
@@ -840,9 +843,57 @@ class Circuit(object):
         return x.__add__(self)
 
     def __add__(self, x):
+        """
+        Method for adding circuits, or labels to circuits.
+
+        Parameters
+        ----------
+        x : `Circuit` or tuple of `Label` objects
+            `Circuit` to add to this `Circuit`, or a tuple of Labels to add to this
+            Circuit. Note: If `x` is a `Circuit` it must have line labels that are
+            compatible with this it is being added to. In other words, if `x` uses
+            the default '*' placeholder as its line label and this Circuit does not,
+            and vice versa, a ValueError will be raised.
+
+        Returns
+        -------
+        Circuit
+        """
+
         if not isinstance(x, Circuit):
             assert(all([isinstance(l, _Label) for l in x])), "Only Circuits and Label-tuples can be added to Circuits!"
             return Circuit._fastinit(self.layertup + x, self.line_labels, editable=False)
+        
+        #Add special line label handling to deal with the special global idle circuits (which have no line labels
+        # associated with them typically).
+        #Check if a the circuit or labels being added are all global idles, if so inherit the
+        #line labels from the circuit being added to. Otherwise, enforce compatibility.
+        layertup_x = x.layertup if isinstance(x, Circuit) else x
+        gbl_idle_x= all([lbl == _Label(()) for lbl in layertup_x])
+        gbl_idle_self= all([lbl == _Label(()) for lbl in self.layertup])
+
+        if not (gbl_idle_x or gbl_idle_self):
+            combined_labels = {x.line_labels, self.line_labels}
+        elif not gbl_idle_x and gbl_idle_self:
+            combined_labels = {x.line_labels}
+        elif gbl_idle_x and not gbl_idle_self:    
+            combined_labels = {self.line_labels}
+        else: #both are all global idles so it doesn't matter which we take.
+            combined_labels = {self.line_labels}
+
+        #check that the line labels are compatible between circuits.
+        #i.e. raise error if adding circuit with * line label to one with
+        #standard line labels.
+        if ('*',) in combined_labels and len(combined_labels) > 1:
+            # raise the error
+            msg = f"Adding circuits with incompatible line labels: {combined_labels}."  \
+                    +" The problem is that one of these labels uses the placeholder value of '*', while the other label does not."\
+                    +" The placeholder value arises when when a Circuit is initialized without specifying the line labels,"\
+                    +" either explicitly by setting the line_labels or by num_lines kwarg, or implicitly from specifying"\
+                    +" layer labels with non-None state-space labels. Circuits with '*' line labels can be used, but"\
+                    +" only in conjunction with other circuits with '*' line labels (and vice-versa for circuits with"\
+                    +" standard line labels)." 
+            raise ValueError(msg)
 
         if self._str is None or x._str is None:
             s = None
@@ -854,8 +905,18 @@ class Circuit(object):
                 s = (mystr + xstr) if xstr != "{}" else mystr
             else: s = xstr
 
-        added_labels = tuple([l for l in x.line_labels if l not in self.line_labels])
-        new_line_labels = self.line_labels + added_labels
+        #try to return the line labels as the contents of combined labels in
+        #sorted order. If there is a TypeError raised this is probably because
+        #we're mixing integer and string labels, in which case we'll just return
+        #the new labels in whatever arbirary order is obtained by casting a set to
+        #a tuple.
+        #unpack all of the different sets of labels and make sure there are no duplicates
+        combined_labels_unpacked = {el for tup in combined_labels for el in tup}
+        try:
+            new_line_labels = tuple(sorted(list(combined_labels_unpacked)))
+        except TypeError:
+            new_line_labels = tuple(combined_labels_unpacked)
+
         if s is not None:
             s += _op_seq_str_suffix(new_line_labels, occurrence_id=None)  # don't maintain occurrence_id
 
@@ -3959,6 +4020,8 @@ class Circuit(object):
 
         # Init the openqasm string.
         openqasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\n'
+        # Include a delay instruction
+        openqasm += 'opaque delay(t) q;\n\n'
 
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
         # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
@@ -4037,7 +4100,9 @@ class Circuit(object):
             if not block_between_gates:
                 for q in self.line_labels:
                     if q not in qubits_used:
-                        openqasm += 'id' + ' q[' + str(qubit_conversion[q]) + '];\n'
+                        # Delay 0 works because of the barrier
+                        # In OpenQASM3, this should probably be a stretch instead
+                        openqasm += 'delay(0)' + ' q[' + str(qubit_conversion[q]) + '];\n'
 
             # Add in a barrier after every circuit layer if block_between_layers==True.
             # Including barriers is critical for QCVV testing, circuits should usually

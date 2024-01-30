@@ -16,18 +16,19 @@ class CoreStdData(object):
         super(CoreStdData, self).setUp()
         self.ds = fixtures.ds.copy()
         self.model = fixtures.model.copy()
-        self.fiducials = fixtures.fiducials
+        self.prep_fids = fixtures.prep_fids
+        self.meas_fids = fixtures.meas_fids
 
 
 class CoreFuncTester(CoreStdData, BaseCase):
     def test_gram_rank_and_evals(self):
-        rank, evals, target_evals = core.gram_rank_and_eigenvalues(self.ds, self.fiducials, self.fiducials, self.model)
+        rank, evals, target_evals = core.gram_rank_and_eigenvalues(self.ds, self.prep_fids, self.meas_fids, self.model)
         # TODO assert correctness
 
     def test_gram_rank_and_evals_raises_on_no_target(self):
         # XXX is this neccessary?  EGN: probably not
         with self.assertRaises(ValueError):
-            core.gram_rank_and_eigenvalues(self.ds, self.fiducials, self.fiducials, None)
+            core.gram_rank_and_eigenvalues(self.ds, self.prep_fids, self.meas_fids, None)
 
     def test_find_closest_unitary_opmx_raises_on_multi_qubit(self):
         with self.assertRaises(ValueError):
@@ -41,15 +42,16 @@ class CoreLGSTTester(CoreStdData, BaseCase):
         self.lgstStrings = fixtures.lgstStrings
 
     def test_do_lgst(self):
+        print(self.model)
         mdl_lgst = core.run_lgst(
-            self.ds, self.fiducials, self.fiducials, self.model,
+            self.ds, self.prep_fids, self.meas_fids, self.model,
             svd_truncate_to=4
         )
         # TODO assert correctness
 
         # XXX is this neccessary? EGN: tests higher verbosity printing.
         mdl_lgst_2 = core.run_lgst(
-            self.ds, self.fiducials, self.fiducials, self.model,
+            self.ds, self.prep_fids, self.meas_fids, self.model,
             svd_truncate_to=4, verbosity=10
         )
         # TODO assert correctness
@@ -60,18 +62,19 @@ class CoreLGSTTester(CoreStdData, BaseCase):
         # XXX is this neccessary?
         with self.assertRaises(ValueError):
             core.run_lgst(
-                self.ds, self.fiducials, self.fiducials, None, svd_truncate_to=4
+                self.ds, self.prep_fids, self.meas_fids, None, svd_truncate_to=4
             )
 
     def test_do_lgst_raises_on_no_spam_dict(self):
         with self.assertRaises(ValueError):
             core.run_lgst(
-                self.ds, self.fiducials, self.fiducials, None,
+                self.ds, self.prep_fids, self.meas_fids, None,
                 op_labels=list(self.model.operations.keys()), svd_truncate_to=4
             )
 
     def test_do_lgst_raises_on_bad_fiducials(self):
-        bad_fids = pc.to_circuits([('Gx',), ('Gx',), ('Gx',), ('Gx',)])
+        bad_fids = [Circuit([Label('Gxpi2',0)], line_labels=(0,)), Circuit([Label('Gxpi2',0)], line_labels=(0,)), 
+                    Circuit([Label('Gxpi2',0)], line_labels=(0,)), Circuit([Label('Gxpi2',0)], line_labels=(0,))]
         with self.assertRaises(ValueError):
             core.run_lgst(
                 self.ds, bad_fids, bad_fids, self.model, svd_truncate_to=4
@@ -84,7 +87,7 @@ class CoreLGSTTester(CoreStdData, BaseCase):
             num_samples=10, sample_error='none')
         with self.assertRaises(KeyError):
             core.run_lgst(
-                bad_ds, self.fiducials, self.fiducials, self.model,
+                bad_ds, self.prep_fids, self.meas_fids, self.model,
                 svd_truncate_to=4
             )
 
@@ -95,7 +98,7 @@ class CoreLGSTTester(CoreStdData, BaseCase):
             num_samples=10, sample_error='none')
         with self.assertRaises(KeyError):
             core.run_lgst(
-                bad_ds, self.fiducials, self.fiducials, self.model,
+                bad_ds, self.prep_fids, self.meas_fids, self.model,
                 svd_truncate_to=4
             )
 
@@ -167,17 +170,20 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
         # TODO assert correctness
 
     def test_do_mc2gst_alias_model(self):
+        
         aliased_list = [
             Circuit([
-                (x if x != Label("Gx") else Label("GA1")) for x in mdl
-            ]) for mdl in self.lsgstStrings[0]
+                (x if x != Label(('Gxpi2',0)) else Label("GA1")) for x in mdl
+            ], line_labels = (0,)) for mdl in self.lsgstStrings[0]
         ]
-        aliases = {Label('GA1'): Circuit(['Gx'])}
+        aliases = {Label('GA1'): Circuit([Label('Gxpi2',0)], line_labels= (0,))}
         aliased_list = CircuitList(aliased_list, aliases)
 
+        print(list(aliased_list))
+
         aliased_model = self.mdl_clgst.copy()
-        aliased_model.operations['GA1'] = self.mdl_clgst.operations['Gx']
-        aliased_model.operations.pop('Gx')
+        aliased_model.operations['GA1'] = self.mdl_clgst.operations['Gxpi2',0]
+        aliased_model.operations.pop(('Gxpi2',0))
 
         mdl_lsgst = core.run_gst_fit_simple(self.ds, aliased_model, aliased_list,
                                             {'tol': 1e-5}, "chi2",
@@ -229,7 +235,7 @@ class CoreMC2GSTTester(CoreStdData, BaseCase):
     def test_do_iterative_mc2gst_circuit_weights_dict(self):
         def make_weights_array(l, weights_dict):
             return np.array([weights_dict.get(circuit, 1.0) for circuit in l])
-        weighted_lists = [CircuitList(lst, circuit_weights=make_weights_array(lst, {('Gx',): 2.0}))
+        weighted_lists = [CircuitList(lst, circuit_weights=make_weights_array(lst, {('Gxpi2',0): 2.0}))
                           for lst in self.lsgstStrings]
         mdl_lsgst = core.run_iterative_gst(
             self.ds, self.mdl_clgst, weighted_lists,
@@ -313,15 +319,15 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
     def test_do_mlgst_alias_model(self):
         aliased_list = [
             Circuit([
-                (x if x != Label("Gx") else Label("GA1")) for x in mdl
-            ]) for mdl in self.lsgstStrings[0]
+                (x if x != Label('Gxpi2',0) else Label("GA1")) for x in mdl
+            ], line_labels=(0,)) for mdl in self.lsgstStrings[0]
         ]
-        aliases = {Label('GA1'): Circuit(['Gx'])}
+        aliases = {Label('GA1'): Circuit([Label('Gxpi2',0)], line_labels=(0,))}
         aliased_list = CircuitList(aliased_list, aliases)
 
         aliased_model = self.mdl_clgst.copy()
-        aliased_model.operations['GA1'] = self.mdl_clgst.operations['Gx']
-        aliased_model.operations.pop('Gx')
+        aliased_model.operations['GA1'] = self.mdl_clgst.operations['Gxpi2',0]
+        aliased_model.operations.pop(('Gxpi2',0))
 
         mdl_lsgst = core.run_gst_fit_simple(self.ds, aliased_model, aliased_list,
                                             {'tol': 1e-5}, "logl",
@@ -410,3 +416,38 @@ class CoreMLGSTTester(CoreStdData, BaseCase):
                                         resource_alloc=None
                                         )
         # TODO assert correctness
+
+    #Add a test for the new generator method.
+    #run_iterative_gst uses this under the hood, so we really only need to separately
+    #test starting at a different starting index in the fits.
+
+    def test_iterative_gst_generator_starting_index(self):
+        generator = core.iterative_gst_generator(
+            self.ds, self.mdl_clgst, self.lsgstStrings,
+            optimizer={'tol': 1e-5},
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=['logl'],
+            resource_alloc=None, starting_index=0, verbosity=0
+        )
+
+        models = []
+
+        for _ in range(len(self.lsgstStrings)):
+            models.append(next(generator)[0])
+
+        #now make a new generator starting from a different index
+        #with a start model corresponding to the model in models for
+        #that index.
+        generator1 = core.iterative_gst_generator(
+            self.ds, models[0], self.lsgstStrings,
+            optimizer={'tol': 1e-5},
+            iteration_objfn_builders=['chi2'],
+            final_objfn_builders=['logl'],
+            resource_alloc=None, starting_index=1, verbosity=0
+        )
+        models1= []
+        for _ in range(1,len(self.lsgstStrings)):
+            models1.append(next(generator1)[0])
+
+        #Make sure we get the same result in both cases.
+        self.assertArraysAlmostEqual(models[-1].to_vector(), models1[-1].to_vector())

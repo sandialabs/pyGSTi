@@ -340,7 +340,7 @@ class ExplicitOpModel(_mdl.OpModel):
             raise KeyError("Key %s has an invalid prefix" % label)
 
     def convert_members_inplace(self, to_type, categories_to_convert='all', labels_to_convert='all',
-                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False):
+                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, cptp_truncation_tol= 1e-6):
         """
         TODO: docstring -- like set_all_parameterizations but doesn't set default gauge group by default
         """
@@ -349,7 +349,7 @@ class ExplicitOpModel(_mdl.OpModel):
             for lbl, gate in self.operations.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
                     ideal = ideal_model.operations.get(lbl, None) if (ideal_model is not None) else None
-                    self.operations[lbl] = _op.convert(gate, to_type, self.basis, ideal, flatten_structure)
+                    self.operations[lbl] = _op.convert(gate, to_type, self.basis, ideal, flatten_structure, cptp_truncation_tol)
         if any([c in categories_to_convert for c in ('all', 'instruments')]):
             for lbl, inst in self.instruments.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
@@ -382,7 +382,7 @@ class ExplicitOpModel(_mdl.OpModel):
             self.default_gauge_group = _gg.TrivialGaugeGroup(self.state_space)
 
     def set_all_parameterizations(self, gate_type, prep_type="auto", povm_type="auto",
-                                  instrument_type="auto", ideal_model=None):
+                                  instrument_type="auto", ideal_model=None, cptp_truncation_tol = 1e-6):
         """
         Convert all gates, states, and POVMs to a specific parameterization type.
 
@@ -416,6 +416,14 @@ class ExplicitOpModel(_mdl.OpModel):
             This may specify an ideal model of unitary gates and pure state vectors
             to be used as the *ideal* operation of each gate/SPAM operation, which
             is particularly useful as target for CPTP-based conversions.
+            
+        cptp_truncation_tol : float, optional (default 1e-6)
+            Tolerance used for conversion to CPTP parameterizations. When converting to
+            CPTP models negative eigenvalues of the choi matrix representation of a superoperator
+            are truncated, which can result in a change in the PTM for that operator. This tolerance
+            indicates the maximum amount of truncation induced deviation from the original operations
+            (measured by frobenius distance) we're willing to accept without marking the conversion
+            as failed.
 
         Returns
         -------
@@ -434,10 +442,10 @@ class ExplicitOpModel(_mdl.OpModel):
         ityp = _instrument.instrument_type_from_op_type(gate_type) if instrument_type == "auto" else instrument_type
 
         try:
-            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model)
-            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model)
-            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model)
-            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model)
+            self.convert_members_inplace(typ, 'operations', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(ityp, 'instruments', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(rtyp, 'preps', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
+            self.convert_members_inplace(povmtyp, 'povms', 'all', flatten_structure=True, ideal_model=static_model, cptp_truncation_tol = cptp_truncation_tol)
         except ValueError as e:
             raise ValueError("Failed to convert members. If converting to CPTP-based models, " +
                 "try providing an ideal_model to avoid possible branch cuts.") from e
@@ -1565,10 +1573,12 @@ class ExplicitOpModel(_mdl.OpModel):
 
         if all([udim == 2 for udim in all_udims]):
             return _QubitProcessorSpec(nqudits, list(gate_unitaries.keys()), gate_unitaries, availability,
-                                       qubit_labels=qudit_labels)
+                                       qubit_labels=qudit_labels,
+                                       instrument_names=list(self.instruments.keys()), nonstd_instruments=self.instruments)
         else:
             return _QuditProcessorSpec(qudit_labels, all_udims, list(gate_unitaries.keys()), gate_unitaries,
-                                       availability)
+                                       availability,
+                                       instrument_names=list(self.instruments.keys()), nonstd_instruments=self.instruments)
 
     def create_modelmember_graph(self):
         return _MMGraph({

@@ -5,7 +5,9 @@ mpl_logger.setLevel(logging.WARNING)
 import unittest
 import pygsti
 import numpy as np
-from pygsti.modelpacks.legacy import std1Q_XYI
+from pygsti.modelpacks import smq1Q_XYI
+from pygsti.circuits import Circuit
+from pygsti.baseobjs import Label
 
 from ..testutils import BaseTestCase
 
@@ -55,59 +57,70 @@ class TimeDependentTestCase(BaseTestCase):
         super(TimeDependentTestCase, self).setUp()
 
     def test_time_dependent_datagen(self):
-        mdl = std1Q_XYI.target_model("full TP",sim_type="map")
-        mdl.operations['Gi'] = MyTimeDependentIdle(1.0)
+        mdl = smq1Q_XYI.target_model("full TP")
+        mdl.sim = 'map'
+        mdl.operations['Gi',0] = MyTimeDependentIdle(1.0)
 
         #Create a time-dependent dataset (simulation of time-dependent model):
-        circuits = std1Q_XYI.prepStrs + pygsti.circuits.to_circuits([('Gi',), ('Gi', 'Gx', 'Gi', 'Gx')]) # just pick some circuits
+        circuits = smq1Q_XYI.prep_fiducials() + [Circuit([Label('Gi',0)], line_labels=(0,)), 
+                                                Circuit([Label('Gi',0), Label('Gxpi2',0), Label('Gi',0), Label('Gxpi2',0)], line_labels=(0,))] 
+                                                # just pick some circuits
         ds = pygsti.data.simulate_data(mdl, circuits, num_samples=100,
-                                               sample_error='none', seed=1234, times=[0,0.1,0.2])
+                                       sample_error='none', seed=1234, times=[0,0.1,0.2])
 
-        self.assertArraysEqual(ds[('Gi',)].time, np.array([0.,  0.,  0.1, 0.1, 0.2, 0.2]))
-        self.assertArraysEqual(ds[('Gi',)].reps, np.array([100.,   0.,  95.,   5.,  90.,  10.]))
-        self.assertArraysEqual(ds[('Gi',)].outcomes, [('0',), ('1',), ('0',), ('1',), ('0',), ('1',)])
+        self.assertArraysEqual(ds[Circuit([Label('Gi',0)], line_labels=(0,))].time, np.array([0.,  0.,  0.1, 0.1, 0.2, 0.2]))
+        self.assertArraysEqual(ds[Circuit([Label('Gi',0)], line_labels=(0,))].reps, np.array([100.,   0.,  95.,   5.,  90.,  10.]))
+        self.assertArraysEqual(ds[Circuit([Label('Gi',0)], line_labels=(0,))].outcomes, [('0',), ('1',), ('0',), ('1',), ('0',), ('1',)])
 
         # sparse data
         ds2 = pygsti.data.simulate_data(mdl, circuits, num_samples=100,
-                                                sample_error='none', seed=1234, times=[0,0.1,0.2],
-                                                record_zero_counts=False)
-        self.assertArraysEqual(ds2[('Gi',)].time, np.array([0.,  0.1, 0.1, 0.2, 0.2]))
-        self.assertArraysEqual(ds2[('Gi',)].reps, np.array([100.,  95.,   5.,  90.,  10.]))
-        self.assertArraysEqual(ds2[('Gi',)].outcomes, [('0',), ('0',), ('1',), ('0',), ('1',)])
+                                        sample_error='none', seed=1234, times=[0,0.1,0.2],
+                                        record_zero_counts=False)
+        self.assertArraysEqual(ds2[Circuit([Label('Gi',0)], line_labels=(0,))].time, np.array([0.,  0.1, 0.1, 0.2, 0.2]))
+        self.assertArraysEqual(ds2[Circuit([Label('Gi',0)], line_labels=(0,))].reps, np.array([100.,  95.,   5.,  90.,  10.]))
+        self.assertArraysEqual(ds2[Circuit([Label('Gi',0)], line_labels=(0,))].outcomes, [('0',), ('0',), ('1',), ('0',), ('1',)])
 
     def test_time_dependent_gst_staticdata(self):
-
+        
         #run GST in a time-dependent mode:
-        prep_fiducials, meas_fiducials = std1Q_XYI.prepStrs, std1Q_XYI.effectStrs
-        germs = std1Q_XYI.germs
+        prep_fiducials, meas_fiducials = smq1Q_XYI.prep_fiducials()[0:4], smq1Q_XYI.meas_fiducials()[0:3]
+        germs = smq1Q_XYI.germs(lite=True)
+        germs[0] = Circuit([Label('Gi',0)], line_labels=(0,))
         maxLengths = [1, 2]
 
-        target_model = std1Q_XYI.target_model("full TP", sim_type="map")
-        mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
+        target_model = smq1Q_XYI.target_model("full TP")
+        target_model.sim = "map"
+        
+        del target_model.operations[Label(())]
+        target_model.operations['Gi',0] = np.eye(4)
+        
+        mdl_datagen = target_model.depolarize(op_noise=0.05, spam_noise=0.01)
         edesign = pygsti.protocols.StandardGSTDesign(target_model.create_processor_spec(), prep_fiducials,
                                                      meas_fiducials, germs, maxLengths)
 
         # *sparse*, time-independent data
-        ds = pygsti.data.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, num_samples=10,
-                                               sample_error="binomial", seed=1234, times=[0],
-                                               record_zero_counts=False)
+        ds = pygsti.data.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, num_samples=1000,
+                                       sample_error="binomial", seed=1234, times=[0],
+                                       record_zero_counts=False)
         data = pygsti.protocols.ProtocolData(edesign, ds)
-
         target_model.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
-        self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 126)
-
+        self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 57)
+        
         builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()], [])
         gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
                                                  objfn_builders=builders)
         results = gst.run(data)
 
         # Normal GST used as a check - should get same answer since data is time-independent
-        results2 = pygsti.run_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
-                                                germs, maxLengths, verbosity=3,
-                                                advanced_options={'starting_point': 'target',
-                                                                  'always_perform_mle': True,
-                                                                  'only_perform_mle': True}, gauge_opt_params=False)
-
+        #We aren't actually doing this comparison atm (relevant tests are commented out) so no point
+        #doing the computation. For some reason this fit also took very long to run, which is strange (I don't see
+        #any reason why it would)
+        #results2 = pygsti.run_long_sequence_gst(ds, target_model, prep_fiducials, meas_fiducials,
+        #                                        germs, maxLengths, verbosity=3,
+        #                                        advanced_options={'starting_point': 'target',
+        #                                                          'always_perform_mle': True,
+        #                                                          'only_perform_mle': True}, gauge_opt_params=False)
+        
         #These check FAIL on some TravisCI machines for an unknown reason (but passes on Eriks machines) -- figure out why this is in FUTURE.
         #Check that "timeDependent=True" mode matches behavior or "timeDependent=False" mode when model and data are time-independent.
         #self.assertAlmostEqual(pygsti.tools.chi2(results.estimates['default'].models['iteration estimates'][0], results.dataset, results.circuit_lists['iteration'][0]),
@@ -122,23 +135,27 @@ class TimeDependentTestCase(BaseTestCase):
 
     def test_time_dependent_gst(self):
         #run GST in a time-dependent mode:
-        prep_fiducials, meas_fiducials = std1Q_XYI.prepStrs, std1Q_XYI.effectStrs
-        germs = std1Q_XYI.germs
+        #use minimally informationally complete set
+        prep_fiducials, meas_fiducials = smq1Q_XYI.prep_fiducials()[0:4], smq1Q_XYI.meas_fiducials()[0:3]
+        germs = smq1Q_XYI.germs(lite=True)
+        germs[0] = Circuit([Label('Gi',0)], line_labels=(0,))
         maxLengths = [1, 2]
 
-        target_model = std1Q_XYI.target_model("full TP",sim_type="map")
-        mdl_datagen = target_model.depolarize(op_noise=0.01, spam_noise=0.001)
-        mdl_datagen.operations['Gi'] = MyTimeDependentIdle(1.0)
+        target_model = smq1Q_XYI.target_model("full TP")
+        target_model.sim = 'map'
+        del target_model.operations[Label(())]
+        mdl_datagen = target_model.depolarize(op_noise=0.05, spam_noise=0.01)
+        mdl_datagen.operations['Gi',0] = MyTimeDependentIdle(1.0)
         edesign = pygsti.protocols.StandardGSTDesign(target_model.create_processor_spec(), prep_fiducials,
                                                      meas_fiducials, germs, maxLengths)
 
         # *sparse*, time-independent data
-        ds = pygsti.data.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, num_samples=1000,
+        ds = pygsti.data.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, num_samples=2000,
                                        sample_error="binomial", seed=1234, times=[0, 0.1, 0.2],
                                        record_zero_counts=False)
-        self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 500)
+        self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 171)
 
-        target_model.operations['Gi'] = MyTimeDependentIdle(0.0)  # start assuming no time dependent decay 0
+        target_model.operations['Gi',0] = MyTimeDependentIdle(0)  # start assuming no time dependent decay
         target_model.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
 
         builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()], [])
@@ -149,9 +166,9 @@ class TimeDependentTestCase(BaseTestCase):
 
         #we should recover the 1.0 decay we put into mdl_datagen['Gi']:
         final_mdl = results.estimates['GateSetTomography'].models['final iteration estimate']
-        print("Final decay rate = ", final_mdl.operations['Gi'].to_vector())
-        #self.assertAlmostEqual(final_mdl.operations['Gi'].to_vector()[0], 1.0, places=1)
-        self.assertAlmostEqual(final_mdl.operations['Gi'].to_vector()[0], 1.0, delta=0.1) # weaker b/c of unknown TravisCI issues
+        print("Final decay rate = ", final_mdl.operations['Gi',0].to_vector())
+        #self.assertAlmostEqual(final_mdl.operations['Gi',0].to_vector()[0], 1.0, places=1)
+        self.assertAlmostEqual(final_mdl.operations['Gi',0].to_vector()[0], 1.0, delta=0.1) # weaker b/c of unknown TravisCI issues
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

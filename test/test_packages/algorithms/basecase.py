@@ -18,7 +18,7 @@ class AlgorithmsBase(BaseTestCase):
         self.op_labels = list(self.model.operations.keys()) # also == std.gates
         self.lgstStrings = pygsti.circuits.create_lgst_circuits(self.fiducials, self.fiducials, self.op_labels)
 
-        self.maxLengthList = [0,1,2,4,8]
+        self.maxLengthList = [1,2,4,8]
 
         self.elgstStrings = pygsti.circuits.create_elgst_lists(
             self.op_labels, self.germs, self.maxLengthList )

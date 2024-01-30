@@ -25,8 +25,6 @@ from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.modelparaminterposer import LinearInterposer as _LinearInterposer
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims import forwardsim as _fwdsim
-from pygsti.forwardsims import mapforwardsim as _mapfwdsim
-from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
 from pygsti.modelmembers import modelmember as _gm
 from pygsti.modelmembers import operations as _op
 from pygsti.baseobjs.basis import Basis as _Basis, TensorProdBasis as _TensorProdBasis
@@ -505,7 +503,7 @@ class OpModel(Model):
         except:
             nqubits = None
         # TODO: This should probably also take evotype (e.g. 'chp' should probably use a CHPForwardSim, etc)
-        self._sim = simulator = _fwdsim.ForwardSimulator.cast(simulator, nqubits)
+        self._sim = _fwdsim.ForwardSimulator.cast(simulator, nqubits)
         self._sim.model = self  # ensure the simulator's `model` is set to this object
 
     @property
@@ -609,6 +607,7 @@ class OpModel(Model):
         raise NotImplementedError("Derived Model classes should implement _iter_parameterized_objs")
         #return # default is to have no parameterized objects
 
+    #TODO: Make this work with param interposers.
     def _check_paramvec(self, debug=False):
         if debug: print("---- Model._check_paramvec ----")
 

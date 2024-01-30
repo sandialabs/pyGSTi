@@ -26,6 +26,7 @@ from pygsti import baseobjs as _baseobjs
 from pygsti.tools import mpitools as _mpit
 from pygsti.baseobjs.statespace import ExplicitStateSpace as _ExplicitStateSpace
 from pygsti.baseobjs.statespace import QuditSpace as _QuditSpace
+from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 
 FLOATSIZE = 8  # in bytes: TODO: a better way
 
@@ -925,7 +926,7 @@ def randomize_model_list(model_list, randomization_strength, num_copies,
     return newmodelList
 
 
-def test_germs_list_completeness(model_list, germs_list, score_func, threshold, float_type=_np.cdouble):
+def test_germs_list_completeness(model_list, germs_list, score_func, threshold, float_type=_np.cdouble, comm=None, num_gauge_params = None):
     """
     Check to see if the germs_list is amplificationally complete (AC).
 
@@ -953,17 +954,27 @@ def test_germs_list_completeness(model_list, germs_list, score_func, threshold, 
         
     float_type : numpy dtype object, optional
         Numpy data type to use for floating point arrays.
+    
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+        
+    num_gauge_params : int, optional (default None)
+        A optional kwarg for specifying the number of gauge
+        parameters. Specifying this if already precomputed can
+        save on computation.
 
     Returns
     -------
     int
         The index of the first model in `model_list` to fail the amplficational
-        completeness test.
+        completeness test. Returns -1 if germ set is AC for all tested models.
     """
     for modelNum, model in enumerate(model_list):
         initial_test = test_germ_set_infl(model, germs_list,
                                           score_func=score_func,
-                                          threshold=threshold, float_type=float_type)
+                                          threshold=threshold, float_type=float_type,
+                                          comm=comm)
         if not initial_test:
             return modelNum
 
@@ -985,10 +996,18 @@ def _remove_spam_vectors(model):
     Model
     """
     reducedModel = model.copy()
-    for prepLabel in list(reducedModel.preps.keys()):
-        del reducedModel.preps[prepLabel]
-    for povmLabel in list(reducedModel.povms.keys()):
-        del reducedModel.povms[povmLabel]
+    try:
+        for prepLabel in list(reducedModel.preps.keys()):
+            del reducedModel.preps[prepLabel]
+        for povmLabel in list(reducedModel.povms.keys()):
+            del reducedModel.povms[povmLabel]
+    except AttributeError:
+        # Implicit model instead
+        for prepLabel in list(reducedModel.prep_blks.keys()):
+            del reducedModel.prep_blks[prepLabel]
+        for povmLabel in list(reducedModel.povm_blks.keys()):
+            del reducedModel.povm_blks[povmLabel]
+
     reducedModel._mark_for_rebuild()
     return reducedModel
 
@@ -1019,23 +1038,61 @@ def _num_non_spam_gauge_params(model):
 # so SOP is op_dim^2 x op_dim^2 and acts on vectorized *gates*
 # Recall vectorizing identity (when vec(.) concats rows as flatten does):
 #     vec( A * X * B ) = A tensor B^T * vec( X )
-def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
-    """Return super operator for doing a perfect twirl with respect to wrt.
+def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble, tol=1e-12):
     """
+    Return super operator for doing a perfect twirl with respect to wrt.
+        
+    Parameters
+    ---------
+    wrt : numpy.ndarray
+        Superoperator to construct a twirling superduperoperator with
+        respect to.
+        
+    eps : float
+        Tolerance used for evaluating whether two eigenvalues are degenerate.
+        
+    float_type : numpy dtype (optional, default numpy.cdouble)
+        When specified return the resulting superduperoperator as an ndarray
+        with this dtype.
+        
+    tol : float (optional, default 1e-12)
+       
+    Returns
+    -------
+    SuperOp : ndarray
+        SuperOp (really a superduperoperator) is dim^2 x dim^2 matrix that acts on
+        vectorized superoperators to perform a projection onto the commutant of wrt.
+    """
+    
     assert wrt.shape[0] == wrt.shape[1]  # only square matrices allowed
     dim = wrt.shape[0]
     
     #The eigenvalues and eigenvectors of wrt can be complex valued, even for
-    #real-valued transfer matrices. Need to be careful here to start off using able
+    #real-valued transfer matrices. Need to be careful here to start off using a
     #complex data type. The actual projector onto the germs commutant appears to be strictly real valued though
     #(that makes sense because otherwise the projected derivative would become complex
     #So we should be able to cast it back to the specified float_type just before returning it.
     SuperOp = _np.zeros((dim**2, dim**2), dtype=_np.cdouble)
-
-    # Get spectrum and eigenvectors of wrt
-    wrtEvals, wrtEvecs = _np.linalg.eig(wrt)
-    wrtEvecsInv = _np.linalg.inv(wrtEvecs)
     
+    #Test the wrt matrix to see if it is normal. If so use the schur
+    #decomposition, otherwise use the general eigenvalue decomposition.
+    wrt_conj_transpose = wrt.conj().T
+    wrt_commutator = wrt@wrt_conj_transpose - wrt_conj_transpose@wrt
+    
+    # Get spectrum and eigenvectors of wrt
+    # May as well use the same eps here too.
+    if _np.linalg.norm(wrt_commutator) < tol*(dim**0.5):
+        schur_form, wrtEvecs = _sla.schur(wrt, output = 'complex')
+        #schur_form should be an upper triangular matrix, with the
+        #eigenvalues we want on the diagonal.
+        wrtEvals = _np.diag(schur_form)
+        wrtEvecsInv = wrtEvecs.conj().T
+    else:
+        _warnings.warn('Warning: Input matrix is not normal, using the general eigenvalue decomposition '\
+                       +'from numpy.linalg.eig. This code path has been found to suffer from numerical '\
+                       +'instability problems before, so proceed with caution.')
+        wrtEvals, wrtEvecs = _np.linalg.eig(wrt)
+        wrtEvecsInv = _np.linalg.inv(wrtEvecs)
     
     #calculate the dimensions of the eigenspaces:
     subspace_idx_list=[]
@@ -1102,7 +1159,7 @@ def _super_op_for_perfect_twirl(wrt, eps, float_type=_np.cdouble):
     #sanity check to confirm everything we're casting is actually real!
     if (float_type is _np.double) or (float_type is _np.single):
         #might as well use eps as the threshold here too.
-        if _np.any(_np.imag(SuperOp)>eps):
+        if _np.any(_np.abs(_np.imag(SuperOp))>eps):
             raise ValueError("Attempting to cast a twirling superoperator with non-trivial imaginary component to a real-valued data type.")
         #cast just the real part to specified float type.
         SuperOp=SuperOp.real.astype(float_type)
@@ -1168,10 +1225,8 @@ def _twirled_deriv(model, circuit, eps=1e-6, float_type=_np.cdouble):
         (i.e. `abs(eval1 - eval2) < eps` ? )
         
     float_type : numpy dtype object, optional
-        Nump data type to use for floating point arrays.
+        Numpy data type to use for floating point arrays.
         
-
-
     Returns
     -------
     numpy array
@@ -1217,7 +1272,7 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float
         across multiple processors.
         
     float_type : numpy dtype object, optional
-        Nump data type to use for floating point arrays.
+        Numpy data type to use for floating point arrays.
 
     Returns
     -------
@@ -1236,6 +1291,7 @@ def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float
     nCircuits = len(circuits)
 
     ret = _np.empty((nCircuits, fd, dProds.shape[1]), dtype=float_type)
+    
     for i in range(nCircuits):
         # flattened_op_dim x flattened_op_dim
         twirler = _super_op_for_perfect_twirl(prods[i], eps, float_type=float_type)
@@ -1324,7 +1380,7 @@ def test_germ_set_finitel(model, germs_to_test, length, weights=None,
 
 def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
                        return_spectrum=False, threshold=1e6, check=False,
-                       float_type=_np.cdouble):
+                       float_type=_np.cdouble, comm=None, nGaugeParams = None):
     """
     Test whether a set of germs is able to amplify all non-gauge parameters.
 
@@ -1361,6 +1417,15 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
         
     float_type: numpy dtype object, optional
         Optional numpy data type to use for internal numpy array calculations.
+        
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+        
+    nGaugeParams : int, optional (default None)
+        A optional kwarg for specifying the number of gauge
+        parameters. Specifying this if already precomputed can
+        save on computation.
 
     Returns
     -------
@@ -1375,27 +1440,42 @@ def test_germ_set_infl(model, germs_to_test, score_func='all', weights=None,
     # to consider the set of *gate* parameters for amplification
     # and this makes sure our parameter counting is correct
     model = _remove_spam_vectors(model)
-
+    Np= model.num_params
+    
     germLengths = _np.array([len(germ) for germ in germs_to_test], _np.int64)
-    twirledDerivDaggerDeriv = _compute_bulk_twirled_ddd(model, germs_to_test,
-                                                        1. / threshold, check,
-                                                        germLengths, 
-                                                        float_type=float_type)
-    # result[i] = _np.dot( twirledDeriv[i].H, twirledDeriv[i] ) i.e. matrix
-    # product
-    # result[i,k,l] = sum_j twirledDerivH[i,k,j] * twirledDeriv(i,j,l)
-    # result[i,k,l] = sum_j twirledDeriv_conj[i,j,k] * twirledDeriv(i,j,l)
-
+    #twirledDerivDaggerDeriv = _compute_bulk_twirled_ddd(model, germs_to_test,
+    #                                                    1. / threshold, check,
+    #                                                    germLengths, 
+    #                                                    float_type=float_type)
+    
+    #Use a more memory efficient implementation that builds up the J^T@J matrix
+    #borrowing the code used for single-Jac mode in the germ search routine below:
+    twirledDerivDaggerDeriv = _np.zeros((Np, Np), dtype=float_type)
+    
     if weights is None:
         nGerms = len(germs_to_test)
         # weights = _np.array( [1.0/nGerms]*nGerms, 'd')
         weights = _np.array([1.0] * nGerms, 'd')
 
-    #combinedTDDD = _np.einsum('i,ijk->jk', weights, twirledDerivDaggerDeriv)
-    combinedTDDD = _np.tensordot(weights, twirledDerivDaggerDeriv, (0, 0))
-    sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(combinedTDDD)))
+    loc_Indices, _, _ = _mpit.distribute_indices(
+        list(range(len(germs_to_test))), comm, False)
 
-    nGaugeParams = model.num_gauge_params
+    for i, GermIdx in enumerate(loc_Indices):
+        twirledDerivDaggerDeriv += weights[GermIdx]*_compute_twirled_ddd(
+            model, germs_to_test[GermIdx], 1. / threshold, float_type=float_type)
+
+    #aggregate each twirledDerivDaggerDeriv across all procs
+    if comm is not None and comm.Get_size() > 1:
+        from mpi4py import MPI  # not at top so pygsti doesn't require mpi4py
+        result = _np.empty((Np, Np), dtype=float_type)
+        comm.Allreduce(twirledDerivDaggerDeriv, result, op=MPI.SUM)
+        twirledDerivDaggerDeriv[:, :] = result[:, :]
+        result = None  # free mem
+                                                       
+    sortedEigenvals = _np.sort(_np.real(_np.linalg.eigvalsh(twirledDerivDaggerDeriv)))
+
+    if nGaugeParams is None:
+        nGaugeParams = model.num_gauge_params
     observableEigenvals = sortedEigenvals[nGaugeParams:]
 
     bSuccess = bool(_scoring.list_score(observableEigenvals, score_func)
@@ -1735,7 +1815,8 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
                                                              germs_list,
                                                              score_func,
                                                              threshold,
-                                                             float_type=float_type)
+                                                             float_type=float_type,
+                                                             comm=comm)
         if undercompleteModelNum > -1:
             printer.warning("Complete initial germ set FAILS on model "
                             + str(undercompleteModelNum) + ".")
@@ -1826,6 +1907,18 @@ def find_germs_breadthfirst(model_list, germs_list, randomize=True,
     }
 
     initN = 1
+
+    #Compute initial score (before adding any germs beyond the initial set)
+    if len(goodGerms) > 0:
+        worstScore = _scoring.CompositeScore(-1.0e100, 0, None)  # worst of all models
+        for k, currentDDD in enumerate(currentDDDList):
+            nonAC_kwargs['germ_lengths'] = _np.array([len(germ) for germ in goodGerms])
+            worstScore = max(worstScore, compute_composite_germ_set_score(
+                partial_deriv_dagger_deriv=currentDDD[None, :, :], init_n=initN,
+                **nonAC_kwargs))
+        printer.log("Initial germ score = " + str(worstScore), 4)
+        initN = worstScore.N
+
     while _np.any(weights == 0):
         printer.log("Outer iteration: %d of %d amplified, %d germs" %
                     (initN, numNonGaugeParams, len(goodGerms)), 2)
@@ -2855,7 +2948,7 @@ def drop_random_germs(candidate_list, rand_frac, target_model, keep_bare=True, s
 #compact EVD in order to save on memory.    
 def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
                                        comm=None, evd_tol=1e-10,  float_type=_np.cdouble,
-                                       printer=None):
+                                       printer=None, return_eigs=False):
 
     """
     Calculate the positive squares of the germ Jacobians.
@@ -2893,6 +2986,10 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
         
     float_type : numpy dtype object, optional
         Numpy data type to use in floating point arrays.
+        
+    return_eigs : bool, optional, default False
+        If True then additionally return a list of the arrays of eigenvalues for each
+        germ's twirled derivative gramian.
 
     Returns
     -------
@@ -2906,12 +3003,20 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
     #TODO: Figure out how to pipe in a comm object to parallelize some of this with MPI.
        
     sqrteU_list=[]
-    #e_list=[]
+    e_list=[]
+
+    #remove spam parameters from the model before calculating the jacobian.
+    #The representations of the germ process matrices are clearly independent 
+    #of the spam parameters. (I say that, but I only realized I had forgotten this like
+    #6 months later...)
+    if len(model.preps) > 0 or len(model.povms) > 0:
+        model = _remove_spam_vectors(model)
+        # This function assumes model has no spam elements so `lookup` below
     
     if printer is not None:
         printer.log('Generating compact EVD Cache',1)
         
-        with printer.progress_logging(2):
+        with printer.progress_logging(1):
     
             for i, germ in enumerate(germs_list):
             
@@ -2935,7 +3040,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
                 
                 #e, U= compact_EVD_via_SVD(twirledDeriv, evd_tol)
                 
-                #e_list.append(e)
+                e_list.append(e)
                 
                 #by doing this I am assuming that the matrix is PSD, but since these are all
                 #gramians that should be alright.
@@ -2965,7 +3070,7 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
             U_remapped= ((twirledDeriv.conj().T)@U)/_np.sqrt(e.reshape((1,len(e))))
             #e, U= compact_EVD_via_SVD(twirledDeriv, evd_tol)
             
-            #e_list.append(e)
+            e_list.append(e)
             
             #by doing this I am assuming that the matrix is PSD, but since these are all
             #gramians that should be alright.
@@ -2973,9 +3078,12 @@ def _compute_bulk_twirled_ddd_compact(model, germs_list, eps,
             #I want to use a rank-decomposition, so split the eigenvalues into a pair of diagonal
             #matrices with the square roots of the eigenvalues on the diagonal and fold those into
             #the matrix of eigenvectors by left multiplying.
-            sqrteU_list.append( U_remapped@_np.diag(_np.sqrt(e)) )       
-        
-    return sqrteU_list#, e_list
+            sqrteU_list.append( U_remapped@_np.diag(_np.sqrt(e)) )  
+           
+    if return_eigs:
+        return sqrteU_list, e_list
+    else:
+        return sqrteU_list
     
 #New function for computing the compact eigenvalue decompostion of a matrix.
 #Assumes that we are working with a diagonalizable matrix, no safety checks made.
@@ -3043,8 +3151,8 @@ def compact_EVD_via_SVD(mat, threshold= 1e-10):
     try:
         _, s, Vh = _np.linalg.svd(mat)
     except _np.linalg.LinAlgError:
-        print('SVD Calculation Failed to Converge.')
-        print('Falling back to Scipy SVD with lapack driver gesvd, which is slower but *should* be more stable.')
+        _warnings.warn('SVD Calculation Failed to Converge. Falling back to Scipy' \
+                        +' SVD with lapack driver gesvd, which is slower but *should* be more stable.')
         _, s, Vh = _sla.svd(mat, lapack_driver='gesvd')
 
     #How many non-zero eigenvalues are there and what are their indices
@@ -3337,7 +3445,7 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         #diagnostic information
         #if this prints something bad happened
         if central_mat.shape == (0,0):
-            print('central_mat shape: ', central_mat.shape)
+            _warnings.warn(f'central_mat shape: {central_mat.shape}')
             
         #now calculate the diagonal elements of pinv_E_beta@central_mat@pinv_E_beta.T
         
@@ -3354,9 +3462,12 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
             #Cholesky decomposition probably failed.
             #I'm not sure why it failed though so print some diagnostic info:
             cholesky_success=False
-            print('Cholesky Decomposition Probably Failed. This may be due to a poorly conditioned original Jacobian. Here is some diagnostic info.')
-            print('Minimum original eigenvalue: ', _np.min(orig_e))
-            #raise err  
+            warnmsg = 'Cholesky Decomposition Probably Failed.' \
+                      +' This may be due to a poorly conditioned original Jacobian.'\
+                      +' Consider increasing the value of evd_tol, if relevant.'\
+                      +' Here is some diagnostic info.'\
+                      + f'Minimum original eigenvalue: {_np.min(orig_e)}'
+            _warnings.warn(warnmsg)
         if cholesky_success:
             pinv_E_beta_central_chol= pinv_E_beta@central_mat_chol
             inv_update_term_diag= _np.einsum('ij,ji->i', pinv_E_beta_central_chol, pinv_E_beta_central_chol.T)
@@ -3381,8 +3492,9 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         except _np.linalg.LinAlgError:
             #This means the SVD did not converge, try to fall back to a more stable
             #SVD implementation using the scipy lapack_driver options.
-            print('pinv Calculation Failed to Converge.')
-            print('Falling back to pinv implementation based on Scipy SVD with lapack driver gesvd, which is slower but *should* be more stable.')
+            _warnings.warn('pinv Calculation Failed to Converge.'\
+                           +'Falling back to pinv implementation based on Scipy SVD with lapack driver gesvd,'\
+                           +' which is slower but *should* be more stable.')
             pinv_R_update = stable_pinv(R_update)
             
         #I have a bunch of intermediate matrices I need to construct. Some of which are used to build up
@@ -3403,11 +3515,12 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
             #I'm not sure why it failed though so print some diagnostic info:
             #Is B symmetric or hermitian?
             cholesky_success=False
-            print('Cholesky Decomposition Probably Failed. This may be due to a poorly conditioned original Jacobian. Here is some diagnostic info.')
             #What are the eigenvalues of the Dinv matrix?
-            print('Dinv Condition Number: ', _np.linalg.cond(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)))
-            print('Minimum original eigenvalue: ', _np.min(orig_e))
-            #raise err
+            _warnings.warn('Cholesky Decomposition Probably Failed. This may be due to a poorly conditioned original Jacobian.' \
+                           +' Here is some diagnostic info.'\
+                           +f' Dinv Condition Number: {_np.linalg.cond(_np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B))}'\
+                           +f' Minimum original eigenvalue: {_np.min(orig_e)}'\
+                           +' Falling back w/o use of Cholesky.')
             
         if cholesky_success:
             pinv_E_beta_B_Dinv_chol= pinv_E_beta@B@Dinv_chol
@@ -3422,7 +3535,6 @@ def minamide_style_inverse_trace(update, orig_e, U, proj_U, force_rank_increase=
         
         else:
             #Since the cholesky decomposition failed go ahead and use an alternative calculation pipeline.
-            print('Falling back w/o use of Cholesky.')
             Dinv= _np.linalg.inv(_np.eye(pinv_R_update.shape[0]) + B@(pinv_E_beta.T@pinv_E_beta)@B)
             pinv_E_beta_B= pinv_E_beta@B
             
@@ -3584,6 +3696,9 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
     if (num_nongauge_params is None):
         (_, numGaugeParams,
          numNonGaugeParams, _) = _get_model_params(model_list)
+        #TODO: This block doesn't make sense to me anymore. But I also
+        #don't think this can be reached, so figure out what the intention here
+        #was supposed to be another time.
         if num_nongauge_params is not None:
             numGaugeParams = numGaugeParams + numNonGaugeParams - num_nongauge_params
             numNonGaugeParams = num_nongauge_params
@@ -3594,6 +3709,21 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
     printer.log('Number of gauge parameters: ' + str(numGaugeParams), 1) 
     printer.log('Number of non-gauge parameters: ' + str(numNonGaugeParams), 1)
 
+    #Add some logic to support germ selection on gate sets containing static gates without parameters
+    #In this case we need to avoid germs consisting solely of the parameterless gates. I could catch this
+    #later, but better to clean up the candidate list upfront (smaller search spaces are good).
+    #This only works for ExplicitModels so skip otherwise
+    if isinstance(model_list[0], _ExplicitOpModel):
+        cleaned_germs_list = []
+        for germ in germs_list:
+            num_params_for_germ = 0
+            for lbl in germ:
+                if lbl in model_list[0].operations:
+                    num_params_for_germ += model_list[0].operations[lbl].num_params
+            if num_params_for_germ>0:
+                cleaned_germs_list.append(germ)
+        germs_list = cleaned_germs_list
+        
     germLengths = _np.array([len(germ) for germ in germs_list], _np.int64)
 
     numGerms = len(germs_list)
@@ -3649,18 +3779,21 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         raise ValueError('Unsupported argument. Force must either be a string, list or None.')    
 
     if pretest:
+        printer.log("Performing pretest on complete candidate germ list to verify amplficational completeness", 1)
         undercompleteModelNum = test_germs_list_completeness(model_list,
                                                              germs_list,
                                                              score_func,
                                                              threshold,
-                                                             float_type=float_type)
+                                                             float_type=float_type,
+                                                             comm=comm,
+                                                             num_gauge_params = numGaugeParams)
         if undercompleteModelNum > -1:
-            printer.warning("Complete initial germ set FAILS on model "
+            printer.warning("Complete initial candidate germ set FAILS on model "
                             + str(undercompleteModelNum) + ".")
             printer.warning("Aborting search.")
             return None
 
-        printer.log("Complete initial germ set succeeds on all input models.", 1)
+        printer.log("Complete initial candidate germ set succeeds on all input models.", 1)
         printer.log("Now searching for best germ set.", 1)
 
     printer.log("Starting germ set optimization. Lower score is better.", 1)
@@ -3817,7 +3950,8 @@ def find_germs_breadthfirst_greedy(model_list, germs_list, randomize=True,
         printer.log('Testing initial germ list for AC.', 2)
         initial_germ_set_completeness = test_germs_list_completeness(model_list, goodGerms,
                                                                      score_func, threshold,
-                                                                     float_type=float_type)
+                                                                     float_type=float_type,
+                                                                     comm=comm)
         if initial_germ_set_completeness == -1:
             initN= numNonGaugeParams
             first_outer_iter_log= False
@@ -4285,3 +4419,597 @@ def stable_pinv(mat):
     #new form the psuedoinverse:
     pinv= Vh.T@(pinv_s*U.T)
     return pinv
+
+
+#---------- Minimal Germ Spanning Vectors------------#
+#Not a great name for this section of code. Idea here is to
+#take a user-inputed AC germ-set (presumably from a prior germ
+#selection run and then identify a minimal set of amplified directions
+#that spans model space collectively accross all germs.
+#this can then be used as input to a version of FPR that is
+#globally aware of the overlap in amplified directions
+#of parameter space.
+
+def germ_set_spanning_vectors(target_model, germ_list, assume_real=False, float_type=_np.cdouble, 
+                              num_nongauge_params=None, tol = 1e-6, pretest=False, evd_tol = 1e-10,
+                              verbosity=1, threshold = 1e6, mode = 'greedy', update_cache_low_rank = False,
+                              final_test = True, comm=None): 
+    """
+    Parameters
+    ----------
+    target_model : Model or list of Model
+        The model you are aiming to implement, or a list of models that are
+        copies of the model you are trying to implement (either with or
+        without random unitary perturbations applied to the models).
+        
+    num_nongauge_params : int, optional
+        Force the number of nongauge parameters rather than rely on automated gauge optimization.
+        
+    float_type : numpy dtype object, optional
+        Numpy data type to use for floating point arrays.
+    
+    tol : float, optional
+        Tolerance (`eps` arg) for :func:`_compute_bulk_twirled_ddd`, which sets
+        the differece between eigenvalues below which they're treated as
+        degenerate.
+    
+    pretest : boolean, optional
+        Whether germ list should be initially checked for completeness.
+    
+    evd_tol : float, optional
+        A threshold value to use when taking eigenvalue decompositions/SVDs such that
+        values below this are set to zero.
+        
+    verbosity : int, optional
+        Level of detail printed to stdout.
+        
+    threshold : float, optional
+        Value which the score (before penalties are applied) must be lower than
+        for a germ set to be considered AC
+        
+    mode : string, optional (default 'greedy)'
+        An optional mode string for specifying the search heuristic used for
+        constructing the germ vector set. If 'greedy' we use a greedy search
+        algorithm based on low-rank updates. If 'RRQR' we use a heuristic for
+        the subset selection problem due to Golub, Klema and Stewart (1976),
+        detailed in chapter 12 of the book "Matrix Computations" by Golub and
+        Van Loan. 
+        
+    update_cache_low_rank : bool, optional (default = False)
+        A flag indicating whether the psuedoinverses in the update cache used 
+        as part of the low-rank update routine should themselves be updated
+        between iterations using low-rank updates. Setting this to True
+        gives a notable performance boost, but I have found that this can
+        also give rise to numerical stability issues, so caveat emptor.
+        Only set to True if you're sure of what you're doing.
+        
+    final_test : bool, optional (default True)
+        A flag indicating whether a final test should be performed to validate
+        the final score of the germ-vector set found using either the greedy
+        or RRQR based search heuristics. Can be useful in conjunction with
+        the use of update_cache_low_rank, as this can help detect numerical
+        stability problems in the use of low-rank updates for cache construction.
+        
+    comm : mpi4py.MPI.Comm, optional
+        When not None, an MPI communicator for distributing the computation
+        across multiple processors.
+        
+    Returns
+    -------
+    
+    germ_vec_dict : dict
+        A dictionary whose keys are germs and whose elements are numpy arrays
+        whose columns correspond to the amplified directions in parameter space
+        identified for that germ such that when combined with the amplified directions
+        selected for each other germ in the set we maintain amplificational completeness.
+
+    currentDDD : ndarray
+        The J^T@J matrix for subset of twirled derivative columns selected accross
+        all of the germs. The spectrum of this matrix provides information about the
+        amplificational properties of the reduced vector set. 
+    """
+    printer = _baseobjs.VerbosityPrinter.create_printer(verbosity)
+    
+    #Add some checks related to the option to switch up data types:
+    if not assume_real:
+        if not (float_type is _np.cdouble or float_type is _np.csingle):
+            printer.log('Selected numpy type: '+ str(float_type.dtype), 1)
+            raise ValueError('Unless working with (known) real-valued quantities only, please select an appropriate complex numpy dtype (either cdouble or csingle).')
+    else:
+        if not (float_type is _np.double or float_type is _np.single):
+            printer.log('Selected numpy type: '+ str(float_type.dtype), 1)
+            raise ValueError('When assuming real-valued quantities, please select a real-values numpy dtype (either double or single).')
+    
+    Np = target_model.num_params
+    
+    if (num_nongauge_params is None):
+        (_, numGaugeParams,
+         numNonGaugeParams, _) = _get_model_params([target_model])
+        if num_nongauge_params is not None:
+            numGaugeParams = numGaugeParams + numNonGaugeParams - num_nongauge_params
+            numNonGaugeParams = num_nongauge_params
+    elif (num_nongauge_params is not None):
+        numGaugeParams =  Np - num_nongauge_params
+        numNonGaugeParams = num_nongauge_params
+    
+    printer.log('Number of gauge parameters: ' + str(numGaugeParams), 1) 
+    printer.log('Number of non-gauge parameters: ' + str(numNonGaugeParams), 1)
+    
+    
+    if pretest:
+        undercompleteModelNum = test_germs_list_completeness([target_model],
+                                                             germ_list, 
+                                                             'all',
+                                                             threshold,
+                                                             float_type=float_type,
+                                                             comm=comm)
+        if undercompleteModelNum > -1:
+            printer.warning("Complete initial germ set FAILS on model "
+                            + str(undercompleteModelNum) + ".")
+            printer.warning("Aborting search.")
+            return None
+
+        printer.log("Complete initial germ set succeeds on all input models.", 1)
+        
+    twirledDerivDaggerDerivList, germ_eigval_list = _compute_bulk_twirled_ddd_compact(target_model, germ_list, tol, evd_tol=evd_tol, float_type=float_type, printer=printer, return_eigs=True)
+    
+    #_compute_bulk_twirled_ddd returns a list of matrices of the form U@np.diag(np.sqrt(e)) where U@diag(e)@U^H is the compact eigenvalue decomposition of a matrix. It is done this way to ensure we have symmetric updates.
+    
+    #Let's take the list of compactified U@np.diag(np.sqrt(e)) matrices, which are num_params x rank of twirled derivative in dimensions and concatenate them into a single array
+    printer.log('Concatenating compact EVDs', 2)
+    composite_twirled_deriv_array = _np.concatenate(twirledDerivDaggerDerivList, axis =1)
+    
+    printer.log('Complete germ set (overcomplete) number of amplified parameters: %d'%(composite_twirled_deriv_array.shape[1]), 1)
+    
+    #also do this for the eigenvalues:
+    composite_eigenvalue_array = _np.concatenate(germ_eigval_list, axis=None)
+    
+    #I am going to need to easily map back from indexes in the above 2 composite arrays and 
+    #the corresponding germ, internal germ index pair.
+    idx_to_germ_idx = [(germ, internal_idx) for germ_idx, germ in enumerate(germ_list) 
+                                            for internal_idx in range(len(germ_eigval_list[germ_idx]))]
+    
+    #Initialize a dictionary tracking for each germs the directions in model parameter
+    #space being kept for that germ.
+    germ_vec_dict = {germ : [] for germ in germ_list}
+    
+    if mode == 'greedy':
+    
+        num_candidate_vecs= composite_twirled_deriv_array.shape[1]
+
+        #Named weights for historical reasons, this is a binary vector of length equal to the total number
+        #of candidate eigenvectors for including in the J^T@J matrix.  
+        weights = _np.zeros(num_candidate_vecs, _np.int64)
+        
+        #Ok, now let's do the initial iteration of the greedy search and then use this to build off of using low-rank
+        #rank-update magic.
+        
+        #for the initial iteration since we're just adding a single vector, independent of the score function used
+        #we basically just want to choose the vector associated with the largest eigenvalue (as this will minimize both
+        #the psuedoinverse-trace and the minimum psuedoinverse eigenvalue conditions).
+        best_initial_vec_index= _np.argmax(composite_eigenvalue_array)
+        printer.log('Best initial vector found: ' + str(best_initial_vec_index), 2)
+        
+        #Set the weight of this vector to 1
+        weights[best_initial_vec_index]=1
+        
+        #and add it to a dictionary tracking for each germs the directions in model parameter
+        #space being kept for that germ.
+        germ_vec_dict[idx_to_germ_idx[best_initial_vec_index][0]].append(composite_twirled_deriv_array[:, [best_initial_vec_index]]/_np.sqrt(composite_eigenvalue_array[best_initial_vec_index]))
+        #Note: I want the elements of the germ vector dict to correspond to normalized vectors in model
+        #parameter space, but the vectors corresponding to the columns of composite_twirled_deriv_array
+        #have a factor of sqrt(e) folded into them, so I am dividing that back out here.
+        
+        #initial value of the current twirled derivative gramian.
+        currentDDD = composite_twirled_deriv_array[:, [best_initial_vec_index]]@ composite_twirled_deriv_array[:, [best_initial_vec_index]].T
+        
+        #Now start the greedy search. The initial number of amplified parameters is 1.
+        initN=1
+        #initialize a variable for the previous iteration's update cache to None
+        prev_update_cache = None
+        
+        while _np.any(weights == 0):
+            printer.log("Outer iteration: %d of %d amplified" %
+                            (initN, numNonGaugeParams), 2)
+                            
+            if initN == numNonGaugeParams:
+                break   # We are AC, so we can stop adding model parameter directions.
+                    
+            #precompute things that can be reused for the rank-one update
+            printer.log('Creating update cache.', 3)
+            if prev_update_cache is None:
+                current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol)
+            else:
+                if update_cache_low_rank == True:
+                    #do a rank one psuedoinverse update wrt the best vector from the prior round
+                    current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol, 
+                                                                           prev_update_cache = prev_update_cache,
+                                                                           rank_one_update=composite_twirled_deriv_array[:, [idx_best_candidate_vec]]) # noqa: F821
+                else:
+                    #otherwise rebuild the update cache from scratch using a fresh psuedoinverse. Could be useful if worried about stability.
+                    current_update_cache = construct_update_cache_rank_one(currentDDD, evd_tol=evd_tol)
+            
+            candidate_vec_indices = _np.where(weights == 0)[0]
+            
+            best_vec_score = _scoring.CompositeScore(1.0e100, 0, None)  # lower is better
+            idx_best_candidate_vec = None
+            
+            for i,idx in enumerate(candidate_vec_indices):
+                printer.log('Inner iter over candidate vectors, %d of %d'%(i, len(candidate_vec_indices)), 3)
+                                      
+                current_vec_score = compute_composite_vector_set_score(
+                                                current_update_cache= current_update_cache,
+                                                vector_update= composite_twirled_deriv_array[:, [idx]],
+                                                num_nongauge_params= numNonGaugeParams,
+                                                float_type= float_type)
+
+                if current_vec_score < best_vec_score:
+                    best_vec_score = current_vec_score
+                    idx_best_candidate_vec = idx
+                    
+            #update the weight vector:
+            weights[idx_best_candidate_vec]=1
+            
+            #update initN for the next round, this should just be the N value for the best_vec_score
+            initN= best_vec_score.N
+            
+            #logging for the best found score at this iteration:
+            printer.log('Best score this iteration: ' + str(best_vec_score), 2)
+            
+            #update currentDDD
+            currentDDD= composite_twirled_deriv_array[:, _np.where(weights == 1)[0]]@ composite_twirled_deriv_array[:, _np.where(weights == 1)[0]].T
+        
+            #Add this vector to the germ vector dictionary
+            germ_vec_dict[idx_to_germ_idx[idx_best_candidate_vec][0]].append(composite_twirled_deriv_array[:, [idx_best_candidate_vec]]/_np.sqrt(composite_eigenvalue_array[idx_best_candidate_vec]))
+            
+            #set the previous update cache to the current one in preparation for the next round through the loop.
+            prev_update_cache = current_update_cache
+            
+        printer.log('Returning best found vector set. Final Score: ' + str(best_vec_score),1)
+        
+        #if true, perform a final test and verify that the final score 
+        if final_test:
+            #restricted version of the psuedoinverse trace that only looks at the non-gauge parameters.
+            #Only care about gramians, so assume hermitian
+            def restricted_pinv_trace(mat, num_nongauge):
+                #flip so in descending order
+                evals = _np.flip(_np.linalg.eigvalsh(mat), axis=0)
+                restricted_evals = evals[0:num_nongauge]
+                pinv_evals = 1/restricted_evals
+                rank = _np.count_nonzero(restricted_evals > 1e-7) #HARDCODED
+                
+                return _np.sum(pinv_evals), rank
+            
+            #also validate the rank:    
+            final_test_pinv, final_test_rank = restricted_pinv_trace(currentDDD, numNonGaugeParams)
+            
+            #compare these to the results of the greedy search and raise and error if they are significantly different.
+            #Hardcoded tolerance is primarily meant to detect catastrophic failures, hence it being pretty large.
+            if (abs(final_test_pinv - best_vec_score.minor) > 1) or (final_test_rank != best_vec_score.N): #HARDCODED
+                raise ValueError(f'Final test failed. Either the psuedoinverse traces are different or the final ranks are different. \n'
+                                 + f'The final psuedoinverse-trace from the test is: {final_test_pinv} and the final rank from the test is: {final_test_rank} \n'
+                                 + f'The final psuedoinverse-trace from the greedy search is: {best_vec_score.minor} and the final rank from the greedy search is: {best_vec_score.N}')
+            
+    #add in a new code path for using the SVD/RRQR based heuristic.
+    elif mode == 'RRQR':
+        #Start by calculating the singular value decomposition of the composite_twirled_deriv_array
+        #Only need the V matrix.
+        _, _, Vh = _np.linalg.svd(composite_twirled_deriv_array, full_matrices=False, compute_uv=True, hermitian=False)
+       
+        #target rank = numNonGaugeParams
+        #Take the rank revealing QR decomposition of the submatrix of Vh corresponding
+        #to the first numNonGaugeParams rows.
+        #I actually only need the column permutation as well.
+        _, P = _sla.qr(Vh[0:numNonGaugeParams, :], mode='r', pivoting=True)
+        
+        #We should be able to use the integer array returned by the RRQR to
+        #index directly into the composite_twirled_deriv_array
+        permuted_composite_twirled_deriv_array = composite_twirled_deriv_array[:, P]
+        #As for the subset to take, we want the first numNonGaugeParams columns
+        #of the permuted array
+        selected_vector_subset = permuted_composite_twirled_deriv_array[:, 0:numNonGaugeParams]
+        
+        #Add the vectors to the germ vector dictionary
+        for vec_idx in P[0:numNonGaugeParams]:
+            germ_vec_dict[idx_to_germ_idx[vec_idx][0]].append(composite_twirled_deriv_array[:, [vec_idx]]/_np.sqrt(composite_eigenvalue_array[vec_idx]))
+        
+        #temporarily copy, fix the return behavior later to avoid this.
+        currentDDD= selected_vector_subset @ selected_vector_subset.T
+        #Need to map back the selected vectors indices (which we should be able to pull
+        #directly by taking the first numNonGaugeParams of P) and use them to map back into
+        #the germ set for germ_vec_dict construction purposes.
+        
+    else:
+        raise NotImplementedError('The specified mode string ' + mode + ' is not currently implemented. Please use either greedy or RRQR.')    
+
+    return germ_vec_dict, currentDDD
+
+#Updated composite score calculating function specialized to 
+#handle the case where we're assembling a composite set of
+#model vectors rather than full germs.
+def compute_composite_vector_set_score(current_update_cache, vector_update, 
+                                       model=None, num_nongauge_params=None, 
+                                       force_rank_increase=False, 
+                                       float_type=_np.cdouble):
+    """
+    Compute the score for a germ set when it is not AC against a model.
+
+    Normally scores computed for germ sets against models for which they are
+    not AC will simply be astronomically large. This is fine if AC is all you
+    care about, but not so useful if you want to compare partial germ sets
+    against one another to see which is closer to being AC. This function
+    will see if the germ set is AC for the parameters corresponding to the
+    largest `N` eigenvalues for increasing `N` until it finds a value of `N`
+    for which the germ set is not AC or all the non gauge parameters are
+    accounted for and report the value of `N` as well as the score.
+    This allows partial germ set scores to be compared against one-another
+    sensibly, where a larger value of `N` always beats a smaller value of `N`,
+    and ties in the value of `N` are broken by the score for that value of `N`.
+
+    Parameters
+    ----------
+    
+    current_update_cache : tuple
+        A tuple whose elements are the components of the current update cache
+        for performing a low-rank update. Elements are (pinv(A), proj_A).
+        
+    vector_update : ndarray
+        A numpy array corresponding to one half of the low-rank symmetric update to
+        to perform.
+    
+    model : Model, optional
+        The model against which the germ set is to be scored. Not needed if
+        `partial_deriv_dagger_deriv` is provided.
+
+    num_nongauge_params : int, optional
+        Force the number of nongauge parameters rather than rely on automated gauge optimization.
+    
+    force_rank_increase : bool, optional
+        Whether to force the greedy iteration to select a new germ that increases the rank
+        of the jacobian at each iteration (this may result in choosing a germ that is sub-optimal
+        with respect to the chosen score function). Also results in pruning in subsequent
+        optimization iterations. Defaults to False.
+    
+    
+    Returns
+    -------
+    CompositeScore
+        The score for the germ set indicating how many parameters it amplifies
+        and its numerical score restricted to those parameters.
+    
+    rank_increase_flag : bool
+        A flag that indicates whether the candidate update germ increases the rank
+        of the overall Jacobian.
+    """
+    
+    if num_nongauge_params is None:
+        if model is None:
+            raise ValueError("Must provide either num_gauge_params or model!")
+        else:
+            reduced_model = _remove_spam_vectors(model)
+            num_nongauge_params = reduced_model.num_params - reduced_model.num_gauge_params
+    
+    #calculate the updated eigenvalues
+    inverse_trace, rank_increase_flag = rank_one_inverse_trace_update(vector_update, current_update_cache[0], current_update_cache[1], current_update_cache[2], force_rank_increase)
+    
+    #check if the rank_increase_flag is set to False, if so then we failed
+    #to increase the rank and so couldn't use the inverse trace update.
+    if not rank_increase_flag and force_rank_increase:
+        AC_score = -_np.inf
+        N_AC = -_np.inf
+    else:
+        AC_score = inverse_trace
+        #current_update_cache[3] is the current rank of A, so if the rank increase flag is set we increment this by 1.
+        if rank_increase_flag:
+            N_AC = current_update_cache[3]+1
+        else:
+            N_AC= current_update_cache[3]
+        
+    # Apply penalties to the major score
+    major_score = -N_AC
+    minor_score = AC_score
+    ret = _scoring.CompositeScore(major_score, minor_score, N_AC)
+    
+    #TODO revisit what to do with the rank increase flag so that we can use
+    #it to remove unneeded germs from the list of candidates.
+    
+    return ret#, rank_increase_flag
+    
+#version specialized for rank one updates
+def construct_update_cache_rank_one(mat, evd_tol=1e-10, prev_update_cache=None, rank_one_update=None):
+    """
+    Calculates the parts of the psuedoinverse update loop algorithm that we can 
+    pre-compute and reuse throughout all of the potential updates.
+    
+    This is based on a result from Carl Meyer in Generalized Inversion of 
+    Modified Matrices, and summarized in 3.2.7 of the matrix cookbook.
+    
+    quantities we can pre-compute are (for initial matrix A):
+    pinv(A)
+    I-A@pinv(A)
+    
+    Input:
+    
+    mat : ndarray
+        The matrix to construct a set of reusable objects for performing the updates.
+        mat is assumed to be a symmetric square matrix.
+        
+    evd_tol : float (optional)
+        A threshold value for setting eigenvalues to zero.
+        
+    Output:
+    
+    pinv_A : ndarray
+        The psuedoinverse of the input matrix
+    
+    proj_A : ndarray
+        A projectors onto the orthogonal complement of the column space of the input matrix.
+    
+    pinv_A_trace : float
+        The trace of pinv_A.
+        
+    rank : int
+        The current rank of A/pinv_A
+        
+    """
+    
+    #Start by constructing the psuedoinverse of the input matrix.
+    
+    #if these are both specified then use a rank-one update for the psuedoinversion.
+    if ((prev_update_cache is not None) and (rank_one_update is  not None)):
+        pinv_A, rank_increase_flag = rank_one_psuedoinverse_update(rank_one_update, prev_update_cache[0], 
+                                                                   prev_update_cache[1], prev_update_cache[2])
+        if rank_increase_flag:
+            rank= prev_update_cache[3]+1
+        else:
+            rank=prev_update_cache[3]
+        
+    #Else construct the psuedoinverse from scratch.
+    #Use the scipy implementation since I can get the rank out easily
+    else:
+        try:
+            pinv_A, rank= _sla.pinvh(mat, return_rank=True) #hardcoded
+        except _np.linalg.LinAlgError:
+            #This means the SVD did not converge, try to fall back to a more stable
+            #SVD implementation using the scipy lapack_driver options.
+            _warnings.warn('pinv Calculation Failed to Converge.'\
+                           +'Falling back to pinv implementation based on Scipy SVD with lapack driver gesvd,'\
+                           +' which is slower but *should* be more stable.')
+            pinv_A = stable_pinv(mat)
+    
+    #construct the projector
+    proj_A= _np.eye(mat.shape[0]) - mat@pinv_A
+    
+    #I think that's all we can pre-compute, so return those values:
+    return pinv_A, proj_A, _np.trace(pinv_A), rank
+    
+#function for doing rank-1 psuedoinverse-trace update:
+def rank_one_inverse_trace_update(vector_update, pinv_A, proj_A, pinv_A_trace, force_rank_increase=False):
+    """
+        Helper function for calculating rank-one updates to the trace of the psuedoinverse.
+        Takes as input a rank-one update, the psuedo-inverse of the matrix
+        we're updating, the projector onto the column space for the matrix whose
+        psuedoinverse we are updating and a flag for specifying if we're requiring
+        the rank to increase.
+    """
+    #calculate some quantities we need. Following notation from matrix cookbook.
+    v = pinv_A@vector_update
+    beta = 1 + _np.sum(vector_update*v)
+    w = proj_A@vector_update
+    
+    #the conditions are based on beta and the 2-norm of w.
+    norm_w = _np.linalg.norm(w)
+    
+    #Note: we only actually need to calculate the diagonal elements of the G matrix. 
+    if norm_w > 1e-10: #HARDCODED, need some wiggle room for numerical precision reasons.
+        #print('Case 1')
+        #the diagonal of an outer-product of 2 vectors is just a vector of the element-wise
+        #products of corresponding elements.
+        vw_term_diag = (-2/norm_w**2)*(v*w)
+        ww_term_diag = (beta/norm_w**4)*(w**2)
+        
+        G_diag = vw_term_diag + ww_term_diag
+        
+        #if the norm of w is non-zero this means our update has non-trivial
+        #support on the orthogonal complement to the column space of A,
+        #so our rank must increase by 1.
+        rank_increase_flag = True
+    
+    elif (norm_w<1e-10) and (beta>1e-10):
+        #print('Case 3/5')
+        G_diag = (-beta/_np.abs(beta)**2)*(v**2)
+        
+        rank_increase_flag = False
+        
+    elif (norm_w<1e-10) and (beta<1e-10):
+        #The only circumstance I can think of where we'll hit this is if
+        #the update is a -1 eigenstate of pinv_A. I have no intuition for
+        #whether we'll encounter this in practice.
+        _warnings.warn('Encountered Case 6 of the psuedoinverse update from the matrix cookbook,'\
+                       +' which probably should not be possible (AKA look into this).')
+        gamma = pinv_A@v
+        norm_v= _np.linalg.norm(v)
+        
+        gamma_v_term_diag = (-2/norm_v**2)*(gamma*v)
+        vv_term_diag = (_np.sum(v*gamma)/norm_v**4)*(v**2)
+        
+        G_diag = gamma_v_term_diag + vv_term_diag
+        
+        rank_increase_flag = False
+    
+    else:
+        raise ValueError('Some weird shite went down here, none of the cases match.')
+
+    #Ok, now we just take the sum of this vector and we have the trace.
+    updated_trace = _np.sum(G_diag) + pinv_A_trace
+    
+    return updated_trace, rank_increase_flag
+    
+    
+#function for doing rank-1 psuedoinverse update:
+def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_increase=False):
+    """
+    Helper function for calculating rank-one psuedoinverse updates.
+    Takes as input a rank-one update, the psuedo-inverse of the matrix
+    we're updating, the projector onto the column space for the matrix whose
+    psuedoinverse we are updating and a flag for specifying if we're requiring
+    the rank to increase.
+    """
+    
+    #calculate some quantities we need. Following notation from matrix cookbook.
+    beta = 1 + vector_update.T@pinv_A@vector_update
+    v= pinv_A@vector_update
+    w = proj_A@vector_update
+    
+    #the conditions are based on beta and the 2-norm of w.
+    norm_w = _np.linalg.norm(w)
+    
+    #Note: we only actually need to calculate the diagonal elements of the G matrix. 
+    if norm_w > 1e-10: #HARDCODED, need some wiggle room for numerical precision reasons.
+        #print('Case 1')
+        #the diagonal of an outer-product of 2 vectors is just a vector of the element-wise
+        #products of corresponding elements.
+        vw = v@w.T
+        vw_term = (-1/norm_w**2)*(vw + vw.T)
+        ww_term = (beta/norm_w**4)*(w@w.T)
+        
+        G = vw_term + ww_term
+        
+        #if the norm of w is non-zero this means our update has non-trivial
+        #support on the orthogonal complement to the column space of A,
+        #so our rank must increase by 1.
+        rank_increase_flag = True
+    
+    elif (norm_w<1e-10) and (beta>1e-10):
+        #print('Case 3/5')
+        G = (-beta/_np.abs(beta)**2)*(v@v.T)
+        
+        rank_increase_flag = False
+        
+    elif (norm_w<1e-10) and (beta<1e-10):
+        #The only circumstance I can think of where we'll hit this is if
+        #the update is a -1 eigenstate of pinv_A. I have no intuition for
+        #whether we'll encounter this in practice.
+        _warnings.warn('Encountered Case 6 of the psuedoinverse update from the matrix cookbook,'\
+                       +' which probably should not be possible (AKA look into this).')
+        gamma = pinv_A@v
+        norm_v= _np.linalg.norm(v)
+        
+        gamma_v= gamma@v.T
+        gamma_v_term = (-1/norm_v**2)*(gamma_v+gamma_v.T)
+        vv_term = (_np.sum(v*gamma)/norm_v**4)*(v@v.T)
+        
+        G = gamma_v_term + vv_term
+        
+        rank_increase_flag = False
+    
+    else:
+        raise ValueError('Some weird shite went down here, none of the cases match.')
+
+    #Ok, now we just take the sum of this vector and we have the trace.
+    updated_pinv = G + pinv_A
+    
+    return updated_pinv, rank_increase_flag
+    
+
+                                                   

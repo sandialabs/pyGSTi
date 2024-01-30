@@ -10,6 +10,7 @@
 *.pyd
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
+*_checkpoints/
 jupyter_notebooks/**/offline
 test/test_packages/offline
 hooks/etc/permissions.yml
@@ -23,7 +24,13 @@ doc/_autosummary
 doc/autoapi
 doc/build
 .venv*
+*.pyc*
 
+# Protocol Checkpointing #
+##########################
+*gst_checkpoints*
+*model_test_checkpoints*
+*standard_gst_checkpoints*
 
 # Test Metadata #
 #################
@@ -47,6 +54,8 @@ jupyter_notebooks/Tutorials/tutorial_files/exampleMultiDataSetReport
 jupyter_notebooks/Tutorials/tutorial_files/exampleBriefReport
 jupyter_notebooks/Tutorials/tutorial_files/*.ipynb
 jupyter_notebooks/Tutorials/tutorial_files/tempTest
+jupyter_notebooks/Tutorials/tutorial_files/*checkpoints
+
 
 
 # Compiled source #

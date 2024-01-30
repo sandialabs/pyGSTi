@@ -187,7 +187,11 @@ def write_benchmarker(benchmarker, outdir, overwrite=False, verbosity=0):
             _io.write_dataset(fname, benchmarker.multids[dskey][dsind], fixed_column_mode=False)
 
 
-def create_benchmarker(dsfilenames, predictions={}, test_stability=True, auxtypes=[], verbosity=1):
+def create_benchmarker(dsfilenames, predictions=None, test_stability=True, auxtypes=None, verbosity=1):
+    if predictions is None:
+        predictions = dict()
+    if auxtypes is None:
+        auxtypes = []
     benchmarker = load_data_into_benchmarker(dsfilenames, verbosity=verbosity)
     if test_stability:
         if verbosity > 0:
@@ -205,12 +209,14 @@ def create_benchmarker(dsfilenames, predictions={}, test_stability=True, auxtype
 
 
 def load_data_into_benchmarker(dsfilenames=None, summarydatasets_filenames=None, summarydatasets_folder=None,
-                               predicted_summarydatasets_folders={}, verbosity=1):
+                               predicted_summarydatasets_folders=None, verbosity=1):
     """
     todo
 
     """
-    if len(predicted_summarydatasets_folders) > 0:
+    if predicted_summarydatasets_folders is None:
+        predicted_summarydatasets_folders = dict()
+    elif len(predicted_summarydatasets_folders) > 0:
         assert(summarydatasets_folder is not None)
         #if len(predicted_summarydatasets_folders) > 1:
         #    raise NotImplementedError("This is not yet supported!")
