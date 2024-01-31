@@ -38,6 +38,7 @@ from .staticstdop import StaticStandardOp
 from .staticunitaryop import StaticUnitaryOp
 from .stochasticop import StochasticNoiseOp
 from .lindbladcoefficients import LindbladCoefficientBlock as _LindbladCoefficientBlock
+from .affineshiftop import AffineShiftOp
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
