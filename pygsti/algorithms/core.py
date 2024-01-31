@@ -444,6 +444,10 @@ def _construct_a(effect_fiducials, model):
     dim = model.dim
     A = _np.empty((n, dim))
     # st = _np.empty(dim, 'd')
+    
+    # Remove restrictions on state param types for computation
+    old_default_param = model.preps.default_param
+    model.preps.default_param = "full"
 
     basis_st = _np.zeros((dim, 1), 'd'); eoff = 0
     for k, (estr, povmLbl, povmLen) in enumerate(zip(effect_fiducials, povmLbls, povmLens)):
@@ -459,6 +463,9 @@ def _construct_a(effect_fiducials, model):
             basis_st[i] = 0.0
 
         eoff += povmLen
+    
+    model.preps.default_param = old_default_param
+
     return A
 
 
@@ -467,6 +474,10 @@ def _construct_b(prep_fiducials, model):
     dim = model.dim
     B = _np.empty((dim, n))
     # st = _np.empty(dim, 'd')
+
+    # Remove restrictions on POVM param types for computation
+    old_default_param = model.povms.default_param
+    model.povms.default_param = "full"
 
     #Create POVM of vector units
     basis_Es = []
@@ -484,6 +495,8 @@ def _construct_b(prep_fiducials, model):
         B[:, k] = [probs[("E%d" % i,)] for i in range(dim)]  # CHECK will this work?
 
     del model.povms['M_LGST_tmp_povm']
+    model.povms.default_param = old_default_param
+
     return B
 
 

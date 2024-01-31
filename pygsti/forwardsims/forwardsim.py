@@ -373,7 +373,7 @@ class ForwardSimulator(_NicelySerializable):
             if 'epp' in array_types:
                 derivative_dimensions = (self.model.num_params, self.model.num_params)
             elif 'ep' in array_types:
-                derivative_dimensions = (self.model.num_params)
+                derivative_dimensions = (self.model.num_params,)
             else:
                 derivative_dimensions = tuple()
         return _CircuitOutcomeProbabilityArrayLayout.create_from(circuits, self.model, dataset, derivative_dimensions,
