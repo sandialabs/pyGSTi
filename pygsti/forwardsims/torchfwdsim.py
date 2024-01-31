@@ -52,22 +52,21 @@ class TorchForwardSimulator(ForwardSimulator):
         super(ForwardSimulator, self).__init__(model)
 
     def _bulk_fill_probs_block(self, array_to_fill, layout):
+        l2state, l2gate, l2povm = self._prep_bulk_fill_probs_block(layout)
         for element_indices, circuit, outcomes in layout.iter_unique_circuits():
-            self._compute_circuit_outcome_probabilities(array_to_fill[element_indices], circuit,
-                                                        outcomes, layout.resource_alloc(), time=None)
+            self._circuit_fill_probs_block(array_to_fill[element_indices], circuit, outcomes, l2state, l2gate, l2povm)
+            
+    def _prep_bulk_fill_probs_block(self, layout):
+        label_to_gate = dict()
+        label_to_povm = dict()
+        label_to_state = dict()
+        for _, circuit, outcomes in layout.iter_unique_circuits():
+            expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
+            # ^ Note, I'm not sure if outcomes needs to be passed to the function above.
+            if len(expanded_circuit_outcomes) > 1:
+                raise NotImplementedError("I don't know what to do with this.")
+            spc = list(expanded_circuit_outcomes.keys())[0]
 
-    def _compute_circuit_outcome_probabilities(
-            self, array_to_fill: np.ndarray, circuit: Circuit,
-            outcomes: Tuple[Tuple[str]], resource_alloc: ResourceAllocation, time=None
-        ):
-        expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
-        if time is not None:
-            raise NotImplementedError()
-        if len(expanded_circuit_outcomes) > 1:
-            raise ValueError("We're only able to write to array_to_fill once.")
-        for spc in expanded_circuit_outcomes:
-            # ^ spc is a SeparatePOVMCircuit
-            # Note: `spc.circuit_without_povm` *always* begins with a prep label.
             prep_label = spc.circuit_without_povm[0]
             op_labels  = spc.circuit_without_povm[1:]
             effect_labels = spc.full_effect_labels
@@ -105,7 +104,7 @@ class TorchForwardSimulator(ForwardSimulator):
             <class 'pygsti.modelmembers.povms.effect.POVMEffect'>
             <class 'pygsti.modelmembers.modelmember.ModelMember'>
             """
-
+        
             rhorep  = rho._rep
             opreps = [op._rep for op in ops]
             effectreps = [effect._rep for effect in effects]
@@ -117,15 +116,48 @@ class TorchForwardSimulator(ForwardSimulator):
                 <class 'pygsti.evotypes.densitymx[_slow].effectreps.EffectRepConjugatedState'>
                 <class 'pygsti.evotypes.densitymx[_slow].effectreps.EffectRep'>
             """
-
+        
+            # Get the numerical representations
             superket = rhorep.base
             superops = [orep.base for orep in opreps]
             povm_mat = np.row_stack([erep.state_rep.base for erep in effectreps])
-            for superop in superops:
-                superket = superop @ superket
-            array_to_fill[:] = povm_mat @ superket
 
-        pass
+            label_to_state[prep_label] = superket
+            for i, ol in enumerate(op_labels):
+                label_to_gate[ol] = superops[i]
+            label_to_povm[''.join(effect_labels)] = povm_mat
+
+        return label_to_state, label_to_gate, label_to_povm
+
+    def _circuit_fill_probs_block(self, array_to_fill, circuit, outcomes, l2state, l2gate, l2povm):
+        spc = next(iter(circuit.expand_instruments_and_separate_povm(self.model, outcomes)))
+        prep_label = spc.circuit_without_povm[0]
+        op_labels  = spc.circuit_without_povm[1:]
+        povm_label = ''.join(spc.full_effect_labels)
+
+        superket = l2state[prep_label]
+        superops = [l2gate[ol] for ol in op_labels]
+        povm_mat = l2povm[povm_label]
+
+        for superop in superops:
+            superket = superop @ superket
+        array_to_fill[:] = povm_mat @ superket
+        return
+
+    def _compute_circuit_outcome_probabilities(
+        self, array_to_fill: np.ndarray, circuit: Circuit,
+        outcomes: Tuple[Tuple[str]], resource_alloc: ResourceAllocation, time=None
+    ):
+        """
+        This was originally a helper function, called in a loop inside _bulk_fill_probs_block.
+        
+        The need for this helper function has been obviated by having
+        _bulk_fill_probs_block do initial prep work (via the new 
+        _prep_bulk_probs_block function), and then calling a new per-circuit helper
+        function (specifically, _circuit_fill_probs_block) that takes advantage of
+        the prep work.
+        """
+        raise NotImplementedError()
 
 
 
