@@ -10,6 +10,7 @@ Defines the TPPOVM class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
 
@@ -56,3 +57,12 @@ class TPPOVM(_BasePOVM):
 
         return (TPPOVM, (effects, self.evotype, self.state_space, True),
                 {'_gpindices': self._gpindices, '_submember_rpindices': self._submember_rpindices})
+
+    def torch_base(self, require_grad=False, torch_handle=None):
+        if torch_handle is None:
+            import torch as torch_handle
+        assert not require_grad
+        effectreps = [effect._rep for effect in self.values()]
+        povm_mat = _np.row_stack([erep.state_rep.base for erep in effectreps])
+        povm_mat = torch_handle.from_numpy(povm_mat)
+        return povm_mat

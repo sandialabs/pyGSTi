@@ -99,40 +99,16 @@ class TorchForwardSimulator(ForwardSimulator):
                     keyed by effectlabels and ConjugatedStatePOVMEffect-valued
             """
 
-            effects = [effect for effect in povm.values()]
-            """ ^ The first len(effect_labels) elements of that list have the inheritance structure ...
-                
-            <class 'pygsti.modelmembers.povms.fulleffect.FullPOVMEffect'>
-            <class 'pygsti.modelmembers.povms.conjugatedeffect.ConjugatedStatePOVMEffect'>
-            <class 'pygsti.modelmembers.povms.conjugatedeffect.DenseEffectInterface'>
-            <class 'pygsti.modelmembers.povms.effect.POVMEffect'>
-            <class 'pygsti.modelmembers.modelmember.ModelMember'>
-
-            The final element of "effects" is (usually ?) a ComplementPOVMEffect object.
-            """
-            if 'ComplementPOVMEffect' not in str(type(effects[-1])):
-                raise ValueError()
-        
-            effectreps = [effect._rep for effect in effects]
-            """ ^ the ._rep fields for states, ops, and effects return
-                <class 'pygsti.evotypes.densitymx[_slow].statereps.StateRepDense'>
-                <class 'pygsti.evotypes.densitymx[_slow].statereps.StateRep'>
-                <class 'pygsti.evotypes.densitymx[_slow].opreps.OpRepDenseSuperop'>
-                <class 'pygsti.evotypes.densitymx[_slow].opreps.OpRep'>  
-                <class 'pygsti.evotypes.densitymx[_slow].effectreps.EffectRepConjugatedState'>
-                <class 'pygsti.evotypes.densitymx[_slow].effectreps.EffectRep'>
-            """
-        
             # Get the numerical representations
-            povm_mat = np.row_stack([erep.state_rep.base for erep in effectreps])
             superket = rho.torch_base(require_grad=False, torch_handle=torch)
             superops = [op.torch_base(require_grad=False, torch_handle=torch) for op in ops]
+            povm_mat = povm.torch_base(require_grad=False, torch_handle=torch)
             # povm_mat = np.row_stack([effect.base for effect in effects])
 
             label_to_state[prep_label] = superket
             for i, ol in enumerate(op_labels):
                 label_to_gate[ol] = superops[i]
-            label_to_povm[''.join(effect_labels)] = torch.from_numpy(povm_mat)
+            label_to_povm[''.join(effect_labels)] = povm_mat
 
         return label_to_state, label_to_gate, label_to_povm
 
