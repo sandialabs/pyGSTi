@@ -109,8 +109,6 @@ class TorchForwardSimulator(ForwardSimulator):
             The final element of "effects" is usually (?) a ComplementPOVMEffect object.
             """
         
-            rhorep  = rho._rep
-            opreps = [op._rep for op in ops]
             effectreps = [effect._rep for effect in effects]
             """ ^ the ._rep fields for states, ops, and effects return
                 <class 'pygsti.evotypes.densitymx[_slow].statereps.StateRepDense'>
@@ -122,16 +120,14 @@ class TorchForwardSimulator(ForwardSimulator):
             """
         
             # Get the numerical representations
-            # superket = rhorep.base
-            # superops = [orep.base for orep in opreps]
             povm_mat = np.row_stack([erep.state_rep.base for erep in effectreps])
-            superket = rho.base
-            superops = [op.base for op in ops]
+            superket = rho.torch_base(require_grad=False, torch_handle=torch)
+            superops = [op.torch_base(require_grad=False, torch_handle=torch) for op in ops]
             # povm_mat = np.row_stack([effect.base for effect in effects])
 
-            label_to_state[prep_label] = torch.from_numpy(superket)
+            label_to_state[prep_label] = superket
             for i, ol in enumerate(op_labels):
-                label_to_gate[ol] = torch.from_numpy(superops[i])
+                label_to_gate[ol] = superops[i]
             label_to_povm[''.join(effect_labels)] = torch.from_numpy(povm_mat)
 
         return label_to_state, label_to_gate, label_to_povm

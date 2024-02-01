@@ -158,15 +158,18 @@ class TPState(_DenseState):
         self._ptr_has_changed()
         self.dirty = dirty_value
 
-    @property
-    def torch_base(self):
-        import torch
-        t_param = torch.from_numpy(self.to_vector())
-        t_param.requires_grad_(True)
-        t_const = self._ptr[0]*torch.ones(1, dtype=torch.double) 
-        t = torch.concat((t_const, t_param)) 
-        return t, [t_param]
-
+    def torch_base(self, require_grad: bool, torch_handle=None):
+        if torch_handle is None:
+            import torch as torch_handle
+        if require_grad:
+            t_param = torch_handle.from_numpy(self._rep.base[1:])
+            t_param.requires_grad_(require_grad)
+            t_const = self._ptr[0]*torch_handle.ones(1, dtype=torch_handle.double) 
+            t = torch_handle.concat((t_const, t_param)) 
+            return t, t_param
+        else:
+            t = torch_handle.from_numpy(self._rep.base)
+            return t
 
     def deriv_wrt_params(self, wrt_filter=None):
         """

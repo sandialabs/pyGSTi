@@ -155,6 +155,20 @@ class FullTPOp(_DenseOperator):
         self._ptr_has_changed()  # because _rep.base == _ptr (same memory)
         self.dirty = dirty_value
 
+    def torch_base(self, require_grad: bool, torch_handle=None):
+        if torch_handle is None:
+            import torch as torch_handle
+        if require_grad:
+            t_param = torch_handle.from_numpy(self._rep.base[1:, :])
+            t_param.requires_grad_(True)
+            t_const = torch_handle.zeros(size=(1, self.dim), dtype=torch_handle.double)
+            t_const[0,0] = 1.0
+            t = torch_handle.row_stack((t_const, t_param))
+            return t, [t_param]
+        else:
+            t = torch_handle.from_numpy(self._rep.base)
+            return t
+
     def deriv_wrt_params(self, wrt_filter=None):
         """
         The element-wise derivative this operation.
