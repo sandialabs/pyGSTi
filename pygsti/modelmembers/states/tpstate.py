@@ -169,7 +169,7 @@ class TPState(_DenseState):
             return t, t_param
         else:
             t = torch_handle.from_numpy(self._rep.base)
-            return t
+            return t, []
 
     def deriv_wrt_params(self, wrt_filter=None):
         """

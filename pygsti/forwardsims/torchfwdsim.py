@@ -68,7 +68,7 @@ class TorchForwardSimulator(ForwardSimulator):
 
             prep_label = spc.circuit_without_povm[0]
             op_labels  = spc.circuit_without_povm[1:]
-            effect_labels = spc.full_effect_labels
+            povm_label = spc.povm_label
 
             rho = model.circuit_layer_operator(prep_label, typ='prep')
             """ ^
@@ -89,7 +89,7 @@ class TorchForwardSimulator(ForwardSimulator):
             <class 'pygsti.modelmembers.operations.linearop.LinearOperator'>
             <class 'pygsti.modelmembers.modelmember.ModelMember'>
             """
-            povm = model.circuit_layer_operator(spc.povm_label, 'povm')
+            povm = model.circuit_layer_operator(povm_label, 'povm')
             """
             <class 'pygsti.modelmembers.povms.tppovm.TPPOVM'>
             <class 'pygsti.modelmembers.povms.basepovm._BasePOVM'>
@@ -100,15 +100,16 @@ class TorchForwardSimulator(ForwardSimulator):
             """
 
             # Get the numerical representations
-            superket = rho.torch_base(require_grad=False, torch_handle=torch)
-            superops = [op.torch_base(require_grad=False, torch_handle=torch) for op in ops]
-            povm_mat = povm.torch_base(require_grad=False, torch_handle=torch)
-            # povm_mat = np.row_stack([effect.base for effect in effects])
+            #   Right now I have a very awkward switch for gradients used in debugging.
+            require_grad = True
+            superket = rho.torch_base(require_grad,  torch_handle=torch)[0]
+            superops = [op.torch_base(require_grad,  torch_handle=torch)[0] for op in ops]
+            povm_mat = povm.torch_base(require_grad, torch_handle=torch)[0]
 
             label_to_state[prep_label] = superket
             for i, ol in enumerate(op_labels):
                 label_to_gate[ol] = superops[i]
-            label_to_povm[''.join(effect_labels)] = povm_mat
+            label_to_povm[povm_label] = povm_mat
 
         return label_to_state, label_to_gate, label_to_povm
 
@@ -130,7 +131,7 @@ class TorchForwardSimulator(ForwardSimulator):
         spc = next(iter(circuit.expand_instruments_and_separate_povm(self.model, outcomes)))
         prep_label = spc.circuit_without_povm[0]
         op_labels  = spc.circuit_without_povm[1:]
-        povm_label = ''.join(spc.full_effect_labels)
+        povm_label = spc.povm_label
 
         superket = l2state[prep_label]
         superops = [l2gate[ol] for ol in op_labels]

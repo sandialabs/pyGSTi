@@ -57,12 +57,47 @@ class TPPOVM(_BasePOVM):
 
         return (TPPOVM, (effects, self.evotype, self.state_space, True),
                 {'_gpindices': self._gpindices, '_submember_rpindices': self._submember_rpindices})
+    
+    @property
+    def dim(self):
+        effect = next(iter(self.values()))
+        return effect.dim
+    
+    @property
+    def base(self):
+        effectreps = [effect._rep for effect in self.values()]
+        povm_mat = _np.row_stack([erep.state_rep.base for erep in effectreps])
+        return povm_mat
 
     def torch_base(self, require_grad=False, torch_handle=None):
         if torch_handle is None:
             import torch as torch_handle
-        assert not require_grad
-        effectreps = [effect._rep for effect in self.values()]
-        povm_mat = _np.row_stack([erep.state_rep.base for erep in effectreps])
-        povm_mat = torch_handle.from_numpy(povm_mat)
-        return povm_mat
+        if not require_grad:
+            t = torch_handle.from_numpy(self.base)
+            return t, []
+        else:
+            assert self.complement_label is not None
+            complement_index = -1
+            for i,k in enumerate(self.keys()):
+                if k == self.complement_label:
+                    complement_index = i
+                    break
+            assert complement_index >= 0
+
+            num_effects = len(self)
+            if complement_index != num_effects - 1:
+                raise NotImplementedError()
+
+            not_comp_selector = _np.ones(shape=(num_effects,), dtype=bool)
+            not_comp_selector[complement_index] = False
+            dim = self.dim
+            first_basis_vec = torch_handle.zeros(size=(1, dim), dtype=torch_handle.double)
+            first_basis_vec[0,0] = dim ** 0.25
+
+            base = self.base
+            t_param = torch_handle.from_numpy(base[not_comp_selector, :])
+            t_param.requires_grad_(True)
+            t_func = first_basis_vec - t_param.sum(axis=0, keepdim=True)
+            t = torch_handle.row_stack((t_param, t_func))
+            return t, [t_param]
+
