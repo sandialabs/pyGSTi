@@ -89,15 +89,17 @@ class TorchForwardSimulator(ForwardSimulator):
             <class 'pygsti.modelmembers.operations.linearop.LinearOperator'>
             <class 'pygsti.modelmembers.modelmember.ModelMember'>
             """
-            # povm = model.circuit_layer_operator(spc.povm_label, 'povm')
+            povm = model.circuit_layer_operator(spc.povm_label, 'povm')
             """
             <class 'pygsti.modelmembers.povms.tppovm.TPPOVM'>
             <class 'pygsti.modelmembers.povms.basepovm._BasePOVM'>
             <class 'pygsti.modelmembers.povms.povm.POVM'>
-            <class 'pygsti.modelmembers.modelmember.ModelMember'>
+                <class 'pygsti.modelmembers.modelmember.ModelMember'>
+                <class 'collections.OrderedDict'>
+                    keyed by effectlabels and ConjugatedStatePOVMEffect-valued
             """
 
-            effects = [model.circuit_layer_operator(el, 'povm') for el in effect_labels]
+            effects = [effect for effect in povm.values()]
             """ ^ The first len(effect_labels) elements of that list have the inheritance structure ...
                 
             <class 'pygsti.modelmembers.povms.fulleffect.FullPOVMEffect'>
@@ -106,8 +108,10 @@ class TorchForwardSimulator(ForwardSimulator):
             <class 'pygsti.modelmembers.povms.effect.POVMEffect'>
             <class 'pygsti.modelmembers.modelmember.ModelMember'>
 
-            The final element of "effects" is usually (?) a ComplementPOVMEffect object.
+            The final element of "effects" is (usually ?) a ComplementPOVMEffect object.
             """
+            if 'ComplementPOVMEffect' not in str(type(effects[-1])):
+                raise ValueError()
         
             effectreps = [effect._rep for effect in effects]
             """ ^ the ._rep fields for states, ops, and effects return
