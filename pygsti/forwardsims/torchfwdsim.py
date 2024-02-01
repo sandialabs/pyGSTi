@@ -19,9 +19,9 @@ import numpy as np
 import scipy.linalg as la
 try:
     import torch
-    ENABLED = True
+    TORCH_ENABLED = True
 except ImportError:
-    ENABLED = False
+    TORCH_ENABLED = False
 
 from pygsti.forwardsims.forwardsim import ForwardSimulator
 
@@ -48,6 +48,8 @@ class TorchForwardSimulator(ForwardSimulator):
     (The current work-in-progress implementation has no Torch functionality whatsoever.)
     """
     def __init__(self, model = None):
+        if not TORCH_ENABLED:
+            raise RuntimeError('PyTorch could not be imported.')
         self.model = model
         super(ForwardSimulator, self).__init__(model)
 
@@ -55,7 +57,7 @@ class TorchForwardSimulator(ForwardSimulator):
         l2state, l2gate, l2povm = self._prep_bulk_fill_probs_block(layout)
         for element_indices, circuit, outcomes in layout.iter_unique_circuits():
             self._circuit_fill_probs_block(array_to_fill[element_indices], circuit, outcomes, l2state, l2gate, l2povm)
-            
+
     def _prep_bulk_fill_probs_block(self, layout):
         label_to_gate = dict()
         label_to_povm = dict()
@@ -122,10 +124,10 @@ class TorchForwardSimulator(ForwardSimulator):
             superops = [orep.base for orep in opreps]
             povm_mat = np.row_stack([erep.state_rep.base for erep in effectreps])
 
-            label_to_state[prep_label] = superket
+            label_to_state[prep_label] = torch.from_numpy(superket)
             for i, ol in enumerate(op_labels):
-                label_to_gate[ol] = superops[i]
-            label_to_povm[''.join(effect_labels)] = povm_mat
+                label_to_gate[ol] = torch.from_numpy(superops[i])
+            label_to_povm[''.join(effect_labels)] = torch.from_numpy(povm_mat)
 
         return label_to_state, label_to_gate, label_to_povm
 
@@ -141,7 +143,11 @@ class TorchForwardSimulator(ForwardSimulator):
 
         for superop in superops:
             superket = superop @ superket
-        array_to_fill[:] = povm_mat @ superket
+        probs = povm_mat @ superket
+
+        if isinstance(probs, torch.Tensor):
+            probs = probs.cpu().detach().numpy()
+        array_to_fill[:] = probs
         return
 
     def _compute_circuit_outcome_probabilities(
