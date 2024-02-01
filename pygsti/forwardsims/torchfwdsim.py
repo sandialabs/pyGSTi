@@ -10,6 +10,7 @@ Defines the TorchForwardSimulator class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from collections import OrderedDict
 import warnings as warnings
 from typing import Tuple, Optional, TypeVar
 import importlib as _importlib
@@ -30,6 +31,8 @@ from pygsti.forwardsims.forwardsim import ForwardSimulator
 from pygsti.circuits import Circuit
 from pygsti.baseobjs.resourceallocation import ResourceAllocation
 ExplicitOpModel = TypeVar('ExplicitOpModel')
+SeparatePOVMCircuit = TypeVar('SeparatePOVMCircuit')
+CircuitOutcomeProbabilityArrayLayout = TypeVar('CircuitOutcomeProbabilityArrayLayout')
 # ^ declare to avoid circular references
 
 
@@ -113,6 +116,24 @@ class TorchForwardSimulator(ForwardSimulator):
 
         return label_to_state, label_to_gate, label_to_povm
 
+    @staticmethod
+    def _check_copa_layout(layout: CircuitOutcomeProbabilityArrayLayout):
+        # I need to verify some assumptions on what layout.iter_unique_circuits()
+        # returns. Looking at the implementation of that function, the assumptions
+        # can be framed in terms of the "layout._element_indicies" OrderedDict.
+        eind = layout._element_indices
+        assert isinstance(eind, OrderedDict)
+        items = iter(eind.items())
+        k_prev, v_prev = next(items)
+        assert k_prev == 0
+        assert v_prev.start == 0
+        for k, v in items:
+            assert k == k_prev + 1
+            assert v.start == v_prev.stop
+            k_prev = k
+            v_prev = v
+        return v_prev.stop
+
     def _bulk_fill_probs_block(self, array_to_fill, layout, torch_cache: Optional[Tuple] = None):
         if torch_cache is None:
             torch_cache = TorchForwardSimulator._build_torch_cache(self.model, layout)
@@ -120,15 +141,35 @@ class TorchForwardSimulator(ForwardSimulator):
             assert isinstance(torch_cache, tuple)
             assert len(torch_cache) == 3
             assert all(isinstance(d, dict) for d in torch_cache)
+        
+        layout_len = TorchForwardSimulator._check_copa_layout(layout)
 
-        for indices, circuit, outcomes in layout.iter_unique_circuits():
-            array = array_to_fill[indices]
-            self._circuit_fill_probs_block(array, circuit, outcomes, torch_cache)
+        probs = []
+        for _, circuit, outcomes in layout.iter_unique_circuits():
+            # Step 1. Get the SeparatePOVMCircuit associated with this Circuit object.
+            #
+            #    Right now I only know how to do this by getting a function that returns
+            #    a dict with the SeparatePOVMCircuit as a key. I don't know how I would
+            #    be expected to process the dict if it contained more than one key-value
+            #    pair, so I'm making some assertions before just unpacking the dict.
+            #
+            spc_dict = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
+            assert len(spc_dict) == 1
+            spc, val = next(iter(spc_dict.items()))
+            assert val == outcomes
+            #
+            # Step 2. Use the SeparatePOVMCircuit and torch_cache to compute outcome probabilities.
+            #
+            circuit_probs = TorchForwardSimulator._circuit_probs(spc, torch_cache)
+            probs.append(circuit_probs)
+        probs = torch.concat(probs)
+
+        array_to_fill[:layout_len] = probs.cpu().detach().numpy().flatten()
         pass
 
-    def _circuit_fill_probs_block(self, array_to_fill, circuit, outcomes, torch_cache):
+    @staticmethod
+    def _circuit_probs(spc: SeparatePOVMCircuit, torch_cache):
         l2state, l2gate, l2povm = torch_cache
-        spc = next(iter(circuit.expand_instruments_and_separate_povm(self.model, outcomes)))
         prep_label = spc.circuit_without_povm[0]
         op_labels  = spc.circuit_without_povm[1:]
         povm_label = spc.povm_label
@@ -140,25 +181,7 @@ class TorchForwardSimulator(ForwardSimulator):
         for superop in superops:
             superket = superop @ superket
         probs = povm_mat @ superket
-
-        probs = probs.cpu().detach().numpy().flatten()
-        array_to_fill[:] = probs
-        return
-
-    def _compute_circuit_outcome_probabilities(
-        self, array_to_fill: np.ndarray, circuit: Circuit,
-        outcomes: Tuple[Tuple[str]], resource_alloc: ResourceAllocation, time=None
-    ):
-        """
-        This was originally a helper function, called in a loop inside _bulk_fill_probs_block.
-        
-        The need for this helper function has been obviated by having
-        _bulk_fill_probs_block do initial prep work (via the new 
-        _build_torch_cache function), and then calling a new per-circuit helper
-        function (specifically, _circuit_fill_probs_block) that takes advantage of
-        the prep work.
-        """
-        raise NotImplementedError()
+        return probs
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill):
         if pr_array_to_fill is not None:
