@@ -12,7 +12,7 @@ Defines the TorchForwardSimulator class
 
 from collections import OrderedDict
 import warnings as warnings
-from typing import Tuple, Optional, TypeVar
+from typing import Tuple, Optional, TypeVar, Union
 import importlib as _importlib
 import warnings as _warnings
 from pygsti.tools import slicetools as _slct
@@ -87,6 +87,12 @@ class StatelessCircuit:
                 keyed by effectlabels and ConjugatedStatePOVMEffect-valued
         """
         return
+    
+    def povm_tensor_from_params(self, vec: Union[np.ndarray, torch.Tensor]):
+        if isinstance(vec, np.ndarray):
+            vec = torch.from_numpy(vec)
+        povm = self.povm_type.torch_base(self.output_dim, self.input_dim, vec, torch)
+        return povm
 
 
 def make_stateless_circuits(model: ExplicitOpModel, layout):
@@ -120,26 +126,30 @@ class TorchForwardSimulator(ForwardSimulator):
         super(ForwardSimulator, self).__init__(model)
 
     @staticmethod
-    def _strip_abstractions(model: ExplicitOpModel, layout):
-        circuit_list = make_stateless_circuits(model, layout)
-        tc = dict()
-        for circuit in circuit_list:
-            rho = model.circuit_layer_operator(circuit.prep_label, typ='prep')
-            ops = [model.circuit_layer_operator(ol, 'op') for ol in circuit.op_labels]
-            povm = model.circuit_layer_operator(circuit.povm_label, 'povm')
+    def _strip_abstractions(model: ExplicitOpModel, layout, grad=True):
+        circuits = make_stateless_circuits(model, layout)
+        free_params = extract_free_parameters(model)
+        torch_cache = dict()
+        for c in circuits:
+            rho = model.circuit_layer_operator(c.prep_label, typ='prep')
+            ops = [model.circuit_layer_operator(ol, 'op') for ol in c.op_labels]
 
             # Get the numerical representations
-            require_grad = True
-            superket_data = rho.torch_base(require_grad,  torch_handle=torch)
-            superops_data = [op.torch_base(require_grad,  torch_handle=torch) for op in ops]
-            povm_mat_data = povm.torch_base(torch_handle=torch)
+            superket_data = rho.torch_base(grad,  torch_handle=torch)
+            superops_data = [op.torch_base(grad,  torch_handle=torch) for op in ops]
 
-            tc[circuit.prep_label] = superket_data
-            for i, ol in enumerate(circuit.op_labels):
-                tc[ol] = superops_data[i]
-            tc[circuit.povm_label] = povm_mat_data
+            povm_t_params = torch.from_numpy(free_params[c.povm_label][1])
+            povm_t_params.requires_grad_(grad)
+            povm_t = c.povm_tensor_from_params(povm_t_params)
+            povm_grad_params = [povm_t_params] if grad else []
+            povm_mat_data = (povm_t, povm_grad_params)
 
-        return tc, circuit_list
+            torch_cache[c.prep_label] = superket_data
+            for i, ol in enumerate(c.op_labels):
+                torch_cache[ol] = superops_data[i]
+            torch_cache[c.povm_label] = povm_mat_data
+
+        return circuits, torch_cache
 
     @staticmethod
     def _check_copa_layout(layout: CircuitOutcomeProbabilityArrayLayout):
@@ -161,22 +171,23 @@ class TorchForwardSimulator(ForwardSimulator):
 
     def _bulk_fill_probs_block(self, array_to_fill, layout, stripped_abstractions: Optional[tuple] = None):
         if stripped_abstractions is None:
-            torch_cache, stateless_circuit_specs = TorchForwardSimulator._strip_abstractions(self.model, layout)
+            stateless_circuits, torch_cache = TorchForwardSimulator._strip_abstractions(self.model, layout)
         else:
-            torch_cache, stateless_circuit_specs = stripped_abstractions
+            stateless_circuits, torch_cache = stripped_abstractions
+
         layout_len = TorchForwardSimulator._check_copa_layout(layout)
         # ^ TODO: consider moving that call into build_torch_cache.
-        probs = TorchForwardSimulator._all_circuit_probs(stateless_circuit_specs, torch_cache)
+        probs = TorchForwardSimulator._all_circuit_probs(stateless_circuits, torch_cache)
         array_to_fill[:layout_len] = probs.cpu().detach().numpy().flatten()
         pass
 
     @staticmethod
-    def _all_circuit_probs(stateless_circuit_specs, torch_cache):
+    def _all_circuit_probs(stateless_circuits, torch_cache):
         probs = []
-        for scs in stateless_circuit_specs:
-            superket = torch_cache[scs.prep_label][0]
-            superops = [torch_cache[ol][0] for ol in scs.op_labels]
-            povm_mat = torch_cache[scs.povm_label][0]
+        for c in stateless_circuits:
+            superket = torch_cache[c.prep_label][0]
+            superops = [torch_cache[ol][0] for ol in c.op_labels]
+            povm_mat = torch_cache[c.povm_label][0]
             for superop in superops:
                 superket = superop @ superket
             circuit_probs = povm_mat @ superket
@@ -193,7 +204,7 @@ class TorchForwardSimulator(ForwardSimulator):
         from torch.func import jacfwd
         probs = np.empty(len(layout), 'd')
         stripped = TorchForwardSimulator._strip_abstractions(self.model, layout)
-        torch_cache, scs_list = stripped
+        scs_list, torch_cache = stripped
         torch_probs = self._all_circuit_probs(scs_list, torch_cache)
         self._bulk_fill_probs_block(probs, layout, stripped)
 

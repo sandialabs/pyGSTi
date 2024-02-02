@@ -85,28 +85,8 @@ class TPPOVM(_BasePOVM):
         vec = _np.concatenate(effect_vecs)
         return vec
 
-    def torch_base(self, torch_handle=None, vec=None):
-        if torch_handle is None:
-            import torch as torch_handle
-
-        if vec is None:
-            # we're being evaluated at our current value; expect a need for gradients later on
-            vec = self.to_vector()
-            t_param = torch_handle.from_numpy(vec)
-            t_param.requires_grad_(True)
-            grad_params = [t_param]
-        else: 
-            # we're being evaluated in a functional sense; no need for gradients
-            t_param = torch_handle.from_numpy(vec)
-            grad_params = []
-
-        num_effects = len(self)
-        dim = self.dim
-        t = TPPOVM.static_torch_base(num_effects, dim, t_param, torch_handle)
-        return t, grad_params
-    
     @staticmethod
-    def static_torch_base(num_effects: int, dim: int, t_param: Tensor, torch_handle=None):
+    def torch_base(num_effects: int, dim: int, t_param: Tensor, torch_handle=None):
         if torch_handle is None:
             import torch as torch_handle
 
