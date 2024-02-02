@@ -46,6 +46,21 @@ Proposal:
    overload @ in whatever way that they need.
 """
 
+"""Efficiency ideas
+ * Compute the jacobian in blocks of rows at a time (iterating over the blocks in parallel). Ideally pytorch
+   would recognize how the computations decompose, but we should check to make sure it does.
+
+ * Recycle some of the work in setting up the Jacobian function.
+    Calling circuit.expand_instruments_and_separate_povm(model, outcomes) inside the StatelessModel constructor
+    might be expensive. It only need to happen once during an iteration of GST.
+
+ * get_torch_cache can be made much more efficient.
+    * it should suffice to just iterate over self.param_labels (or, equivalently, the keys of free_params).
+      I can add a self.param_types field to the StatelessModel class.
+      We might need to store a little more info in StatelessModel so we have the necessary metadata for each
+      parameter's static "torch_base" method (dimensions should suffice).
+"""
+
 class StatelessCircuit:
 
     def __init__(self, spc: SeparatePOVMCircuit, model: ExplicitOpModel):
@@ -125,7 +140,7 @@ class StatelessModel:
             d[lbl] = vec
         return d
     
-    def get_torch_cache(self, free_params: Dict[Label, torch.Tensor], grad: bool):
+    def get_torch_cache(self, free_params: OrderedDict[Label, torch.Tensor], grad: bool):
         torch_cache = dict()
         for c in self.circuits:
 
