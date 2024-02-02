@@ -15,6 +15,8 @@ from pygsti.modelmembers.povms.basepovm import _BasePOVM
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
 from pygsti.modelmembers.povms.fulleffect import FullPOVMEffect as _FullPOVMEffect
 from pygsti.modelmembers.povms.conjugatedeffect import ConjugatedStatePOVMEffect as _ConjugatedStatePOVMEffect
+from typing import Tuple, Optional, TypeVar
+Tensor = TypeVar('Tensor')  # torch.tensor.
 
 
 class TPPOVM(_BasePOVM):
@@ -65,6 +67,7 @@ class TPPOVM(_BasePOVM):
         effect = next(iter(self.values()))
         return effect.dim
     
+    # TODO: remove this function if I can confirm its no longer needed.
     @property
     def base(self):
         effectreps = [effect._rep for effect in self.values()]
@@ -99,10 +102,17 @@ class TPPOVM(_BasePOVM):
 
         num_effects = len(self)
         dim = self.dim
+        t = TPPOVM.static_torch_base(num_effects, dim, t_param, torch_handle)
+        return t, grad_params
+    
+    @staticmethod
+    def static_torch_base(num_effects: int, dim: int, t_param: Tensor, torch_handle=None):
+        if torch_handle is None:
+            import torch as torch_handle
+
         first_basis_vec = torch_handle.zeros(size=(1, dim), dtype=torch_handle.double)
         first_basis_vec[0,0] = dim ** 0.25
         t_param_mat = t_param.reshape((num_effects - 1, dim))
         t_func = first_basis_vec - t_param_mat.sum(axis=0, keepdim=True)
         t = torch_handle.row_stack((t_param_mat, t_func))
-
-        return t, grad_params
+        return t
