@@ -12,7 +12,7 @@ Defines the TorchForwardSimulator class
 
 from collections import OrderedDict
 import warnings as warnings
-from typing import Tuple, Optional, TypeVar, Union, List
+from typing import Tuple, Optional, TypeVar, Union, List, Dict
 import importlib as _importlib
 import warnings as _warnings
 from pygsti.tools import slicetools as _slct
@@ -30,6 +30,7 @@ from pygsti.forwardsims.forwardsim import ForwardSimulator
 # Below: imports only needed for typehints
 from pygsti.circuits import Circuit
 from pygsti.baseobjs.resourceallocation import ResourceAllocation
+Label = TypeVar('Label')
 ExplicitOpModel = TypeVar('ExplicitOpModel')
 SeparatePOVMCircuit = TypeVar('SeparatePOVMCircuit')
 CircuitOutcomeProbabilityArrayLayout = TypeVar('CircuitOutcomeProbabilityArrayLayout')
@@ -89,70 +90,32 @@ class StatelessCircuit:
         """
         return
 
+
+
+class StatelessModel:
+
+    def __init__(self, model: ExplicitOpModel, layout):
+        circuits = []
+        for _, circuit, outcomes in layout.iter_unique_circuits():
+            expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(model, outcomes)
+            # ^ Note, I'm not sure if outcomes needs to be passed to the function above.
+            if len(expanded_circuit_outcomes) > 1:
+                raise NotImplementedError("I don't know what to do with this.")
+            spc = list(expanded_circuit_outcomes.keys())[0]
+            circuits.append(StatelessCircuit(spc, model))
+        self.circuits = circuits
+        return
     
-"""
-TODO:
-
-Revise the torch_base functions for TPState and FullTPOp so that
-they're static and follow the pattern of TPPOVM.torch_base.
-At the same time, revise TorchForwardSimulator._strip_abstractions
-as needed.
-
-Create a StatelessModel class
-
-    For now it suffices to have one member: circuits.
-
-    Constructor should include at least the code in the make_stateless_circuits
-    function.
-
-    Make the extract_free_parameters function below a static function
-    within this class.
-
-    Make a function that is similar TorchForwardSimulator._all_circuit_probs,
-    but differs in that it accepts a dict of the kind returned by
-    extract_free_parameters.
-
-    Have TorchForwardSimulator._strip_abstractions construct a StatelessModel
-    instance, and return that object instead of the list of StatelessCircuit objects.
-"""
-
-
-def make_stateless_circuits(model: ExplicitOpModel, layout):
-    label_containers = []
-    for _, circuit, outcomes in layout.iter_unique_circuits():
-        expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(model, outcomes)
-        # ^ Note, I'm not sure if outcomes needs to be passed to the function above.
-        if len(expanded_circuit_outcomes) > 1:
-            raise NotImplementedError("I don't know what to do with this.")
-        spc = list(expanded_circuit_outcomes.keys())[0]
-        label_containers.append(StatelessCircuit(spc, model))
-    return label_containers
-
-
-def extract_free_parameters(model: ExplicitOpModel):
-    d = OrderedDict()
-    for lbl, obj in model._iter_parameterized_objs():
-        d[lbl] = (obj.gpindices_as_array(), obj.to_vector())
-    return d
-
-
-class TorchForwardSimulator(ForwardSimulator):
-    """
-    A forward simulator that leverages automatic differentiation in PyTorch.
-    (The current work-in-progress implementation has no Torch functionality whatsoever.)
-    """
-    def __init__(self, model : Optional[ExplicitOpModel] = None):
-        if not TORCH_ENABLED:
-            raise RuntimeError('PyTorch could not be imported.')
-        self.model = model
-        super(ForwardSimulator, self).__init__(model)
-
     @staticmethod
-    def _strip_abstractions(model: ExplicitOpModel, layout, grad=True):
-        circuits = make_stateless_circuits(model, layout)
-        free_params = extract_free_parameters(model)
+    def extract_free_parameters(model: ExplicitOpModel):
+        d = OrderedDict()
+        for lbl, obj in model._iter_parameterized_objs():
+            d[lbl] = (obj.gpindices_as_array(), obj.to_vector())
+        return d
+    
+    def get_torch_cache(self, free_params: Dict[Label, torch.Tensor], grad: bool):
         torch_cache = dict()
-        for c in circuits:
+        for c in self.circuits:
 
             if c.prep_label not in torch_cache:
                 superket_t_params = torch.from_numpy(free_params[c.prep_label][1])
@@ -171,7 +134,6 @@ class TorchForwardSimulator(ForwardSimulator):
                     op_data = (op_t, grad_params)
                     torch_cache[ol] = op_data
 
-            
             if c.povm_label not in torch_cache:
                 povm_t_params = torch.from_numpy(free_params[c.povm_label][1])
                 povm_t_params.requires_grad_(grad)
@@ -180,7 +142,39 @@ class TorchForwardSimulator(ForwardSimulator):
                 povm_data = (povm_t, povm_grad_params)
                 torch_cache[c.povm_label] = povm_data
 
-        return circuits, torch_cache
+        return torch_cache
+
+    def circuit_probs(self, torch_cache: Dict[Label, torch.Tensor]):
+        probs = []
+        for c in self.circuits:
+            superket = torch_cache[c.prep_label][0]
+            superops = [torch_cache[ol][0] for ol in c.op_labels]
+            povm_mat = torch_cache[c.povm_label][0]
+            for superop in superops:
+                superket = superop @ superket
+            circuit_probs = povm_mat @ superket
+            probs.append(circuit_probs)
+        probs = torch.concat(probs)
+        return probs
+
+
+class TorchForwardSimulator(ForwardSimulator):
+    """
+    A forward simulator that leverages automatic differentiation in PyTorch.
+    (The current work-in-progress implementation has no Torch functionality whatsoever.)
+    """
+    def __init__(self, model : Optional[ExplicitOpModel] = None):
+        if not TORCH_ENABLED:
+            raise RuntimeError('PyTorch could not be imported.')
+        self.model = model
+        super(ForwardSimulator, self).__init__(model)
+
+    @staticmethod
+    def separate_state(model: ExplicitOpModel, layout, grad=True):
+        slm = StatelessModel(model, layout)
+        free_params = StatelessModel.extract_free_parameters(model)
+        torch_cache = slm.get_torch_cache(free_params, grad)
+        return slm, torch_cache
 
     @staticmethod
     def _check_copa_layout(layout: CircuitOutcomeProbabilityArrayLayout):
@@ -202,29 +196,14 @@ class TorchForwardSimulator(ForwardSimulator):
 
     def _bulk_fill_probs_block(self, array_to_fill, layout, stripped_abstractions: Optional[tuple] = None):
         if stripped_abstractions is None:
-            stateless_circuits, torch_cache = TorchForwardSimulator._strip_abstractions(self.model, layout)
+            slm, torch_cache = TorchForwardSimulator.separate_state(self.model, layout)
         else:
-            stateless_circuits, torch_cache = stripped_abstractions
+            slm, torch_cache = stripped_abstractions
 
         layout_len = TorchForwardSimulator._check_copa_layout(layout)
-        # ^ TODO: consider moving that call into build_torch_cache.
-        probs = TorchForwardSimulator._all_circuit_probs(stateless_circuits, torch_cache)
+        probs = slm.circuit_probs(torch_cache)
         array_to_fill[:layout_len] = probs.cpu().detach().numpy().flatten()
         pass
-
-    @staticmethod
-    def _all_circuit_probs(stateless_circuits, torch_cache):
-        probs = []
-        for c in stateless_circuits:
-            superket = torch_cache[c.prep_label][0]
-            superops = [torch_cache[ol][0] for ol in c.op_labels]
-            povm_mat = torch_cache[c.povm_label][0]
-            for superop in superops:
-                superket = superop @ superket
-            circuit_probs = povm_mat @ superket
-            probs.append(circuit_probs)
-        probs = torch.concat(probs)
-        return probs
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill):
         if pr_array_to_fill is not None:
@@ -234,9 +213,9 @@ class TorchForwardSimulator(ForwardSimulator):
     def _bulk_fill_dprobs_block(self, array_to_fill, layout):
         from torch.func import jacfwd
         probs = np.empty(len(layout), 'd')
-        stripped = TorchForwardSimulator._strip_abstractions(self.model, layout)
-        scs_list, torch_cache = stripped
-        torch_probs = self._all_circuit_probs(scs_list, torch_cache)
+        stripped = TorchForwardSimulator.separate_state(self.model, layout)
+        slm, torch_cache = stripped
+        torch_probs = slm.circuit_probs(torch_cache)
         self._bulk_fill_probs_block(probs, layout, stripped)
 
         """
