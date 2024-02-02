@@ -59,9 +59,9 @@ class TorchForwardSimulator(ForwardSimulator):
 
     @staticmethod
     def _build_torch_cache(model: ExplicitOpModel, layout):
-        label_to_gate = dict()
-        label_to_povm = dict()
-        label_to_state = dict()
+        label_to_gate = OrderedDict()
+        label_to_povm = OrderedDict()
+        label_to_state = OrderedDict()
         for _, circuit, outcomes in layout.iter_unique_circuits():
             expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(model, outcomes)
             # ^ Note, I'm not sure if outcomes needs to be passed to the function above.
@@ -105,9 +105,9 @@ class TorchForwardSimulator(ForwardSimulator):
             # Get the numerical representations
             #   Right now I have a very awkward switch for gradients used in debugging.
             require_grad = True
-            superket = rho.torch_base(require_grad,  torch_handle=torch)[0]
-            superops = [op.torch_base(require_grad,  torch_handle=torch)[0] for op in ops]
-            povm_mat = povm.torch_base(require_grad, torch_handle=torch)[0]
+            superket = rho.torch_base(require_grad,  torch_handle=torch)
+            superops = [op.torch_base(require_grad,  torch_handle=torch) for op in ops]
+            povm_mat = povm.torch_base(require_grad, torch_handle=torch)
 
             label_to_state[prep_label] = superket
             for i, ol in enumerate(op_labels):
@@ -133,17 +133,8 @@ class TorchForwardSimulator(ForwardSimulator):
             k_prev = k
             v_prev = v
         return v_prev.stop
-
-    def _bulk_fill_probs_block(self, array_to_fill, layout, torch_cache: Optional[Tuple] = None):
-        if torch_cache is None:
-            torch_cache = TorchForwardSimulator._build_torch_cache(self.model, layout)
-        else:
-            assert isinstance(torch_cache, tuple)
-            assert len(torch_cache) == 3
-            assert all(isinstance(d, dict) for d in torch_cache)
-        
-        layout_len = TorchForwardSimulator._check_copa_layout(layout)
-
+    
+    def _all_circuit_probs(self, layout, torch_cache):
         probs = []
         for _, circuit, outcomes in layout.iter_unique_circuits():
             # Step 1. Get the SeparatePOVMCircuit associated with this Circuit object.
@@ -163,7 +154,18 @@ class TorchForwardSimulator(ForwardSimulator):
             circuit_probs = TorchForwardSimulator._circuit_probs(spc, torch_cache)
             probs.append(circuit_probs)
         probs = torch.concat(probs)
+        return probs
 
+    def _bulk_fill_probs_block(self, array_to_fill, layout, torch_cache: Optional[Tuple] = None):
+        if torch_cache is None:
+            torch_cache = TorchForwardSimulator._build_torch_cache(self.model, layout)
+        else:
+            assert isinstance(torch_cache, tuple)
+            assert len(torch_cache) == 3
+            assert all(isinstance(d, dict) for d in torch_cache)
+        
+        layout_len = TorchForwardSimulator._check_copa_layout(layout)
+        probs = self._all_circuit_probs(layout, torch_cache)
         array_to_fill[:layout_len] = probs.cpu().detach().numpy().flatten()
         pass
 
@@ -174,14 +176,26 @@ class TorchForwardSimulator(ForwardSimulator):
         op_labels  = spc.circuit_without_povm[1:]
         povm_label = spc.povm_label
 
-        superket = l2state[prep_label]
-        superops = [l2gate[ol] for ol in op_labels]
-        povm_mat = l2povm[povm_label]
+        superket = l2state[prep_label][0]
+        superops = [l2gate[ol][0] for ol in op_labels]
+        povm_mat = l2povm[povm_label][0]
 
         for superop in superops:
             superket = superop @ superket
         probs = povm_mat @ superket
         return probs
+    
+    @staticmethod
+    def _get_jac_bookkeeping_dict(model: ExplicitOpModel, torch_cache):
+        tcd = OrderedDict()
+        tcd.update(torch_cache[0])
+        tcd.update(torch_cache[1])
+        tcd.update(torch_cache[2])
+
+        d = OrderedDict()
+        for lbl, obj in model._iter_parameterized_objs():
+            d[lbl] = (obj.gpindices_as_array(), tcd[lbl][1])
+        return d
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill):
         if pr_array_to_fill is not None:
@@ -189,11 +203,25 @@ class TorchForwardSimulator(ForwardSimulator):
         return self._bulk_fill_dprobs_block(array_to_fill, layout)
 
     def _bulk_fill_dprobs_block(self, array_to_fill, layout):
+        from torch.func import jacfwd
         probs = np.empty(len(layout), 'd')
-        self._bulk_fill_probs_block(probs, layout)
+        torch_cache = TorchForwardSimulator._build_torch_cache(self.model, layout)
+        self._bulk_fill_probs_block(probs, layout, torch_cache)
+        
+        # jacbook = TorchForwardSimulator._get_jac_bookkeeping_dict(self.model, torch_cache)
+        # tprobs = self._all_circuit_probs(layout, torch_cache)
+
+        # num_torch_param_obj = len(jacbook)
+        # jac_handle = jacfwd(tprobs, )
+        # cur_params = machine.params
+        # num_params = len(cur_params)
+        # J_func = jacfwd(machine.circuit_outcome_probs, argnums=tuple(range(num_params)))
+        # J = J_func(*cur_params)
+
 
         probs2 = np.empty(len(layout), 'd')
-        orig_vec = self.model.to_vector().copy()
+        orig_vec = self.model.to_vector()
+        orig_vec = orig_vec.copy()
         FIN_DIFF_EPS = 1e-7
         for i in range(self.model.num_params):
             vec = orig_vec.copy(); vec[i] += FIN_DIFF_EPS
