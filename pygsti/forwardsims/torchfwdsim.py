@@ -45,6 +45,25 @@ Proposal:
    overload @ in whatever way that they need.
 """
 
+class StatelessCircuitSpec:
+
+    def __init__(self, spc: SeparatePOVMCircuit):
+        self.prep_label = spc.circuit_without_povm[0]
+        self.op_labels = spc.circuit_without_povm[1:]
+        self.povm_label = spc.povm_label
+
+
+def make_stateless_circuit_specs(model: ExplicitOpModel, layout):
+    label_containers = []
+    for _, circuit, outcomes in layout.iter_unique_circuits():
+        expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(model, outcomes)
+        # ^ Note, I'm not sure if outcomes needs to be passed to the function above.
+        if len(expanded_circuit_outcomes) > 1:
+            raise NotImplementedError("I don't know what to do with this.")
+        spc = list(expanded_circuit_outcomes.keys())[0]
+        label_containers.append(StatelessCircuitSpec(spc))
+    return label_containers
+
 
 class TorchForwardSimulator(ForwardSimulator):
     """
@@ -58,20 +77,11 @@ class TorchForwardSimulator(ForwardSimulator):
         super(ForwardSimulator, self).__init__(model)
 
     @staticmethod
-    def _build_torch_cache(model: ExplicitOpModel, layout):
+    def _strip_abstractions(model: ExplicitOpModel, layout):
+        scs_list = make_stateless_circuit_specs(model, layout)
         tc = dict()
-        for _, circuit, outcomes in layout.iter_unique_circuits():
-            expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(model, outcomes)
-            # ^ Note, I'm not sure if outcomes needs to be passed to the function above.
-            if len(expanded_circuit_outcomes) > 1:
-                raise NotImplementedError("I don't know what to do with this.")
-            spc = list(expanded_circuit_outcomes.keys())[0]
-
-            prep_label = spc.circuit_without_povm[0]
-            op_labels  = spc.circuit_without_povm[1:]
-            povm_label = spc.povm_label
-
-            rho = model.circuit_layer_operator(prep_label, typ='prep')
+        for scs in scs_list:
+            rho = model.circuit_layer_operator(scs.prep_label, typ='prep')
             """ ^
             <class 'pygsti.modelmembers.states.tpstate.TPState'>
             <class 'pygsti.modelmembers.states.densestate.DenseState'>
@@ -79,7 +89,7 @@ class TorchForwardSimulator(ForwardSimulator):
             <class 'pygsti.modelmembers.states.state.State'>
             <class 'pygsti.modelmembers.modelmember.ModelMember'>
             """
-            ops = [model.circuit_layer_operator(ol, 'op') for ol in op_labels]
+            ops = [model.circuit_layer_operator(ol, 'op') for ol in scs.op_labels]
             """ ^ For reasons that I don't understand, this is OFTEN an empty list
             in the first step of iterative GST. When it's nonempty, it contains ...
         
@@ -90,7 +100,7 @@ class TorchForwardSimulator(ForwardSimulator):
             <class 'pygsti.modelmembers.operations.linearop.LinearOperator'>
             <class 'pygsti.modelmembers.modelmember.ModelMember'>
             """
-            povm = model.circuit_layer_operator(povm_label, 'povm')
+            povm = model.circuit_layer_operator(scs.povm_label, 'povm')
             """
             <class 'pygsti.modelmembers.povms.tppovm.TPPOVM'>
             <class 'pygsti.modelmembers.povms.basepovm._BasePOVM'>
@@ -101,18 +111,17 @@ class TorchForwardSimulator(ForwardSimulator):
             """
 
             # Get the numerical representations
-            #   Right now I have a very awkward switch for gradients used in debugging.
             require_grad = True
             superket_data = rho.torch_base(require_grad,  torch_handle=torch)
             superops_data = [op.torch_base(require_grad,  torch_handle=torch) for op in ops]
             povm_mat_data = povm.torch_base(require_grad, torch_handle=torch)
 
-            tc[prep_label] = superket_data
-            for i, ol in enumerate(op_labels):
+            tc[scs.prep_label] = superket_data
+            for i, ol in enumerate(scs.op_labels):
                 tc[ol] = superops_data[i]
-            tc[povm_label] = povm_mat_data
+            tc[scs.povm_label] = povm_mat_data
 
-        return tc
+        return tc, scs_list
 
     @staticmethod
     def _check_copa_layout(layout: CircuitOutcomeProbabilityArrayLayout):
@@ -131,60 +140,38 @@ class TorchForwardSimulator(ForwardSimulator):
             k_prev = k
             v_prev = v
         return v_prev.stop
-    
-    def _all_circuit_probs(self, layout, torch_cache):
-        probs = []
-        for _, circuit, outcomes in layout.iter_unique_circuits():
-            # Step 1. Get the SeparatePOVMCircuit associated with this Circuit object.
-            #
-            #    Right now I only know how to do this by getting a function that returns
-            #    a dict with the SeparatePOVMCircuit as a key. I don't know how I would
-            #    be expected to process the dict if it contained more than one key-value
-            #    pair, so I'm making some assertions before just unpacking the dict.
-            #
-            spc_dict = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
-            assert len(spc_dict) == 1
-            spc, val = next(iter(spc_dict.items()))
-            assert val == outcomes
-            #
-            # Step 2. Use the SeparatePOVMCircuit and torch_cache to compute outcome probabilities.
-            #
-            circuit_probs = TorchForwardSimulator._circuit_probs(spc, torch_cache)
-            probs.append(circuit_probs)
-        probs = torch.concat(probs)
-        return probs
 
-    def _bulk_fill_probs_block(self, array_to_fill, layout, torch_cache: Optional[dict] = None):
-        if torch_cache is None:
-            torch_cache = TorchForwardSimulator._build_torch_cache(self.model, layout)
+    def _bulk_fill_probs_block(self, array_to_fill, layout, stripped_abstractions: Optional[tuple] = None):
+        if stripped_abstractions is None:
+            torch_cache, stateless_circuit_specs = TorchForwardSimulator._strip_abstractions(self.model, layout)
         else:
-            assert isinstance(torch_cache, dict)
+            torch_cache, stateless_circuit_specs = stripped_abstractions
         layout_len = TorchForwardSimulator._check_copa_layout(layout)
-        probs = self._all_circuit_probs(layout, torch_cache)
+        # ^ TODO: consider moving that call into build_torch_cache.
+        probs = TorchForwardSimulator._all_circuit_probs(stateless_circuit_specs, torch_cache)
         array_to_fill[:layout_len] = probs.cpu().detach().numpy().flatten()
         pass
 
     @staticmethod
-    def _circuit_probs(spc: SeparatePOVMCircuit, torch_cache):
-        prep_label = spc.circuit_without_povm[0]
-        op_labels  = spc.circuit_without_povm[1:]
-        povm_label = spc.povm_label
-
-        superket = torch_cache[prep_label][0]
-        superops = [torch_cache[ol][0] for ol in op_labels]
-        povm_mat = torch_cache[povm_label][0]
-
-        for superop in superops:
-            superket = superop @ superket
-        probs = povm_mat @ superket
+    def _all_circuit_probs(stateless_circuit_specs, torch_cache):
+        probs = []
+        for scs in stateless_circuit_specs:
+            superket = torch_cache[scs.prep_label][0]
+            superops = [torch_cache[ol][0] for ol in scs.op_labels]
+            povm_mat = torch_cache[scs.povm_label][0]
+            for superop in superops:
+                superket = superop @ superket
+            circuit_probs = povm_mat @ superket
+            probs.append(circuit_probs)
+        probs = torch.concat(probs)
         return probs
     
-    @staticmethod
-    def _get_jac_bookkeeping_dict(model: ExplicitOpModel, torch_cache):
-        d = OrderedDict()
-        for lbl, obj in model._iter_parameterized_objs():
-            d[lbl] = (obj.gpindices_as_array(), torch_cache[lbl][1])
-        return d
+    # @staticmethod
+    # def _get_jac_bookkeeping_dict(model: ExplicitOpModel, torch_cache):
+    #     d = OrderedDict()
+    #     for lbl, obj in model._iter_parameterized_objs():
+    #         d[lbl] = (obj.gpindices_as_array(), torch_cache[lbl][1])
+    #     return d
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill):
         if pr_array_to_fill is not None:
@@ -194,8 +181,15 @@ class TorchForwardSimulator(ForwardSimulator):
     def _bulk_fill_dprobs_block(self, array_to_fill, layout):
         from torch.func import jacfwd
         probs = np.empty(len(layout), 'd')
-        torch_cache = TorchForwardSimulator._build_torch_cache(self.model, layout)
-        self._bulk_fill_probs_block(probs, layout, torch_cache)
+        stripped = TorchForwardSimulator._strip_abstractions(self.model, layout)
+        torch_cache, scs_list = stripped
+        torch_probs = self._all_circuit_probs(scs_list, torch_cache)
+        self._bulk_fill_probs_block(probs, layout, stripped)
+
+        """
+        I need a function that accepts model parameter arrays and returns something
+        equivalent to the torch_cache. Then I can use 
+        """
         
         # jacbook = TorchForwardSimulator._get_jac_bookkeeping_dict(self.model, torch_cache)
         # tprobs = self._all_circuit_probs(layout, torch_cache)
