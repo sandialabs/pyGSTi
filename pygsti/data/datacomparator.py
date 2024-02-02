@@ -647,9 +647,9 @@ class DataComparator():
             if self.inconsistent_datasets_detected:
                 print("The data are INCONSISTENT at {0:.2f}% significance.".format(self.significance * 100))
                 print("  - Details:")
-                print("    - The aggregate log-_likelihood ratio test is "
+                print("    - The aggregate log-likelihood ratio test is "
                       "significant at {0:.2f} standard deviations.".format(self._aggregate_nsigma))
-                print("    - The aggregate log-_likelihood ratio test "
+                print("    - The aggregate log-likelihood ratio test "
                       "standard deviations signficance threshold is {0:.2f}".format(self._aggregate_nsigma_threshold))
                 print(
                     "    - The number of sequences with data that is "
