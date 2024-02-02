@@ -104,13 +104,25 @@ class StatelessModel:
             spc = list(expanded_circuit_outcomes.keys())[0]
             circuits.append(StatelessCircuit(spc, model))
         self.circuits = circuits
+
+        self.param_labels = []
+        self.param_positions = OrderedDict()
+        for lbl, obj in model._iter_parameterized_objs():
+            self.param_labels.append(lbl)
+            self.param_positions[lbl] = obj.gpindices_as_array()
+        self.num_params = len(self.param_labels)
+
         return
     
-    @staticmethod
-    def extract_free_parameters(model: ExplicitOpModel):
+    def get_free_parameters(self, model: ExplicitOpModel):
         d = OrderedDict()
-        for lbl, obj in model._iter_parameterized_objs():
-            d[lbl] = (obj.gpindices_as_array(), obj.to_vector())
+        for i, (lbl, obj) in enumerate(model._iter_parameterized_objs()):
+            gpind = obj.gpindices_as_array()
+            vec = obj.to_vector()
+            vec = torch.from_numpy(vec)
+            assert int(gpind.size) == int(np.product(vec.shape))
+            assert self.param_labels[i] == lbl
+            d[lbl] = vec
         return d
     
     def get_torch_cache(self, free_params: Dict[Label, torch.Tensor], grad: bool):
@@ -118,8 +130,9 @@ class StatelessModel:
         for c in self.circuits:
 
             if c.prep_label not in torch_cache:
-                superket_t_params = torch.from_numpy(free_params[c.prep_label][1])
-                superket_t_params.requires_grad_(grad)
+                superket_t_params = free_params[c.prep_label]
+                if grad:
+                    superket_t_params.requires_grad_(True)
                 superket_grad_params = [superket_t_params] if grad else []
                 superket_t = c.prep_type.torch_base(c.input_dim, superket_t_params, torch)
                 superket_data = (superket_t, superket_grad_params)
@@ -127,16 +140,18 @@ class StatelessModel:
 
             for ol in c.op_labels:
                 if ol not in torch_cache:
-                    curr_params = torch.from_numpy(free_params[ol][1])
-                    curr_params.requires_grad_(grad)
+                    curr_params = free_params[ol]
+                    if grad:
+                        curr_params.requires_grad_(True)
                     grad_params = [curr_params] if grad else []
                     op_t = c.op_types[ol].torch_base(c.input_dim, curr_params, torch)
                     op_data = (op_t, grad_params)
                     torch_cache[ol] = op_data
 
             if c.povm_label not in torch_cache:
-                povm_t_params = torch.from_numpy(free_params[c.povm_label][1])
-                povm_t_params.requires_grad_(grad)
+                povm_t_params = free_params[c.povm_label]
+                if grad:
+                    povm_t_params.requires_grad_(True)
                 povm_t = c.povm_type.torch_base(c.output_dim, c.input_dim, povm_t_params, torch)
                 povm_grad_params = [povm_t_params] if grad else []
                 povm_data = (povm_t, povm_grad_params)
@@ -156,12 +171,18 @@ class StatelessModel:
             probs.append(circuit_probs)
         probs = torch.concat(probs)
         return probs
+    
+    def functional_circuit_probs(self, *free_params: Tuple[torch.Tensor]):
+        assert len(free_params) == len(self.param_labels)
+        free_params = {self.param_labels[i]: free_params[i] for i,pl in enumerate(self.param_labels)}
+        torch_cache = self.get_torch_cache(free_params, grad=False)
+        probs = self.circuit_probs(torch_cache)
+        return probs
 
 
 class TorchForwardSimulator(ForwardSimulator):
     """
     A forward simulator that leverages automatic differentiation in PyTorch.
-    (The current work-in-progress implementation has no Torch functionality whatsoever.)
     """
     def __init__(self, model : Optional[ExplicitOpModel] = None):
         if not TORCH_ENABLED:
@@ -170,9 +191,9 @@ class TorchForwardSimulator(ForwardSimulator):
         super(ForwardSimulator, self).__init__(model)
 
     @staticmethod
-    def separate_state(model: ExplicitOpModel, layout, grad=True):
+    def separate_state(model: ExplicitOpModel, layout, grad=False):
         slm = StatelessModel(model, layout)
-        free_params = StatelessModel.extract_free_parameters(model)
+        free_params = slm.get_free_parameters(model)
         torch_cache = slm.get_torch_cache(free_params, grad)
         return slm, torch_cache
 
@@ -213,25 +234,20 @@ class TorchForwardSimulator(ForwardSimulator):
     def _bulk_fill_dprobs_block(self, array_to_fill, layout):
         from torch.func import jacfwd
         probs = np.empty(len(layout), 'd')
-        stripped = TorchForwardSimulator.separate_state(self.model, layout)
-        slm, torch_cache = stripped
-        torch_probs = slm.circuit_probs(torch_cache)
-        self._bulk_fill_probs_block(probs, layout, stripped)
+        slm = StatelessModel(self.model, layout)
+        free_params = slm.get_free_parameters(self.model)
+        torch_cache = slm.get_torch_cache(free_params, False)
+        self._bulk_fill_probs_block(probs, layout, (slm, torch_cache))
 
         """
         I need a function that accepts model parameter arrays and returns something
         equivalent to the torch_cache. Then I can use 
         """
         
-        # jacbook = TorchForwardSimulator._get_jac_bookkeeping_dict(self.model, torch_cache)
-        # tprobs = self._all_circuit_probs(layout, torch_cache)
-
-        # num_torch_param_obj = len(jacbook)
-        # jac_handle = jacfwd(tprobs, )
-        # cur_params = machine.params
-        # num_params = len(cur_params)
-        # J_func = jacfwd(machine.circuit_outcome_probs, argnums=tuple(range(num_params)))
-        # J = J_func(*cur_params)
+        argnums = tuple(range(slm.num_params))
+        J_handle = jacfwd(slm.functional_circuit_probs, argnums=argnums)
+        free_param_tup = tuple(free_params.values())
+        J = J_handle(*free_param_tup)
 
         probs2 = np.empty(len(layout), 'd')
         orig_vec = self.model.to_vector()
