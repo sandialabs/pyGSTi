@@ -120,7 +120,7 @@ class StatelessModel:
             gpind = obj.gpindices_as_array()
             vec = obj.to_vector()
             vec = torch.from_numpy(vec)
-            assert int(gpind.size) == int(np.product(vec.shape))
+            assert int(gpind.size) == int(np.prod(vec.shape))
             assert self.param_labels[i] == lbl
             d[lbl] = vec
         return d
@@ -233,33 +233,19 @@ class TorchForwardSimulator(ForwardSimulator):
 
     def _bulk_fill_dprobs_block(self, array_to_fill, layout):
         from torch.func import jacfwd
-        probs = np.empty(len(layout), 'd')
+
         slm = StatelessModel(self.model, layout)
-        free_params = slm.get_free_parameters(self.model)
-        torch_cache = slm.get_torch_cache(free_params, False)
-        self._bulk_fill_probs_block(probs, layout, (slm, torch_cache))
-
-        """
-        I need a function that accepts model parameter arrays and returns something
-        equivalent to the torch_cache. Then I can use 
-        """
-        
         argnums = tuple(range(slm.num_params))
-        J_handle = jacfwd(slm.functional_circuit_probs, argnums=argnums)
+        J_func = jacfwd(slm.functional_circuit_probs, argnums=argnums)
+
+        free_params = slm.get_free_parameters(self.model)
         free_param_tup = tuple(free_params.values())
-        J = J_handle(*free_param_tup)
 
-        probs2 = np.empty(len(layout), 'd')
-        orig_vec = self.model.to_vector()
-        orig_vec = orig_vec.copy()
-        FIN_DIFF_EPS = 1e-7
-        for i in range(self.model.num_params):
-            vec = orig_vec.copy(); vec[i] += FIN_DIFF_EPS
-            self.model.from_vector(vec, close=True)
-            self._bulk_fill_probs_block(probs2, layout)
-            array_to_fill[:, i] = (probs2 - probs) / FIN_DIFF_EPS
-
-        self.model.from_vector(orig_vec, close=True)
+        J_val = J_func(*free_param_tup)
+        J_val = torch.column_stack(J_val)
+        J_np = J_val.cpu().detach().numpy()
+        array_to_fill[:] = J_np
+        return
 
 """
 Running GST produces the following traceback if I set a breakpoint inside the
