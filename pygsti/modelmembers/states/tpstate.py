@@ -18,6 +18,8 @@ from pygsti.baseobjs import statespace as _statespace
 from pygsti.modelmembers.states.densestate import DenseState as _DenseState
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.baseobjs.protectedarray import ProtectedArray as _ProtectedArray
+from typing import Tuple, Optional, TypeVar
+Tensor = TypeVar('Tensor')  # torch.tensor.
 
 
 class TPState(_DenseState):
@@ -158,18 +160,14 @@ class TPState(_DenseState):
         self._ptr_has_changed()
         self.dirty = dirty_value
 
-    def torch_base(self, require_grad: bool, torch_handle=None):
+    @staticmethod
+    def torch_base(dim: int, t_param: Tensor, torch_handle=None):
         if torch_handle is None:
             import torch as torch_handle
-        if require_grad:
-            t_param = torch_handle.from_numpy(self._rep.base[1:])
-            t_param.requires_grad_(require_grad)
-            t_const = self._ptr[0]*torch_handle.ones(1, dtype=torch_handle.double) 
-            t = torch_handle.concat((t_const, t_param)) 
-            return t, t_param
-        else:
-            t = torch_handle.from_numpy(self._rep.base)
-            return t, []
+
+        t_const = (dim ** -0.25) * torch_handle.ones(1, dtype=torch_handle.double) 
+        t = torch_handle.concat((t_const, t_param)) 
+        return t
 
     def deriv_wrt_params(self, wrt_filter=None):
         """

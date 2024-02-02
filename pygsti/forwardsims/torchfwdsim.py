@@ -12,7 +12,7 @@ Defines the TorchForwardSimulator class
 
 from collections import OrderedDict
 import warnings as warnings
-from typing import Tuple, Optional, TypeVar, Union
+from typing import Tuple, Optional, TypeVar, Union, List
 import importlib as _importlib
 import warnings as _warnings
 from pygsti.tools import slicetools as _slct
@@ -54,7 +54,6 @@ class StatelessCircuit:
 
         prep = model.circuit_layer_operator(self.prep_label, typ='prep')
         povm = model.circuit_layer_operator(self.povm_label, 'povm')
-
         self.input_dim  = prep.dim
         self.output_dim = len(povm)
 
@@ -66,7 +65,9 @@ class StatelessCircuit:
         <class 'pygsti.modelmembers.states.state.State'>
         <class 'pygsti.modelmembers.modelmember.ModelMember'>
         """
-        self.op_types  = [type(model.circuit_layer_operator(ol, 'op')) for ol in self.op_labels]
+        self.op_types = OrderedDict()
+        for ol in self.op_labels:
+            self.op_types[ol] = type(model.circuit_layer_operator(ol, 'op'))
         """ ^ For reasons that I don't understand, this is OFTEN an empty list
         in the first step of iterative GST. When it's nonempty, it contains ...
     
@@ -87,12 +88,33 @@ class StatelessCircuit:
                 keyed by effectlabels and ConjugatedStatePOVMEffect-valued
         """
         return
+
     
-    def povm_tensor_from_params(self, vec: Union[np.ndarray, torch.Tensor]):
-        if isinstance(vec, np.ndarray):
-            vec = torch.from_numpy(vec)
-        povm = self.povm_type.torch_base(self.output_dim, self.input_dim, vec, torch)
-        return povm
+"""
+TODO:
+
+Revise the torch_base functions for TPState and FullTPOp so that
+they're static and follow the pattern of TPPOVM.torch_base.
+At the same time, revise TorchForwardSimulator._strip_abstractions
+as needed.
+
+Create a StatelessModel class
+
+    For now it suffices to have one member: circuits.
+
+    Constructor should include at least the code in the make_stateless_circuits
+    function.
+
+    Make the extract_free_parameters function below a static function
+    within this class.
+
+    Make a function that is similar TorchForwardSimulator._all_circuit_probs,
+    but differs in that it accepts a dict of the kind returned by
+    extract_free_parameters.
+
+    Have TorchForwardSimulator._strip_abstractions construct a StatelessModel
+    instance, and return that object instead of the list of StatelessCircuit objects.
+"""
 
 
 def make_stateless_circuits(model: ExplicitOpModel, layout):
@@ -131,23 +153,32 @@ class TorchForwardSimulator(ForwardSimulator):
         free_params = extract_free_parameters(model)
         torch_cache = dict()
         for c in circuits:
-            rho = model.circuit_layer_operator(c.prep_label, typ='prep')
-            ops = [model.circuit_layer_operator(ol, 'op') for ol in c.op_labels]
 
-            # Get the numerical representations
-            superket_data = rho.torch_base(grad,  torch_handle=torch)
-            superops_data = [op.torch_base(grad,  torch_handle=torch) for op in ops]
+            if c.prep_label not in torch_cache:
+                superket_t_params = torch.from_numpy(free_params[c.prep_label][1])
+                superket_t_params.requires_grad_(grad)
+                superket_grad_params = [superket_t_params] if grad else []
+                superket_t = c.prep_type.torch_base(c.input_dim, superket_t_params, torch)
+                superket_data = (superket_t, superket_grad_params)
+                torch_cache[c.prep_label] = superket_data
 
-            povm_t_params = torch.from_numpy(free_params[c.povm_label][1])
-            povm_t_params.requires_grad_(grad)
-            povm_t = c.povm_tensor_from_params(povm_t_params)
-            povm_grad_params = [povm_t_params] if grad else []
-            povm_mat_data = (povm_t, povm_grad_params)
+            for ol in c.op_labels:
+                if ol not in torch_cache:
+                    curr_params = torch.from_numpy(free_params[ol][1])
+                    curr_params.requires_grad_(grad)
+                    grad_params = [curr_params] if grad else []
+                    op_t = c.op_types[ol].torch_base(c.input_dim, curr_params, torch)
+                    op_data = (op_t, grad_params)
+                    torch_cache[ol] = op_data
 
-            torch_cache[c.prep_label] = superket_data
-            for i, ol in enumerate(c.op_labels):
-                torch_cache[ol] = superops_data[i]
-            torch_cache[c.povm_label] = povm_mat_data
+            
+            if c.povm_label not in torch_cache:
+                povm_t_params = torch.from_numpy(free_params[c.povm_label][1])
+                povm_t_params.requires_grad_(grad)
+                povm_t = c.povm_type.torch_base(c.output_dim, c.input_dim, povm_t_params, torch)
+                povm_grad_params = [povm_t_params] if grad else []
+                povm_data = (povm_t, povm_grad_params)
+                torch_cache[c.povm_label] = povm_data
 
         return circuits, torch_cache
 
