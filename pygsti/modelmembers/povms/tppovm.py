@@ -13,6 +13,8 @@ Defines the TPPOVM class
 import numpy as _np
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
+from pygsti.modelmembers.povms.fulleffect import FullPOVMEffect as _FullPOVMEffect
+from pygsti.modelmembers.povms.conjugatedeffect import ConjugatedStatePOVMEffect as _ConjugatedStatePOVMEffect
 
 
 class TPPOVM(_BasePOVM):
@@ -68,36 +70,39 @@ class TPPOVM(_BasePOVM):
         effectreps = [effect._rep for effect in self.values()]
         povm_mat = _np.row_stack([erep.state_rep.base for erep in effectreps])
         return povm_mat
+    
+    def to_vector(self):
+        effect_vecs = []
+        for i, (lbl, effect) in enumerate(self.items()):
+            if lbl != self.complement_label:
+                assert isinstance(effect, _FullPOVMEffect)
+                effect_vecs.append(effect.to_vector())
+            else:
+                assert i == len(self) - 1
+        vec = _np.concatenate(effect_vecs)
+        return vec
 
-    def torch_base(self, require_grad=False, torch_handle=None):
+    def torch_base(self, torch_handle=None, vec=None):
         if torch_handle is None:
             import torch as torch_handle
-        if not require_grad:
-            t = torch_handle.from_numpy(self.base)
-            return t, []
-        else:
-            assert self.complement_label is not None
-            complement_index = -1
-            for i,k in enumerate(self.keys()):
-                if k == self.complement_label:
-                    complement_index = i
-                    break
-            assert complement_index >= 0
 
-            num_effects = len(self)
-            if complement_index != num_effects - 1:
-                raise NotImplementedError()
-
-            not_comp_selector = _np.ones(shape=(num_effects,), dtype=bool)
-            not_comp_selector[complement_index] = False
-            dim = self.dim
-            first_basis_vec = torch_handle.zeros(size=(1, dim), dtype=torch_handle.double)
-            first_basis_vec[0,0] = dim ** 0.25
-
-            base = self.base
-            t_param = torch_handle.from_numpy(base[not_comp_selector, :])
+        if vec is None:
+            # we're being evaluated at our current value; expect a need for gradients later on
+            vec = self.to_vector()
+            t_param = torch_handle.from_numpy(vec)
             t_param.requires_grad_(True)
-            t_func = first_basis_vec - t_param.sum(axis=0, keepdim=True)
-            t = torch_handle.row_stack((t_param, t_func))
-            return t, [t_param]
+            grad_params = [t_param]
+        else: 
+            # we're being evaluated in a functional sense; no need for gradients
+            t_param = torch_handle.from_numpy(vec)
+            grad_params = []
 
+        num_effects = len(self)
+        dim = self.dim
+        first_basis_vec = torch_handle.zeros(size=(1, dim), dtype=torch_handle.double)
+        first_basis_vec[0,0] = dim ** 0.25
+        t_param_mat = t_param.reshape((num_effects - 1, dim))
+        t_func = first_basis_vec - t_param_mat.sum(axis=0, keepdim=True)
+        t = torch_handle.row_stack((t_param_mat, t_func))
+
+        return t, grad_params

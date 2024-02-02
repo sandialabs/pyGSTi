@@ -45,15 +45,51 @@ Proposal:
    overload @ in whatever way that they need.
 """
 
-class StatelessCircuitSpec:
+class StatelessCircuit:
 
-    def __init__(self, spc: SeparatePOVMCircuit):
+    def __init__(self, spc: SeparatePOVMCircuit, model: ExplicitOpModel):
         self.prep_label = spc.circuit_without_povm[0]
-        self.op_labels = spc.circuit_without_povm[1:]
+        self.op_labels  = spc.circuit_without_povm[1:]
         self.povm_label = spc.povm_label
 
+        prep = model.circuit_layer_operator(self.prep_label, typ='prep')
+        povm = model.circuit_layer_operator(self.povm_label, 'povm')
 
-def make_stateless_circuit_specs(model: ExplicitOpModel, layout):
+        self.input_dim  = prep.dim
+        self.output_dim = len(povm)
+
+        self.prep_type = type(prep)
+        """ ^
+        <class 'pygsti.modelmembers.states.tpstate.TPState'>
+        <class 'pygsti.modelmembers.states.densestate.DenseState'>
+        <class 'pygsti.modelmembers.states.densestate.DenseStateInterface'>
+        <class 'pygsti.modelmembers.states.state.State'>
+        <class 'pygsti.modelmembers.modelmember.ModelMember'>
+        """
+        self.op_types  = [type(model.circuit_layer_operator(ol, 'op')) for ol in self.op_labels]
+        """ ^ For reasons that I don't understand, this is OFTEN an empty list
+        in the first step of iterative GST. When it's nonempty, it contains ...
+    
+        <class 'pygsti.modelmembers.operations.fulltpop.FullTPOp'>
+        <class 'pygsti.modelmembers.operations.denseop.DenseOperator'>
+        <class 'pygsti.modelmembers.operations.denseop.DenseOperatorInterface'>
+        <class 'pygsti.modelmembers.operations.krausop.KrausOperatorInterface'>
+        <class 'pygsti.modelmembers.operations.linearop.LinearOperator'>
+        <class 'pygsti.modelmembers.modelmember.ModelMember'>
+        """
+        self.povm_type = type(povm)
+        """
+        <class 'pygsti.modelmembers.povms.tppovm.TPPOVM'>
+        <class 'pygsti.modelmembers.povms.basepovm._BasePOVM'>
+        <class 'pygsti.modelmembers.povms.povm.POVM'>
+            <class 'pygsti.modelmembers.modelmember.ModelMember'>
+            <class 'collections.OrderedDict'>
+                keyed by effectlabels and ConjugatedStatePOVMEffect-valued
+        """
+        return
+
+
+def make_stateless_circuits(model: ExplicitOpModel, layout):
     label_containers = []
     for _, circuit, outcomes in layout.iter_unique_circuits():
         expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(model, outcomes)
@@ -61,8 +97,15 @@ def make_stateless_circuit_specs(model: ExplicitOpModel, layout):
         if len(expanded_circuit_outcomes) > 1:
             raise NotImplementedError("I don't know what to do with this.")
         spc = list(expanded_circuit_outcomes.keys())[0]
-        label_containers.append(StatelessCircuitSpec(spc))
+        label_containers.append(StatelessCircuit(spc, model))
     return label_containers
+
+
+def extract_free_parameters(model: ExplicitOpModel):
+    d = OrderedDict()
+    for lbl, obj in model._iter_parameterized_objs():
+        d[lbl] = (obj.gpindices_as_array(), obj.to_vector())
+    return d
 
 
 class TorchForwardSimulator(ForwardSimulator):
@@ -78,50 +121,25 @@ class TorchForwardSimulator(ForwardSimulator):
 
     @staticmethod
     def _strip_abstractions(model: ExplicitOpModel, layout):
-        scs_list = make_stateless_circuit_specs(model, layout)
+        circuit_list = make_stateless_circuits(model, layout)
         tc = dict()
-        for scs in scs_list:
-            rho = model.circuit_layer_operator(scs.prep_label, typ='prep')
-            """ ^
-            <class 'pygsti.modelmembers.states.tpstate.TPState'>
-            <class 'pygsti.modelmembers.states.densestate.DenseState'>
-            <class 'pygsti.modelmembers.states.densestate.DenseStateInterface'>
-            <class 'pygsti.modelmembers.states.state.State'>
-            <class 'pygsti.modelmembers.modelmember.ModelMember'>
-            """
-            ops = [model.circuit_layer_operator(ol, 'op') for ol in scs.op_labels]
-            """ ^ For reasons that I don't understand, this is OFTEN an empty list
-            in the first step of iterative GST. When it's nonempty, it contains ...
-        
-            <class 'pygsti.modelmembers.operations.fulltpop.FullTPOp'>
-            <class 'pygsti.modelmembers.operations.denseop.DenseOperator'>
-            <class 'pygsti.modelmembers.operations.denseop.DenseOperatorInterface'>
-            <class 'pygsti.modelmembers.operations.krausop.KrausOperatorInterface'>
-            <class 'pygsti.modelmembers.operations.linearop.LinearOperator'>
-            <class 'pygsti.modelmembers.modelmember.ModelMember'>
-            """
-            povm = model.circuit_layer_operator(scs.povm_label, 'povm')
-            """
-            <class 'pygsti.modelmembers.povms.tppovm.TPPOVM'>
-            <class 'pygsti.modelmembers.povms.basepovm._BasePOVM'>
-            <class 'pygsti.modelmembers.povms.povm.POVM'>
-                <class 'pygsti.modelmembers.modelmember.ModelMember'>
-                <class 'collections.OrderedDict'>
-                    keyed by effectlabels and ConjugatedStatePOVMEffect-valued
-            """
+        for circuit in circuit_list:
+            rho = model.circuit_layer_operator(circuit.prep_label, typ='prep')
+            ops = [model.circuit_layer_operator(ol, 'op') for ol in circuit.op_labels]
+            povm = model.circuit_layer_operator(circuit.povm_label, 'povm')
 
             # Get the numerical representations
             require_grad = True
             superket_data = rho.torch_base(require_grad,  torch_handle=torch)
             superops_data = [op.torch_base(require_grad,  torch_handle=torch) for op in ops]
-            povm_mat_data = povm.torch_base(require_grad, torch_handle=torch)
+            povm_mat_data = povm.torch_base(torch_handle=torch)
 
-            tc[scs.prep_label] = superket_data
-            for i, ol in enumerate(scs.op_labels):
+            tc[circuit.prep_label] = superket_data
+            for i, ol in enumerate(circuit.op_labels):
                 tc[ol] = superops_data[i]
-            tc[scs.povm_label] = povm_mat_data
+            tc[circuit.povm_label] = povm_mat_data
 
-        return tc, scs_list
+        return tc, circuit_list
 
     @staticmethod
     def _check_copa_layout(layout: CircuitOutcomeProbabilityArrayLayout):
@@ -165,13 +183,6 @@ class TorchForwardSimulator(ForwardSimulator):
             probs.append(circuit_probs)
         probs = torch.concat(probs)
         return probs
-    
-    # @staticmethod
-    # def _get_jac_bookkeeping_dict(model: ExplicitOpModel, torch_cache):
-    #     d = OrderedDict()
-    #     for lbl, obj in model._iter_parameterized_objs():
-    #         d[lbl] = (obj.gpindices_as_array(), torch_cache[lbl][1])
-    #     return d
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill):
         if pr_array_to_fill is not None:
