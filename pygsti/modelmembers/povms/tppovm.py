@@ -67,13 +67,6 @@ class TPPOVM(_BasePOVM):
         effect = next(iter(self.values()))
         return effect.dim
     
-    # TODO: remove this function if I can confirm its no longer needed.
-    @property
-    def base(self):
-        effectreps = [effect._rep for effect in self.values()]
-        povm_mat = _np.row_stack([erep.state_rep.base for erep in effectreps])
-        return povm_mat
-    
     def to_vector(self):
         effect_vecs = []
         for i, (lbl, effect) in enumerate(self.items()):
