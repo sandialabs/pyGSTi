@@ -53,27 +53,21 @@ Proposal:
  * Recycle some of the work in setting up the Jacobian function.
     Calling circuit.expand_instruments_and_separate_povm(model, outcomes) inside the StatelessModel constructor
     might be expensive. It only need to happen once during an iteration of GST.
-
- * get_torch_cache can be made much more efficient.
-    * it should suffice to just iterate over self.param_labels (or, equivalently, the keys of free_params).
-      I can add a self.param_types field to the StatelessModel class.
-      We might need to store a little more info in StatelessModel so we have the necessary metadata for each
-      parameter's static "torch_base" method (dimensions should suffice).
 """
 
 class StatelessCircuit:
 
-    def __init__(self, spc: SeparatePOVMCircuit, model: ExplicitOpModel):
+    def __init__(self, spc: SeparatePOVMCircuit):
         self.prep_label = spc.circuit_without_povm[0]
         self.op_labels  = spc.circuit_without_povm[1:]
         self.povm_label = spc.povm_label
 
-        prep = model.circuit_layer_operator(self.prep_label, typ='prep')
-        povm = model.circuit_layer_operator(self.povm_label, 'povm')
-        self.input_dim  = prep.dim
-        self.output_dim = len(povm)
+        # prep = model.circuit_layer_operator(self.prep_label, typ='prep')
+        # povm = model.circuit_layer_operator(self.povm_label, 'povm')
+        # self.input_dim  = prep.dim
+        # self.output_dim = len(povm)
 
-        self.prep_type = type(prep)
+        # self.prep_type = type(prep)
         """ ^
         <class 'pygsti.modelmembers.states.tpstate.TPState'>
         <class 'pygsti.modelmembers.states.densestate.DenseState'>
@@ -81,9 +75,9 @@ class StatelessCircuit:
         <class 'pygsti.modelmembers.states.state.State'>
         <class 'pygsti.modelmembers.modelmember.ModelMember'>
         """
-        self.op_types = OrderedDict()
-        for ol in self.op_labels:
-            self.op_types[ol] = type(model.circuit_layer_operator(ol, 'op'))
+        # self.op_types = OrderedDict()
+        # for ol in self.op_labels:
+        #     self.op_types[ol] = type(model.circuit_layer_operator(ol, 'op'))
         """ ^ For reasons that I don't understand, this is OFTEN an empty list
         in the first step of iterative GST. When it's nonempty, it contains ...
     
@@ -94,7 +88,7 @@ class StatelessCircuit:
         <class 'pygsti.modelmembers.operations.linearop.LinearOperator'>
         <class 'pygsti.modelmembers.modelmember.ModelMember'>
         """
-        self.povm_type = type(povm)
+        # self.povm_type = type(povm)
         """
         <class 'pygsti.modelmembers.povms.tppovm.TPPOVM'>
         <class 'pygsti.modelmembers.povms.basepovm._BasePOVM'>
@@ -106,27 +100,33 @@ class StatelessCircuit:
         return
 
 
-
 class StatelessModel:
 
     def __init__(self, model: ExplicitOpModel, layout):
         circuits = []
         for _, circuit, outcomes in layout.iter_unique_circuits():
             expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(model, outcomes)
-            # ^ Note, I'm not sure if outcomes needs to be passed to the function above.
             if len(expanded_circuit_outcomes) > 1:
                 raise NotImplementedError("I don't know what to do with this.")
             spc = list(expanded_circuit_outcomes.keys())[0]
-            circuits.append(StatelessCircuit(spc, model))
+            c = StatelessCircuit(spc)
+            circuits.append(c)
         self.circuits = circuits
 
-        self.param_labels = []
-        self.param_positions = OrderedDict()
+        self.param_metadata = []
         for lbl, obj in model._iter_parameterized_objs():
-            self.param_labels.append(lbl)
-            self.param_positions[lbl] = obj.gpindices_as_array()
-        self.num_params = len(self.param_labels)
-
+            param_type = type(obj)
+            typestr = str(param_type)
+            if 'TPPOVM' in typestr:
+                param_data = (lbl, param_type, len(obj), obj.dim)
+            elif 'FullTPOp' in typestr:
+                param_data = (lbl, param_type, obj.dim)
+            elif 'TPState' in typestr:
+                param_data = (lbl, param_type, obj.dim)
+            else:
+                raise ValueError()
+            self.param_metadata.append(param_data)
+        self.num_params = len(self.param_metadata)
         return
     
     def get_free_parameters(self, model: ExplicitOpModel):
@@ -136,50 +136,36 @@ class StatelessModel:
             vec = obj.to_vector()
             vec = torch.from_numpy(vec)
             assert int(gpind.size) == int(np.prod(vec.shape))
-            assert self.param_labels[i] == lbl
+            assert self.param_metadata[i][0] == lbl
             d[lbl] = vec
         return d
-    
+
     def get_torch_cache(self, free_params: OrderedDict[Label, torch.Tensor], grad: bool):
         torch_cache = dict()
-        for c in self.circuits:
+        for i, fp_val in enumerate(free_params.values()):
 
-            if c.prep_label not in torch_cache:
-                superket_t_params = free_params[c.prep_label]
-                if grad:
-                    superket_t_params.requires_grad_(True)
-                superket_grad_params = [superket_t_params] if grad else []
-                superket_t = c.prep_type.torch_base(c.input_dim, superket_t_params, torch)
-                superket_data = (superket_t, superket_grad_params)
-                torch_cache[c.prep_label] = superket_data
+            if grad: fp_val.requires_grad_(True)
+            metadata = self.param_metadata[i]
+            fp_label = metadata[0]
+            fp_type  = metadata[1]
+            fp_tstr  = str(fp_type)
 
-            for ol in c.op_labels:
-                if ol not in torch_cache:
-                    curr_params = free_params[ol]
-                    if grad:
-                        curr_params.requires_grad_(True)
-                    grad_params = [curr_params] if grad else []
-                    op_t = c.op_types[ol].torch_base(c.input_dim, curr_params, torch)
-                    op_data = (op_t, grad_params)
-                    torch_cache[ol] = op_data
-
-            if c.povm_label not in torch_cache:
-                povm_t_params = free_params[c.povm_label]
-                if grad:
-                    povm_t_params.requires_grad_(True)
-                povm_t = c.povm_type.torch_base(c.output_dim, c.input_dim, povm_t_params, torch)
-                povm_grad_params = [povm_t_params] if grad else []
-                povm_data = (povm_t, povm_grad_params)
-                torch_cache[c.povm_label] = povm_data
-
+            if ('FullTPOp' in fp_tstr) or ('TPState' in fp_tstr):
+                param_t = fp_type.torch_base(metadata[2], fp_val)
+            elif 'TPPOVM' in fp_tstr:
+                param_t = fp_type.torch_base(metadata[2], metadata[3], fp_val)
+            else:
+                raise ValueError()
+            torch_cache[fp_label] = param_t
+        
         return torch_cache
 
     def circuit_probs(self, torch_cache: Dict[Label, torch.Tensor]):
         probs = []
         for c in self.circuits:
-            superket = torch_cache[c.prep_label][0]
-            superops = [torch_cache[ol][0] for ol in c.op_labels]
-            povm_mat = torch_cache[c.povm_label][0]
+            superket = torch_cache[c.prep_label]
+            superops = [torch_cache[ol] for ol in c.op_labels]
+            povm_mat = torch_cache[c.povm_label]
             for superop in superops:
                 superket = superop @ superket
             circuit_probs = povm_mat @ superket
@@ -188,8 +174,8 @@ class StatelessModel:
         return probs
     
     def functional_circuit_probs(self, *free_params: Tuple[torch.Tensor]):
-        assert len(free_params) == len(self.param_labels)
-        free_params = {self.param_labels[i]: free_params[i] for i,pl in enumerate(self.param_labels)}
+        assert len(free_params) == len(self.param_metadata) == self.num_params
+        free_params = {self.param_metadata[i][0] : free_params[i] for i in range(self.num_params)}
         torch_cache = self.get_torch_cache(free_params, grad=False)
         probs = self.circuit_probs(torch_cache)
         return probs
@@ -261,6 +247,7 @@ class TorchForwardSimulator(ForwardSimulator):
         J_np = J_val.cpu().detach().numpy()
         array_to_fill[:] = J_np
         return
+
 
 """
 Running GST produces the following traceback if I set a breakpoint inside the
