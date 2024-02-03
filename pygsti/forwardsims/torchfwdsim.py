@@ -61,42 +61,6 @@ class StatelessCircuit:
         self.prep_label = spc.circuit_without_povm[0]
         self.op_labels  = spc.circuit_without_povm[1:]
         self.povm_label = spc.povm_label
-
-        # prep = model.circuit_layer_operator(self.prep_label, typ='prep')
-        # povm = model.circuit_layer_operator(self.povm_label, 'povm')
-        # self.input_dim  = prep.dim
-        # self.output_dim = len(povm)
-
-        # self.prep_type = type(prep)
-        """ ^
-        <class 'pygsti.modelmembers.states.tpstate.TPState'>
-        <class 'pygsti.modelmembers.states.densestate.DenseState'>
-        <class 'pygsti.modelmembers.states.densestate.DenseStateInterface'>
-        <class 'pygsti.modelmembers.states.state.State'>
-        <class 'pygsti.modelmembers.modelmember.ModelMember'>
-        """
-        # self.op_types = OrderedDict()
-        # for ol in self.op_labels:
-        #     self.op_types[ol] = type(model.circuit_layer_operator(ol, 'op'))
-        """ ^ For reasons that I don't understand, this is OFTEN an empty list
-        in the first step of iterative GST. When it's nonempty, it contains ...
-    
-        <class 'pygsti.modelmembers.operations.fulltpop.FullTPOp'>
-        <class 'pygsti.modelmembers.operations.denseop.DenseOperator'>
-        <class 'pygsti.modelmembers.operations.denseop.DenseOperatorInterface'>
-        <class 'pygsti.modelmembers.operations.krausop.KrausOperatorInterface'>
-        <class 'pygsti.modelmembers.operations.linearop.LinearOperator'>
-        <class 'pygsti.modelmembers.modelmember.ModelMember'>
-        """
-        # self.povm_type = type(povm)
-        """
-        <class 'pygsti.modelmembers.povms.tppovm.TPPOVM'>
-        <class 'pygsti.modelmembers.povms.basepovm._BasePOVM'>
-        <class 'pygsti.modelmembers.povms.povm.POVM'>
-            <class 'pygsti.modelmembers.modelmember.ModelMember'>
-            <class 'collections.OrderedDict'>
-                keyed by effectlabels and ConjugatedStatePOVMEffect-valued
-        """
         return
 
 
