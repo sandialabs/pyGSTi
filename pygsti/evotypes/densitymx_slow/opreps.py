@@ -26,7 +26,9 @@ from ...tools import optools as _ot
 
 
 class OpRep:
-    """Any representation of a linear operator on a defined vector space."""
+    """
+    A real superoperator on Hilbert-Schmidt space.
+    """
 
     def __init__(self, state_space):
         self.state_space = state_space
@@ -42,6 +44,10 @@ class OpRep:
         raise NotImplementedError()
 
     def aslinearoperator(self):
+        """
+        Return a SciPy LinearOperator that accepts superket representations of vectors
+        in Hilbert-Schmidt space and returns a vector of that same representation.
+        """
         def mv(v):
             if v.ndim == 2 and v.shape[1] == 1: v = v[:, 0]
             in_state = _StateRepDense(_np.ascontiguousarray(v, 'd'), self.state_space, None)
@@ -56,7 +62,7 @@ class OpRep:
 
 class OpRepDenseSuperop(OpRep):
     """
-    A real superoperator representation of a quantum channel.
+    A real superoperator on Hilbert-Schmidt space.
     The operator's action (and adjoint action) work with Hermitian matrices
     stored as *vectors* in their real superket representations.
     """

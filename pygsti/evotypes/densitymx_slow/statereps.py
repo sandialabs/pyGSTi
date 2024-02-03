@@ -25,14 +25,16 @@ except ImportError:
 
 
 class StateRep:
-    """A real superket representation of a Hermitian matrix of given order."""
+    """A real superket representation of an element in Hilbert-Schmidt space."""
 
     def __init__(self, data, state_space):
         #vec = _np.asarray(vec, dtype='d')
         assert(data.dtype == _np.dtype('d'))
         self.data = _np.require(data.copy(), requirements=['OWNDATA', 'C_CONTIGUOUS'])
         self.state_space = _StateSpace.cast(state_space)
-        assert(len(self.data) == self.state_space.dim)
+        ds0 = self.data.shape[0]
+        assert(ds0 == self.state_space.dim)
+        assert(ds0 == self.data.size)
 
     def __reduce__(self):
         return (StateRep, (self.data, self.state_space), (self.data.flags.writeable,))
