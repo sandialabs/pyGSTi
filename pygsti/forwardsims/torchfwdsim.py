@@ -180,7 +180,7 @@ class TorchForwardSimulator(ForwardSimulator):
             v_prev = v
         return v_prev.stop
 
-    def _bulk_fill_probs_block(self, array_to_fill, layout, stripped_abstractions: Optional[tuple] = None):
+    def _bulk_fill_probs(self, array_to_fill, layout, stripped_abstractions: Optional[tuple] = None):
         if stripped_abstractions is None:
             slm, torch_cache = TorchForwardSimulator.separate_state(self.model, layout)
         else:
@@ -192,20 +192,15 @@ class TorchForwardSimulator(ForwardSimulator):
         pass
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill):
-        if pr_array_to_fill is not None:
-            self._bulk_fill_probs_block(pr_array_to_fill, layout)
-        return self._bulk_fill_dprobs_block(array_to_fill, layout)
-
-    def _bulk_fill_dprobs_block(self, array_to_fill, layout):
-        from torch.func import jacfwd
-
         slm = StatelessModel(self.model, layout)
-        argnums = tuple(range(slm.num_params))
-        J_func = jacfwd(slm.functional_circuit_probs, argnums=argnums)
-
         free_params = slm.get_free_parameters(self.model)
-        free_param_tup = tuple(free_params.values())
+        torch_cache = slm.get_torch_cache(free_params, grad=False)
+        if pr_array_to_fill is not None:
+            self._bulk_fill_probs(pr_array_to_fill, layout, (slm, torch_cache))
 
+        argnums = tuple(range(slm.num_params))
+        J_func = torch.func.jacfwd(slm.functional_circuit_probs, argnums=argnums)
+        free_param_tup = tuple(free_params.values())
         J_val = J_func(*free_param_tup)
         J_val = torch.column_stack(J_val)
         J_np = J_val.cpu().detach().numpy()
