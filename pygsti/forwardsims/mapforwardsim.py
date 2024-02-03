@@ -62,10 +62,7 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
                                                          [self.model.circuit_layer_operator(ol, 'op')._rep
                                                           for ol in spc.circuit_without_povm[1:]])
                 if povmrep is None:
-                    ereps = []
-                    for  elabel in spc.full_effect_labels:
-                        erep = self.model.circuit_layer_operator(elabel, 'povm')._rep
-                        ereps.append(erep)
+                    ereps = [self.model.circuit_layer_operator(elabel, 'povm')._rep for elabel in spc.full_effect_labels]
                     array_to_fill[indices] = [erep.probability(rhorep) for erep in ereps]  # outcome probabilities
                 else:
                     # using spc.effect_labels ensures returned probabilities are in same order as spc_outcomes
