@@ -1702,9 +1702,7 @@ class ExplicitLayerRules(_LayerRules):
         State
         """
         # No need for caching preps
-        prep = model.preps[layerlbl]
-        # print(f'prep is of type {type(prep)}')
-        return prep
+        return model.preps[layerlbl]  # don't cache this - it's not a new operator
 
     def povm_layer_operator(self, model, layerlbl, caches):
         """
