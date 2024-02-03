@@ -24,13 +24,10 @@ from ...tools import lindbladtools as _lbt
 from ...tools import matrixtools as _mt
 from ...tools import optools as _ot
 
-"""
-Riley note:
-    These classes are actually used for representing linear operators that
-    act on superkets, not linear operators that act on density matrices.
-"""
 
 class OpRep:
+    """Any representation of a linear operator on a defined vector space."""
+
     def __init__(self, state_space):
         self.state_space = state_space
 
@@ -58,6 +55,12 @@ class OpRep:
 
 
 class OpRepDenseSuperop(OpRep):
+    """
+    A real superoperator representation of a quantum channel.
+    The operator's action (and adjoint action) work with Hermitian matrices
+    stored as *vectors* in their real superket representations.
+    """
+
     def __init__(self, mx, basis, state_space):
         state_space = _StateSpace.cast(state_space)
         if mx is None:

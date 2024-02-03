@@ -24,13 +24,9 @@ except ImportError:
     _fastcalc = None
 
 
-"""
-Riley note:
-    These classes are actually used for representing superkets,
-    not density matrices.
-"""
-
 class StateRep:
+    """A real superket representation of a Hermitian matrix of given order."""
+
     def __init__(self, data, state_space):
         #vec = _np.asarray(vec, dtype='d')
         assert(data.dtype == _np.dtype('d'))
@@ -67,6 +63,10 @@ class StateRep:
 
 
 class StateRepDense(StateRep):
+    """
+    An almost-trivial wrapper around StateRep.
+    Implements the "base" property and defines a trivial "base_has_changed" function.
+    """
 
     def __init__(self, data, state_space, basis):
         #ignore basis for now (self.basis = basis in future?)
