@@ -56,6 +56,13 @@ Proposal:
 """
 
 class StatelessCircuit:
+    """
+    Helper data structure useful for simulating a specific circuit quantum (including prep,
+    applying a sequence of gates, and applying a POVM to the output of the last gate).
+    
+    The forward simulation can only be done when we have access to a dict that maps
+    pyGSTi Labels to certain PyTorch Tensors.
+    """
 
     def __init__(self, spc: SeparatePOVMCircuit):
         self.prep_label = spc.circuit_without_povm[0]
@@ -65,6 +72,18 @@ class StatelessCircuit:
 
 
 class StatelessModel:
+    """
+    A container for the information in an ExplicitOpModel that's "stateless"
+    in the sense of object-oriented programming.
+    
+        Currently, that information is just specifications of the model's
+        circuits, and model parameter metadata.
+
+    StatelessModels have functions to (1) extract stateful data from an
+    ExplicitOpModel, (2) reformat that data into particular PyTorch
+    Tensors, and (3) run the forward simulation using that data. There
+    is also a function that combines (2) and (3).
+    """
 
     def __init__(self, model: ExplicitOpModel, layout):
         circuits = []
@@ -94,17 +113,47 @@ class StatelessModel:
         return
     
     def get_free_parameters(self, model: ExplicitOpModel):
-        d = OrderedDict()
+        """
+        Return an ordered dict that maps pyGSTi Labels to PyTorch Tensors.
+        The Labels correspond to parameterized objects in "model".
+        The Tensors correspond to the current values of an object's parameters.
+        For the purposes of forward simulation, we intend that the following 
+        equivalence holds:
+        
+            model == (self, [dict returned by this function]).
+            
+        That said, the values in this function's returned dict need to be
+        formatted by get_torch_cache BEFORE being used in forward simulation.
+        """
+        free_params = OrderedDict()
         for i, (lbl, obj) in enumerate(model._iter_parameterized_objs()):
             gpind = obj.gpindices_as_array()
             vec = obj.to_vector()
             vec = torch.from_numpy(vec)
             assert int(gpind.size) == int(np.prod(vec.shape))
+            # ^ a sanity check that we're interpreting the results of obj.to_vector()
+            #   correctly. Future implementations might need us to also keep track of
+            #   the "gpind" variable. Right now we get around NOT using that variable
+            #   by using an OrderedDict and by iterating over parameterized objects in
+            #   the same way that "model"s does.
             assert self.param_metadata[i][0] == lbl
-            d[lbl] = vec
-        return d
+            # ^ If this check fails then it invalidates our assumptions about how
+            #   we're using OrderedDict objects.
+            free_params[lbl] = vec
+        return free_params
 
     def get_torch_cache(self, free_params: OrderedDict[Label, torch.Tensor], grad: bool):
+        """
+        Returns a dict mapping pyGSTi Labels to PyTorch tensors. The dict makes it easy
+        to simulate a stateful model implied by (self, free_params). It is obtained by
+        applying invertible transformations --- defined in various ModelMember subclasses
+        --- on the tensors stored in free_params.
+
+        If ``grad`` is True, then the values in the returned dict are preparred for use
+        in PyTorch's backpropogation functionality. If we want to compute a Jacobian of
+        circuit outcome probabilities then such functionality is actually NOT needed.
+        Therefore for purposes of computing Jacobians this should be set to False.
+        """
         torch_cache = dict()
         for i, fp_val in enumerate(free_params.values()):
 
@@ -137,7 +186,12 @@ class StatelessModel:
         probs = torch.concat(probs)
         return probs
     
-    def functional_circuit_probs(self, *free_params: Tuple[torch.Tensor]):
+    def jac_friendly_circuit_probs(self, *free_params: Tuple[torch.Tensor]):
+        """
+        This function combines parameter reformatting and forward simulation.
+        It's needed so that we can use PyTorch to compute the Jacobian of
+        the map from a model's free parameters to circuit outcome probabilities.
+        """
         assert len(free_params) == len(self.param_metadata) == self.num_params
         free_params = {self.param_metadata[i][0] : free_params[i] for i in range(self.num_params)}
         torch_cache = self.get_torch_cache(free_params, grad=False)
@@ -199,7 +253,7 @@ class TorchForwardSimulator(ForwardSimulator):
             self._bulk_fill_probs(pr_array_to_fill, layout, (slm, torch_cache))
 
         argnums = tuple(range(slm.num_params))
-        J_func = torch.func.jacfwd(slm.functional_circuit_probs, argnums=argnums)
+        J_func = torch.func.jacfwd(slm.jac_friendly_circuit_probs, argnums=argnums)
         free_param_tup = tuple(free_params.values())
         J_val = J_func(*free_param_tup)
         J_val = torch.column_stack(J_val)
