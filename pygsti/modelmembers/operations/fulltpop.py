@@ -157,11 +157,15 @@ class FullTPOp(_DenseOperator):
         self._ptr_has_changed()  # because _rep.base == _ptr (same memory)
         self.dirty = dirty_value
 
+    def stateless_data(self):
+        return (self.dim,)
+
     @staticmethod
-    def torch_base(dim: int, t_param: Tensor, torch_handle=None):
+    def torch_base(sd: Tuple[int], t_param: Tensor, torch_handle=None):
         if torch_handle is None:
             import torch as torch_handle
-        
+
+        dim = sd[0]
         t_const = torch_handle.zeros(size=(1, dim), dtype=torch_handle.double)
         t_const[0,0] = 1.0
         t_param_mat = t_param.reshape((dim - 1, dim))

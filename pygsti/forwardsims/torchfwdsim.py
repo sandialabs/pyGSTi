@@ -99,15 +99,7 @@ class StatelessModel:
         self.param_metadata = []
         for lbl, obj in model._iter_parameterized_objs():
             param_type = type(obj)
-            typestr = str(param_type)
-            if 'TPPOVM' in typestr:
-                param_data = (lbl, param_type, len(obj), obj.dim)
-            elif 'FullTPOp' in typestr:
-                param_data = (lbl, param_type, obj.dim)
-            elif 'TPState' in typestr:
-                param_data = (lbl, param_type, obj.dim)
-            else:
-                raise ValueError()
+            param_data = (lbl, param_type) + (obj.stateless_data(),)
             self.param_metadata.append(param_data)
         self.num_params = len(self.param_metadata)
         return
@@ -159,16 +151,10 @@ class StatelessModel:
 
             if grad: fp_val.requires_grad_(True)
             metadata = self.param_metadata[i]
+            
             fp_label = metadata[0]
             fp_type  = metadata[1]
-            fp_tstr  = str(fp_type)
-
-            if ('FullTPOp' in fp_tstr) or ('TPState' in fp_tstr):
-                param_t = fp_type.torch_base(metadata[2], fp_val)
-            elif 'TPPOVM' in fp_tstr:
-                param_t = fp_type.torch_base(metadata[2], metadata[3], fp_val)
-            else:
-                raise ValueError()
+            param_t = fp_type.torch_base(metadata[2], fp_val)
             torch_cache[fp_label] = param_t
         
         return torch_cache

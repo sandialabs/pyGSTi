@@ -78,11 +78,16 @@ class TPPOVM(_BasePOVM):
         vec = _np.concatenate(effect_vecs)
         return vec
 
+    def stateless_data(self):
+        dim1 = len(self)
+        dim2 = self.dim
+        return (dim1, dim2)
+
     @staticmethod
-    def torch_base(num_effects: int, dim: int, t_param: Tensor, torch_handle=None):
+    def torch_base(sd: Tuple[int, int], t_param: Tensor, torch_handle=None):
         if torch_handle is None:
             import torch as torch_handle
-
+        num_effects, dim = sd
         first_basis_vec = torch_handle.zeros(size=(1, dim), dtype=torch_handle.double)
         first_basis_vec[0,0] = dim ** 0.25
         t_param_mat = t_param.reshape((num_effects - 1, dim))
