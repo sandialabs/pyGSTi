@@ -12,13 +12,9 @@ Defines the TorchForwardSimulator class
 
 from collections import OrderedDict
 import warnings as warnings
-from typing import Tuple, Optional, TypeVar, Union, List, Dict
-import importlib as _importlib
-import warnings as _warnings
-from pygsti.tools import slicetools as _slct
+from typing import Tuple, Optional, TypeVar, Dict
 
 import numpy as np
-import scipy.linalg as la
 try:
     import torch
     TORCH_ENABLED = True
@@ -27,24 +23,14 @@ except ImportError:
 
 from pygsti.forwardsims.forwardsim import ForwardSimulator
 
-# Below: imports only needed for typehints
-from pygsti.circuits import Circuit
-from pygsti.baseobjs.resourceallocation import ResourceAllocation
+# Below: variables for type annotations.
+#   We have to create variable aliases rather than importing the types
+#   directly, since importing the types would cause circular imports.
 Label = TypeVar('Label')
 ExplicitOpModel = TypeVar('ExplicitOpModel')
 SeparatePOVMCircuit = TypeVar('SeparatePOVMCircuit')
 CircuitOutcomeProbabilityArrayLayout = TypeVar('CircuitOutcomeProbabilityArrayLayout')
-# ^ declare to avoid circular references
 
-
-"""
-Proposal:
-   There are lots of places where we use np.dot in the codebase.
-   I think we're much better off replacing with the @ operator
-   unless we're using the "out" keyword of np.dot. Reason being:
-   different classes of ndarray-like objects (like pytorch Tensors!)
-   overload @ in whatever way that they need.
-"""
 
 """Efficiency ideas
  * Compute the jacobian in blocks of rows at a time (iterating over the blocks in parallel). Ideally pytorch
@@ -54,6 +40,7 @@ Proposal:
     Calling circuit.expand_instruments_and_separate_povm(model, outcomes) inside the StatelessModel constructor
     might be expensive. It only need to happen once during an iteration of GST.
 """
+
 
 class StatelessCircuit:
     """
@@ -151,7 +138,7 @@ class StatelessModel:
 
             if grad: fp_val.requires_grad_(True)
             metadata = self.param_metadata[i]
-            
+
             fp_label = metadata[0]
             fp_type  = metadata[1]
             param_t = fp_type.torch_base(metadata[2], fp_val)
