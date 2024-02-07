@@ -26,7 +26,7 @@ def Ls(*args):
     """ Convert args to a tuple to Labels """
     return tuple([L(x) for x in args])
 
-"""
+
 class AbstractForwardSimTester(BaseCase):
     # XXX is it really neccessary to test an abstract base class?
     def setUp(self):
@@ -141,7 +141,7 @@ class MapForwardSimTester(ForwardSimBase, BaseCase):
         super(MapForwardSimTester, cls).setUpClass()
         cls.model = cls.model.copy()
         cls.model.sim = MapForwardSimulator()
-"""
+
 
 class BaseProtocolData:
 
@@ -171,19 +171,19 @@ class ForwardSimIntegrationTester(BaseProtocolData):
         pass
 
     # shared memory forward simulators
-    # def test_simple_matrix_fwdsim(self):
-    #     self._run(SimpleMatrixForwardSimulator)
+    def test_simple_matrix_fwdsim(self):
+        self._run(SimpleMatrixForwardSimulator)
 
-    # def test_simple_map_fwdsim(self):
-    #     self._run(SimpleMapForwardSimulator)
+    def test_simple_map_fwdsim(self):
+        self._run(SimpleMapForwardSimulator)
 
     def test_torch_fwdsim(self):
         self._run(TorchForwardSimulator)
 
     # distributed-memory forward simulators
-    # def test_map_fwdsim(self):
-    #     self._run(MapForwardSimulator)
+    def test_map_fwdsim(self):
+        self._run(MapForwardSimulator)
 
-    # def test_matrix_fwdsim(self):
-    #     self._run(MatrixForwardSimulator)
+    def test_matrix_fwdsim(self):
+        self._run(MatrixForwardSimulator)
 
