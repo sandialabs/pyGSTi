@@ -1,5 +1,5 @@
 ********************************************************************************
-  pyGSTi 0.9
+  pyGSTi 0.9.12.1
 ********************************************************************************
 
 ![master build](https://github.com/pyGSTio/pyGSTi/workflows/Build%20and%20run%20tests/badge.svg?branch=master)
