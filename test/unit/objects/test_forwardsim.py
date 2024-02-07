@@ -3,6 +3,7 @@
 from unittest import mock
 
 import numpy as np
+import pytest
 
 from pygsti.models import modelconstruction as _setc
 import pygsti.models as models
@@ -177,6 +178,7 @@ class ForwardSimIntegrationTester(BaseProtocolData):
     def test_simple_map_fwdsim(self):
         self._run(SimpleMapForwardSimulator)
 
+    @pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
     def test_torch_fwdsim(self):
         self._run(TorchForwardSimulator)
 

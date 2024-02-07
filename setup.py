@@ -35,6 +35,7 @@ The primary goals of the pyGSTi project are to:
 
 # Extra requirements
 extras = {
+    'pytorch' : ['torch'],
     'diamond_norm': [
         'cvxopt',
         'cvxpy'
