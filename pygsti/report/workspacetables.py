@@ -427,69 +427,77 @@ class GatesTable(WorkspaceTable):
                 tup_of_ops = tuple([model.instruments[il][comp_lbl] for model in models]
                                    )  # may want to gracefully handle index error here?
                 label_op_tups.append((il, comp_lbl, tup_of_ops))
+                #need to find the color_min/max
 
         for lbl, comp_lbl, per_model_ops in label_op_tups:
             row_data = [lbl if (comp_lbl is None) else (lbl + '.' + comp_lbl)]
             row_formatters = [None]
 
-            for model, op in zip(models, per_model_ops):
+            for model, title, op in zip(models, titles, per_model_ops):
                 basis = model.basis
+                if confidence_region_info is not None:
+                    intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(
+                        lbl, comp_lbl)[:, None]
+
+                    if isinstance(per_model_ops[-1], _op.FullArbitraryOp):
+                        #then we know how to reshape into a matrix
+                        op_dim = models[-1].dim
+                        basis = models[-1].basis
+                        intervalMx = intervalVec.reshape(op_dim, op_dim)
+                    elif isinstance(per_model_ops[-1], _op.FullTPOp):
+                        #then we know how to reshape into a matrix
+                        op_dim = models[-1].dim
+                        basis = models[-1].basis
+                        intervalMx = _np.concatenate((_np.zeros((1, op_dim), 'd'),
+                                                    intervalVec.reshape(op_dim - 1, op_dim)), axis=0)
+                    else:
+                        # we don't know how best to reshape interval matrix for gate, so
+                        # use derivative
+                        op_dim = models[-1].dim
+                        basis = models[-1].basis
+                        op_deriv = per_model_ops[-1].deriv_wrt_params()
+                        intervalMx = _np.abs(_np.dot(op_deriv, intervalVec).reshape(op_dim, op_dim))
+
+                    if display_as == "boxes": 
+                        maxAbsVal = _np.max(_np.abs(intervalMx))
+                        fig2 = _wp.GateMatrixPlot(self.ws, intervalMx,
+                                                color_min=-maxAbsVal, color_max=maxAbsVal,
+                                                colorbar=True,
+                                                mx_basis=basis)
+                else: 
+                    intervalMx = None
 
                 if display_as == "numbers":
                     row_data.append(op.to_dense('HilbertSchmidt'))
                     row_formatters.append('Brackets')
                 elif display_as == "boxes":
+                    if "Target" == title: 
+                        eb_matrix = None
+                    else:
+                        eb_matrix = intervalMx
                     if lbl in instLabels:
                         fig = _wp.GateMatrixPlot(self.ws, op.to_dense(on_space='HilbertSchmidt'), color_min=-0.5, color_max=0.5,
                                                 colorbar=True,
-                                                mx_basis=basis)
+                                                mx_basis=basis, eb_matrix=eb_matrix)
                     else:
                         fig = _wp.GateMatrixPlot(self.ws, op.to_dense(on_space='HilbertSchmidt'),
                                                 colorbar=True,
-                                                mx_basis=basis)
+                                                mx_basis=basis, eb_matrix=eb_matrix)
 
                     row_data.append(fig)
                     row_formatters.append('Figure')
                 else:
                     raise ValueError("Invalid 'display_as' argument: %s" % display_as)
-
-            if confidence_region_info is not None:
-                intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(
-                    lbl, comp_lbl)[:, None]
-
-                if isinstance(per_model_ops[-1], _op.FullArbitraryOp):
-                    #then we know how to reshape into a matrix
-                    op_dim = models[-1].dim
-                    basis = models[-1].basis
-                    intervalMx = intervalVec.reshape(op_dim, op_dim)
-                elif isinstance(per_model_ops[-1], _op.FullTPOp):
-                    #then we know how to reshape into a matrix
-                    op_dim = models[-1].dim
-                    basis = models[-1].basis
-                    intervalMx = _np.concatenate((_np.zeros((1, op_dim), 'd'),
-                                                  intervalVec.reshape(op_dim - 1, op_dim)), axis=0)
-                else:
-                    # we don't know how best to reshape interval matrix for gate, so
-                    # use derivative
-                    op_dim = models[-1].dim
-                    basis = models[-1].basis
-                    op_deriv = per_model_ops[-1].deriv_wrt_params()
-                    intervalMx = _np.abs(_np.dot(op_deriv, intervalVec).reshape(op_dim, op_dim))
-
+            if confidence_region_info is not None: 
                 if display_as == "numbers":
-                    row_data.append(intervalMx)
-                    row_formatters.append('Brackets')
+                        row_data.append(intervalMx)
+                        row_formatters.append('Brackets')
 
                 elif display_as == "boxes":
-                    maxAbsVal = _np.max(_np.abs(intervalMx))
-                    fig = _wp.GateMatrixPlot(self.ws, intervalMx,
-                                             color_min=-maxAbsVal, color_max=maxAbsVal,
-                                             colorbar=False,
-                                             mx_basis=basis)
-                    row_data.append(fig)
-                    row_formatters.append('Figure')
+                        row_data.append(fig2)
+                        row_formatters.append('Figure')
                 else:
-                    assert(False)  # pragma: no cover
+                    assert(False)  # pragma: no cover`
 
             table.add_row(row_data, row_formatters)
 

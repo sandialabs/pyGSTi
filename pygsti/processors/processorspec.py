@@ -316,7 +316,9 @@ class QuditProcessorSpec(ProcessorSpec):
         def flagfn(typ): return {'auto_embed': True, 'match_parent_statespace': True,
                                  'match_parent_evotype': True, 'cast_to_type': typ}
         
-        nonstd_instruments = _OrderedMemberDict(None, 'full', 'I', flagfn("instrument"))
+        nonstd_instruments = _OrderedMemberDict(None, 'full', 'I', flagfn("instrument")) 
+        #Note: some of this is hardcoded, instrument_prefix should be allowed to be variable and 'full' may not always be correct.
+        #However, this should work 95+% of the time 
         for k, obj in state.get('nonstd_instruments', {}).items(): 
             nonstd_instruments[_Lbl(tuple(k.split(':')))] = _unserialize_instrument(obj)
 
