@@ -118,7 +118,6 @@ def convert_to_pauli(matrix, numQubits):
 # Compute the set of measurable effects of Hamiltonian error generators operating on two qubits in each of the specified eigenstates
 # Return: hamiltonian error and coef dictionary
 def gather_hamiltonian_jacobian_coefs(pauliDict, numQubits, printFlag=True):
-    parities = [1, -1]
     parities = list(product([1, -1], repeat=numQubits))
     hamiltonianErrorOutputs = dict()
     identKey = "I" * numQubits
@@ -133,8 +132,15 @@ def gather_hamiltonian_jacobian_coefs(pauliDict, numQubits, printFlag=True):
     paulis1Q = basisconstructors.pp_matrices_dict(2, normalize=False)
     for pauliPair in pauliDictProduct:
         for parity in parities:
-            inputStateName = "".join([str(parity[i])[:-1] + pauliPair[0][i] for i in range(len(pauliPair[0]))])
-            inputStateItems = [parity[i] * paulis1Q[pauliPair[0][i]] for i in range(len(pauliPair[0]))]
+            inputStateName = "".join(
+                [
+                    str(parity[i])[:-1] + pauliPair[0][i]
+                    for i in range(len(pauliPair[0]))
+                ]
+            )
+            inputStateItems = [
+                parity[i] * paulis1Q[pauliPair[0][i]] for i in range(len(pauliPair[0]))
+            ]
             while len(inputStateItems) >= 2:
                 inputState = _np.kron(inputStateItems[0], inputStateItems[1])
                 inputStateItems[1] = inputState
@@ -159,30 +165,44 @@ def gather_hamiltonian_jacobian_coefs(pauliDict, numQubits, printFlag=True):
 
 # Compute the set of measurable effects of stochastic error generators operating on a single qubit in each of the specified eigenstates
 def gather_stochastic_jacobian_coefs(pauliDict, numQubits, printFlag=False):
-    parities = [1, -1]
+    parities = list(product([1, -1], repeat=numQubits))
     stochasticErrorOutputs = dict()
     identKey = "I" * numQubits
     ident = pauliDict[identKey]
 
     pauliDictProduct = list(
         _itertools.product(
-            [key for key in pauliDict.keys() if key != identKey],
+            [key for key in pauliDict.keys() if "I" not in key],
             [key for key in pauliDict.keys() if key != identKey],
         )
     )
+    paulis1Q = basisconstructors.pp_matrices_dict(2, normalize=False)
     for pauliPair in pauliDictProduct:
         for parity in parities:
-            inputStateName = str(parity)[:-1] + pauliPair[0]
-            inputState = parity * pauliDict[pauliPair[0]]
+            inputStateName = "".join(
+                [
+                    str(parity[i])[:-1] + pauliPair[0][i]
+                    for i in range(len(pauliPair[0]))
+                ]
+            )
+            inputStateItems = [
+                parity[i] * paulis1Q[pauliPair[0][i]] for i in range(len(pauliPair[0]))
+            ]
+            while len(inputStateItems) >= 2:
+                inputState = _np.kron(inputStateItems[0], inputStateItems[1])
+                inputStateItems[1] = inputState
+                inputStateItems.pop(0)
             indexedPauli = pauliDict[pauliPair[1]]
             inputState = ident / 2 + inputState / 2
 
             process_matrix = stochastic_error_generator(inputState, indexedPauli, ident)
+
             decomposition = convert_to_pauli(process_matrix, numQubits)
             for element in decomposition:
-                stochasticErrorOutputs[
-                    ((inputStateName, element[1]), pauliPair[1])
-                ] = element[0]
+                if "I" not in element[1]:
+                    stochasticErrorOutputs[
+                        ((str(inputStateName), element[1]), pauliPair[1])
+                    ] = element[0]
     if printFlag:
         for key in stochasticErrorOutputs:
             print(key, "\n", stochasticErrorOutputs[key])
@@ -193,7 +213,7 @@ def gather_stochastic_jacobian_coefs(pauliDict, numQubits, printFlag=False):
 # Compute the set of measurable effects of pauli-correlation error generators operating on a single qubit in each of the specified eigenstates
 def gather_pauli_correlation_jacobian_coefs(pauliDict, numQubits, printFlag=False):
     pauliCorrelationErrorOutputs = dict()
-    parities = [1, -1]
+    parities = list(product([1, -1], repeat=numQubits))
     identKey = "I" * numQubits
     ident = pauliDict[identKey]
 
@@ -203,13 +223,25 @@ def gather_pauli_correlation_jacobian_coefs(pauliDict, numQubits, printFlag=Fals
 
     pauliDictProduct = list(
         _itertools.product(
-            [key for key in pauliDict.keys() if key != identKey], pauliDictProduct
+            [key for key in pauliDict.keys() if "I" not in key], pauliDictProduct
         )
     )
+    paulis1Q = basisconstructors.pp_matrices_dict(2, normalize=False)
     for pauliPair in pauliDictProduct:
         for parity in parities:
-            inputStateName = str(parity)[:-1] + pauliPair[0]
-            inputState = parity * pauliDict[pauliPair[0]]
+            inputStateName = "".join(
+                [
+                    str(parity[i])[:-1] + pauliPair[0][i]
+                    for i in range(len(pauliPair[0]))
+                ]
+            )
+            inputStateItems = [
+                parity[i] * paulis1Q[pauliPair[0][i]] for i in range(len(pauliPair[0]))
+            ]
+            while len(inputStateItems) >= 2:
+                inputState = _np.kron(inputStateItems[0], inputStateItems[1])
+                inputStateItems[1] = inputState
+                inputStateItems.pop(0)
             indexedPauli1 = pauliDict[pauliPair[1][0]]
             indexedPauli2 = pauliDict[pauliPair[1][1]]
             inputState = ident / 2 + inputState / 2
@@ -218,9 +250,10 @@ def gather_pauli_correlation_jacobian_coefs(pauliDict, numQubits, printFlag=Fals
             )
             decomposition = convert_to_pauli(process_matrix, numQubits)
             for element in decomposition:
-                pauliCorrelationErrorOutputs[
-                    ((inputStateName, element[1]), pauliPair[1])
-                ] = element[0]
+                if "I" not in element[1]:
+                    pauliCorrelationErrorOutputs[
+                        ((str(inputStateName), element[1]), pauliPair[1])
+                    ] = element[0]
 
     if printFlag:
         for key in pauliCorrelationErrorOutputs:
@@ -232,7 +265,7 @@ def gather_pauli_correlation_jacobian_coefs(pauliDict, numQubits, printFlag=Fals
 # Compute the set of measurable effects of pauli-correlation error generators operating on a single qubit in each of the specified eigenstates
 def gather_anti_symmetric_jacobian_coefs(pauliDict, numQubits, printFlag=False):
     antiSymmetricErrorOutputs = dict()
-    parities = [1, -1]
+    parities = list(product([1, -1], repeat=numQubits))
     identKey = "I" * numQubits
     ident = pauliDict[identKey]
 
@@ -242,13 +275,25 @@ def gather_anti_symmetric_jacobian_coefs(pauliDict, numQubits, printFlag=False):
 
     pauliDictProduct = list(
         _itertools.product(
-            [key for key in pauliDict.keys() if key != identKey], pauliDictProduct
+            [key for key in pauliDict.keys() if "I" not in key], pauliDictProduct
         )
     )
+    paulis1Q = basisconstructors.pp_matrices_dict(2, normalize=False)
     for pauliPair in pauliDictProduct:
         for parity in parities:
-            inputStateName = str(parity)[:-1] + pauliPair[0]
-            inputState = parity * pauliDict[pauliPair[0]]
+            inputStateName = "".join(
+                [
+                    str(parity[i])[:-1] + pauliPair[0][i]
+                    for i in range(len(pauliPair[0]))
+                ]
+            )
+            inputStateItems = [
+                parity[i] * paulis1Q[pauliPair[0][i]] for i in range(len(pauliPair[0]))
+            ]
+            while len(inputStateItems) >= 2:
+                inputState = _np.kron(inputStateItems[0], inputStateItems[1])
+                inputStateItems[1] = inputState
+                inputStateItems.pop(0)
             indexedPauli1 = pauliDict[pauliPair[1][0]]
             indexedPauli2 = pauliDict[pauliPair[1][1]]
             inputState = ident / 2 + inputState / 2
@@ -257,9 +302,10 @@ def gather_anti_symmetric_jacobian_coefs(pauliDict, numQubits, printFlag=False):
             )
             decomposition = convert_to_pauli(process_matrix, numQubits)
             for element in decomposition:
-                antiSymmetricErrorOutputs[
-                    ((inputStateName, element[1]), pauliPair[1])
-                ] = element[0]
+                if "I" not in element[1]:
+                    antiSymmetricErrorOutputs[
+                        ((str(inputStateName), element[1]), pauliPair[1])
+                    ] = element[0]
     if printFlag:
         for key in antiSymmetricErrorOutputs:
             print(key, "\n", antiSymmetricErrorOutputs[key])
@@ -316,9 +362,13 @@ def dict_to_jacobian(coef_dict, classification, numQubits):
     identKey = "I" * numQubits
     parities = list(product([1, -1], repeat=numQubits))
     paulis1Q = basisconstructors.pp_matrices_dict(2, normalize=False)
-    pauliKeys = [key for key in paulis1Q.keys() if "I" not in key] + ["-" + key for key in paulis1Q.keys() if "I" not in key]
-    
-    initial_states = ["".join(pair) for pair in _itertools.product(pauliKeys, repeat=numQubits)]
+    pauliKeys = [key for key in paulis1Q.keys() if "I" not in key] + [
+        "-" + key for key in paulis1Q.keys() if "I" not in key
+    ]
+
+    initial_states = [
+        "".join(pair) for pair in _itertools.product(pauliKeys, repeat=numQubits)
+    ]
 
     pauliDictProduct = list(
         _itertools.product(
@@ -349,9 +399,7 @@ def dict_to_jacobian(coef_dict, classification, numQubits):
         row_index_coef = row_index_list.get(coef[0])
         col_index_coef = col_index_list.get(coef[1])
         if row_index_coef:
-            output_jacobian[row_index_coef][col_index_coef] = coef_dict[
-                coef
-            ]
+            output_jacobian[row_index_coef][col_index_coef] = coef_dict[coef]
     # print(output_jacobian)
     # print(col_index_list)
     return output_jacobian, col_index_list
@@ -547,7 +595,9 @@ def idle_tomography_fidpairs(nqubits):
     """
 
     pauli_strings = ["X", "Y", "Z"]
-    nq_pauli_strings = list(product(pauli_strings, repeat=nqubits))  # skip the all identity string
+    nq_pauli_strings = list(
+        product(pauli_strings, repeat=nqubits)
+    )  # skip the all identity string
 
     # we also want all possible combinations of sign for each the pauli
     # observable on each qubit. The NQPauliState expects these to be either 0
@@ -1142,10 +1192,10 @@ def compute_observed_err_rate(
                     cnt0 += cnt  # [0] b/c outcomes are actually 1-tuples
                 else:
                     cnt1 += cnt
-            #total = _np.abs(cnt0) + _np.abs(cnt1)
+            # total = _np.abs(cnt0) + _np.abs(cnt1)
             exptn = float(cnt0 - cnt1) / total
-            #I think fp might stand for 'frequency plus' and is supposed to
-            #be the frequency of the plus outcome.
+            # I think fp might stand for 'frequency plus' and is supposed to
+            # be the frequency of the plus outcome.
             fp = 0.5 + 0.5 * float(cnt0 - cnt1 + 1) / (total + 2)
 
         # <ZZ> = 00 count - 01 count - 10 count + 11 count (* minus_sign)
@@ -1163,15 +1213,17 @@ def compute_observed_err_rate(
             raise NotImplementedError(
                 "Expectation values of weight > 2 observables are not implemented!"
             )
-        
+
         f = 0.5 + 0.5 * exptn
 
-        #The issue here is that the frequency can be outside the range [0,1].
-        #If it is then the weight calculation fails, in this case just do OLS.
-        if not (fp > 1 or fp < 0): #standard binomial/multinomial case
+        # The issue here is that the frequency can be outside the range [0,1].
+        # If it is then the weight calculation fails, in this case just do OLS.
+        if not (fp > 1 or fp < 0):  # standard binomial/multinomial case
             wt = _np.sqrt(total) / _np.sqrt(fp * (1.0 - fp))
-            err = 2 * _np.sqrt(f * (1.0 - f) / total)  # factor of 2 b/c expectation is addition of 2 terms
-        else: #set the weight and error to None.
+            err = 2 * _np.sqrt(
+                f * (1.0 - f) / total
+            )  # factor of 2 b/c expectation is addition of 2 terms
+        else:  # set the weight and error to None.
             wt = None
             err = None
 
@@ -1189,11 +1241,15 @@ def compute_observed_err_rate(
         errbars.append(err)
 
     # curvefit -> slope
-    #check that the weights are not all None (if they are this is non-CP and use OLS)
+    # check that the weights are not all None (if they are this is non-CP and use OLS)
     if all([elem is not None for elem in wts]):
-        coeffs = _np.polyfit(max_lengths, data_to_fit, fit_order, w=wts)  # when fit_order = 1 = line
+        coeffs = _np.polyfit(
+            max_lengths, data_to_fit, fit_order, w=wts
+        )  # when fit_order = 1 = line
     else:
-        coeffs = _np.polyfit(max_lengths, data_to_fit, fit_order)  # when fit_order = 1 = line
+        coeffs = _np.polyfit(
+            max_lengths, data_to_fit, fit_order
+        )  # when fit_order = 1 = line
     if fit_order == 1:
         slope = coeffs[0]
     elif fit_order == 2:
@@ -1302,18 +1358,24 @@ def do_idle_tomography(
     ## Can I just pass experiment design fiducial pairs to the jacobian building? (this is the better way)
     hamiltonian_jacobian_coefs = build_class_jacobian("H", nqubits)
     # print(hamiltonian_jacobian_coefs)
-    
-    hamiltonian_jacobian, hamiltonian_index_list = dict_to_jacobian(hamiltonian_jacobian_coefs, "H", nqubits)
+
+    hamiltonian_jacobian, hamiltonian_index_list = dict_to_jacobian(
+        hamiltonian_jacobian_coefs, "H", nqubits
+    )
     # print(hamiltonian_jacobian_coefs)
     # print(hamiltonian_index_list)
     # print(hamiltonian_jacobian)
     # print(hamiltonian_jacobian.shape)
 
     stochastic_jacobian_coefs = build_class_jacobian("S", nqubits)
-    stochastic_jacobian, stochastic_index_list = dict_to_jacobian(stochastic_jacobian_coefs, "S", nqubits)
+    stochastic_jacobian, stochastic_index_list = dict_to_jacobian(
+        stochastic_jacobian_coefs, "S", nqubits
+    )
     # print(stochastic_jacobian_coefs)
     correlation_jacobian_coefs = build_class_jacobian("C", nqubits)
-    correlation_jacobian, correlation_index_list = dict_to_jacobian(correlation_jacobian_coefs, "C", nqubits)
+    correlation_jacobian, correlation_index_list = dict_to_jacobian(
+        correlation_jacobian_coefs, "C", nqubits
+    )
     # print(correlation_index_list)
     # print(len(correlation_index_list))
     # quit()
@@ -1324,12 +1386,27 @@ def do_idle_tomography(
     )
     # print(hamiltonian_jacobian_coefs)
     # print(anti_symmetric_jacobian_coefs)
-    error_gen_index_list = {"hamiltonian": [], "stochastic":[], "correlation":[], "anti-symmetric":[]}
-    error_gen_index_list['hamiltonian'] += (''.join(['H', str(key)]) for key in hamiltonian_index_list.keys())
-    #print(error_gen_index_list)
-    error_gen_index_list['stochastic'] += (''.join(['S', str(key)]) for key in stochastic_index_list.keys())
-    error_gen_index_list['correlation'] += (''.join(['C', str(key[0]), ',', str(key[1])]) for key in correlation_index_list.keys())
-    error_gen_index_list['anti-symmetric'] += (''.join(['A', str(key[0]), ',', str(key[1])]) for key in anti_symmetric_index_list.keys())
+    error_gen_index_list = {
+        "hamiltonian": [],
+        "stochastic": [],
+        "correlation": [],
+        "anti-symmetric": [],
+    }
+    error_gen_index_list["hamiltonian"] += (
+        "".join(["H", str(key)]) for key in hamiltonian_index_list.keys()
+    )
+    # print(error_gen_index_list)
+    error_gen_index_list["stochastic"] += (
+        "".join(["S", str(key)]) for key in stochastic_index_list.keys()
+    )
+    error_gen_index_list["correlation"] += (
+        "".join(["C", str(key[0]), ",", str(key[1])])
+        for key in correlation_index_list.keys()
+    )
+    error_gen_index_list["anti-symmetric"] += (
+        "".join(["A", str(key[0]), ",", str(key[1])])
+        for key in anti_symmetric_index_list.keys()
+    )
 
     full_jacobian = _np.hstack(
         (
@@ -1485,7 +1562,6 @@ def do_idle_tomography(
         observed_rate_infos["diffbasis"] = obs_infos
         printer.log("Completed Hamiltonian.", 1)
 
-
     obs_err_rates = _np.concatenate(
         [
             _np.array(
@@ -1497,26 +1573,28 @@ def do_idle_tomography(
         ]
     )
 
-    #print(error_gen_index_list)
-    #print(sum([len(val) for val in error_gen_index_list.values()]))
+    # print(error_gen_index_list)
+    # print(sum([len(val) for val in error_gen_index_list.values()]))
 
     ##FIXME -- I think this only works for one qubit because of err[0] so we will come back to this
     intrinsic_rate_list = _np.dot(full_jacobian_inv, obs_err_rates)
     # intrinsic_rates = {k: [v for v in error_gen_index_list[k]] for k in error_gen_index_list.keys()}
-    #print(error_gen_index_list)
+    # print(error_gen_index_list)
     intrinsic_rates = {}
-    #for k in error_gen_index_list.keys():
-        #for v in error_gen_index_list[k]:
-            #print(f'{k=}')
-            #print(f'{v=}')
-            
-    intrinsic_rates = {v: 0 for k in error_gen_index_list.keys() for v in error_gen_index_list[k]}
+    # for k in error_gen_index_list.keys():
+    # for v in error_gen_index_list[k]:
+    # print(f'{k=}')
+    # print(f'{v=}')
+
+    intrinsic_rates = {
+        v: 0 for k in error_gen_index_list.keys() for v in error_gen_index_list[k]
+    }
     for key, i in zip(intrinsic_rates.keys(), range(intrinsic_rate_list.shape[0])):
         with _np.printoptions(precision=10):
-            print(f'{key}:  {intrinsic_rate_list[i]}')
+            print(f"{key}:  {intrinsic_rate_list[i]}")
         intrinsic_rates[key] = intrinsic_rate_list[i]
-    #with _np.printoptions(precision=10):
-        #print(intrinsic_rates)
+    # with _np.printoptions(precision=10):
+    # print(intrinsic_rates)
 
     return _IdleTomographyResults(
         dataset,
