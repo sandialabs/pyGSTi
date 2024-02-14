@@ -52,10 +52,11 @@ gates = ["Gi", "Gx", "Gy", "Gcnot"]
 max_lengths = [1, 2]
 
 # Changes noted here for 2-qubit
-pspec = pygsti.processors.QubitProcessorSpec(
-    n_qubits, gates, geometry="line", nonstd_gate_unitaries={(): 2, 'Gi': np.eye(4)},
-                                             availability={'Gi':[(0,1)]}
-)
+if n_qubits == 2:
+    pspec = pygsti.processors.QubitProcessorSpec(
+        n_qubits, gates, geometry="line", nonstd_gate_unitaries={(): 2, 'Gi': np.eye(4)},
+                                                availability={'Gi':[(0,1)]}
+    )
 
 
 mdl_target = pygsti.models.create_crosstalk_free_model(pspec)
@@ -104,8 +105,6 @@ else:
                 new_ckt[i] = Label(("Gi", 0))
         updated_ckt_list.append(new_ckt)
 
-
-print(updated_ckt_list)
 
 err_str = "HX"
 term_dict = {("H", "XI"): 0.001}
@@ -158,15 +157,15 @@ else:
     )
 
 
-print(f'{results.observed_rate_infos=}')
-print(f'{results.intrinsic_rates=}')
+# print(f'{results.observed_rate_infos=}')
+# print(f'{results.intrinsic_rates=}')
 
-output_str = "../1qTestReports/" + err_str
-name_str = "Test idle tomography example report: 1q, " + err_str
+# output_str = "../1qTestReports/" + err_str
+# name_str = "Test idle tomography example report: 1q, " + err_str
 
-idt.create_idletomography_report(results, output_str, name_str, auto_open=True)
+# idt.create_idletomography_report(results, output_str, name_str, auto_open=True)
 
-results.error_list
+# results.error_list
 # ws = pygsti.report.Workspace()
 # ws.init_notebook_mode(autodisplay=True)
 # print(results)

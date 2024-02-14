@@ -76,6 +76,11 @@ def allerrors(nqubits, maxweight):
                 for loc2 in range(loc1 + 1, nqubits)
                 for p1 in range(3) for p2 in range(3)]
 
+def all_full_length_observables(meas, nqubits):
+    if nqubits == 1:
+        return [_pobjs.NQPauliOp(meas.rep).subpauli([i]) for i in range(len(meas))]
+    else:
+        return [_pobjs.NQPauliOp(meas.rep).subpauli(range(len(meas)))]
 
 def allobservables(meas, maxweight):
     """
