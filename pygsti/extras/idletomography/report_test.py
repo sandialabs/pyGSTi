@@ -57,6 +57,8 @@ if n_qubits == 2:
         n_qubits, gates, geometry="line", nonstd_gate_unitaries={(): 2, 'Gi': np.eye(4)},
                                                 availability={'Gi':[(0,1)]}
     )
+else:
+    pspec = pygsti.processors.QubitProcessorSpec(n_qubits, gates, geometry="line", nonstd_gate_unitaries={():1})
 
 
 mdl_target = pygsti.models.create_crosstalk_free_model(pspec)
@@ -107,7 +109,10 @@ else:
 
 
 err_str = "HX"
-term_dict = {("H", "XI"): 0.001}
+if n_qubits == 2:
+    term_dict = {("H", "XI"): 0.001}
+else:
+    term_dict ={("H","X"): 0.001}
 # state_space = QubitSpace(n_qubits)
 # test_error_gen = LindbladErrorgen.from_elementary_errorgens(term_dict, state_space=state_space, parameterization='GLND')
 # test_error_gen.to_dense()
@@ -157,7 +162,7 @@ else:
     )
 
 
-# print(f'{results.observed_rate_infos=}')
+print(f'{results.observed_rate_infos=}')
 # print(f'{results.intrinsic_rates=}')
 
 # output_str = "../1qTestReports/" + err_str
