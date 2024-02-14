@@ -1384,6 +1384,7 @@ def do_idle_tomography(
     anti_symmetric_jacobian, anti_symmetric_index_list = dict_to_jacobian(
         anti_symmetric_jacobian_coefs, "A", nqubits
     )
+
     # print(hamiltonian_jacobian_coefs)
     # print(anti_symmetric_jacobian_coefs)
     error_gen_index_list = {
@@ -1463,7 +1464,9 @@ def do_idle_tomography(
         # print("DB: %d same-basis pairs" % len(pauli_fidpairs))
 
         obs_infos = dict()
-
+        ## FIXME: through 1565 -- computing observed error rates per qubit.  i.e., extant code assumes we are checking for HX
+        ## on qubit 0 and qubit 1 (and if weight-2 errors are allowed, then HXX as well).  However, we are now passing full-length
+        ## pauli strings (i.e., HIX to measure the effects of HX on qubit 1), so we do not need the additional iterations
         for i, (ifp, pauli_fidpair) in enumerate(same_basis_fidpairs.items()):
             # NOTE: pauli_fidpair is a 2-tuple of NQPauliState objects
 
@@ -1475,7 +1478,8 @@ def do_idle_tomography(
             infos_for_this_fidpair = _collections.OrderedDict()
             for j, out in enumerate(all_observables):
                 printer.log("  - observable %d of %d" % (j, len(all_observables)), 2)
-
+                print(f"{j = }")
+                print(f"{out = }")
                 info = compute_observed_err_rate(
                     dataset,
                     pauli_fidpair,
@@ -1572,12 +1576,16 @@ def do_idle_tomography(
             )
         ]
     )
+    print(obs_err_rates)
+    quit()
 
     # print(error_gen_index_list)
     # print(sum([len(val) for val in error_gen_index_list.values()]))
 
     ##FIXME -- I think this only works for one qubit because of err[0] so we will come back to this
     intrinsic_rate_list = _np.dot(full_jacobian_inv, obs_err_rates)
+    # print(f'{len(intrinsic_rate_list)}')
+    # quit()
     # intrinsic_rates = {k: [v for v in error_gen_index_list[k]] for k in error_gen_index_list.keys()}
     # print(error_gen_index_list)
     intrinsic_rates = {}
