@@ -22,8 +22,8 @@ from pygsti.extras.idletomography.idtcore import idle_tomography_fidpairs
 n_qubits = 3
 
 fid_pairs = idle_tomography_fidpairs(n_qubits)
-print(fid_pairs)
-print(len(fid_pairs))
+# print(fid_pairs)
+# print(len(fid_pairs))
 
 if n_qubits == 1:
     huh = [
@@ -54,16 +54,24 @@ max_lengths = [1, 2]
 # Changes noted here for 2-qubit
 if n_qubits == 2:
     pspec = pygsti.processors.QubitProcessorSpec(
-        n_qubits, gates, geometry="line", nonstd_gate_unitaries={(): 2, 'Gi': np.eye(4)},
-                                                availability={'Gi':[(0,1)]}
+        n_qubits,
+        gates,
+        geometry="line",
+        nonstd_gate_unitaries={(): 2, "Gi": np.eye(4)},
+        availability={"Gi": [(0, 1)]},
     )
 elif n_qubits == 3:
     pspec = pygsti.processors.QubitProcessorSpec(
-        n_qubits, gates, geometry="line", nonstd_gate_unitaries={(): 3, 'Gi': np.eye(8)},
-                                                availability={'Gi':[(0,1,2)]}
+        n_qubits,
+        gates,
+        geometry="line",
+        nonstd_gate_unitaries={(): 3, "Gi": np.eye(8)},
+        availability={"Gi": [(0, 1, 2)]},
     )
 else:
-    pspec = pygsti.processors.QubitProcessorSpec(n_qubits, gates, geometry="line", nonstd_gate_unitaries={():1})
+    pspec = pygsti.processors.QubitProcessorSpec(
+        n_qubits, gates, geometry="line", nonstd_gate_unitaries={(): 1}
+    )
 
 
 mdl_target = pygsti.models.create_crosstalk_free_model(pspec)
@@ -99,7 +107,7 @@ if n_qubits == 2:
         for i, lbl in enumerate(ckt):
             if lbl == Label(()):
                 # new_ckt[i] = [Label(("Gi", i)) for i in range(n_qubits)]
-                new_ckt[i] = Label("Gi",(0,1))
+                new_ckt[i] = Label("Gi", (0, 1))
                 # new_ckt[i] = Label(("Gi", 0))
         updated_ckt_list.append(new_ckt)
 elif n_qubits == 3:
@@ -109,7 +117,7 @@ elif n_qubits == 3:
         for i, lbl in enumerate(ckt):
             if lbl == Label(()):
                 # new_ckt[i] = [Label(("Gi", i)) for i in range(n_qubits)]
-                new_ckt[i] = Label("Gi",(0,1,2))
+                new_ckt[i] = Label("Gi", (0, 1, 2))
                 # new_ckt[i] = Label(("Gi", 0))
         updated_ckt_list.append(new_ckt)
 else:
@@ -129,7 +137,7 @@ if n_qubits == 2:
 elif n_qubits == 3:
     term_dict = {("H", "XII"): 0.001}
 else:
-    term_dict ={("H","X"): 0.001}
+    term_dict = {("H", "X"): 0.001}
 # state_space = QubitSpace(n_qubits)
 # test_error_gen = LindbladErrorgen.from_elementary_errorgens(term_dict, state_space=state_space, parameterization='GLND')
 # test_error_gen.to_dense()
@@ -143,8 +151,6 @@ else:
 # Circuit.replace_gatename_inplace(noise_model.operations['Gxpi2',0], "Gxpi2", "Gx")
 # noise_model.operations[Label(("Gi", 0))] = noisy_idle
 # noise_model._rebuild_paramvec()
-
-
 
 
 mdl_datagen = pygsti.models.create_crosstalk_free_model(
