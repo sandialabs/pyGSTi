@@ -44,7 +44,7 @@ from pygsti.tools import optools as _ot
 
 class LinearOperator(_modelmember.ModelMember):
     """
-    Base class for all operation representations
+    Base class for all *square* operation representations
 
     Parameters
     ----------
@@ -92,6 +92,14 @@ class LinearOperator(_modelmember.ModelMember):
         """
         return (self.dim)**2
 
+    @property
+    def shape(self):
+        # Provide this function to mimic numpy array semantics.
+        #
+        # We can't rely on self._rep.shape since superclasses
+        # are given broad freedom to define semantics of self._rep.
+        return (self.dim, self.dim)
+
     def set_dense(self, m):
         """
         Set the dense-matrix value of this operation.
@@ -127,28 +135,6 @@ class LinearOperator(_modelmember.ModelMember):
         None
         """
         pass
-
-    #def rep_at_time(self, t):
-    #    """
-    #    Retrieves a representation of this operator at time `t`.
-    #
-    #    This is operationally equivalent to calling `self.set_time(t)` and
-    #    then retrieving `self._rep`.  However, what is returned from this function
-    #    need not be the same rep object for different times, allowing the
-    #    operator object to cache many reps for different times to increase performance
-    #    (this avoids having to initialize the same rep at a given time).
-    #
-    #    Parameters
-    #    ----------
-    #    t : float
-    #        The time.
-    #
-    #    Returns
-    #    -------
-    #    object
-    #    """
-    #    self.set_time(t)
-    #    return self._rep
 
     def to_dense(self, on_space='minimal'):
         """

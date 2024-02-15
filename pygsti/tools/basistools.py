@@ -141,6 +141,13 @@ def change_basis(mx, from_basis, to_basis):
         The given operation matrix converted to the `to_basis` basis.
         Array size is the same as `mx`.
     """
+    if isinstance(mx, _np.ndarray) and mx.ndim == 0:
+        # mx is probably a wrapper around a pyGSTi object.
+        mx = mx.item()
+    if hasattr(mx, 'to_dense'):
+        # Question: how do we know the returned representation is
+        # in fact in the "from_basis"?
+        mx = mx.to_dense()
     if len(mx.shape) not in (1, 2):
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
@@ -200,37 +207,6 @@ def change_basis(mx, from_basis, to_basis):
         raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
                          (_mt.safe_norm(ret, 'imag'), from_basis, to_basis, ret))
     return ret.real
-
-#def transform_matrix(from_basis, to_basis, dim_or_block_dims=None, sparse=False):
-#    '''
-#    Compute the transformation matrix between two bases
-#
-#    Parameters
-#    ----------
-#    from_basis : Basis or str
-#        Basis being converted from
-#
-#    to_basis : Basis or str
-#        Basis being converted to
-#
-#    dim_or_block_dims : int or list of ints
-#        if strings provided as bases, the dimension of basis to use.
-#
-#    sparse : bool, optional
-#        Whether to construct a sparse or dense transform matrix
-#        when this isn't specified already by `from_basis` or
-#        `to_basis` (e.g. when these are both strings).
-#
-#    Returns
-#    -------
-#    Basis
-#        the composite basis created
-#    '''
-#    if dim_or_block_dims is None:
-#        assert isinstance(from_basis, Basis)
-#    else:
-#        from_basis = Basis(from_basis, dim_or_block_dims, sparse=sparse)
-#    return from_basis.transform_matrix(to_basis)
 
 
 def create_basis_pair(mx, from_basis, to_basis):
@@ -303,6 +279,9 @@ def create_basis_for_matrix(mx, basis):
     -------
     Basis
     """
+    if isinstance(mx, _np.ndarray) and mx.ndim == 0:
+        # ^ mx is probably just holding a pyGSTi object
+        mx = mx.item()
     dim = mx.shape[0]
     if isinstance(basis, _basis.Basis):
         assert(basis.dim == dim), "Supplied Basis has wrong dimension!"
