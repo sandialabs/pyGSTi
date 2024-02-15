@@ -1068,8 +1068,18 @@ class ModelMember(ModelChild, _NicelySerializable):
         """
         raise NotImplementedError()
     
+    # TODO: verify that something like that following won't work for AD.
+    # def moretorch(self, vec):
+    #     import torch
+    #     oldvec = self.to_vector()
+    #     self.from_vector(vec)
+    #     numpyrep = self.base
+    #     torchrep = torch.from_numpy(numpyrep)
+    #     self.from_vector(oldvec)
+    #     return torchrep        
+    
     @staticmethod
-    def torch_base(sd, vec, grad: bool = False):
+    def torch_base(sd, vec, torch_handle=None):
         """
         Suppose "obj" is an instance of some ModelMember subclass. If we compute
 
@@ -1084,8 +1094,11 @@ class ModelMember(ModelChild, _NicelySerializable):
 
             np.allclose(obj.base, T.numpy()).
 
-        The "grad" argument indicates if expressions built from this PyTorch Tensor
-        need to support backpropogation.
+        Optional args
+        -------------    
+        torch_handle can be None or it can be a reference to torch as a Python package
+        (analogous to the variable "np" after we do "import numpy as np"). If it's none
+        then we'll import torch as the first step of this function.
         """
         raise NotImplementedError()
 
