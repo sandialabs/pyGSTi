@@ -44,7 +44,7 @@ from pygsti.tools import optools as _ot
 
 class LinearOperator(_modelmember.ModelMember):
     """
-    Base class for all operation representations
+    Base class for all *square* operation representations
 
     Parameters
     ----------
@@ -91,6 +91,14 @@ class LinearOperator(_modelmember.ModelMember):
         int
         """
         return (self.dim)**2
+
+    @property
+    def shape(self):
+        # Provide this function to mimic numpy array semantics.
+        #
+        # We can't rely on self._rep.shape since superclasses
+        # are given broad freedom to define semantics of self._rep.
+        return (self.dim, self.dim)
 
     def set_dense(self, m):
         """
