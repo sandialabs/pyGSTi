@@ -19,7 +19,7 @@ from pygsti.extras.idletomography.pauliobjs import NQPauliState
 
 from pygsti.extras.idletomography.idtcore import idle_tomography_fidpairs
 
-n_qubits = 2
+n_qubits = 3
 
 fid_pairs = idle_tomography_fidpairs(n_qubits)
 print(fid_pairs)
@@ -57,6 +57,11 @@ if n_qubits == 2:
         n_qubits, gates, geometry="line", nonstd_gate_unitaries={(): 2, 'Gi': np.eye(4)},
                                                 availability={'Gi':[(0,1)]}
     )
+elif n_qubits == 3:
+    pspec = pygsti.processors.QubitProcessorSpec(
+        n_qubits, gates, geometry="line", nonstd_gate_unitaries={(): 3, 'Gi': np.eye(8)},
+                                                availability={'Gi':[(0,1,2)]}
+    )
 else:
     pspec = pygsti.processors.QubitProcessorSpec(n_qubits, gates, geometry="line", nonstd_gate_unitaries={():1})
 
@@ -87,7 +92,7 @@ idle_experiments = idt.make_idle_tomography_list(
 print(len(idle_experiments), "idle tomography experiments for %d qubits" % n_qubits)
 from pygsti.baseobjs import Label
 
-if n_qubits > 1:
+if n_qubits == 2:
     updated_ckt_list = []
     for ckt in idle_experiments:
         new_ckt = ckt.copy(editable=True)
@@ -95,6 +100,16 @@ if n_qubits > 1:
             if lbl == Label(()):
                 # new_ckt[i] = [Label(("Gi", i)) for i in range(n_qubits)]
                 new_ckt[i] = Label("Gi",(0,1))
+                # new_ckt[i] = Label(("Gi", 0))
+        updated_ckt_list.append(new_ckt)
+elif n_qubits == 3:
+    updated_ckt_list = []
+    for ckt in idle_experiments:
+        new_ckt = ckt.copy(editable=True)
+        for i, lbl in enumerate(ckt):
+            if lbl == Label(()):
+                # new_ckt[i] = [Label(("Gi", i)) for i in range(n_qubits)]
+                new_ckt[i] = Label("Gi",(0,1,2))
                 # new_ckt[i] = Label(("Gi", 0))
         updated_ckt_list.append(new_ckt)
 else:
@@ -111,6 +126,8 @@ else:
 err_str = "HX"
 if n_qubits == 2:
     term_dict = {("H", "XI"): 0.001}
+elif n_qubits == 3:
+    term_dict = {("H", "XII"): 0.001}
 else:
     term_dict ={("H","X"): 0.001}
 # state_space = QubitSpace(n_qubits)
@@ -150,6 +167,17 @@ if n_qubits == 2:
         advanced_options={"jacobian mode": "together", "pauli_fidpairs": fid_pairs},
         idle_string="Gi:0:1",
     )
+elif n_qubits == 3:
+    results = idt.do_idle_tomography(
+        n_qubits,
+        ds,
+        max_lengths,
+        paulidicts,
+        maxweight=1,
+        advanced_options={"jacobian mode": "together", "pauli_fidpairs": fid_pairs},
+        idle_string="Gi:0:1:2",
+    )
+
 else:
     results = idt.do_idle_tomography(
         n_qubits,
@@ -162,7 +190,7 @@ else:
     )
 
 
-print(f'{results.observed_rate_infos=}')
+# print(f'{results.observed_rate_infos=}')
 # print(f'{results.intrinsic_rates=}')
 
 # output_str = "../1qTestReports/" + err_str
