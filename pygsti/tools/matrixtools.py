@@ -145,7 +145,7 @@ def frobeniusnorm(ar):
     float or complex
         depending on the element type of ar.
     """
-    return _np.sqrt(_np.sum(ar**2))
+    return _np.linalg.norm(ar.reshape((-1,)))
 
 
 def frobeniusnorm_squared(ar):
@@ -165,7 +165,7 @@ def frobeniusnorm_squared(ar):
     float or complex
         depending on the element type of ar.
     """
-    return _np.sum(ar**2)
+    return _np.linalg.norm(ar.reshape((-1,)))**2
 
 
 def nullspace(m, tol=1e-7):
