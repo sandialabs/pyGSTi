@@ -108,7 +108,8 @@ class TimeDependentTestCase(BaseTestCase):
         
         builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()], [])
         gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
-                                                 objfn_builders=builders)
+                                                 objfn_builders=builders,
+                                                 optimizer={'maxiters':2,'tol': 1e-4})
         results = gst.run(data)
 
         # Normal GST used as a check - should get same answer since data is time-independent
