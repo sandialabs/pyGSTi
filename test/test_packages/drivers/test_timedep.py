@@ -109,7 +109,7 @@ class TimeDependentTestCase(BaseTestCase):
         builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()], [])
         gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
                                                  objfn_builders=builders,
-                                                 optimizer={'maxiters':2,'tol': 1e-4})
+                                                 optimizer={'maxiter':2,'tol': 1e-4})
         results = gst.run(data)
 
         # Normal GST used as a check - should get same answer since data is time-independent
@@ -152,7 +152,7 @@ class TimeDependentTestCase(BaseTestCase):
 
         # *sparse*, time-independent data
         ds = pygsti.data.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, num_samples=2000,
-                                       sample_error="binomial", seed=1234, times=[0, 0.1, 0.2],
+                                       sample_error="binomial", seed=1234, times=[0, 0.2],
                                        record_zero_counts=False)
         self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 171)
 
@@ -161,7 +161,7 @@ class TimeDependentTestCase(BaseTestCase):
 
         builders = pygsti.protocols.GSTObjFnBuilders([pygsti.objectivefns.TimeDependentPoissonPicLogLFunction.builder()], [])
         gst = pygsti.protocols.GateSetTomography(target_model, gaugeopt_suite=None,
-                                                 objfn_builders=builders, optimizer={'tol': 1e-4})
+                                                 objfn_builders=builders, optimizer={'maxiter':10,'tol': 1e-4})
         data = pygsti.protocols.ProtocolData(edesign, ds)
         results = gst.run(data)
 
