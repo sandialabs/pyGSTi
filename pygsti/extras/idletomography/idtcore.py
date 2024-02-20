@@ -118,6 +118,19 @@ def convert_to_pauli(matrix, numQubits):
     coefs = _np.real_if_close(_np.dot(translationMatrix, matrix.flatten()))
     return [(a, b) for (a, b) in zip(coefs, pauliNames) if abs(a) > 0.0001]
 
+def convert_to_pauli_by_trace(matrix, numQubits):
+    pp = Basis.cast("PP", dim=4**numQubits)
+    # print(f"{pp.elements = }")
+    # print(f"{pp.labels = }")
+    # print(f"{pp.ellookup = }")
+    coef_list = []
+    for lbl, elt in pp.ellookup.items():
+        coef_list.append((_np.real_if_close(_np.trace(elt.conj().T @ matrix)), lbl))
+    x = [True for coef in coef_list if abs(coef[0]) > 0.0001]
+    if len(x) > 1:
+        raise ValueError
+    return coef_list
+
 
 # Compute the set of measurable effects of Hamiltonian error generators operating on two qubits in each of the specified eigenstates
 # Return: hamiltonian error and coef dictionary
@@ -133,16 +146,21 @@ def gather_hamiltonian_jacobian_coefs(pauliDict, numQubits, printFlag=True):
             [key for key in pauliDict.keys() if key != identKey],
         )
     )
+    # print(f"{pauliDict = }")
+    # print(f"{pauliDictProduct = }")
+    
     paulis1Q = basisconstructors.pp_matrices_dict(2, normalize=False)
     for pauliPair in pauliDictProduct:
         for parity in parities:
             inputStateName = "".join(
                 [parity[i][:-1] + pauliPair[0][i] for i in range(len(pauliPair[0]))]
             )
+            # print(f"{inputStateName =}")
             inputStateItems = [
                 int(parity[i]) * paulis1Q[pauliPair[0][i]]
                 for i in range(len(pauliPair[0]))
             ]
+            # print(f"{inputStateItems = }")
             if len(inputStateItems) == 1:
                 inputState = inputStateItems[0]
             else:
@@ -150,22 +168,60 @@ def gather_hamiltonian_jacobian_coefs(pauliDict, numQubits, printFlag=True):
                     inputState = _np.kron(inputStateItems[0], inputStateItems[1])
                     inputStateItems[1] = inputState
                     inputStateItems.pop(0)
+            # print(f"{inputState = }")
             indexedPauli = pauliDict[pauliPair[1]]
-            inputState = ident / 2 + inputState / 2
+            # print(f"{pauliPair[1] = }")
+            # print(f"{indexedPauli = }")
+            inputState = ident / (2**numQubits) + inputState / (2**numQubits)
 
             process_matrix = hamiltonian_error_generator(
                 inputState, indexedPauli, ident
             )
+            # print(f"{process_matrix = }")
             decomposition = convert_to_pauli(process_matrix, numQubits)
+            # flag =False
+            # if len(decomposition) > 0:
+            #     print(decomposition)
+            #     flag = True
+            # # decomposition = convert_to_pauli_by_trace(process_matrix,numQubits)
+            # if flag:
+            #     print(decomposition)
+            #     quit()
+            # if str(inputStateName) == "+Z+X":
+            #     if pauliPair[1] == "XX":
+            #         print(f"{decomposition = }")
+            #         quit()
             # Stores elements as ((prep, measure), error gen index): non-zero coefficient
+
             for element in decomposition:
+                # print(f"{inputStateName = }")
+                # print(f"{element[1] = }")
+                # print(f"{pauliPair[1]}")
                 if "I" not in element[1]:
                     hamiltonianErrorOutputs[
                         ((str(inputStateName), element[1]), pauliPair[1])
                     ] = element[0]
+            for element in decomposition:
+                if "I" in element[1]:
+                    print(element)
+                    new_strings = []
+                    if element[1].index("I") == 0:
+                        new_strings.append("+X" + element[1][1:])
+                        new_strings.append("+Y" + element[1][1:])
+                        new_strings.append("+Z" + element[1][1:])
+                    else:
+                        new_strings.append(element[1][0:2] + "+X")
+                        new_strings.append(element[1][0:2] + "+Y")
+                        new_strings.append(element[1][0:2] + "+Z")
+                    for stringl in new_strings:
+                        hamiltonianErrorOutputs[((str(inputStateName), stringl), pauliPair[1])] = element[0]
+
+                        
+    # printFlag = True
     if printFlag:
         for key in hamiltonianErrorOutputs:
             print(key, "\n", hamiltonianErrorOutputs[key])
+    # quit()
     return hamiltonianErrorOutputs
 
 
@@ -611,7 +667,8 @@ def idle_tomography_fidpairs(nqubits):
     pauli_strings = ["X", "Y", "Z"]
     nq_pauli_strings = list(
         product(pauli_strings, repeat=nqubits)
-    )  # skip the all identity string
+    )  # skip the all identity string]
+    # nq_pauli_strings.pop(nq_pauli_strings.index("I"*nqubits))
 
     # we also want all possible combinations of sign for each the pauli
     # observable on each qubit. The NQPauliState expects these to be either 0
@@ -1390,10 +1447,18 @@ def do_idle_tomography(
     # print(hamiltonian_jacobian_coefs)
 
     print("Hamiltonian Jacobian coefs found")
+    # print(f"{hamiltonian_jacobian_coefs = }")
+    # for key in hamiltonian_jacobian_coefs.keys():
+    #     print(key[1])
+    # quit()
 
     hamiltonian_jacobian, hamiltonian_index_list = dict_to_jacobian(
         hamiltonian_jacobian_coefs, "H", nqubits, all_fidpairs
     )
+    # print(f"{hamiltonian_jacobian = }")
+    # print(f"{hamiltonian_index_list = }")
+    # print(hamiltonian_jacobian[:,4])
+    # quit()
 
     print("Hamiltonian Jacobian built")
 
@@ -1472,7 +1537,7 @@ def do_idle_tomography(
     full_jacobian_inv = _np.linalg.pinv(full_jacobian)
     print("Jacobian inverse calculated")
 
-    # hamil_jacobian_inv = _np.linalg.pinv(hamiltonian_jacobian)
+    hamil_jacobian_inv = _np.linalg.pinv(hamiltonian_jacobian)
 
     # if "pauli_fidpairs" in advanced_options:
     #     fidpair_index_dict = dict(enumerate(advanced_options["pauli_fidpairs"]))
@@ -1674,8 +1739,8 @@ def do_idle_tomography(
     # print(hamiltonian_jacobian[311,0:15])
     # quit()
 
-    # testing_intrinsic_rates = _np.dot(hamil_jacobian_inv, obs_err_rates)
-    # print(f"{testing_intrinsic_rates = }")
+    testing_intrinsic_rates = _np.dot(hamil_jacobian_inv, obs_err_rates)
+    print(f"{testing_intrinsic_rates = }")
     # hs_jac = _np.hstack([hamiltonian_jacobian, stochastic_jacobian])
     # hs_jac_inv = _np.linalg.pinv(hs_jac)
     # hs_intrinsic_rates = _np.dot(hs_jac_inv, obs_err_rates)

@@ -19,7 +19,7 @@ from pygsti.extras.idletomography.pauliobjs import NQPauliState
 
 from pygsti.extras.idletomography.idtcore import idle_tomography_fidpairs
 
-n_qubits = 3
+n_qubits = 1
 
 fid_pairs = idle_tomography_fidpairs(n_qubits)
 # print(fid_pairs)
@@ -133,9 +133,9 @@ else:
 
 err_str = "HX"
 if n_qubits == 2:
-    term_dict = {("H", "XI"): 0.001}
+    term_dict = {("H", "XX"): 0.001}
 elif n_qubits == 3:
-    term_dict = {("H", "XII"): 0.001}
+    term_dict = {("H", "XII"): 0.0001}
 else:
     term_dict = {("H", "X"): 0.001}
 # state_space = QubitSpace(n_qubits)
@@ -199,10 +199,10 @@ else:
 # print(f'{results.observed_rate_infos=}')
 # print(f'{results.intrinsic_rates=}')
 
-# output_str = "../1qTestReports/" + err_str
-# name_str = "Test idle tomography example report: 1q, " + err_str
+output_str = "../1qTestReports/" + err_str
+name_str = "Test idle tomography example report: 1q, " + err_str
 
-# idt.create_idletomography_report(results, output_str, name_str, auto_open=True)
+idt.create_idletomography_report(results, output_str, name_str, auto_open=True)
 
 # results.error_list
 # ws = pygsti.report.Workspace()
