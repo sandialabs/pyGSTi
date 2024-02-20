@@ -2,9 +2,8 @@ import collections
 import os
 
 import pygsti
-from pygsti.modelpacks.legacy import std1Q_XYI as std
+from pygsti.modelpacks import smq1Q_XY as std
 from ..testutils import BaseTestCase, compare_files, temp_files, regenerate_references
-
 
 class ReportBaseCase(BaseTestCase):
 
@@ -28,14 +27,16 @@ class ReportBaseCase(BaseTestCase):
         #cls.specs = pygsti.construction.build_spam_specs(std.fiducials, effect_labels=['E0'])
         #  #only use the first EVec
 
-        op_labels = std.gates
-        cls.lgstStrings = pygsti.circuits.create_lgst_circuits(std.fiducials, std.fiducials, op_labels)
-        cls.maxLengthList = [1,2,4,8]
+        op_labels = list(target_model.operations.keys())
+        #use minimally informationally complete prep and measurement fids
+        cls.min_prep_fids = std.prep_fiducials()[0:4]
+        cls.min_meas_fids = std.meas_fiducials()[0:3]
+        
+        cls.lgstStrings = pygsti.circuits.create_lgst_circuits(cls.min_prep_fids, cls.min_meas_fids, op_labels)
+        cls.maxLengthList = [1,2,4]
 
         cls.lsgstStrings = pygsti.circuits.create_lsgst_circuit_lists(
-            op_labels, std.fiducials, std.fiducials, std.germs, cls.maxLengthList)
-        cls.lsgstStructs = pygsti.circuits.make_lsgst_structs(
-            op_labels, std.fiducials, std.fiducials, std.germs, cls.maxLengthList)
+            op_labels, cls.min_prep_fids, cls.min_meas_fids, std.germs(), cls.maxLengthList)
 
 
         # RUN BELOW LINES TO GENERATE ANALYSIS DATASET (SAVE)
@@ -51,7 +52,7 @@ class ReportBaseCase(BaseTestCase):
         cls.ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/reportgen.dataset")
         cls.ds2 = pygsti.data.DataSet(file_to_load_from=compare_files + "/reportgen2.dataset")
 
-        mdl_lgst = pygsti.run_lgst(cls.ds, std.fiducials, std.fiducials, target_model, svd_truncate_to=4, verbosity=0)
+        mdl_lgst = pygsti.run_lgst(cls.ds, cls.min_prep_fids, cls.min_meas_fids, target_model, svd_truncate_to=4, verbosity=0)
         mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, target_model, {'gates': 1.0, 'spam': 0.0})
         cls.mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
         cls.mdl_clgst_tp = pygsti.contract(cls.mdl_clgst, "vSPAM")
@@ -68,7 +69,7 @@ class ReportBaseCase(BaseTestCase):
         )
 
         experiment_design = pygsti.protocols.StandardGSTDesign(
-            target_model.create_processor_spec(), std.fiducials, std.fiducials, std.germs, cls.maxLengthList
+            target_model.create_processor_spec(), cls.min_prep_fids, cls.min_meas_fids, std.germs(lite=True), cls.maxLengthList
         )
         data = pygsti.protocols.ProtocolData(experiment_design, cls.ds)
         protocol = pygsti.protocols.StandardGST()
@@ -105,12 +106,12 @@ class ReportBaseCase(BaseTestCase):
         cls.ds3.add_counts_from_dataset(cls.ds2)
         cls.ds3.done_adding_data()
 
-        cls.results_logL = pygsti.run_long_sequence_gst(cls.ds3, tp_target, std.fiducials, std.fiducials,
-                                                        std.germs, cls.maxLengthList, verbosity=0,
+        cls.results_logL = pygsti.run_long_sequence_gst(cls.ds3, tp_target, cls.min_prep_fids, cls.min_meas_fids,
+                                                        std.germs(), cls.maxLengthList, verbosity=0,
                                                         advanced_options={'tolerance': 1e-6, 'starting_point': 'LGST',
                                                                         'on_bad_fit': ["robust","Robust","robust+","Robust+"],
-                                                                        'bad_fit_threshold': -1.0,
-                                                                        'germ_length_limits': {('Gx','Gi','Gi'): 2} })
+                                                                        'bad_fit_threshold': -1.0},
+                                                                        disable_checkpointing= True)
 
         #OLD
         #lsgst_gatesets_TP = pygsti.do_iterative_mlgst(cls.ds, cls.mdl_clgst_tp, cls.lsgstStrings, verbosity=0,
@@ -140,17 +141,16 @@ class ReportBaseCase(BaseTestCase):
 
         os.chdir(orig_cwd)
 
-
-
     def setUp(self):
         super(ReportBaseCase, self).setUp()
 
         cls = self.__class__
 
         self.target_model = std.target_model()
-        self.fiducials = std.fiducials[:]
-        self.germs = std.germs[:]
-        self.op_labels = std.gates
+        self.prep_fids = cls.min_prep_fids
+        self.meas_fids = cls.min_meas_fids
+        self.germs = std.germs()
+        self.op_labels = list(std.target_model().operations.keys())
 
         #self.specs = cls.specs
         self.maxLengthList = cls.maxLengthList[:]

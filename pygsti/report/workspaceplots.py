@@ -1906,7 +1906,8 @@ def _mx_fn_blank(plaq, x, y, unused):
 
 def _mx_fn_errorrate(plaq, x, y, direct_gst_models):  # error rate as 1x1 matrix which we have plotting function sum up
     base_circuit = plaq.base if isinstance(plaq, _GermFiducialPairPlaquette) \
-        else _Circuit(())
+        else _Circuit((), line_labels=list(direct_gst_models.keys())[0].line_labels) #Taking the line labels from the first circuit in direct_gst_models will probably work
+        #most of the time. TODO: Cook up a better scheme.
     return _np.array([[_ph.small_eigenvalue_err_rate(base_circuit, direct_gst_models)]])
 
 

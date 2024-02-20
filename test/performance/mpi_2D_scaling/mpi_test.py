@@ -10,7 +10,7 @@ import pygsti
 from pygsti.modelpacks import smq2Q_XYICNOT as std
 
 comm = MPI.COMM_WORLD
-resource_alloc = pygsti.obj.ResourceAllocation(comm)
+resource_alloc = pygsti.baseobjs.ResourceAllocation(comm)
 mdl = std.target_model()
 
 exp_design = std.get_gst_experiment_design(64)
@@ -39,7 +39,7 @@ opt = None  # default
 
 #GST TEST
 data = pygsti.protocols.ProtocolData(exp_design, ds)
-#mdl.sim = pygsti.obj.MatrixForwardSimulator(num_atoms=1)
+#mdl.sim = pygsti.baseobjs.MatrixForwardSimulator(num_atoms=1)
 mdl.sim = pygsti.objects.MapForwardSimulator(num_atoms=1, max_cache_size=0)
 gst = pygsti.protocols.GateSetTomography(mdl, gaugeopt_suite=False,  # 'randomizeStart': 0e-6,
                                          objfn_builders=builders, optimizer=opt, verbosity=4)

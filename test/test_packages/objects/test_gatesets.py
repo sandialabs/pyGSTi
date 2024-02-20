@@ -346,12 +346,12 @@ class TestGateSetMethods(GateSetTestCase):
 
     @unittest.skip("TODO: add backward compatibility for old gatesets?")
     def test_load_old_gateset(self):
-        #pygsti.obj.results.enable_old_python_results_unpickling()
+        #pygsti.baseobjs.results.enable_old_python_results_unpickling()
         from pygsti.io import enable_old_object_unpickling
         with enable_old_object_unpickling(), patched_uuid():
             with open(compare_files + "/pygsti0.9.6.gateset.pkl", 'rb') as f:
                 mdl = pickle.load(f)
-        #pygsti.obj.results.disable_old_python_results_unpickling()
+        #pygsti.baseobjs.results.disable_old_python_results_unpickling()
         #pygsti.io.disable_old_object_unpickling()
         with open(temp_files + "/repickle_old_gateset.pkl", 'wb') as f:
             pickle.dump(mdl, f)

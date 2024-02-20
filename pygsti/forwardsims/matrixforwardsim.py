@@ -1025,7 +1025,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return hProdCache
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
-                      derivative_dimension=None, verbosity=0):
+                      derivative_dimensions=None, verbosity=0):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
@@ -1046,10 +1046,11 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         array_types : tuple, optional
             A tuple of string-valued array types.  See :meth:`ForwardSimulator.create_layout`.
 
-        derivative_dimension : int, optional
+        derivative_dimensions : int or tuple[int], optional
             Optionally, the parameter-space dimension used when taking first
             and second derivatives with respect to the cirucit outcome probabilities.  This must be
             non-None when `array_types` contains `'ep'` or `'epp'` types.
+            If a tuple, then must be length 1.
 
         verbosity : int or VerbosityPrinter
             Determines how much output to send to stdout.  0 means no output, higher
@@ -1075,7 +1076,13 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         printer = _VerbosityPrinter.create_printer(verbosity, resource_alloc)
         nprocs = resource_alloc.comm_size
         comm = resource_alloc.comm
-        num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
+        if isinstance(derivative_dimensions, int):
+            num_params = derivative_dimensions
+        elif isinstance(derivative_dimensions, tuple):
+            assert len(derivative_dimensions) == 1
+            num_params = derivative_dimensions[0]
+        else:
+            num_params = self.model.num_params
         C = 1.0 / (1024.0**3)
 
         if mem_limit is not None:

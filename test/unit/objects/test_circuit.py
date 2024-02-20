@@ -623,6 +623,10 @@ class CircuitOperationTester(BaseCase):
     def test_raise_on_add_non_circuit(self):
         with self.assertRaises(AssertionError):
             self.s1 + ("Gx",)  # can't add non-Circuit to circuit
+            
+    def test_raise_on_add_incompatible_circuit_labels(self):
+        with self.assertRaises(ValueError):
+            self.s1 + circuit.Circuit([Label('Gy',0)], line_labels=(0,))
 
     def test_clear(self):
         c = self.s1.copy(editable=True)

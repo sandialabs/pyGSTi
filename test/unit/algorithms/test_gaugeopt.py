@@ -10,8 +10,9 @@ class GaugeOptMethodBase(object):
     def setUp(self):
         super(GaugeOptMethodBase, self).setUp()
         self.options = dict(
-            verbosity=10,
-            check_jac=True
+            verbosity=0,
+            check_jac=False,
+            tol = 1e-5
         )
 
     def test_gaugeopt(self):
@@ -158,7 +159,7 @@ class CPTPGaugeOptTester(GaugeOptMethodBase, GaugeOptWithGaugeGroupInstance, Bas
         super(CPTPGaugeOptTester, cls).setUpClass()
         # TODO construct directly
         mdl_lgst_target = go.gaugeopt_to_target(fixtures.mdl_lgst, fixtures.model, check_jac=True)
-        mdl_clgst_cptp = alg.contract(mdl_lgst_target, "CPTP", verbosity=10, tol=10.0)
+        mdl_clgst_cptp = alg.contract(mdl_lgst_target, "CPTP", verbosity=0, tol=10.0)
         cls._model = mdl_clgst_cptp
 
 
@@ -210,6 +211,16 @@ class LGSTGaugeOptSPAMPenaltyTester(LGSTGaugeOptPenaltyBase, BaseCase):
             spam_penalty_factor=1.0
         )
 
+class GaugeOptCheckJacTester(GaugeOptMethodBase, LGSTGaugeOptInstance, BaseCase):
+    def setUp(self):
+        super(GaugeOptCheckJacTester, self).setUp()
+        self.options.update(
+            check_jac = True
+        )
 
-class LGSTGaugeOptAllPenaltyTester(LGSTGaugeOptCPTPPenaltyTester, LGSTGaugeOptSPAMPenaltyTester):
-    pass
+
+#I think the only difference between this and CPTPGaugeOptAllPenaltyTester is the initial model used.
+#For the purposed of testing the use of both penalty functions simultaneously I don't think this is
+#important.
+#class LGSTGaugeOptAllPenaltyTester(LGSTGaugeOptCPTPPenaltyTester, LGSTGaugeOptSPAMPenaltyTester):
+#    pass

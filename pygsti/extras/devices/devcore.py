@@ -11,7 +11,7 @@
 import numpy as _np
 
 import warnings
-warnings.warn("The pygsti.devices.devcore module is deprecated. See pygsti.devices.experimentaldevice instead.",
+warnings.warn("The pygsti.devices.devcore module is deprecated. See pygsti.extras.devices.experimentaldevice instead.",
               DeprecationWarning)
 
 from . import ibmq_algiers      # New system
@@ -191,12 +191,14 @@ def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges
     return _QubitProcessorSpec(total_qubits, gate_names, geometry=qubit_graph, qubit_labels=qubits)
 
 
-def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native={}, calformat=None,
+def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native=None, calformat=None,
                              model_type='TwirledLayers', idle_name=None):
     """
     calformat: 'ibmq-v2018', 'ibmq-v2019', 'rigetti', 'native'.
     """
 
+    if one_qubit_gates_to_native is None:
+        one_qubit_gates_to_native = {}
     specs = _get_dev_specs(device)
     two_qubit_gate = specs.two_qubit_gate
     if 'Gc0' in one_qubit_gates:
@@ -386,7 +388,7 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
     return model
 
 
-def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native={},
+def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native=None,
                                     calformat=None, qubits=None):
     """
     todo
@@ -394,6 +396,9 @@ def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_
     Note: this model is *** NOT *** suitable for optimization: it is not aware that it is a local depolarization
     with non-independent error rates model.
     """
+
+    if one_qubit_gates_to_native is None:
+        one_qubit_gates_to_native = {}
 
     def _get_local_depolarization_channel(rate, num_qubits):
 
