@@ -261,8 +261,9 @@ class CrosstalkFreeFOGIGSTTester(FOGIGSTTestCase, BaseTestCase):
         nQubits = 2
         #pspec = pygsti.processors.QubitProcessorSpec(nQubits, ['Gxpi2', 'Gypi2', 'Gi'], geometry='line')
         #availability={'Gcnot': [(0,1)]},  # to match smq2Q_XYCNOT
-        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ['Gxpi2', 'Gypi2', 'Gcnot'],
-                                                     availability={'Gcnot': [(0,1)]}, geometry='line')
+        #pspec = pygsti.processors.QubitProcessorSpec(nQubits, ['Gxpi2', 'Gypi2', 'Gcnot'],
+        #                                             availability={'Gcnot': [(0,1)]}, geometry='line')
+        pspec = pygsti.processors.QubitProcessorSpec(nQubits, ['Gxpi2', 'Gypi2'], geometry='line')
         return pspec
     
     def create_model(self):
