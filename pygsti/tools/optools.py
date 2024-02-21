@@ -81,12 +81,12 @@ def fidelity(a, b):
     float
         The resulting fidelity.
     """
-    evals, U = _np.linalg.eig(a)
-    if len([ev for ev in evals if abs(ev) > 1e-8]) == 1:
+    evals_a, U = _np.linalg.eig(a)
+    if len([ev for ev in evals_a if abs(ev) > 1e-8]) == 1:
         # special case when a is rank 1, a = vec * vec^T and sqrt(a) = a
-        ivec = _np.argmax(evals)
+        ivec = _np.argmax(evals_a)
         vec = U[:, ivec:(ivec + 1)]
-        F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(b, vec)).real  # vec^T * b * vec
+        F = evals_a[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(b, vec)).real  # vec^T * b * vec
         return float(F[0, 0])
 
     evals, U = _np.linalg.eig(b)
@@ -99,6 +99,11 @@ def fidelity(a, b):
 
     #if _np.array_equal(a, b): return 1.0  # HACK - some cases when a and b are perfecty equal sqrtm(a) fails...
     sqrtA = _hack_sqrtm(a)  # _spl.sqrtm(a)
+
+    # ^ Riley note:
+    #   We're wasting effort by calling that function. We already have the eigendecomposition of A,
+    #   so we can trivially compute sqrtA = U @ (np.sqrt(np.abs(evals_a)).reshape((-1, 1)) * U.conj().T  )
+
     # test the scipy sqrtm function - sometimes fails when rank defficient
     #assert(_np.linalg.norm(_np.dot(sqrtA, sqrtA) - a) < 1e-8)
     if _np.linalg.norm(_np.dot(sqrtA, sqrtA) - a) > 1e-8:
@@ -434,8 +439,8 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     
     #if the tp flag isn't set we'll calculate whether it is true here
     if is_tp is None:
-        def is_tp_fn(x): return _np.isclose(x[0, 0], 1.0) and all(
-        [_np.isclose(x[0, i], 0) for i in range(1,d2)])
+        def is_tp_fn(x):
+            return _np.isclose(x[0, 0], 1.0) and _np.allclose(x[0, 1:d2], 0)
         
         is_tp= (is_tp_fn(a) and is_tp_fn(b))
    
