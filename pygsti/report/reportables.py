@@ -921,13 +921,16 @@ def upper_bound_fidelity(gate, mx_basis):
     gate : numpy.ndarray
         the transfer-matrix specifying a gate's action.
 
-    mx_basis : Basis or {'pp', 'gm', 'std'}
-        the basis that `gate` is in.
+    mx_basis : Basis or string
+        Currently restricted to Pauli-product
 
     Returns
     -------
     float
     """
+    basis_str = mx_basis if isinstance(mx_basis, str) else mx_basis.name
+    if basis_str != 'pp':
+        raise NotImplementedError(f'Basis must be Pauli-Product, got {mx_basis}.')
     return _tools.fidelity_upper_bound(gate)[0]
 
 
