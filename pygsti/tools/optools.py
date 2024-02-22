@@ -570,7 +570,7 @@ def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     d = int(round(_np.sqrt(a.shape[0])))
     PF = entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
     AGF = (d * PF + 1) / (1 + d)
-    return float(AGF)
+    return AGF
 
 
 def average_gate_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
@@ -660,7 +660,7 @@ def entanglement_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     EI : float
         The EI of a to b.
     """
-    return 1 - float(entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary))
+    return 1 - entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
 
 
 def gateset_infidelity(model, target_model, itype='EI',
