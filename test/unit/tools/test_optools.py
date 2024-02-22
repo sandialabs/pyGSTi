@@ -50,7 +50,7 @@ class OpToolsTester(BaseCase):
         # U_2Q is 4x4 unitary matrix operating on isolated two-qubit space (CX(pi) rotation)
 
         op_2Q = ot.unitary_to_pauligate(U_2Q)
-        op_2Q_inv = ot.process_mx_to_unitary(bt.change_basis(op_2Q, 'pp', 'std'))
+        op_2Q_inv = ot.std_process_mx_to_unitary(bt.change_basis(op_2Q, 'pp', 'std'))
         self.assertArraysAlmostEqual(U_2Q, op_2Q_inv)
 
     def test_decompose_gate_matrix(self):
@@ -379,6 +379,13 @@ class GateOpsTester(BaseCase):
             [-0.35432747-0.27939404j, -0.02266757+0.71502652j, -0.27452307+0.07511567j,  0.35432747+0.27939404j],
             [ 0.71538573+0.j,  0.2680266 +0.36300238j, 0.2680266 -0.36300238j,  0.28461427+0.j]])
 
+    def test_frobenius_distance(self):
+        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.A), 0.0)
+        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), 0.6204836823)
+
+        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.A), 0.0)
+        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.B), 0.385)
+
     def test_jtrace_distance(self):
         val = ot.jtracedist(self.A_TP, self.A_TP, mx_basis="pp")
         self.assertAlmostEqual(val, 0.0)
@@ -406,6 +413,12 @@ class GateOpsTester(BaseCase):
         self.assertAlmostEqual(fidelity_TP_unitary_std, expect)
 
     def test_fidelity_upper_bound(self):
+        np.random.seed(0)
+        Q = np.linalg.qr(np.random.randn(4,4) + 1j*np.random.randn(4,4))[0]
+        Q[:, 0] = 0.0  # zero out the first column
+        bad_superoperator = ot.unitary_to_superop(Q)
+        upperBound, _ = ot.fidelity_upper_bound(bad_superoperator)
+        self.assertAlmostEqual(upperBound, 0.75)
         np.random.seed(0)
         Q = np.linalg.qr(np.random.randn(4,4) + 1j*np.random.randn(4,4))[0]
         Q[:, 0] = 0.0  # zero out the first column
