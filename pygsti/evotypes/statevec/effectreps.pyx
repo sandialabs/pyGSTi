@@ -94,8 +94,8 @@ cdef class EffectRepComputational(EffectRep):
         outvec[(<EffectCRep_Computational*>self.c_effect)._nonzero_index] = 1.0
 
         if on_space == 'HilbertSchmidt':
-            outvec = _np.kron(outvec, outvec)
-            
+            outvec = _np.kron(_np.conj(outvec), outvec)
+
         return outvec
 
 
