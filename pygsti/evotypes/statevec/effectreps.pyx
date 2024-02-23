@@ -87,13 +87,15 @@ cdef class EffectRepComputational(EffectRep):
         # when trust_outvec_sparsity is True, assume we only need to fill in the
         # non-zero elements of outvec (i.e. that outvec is already zero wherever
         # this vector is zero).
-        if on_space not in ('minimal', 'Hilbert'):
-            raise ValueError('statevec evotype cannot (yet) generate dense Hilbert-Schmidt effect vectors')
         if outvec is None:
             outvec = _np.zeros(self.state_space.udim, complex)
         elif not trust_outvec_sparsity:
             outvec[:] = 0  # reset everything to zero
         outvec[(<EffectCRep_Computational*>self.c_effect)._nonzero_index] = 1.0
+
+        if on_space == 'HilbertSchmidt':
+            outvec = _np.kron(outvec, outvec)
+            
         return outvec
 
 
@@ -137,7 +139,9 @@ cdef class EffectRepTensorProduct(EffectRep):
 
     def to_dense(self, on_space, scratch=None):  # taken from slow version - CONSOLIDATE?
         if on_space not in ('minimal', 'Hilbert'):
-            raise ValueError('statevec evotype cannot (yet) generate dense Hilbert-Schmidt effect vectors')
+            # raise ValueError('statevec evotype cannot (yet) generate dense Hilbert-Schmidt effect vectors')
+            print('EXPERIMENTAL: generating dense Hilbert-Schmidt effect vectors')
+            outvec = _np.zeros(self.state_space.dim, complex)
         if scratch is None:
             scratch = _np.empty(self.udim, complex)
         outvec = scratch
