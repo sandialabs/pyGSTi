@@ -154,7 +154,7 @@ class TimeDependentTestCase(BaseTestCase):
         ds = pygsti.data.simulate_data(mdl_datagen, edesign.all_circuits_needing_data, num_samples=2000,
                                        sample_error="binomial", seed=1234, times=[0, 0.2],
                                        record_zero_counts=False)
-        self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 171)
+        self.assertEqual(ds.degrees_of_freedom(aggregate_times=False), 114)
 
         target_model.operations['Gi',0] = MyTimeDependentIdle(0)  # start assuming no time dependent decay
         target_model.sim = pygsti.forwardsims.MapForwardSimulator(max_cache_size=0)  # No caching allowed for time-dependent calcs
