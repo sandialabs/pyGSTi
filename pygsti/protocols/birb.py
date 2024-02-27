@@ -109,7 +109,29 @@ def symplectic_to_pauli(s,p):
             
     return pauli
 
-def sample_random_pauli(n,pspec = None, absolute_compilation = None, qubit_labels = None, circuit = False, include_identity = False, rand_state = None):
+def generic_pauli_sampler(n, include_identity = False, rand_state = None):
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+
+    if include_identity is False:
+        while True: 
+            rand_ints = rand_state.randint(0,4,n)
+            if sum(rand_ints) != 0: # make sure we don't get all identities
+                break
+    else:
+        rand_ints = rand_state.randint(0, 4, n)
+
+    return rand_ints
+
+def mod_oneq_pauli_sampler(n, rand_state = None):
+    if rand_state is None:
+        rand_state = _np.random.RandomState()
+    rand_ints = rand_state.randint(1, 4, n)
+
+    return rand_ints
+
+
+def sample_random_pauli(n, pspec = None, absolute_compilation = None, qubit_labels = None, circuit = False, pauli_sampler = generic_pauli_sampler, pauli_sampler_kwargs = {'include_identity': False}, rand_state = None):
     # Samples a random Pauli along with a +-1 phase. Returns the Pauli as a list or as a circuit depending 
     # upon the value of "circuit"
     #     - n: Number of qubits
@@ -125,14 +147,16 @@ def sample_random_pauli(n,pspec = None, absolute_compilation = None, qubit_label
         else: qubits = pspec.qubit_labels[:]
     
     pauli_list = ['I','X','Y','Z']
+
+    rand_ints = pauli_sampler(n = n, rand_state = rand_state, **pauli_sampler_kwargs)
     
-    if include_identity is False:
-        while True: 
-            rand_ints = rand_state.randint(0,4,n)
-            if sum(rand_ints) != 0: # make sure we don't get all identities
-                break
-    else:
-        rand_ints = rand_state.randint(0, 4, n)
+    #if include_identity is False:
+    #    while True: 
+    #        rand_ints = rand_state.randint(0,4,n)
+    #        if sum(rand_ints) != 0: # make sure we don't get all identities
+    #            break
+    #else:
+    #    rand_ints = rand_state.randint(0, 4, n)
             
     pauli = [pauli_list[i] for i in rand_ints]
     if set(pauli) != set('I'): sign = rand_state.choice([-1,1])
@@ -303,7 +327,7 @@ def create_direct_rb_circuit_no_inversion(pspec, clifford_compilations, length, 
 
     rand_pauli, rand_sign, pauli_circuit = sample_random_pauli(n = n, pspec = pspec, 
                                                                    absolute_compilation = clifford_compilations['absolute'],
-                                                                   circuit = True, include_identity = False)
+                                                                   circuit = True)
     
     s_inputstate, p_inputstate, s_init_layer, p_init_layer, prep_circuit = sample_stabilizer(rand_pauli, rand_sign)
     prep_circuit = compose_initial_cliffords(prep_circuit)

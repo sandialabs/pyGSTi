@@ -545,7 +545,7 @@ def process_measure_layer(native_measure_layer, qubit_pointers, new_qubit_labels
         labels = [Label(label[0], qubit_pointers[label[1]][-1]) for label in native_measure_layer[0]]
         return _cir.Circuit([labels], line_labels = new_qubit_labels)
 
-def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, loqs, debug = True, layer_sampler = sample_rb_mcm_circuit_layer_with_1Q_gates, layer_sampler_kwargs = {'mixed_layer_sampler': sample_rb_mcm_mixed_layer_by_edgegrab, 'mixed_layer_sampler_kwargs': {'mcm_density': .25, 'mcm_only_layers': True, 'two_q_gate_density': .5}}, include_identity = True, mcm_reset = True, seed = None):
+def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, loqs, debug = True, layer_sampler = sample_rb_mcm_circuit_layer_with_1Q_gates, layer_sampler_kwargs = {'mixed_layer_sampler': sample_rb_mcm_mixed_layer_by_edgegrab, 'mixed_layer_sampler_kwargs': {'mcm_density': .25, 'mcm_only_layers': True, 'two_q_gate_density': .5}}, pauli_sampler = birb.generic_pauli_sampler, pauli_sampler_kwargs = {'include_identity': True}, mcm_reset = True, seed = None):
     
     rand_state = _np.random.RandomState(seed)
     
@@ -598,7 +598,7 @@ def create_rb_with_mcm_circuit(pspec, length, qubit_labels, mcm_labels, loqs, de
     
     # Sample the Pauli
     
-    rand_pauli, rand_sign, pauli_circuit = birb.sample_random_pauli(n = n + mcm_count, pspec = big_pspec, absolute_compilation = big_compilations['absolute'], circuit = True, include_identity = include_identity, rand_state = rand_state)
+    rand_pauli, rand_sign, pauli_circuit = birb.sample_random_pauli(n = n + mcm_count, pspec = big_pspec, absolute_compilation = big_compilations['absolute'], circuit = True, pauli_sampler = pauli_sampler, pauli_sampler_kwargs = pauli_sampler_kwargs, rand_state = rand_state)
     s_pauli_circuit, p_pauli_circuit = _symp.symplectic_rep_of_clifford_circuit(pauli_circuit, pspec = big_pspec)
     current_pauli = rand_pauli
     '''if debug: 
