@@ -1109,11 +1109,14 @@ def find_std_clifford_compilation(model, verbosity=0):
            set(target_model.operations.keys()) == set(model.operations.keys()) and \
            set(target_model.preps.keys()) == set(model.preps.keys()) and \
            set(target_model.povms.keys()) == set(model.povms.keys()):
-            if target_model.frobeniusdist(model) < 1e-6:
-                from pygsti.modelpacks import RBModelPack as _RBModelPack
-                if isinstance(mod, _RBModelPack):
-                    printer.log("Found standard clifford compilation from %s" % module_name)
-                    return mod.clifford_compilation(qubit_labels)
+            try:
+                if target_model.frobeniusdist(model) < 1e-6:
+                    from pygsti.modelpacks import RBModelPack as _RBModelPack
+                    if isinstance(mod, _RBModelPack):
+                        printer.log("Found standard clifford compilation from %s" % module_name)
+                        return mod.clifford_compilation(qubit_labels)
+            except:
+                return None
 
     return None
 

@@ -14,6 +14,7 @@ import importlib as _importlib
 import warnings as _warnings
 
 import numpy as _np
+import numpy.linalg as _nla
 
 from pygsti.baseobjs.opcalc import compact_deriv as _compact_deriv, \
     bulk_eval_compact_polynomials as _bulk_eval_compact_polynomials, \
@@ -267,7 +268,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                                     self.oob_check_interval, self.cache)
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
-                      derivative_dimension=None, verbosity=0):
+                      derivative_dimensions=None, verbosity=0):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
@@ -288,7 +289,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         array_types : tuple, optional
             A tuple of string-valued array types.  See :meth:`ForwardSimulator.create_layout`.
 
-        derivative_dimension : int, optional
+        derivative_dimensions : int, optional
             Optionally, the parameter-space dimension used when taking first
             and second derivatives with respect to the cirucit outcome probabilities.  This must be
             non-None when `array_types` contains `'ep'` or `'epp'` types.
@@ -313,7 +314,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
 
         printer = _VerbosityPrinter.create_printer(verbosity, resource_alloc)
         nprocs = resource_alloc.comm_size
-        num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
+        num_params = derivative_dimensions if (derivative_dimensions is not None) else self.model.num_params
         polynomial_vindices_per_int = _Polynomial._vindices_per_int(num_params)
         C = 1.0 / (1024.0**3)
 
@@ -1390,7 +1391,74 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         if nTotFailed > 0:
             _warnings.warn(("Unable to find a path set that achieves the desired "
                             "pathmagnitude gap (%d circuits failed)") % nTotFailed)
+    
+    
+    #Utility method for generating process matrices for circuits. Should not be used for forward
+    #simulation when using the MapForwardSimulator.
+    def product(self, circuit, scale=False):
+        """
+        Compute the product of a specified sequence of operation labels.
 
+        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
+        the first element of circuit can be thought of as the first gate operation
+        performed, which is on the far right of the product of matrices.
+
+        Parameters
+        ----------
+        circuit : Circuit or tuple of operation labels
+            The sequence of operation labels.
+
+        scale : bool, optional
+            When True, return a scaling factor (see below).
+
+        Returns
+        -------
+        product : numpy array
+            The product or scaled product of the operation matrices.
+        scale : float
+            Only returned when scale == True, in which case the
+            actual product == product * scale.  The purpose of this
+            is to allow a trace or other linear operation to be done
+            prior to the scaling.
+        """
+        _warnings.warn('Generating dense process matrix representations of circuits or gates \n'
+                       'can be inefficient and should be avoided for the purposes of forward \n'
+                       'simulation/calculation of circuit outcome probability distributions \n' 
+                       'when using the MapForwardSimulator.')
+        
+        # Smallness tolerances, used internally for conditional scaling required
+        # to control bulk products, their gradients, and their Hessians.
+        _PSMALL = 1e-100
+        
+        if scale:
+            scaledGatesAndExps = {}
+            scale_exp = 0
+            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
+            for lOp in circuit:
+                if lOp not in scaledGatesAndExps:
+                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal')
+                    ng = max(_nla.norm(opmx), 1.0)
+                    scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
+
+                gate, ex = scaledGatesAndExps[lOp]
+                H = _np.dot(gate, G)   # product of gates, starting with identity
+                scale_exp += ex   # scale and keep track of exponent
+                if H.max() < _PSMALL and H.min() > -_PSMALL:
+                    nG = max(_nla.norm(G), _np.exp(-scale_exp))
+                    G = _np.dot(gate, G / nG); scale_exp += _np.log(nG)  # LEXICOGRAPHICAL VS MATRIX ORDER
+                else: G = H
+
+            old_err = _np.seterr(over='ignore')
+            scale = _np.exp(scale_exp)
+            _np.seterr(**old_err)
+
+            return G, scale
+        else:
+            G = _np.identity(self.model.state_space.dim)
+            for lOp in circuit:
+                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='HilbertSchmidt'), G)
+                # above line: LEXICOGRAPHICAL VS MATRIX ORDER
+            return G
 
 class _TermPathSetBase(object):
     """
