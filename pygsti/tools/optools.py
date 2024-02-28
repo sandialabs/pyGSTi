@@ -578,44 +578,6 @@ def simple_entanglement_fidelity(op_a, op_b, mx_basis, n_leak=0):
     return ent_fid
 
 
-def simple_entanglement_fidelity2(a_, b_, mx_basis, n_leak=0):
-    import numpy.linalg as la
-    dim = int(_np.sqrt(a_.shape[0]))
-    assert a_.shape == (dim**2, dim**2)
-    assert b_.shape == (dim**2, dim**2)
-    a = _mt.change_basis(a_, mx_basis, 'std')
-    b = _mt.change_basis(b_, mx_basis, 'std')
-    # set psi = (sum_i |ii>)/sqrt(dim),
-    # where |ii> is the tensor product of the i^th basis vector in C^dim with itself.
-    I = _np.eye(dim, dtype=_np.complex128)
-    summands = []
-    for i in range(dim - n_leak):
-        s = _np.outer(I[i], I[i])
-        s_superket = _bt.stdmx_to_stdvec(s).ravel()
-        summands.append(s_superket)
-    psi = _np.sum(summands, axis=0) / _np.sqrt(dim - n_leak)
-    proj_psi = _np.outer(psi, psi)
-
-    # I have a density matrix representation I want.
-    # I need to convert it into a vector whose coefficients
-    # are interpreted w.r.t. a tensor product basis.
-
-    proj_psi_superket = _bt.stdmx_to_stdvec(proj_psi).ravel()
-    
-    idle_gate = _np.eye(dim**2, dtype=_np.complex128)
-    a_tensor_idle = _np.kron(a, idle_gate)
-    invb_tensor_idle = _np.kron(_np.linalg.inv(b), idle_gate)
-    temp1 = a_tensor_idle @ proj_psi_superket
-    temp2 = invb_tensor_idle @ temp1
-    ent_fid = proj_psi_superket.conj() @ temp2
-
-    temp2_as_density = _bt.stdvec_to_stdmx(temp2)
-    b_tensor_idle = _np.kron(b, idle_gate)
-    ent_fid2 = fidelity(proj_psi, temp2_as_density)
-
-    return ent_fid
-
-
 def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Computes the average gate fidelity (AGF) between two gates.
