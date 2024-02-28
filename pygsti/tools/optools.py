@@ -524,7 +524,8 @@ def simple_entanglement_fidelity(op_a, op_b, mx_basis, n_leak=0):
     assert op_a.shape == (dim**2, dim**2)
     assert op_b.shape == (dim**2, dim**2)
 
-    # op_a and op_b act on a space "S" that's isomorphic to density matrices of a dim-level system.
+    # op_a and op_b act on the smallest real-linear space "S" that contains density matrices 
+    # for a dim-level system.
     #
     # We care about op_a and op_b only up to their action on the subspace
     #    U = {rho in S : <i|rho|i> = 0 for all i >= dim - n_leak }.
