@@ -525,6 +525,108 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     return fidelity(JA, JB)
 
 
+def simple_entanglement_fidelity(a_, b_, mx_basis, n_leak=0):
+    dim = int(_np.sqrt(a_.shape[0]))
+    assert a_.shape == (dim**2, dim**2)
+    assert b_.shape == (dim**2, dim**2)
+
+    # set psi = (sum_i |ii>)/sqrt(dim),
+    # where |ii> is the tensor product of the i^th basis vector in C^dim with itself.
+    I = _np.eye(dim, dtype=_np.complex128)
+    summands = []
+    for i in range(dim - n_leak):
+        s = _np.outer(I[i], I[i])
+        # s = |i> \tensor <i|
+        s_superket = _bt.stdmx_to_stdvec(s).ravel()
+        # ^ WANT s_superket = |i> \tensor |i> === |ii>
+        #   ... unclear if that's certain to be the case.
+        summands.append(s_superket)
+    psi = _np.sum(summands, axis=0) / _np.sqrt(dim - n_leak)
+    proj_psi = _np.outer(psi, psi)
+    # ^ That is absolutely positively correct!
+    proj_psi_superket = _bt.stdmx_to_ppvec(proj_psi).ravel()
+    # ^ Robin thinks things are breaking here.
+    #   The ordering of basis vectors isn't respecting tensor
+    #   product structure. That is, proj_psi_superket 
+    #   doesn't have the same vectorized tensor product
+    #   structure convention as kron (or kron with the order changed).
+    #   
+    #   TODO: figure out how to order basis elements for stdvec
+    #   so that tensor product structure in stdmx is preserved
+    #   in stdvec.
+    #
+    #      X =   [X11, X12] , size(X11) == size(X22)
+    #            [X21, X22]
+    #
+    #       basis(space(X)) = [basis(space(X11)), basis(space(X12)),..., basis(space(X22))]
+    #           ^ Concatenation.
+    #           ^ The vectorization of the matrix commutes with tensor product.
+    #
+    #           ^ The tensor product of the bases for matrix units of X11, X12.
+    #
+    #   If we just convert X from stdmx to stdvec, then we're doing something like
+    #      basis(space(X)) = [basis(space(row(X, 1))), basis(space(row(X, 2))), ..., basis(space(row(X, n)))].
+    #           ^ Vectorization of the matrix does not commute with tensor product.
+    #
+    #
+    """
+    We are currently taking two 2-dimensional vector spaces (U and V) and:
+    Tensoring them together to get a 4-d space W
+    Constructing a basis of matrix units for the 16-d space B(W)
+    Instead we should take U and V and:
+    Construct a basis B1 of matrix units for the 4-d space B(U)
+    Construct a basis B2 of matrix units for the 4-d space B(V)
+    Tensor B1 \otimes B2 to get a 16-d space.
+
+    ^ Super easy to handle with powers of 2 and Pauli-Products.
+      ... NOT super easy to handle in ... literally anything else.
+          (but also not crazy hard. Just be careful.)
+    """
+    
+    a = _mt.change_basis(a_, mx_basis, 'pp')
+    b = _mt.change_basis(b_, mx_basis, 'pp')
+    idle_gate = _np.eye(dim**2, dtype=_np.complex128)
+    a_tensor_idle = _np.kron(a, idle_gate)
+    b_tensor_idle = _np.kron(b, idle_gate)
+    temp1 = a_tensor_idle @ proj_psi_superket
+    temp2 = b_tensor_idle @ proj_psi_superket
+    ent_fid = _np.real(temp1.conj() @ temp2)
+    return ent_fid
+
+
+def simple_entanglement_fidelity2(a_, b_, mx_basis, n_leak=0):
+    import numpy.linalg as la
+    dim = int(_np.sqrt(a_.shape[0]))
+    assert a_.shape == (dim**2, dim**2)
+    assert b_.shape == (dim**2, dim**2)
+    a = _mt.change_basis(a_, mx_basis, 'std')
+    b = _mt.change_basis(b_, mx_basis, 'std')
+    # set psi = (sum_i |ii>)/sqrt(dim),
+    # where |ii> is the tensor product of the i^th basis vector in C^dim with itself.
+    I = _np.eye(dim, dtype=_np.complex128)
+    summands = []
+    for i in range(dim - n_leak):
+        s = _np.outer(I[i], I[i])
+        s_superket = _bt.stdmx_to_stdvec(s).ravel()
+        summands.append(s_superket)
+    psi = _np.sum(summands, axis=0) / _np.sqrt(dim - n_leak)
+    proj_psi = _np.outer(psi, psi)
+    proj_psi_superket = _bt.stdmx_to_stdvec(proj_psi).ravel()
+    
+    idle_gate = _np.eye(dim**2, dtype=_np.complex128)
+    a_tensor_idle = _np.kron(a, idle_gate)
+    invb_tensor_idle = _np.kron(_np.linalg.inv(b), idle_gate)
+    temp1 = a_tensor_idle @ proj_psi_superket
+    temp2 = invb_tensor_idle @ temp1
+    ent_fid = proj_psi_superket.conj() @ temp2
+
+    temp2_as_density = _bt.stdvec_to_stdmx(temp2)
+    b_tensor_idle = _np.kron(b, idle_gate)
+    ent_fid2 = fidelity(proj_psi, temp2_as_density)
+
+    return ent_fid
+
+
 def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Computes the average gate fidelity (AGF) between two gates.
