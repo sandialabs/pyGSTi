@@ -526,7 +526,9 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     return fidelity(JA, JB)
 
 
-def simple_entanglement_fidelity(op_a, op_b, mx_basis, n_leak=0):
+def lift_and_act_on_maxmixed_state(op_a, op_b, mx_basis, n_leak=0):
+    # Note: this function is only really useful for gates on a single system (qubit, qutrit, qudit);
+    # not tensor products of such systems.
     dim = int(_np.sqrt(op_a.shape[0]))
     assert op_a.shape == (dim**2, dim**2)
     assert op_b.shape == (dim**2, dim**2)
@@ -561,14 +563,11 @@ def simple_entanglement_fidelity(op_a, op_b, mx_basis, n_leak=0):
     #   |psi> = (|00> + |11> + ... + |dim - n_leak - 1>) / sqrt(dim - n_leak).
     #
     # The "mm" in "rho_mm" stands for "maximally mixed."
-    I = _np.eye(dim, dtype=_np.complex128)
-    summands = []
-    for i in range(dim - n_leak):
-        ket_i = I[i]
-        temp = _np.outer(ket_i, ket_i)
-        ket_ii = _bt.stdmx_to_stdvec(temp).ravel()
-        summands.append(ket_ii)
-    psi = _np.sum(summands, axis=0) / _np.sqrt(dim - n_leak)
+    temp = _np.eye(dim, dtype=_np.complex128)
+    if n_leak > 0:
+        temp[-n_leak:,-n_leak:] = 0.0
+    temp /= _np.sqrt(dim - n_leak)
+    psi = _bt.stdmx_to_stdvec(temp).ravel()
     rho_mm = _np.outer(psi, psi)
 
     # Of course, lift_op_a and lift_op_b only act on states in their superket representations.
@@ -581,8 +580,13 @@ def simple_entanglement_fidelity(op_a, op_b, mx_basis, n_leak=0):
 
     temp1 = lift_op_a @ rho_mm_superket
     temp2 = lift_op_b @ rho_mm_superket
-    ent_fid = _np.real(temp1.conj() @ temp2)
 
+    return temp1, temp2, ten_basis
+
+
+def leaky_entanglement_fidelity(op_a, op_b, mx_basis, n_leak=0):
+    temp1, temp2, _ = lift_and_act_on_maxmixed_state(op_a, op_b, mx_basis, n_leak)
+    ent_fid = _np.real(temp1.conj() @ temp2)
     return ent_fid
 
 
