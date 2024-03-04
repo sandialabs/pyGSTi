@@ -598,6 +598,87 @@ def leaky_jtracedist(op_a, op_b, mx_basis, n_leak=0):
     return j_dist
 
 
+def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis):
+    """
+    Let "H" denote n^2 dimensional Hilbert-Schdmit space, and let "U" denote the d^2
+    dimensional subspace of H spanned by vectors whose Hermitian matrix representations
+    are zero outside the leading d-by-d submatrix.
+
+    This function returns a column-unitary matrix "B" where P = B B^{\dagger} is the
+    orthogonal projector from H to U with respect to current_basis. We return B rather
+    than P only because it's simpler to get P from B than it is to get B from P.
+    
+    See below for this function's original use-case.
+    
+    Raison d'etre
+    -------------
+    Suppose we canonically measure the distance between two process matrices (M1, M2) by
+
+        D(M1, M2; H) = max || (M1 - M2) v ||
+                            v is in H,                   (Eq. 1)
+                            tr(v) = 1,
+                            v is positive
+
+    for some norm || * ||.  Suppose also that we want an analog of this distance when
+    (M1, M2) are restricted to the linear subspace U consisting of all vectors in H
+    whose matrix representations are zero outside of their leading d-by-d submatrix.
+
+    One natural way to do this is via the function D(M1, M2; U) -- i.e., just replace
+    H in (Eq. 1) with the subspace U. Using P to denote the orthogonal projector onto U,
+    we claim that we can evaluate this function via the identity
+
+        D(M1, M2; U) = D(M1 P, M2 P; H).                (Eq. 2)
+
+    To see why this is the case, consider a positive vector v and its projection u = P v.
+    Since a vector is called positive whenever its Hermitian matrix representation is positive
+    semidefinite (PSD), we need to show that u is positive. This can be seen by considering
+    block 2-by-2 partitions of the matrix representations of (u,v), where the leading block
+    is d-by-d:
+
+        mat(v) = [x11,  x12]         and      mat(u) = [x11,  0]
+                 [x21,  x22]                           [  0,  0].
+    
+    In particular, u is positive if and only if x11 is PSD, and x11 must be PSD for v
+    to be positive. Furthermore, positivity of v requires that x22 is PSD, which implies
+
+        0 <= tr(u) = tr(x11) <= tr(v).
+    
+    Given this, it is easy to establish (Eq 2.) by considering how the following pair 
+    of problems have the same optimal objective function value
+
+        max || (M1 - M2) P v ||         and        max || (M1 - M2) P v || 
+            mat(v) = [x11, x12]                         mat(v) = [x11, x12]
+                     [x21, x22]                                  [x21, x22]
+            mat(v) is PSD                               x11 is PSD
+            tr(x11) + tr(x22) = 1                       tr(x11) <= 1.
+
+    In fact, this can be taken a little further! The whole argument goes through unchanged
+    if, instead of starting with the objective function || (M1 - M2) v ||, we started with
+    f((M1 - M2) v) and f satisfied the property that f(c v) >= f(v) whenever c is a scalar
+    greater than or equal to one.
+
+    Interesting idea:
+        Set M2 = 0.
+        Use || (I - P) M1 P || as a metric for leakage.
+        Use || P M1 (I - P) || as a metric for seepage
+    """
+    assert d <= n
+    current_basis = _pgb.Basis.cast(current_basis, dim=n**2)
+    std_to_current = current_basis.create_transform_matrix('std')
+    if d == n:
+        return std_to_current
+    # we have to select a proper subset of columns in current_basis
+    std_basis = _pgb.BuiltinBasis(name='std', dim_or_statespace=n**2)
+    label2ind = {ell: idx for idx,ell in enumerate(std_basis.labels)}
+    basis_ind = []
+    for i in range(d):
+        for j in range(d):
+            basis_ind.append(label2ind[f"({i},{j})"])
+    basis_ind = _np.array(basis_ind)
+    submatrix_basis_vectors = std_to_current[:, basis_ind]
+    return submatrix_basis_vectors
+
+
 def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Computes the average gate fidelity (AGF) between two gates.
