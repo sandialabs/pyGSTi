@@ -594,18 +594,31 @@ def _create_objective_fn(model, target_model, item_weights=None,
         # non-least-squares case where objective function returns a single float
         # and (currently) there's no analytic jacobian
         if n_leak > 0:
-            pass
+            dim = int(_np.sqrt(mxBasis.dim))
+            B = _tools.leading_dxd_submatrix_basis_vectors(dim - n_leak, dim, mxBasis)
+            P = B @ B.T.conj()
+            if _np.linalg.norm(P.imag) > 1e-12:
+                raise ValueError()
+            else:
+                P = P.real
+            transform_mx_arg = (P, None)
+            # ^ The semantics of this tuple are defined by the frobeniusdist function
+            #   in the ExplicitOpModelCalc class. There are intended semantics for 
+            #   the second element of the tuple, but those aren't implemented yet so
+            #   for now I'm setting the second entry to None. -- Riley
+        else:
+            transform_mx_arg = None
+
+        assert gates_metric != "frobeniustt"
+        assert spam_metric  != "frobeniustt"
+        # ^ Erik and Corey said these are rarely used. I've removed support for
+        # them in this codepath (non-LS optimizer) in order to make it easier to
+        # read my updated code for leakage-aware metrics. It wouldn't be hard to
+        # add support back, but I just want to keep things simple. -- Riley
 
         def _objective_fn(gauge_group_el, oob_check):
             mdl = _transform_with_oob_check(model, gauge_group_el, oob_check)
             ret = 0
-
-            if gates_metric == "frobeniustt" or spam_metric == "frobeniustt":
-                full_target_model = target_model.copy()
-                full_target_model.convert_members_inplace("full")  # so we can gauge-transform the target model.
-                transformed_target = _transform_with_oob_check(full_target_model, gauge_group_el.inverse(), oob_check)
-            else:
-                transformed_target = None
 
             if cptp_penalty_factor > 0:
                 mdl.basis = mxBasis  # set basis for jamiolkowski iso
@@ -618,27 +631,24 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 ret += _np.sum(spamPenaltyVec)
 
             if target_model is not None:
-                if gates_metric == "frobenius":
-                    if spam_metric == "frobenius":
-                        ret += mdl.frobeniusdist(target_model, None, item_weights)
+                # Leakage-aware metric supported, per implementation in mdl.frobeniusdist.
+                # Refer to how mdl.frobeniusdist handles the case when transform_mx_arg
+                # is a tuple in order to understand how the leakage-aware metric is defined.
+                if "frobenius" in gates_metric:
+                    if spam_metric == gates_metric:
+                        val = mdl.frobeniusdist(target_model, transform_mx_arg, item_weights)
                     else:
                         wts = item_weights.copy(); wts['spam'] = 0.0
                         for k in wts:
                             if k in mdl.preps or \
                                k in mdl.povms: wts[k] = 0.0
-                        ret += mdl.frobeniusdist(target_model, None, wts)
-
-                elif gates_metric == "frobeniustt":
-                    if spam_metric == "frobeniustt":
-                        ret += transformed_target.frobeniusdist(model, None, item_weights)
-                    else:
-                        wts = item_weights.copy(); wts['spam'] = 0.0
-                        for k in wts:
-                            if k in mdl.preps or \
-                               k in mdl.povms: wts[k] = 0.0
-                        ret += transformed_target.frobeniusdist(model, None, wts)
+                        val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
+                    if "squared" in gates_metric:
+                        val = val ** 2
+                    ret += val
 
                 elif gates_metric == "fidelity":
+                    # Leakage-aware metric supported, using leaky_entanglement_fidelity.
                     for opLbl in mdl.operations:
                         wt = item_weights.get(opLbl, opWeight)
                         top = target_model.operations[opLbl].to_dense()
@@ -646,6 +656,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
                         ret += wt * (1.0 - _tools.leaky_entanglement_fidelity(top, mop, mxBasis, n_leak))**2
 
                 elif gates_metric == "tracedist":
+                    # Leakage-aware metric supported, using leaky_jtracedist.
                     for opLbl in mdl.operations:
                         wt = item_weights.get(opLbl, opWeight)
                         top = target_model.operations[opLbl].to_dense()
@@ -654,23 +665,25 @@ def _create_objective_fn(model, target_model, item_weights=None,
 
                 else: raise ValueError("Invalid gates_metric: %s" % gates_metric)
 
-                if spam_metric == "frobenius":
-                    if gates_metric != "frobenius":  # otherwise handled above to match normalization in frobeniusdist
-                        wts = item_weights.copy(); wts['gates'] = 0.0
-                        for k in wts:
-                            if k in mdl.operations or \
-                               k in mdl.instruments: wts[k] = 0.0
-                        ret += mdl.frobeniusdist(target_model, None, wts)
+                if "frobenius" in spam_metric and gates_metric == spam_metric:
+                    # We already handled SPAM error in this case. Just return.
+                    return ret
 
-                elif spam_metric == "frobeniustt":
-                    if gates_metric != "frobeniustt":  # otherwise handled above to match normalization in frobeniusdist
-                        wts = item_weights.copy(); wts['gates'] = 0.0
-                        for k in wts:
-                            if k in mdl.operations or \
-                               k in mdl.instruments: wts[k] = 0.0
-                        ret += transformed_target.frobeniusdist(model, None, wts)
+                elif "frobenius" in spam_metric:
+                    # Leakage-aware metric supported in principle via implementation in
+                    # mdl.frobeniusdist (check implementation to see how it handles the
+                    # case when transform_mx_arg is a tuple).
+                    wts = item_weights.copy(); wts['gates'] = 0.0
+                    for k in wts:
+                        if k in mdl.operations or \
+                            k in mdl.instruments: wts[k] = 0.0
+                    val = mdl.frobeniusdist(target_model, transform_mx_arg, wts)
+                    if "squared" in spam_metric:
+                        val = val ** 2
+                    ret += val 
 
                 elif spam_metric == "fidelity":
+                    # Leakage-aware metrics NOT available
                     for preplabel, m_prep in mdl.preps.items():
                         wt = item_weights.get(preplabel, spamWeight)
                         rhoMx1 = _tools.vec_to_stdmx(m_prep.to_dense(), mxBasis)
@@ -684,6 +697,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
                         ret += wt * (1.0 - fidelity)**2
 
                 elif spam_metric == "tracedist":
+                    # Leakage-aware metrics NOT available.
                     for preplabel, m_prep in mdl.preps.items():
                         wt = item_weights.get(preplabel, spamWeight)
                         rhoMx1 = _tools.vec_to_stdmx(m_prep.to_dense(), mxBasis)
