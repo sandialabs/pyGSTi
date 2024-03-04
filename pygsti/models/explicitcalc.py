@@ -241,47 +241,32 @@ class ExplicitOpModelCalc(object):
         sqrt_itemWeights = {k: _np.sqrt(v) for k, v in item_weights.items()}
         opWeight = sqrt_itemWeights.get('gates', 1.0)
         spamWeight = sqrt_itemWeights.get('spam', 1.0)
+        # if T is None:
+        #     T = _np.eye(self.dim)
+        Ti = None if T is None else _np.linalg.pinv(T)
+        # ^ TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
 
-        if T is not None:
-            Ti = _np.linalg.inv(T)  # TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
-            for opLabel, gate in self.operations.items():
-                wt = sqrt_itemWeights.get(opLabel, opWeight)
-                resids.append(
-                    wt * gate.residuals(
-                        other_calc.operations[opLabel], T, Ti))
-                nSummands += wt**2 * (gate.dim)**2
+        for opLabel, gate in self.operations.items():
+            wt = sqrt_itemWeights.get(opLabel, opWeight)
+            other_gate = other_calc.operations[opLabel]
+            resid =  wt * gate.residuals(other_gate, T, Ti)
+            resids.append(resid)
+            nSummands += wt**2 * (gate.dim)**2
 
-            for lbl, rhoV in self.preps.items():
-                wt = sqrt_itemWeights.get(lbl, spamWeight)
-                resids.append(
-                    wt * rhoV.residuals(other_calc.preps[lbl], T, Ti))
-                nSummands += wt**2 * rhoV.dim
+        for lbl, rhoV in self.preps.items():
+            wt = sqrt_itemWeights.get(lbl, spamWeight)
+            other_prep = other_calc.preps[lbl]
+            resid = wt * rhoV.residuals(other_prep, T, Ti)
+            resids.append(resid)
+            nSummands += wt**2 * rhoV.dim
 
-            for lbl, Evec in self.effects.items():
-                wt = sqrt_itemWeights.get(lbl, spamWeight)
-                resids.append(
-                    wt * Evec.residuals(other_calc.effects[lbl], T, Ti))
+        for lbl, Evec in self.effects.items():
+            wt = sqrt_itemWeights.get(lbl, spamWeight)
+            other_effect = other_calc.effects[lbl]
+            resid = wt * Evec.residuals(other_effect, T, Ti)
+            resids.append(resid)
 
-                nSummands += wt**2 * Evec.dim
-
-        else:
-            for opLabel, gate in self.operations.items():
-                wt = sqrt_itemWeights.get(opLabel, opWeight)
-                resids.append(
-                    wt * gate.residuals(other_calc.operations[opLabel]))
-                nSummands += wt**2 * (gate.dim)**2
-
-            for lbl, rhoV in self.preps.items():
-                wt = sqrt_itemWeights.get(lbl, spamWeight)
-                resids.append(
-                    wt * rhoV.residuals(other_calc.preps[lbl]))
-                nSummands += wt**2 * rhoV.dim
-
-            for lbl, Evec in self.effects.items():
-                wt = sqrt_itemWeights.get(lbl, spamWeight)
-                resids.append(
-                    wt * Evec.residuals(other_calc.effects[lbl]))
-                nSummands += wt**2 * Evec.dim
+            nSummands += wt**2 * Evec.dim
 
         resids = [r.ravel() for r in resids]
         resids = _np.concatenate(resids)
