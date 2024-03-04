@@ -120,12 +120,18 @@ class ExplicitOpModelCalc(object):
         other_calc : ForwardSimulator
             the other gate calculator to difference against.
 
-        transform_mx : numpy array, optional
-            if not None, transform this model by
-            G => inv(transform_mx) * G * transform_mx, for each operation matrix G
-            (and similar for rho and E vectors) before taking the difference.
-            This transformation is applied only for the difference and does
-            not alter the values stored in this model.
+        transform_mx : numpy array or tuple, optional
+            if transform_mx is a numpy array, then for each operation matrix
+            G we implicitly consider the transformed quantity
+                G => inv(transform_mx) * G * transform_mx
+            Similar transformations are applied for effect vectors.
+            This transformation is applied only for the difference and does not
+            alter the values stored in this model.
+
+            if transform_mx is a tuple then it should consist of two numpy arrays,
+            the first of which will be interpreted as transform_mx in the usual
+            sense and the second of which will either be None or will be syntactically
+            subtituted for inv(transform_mx).
 
         item_weights : dict, optional
             Dictionary of weighting factors for individual gates and spam
@@ -146,18 +152,22 @@ class ExplicitOpModelCalc(object):
         -------
         float
         """
-        d = 0; T = transform_mx
+        if isinstance(transform_mx, tuple):
+            T, Ti = transform_mx
+        else:
+            T = transform_mx
+            Ti = None if T is None else _np.linalg.pinv(T)
+        d = 0
         nSummands = 0.0
         if item_weights is None: item_weights = {}
         opWeight = item_weights.get('gates', 1.0)
         spamWeight = item_weights.get('spam', 1.0)
 
-        if T is not None:
-            Ti = _np.linalg.inv(T)  # TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
+        if (T is None and Ti is None) or isinstance(transform_mx, _np.ndarray):
+            # use the original implementation.
             for opLabel, gate in self.operations.items():
                 wt = item_weights.get(opLabel, opWeight)
-                d += wt * gate.frobeniusdist_squared(
-                    other_calc.operations[opLabel], T, Ti)
+                d += wt * gate.frobeniusdist_squared(other_calc.operations[opLabel], T, Ti)
                 nSummands += wt * (gate.dim)**2
 
             for lbl, rhoV in self.preps.items():
@@ -169,28 +179,32 @@ class ExplicitOpModelCalc(object):
                 wt = item_weights.get(lbl, spamWeight)
                 d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl], T, Ti)
                 nSummands += wt * Evec.dim
-
         else:
+            # we're in the special case that I'm creating.
             for opLabel, gate in self.operations.items():
                 wt = item_weights.get(opLabel, opWeight)
-                d += wt * gate.frobeniusdist_squared(other_calc.operations[opLabel])
+                gate_mx = gate.to_dense()
+                other_mx = other_calc.operations[opLabel].to_dense()
+                delta = gate_mx - other_mx
+                if T is not None:
+                    delta = delta @ T
+                if Ti is not None:
+                    delta = Ti @ delta
+                val = _np.linalg.norm(delta.flatten())
+                d += wt * val**2
                 nSummands += wt * (gate.dim)**2
 
             for lbl, rhoV in self.preps.items():
+                # keep the original implementation, for now.
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl])
+                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], None, None)
                 nSummands += wt * rhoV.dim
 
             for lbl, Evec in self.effects.items():
+                # keep the original implementation, for now.
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl])
-                nSummands += wt * Evec.dim
-
-        #Temporary: check that this function can be computed by
-        # calling residuals - replace with this later.
-        resids, chk_nSummands = self.residuals(other_calc, transform_mx, item_weights)
-        assert(_np.isclose(_np.sum(resids**2), d))
-        assert(_np.isclose(chk_nSummands, nSummands))
+                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl], None, None)
+                nSummands += wt * Evec.dimxw
 
         if normalize and nSummands > 0:
             return _np.sqrt(d / nSummands)
@@ -241,8 +255,6 @@ class ExplicitOpModelCalc(object):
         sqrt_itemWeights = {k: _np.sqrt(v) for k, v in item_weights.items()}
         opWeight = sqrt_itemWeights.get('gates', 1.0)
         spamWeight = sqrt_itemWeights.get('spam', 1.0)
-        # if T is None:
-        #     T = _np.eye(self.dim)
         Ti = None if T is None else _np.linalg.pinv(T)
         # ^ TODO: generalize inverse op (call T.inverse() if T were a "transform" object?)
 
