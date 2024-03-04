@@ -590,6 +590,14 @@ def leaky_entanglement_fidelity(op_a, op_b, mx_basis, n_leak=0):
     return ent_fid
 
 
+def leaky_jtracedist(op_a, op_b, mx_basis, n_leak=0):
+    temp1, temp2, ten_basis = lift_and_act_on_maxmixed_state(op_a, op_b, mx_basis, n_leak)
+    temp1_std = _bt.vec_to_stdmx(temp1, ten_basis, keep_complex=True)
+    temp2_std = _bt.basistools.vec_to_stdmx(temp2, ten_basis, keep_complex=True)
+    j_dist = tracedist(temp1_std, temp2_std)
+    return j_dist
+
+
 def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     Computes the average gate fidelity (AGF) between two gates.
