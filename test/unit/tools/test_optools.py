@@ -412,6 +412,19 @@ class GateOpsTester(BaseCase):
         self.assertAlmostEqual(fidelity_TP_unitary_jam, expect)
         self.assertAlmostEqual(fidelity_TP_unitary_std, expect)
 
+    def test_leaky_entanglement_fidelity(self):
+        fidelity_TP_unitary= ot.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_no_flag= ot.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_jam= ot.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
+        fidelity_TP_unitary_std= ot.leaky_entanglement_fidelity(self.A_TP_std, self.B_unitary_std, mx_basis='std')
+
+        expect = 0.4804724656092404
+        self.assertAlmostEqual(fidelity_TP_unitary, expect)
+        self.assertAlmostEqual(fidelity_TP_unitary_no_flag, expect)
+        self.assertAlmostEqual(fidelity_TP_unitary_jam, expect)
+        self.assertAlmostEqual(fidelity_TP_unitary_std, expect)
+        pass
+
     def test_fidelity_upper_bound(self):
         np.random.seed(0)
         Q = np.linalg.qr(np.random.randn(4,4) + 1j*np.random.randn(4,4))[0]
