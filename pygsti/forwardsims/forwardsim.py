@@ -180,6 +180,7 @@ class ForwardSimulator(_NicelySerializable):
     #    #self.effectreps = { lbl:e.torep('effect') for lbl,e in effects.items() }
 
     def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
+        #TODO: Better document expected API.
         raise NotImplementedError("Derived classes should implement this!")
 
     def _compute_sparse_circuit_outcome_probabilities(self, circuit, resource_alloc, time=None):
@@ -642,7 +643,7 @@ class ForwardSimulator(_NicelySerializable):
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
                 self.model.from_vector(vec, close=True)
-                self._bulk_fill_probs_block(probs2, layout, resource_alloc)
+                self._bulk_fill_probs_block(probs2, layout)
                 array_to_fill[:, iFinal] = (probs2 - probs) / eps
         self.model.from_vector(orig_vec, close=True)
 

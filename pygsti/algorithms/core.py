@@ -792,9 +792,12 @@ def run_iterative_gst(dataset, start_model, circuit_lists,
             array_types = optimizer.array_types + \
                 _max_array_types([builder.compute_array_types(method_names, mdl.sim)
                                   for builder in iteration_objfn_builders + final_objfn_builders])
+            print(f'array_types {array_types}')
             initial_mdc_store = _objfns.ModelDatasetCircuitsStore(mdl, dataset, circuitsToEstimate, resource_alloc,
                                                                   array_types=array_types, verbosity=printer - 1)
             mdc_store = initial_mdc_store
+            
+            print(f'mdc_store.layout._param_dimensions {mdc_store.layout._param_dimensions}')
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):
                 tNxt = _time.time()

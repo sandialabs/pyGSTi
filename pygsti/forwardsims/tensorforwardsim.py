@@ -63,12 +63,14 @@ class TensorForwardSimulator(_ForwardSimulator):
         
     #define a function that takes as input a circuit and returns the composite tensor network       
         
-    def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes,resource_alloc, time=None):
+    def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
+        print(outcomes)
         expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
         outcome_to_index = {outc: i for i, outc in enumerate(outcomes)}
         for spc, spc_outcomes in expanded_circuit_outcomes.items():  # spc is a SeparatePOVMCircuit
             # Note: `spc.circuit_without_povm` *always* begins with a prep label.
             indices = [outcome_to_index[o] for o in spc_outcomes]
+            print(indices)
             if time is None:  # time-independent state propagation
 
                 rho = self.model.circuit_layer_operator(spc.circuit_without_povm[0], 'prep')
@@ -77,13 +79,17 @@ class TensorForwardSimulator(_ForwardSimulator):
                 circuit_tensor_network = self.construct_circuit_tensor_network(spc.circuit_without_povm[1:])
                 
                 num_qubits= self.model.state_space.num_qubits
-                print(rho)
-                print(povm)
+                #print(rho)
+                #print(povm)
+                
+                #print(circuit)
 
                 if povm is None:
                     effects = [self.model.circuit_layer_operator(elabel, 'povm') for elabel in spc.full_effect_labels]
                     num_qubits= self.model.state_space.num_qubits
                     
+                    #for effect in effects:
+                    #    print(circuit_tensor_network & self.gate_join_TN(0, num_qubits) & rho.LPDO_tensor_network & self.gate_join_TN(len(circuit), num_qubits) & effect.LPDO_tensor_network)
                     
                     array_to_fill[indices] = [(circuit_tensor_network & self.gate_join_TN(0, num_qubits) & rho.LPDO_tensor_network & self.gate_join_TN(len(circuit), num_qubits) & effect.LPDO_tensor_network).contract() for effect in effects] # outcome probabilities
                 else:
@@ -99,9 +105,11 @@ class TensorForwardSimulator(_ForwardSimulator):
                     effect_TNs = [effect.LPDO_tensor_network.copy() for effect in effects]
                     effect_TNs = [self.add_time_context(effect_TN, len(circuit) + 1) for effect_TN in effect_TNs]
                     
+                    #for effect_TN in effect_TNs:
+                    #    print(circuit_tensor_network & self.gate_join_TN(0, num_qubits) & rho_TN & self.gate_join_TN(len(circuit), num_qubits) & effect_TN)
                     
                     array_to_fill[indices] = [(circuit_tensor_network & self.gate_join_TN(0, num_qubits) & rho_TN & self.gate_join_TN(len(circuit), num_qubits) & effect_TN).contract() for effect_TN in effect_TNs]  # outcome probabilities
-                
+               
             else:
                 raise NotImplementedError('Have not done time dependent stuff yet.')
                 #t = time  # Note: time in labels == duration
@@ -117,7 +125,9 @@ class TensorForwardSimulator(_ForwardSimulator):
                 #    # Note: don't advance time (all effects occur at same time)
                 #    ps.append(op._rep.probability(state))
                 #array_to_fill[indices] = ps
-                
+
+            print(array_to_fill)
+
     #def _compute_circuit_outcome_probability_derivatives(self, array_to_fill, circuit, outcomes, param_slice,
     #                                                     resource_alloc):
     #Overide default derivative_dimensions behavior so that it is equal to the number of model parameters
