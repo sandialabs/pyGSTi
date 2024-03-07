@@ -76,6 +76,8 @@ class TensorNetworkOp(_ModelMember):
         super().__init__(state_space, evotype)
            
     def from_vector(self, v, close=False, dirty_value=True):
+        #print('RUNNING IN TENSOR NETWORK')
+        #print(f'{v=}')
         #start by partitioning the vector v into sections with sizes given by tensor_element_counts
         partitioned_vector = []
         for i, element_count in enumerate(self.tensor_element_counts):
@@ -92,9 +94,14 @@ class TensorNetworkOp(_ModelMember):
         #update the quimb tensor reps
         for quimb_tensor, new_data in zip(self.tensor_list, reshaped_arrays):
             quimb_tensor.modify(data= new_data)
-            
+        
+        #print(f'{self.paramvals=}')
+        #print(f'{self.tensor_list[0].data=}')
+              
         self.paramvals = v
         
+        #print(f'{self.paramvals=}')
+
         self.dirty = dirty_value
         
     def to_vector(self):
@@ -234,7 +241,7 @@ class TensorNetworkPOVM(_POVM):
         numpy array
             a 1D numpy array with length == num_params().
         """
-        v = np.empty(self.num_params, 'd')
+        v = _np.empty(self.num_params, 'd')
         for (lbl, effect), effect_local_inds in zip(self.items(), self._submember_rpindices):
             #if lbl == self.complement_label: continue
             v[effect_local_inds] = effect.to_vector()
