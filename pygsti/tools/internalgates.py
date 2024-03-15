@@ -16,7 +16,7 @@ import scipy.linalg as _spl
 from pygsti.tools import optools as _ot
 from pygsti.tools import symplectic as _symp
 from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
-from pygsti import sigmax, sigmay, sigmaz, sigmaxz
+from pygsti.tools.gatetools import sigmax, sigmay, sigmaz, sigmaxz
 
 
 class Gzr(_UnitaryGateFunction):
@@ -357,12 +357,11 @@ def standard_gatenames_cirq_conversions():
 
     Currently there are some standard gate names with no conversion to cirq.
 
-    TODO: add Clifford gates with
-    https://cirq.readthedocs.io/en/latest/generated/cirq.SingleQubitCliffordGate.html
-
     Returns
     -------
-    dict mapping strings to string
+    std_gatenames_to_cirq
+        dict mapping strings corresponding to standard built-in pyGSTi names to
+        corresponding cirq operation objects. 
     """
     try:
         import cirq
@@ -388,7 +387,9 @@ def standard_gatenames_cirq_conversions():
     std_gatenames_to_cirq['Gh'] = cirq.H
     std_gatenames_to_cirq['Gt'] = cirq.T
     std_gatenames_to_cirq['Gtdag'] = cirq.T**-1
-    std_gatenames_to_cirq['Gn'] = cirq.PhasedXZGate(axis_phase_exponent=0.147584, x_exponent=0.419569, z_exponent=-0.295167)
+    std_gatenames_to_cirq['Gn'] = cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
+                                                    x_exponent=0.4195693767448338, 
+                                                    z_exponent=-0.2951672353008665)
 
     #two-qubit gates
 
@@ -435,6 +436,33 @@ def standard_gatenames_cirq_conversions():
 
 
     return std_gatenames_to_cirq
+
+def cirq_gatenames_standard_conversions():
+    
+    """
+    A dictionary converting cirq gates to built-in pyGSTi names for these gates.
+    Does not currently support conversion of all cirq gate types.
+    """
+
+    try:
+        import cirq
+    except ImportError:
+        raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
+
+
+    #reverse the mapping in standard_gatenames_cirq_conversions
+    cirq_to_standard_mapping = {value: key for key,value in standard_gatenames_cirq_conversions().items()}
+
+    #A direct reversing doesn't quite do what we want since the originally mapping was not
+    #one-to-one (some pyGSTi gate names refer to the same cirq Circuit, primarily because of the cliffords). 
+    #Manually add back in some preference on the non-one-to-one gates.
+    cirq_to_standard_mapping[cirq.I] = 'Gi'
+    cirq_to_standard_mapping[cirq.X] = 'Gxpi'
+    cirq_to_standard_mapping[cirq.Y] = 'Gypi'
+    cirq_to_standard_mapping[cirq.Z] = 'Gzpi'
+    cirq_to_standard_mapping[cirq.H] = 'Gh'
+
+    return cirq_to_standard_mapping
 
 
 def standard_gatenames_quil_conversions():
