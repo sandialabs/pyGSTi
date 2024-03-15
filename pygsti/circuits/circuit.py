@@ -3744,6 +3744,12 @@ class Circuit(object):
             gatename_conversion = _itgs.standard_gatenames_cirq_conversions()
             if wait_duration is not None:
                 gatename_conversion[idle_gate_name] = cirq.WaitGate(wait_duration)
+        #conversion does not work is the line labels are none, or the line labels are not a subset
+        #of the keys for qubit_conversion (indicating there isn't a corresponding mapping into cirq objects).
+        msg1 = 'Conversion to cirq does not work with circuits w/placeholder * line label.'
+        msg2 = 'Missing qubit conversions, some line labels have no corresponding cirq conversion in qubit_conversions.'
+        assert self.line_labels != ('*',), msg1
+        assert set(self.line_labels).issubset(set(qubit_conversion.keys())), msg2
 
         moments = []
         for i in range(self.num_layers):
@@ -3751,15 +3757,100 @@ class Circuit(object):
             operations = []
             for gate in layer:
                 operation = gatename_conversion[gate.name]
-                if operation is None:
-                    # This happens if no idle gate it specified because
-                    # standard_gatenames_cirq_conversions maps 'Gi' to `None`
-                    continue
                 qubits = map(qubit_conversion.get, gate.qubits)
                 operations.append(operation.on(*qubits))
             moments.append(cirq.Moment(operations))
 
         return cirq.Circuit(moments)
+    
+    @classmethod
+    def from_cirq(cls, circuit, qubit_conversion=None):
+        """
+        Converts and instantiates a pyGSTi Circuit object from a Cirq Circuit object.
+
+        Parameters
+        ----------
+        circuit : cirq Circuit
+            The cirq Circuit object to parse into a pyGSTi circuit.
+
+        qubit_conversion : dict, optional (default None)
+            A dictionary specifying a mapping between cirq qubit objects and 
+            pyGSTi qubit labels (either integers or strings).
+            If None, then a default mapping is created.
+
+        Returns
+        -------
+        pygsti_circuit
+            A pyGSTi Circuit instance equivalent to the specified Cirq one.
+        """
+
+        try:
+            import cirq
+        except ImportError:
+            raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
+
+        #mapping between cirq gates and pygsti gate names:
+        cirq_to_gate_name_mapping = _itgs.cirq_gatenames_standard_conversions()
+
+        #get all of the qubits in the cirq Circuit
+        all_cirq_qubits = circuit.all_qubits()
+
+        #ensure all of these have a conversion available.
+        if qubit_conversion is not None:
+            assert set(all_cirq_qubits).issubset(set(qubit_conversion.items())), 'Missing cirq to pygsti conversions for some qubit label(s).'
+        #if it is None, build a default mapping.
+        else:
+            #default mapping is currently hardcoded for the conventions of either cirwq's 
+            #NamedQubit, LineQubit or GridQubit classes, other types will raise an error.
+            qubit_conversion = {}
+            for qubit in all_cirq_qubits:
+                if isinstance(qubit, cirq.NamedQubit):
+                    qubit_conversion[qubit] = f'Q{qubit.name}'
+                elif isinstance(qubit, cirq.LineQubit):
+                    qubit_conversion[qubit] = f'Q{qubit.x}'
+                elif isinstance(qubit, cirq.GridQubit):
+                    qubit_conversion[qubit] = f'Q{qubit.row}_{qubit.col}'
+                else:
+                    msg = 'Unsupported cirq qubit type. Currently only support for automatically creating'\
+                          +'a default cirq qubit to pygsti qubit label mapping for NamedQubit, LineQubit and GridQubit.'
+                    raise ValueError(msg)
+
+        #In cirq the equivalent concept to a layer in a pygsti circuit is a Moment.
+        #Circuits consist of ordered lists of moments corresponding to a set of
+        #operations applied at that abstract time slice.
+        #cirq Circuits can be sliced and iterated over. Iterating returns each contained
+        #Moment in sequence. Slicing returns a new circuit corresponding to the 
+        #selected layers.
+
+        #initialize empty list of pygsti circuit layers
+        circuit_layers = []
+
+        #Iterate through each of the moments and build up layers Moment by Moment.
+        for moment in circuit:
+            #if the length of the tuple of operations for this moment in
+            #moment.operations is length 1, then we'll add the operation to
+            #the pygsti circuit as a bare gate label (i.e. not wrapped in a layer label
+            #indicating parallel gates). Otherwise, we'll iterate through and add them
+            #as a layer label.
+            if len(moment.operations) == 1:
+                op = moment.operations[0]
+                name = cirq_to_gate_name_mapping[op.gate]
+                sslbls = tuple(qubit_conversion[qubit] for qubit in op.qubits)
+                circuit_layers.append(_Label(name, state_space_labels = sslbls))
+
+            else:
+                #initialize sublist for layer label elements
+                layer_label_elems = []
+                #iterate through each of the operations in this moment
+                for op in moment.operations:
+                    name = cirq_to_gate_name_mapping[op.gate]
+                    sslbls = tuple(qubit_conversion[qubit] for qubit in op.qubits)
+                    layer_label_elems.append(_Label(name, state_space_labels = sslbls))
+                circuit_layers.append(_Label(layer_label_elems))
+
+        #Note, we can let the pyGSTi Circuit object's constructor handle identifying the
+        #correct line labels.
+        return cls(circuit_layers)        
 
     def convert_to_quil(self,
                         num_qubits=None,
