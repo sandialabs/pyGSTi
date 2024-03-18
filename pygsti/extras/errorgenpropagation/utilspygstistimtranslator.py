@@ -39,7 +39,6 @@ Takes a layer of pyGSTi gates and composes them into a single stim Tableu
 '''
 def pyGSTiLayer_to_stimLayer(player,qubits,MultiGateDict={},MultiGate=False):
     slayer=stim.Tableau(qubits)
-    started = False
     stimDict=Gate_Translate_Dict_p_2_s()
     for sub_lbl in player:
         if not MultiGate:

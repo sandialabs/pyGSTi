@@ -1,9 +1,10 @@
 import stim
-from pygsti.propErrorGens.propagatableerrorgen import *
-from pygsti.propErrorGens.pyGSTiStimTranslator import *
+from pygsti.extras.errorgenpropagation.propagatableerrorgen import *
+from pygsti.extras.errorgenpropagation.utilspygstistimtranslator import *
 from numpy import abs
 from numpy.linalg import multi_dot
 from scipy.linalg import expm
+from pygsti.tools.internalgates import standard_gatenames_stim_conversions
 
 
 '''
@@ -22,12 +23,11 @@ MultiGate: lets the code know
 returns: list of propagatableerrorgens
 '''
 def ErrorPropagator(circ,errorModel,MultiGateDict={},BCHOrder=1,BCHLayerwise=False,NonMarkovian=False,MultiGate=False):
-    qubits=len(circ.line_labels)
-    stim_layers=[]
-    for j in range(circ.depth):
-        layer = circ.layer(j)
-        stim_layer=pyGSTiLayer_to_stimLayer(layer,qubits,MultiGateDict,MultiGate)
-        stim_layers.append(stim_layer)
+    stim_dict=standard_gatenames_stim_conversions()
+    if MultiGate:
+        for key in MultiGateDict:
+            stim_dict[key]=stim_dict[MultiGateDict[key]]
+    stim_layers=circ.convert_to_stim_tableau_layers(gate_name_conversions=stim_dict)
     stim_layers.pop(0)  #Immeditielty toss the first layer because it is not important,
 
     propagation_layers=[]
@@ -40,7 +40,7 @@ def ErrorPropagator(circ,errorModel,MultiGateDict={},BCHOrder=1,BCHLayerwise=Fal
     else:
         propagation_layers = stim_layers
 
-    errorLayers=buildErrorlayers(circ,errorModel,qubits)
+    errorLayers=buildErrorlayers(circ,errorModel,len(circ.line_labels))
 
     num_error_layers=len(errorLayers)
     fully_propagated_layers=[]

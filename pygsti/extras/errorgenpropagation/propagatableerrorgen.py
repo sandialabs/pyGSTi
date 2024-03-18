@@ -1,5 +1,5 @@
 from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel
-from pygsti.propErrorGens.pyGSTiStimTranslator import *
+from pygsti.extras.errorgenpropagation.utilspygstistimtranslator import *
 import stim
 from numpy import array,kron
 from pygsti.tools import change_basis
@@ -7,6 +7,8 @@ from pygsti.tools.lindbladtools import create_elementary_errorgen
 '''
 Similar to errorgenlabel but has an errorrate included as well as additional classes
 '''
+# Create a new pygsti-ish method where we use a modified dictionary and a modified local error generator where the keys are
+# stim PauliStrings
 class propagatableerrorgen(ElementaryErrorgenLabel):
     '''
     Labels an elementary errorgen by a type, pauli and error rate
