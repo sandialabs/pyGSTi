@@ -311,7 +311,7 @@ def standard_gatename_unitaries():
     std_unitaries['Gzr'] = Gzr()
     std_unitaries['Gczr'] = Gczr()
 
-    #Add these at the end, since we don't want unitary_to_standard_gatenemt to return these "shorthand" names
+    #Add these at the end, since we don't want unitary_to_standard_gatenames to return these "shorthand" names
     std_unitaries['Gx'] = std_unitaries['Gxpi2']
     std_unitaries['Gy'] = std_unitaries['Gypi2']
     std_unitaries['Gz'] = std_unitaries['Gzpi2']
@@ -319,7 +319,7 @@ def standard_gatename_unitaries():
     return std_unitaries
 
 
-def unitary_to_standard_gatename(unitary):
+def unitary_to_standard_gatename(unitary, up_to_phase = False, return_phase = False):
     """
     Looks up and returns the standard gate name for a unitary gate matrix, if one exists.
 
@@ -327,6 +327,16 @@ def unitary_to_standard_gatename(unitary):
     ----------
     unitary : complex np.array
         The unitary to convert.
+
+    up_to_phase : bool, optional (default False)
+        If true then after checking if the unitary is exactly equivalent to a built-in one, 
+        this then checks if the input unitary is equal to to a built-in one up to a global
+        phase.
+
+    return_phase : bool, optional (default False)
+        If true, and up_to_phase is true, then if a unitary is equivalent up to a global
+        phase to a built-in one, we return that phase (i.e. the phase the built-in one
+        would need to be multiplied by).
 
     Returns
     -------
@@ -337,6 +347,28 @@ def unitary_to_standard_gatename(unitary):
     for std_name, U in standard_gatename_unitaries().items():
         if not callable(U) and not callable(unitary) and U.shape == unitary.shape and _np.allclose(unitary, U):
             return std_name
+    
+    #check for equivalence up to a global phase.
+    if up_to_phase:
+        for std_name, U in standard_gatename_unitaries().items():
+        #I think the callable checks are to avoid doing the check on the continuously parameterized Z
+        #rotation that is in the built-in dictionary. Follow the original code's lead and do the same here.
+            if not callable(U) and not callable(unitary) and U.shape == unitary.shape:
+                
+                inv_prod = U.conj().T@unitary
+                inv_prod_diag = _np.diag(inv_prod)
+                inv_prod_upper = _np.triu(inv_prod, 1)
+                inv_prod_lower = _np.tril(inv_prod, -1)
+
+                #If all of the diagonals are close to the same value, and all the the off diagonals
+                #are close to 0 then we should be proportional to the identity.
+                if _np.allclose(inv_prod_diag, inv_prod_diag[0]) and _np.allclose(inv_prod_upper, 0) and _np.allclose(inv_prod_lower, 0):
+                    if return_phase:
+                        phase = inv_prod_diag[0]
+                        return std_name, phase
+                    else:
+                        return std_name
+
     return None
 
 
@@ -459,6 +491,7 @@ def cirq_gatenames_standard_conversions():
     cirq_to_standard_mapping[cirq.I] = 'Gi'
     cirq_to_standard_mapping[cirq.X] = 'Gxpi'
     cirq_to_standard_mapping[cirq.Y] = 'Gypi'
+    cirq_to_standard_mapping[cirq.PhasedXZGate(axis_phase_exponent=0.5, x_exponent=-1, z_exponent=0)] = 'Gypi'
     cirq_to_standard_mapping[cirq.Z] = 'Gzpi'
     cirq_to_standard_mapping[cirq.XPowGate(exponent=1 / 2)] = 'Gxpi2'
     cirq_to_standard_mapping[cirq.YPowGate(exponent=1 / 2)] = 'Gypi2'
