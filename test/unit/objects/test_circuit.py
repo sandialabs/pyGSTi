@@ -496,6 +496,72 @@ MEASURE 2 ro[2]
         s = c.convert_to_quil()
         self.assertEqual(quil_str, s)
 
+    def test_convert_to_openqasm(self):
+        ckt = circuit.Circuit([Label('Gxpi2',0), Label(()), Label([Label('Gh',0), Label('Gtdag',1)]), 
+                               Label('Gcnot', (0,1))], line_labels=(0,1))
+
+        converted_qasm = ckt.convert_to_openqasm()
+        #this is really just doing a check if anything has changed. I.e. an integration test.
+        expected_qasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\nopaque delay(t) q;\n\nqreg q[2];'\
+                        +'\ncreg cr[2];\n\nu3(1.570796326794897, 4.71238898038469, 1.570796326794897) q[0];\ndelay(0) q[1];'\
+                        +'\nbarrier q[0], q[1];\ndelay(0) q[0];\ndelay(0) q[1];\nbarrier q[0], q[1];\nh q[0];\ntdg q[1];'\
+                        +'\nbarrier q[0], q[1];\ncx q[0],  q[1];\nbarrier q[0], q[1];\nmeasure q[0] -> cr[0];\nmeasure q[1] -> cr[1];\n'
+
+        self.assertEqual(converted_qasm, expected_qasm)
+
+    def test_convert_to_cirq(self):        
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+            
+        ckt = circuit.Circuit([Label('Gxpi2',0), Label(()), Label('Gn',0), Label([Label('Gh',0), Label('Gtdag',1)]), 
+                               Label('Gcnot', (0,1))], line_labels=(0,1))
+        
+        qubit_conversion = {0: cirq.GridQubit(0,0), 1: cirq.GridQubit(0,1)}
+        cirq_circuit_converted = ckt.convert_to_cirq(qubit_conversion)
+
+        #Manually build this circuit directly in cirq and compare.
+        qubit_00 = cirq.GridQubit(0,0)
+        qubit_01 = cirq.GridQubit(0,1)
+        moment1 = cirq.Moment([cirq.XPowGate(exponent=.5).on(qubit_00), cirq.I(qubit_01)])
+        moment2 = cirq.Moment([cirq.I(qubit_00), cirq.I(qubit_01)])
+        moment3 = cirq.Moment([cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
+                                                            x_exponent=0.4195693767448338, 
+                                                            z_exponent=-0.2951672353008665).on(qubit_00),
+                            cirq.I(qubit_01)])
+        moment4 = cirq.Moment([cirq.H(qubit_00), (cirq.T**-1).on(qubit_01)])
+        moment5 = cirq.Moment([cirq.CNOT.on(qubit_00, qubit_01)])
+        cirq_circuit_direct = cirq.Circuit([moment1, moment2, moment3, moment4, moment5])
+
+        self.assertTrue(cirq_circuit_direct == cirq_circuit_converted)
+
+    def test_from_cirq(self):
+        try:
+            import cirq
+        except ImportError:
+            self.skipTest("Cirq is required for this operation, and it does not appear to be installed.")
+
+        qubit_00 = cirq.GridQubit(0,0)
+        qubit_01 = cirq.GridQubit(0,1)
+        moment1 = cirq.Moment([cirq.XPowGate(exponent=.5).on(qubit_00), cirq.I(qubit_01)])
+        moment2 = cirq.Moment([cirq.I(qubit_00), cirq.I(qubit_01)])
+        moment3 = cirq.Moment([cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
+                                                 x_exponent=0.4195693767448338, 
+                                                 z_exponent=-0.2951672353008665).on(qubit_00),
+                            cirq.I(qubit_01)])
+        moment4 = cirq.Moment([cirq.H(qubit_00), (cirq.T**-1).on(qubit_01)])
+        moment5 = cirq.Moment([cirq.CNOT.on(qubit_00, qubit_01)])
+        cirq_circuit = cirq.Circuit([moment1, moment2, moment3, moment4, moment5])
+        
+        converted_pygsti_circuit = circuit.Circuit.from_cirq(cirq_circuit, 
+                                                             qubit_conversion= {qubit_00: 0, qubit_01: 1})
+        
+        ckt = circuit.Circuit([Label('Gxpi2',0), Label(()), Label('Gn',0), Label([Label('Gh',0), Label('Gtdag',1)]), 
+                               Label('Gcnot', (0,1))], line_labels=(0,1))
+        
+        self.assertEqual(ckt, converted_pygsti_circuit)
+
     def test_done_editing(self):
         self.c.done_editing()
         with self.assertRaises(AssertionError):
