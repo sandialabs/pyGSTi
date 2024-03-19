@@ -204,7 +204,7 @@ class ExplicitOpModelCalc(object):
                 # keep the original implementation, for now.
                 wt = item_weights.get(lbl, spamWeight)
                 d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl], None, None)
-                nSummands += wt * Evec.dimxw
+                nSummands += wt * Evec.dim
 
         if normalize and nSummands > 0:
             return _np.sqrt(d / nSummands)
