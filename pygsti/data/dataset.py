@@ -1031,7 +1031,7 @@ class DataSet(_MongoSerializable):
             self.olIndex = outcome_label_indices
             self.olIndex_max = max(self.olIndex.values()) if len(self.olIndex) > 0 else -1
         elif outcome_labels is not None:
-            if isinstance(outcome_labels, _np.int64):
+            if isinstance(outcome_labels, _numbers.Integral):
                 nqubits = outcome_labels
                 tup_outcomeLabels = [("".join(x),) for x in _itertools.product(*([('0', '1')] * nqubits))]
             else:
