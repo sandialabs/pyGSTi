@@ -460,6 +460,9 @@ def cirq_gatenames_standard_conversions():
     cirq_to_standard_mapping[cirq.X] = 'Gxpi'
     cirq_to_standard_mapping[cirq.Y] = 'Gypi'
     cirq_to_standard_mapping[cirq.Z] = 'Gzpi'
+    cirq_to_standard_mapping[cirq.XPowGate(exponent=1 / 2)] = 'Gxpi2'
+    cirq_to_standard_mapping[cirq.YPowGate(exponent=1 / 2)] = 'Gypi2'
+    cirq_to_standard_mapping[cirq.ZPowGate(exponent=1 / 2)] = 'Gzpi2'
     cirq_to_standard_mapping[cirq.H] = 'Gh'
 
     return cirq_to_standard_mapping
