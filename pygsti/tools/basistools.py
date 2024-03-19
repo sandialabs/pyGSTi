@@ -145,13 +145,6 @@ def change_basis(mx, from_basis, to_basis, expect_real=True):
         The given operation matrix converted to the `to_basis` basis.
         Array size is the same as `mx`.
     """
-    if isinstance(mx, _np.ndarray) and mx.ndim == 0:
-        # mx is probably a wrapper around a pyGSTi object.
-        mx = mx.item()
-    if hasattr(mx, 'to_dense'):
-        # Question: how do we know the returned representation is
-        # in fact in the "from_basis"?
-        mx = mx.to_dense()
     if len(mx.shape) not in (1, 2):
         raise ValueError("Invalid dimension of object - must be 1 or 2, i.e. a vector or matrix")
 
@@ -283,9 +276,6 @@ def create_basis_for_matrix(mx, basis):
     -------
     Basis
     """
-    if isinstance(mx, _np.ndarray) and mx.ndim == 0:
-        # ^ mx is probably just holding a pyGSTi object
-        mx = mx.item()
     dim = mx.shape[0]
     if isinstance(basis, _basis.Basis):
         assert(basis.dim == dim), "Supplied Basis has wrong dimension!"
