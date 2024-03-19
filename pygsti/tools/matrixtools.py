@@ -31,13 +31,15 @@ except ImportError:
 EXPM_DEFAULT_TOL = 2**-53  # Scipy default
 
 
-def trace(m):  # memory leak in numpy causes repeated trace calls to eat up all memory --TODO: Cython this
+def trace(m):
     """
     The trace of a matrix, sum_i m[i,i].
 
-    A memory leak in some version of numpy can cause repeated calls to numpy's
+    Once upon a time, a memory leak in some version of numpy can cause repeated calls to numpy's
     trace function to eat up all available system memory, and this function
-    does not have this problem.
+    was created as a wrapper to bypass that problem. The implementation has since been 
+    restored to use numpy's trace function, following resolution of the memory leak:
+    https://github.com/numpy/numpy/issues/3326.
 
     Parameters
     ----------
@@ -49,17 +51,7 @@ def trace(m):  # memory leak in numpy causes repeated trace calls to eat up all 
     element type of m
         The trace of m.
     """
-    return sum([m[i, i] for i in range(m.shape[0])])
-#    with warnings.catch_warnings():
-#        warnings.filterwarnings('error')
-#        try:
-#            ret =
-#        except Warning:
-#            print "BAD trace from:\n"
-#            for i in range(M.shape[0]):
-#                print M[i,i]
-#            raise ValueError("STOP")
-#    return ret
+    return _np.trace(m)
 
 
 def is_hermitian(mx, tol=1e-9):
@@ -145,7 +137,7 @@ def frobeniusnorm(ar):
     float or complex
         depending on the element type of ar.
     """
-    return _np.sqrt(_np.sum(ar**2))
+    return _np.linalg.norm(ar.reshape((-1,)))
 
 
 def frobeniusnorm_squared(ar):
@@ -165,7 +157,7 @@ def frobeniusnorm_squared(ar):
     float or complex
         depending on the element type of ar.
     """
-    return _np.sum(ar**2)
+    return _np.linalg.norm(ar.reshape((-1,)))**2
 
 
 def nullspace(m, tol=1e-7):
