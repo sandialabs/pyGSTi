@@ -43,6 +43,11 @@ from pygsti.tools import slicetools as _slct
 # c[1:3,'Q0'] = ('Gx','Gy') # assigns to a part of the Q0 line
 
 
+#Add warning filter
+msg = 'Could not find matching standard gate name in provided dictionary. Falling back to try and find a'\
+     +' unitary from standard_gatename_unitaries which matches up to a global phase.'
+_warnings.filterwarnings('module', message=msg, category=UserWarning)
+
 def _np_to_quil_def_str(name, input_array):
     """
     Write a DEFGATE block for RQC quil for an arbitrary one- or two-qubit unitary gate.
@@ -3764,7 +3769,7 @@ class Circuit(object):
         return cirq.Circuit(moments)
     
     @classmethod
-    def from_cirq(cls, circuit, qubit_conversion=None, implied_idles = False, global_idle = False):
+    def from_cirq(cls, circuit, qubit_conversion=None, cirq_gate_conversion= None,implied_idles = False, global_idle = False):
         """
         Converts and instantiates a pyGSTi Circuit object from a Cirq Circuit object.
 
@@ -3777,6 +3782,11 @@ class Circuit(object):
             A dictionary specifying a mapping between cirq qubit objects and 
             pyGSTi qubit labels (either integers or strings).
             If None, then a default mapping is created.
+
+        cirq_gate_conversion : dict, optional (default None)
+            If specified a dictionary with keys given by cirq gate objects,
+            and values given by pygsti gate names which overrides the built-in
+            conversion dictionary used by default.
 
         implied_idles : bool, optional (default False)
             A flag indicating whether to explicitly include
@@ -3805,7 +3815,10 @@ class Circuit(object):
             raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
 
         #mapping between cirq gates and pygsti gate names:
-        cirq_to_gate_name_mapping = _itgs.cirq_gatenames_standard_conversions()
+        if cirq_gate_conversion is not None:
+            cirq_to_gate_name_mapping = cirq_gate_conversion
+        else:
+            cirq_to_gate_name_mapping = _itgs.cirq_gatenames_standard_conversions()
 
         #get all of the qubits in the cirq Circuit
         all_cirq_qubits = circuit.all_qubits()
@@ -3852,7 +3865,14 @@ class Circuit(object):
             #as a layer label.
             if len(moment.operations) == 1:
                 op = moment.operations[0]
-                name = cirq_to_gate_name_mapping[op.gate]
+                try:
+                    name = cirq_to_gate_name_mapping[op.gate]
+                except KeyError:
+                    msg = 'Could not find matching standard gate name in provided dictionary. Falling back to try and find a'\
+                         +' unitary from standard_gatename_unitaries which matches up to a global phase.'
+                    _warnings.warn(msg)
+                    name = _itgs.unitary_to_standard_gatename(op.gate._unitary_(), up_to_phase=True)
+                    assert name is not None, 'Could not find a matching standard gate name for conversion.'
                 sslbls = tuple(qubit_conversion[qubit] for qubit in op.qubits)
                 #global idle handling:
                 if name == 'Gi' and global_idle:
@@ -3873,7 +3893,14 @@ class Circuit(object):
                 layer_label_elems = []
                 #iterate through each of the operations in this moment
                 for op in moment.operations:
-                    name = cirq_to_gate_name_mapping[op.gate]
+                    try:
+                        name = cirq_to_gate_name_mapping[op.gate]
+                    except KeyError:
+                        msg = 'Could not find matching standard gate name in provided dictionary. Falling back to try and find a'\
+                            +' unitary from standard_gatename_unitaries which matches up to a global phase.'
+                        _warnings.warn(msg)
+                        name = _itgs.unitary_to_standard_gatename(op.gate._unitary_(), up_to_phase=True)
+                        assert name is not None, 'Could not find a matching standard gate name for conversion.'
                     sslbls = tuple(qubit_conversion[qubit] for qubit in op.qubits)
                     layer_label_elems.append(_Label(name, state_space_labels = sslbls))
 
