@@ -29,6 +29,7 @@ from ...circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs import Basis
 from itertools import product, permutations
 from ...baseobjs import basisconstructors
+import stim
 
 
 # This module implements idle tomography, which deals only with
@@ -403,6 +404,162 @@ def dict_to_jacobian(coef_dict, classification, numQubits):
     # print(output_jacobian)
     # print(col_index_list)
     return output_jacobian, col_index_list
+
+
+
+#--------- Test out Hamiltonian Jacobian Stuff ---------------#
+
+def hamiltonian_jac_alt(num_qubits):
+    #The jacobian we are trying to construct has columns corresponding to
+    #intrisic hamiltonian generator rates, and rows corresponding to prep-measure
+    #experiment pairs, where prep means prepare some eigenstate of some pauli,
+    #and measure means measure the inner product with some eigenstate of some
+    #pauli. We can write these as (I+Q)/sqrt(d) and (I+R)/sqrt(d) for some
+    #signed paulis Q and R.
+
+    #Dictionary of all of the n-qubit (unsigned) paulis.
+    pauli_matrices = basisconstructors.pp_matrices_dict(2**num_qubits, normalize=False)
+
+    #all possible parities for the pauli strings
+    parities = list(product([1, -1], repeat=num_qubits))
+
+    #get rid of the all identity string, we don't need it.
+    identKey = "I" * num_qubits
+    del pauli_matrices[identKey]
+
+    #constuct list of strictly non-trivial paulis for prep and measurement
+    all_nontrivial_paulis = [key for key in pauli_matrices.keys() if "I" not in key]
+    
+    #for ham keys the only restriction is not the all identity string
+    #let's make the hamiltonian_pauli_idxs values stim PauliString objects
+    hamiltonian_pauli_idxs = [stim.PauliString(pauli) for pauli in pauli_matrices.keys()]
+
+    #For the eigenstates, we are going to want to loop through the non-trivial paulis
+    #and construct the different possible parities.
+    signed_nontrivial_paulis = []
+    #an alternate version of the signed paulis where we only track
+    #the overall sign from pulling the scalars signs out front.
+    overall_signed_nontrivial_paulis = []
+
+    for pauli in all_nontrivial_paulis:
+        for parity in parities:
+            signed_pauli = ''
+            for i,subpauli in enumerate(pauli):
+                if parity[i]>0:
+                    signed_pauli += f'+{subpauli}'
+                else:
+                    signed_pauli += f'-{subpauli}'
+            signed_nontrivial_paulis.append(signed_pauli)
+            if _np.prod(parity)>0:
+                overall_signed_pauli = '+' + pauli
+            else:
+                overall_signed_pauli = '-' + pauli
+            #append this as a stim PauliString object,
+            #which can handle overall signed paulis (but not individually
+            #signed ones).
+            overall_signed_nontrivial_paulis.append(stim.PauliString(overall_signed_pauli))
+    #loop through  prep_meas_pairs, create a list of tuples corresponding to prep eigenstates
+    #and meas eigenstates.
+    prep_meas_eigenstate_pairs = list(product(signed_nontrivial_paulis, repeat=2))
+    #create a similar iterator but for the overall-signed pairs.
+    prep_meas_overall_signed_pairs = list(product(overall_signed_nontrivial_paulis, repeat=2))
+
+    #initialize an empty numpy array for the jacobian:
+    ham_jac = _np.zeros((len(prep_meas_eigenstate_pairs), len(hamiltonian_pauli_idxs)))
+
+    #for each of these pairs we then want to loop through all of the elements of
+    #hamiltonian_pauli_idxs and compute the component of the jacobian for this
+    #hamiltonian index.
+    for row_idx, ((prep, meas), (prep_overall, meas_overall)) in enumerate(zip(prep_meas_eigenstate_pairs, prep_meas_overall_signed_pairs)):
+        for col_idx, ham_pauli_idx in enumerate(hamiltonian_pauli_idxs):
+            #we're calculating for each prep_overall, meas_overall, ham_pauli_idx
+            #triple the expression (-i/d)*Tr(meas_overall@[ham_pauli_idx,prep_overall])
+            prep_ham_idx_comm = half_pauli_comm(ham_pauli_idx, prep_overall)
+            #if this commutator is zero then we can move onto the next hamiltonian index.
+            if prep_ham_idx_comm == 0:
+                continue
+
+            #The paulis are trace orthonormal, so we only get a non-zero value
+            #if meas_overall ~= prep_ham_idx_comm (i.e. up to the overall sign/phase).
+            if is_unsigned_pauli_equiv(meas_overall, prep_ham_idx_comm):
+                #in this case we just need to get the overall sign and append
+                #an appropriately signed 2 to the jacobian.
+                #this should be real-valued up to numerical precision,
+                #but if not this will raise an error below. when we try
+                #to set ham_jac which has a dtype of np.double. 
+                final_sign = _np.real_if_close(-1j*meas_overall.sign*prep_ham_idx_comm.sign)
+                ham_jac[row_idx, col_idx] = final_sign*2
+
+    return ham_jac
+
+def half_pauli_comm(pauli1, pauli2):
+    '''
+    Computes the commutator between two unsigned pauli strings.
+    [pauli1, pauli2]
+
+    Parameters
+    ----------
+    pauli1 : stim.PauliString
+    
+    pauli2 : stim.PauliString
+    
+    Returns
+    -------
+    comm : stim.PauliString or int
+        The signed pauli string corresponding to the commutator,
+        up to a missing factor of 2.
+        If the paulis commute then 0 is returned.
+    '''
+    
+    #Every pair of paulis either commute or anticommute (see 
+    #https://arxiv.org/pdf/1909.08123.pdf for more on commutation structure
+    #of the n-qubit pauli group). So this breaks into two cases. If
+    #pauli1 and pauli2 commute, then [pauli1, pauli2] = 0. If they anticommute
+    #then [pauli1,pauli2] = 2*pauli1@pauli2. Stim has a nice built-in method
+    #for checking this. But, stim doesn't have a nice way to represent a scalar
+    #multiple of a pauli string, so we'll just return the product.
+
+    if pauli1.commutes(pauli2):
+        return 0
+    else:
+        return pauli1*pauli2
+
+def is_unsigned_pauli_equiv(pauli1, pauli2):
+    '''
+    Determines whether two paulis are equivalent up to overall phase.
+
+    Parameters
+    ----------
+    pauli1 : stim.PauliString
+    
+    pauli2 : stim.PauliString
+    
+    Returns
+    -------
+    is_equiv : bool
+        True of paulis are equivalent up to phase, otherwise
+        False.
+    '''
+
+    #create a copy of the paulis, then set their sign attributes to be +1.
+    #we can then compare these using stim's equivalence check.
+    pauli1 = pauli1.copy()
+    pauli2 = pauli2.copy()
+
+    pauli1.sign = 1
+    pauli2.sign = 1
+
+    return pauli1 == pauli2
+
+
+
+
+
+
+
+
+    
+
 
 
 # -----------------------------------------------------------------------------
