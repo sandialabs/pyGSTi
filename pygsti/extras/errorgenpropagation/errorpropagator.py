@@ -213,14 +213,16 @@ def buildErrorlayers(circ,errorDict,qubits):
 def nm_propagators(corr, Elist):
     Kms = []
     for idm in range(len(Elist)):
-        Am = Elist[idm].toWeightedErrorBasisMatrix
-        # This assumes that Elist is in reverse chronological order
-        partials = []
-        for idn in range(idm, len(Elist)):
-            An = Elist[idn].toWeightedErrorBasisMatrix()
-            partials += [corr[idm,idn] * Am @ An]
-        partials[0] = partials[0]/2
-        Kms += [sum(partials,0)]
+        for idmm in range(len(Elist[idm][0])):
+            Am = Elist[idm][0][idmm].toWeightedErrorBasisMatrix()
+            # This assumes that Elist is in reverse chronological order
+            partials = []
+            for idn in range(idm, len(Elist)):
+                for idnn in range(len(Elist[idn][0])):
+                    An = Elist[idn][0][idnn].toWeightedErrorBasisMatrix()
+                    partials += [corr[idm,idn] * Am @ An]
+            partials[0] = partials[0]/2
+            Kms += [sum(partials,0)]
     return Kms
 
 def averaged_evolution(corr, Elist):
