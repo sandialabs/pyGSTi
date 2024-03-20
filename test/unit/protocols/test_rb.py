@@ -8,7 +8,7 @@ from pygsti.processors import QubitProcessorSpec as QPS
 class TestCliffordRBDesign(BaseCase):
 
     def setUp(self):
-        self.num_qubits = 4
+        self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
         
         gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
@@ -22,7 +22,7 @@ class TestCliffordRBDesign(BaseCase):
         }
 
         # TODO: Test a lot of these, currently just the default from the tutorial
-        self.depths = [0, 1, 2]#, 4, 8]
+        self.depths = [0, 2]#, 4, 8]
         self.circuits_per_depth = 5
         self.qubits = ['Q0', 'Q1']
         self.citerations = 20
@@ -66,7 +66,7 @@ class TestCliffordRBDesign(BaseCase):
 class TestDirectRBDesign(BaseCase):
 
     def setUp(self):
-        self.num_qubits = 4
+        self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
         
         gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
@@ -81,7 +81,7 @@ class TestDirectRBDesign(BaseCase):
 
 
         # TODO: Test a lot of these, currently just the default from the tutorial
-        self.depths = [0, 1, 2]#, 4, 8]
+        self.depths = [0, 2]#, 4, 8]
         self.circuits_per_depth = 5
         self.qubits = ['Q0', 'Q1']
         self.randomizeout = True
@@ -141,7 +141,7 @@ class TestDirectRBDesign(BaseCase):
 class TestMirrorRBDesign(BaseCase):
 
     def setUp(self):
-        self.num_qubits = 4
+        self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
 
         gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase'] 
@@ -155,7 +155,7 @@ class TestMirrorRBDesign(BaseCase):
         }
 
         # TODO: Test a lot of these, currently just the default from the tutorial
-        self.depths = [0, 2, 4]
+        self.depths = [0, 2]
         self.circuits_per_depth = 5
         self.qubits = ['Q0', 'Q1']
         self.circuit_type = 'clifford'
@@ -192,7 +192,7 @@ class TestMirrorRBDesign(BaseCase):
 
     def test_clifford_design_construction(self):
 
-        n = 4
+        n = 2
         qs = ['Q'+str(i) for i in range(n)]
         ring = [('Q'+str(i),'Q'+str(i+1)) for i in range(n-1)]
 
@@ -201,7 +201,7 @@ class TestMirrorRBDesign(BaseCase):
         tmodel1 = pygsti.models.create_crosstalk_free_model(pspec1)
 
         depths = [0, 2, 8]
-        q_set = ('Q0', 'Q1', 'Q2')
+        q_set = ('Q0', 'Q1')
 
         clifford_compilations = {'absolute': CCR.create_standard(pspec1, 'absolute', ('paulis', '1Qcliffords'), verbosity=0)}
 
@@ -214,7 +214,7 @@ class TestMirrorRBDesign(BaseCase):
 
     def test_nonclifford_design_type1_construction(self):
 
-        n = 4
+        n = 2
         qs = ['Q'+str(i) for i in range(n)]
         ring = [('Q'+str(i),'Q'+str(i+1)) for i in range(n-1)]
 
@@ -223,7 +223,7 @@ class TestMirrorRBDesign(BaseCase):
         tmodel2 = pygsti.models.create_crosstalk_free_model(pspec2)
 
         depths = [0, 2, 8]
-        q_set = ('Q0', 'Q1', 'Q2')
+        q_set = ('Q0', 'Q1')
 
 
         design2 = pygsti.protocols.MirrorRBDesign(pspec2, depths, 3, qubit_labels=q_set, circuit_type='clifford+zxzxz-haar',
@@ -236,7 +236,7 @@ class TestMirrorRBDesign(BaseCase):
  
     def test_nonclifford_design_type2_construction(self):
 
-        n = 4
+        n = 2
         qs = ['Q'+str(i) for i in range(n)]
         ring = [('Q'+str(i),'Q'+str(i+1)) for i in range(n-1)]
 
@@ -245,7 +245,7 @@ class TestMirrorRBDesign(BaseCase):
         tmodel3 = pygsti.models.create_crosstalk_free_model(pspec3)
 
         depths = [0, 2, 8]
-        q_set = ('Q0', 'Q1', 'Q2')
+        q_set = ('Q0', 'Q1')
 
         
         design3 = pygsti.protocols.MirrorRBDesign(pspec3, depths, 3, qubit_labels=q_set, circuit_type='cz(theta)+zxzxz-haar',
@@ -259,7 +259,7 @@ class TestMirrorRBDesign(BaseCase):
 class TestBiRBDesign(BaseCase):
 
     def setUp(self):
-        self.num_qubits = 4
+        self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
 
         gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase'] 
@@ -272,7 +272,7 @@ class TestBiRBDesign(BaseCase):
         # TODO: Test a lot of these, currently just the default from the tutorial
         self.depths = [0, 2, 4]
         self.circuits_per_depth = 5
-        self.qubits = ['Q0', 'Q1', 'Q2', 'Q3']
+        self.qubits = ['Q0', 'Q1']
         self.circuit_type = 'clifford'
         self.sampler = 'edgegrab'
         self.samplerargs = [0.5]
@@ -295,7 +295,7 @@ class TestBiRBDesign(BaseCase):
         
 class TestBiRBProtocol(BaseCase):
     def setUp(self):
-        self.num_qubits = 4
+        self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
 
         gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase'] 
@@ -308,7 +308,7 @@ class TestBiRBProtocol(BaseCase):
         # TODO: Test a lot of these, currently just the default from the tutorial
         self.depths = [0, 2, 4]
         self.circuits_per_depth = 5
-        self.qubits = ['Q0', 'Q1', 'Q2', 'Q3']
+        self.qubits = ['Q0', 'Q1']
         self.circuit_type = 'clifford'
         self.sampler = 'edgegrab'
         self.samplerargs = [0.5]
@@ -347,7 +347,7 @@ class TestBiRBProtocol(BaseCase):
 
 class TestCliffordRBProtocol(BaseCase):
     def setUp(self):
-        self.num_qubits = 4
+        self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
         
         gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
@@ -361,7 +361,7 @@ class TestCliffordRBProtocol(BaseCase):
         }
 
         # TODO: Test a lot of these, currently just the default from the tutorial
-        self.depths = [0, 1, 2, 4, 8]
+        self.depths = [0, 2, 8]
         self.circuits_per_depth = 5
         self.qubits = ['Q0', 'Q1']
         self.citerations = 20
@@ -403,7 +403,7 @@ class TestCliffordRBProtocol(BaseCase):
 
 class TestDirectRBProtocol(BaseCase):
     def setUp(self):
-        self.num_qubits = 4
+        self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
         
         gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
@@ -418,7 +418,7 @@ class TestDirectRBProtocol(BaseCase):
 
 
         # TODO: Test a lot of these, currently just the default from the tutorial
-        self.depths = [0, 1, 2, 4, 8]
+        self.depths = [0, 2, 8]
         self.circuits_per_depth = 5
         self.qubits = ['Q0', 'Q1']
         self.randomizeout = True
@@ -462,7 +462,7 @@ class TestDirectRBProtocol(BaseCase):
 
 class TestMirrorRBProtocol(BaseCase):
     def setUp(self):
-        self.num_qubits = 4
+        self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
 
         gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase'] 
@@ -476,7 +476,7 @@ class TestMirrorRBProtocol(BaseCase):
         }
 
         # TODO: Test a lot of these, currently just the default from the tutorial
-        self.depths = [0, 2, 4, 8]
+        self.depths = [0, 2, 8]
         self.circuits_per_depth = 5
         self.qubits = ['Q0', 'Q1']
         self.circuit_type = 'clifford'

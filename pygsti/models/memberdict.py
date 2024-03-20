@@ -29,10 +29,12 @@ class _PrefixOrderedDict(_collections.OrderedDict):
         Initial values.  Should only be used as part of de-serialization.
     """
 
-    def __init__(self, prefix, items=[]):
+    def __init__(self, prefix, items=None):
         """ Creates a new _PrefixOrderedDict whose keys must begin
             with the string `prefix`."""
         #** Note: if change __init__ signature, update __reduce__ below
+        if items is None:
+            items = []
         self._prefix = prefix
         super(_PrefixOrderedDict, self).__init__(items)
 
@@ -98,7 +100,7 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
         Used by pickle and other serializations to initialize elements.
     """
 
-    def __init__(self, parent, default_param, prefix, flags, items=[]):
+    def __init__(self, parent, default_param, prefix, flags, items=None):
         """
         Creates a new OrderedMemberDict.
 
@@ -136,6 +138,8 @@ class OrderedMemberDict(_PrefixOrderedDict, _mm.ModelChild):
             Used by pickle and other serializations to initialize elements.
         """
         #** Note: if change __init__ signature, update __reduce__ below
+        if items is None:
+            items = []
         if isinstance(flags, str):  # for backward compatibility
             flags = {'cast_to_type': ("operation" if flags == "gate" else flags)}
 

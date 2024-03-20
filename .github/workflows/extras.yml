@@ -22,7 +22,7 @@ jobs:
       fail-fast: false # Finish all tests even if one fails
       matrix:
         os: [ubuntu-20.04, windows-2019, macos-11]
-        python-version: [3.7, 3.8, 3.9, '3.10']
+        python-version: [3.8, 3.9, '3.10', '3.11']
         
     steps:
     - uses: actions/checkout@v2
@@ -54,18 +54,18 @@ jobs:
       if: ${{matrix.os == 'ubuntu-20.04'}}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --ignore=test/test_packages/mpi --ignore=test/test_packages/mpi.old --ignore=test/test_packages/notebooks test/test_packages
+        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages
     - name: Run test_packages Windows
       if: ${{matrix.os == 'windows-2019'}}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --ignore=test/test_packages/mpi --ignore=test/test_packages/mpi.old --ignore=test/test_packages/notebooks test/test_packages
+        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages
     - name: Run test_packages MacOS
       if: ${{matrix.os == 'macos-11'}}
 
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --ignore=test/test_packages/mpi --ignore=test/test_packages/mpi.old --ignore=test/test_packages/notebooks test/test_packages
+        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages
 
 
 

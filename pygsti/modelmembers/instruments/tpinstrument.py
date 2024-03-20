@@ -70,8 +70,10 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
     # M4 = -(sum(Di)+(4-2=2)*MT) = -(sum(all)+(4-3=1)*MT)
     #n=2 case: (M1-MT) = (MT-M2)-MT = -M2, so M2 = -sum(Di)
 
-    def __init__(self, op_matrices, evotype="default", state_space=None, called_from_reduce=False, items=[]):
+    def __init__(self, op_matrices, evotype="default", state_space=None, called_from_reduce=False, items=None):
 
+        if items is None:
+            items = []
         self._readonly = False  # until init is done
         if len(items) > 0:
             assert(op_matrices is None), "`items` was given when op_matrices != None"

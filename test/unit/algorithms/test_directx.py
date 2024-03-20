@@ -2,6 +2,7 @@ import pygsti.circuits as pc
 import pygsti.data as pdata
 from pygsti.algorithms import directx
 from pygsti.baseobjs import Label as L
+from pygsti.circuits import Circuit
 from . import fixtures
 from ..util import BaseCase
 
@@ -13,16 +14,18 @@ class DirectXTester(BaseCase):
     def setUpClass(cls):
         super(DirectXTester, cls).setUpClass()
         cls._tgt = fixtures.model.copy()
-        cls.prepStrs = fixtures.fiducials
-        cls.effectStrs = fixtures.fiducials
-        cls.strs = pc.to_circuits([
-            (),  # always need empty string
-            ('Gx',), ('Gy',), ('Gi',),  # need these for include_target_ops=True
-            ('Gx', 'Gx'), ('Gx', 'Gy', 'Gx')  # additional
-        ])
+        cls.prepStrs = fixtures.prep_fids
+        cls.effectStrs = fixtures.meas_fids
+        cls.strs = [Circuit([], line_labels=(0,)),
+                    Circuit([L('Gxpi2',0)], line_labels=(0,)),
+                    Circuit([L('Gypi2',0)], line_labels=(0,)),
+                    Circuit([L('Gxpi2',0), L('Gxpi2',0)], line_labels=(0,)),
+                    Circuit([L('Gxpi2',0), L('Gypi2',0), L('Gxpi2',0)], line_labels=(0,))
+                    ]
+                    
         expstrs = pc.create_circuits(
-            "f0+base+f1", order=['f0', 'f1', 'base'], f0=fixtures.fiducials,
-            f1=fixtures.fiducials, base=cls.strs
+            "f0+base+f1", order=['f0', 'f1', 'base'], f0=cls.prepStrs,
+            f1=cls.effectStrs, base=cls.strs
         )
         cls._ds = pdata.simulate_data(fixtures.datagen_gateset.copy(), expstrs, 1000, 'multinomial', seed=_SEED)
 
@@ -43,8 +46,7 @@ class DirectXTester(BaseCase):
         )
         # TODO assert correctness
 
-        circuit_labels = [L('G0'), L('G1'), L('G2'), L('G3'), L('G4'), L('G5')]
-        # circuit_labels = [L('G0'), L('G1'), L('G2'), L('G3')]
+        circuit_labels = [L('G0'), L('G1'), L('G2'), L('G3'), L('G4')]
         model = directx.model_with_lgst_circuit_estimates(
             self.strs, self.ds, self.prepStrs, self.effectStrs, self.tgt,
             circuit_labels=circuit_labels,

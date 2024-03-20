@@ -575,6 +575,26 @@ class StateSpace(_NicelySerializable):
         else:
             return False  # this state space is not equal to anything that isn't another state space
 
+    @property
+    def state_space_labels(self):
+        """
+        Return a tuple corresponding to the concatenation of the
+        constituent state space labels within each tensor product
+        block of this `StateSpace` object.
+
+        Returns
+        -------
+        flattened_state_space_label_list : tuple
+            A tuple containing a flattened list of all of the state
+            space labels appearing within the tensor product blocks
+            of this `StateSpace` objects label list.
+        """
+        flattened_state_space_label_list = []
+        for blk in self.tensor_product_blocks_labels:
+            for lbl in blk:
+                flattened_state_space_label_list.append(lbl)
+        return tuple(flattened_state_space_label_list)
+
 
 class QuditSpace(StateSpace):
     """
@@ -961,8 +981,9 @@ class ExplicitStateSpace(StateSpace):
     udims : int or iterable, optional
         The dimension of each state space label as an integer, tuple of
         integers, or list or tuples of integers to match the structure
-        of `label_list` (i.e., if `label_list=('Q0','Q1')` then `dims` should
-        be a tuple of 2 integers).  Values specify unitary evolution state-space
+        of `label_list`. e.g., if `label_list=('Q0','Q1')` then `udims` should
+        be a tuple of 2 integers, or if label_list='Q0' then `udims` should be an
+        integer.  Values specify unitary evolution state-space
         dimensions, i.e. 2 for a qubit, 3 for a qutrit, etc.  If None, then the
         dimensions are inferred, if possible, from the following naming rules:
 
@@ -1252,7 +1273,6 @@ class ExplicitStateSpace(StateSpace):
         return ' + '.join(
             ['*'.join(["%s(%d%s)" % (lbl, self.label_dims[lbl], 'c' if (self.label_types[lbl] == 'C') else '')
                        for lbl in tpb]) for tpb in self.labels])
-
 
 def default_space_for_dim(dim):
     """
