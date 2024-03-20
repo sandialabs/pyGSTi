@@ -1,7 +1,8 @@
 import stim
 from pygsti.extras.errorgenpropagation.propagatableerrorgen import *
 from pygsti.extras.errorgenpropagation.utilspygstistimtranslator import *
-from numpy import abs
+from numpy import abs,zeros, complex128
+
 from numpy.linalg import multi_dot
 from scipy.linalg import expm
 from pygsti.tools.internalgates import standard_gatenames_stim_conversions
@@ -210,21 +211,23 @@ def buildErrorlayers(circ,errorDict,qubits):
 
 
 # There's a factor of a half missing in here. 
-def nm_propagators(corr, Elist):
+def nm_propagators(corr, Elist,qubits):
     Kms = []
     for idm in range(len(Elist)):
+        Am=zeros([4**qubits,4**qubits],dtype=complex128)
         for idmm in range(len(Elist[idm][0])):
-            Am = Elist[idm][0][idmm].toWeightedErrorBasisMatrix()
+            Am += Elist[idm][0][idmm].toWeightedErrorBasisMatrix()
             # This assumes that Elist is in reverse chronological order
-            partials = []
-            for idn in range(idm, len(Elist)):
-                for idnn in range(len(Elist[idn][0])):
-                    An = Elist[idn][0][idnn].toWeightedErrorBasisMatrix()
-                    partials += [corr[idm,idn] * Am @ An]
-            partials[0] = partials[0]/2
-            Kms += [sum(partials,0)]
+        partials = []
+        for idn in range(idm, len(Elist)):
+            An=zeros([4**qubits,4**qubits],dtype=complex128)
+            for idnn in range(len(Elist[idn][0])):
+                An = Elist[idn][0][idnn].toWeightedErrorBasisMatrix()
+            partials += [corr[idm,idn] * Am @ An]
+        partials[0] = partials[0]/2
+        Kms += [sum(partials,0)]
     return Kms
 
-def averaged_evolution(corr, Elist):
-    Kms = nm_propagators(corr, Elist)
+def averaged_evolution(corr, Elist,qubits):
+    Kms = nm_propagators(corr, Elist,qubits)
     return multi_dot([expm(Km) for Km in Kms])
