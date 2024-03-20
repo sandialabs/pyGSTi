@@ -23,7 +23,7 @@ multiple error iterations
 MultiGate: lets the code know 
 returns: list of propagatableerrorgens
 '''
-def ErrorPropagator(circ,errorModel,MultiGateDict={},BCHOrder=1,BCHLayerwise=False,NonMarkovian=False,MultiGate=False):
+def ErrorPropagator(circ,errorModel,MultiGateDict={},BCHOrder=1,BCHLayerwise=False,NonMarkovian=False,MultiGate=False,ErrorLayerDef=False):
     stim_dict=standard_gatenames_stim_conversions()
     if MultiGate:
         for key in MultiGateDict:
@@ -41,7 +41,10 @@ def ErrorPropagator(circ,errorModel,MultiGateDict={},BCHOrder=1,BCHLayerwise=Fal
     else:
         propagation_layers = stim_layers
 
-    errorLayers=buildErrorlayers(circ,errorModel,len(circ.line_labels))
+    if not ErrorLayerDef:
+        errorLayers=buildErrorlayers(circ,errorModel,len(circ.line_labels))
+    else:
+        errorLayers=[[errorModel]]*circ.depth
 
     num_error_layers=len(errorLayers)
     fully_propagated_layers=[]
@@ -206,6 +209,7 @@ def buildErrorlayers(circ,errorDict,qubits):
                     paulis.append(p2)     
                 errorLayer.append(propagatableerrorgen(errType,paulis,gErrorDict[errs]))
         ErrorGens.append([errorLayer])
+        print(ErrorGens)
     return ErrorGens
 
 
