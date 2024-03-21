@@ -107,11 +107,11 @@ class NQPauliState(object):
             specifying the Pauli basis for each qubit.
 
         signs : tuple, optional
-            A tuple of 0s and/or 1s.  A zero means the "+" eigenvector is
+            A tuple of +/-1ss.  A "+" means the "+" eigenvector is
             either prepared or corresponds to the "0" outcome (if this
-            NQPauliState is used to describe a measurment basis).  A one
+            NQPauliState is used to describe a measurment basis).  A '-'
             means the opposite: the "-" eigenvector is prepared and it
-            corresponds to a "0" outcome.  The default is all zeros.
+            corresponds to a "1" outcome.  The default is all +.
         """
         assert("I" not in string_rep), "'I' cannot be in a NQPauliState"
         self.rep = string_rep
