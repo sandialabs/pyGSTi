@@ -1864,7 +1864,7 @@ class StandardGST(_proto.Protocol):
 
                     #Try to interpret `mode` as a parameterization
                     parameterization = mode  # for now, 1-1 correspondence
-                    initial_model = target_model
+                    initial_model = target_model.copy()
 
                     try:
                         initial_model.set_all_parameterizations(parameterization)

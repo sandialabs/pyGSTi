@@ -930,7 +930,7 @@ def _get_optimizer(advanced_options, model_being_optimized):
     from pygsti.forwardsims.matrixforwardsim import MatrixForwardSimulator as _MatrixFSim
     advanced_options = advanced_options or {}
     default_fditer = 1 if isinstance(model_being_optimized.sim, _MatrixFSim) else 0
-    optimizer = {'maxiter': advanced_options.get('max_iterations', 100000),
+    optimizer = {'maxiter': advanced_options.get('max_iterations', 100),
                  'tol': advanced_options.get('tolerance', 1e-6),
                  'fditer': advanced_options.get('finitediff_iterations', default_fditer)}
     optimizer.update(advanced_options.get('extra_lm_opts', {}))
