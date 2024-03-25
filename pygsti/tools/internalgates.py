@@ -16,6 +16,7 @@ import scipy.linalg as _spl
 from pygsti.tools import optools as _ot
 from pygsti.tools import symplectic as _symp
 from pygsti.baseobjs.unitarygatefunction import UnitaryGateFunction as _UnitaryGateFunction
+from pygsti.tools.gatetools import sigmax, sigmay, sigmaz, sigmaxz
 
 
 class Gzr(_UnitaryGateFunction):
@@ -192,14 +193,18 @@ def standard_gatename_unitaries():
       * 'Gxmpi2','Gympi2','Gzmpi2' : 1Q -pi/2 rotations around X, Y and Z.
       * 'Gh' : Hadamard.
       * 'Gp', 'Gpdag' : phase and inverse phase (an alternative notation/name for Gzpi and Gzmpi2).
-      * 'Gci' where `i = 0, 1, ..., 23` : the 24 1-qubit Cliffor gates (all the gates above are included as one of these).
-      * 'Gcphase','Gcnot','Gswap' : standard 2Q gates.
-
+      * 'Gci' where `i = 0, 1, ..., 23` : the 24 1-qubit Clifford gates (all the gates above are included as one of these).
+      * 'Gcphase','Gcnot','Gswap', 'Giswap' : standard 2Q gates.
+      * 'Gsqrtiswap' : square-root of ISWAP gate, used in some superconducting qubit platforms.
+      * 'Gxx', 'Gzz' : MS-style parity gates
+      * 'Gcres', 'Gecres' : Cross-resonance and echoed cross-resonance gates. Native gate operations common on transmon systems (including IBM).
+      
     * Non-Clifford gates:
 
       * 'Gt', 'Gtdag' : the T and inverse T gates (T is a Z rotation by pi/4).
       * 'Gzr' : a parameterized gate that is a Z rotation by an angle, where when the angle = pi then it equals Z.
-
+      * 'Gn' : N gate, pi/2 rotation about the (np.sqrt(3)/2, 0, -1/2) axis of the Bloch sphere, native gate in some spin qubit systems.
+      
     Mostly, pyGSTi does not assume that a gate with one of these names is indeed
     the unitary specified here. Instead, these names are intended as short-hand
     for defining ProcessorSpecs and n-qubit models. Moreover, when these names
@@ -211,10 +216,6 @@ def standard_gatename_unitaries():
     dict of numpy.ndarray objects.
     """
     std_unitaries = {}
-
-    sigmax = _np.array([[0, 1], [1, 0]])
-    sigmay = _np.array([[0, -1.0j], [1.0j, 0]])
-    sigmaz = _np.array([[1, 0], [0, -1]])
 
     def u_op(exp):
         return _np.array(_spl.expm(-1j * exp / 2), complex)
@@ -233,6 +234,11 @@ def standard_gatename_unitaries():
     std_unitaries['Gympi2'] = u_op(-1 * _np.pi / 2 * sigmay)
     std_unitaries['Gzmpi2'] = u_op(-1 * _np.pi / 2 * sigmaz)
 
+    std_unitaries['Gxpi4'] = u_op(_np.pi / 4 * sigmax)
+    std_unitaries['Gypi4'] = u_op(_np.pi / 4 * sigmay)
+    std_unitaries['Gzpi4'] = u_op(_np.pi / 4 * sigmaz)
+    
+
     H = (1 / _np.sqrt(2)) * _np.array([[1., 1.], [1., -1.]], complex)
     P = _np.array([[1., 0.], [0., 1j]], complex)
     Pdag = _np.array([[1., 0.], [0., -1j]], complex)
@@ -245,6 +251,11 @@ def standard_gatename_unitaries():
     #std_unitaries['Ghph'] = _np.dot(H,_np.dot(P,H))
     std_unitaries['Gt'] = _np.array([[1., 0.], [0., _np.exp(1j * _np.pi / 4)]], complex)
     std_unitaries['Gtdag'] = _np.array([[1., 0.], [0., _np.exp(-1j * _np.pi / 4)]], complex)
+    
+    #N gate, pi/2 rotation about the (np.sqrt(3)/2, 0, -1/2) axis of the Bloch sphere
+    #native gate in some spin qubit systems.
+    std_unitaries['Gn'] = _spl.expm(-1j*(_np.pi/4)*((_np.sqrt(3)/2)*sigmax - (.5)*sigmaz))
+
     # The 1-qubit Clifford group. The labelling is the same as in the the 1-qubit Clifford group generated
     # in pygsti.extras.rb.group, and also in the internal standard unitary (but with 'Gci' -> 'Ci')
     std_unitaries['Gc0'] = _np.array([[1, 0], [0, 1]], complex)  # This is Gi
@@ -273,6 +284,7 @@ def standard_gatename_unitaries():
     std_unitaries['Gc21'] = _np.array([[1, -1], [1, 1]], complex) / _np.sqrt(2)  # This is Gypi2 (up to phase)
     std_unitaries['Gc22'] = _np.array([[0.5 + 0.5j, 0.5 - 0.5j], [-0.5 + 0.5j, -0.5 - 0.5j]], complex)
     std_unitaries['Gc23'] = _np.array([[1, 0], [0, -1j]], complex)  # This is Gzmpi2 / Gpdag (up to phase)
+    
     # Two-qubit gates
     std_unitaries['Gcphase'] = _np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [
                                          0., 0., 1., 0.], [0., 0., 0., -1.]], complex)
@@ -285,10 +297,21 @@ def standard_gatename_unitaries():
     std_unitaries['Gswap'] = _np.array([[1., 0., 0., 0.], [0., 0., 1., 0.],
                                         [0., 1., 0., 0.], [0., 0., 0., 1.]], complex)
 
+    std_unitaries['Giswap'] = _np.array([[1., 0., 0., 0.], [0., 0., 1j, 0.],
+                                        [0., 1j, 0., 0.], [0., 0., 0., 1.]], complex)
+    
+    std_unitaries['Gsqrtiswap'] = _np.array([[1., 0., 0., 0.], [0., 1/_np.sqrt(2), 1j/_np.sqrt(2), 0.],
+                                        [0., 1j/_np.sqrt(2), 1/_np.sqrt(2), 0.], [0., 0., 0., 1.]], complex)
+    
+    #cross-resonance gate (exp(-1j*pi/4 sigmaxz))
+    std_unitaries['Gcres'] = _spl.expm(-1j*_np.pi/4*sigmaxz)
+    std_unitaries['Gecres'] = _np.array([[0, 1, 0., 1j], [1., 0, -1j, 0.],
+                                        [0., 1j, 0, 1], [-1j, 0., 1, 0]], complex)/_np.sqrt(2)
+
     std_unitaries['Gzr'] = Gzr()
     std_unitaries['Gczr'] = Gczr()
 
-    #Add these at the end, since we don't want unitary_to_standard_gatenemt to return these "shorthand" names
+    #Add these at the end, since we don't want unitary_to_standard_gatenames to return these "shorthand" names
     std_unitaries['Gx'] = std_unitaries['Gxpi2']
     std_unitaries['Gy'] = std_unitaries['Gypi2']
     std_unitaries['Gz'] = std_unitaries['Gzpi2']
@@ -296,7 +319,7 @@ def standard_gatename_unitaries():
     return std_unitaries
 
 
-def unitary_to_standard_gatename(unitary):
+def unitary_to_standard_gatename(unitary, up_to_phase = False, return_phase = False):
     """
     Looks up and returns the standard gate name for a unitary gate matrix, if one exists.
 
@@ -304,6 +327,16 @@ def unitary_to_standard_gatename(unitary):
     ----------
     unitary : complex np.array
         The unitary to convert.
+
+    up_to_phase : bool, optional (default False)
+        If true then after checking if the unitary is exactly equivalent to a built-in one, 
+        this then checks if the input unitary is equal to to a built-in one up to a global
+        phase.
+
+    return_phase : bool, optional (default False)
+        If true, and up_to_phase is true, then if a unitary is equivalent up to a global
+        phase to a built-in one, we return that phase (i.e. the phase the built-in one
+        would need to be multiplied by).
 
     Returns
     -------
@@ -314,6 +347,28 @@ def unitary_to_standard_gatename(unitary):
     for std_name, U in standard_gatename_unitaries().items():
         if not callable(U) and not callable(unitary) and U.shape == unitary.shape and _np.allclose(unitary, U):
             return std_name
+    
+    #check for equivalence up to a global phase.
+    if up_to_phase:
+        for std_name, U in standard_gatename_unitaries().items():
+        #I think the callable checks are to avoid doing the check on the continuously parameterized Z
+        #rotation that is in the built-in dictionary. Follow the original code's lead and do the same here.
+            if not callable(U) and not callable(unitary) and U.shape == unitary.shape:
+                
+                inv_prod = U.conj().T@unitary
+                inv_prod_diag = _np.diag(inv_prod)
+                inv_prod_upper = _np.triu(inv_prod, 1)
+                inv_prod_lower = _np.tril(inv_prod, -1)
+
+                #If all of the diagonals are close to the same value, and all the the off diagonals
+                #are close to 0 then we should be proportional to the identity.
+                if _np.allclose(inv_prod_diag, inv_prod_diag[0]) and _np.allclose(inv_prod_upper, 0) and _np.allclose(inv_prod_lower, 0):
+                    if return_phase:
+                        phase = inv_prod_diag[0]
+                        return std_name, phase
+                    else:
+                        return std_name
+
     return None
 
 
@@ -334,12 +389,11 @@ def standard_gatenames_cirq_conversions():
 
     Currently there are some standard gate names with no conversion to cirq.
 
-    TODO: add Clifford gates with
-    https://cirq.readthedocs.io/en/latest/generated/cirq.SingleQubitCliffordGate.html
-
     Returns
     -------
-    dict mapping strings to string
+    std_gatenames_to_cirq
+        dict mapping strings corresponding to standard built-in pyGSTi names to
+        corresponding cirq operation objects. 
     """
     try:
         import cirq
@@ -347,7 +401,10 @@ def standard_gatenames_cirq_conversions():
         raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
 
     std_gatenames_to_cirq = {}
-    std_gatenames_to_cirq['Gi'] = None
+
+    #single-qubit gates
+
+    std_gatenames_to_cirq['Gi'] = cirq.I
     std_gatenames_to_cirq['Gxpi2'] = cirq.XPowGate(exponent=1 / 2)
     std_gatenames_to_cirq['Gxmpi2'] = cirq.XPowGate(exponent=-1 / 2)
     std_gatenames_to_cirq['Gxpi'] = cirq.X
@@ -362,11 +419,86 @@ def standard_gatenames_cirq_conversions():
     std_gatenames_to_cirq['Gh'] = cirq.H
     std_gatenames_to_cirq['Gt'] = cirq.T
     std_gatenames_to_cirq['Gtdag'] = cirq.T**-1
+    std_gatenames_to_cirq['Gn'] = cirq.PhasedXZGate(axis_phase_exponent=0.14758361765043326, 
+                                                    x_exponent=0.4195693767448338, 
+                                                    z_exponent=-0.2951672353008665)
+
+    #two-qubit gates
+
     std_gatenames_to_cirq['Gcphase'] = cirq.CZ
     std_gatenames_to_cirq['Gcnot'] = cirq.CNOT
     std_gatenames_to_cirq['Gswap'] = cirq.SWAP
+    std_gatenames_to_cirq['Gzz'] = cirq.ZZPowGate(exponent=.5, global_shift=-.5)
+    std_gatenames_to_cirq['Gxx'] = cirq.XXPowGate(exponent=.5, global_shift=-.5)
+    std_gatenames_to_cirq['Giswap'] = cirq.ISWAP
+    std_gatenames_to_cirq['Gsqrtiswap'] = cirq.SQRT_ISWAP
+    #I don't presently see a one-to-one conversion for cross-resonance
+
+    #single-qubit clifford group
+
+    std_gatenames_to_cirq['Gc0'] = cirq.I # This is Gi
+    std_gatenames_to_cirq['Gc1'] = cirq.PhasedXZGate(axis_phase_exponent=0.0, x_exponent=0.5, z_exponent=0.5)
+    std_gatenames_to_cirq['Gc2'] = cirq.PhasedXZGate(axis_phase_exponent=0.5, x_exponent=-0.5, z_exponent=-0.5)
+    std_gatenames_to_cirq['Gc3'] = cirq.X # This is pauli X
+    std_gatenames_to_cirq['Gc4'] = cirq.PhasedXZGate(axis_phase_exponent=0.0, x_exponent=-0.5, z_exponent=0.5)
+    std_gatenames_to_cirq['Gc5'] = cirq.PhasedXZGate(axis_phase_exponent=0.5, x_exponent=-0.5, z_exponent=0.5)
+    std_gatenames_to_cirq['Gc6'] = cirq.Y # This is pauli Y
+    std_gatenames_to_cirq['Gc7'] = cirq.PhasedXZGate(axis_phase_exponent=0.0, x_exponent=0.5, z_exponent=-0.5)
+    std_gatenames_to_cirq['Gc8'] = cirq.PhasedXZGate(axis_phase_exponent=0.5, x_exponent=0.5, z_exponent=-0.5)
+    std_gatenames_to_cirq['Gc9'] = cirq.Z # This is pauli Z
+    std_gatenames_to_cirq['Gc10'] = cirq.PhasedXZGate(axis_phase_exponent=0.0, x_exponent=-0.5, z_exponent=-0.5)
+    std_gatenames_to_cirq['Gc11'] = cirq.PhasedXZGate(axis_phase_exponent=0.5, x_exponent=0.5, z_exponent=0.5)
+    std_gatenames_to_cirq['Gc12'] = cirq.H # This is Gh
+    std_gatenames_to_cirq['Gc13'] = cirq.PhasedXZGate(axis_phase_exponent=0.0, x_exponent=-0.5, z_exponent=0.0) # This is Gxmpi2 (up to phase)
+    std_gatenames_to_cirq['Gc14'] = cirq.PhasedXZGate(axis_phase_exponent=0.0, x_exponent=0.0, z_exponent=0.5) # THis is Gzpi2 / Gp (up to phase)
+    std_gatenames_to_cirq['Gc15'] = cirq.PhasedXZGate(axis_phase_exponent=0.5, x_exponent=-0.5, z_exponent=0.0)# This is Gympi2 (up to phase)
+    std_gatenames_to_cirq['Gc16'] = cirq.PhasedXZGate(axis_phase_exponent=0.0, x_exponent=0.5, z_exponent=0.0)# This is Gxpi2 (up to phase)
+    std_gatenames_to_cirq['Gc17'] = cirq.PhasedXZGate(axis_phase_exponent=0.25, x_exponent=1.0, z_exponent=0.0)# This is Gypi2 (up to phase)
+    std_gatenames_to_cirq['Gc18'] = cirq.PhasedXZGate(axis_phase_exponent=0.5, x_exponent=0.5, z_exponent=1.0)
+    std_gatenames_to_cirq['Gc19'] = cirq.PhasedXZGate(axis_phase_exponent=0.0, x_exponent=-0.5, z_exponent=1.0)
+    std_gatenames_to_cirq['Gc20'] = cirq.PhasedXZGate(axis_phase_exponent=-0.25, x_exponent=1.0, z_exponent=0.0)
+    std_gatenames_to_cirq['Gc21'] = cirq.PhasedXZGate(axis_phase_exponent=0.5, x_exponent=0.5, z_exponent=0.0) # This is Gypi2 (up to phase)
+    std_gatenames_to_cirq['Gc22'] = cirq.PhasedXZGate(axis_phase_exponent=0.0, x_exponent=0.5, z_exponent=1.0)
+    std_gatenames_to_cirq['Gc23'] = cirq.PhasedXZGate(axis_phase_exponent=0.0, x_exponent=0.0, z_exponent=-0.5) # This is Gzmpi2 / Gpdag (up to phase)
+
+    #legacy aliasing:
+    std_gatenames_to_cirq['Gx'] = std_gatenames_to_cirq['Gxpi2']
+    std_gatenames_to_cirq['Gy'] = std_gatenames_to_cirq['Gypi2']
+    std_gatenames_to_cirq['Gz'] = std_gatenames_to_cirq['Gzpi2']    
+
 
     return std_gatenames_to_cirq
+
+def cirq_gatenames_standard_conversions():
+    
+    """
+    A dictionary converting cirq gates to built-in pyGSTi names for these gates.
+    Does not currently support conversion of all cirq gate types.
+    """
+
+    try:
+        import cirq
+    except ImportError:
+        raise ImportError("Cirq is required for this operation, and it does not appear to be installed.")
+
+
+    #reverse the mapping in standard_gatenames_cirq_conversions
+    cirq_to_standard_mapping = {value: key for key,value in standard_gatenames_cirq_conversions().items()}
+
+    #A direct reversing doesn't quite do what we want since the originally mapping was not
+    #one-to-one (some pyGSTi gate names refer to the same cirq Circuit, primarily because of the cliffords). 
+    #Manually add back in some preference on the non-one-to-one gates.
+    cirq_to_standard_mapping[cirq.I] = 'Gi'
+    cirq_to_standard_mapping[cirq.X] = 'Gxpi'
+    cirq_to_standard_mapping[cirq.Y] = 'Gypi'
+    cirq_to_standard_mapping[cirq.PhasedXZGate(axis_phase_exponent=0.5, x_exponent=-1, z_exponent=0)] = 'Gypi'
+    cirq_to_standard_mapping[cirq.Z] = 'Gzpi'
+    cirq_to_standard_mapping[cirq.XPowGate(exponent=1 / 2)] = 'Gxpi2'
+    cirq_to_standard_mapping[cirq.YPowGate(exponent=1 / 2)] = 'Gypi2'
+    cirq_to_standard_mapping[cirq.ZPowGate(exponent=1 / 2)] = 'Gzpi2'
+    cirq_to_standard_mapping[cirq.H] = 'Gh'
+
+    return cirq_to_standard_mapping
 
 
 def standard_gatenames_quil_conversions():

@@ -1,7 +1,9 @@
 """
 A standard multi-qubit gate set module.
 
-Variables for working with the a model containing Idle, Z(pi/2) and rot(X=pi/2, Y=sqrt(3)/2) gates.
+Variables for working with the a model containing Idle, Z(pi/2) and N gate, where the N gate is a
+pi/2 rotation about the (np.sqrt(3)/2, 0, -1/2) axis of the Bloch sphere.
+gates.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
