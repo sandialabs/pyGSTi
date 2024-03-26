@@ -10,8 +10,13 @@ Defines the TPPOVM class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import numpy as _np
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
 from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
+from pygsti.modelmembers.povms.fulleffect import FullPOVMEffect as _FullPOVMEffect
+from pygsti.modelmembers.povms.conjugatedeffect import ConjugatedStatePOVMEffect as _ConjugatedStatePOVMEffect
+from typing import Tuple, Optional, TypeVar
+Tensor = TypeVar('Tensor')  # torch.tensor.
 
 
 class TPPOVM(_BasePOVM):
@@ -56,3 +61,36 @@ class TPPOVM(_BasePOVM):
 
         return (TPPOVM, (effects, self.evotype, self.state_space, True),
                 {'_gpindices': self._gpindices, '_submember_rpindices': self._submember_rpindices})
+    
+    @property
+    def dim(self):
+        effect = next(iter(self.values()))
+        return effect.dim
+    
+    def to_vector(self):
+        effect_vecs = []
+        for i, (lbl, effect) in enumerate(self.items()):
+            if lbl != self.complement_label:
+                assert isinstance(effect, _FullPOVMEffect)
+                effect_vecs.append(effect.to_vector())
+            else:
+                assert i == len(self) - 1
+        vec = _np.concatenate(effect_vecs)
+        return vec
+
+    def stateless_data(self):
+        dim1 = len(self)
+        dim2 = self.dim
+        return (dim1, dim2)
+
+    @staticmethod
+    def torch_base(sd: Tuple[int, int], t_param: Tensor, torch_handle=None):
+        if torch_handle is None:
+            import torch as torch_handle
+        num_effects, dim = sd
+        first_basis_vec = torch_handle.zeros(size=(1, dim), dtype=torch_handle.double)
+        first_basis_vec[0,0] = dim ** 0.25
+        t_param_mat = t_param.reshape((num_effects - 1, dim))
+        t_func = first_basis_vec - t_param_mat.sum(axis=0, keepdim=True)
+        t = torch_handle.row_stack((t_param_mat, t_func))
+        return t

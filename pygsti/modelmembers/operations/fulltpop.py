@@ -15,6 +15,8 @@ import numpy as _np
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.baseobjs.protectedarray import ProtectedArray as _ProtectedArray
+from typing import Tuple, Optional, TypeVar
+Tensor = TypeVar('Tensor')  # torch.tensor.
 
 
 class FullTPOp(_DenseOperator):
@@ -154,6 +156,22 @@ class FullTPOp(_DenseOperator):
         self._rep.base.flat[self.dim:] = v  # faster still
         self._ptr_has_changed()  # because _rep.base == _ptr (same memory)
         self.dirty = dirty_value
+
+    def stateless_data(self):
+        return (self.dim,)
+
+    @staticmethod
+    def torch_base(sd: Tuple[int], t_param: Tensor, torch_handle=None):
+        if torch_handle is None:
+            import torch as torch_handle
+
+        dim = sd[0]
+        t_const = torch_handle.zeros(size=(1, dim), dtype=torch_handle.double)
+        t_const[0,0] = 1.0
+        t_param_mat = t_param.reshape((dim - 1, dim))
+        t = torch_handle.row_stack((t_const, t_param_mat))
+        return t
+
 
     def deriv_wrt_params(self, wrt_filter=None):
         """
