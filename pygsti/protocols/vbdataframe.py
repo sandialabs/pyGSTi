@@ -19,7 +19,7 @@ def _calculate_summary_statistic(x, statistic, lower_cutoff=None):
     Utility function that returns statistic(x), or the maximum
     of statistic(x) and lower_cutoff if lower_cutoff is not None.
     """
-    if len(x) == 0 or _np.all(_np.isnan(x)): return _np.NaN
+    if len(x) == 0 or _np.all(_np.isnan(x)): return _np.nan
     if statistic == 'mean': func = _np.nanmean
     elif statistic == 'max' or statistic == 'monotonic_max': func = _np.nanmax
     elif statistic == 'min' or statistic == 'monotonic_min': func = _np.nanmin
