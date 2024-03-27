@@ -7,6 +7,7 @@ from numpy.linalg import multi_dot
 from scipy.linalg import expm
 from pygsti.tools.internalgates import standard_gatenames_stim_conversions
 
+import copy as _copy
 
 '''
 takes a pygsti circuit where each gate has a defined error model and returns the errorgenerators necessary to create an
@@ -44,7 +45,7 @@ def ErrorPropagator(circ,errorModel,MultiGateDict={},BCHOrder=1,BCHLayerwise=Fal
     if not ErrorLayerDef:
         errorLayers=buildErrorlayers(circ,errorModel,len(circ.line_labels))
     else:
-        errorLayers=[[errorModel]]*circ.depth
+        errorLayers=[[[_copy.deepcopy(eg) for eg in errorModel]] for i in range(circ.depth)]
 
     num_error_layers=len(errorLayers)
     fully_propagated_layers=[]
