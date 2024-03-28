@@ -40,7 +40,7 @@ class LocalizedDenseSubNetwork(_keras.layers.Layer):
         x = self.dense3(x)
         return self.output_layer(x)
     
-class LocalizedDenseToErrVec(_keras.layers.Layer):
+class OldLocalizedDenseToErrVec(_keras.layers.Layer):
     def __init__(self, laplace, hops, error_interactions, num_error_types):
         """
         laplace: the lapalcian matrix for the connectivity of the qubits. It must be 
@@ -86,7 +86,7 @@ class LocalizedDenseToErrVec(_keras.layers.Layer):
         x = _tf.concat(x, axis=-1)
         return x
     
-class CircuitErrorVec(_keras.Model):
+class OldCircuitErrorVec(_keras.Model):
     def __init__(self, laplace, output_dim, subunit, hops, nonzero_rates, input_shape = None):
         super().__init__()
         self.laplace = laplace
