@@ -63,8 +63,10 @@ def flatten(l):
             yield el
 
 
-def form_ct_data_matrix(ds, number_of_regions, settings, filter_lengths=[]):
+def form_ct_data_matrix(ds, number_of_regions, settings, filter_lengths=None):
     # This converts a DataSet to an array since the code below uses arrays
+    if filter_lengths is None:
+        filter_lengths = []
     if type(ds) == _DataSet:
 
         opstr = ds.keys()[0]
@@ -182,7 +184,7 @@ def form_ct_data_matrix(ds, number_of_regions, settings, filter_lengths=[]):
 
 
 def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.95, verbosity=1, name=None,
-                                 assume_independent_settings=True, filter_lengths=[]):
+                                 assume_independent_settings=True, filter_lengths=None):
     """
     Implements crosstalk detection on multiqubit data (fine-grained data with entries for each experiment).
 
@@ -220,6 +222,8 @@ def do_basic_crosstalk_detection(ds, number_of_regions, settings, confidence=0.9
     # -------------------------- #
 
     # This converts a DataSet to an array since the code below uses arrays
+    if filter_lengths is None:
+        filter_lengths = []
     if type(ds) == _DataSet:
 
         opstr = ds.keys()[0]

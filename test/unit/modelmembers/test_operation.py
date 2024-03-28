@@ -95,7 +95,7 @@ class OpBase(object):
             pass  # ok if some classes don't implement this
 
 
-class LinearOpTester(OpBase):
+class LinearOpTester(BaseCase):
     n_params = 0
 
     @staticmethod
@@ -103,11 +103,18 @@ class LinearOpTester(OpBase):
         dim = 4
         evotype = Evotype.cast('default')
         state_space = statespace.default_space_for_dim(dim)
-        rep = evotype.create_dense_superop_rep(np.identity(dim, 'd'), state_space)
+        # rep = evotype.create_dense_superop_rep(np.identity(dim, 'd'), state_space)
+        #   ^ Original, failing line. My fix below.
+        rep = evotype.create_dense_superop_rep(None, np.identity(dim, 'd'), state_space)
         return op.LinearOperator(rep, evotype)
 
+    def setUp(self):
+        ExplicitOpModel._strict = False
+        self.gate = self.build_gate()
+
     def test_raise_on_invalid_method(self):
-        T = FullGaugeGroupElement(np.array([[0, 1], [1, 0]], 'd'))
+        mat = np.kron(np.array([[0, 1], [1, 0]], 'd'), np.eye(2))
+        T = FullGaugeGroupElement(mat)
         with self.assertRaises(NotImplementedError):
             self.gate.transform_inplace(T)
         with self.assertRaises(NotImplementedError):
@@ -600,6 +607,7 @@ class ComplexEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
              [(1j, (1, 0)), (-1j, (3, 2))]]   # Im part of 1,0 and 3,2 els (lower triangle); (1,0) and (3,2) must be conjugates
         )
 
+
 class LindbladErrorgenTester(BaseCase):
 
     def test_errgen_construction(self):
@@ -641,46 +649,6 @@ class LindbladErrorgenTester(BaseCase):
         T = UnitaryGaugeGroupElement(np.identity(4, 'd'))
         errgen_copy.transform_inplace(T)
         self.assertTrue(np.allclose(errgen_copy.to_dense(), eg.to_dense()))
-
-#TODO - maybe update this to a test of ExpErrorgenOp, which can have dense/sparse versions?
-#class LindbladOpBase(object):
-#    def test_has_nonzero_hessian(self):
-#        self.assertTrue(self.gate.has_nonzero_hessian())
-#
-#class LindbladErrorgenBase(LindbladOpBase, MutableDenseOpBase):
-#    def test_transform(self):
-#        gate_copy = self.gate.copy()
-#        T = UnitaryGaugeGroupElement(np.identity(4, 'd'))
-#        gate_copy.transform_inplace(T)
-#        self.assertArraysAlmostEqual(gate_copy, self.gate)
-#        # TODO test a non-trivial case
-#
-#    def test_element_accessors(self):
-#        e1 = self.gate[1, 1]
-#        e2 = self.gate[1][1]
-#        self.assertAlmostEqual(e1, e2)
-#
-#        s1 = self.gate[1, :]
-#        s2 = self.gate[1]
-#        s3 = self.gate[1][:]
-#        a1 = self.gate[:]
-#        self.assertArraysAlmostEqual(s1, s2)
-#        self.assertArraysAlmostEqual(s1, s3)
-#
-#        s4 = self.gate[2:4, 1]
-#
-#        result = len(self.gate)
-#        # TODO assert correctness
-#
-#    def test_convert(self):
-#        g = op.convert(self.gate, "CPTP", Basis.cast("pp", 4))
-#        # TODO assert correctness
-#
-#
-#class LindbladSparseOpBase(LindbladOpBase, OpBase):
-#    def assertArraysEqual(self, a, b):
-#        # Sparse LindbladOp does not support equality natively, so compare errorgen matrices
-#        self.assertEqual((a.errorgen.to_sparse() != b.errorgen.to_sparse()).nnz, 0)
 
 
 class LindbladErrorgenBase(OpBase):

@@ -403,7 +403,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
 
     @classmethod
     def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
-                               sampler='edgegrab', samplerargs=[0.25, ], addlocal=False,
+                               sampler='edgegrab', samplerargs=None, addlocal=False,
                                lsargs=(), randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                                citerations=20, compilerargs=(), partitioned=False,
                                descriptor='A DRB experiment', add_default_protocol=False):
@@ -440,6 +440,7 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
 
         samplerargs : list, optional
             A list of arguments that are handed to the sampler function, specified by `sampler`.
+            Defaults to [0.25, ].
             The first argument handed to the sampler is `pspec`, the second argument is `qubit_labels`,
             and `samplerargs` lists the remaining arguments handed to the sampler. This is not
             optional for some choices of `sampler`.
@@ -505,6 +506,8 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
         -------
         DirectRBDesign
         """
+        if samplerargs is None:
+            samplerargs = [0.25, ]
         depths = sorted(list(circuits_and_idealouts_by_depth.keys()))
         circuit_lists = [[x[0] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
         ideal_outs = [[x[1] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
@@ -517,11 +520,13 @@ class DirectRBDesign(_vb.BenchmarkingDesign):
         return self
 
     def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None,
-                 sampler='edgegrab', samplerargs=[0.25, ],
+                 sampler='edgegrab', samplerargs=None,
                  addlocal=False, lsargs=(), randomizeout=False, cliffordtwirl=True, conditionaltwirl=True,
                  citerations=20, compilerargs=(), partitioned=False, descriptor='A DRB experiment',
                  add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
 
+        if samplerargs is None:
+            samplerargs = [0.25, ]
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
         ideal_outs = []
@@ -915,11 +920,13 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
         later (once data is taken) by using a :class:`DefaultProtocolRunner` object.
     """
     def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None, layer_sampling='mixed1q2q',
-                 sampler='edgegrab', samplerargs=[0.25, ],
+                 sampler='edgegrab', samplerargs=None,
                  addlocal=False, lsargs=(),
                  descriptor='A BiRB experiment',
                  add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
 
+        if samplerargs is None:
+            samplerargs = [0.25, ]
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
         measurements = []

@@ -135,50 +135,15 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     
     #If the user hasn't specified a candidate list manually then generate one:
     if candidate_list is None:
-        if ops_to_omit is None:
-            ops_to_omit = []
-        
-        fidOps = [gate for gate in target_model.operations if gate not in ops_to_omit]
-        
-        if omit_identity:
-            # we assume identity gate is always the identity mx regardless of basis
-            Identity = _np.identity(target_model.dim, 'd')
-
-            for gate in fidOps:
-                mx = target_model.operations[gate]
-                if not isinstance(mx, _np.ndarray):
-                    mx = mx.to_dense()
-                try:
-                    if frobeniusdist_squared(mx, Identity) < eq_thresh:
-                        fidOps.remove(gate)
-                except ValueError as e:
-                    raise ValueError('If shapes do not match, this may be a unitary/process matrix mismatch. ' +
-                        'Consider using a parameterization like "full" or "full TP" to avoid this.') from e
-        
-        availableFidList = []
-        if max_fid_length is not None:
-            warn('max_fid_length is now deprecated and will be replaced by the kwarg candidate_fid_counts. See documentation for how to achieve the old behavior with the new kwarg.')
-            if candidate_fid_counts is not None:
-                warn('Specifying max_fid_length without setting candidate_fid_counts results the settings specified in candidate_fid_counts being overridden.\
-                candidate_fid_counts is set by defaults, so this might be expected, but if this is not the desired behavior then please verify your arguments.')
-            #now overrive the value of candidate_fid_counts
-            candidate_fid_counts= max_fid_length
-        if isinstance(candidate_fid_counts, int): 
-            candidate_fid_counts = {candidate_fid_counts: 'all upto'}
-        
-        for fidLength, count in candidate_fid_counts.items():
-            if count == "all upto":
-                availableFidList.extend(_circuits.list_all_circuits(fidOps, 0, fidLength))
-            #if "all" then include all circuits at that particular length.
-            elif count =="all":
-                availableFidList.extend(_circuits.list_all_circuits_one_len(fidOps, fidLength))
-            else:
-                availableFidList.extend(_circuits.list_random_circuits_onelen(
-                    fidOps, fidLength, count, seed=candidate_seed))
-        
+        availableFidList = create_candidate_fiducial_list(target_model, omit_identity= omit_identity,
+                                                          ops_to_omit = ops_to_omit,
+                                                          candidate_fid_counts=candidate_fid_counts, 
+                                                          max_fid_length= max_fid_length,
+                                                          eq_thresh= eq_thresh, candidate_seed = candidate_seed)
+                                                          
         printer.log('Initial Length Available Fiducial List: '+ str(len(availableFidList)), 1)
         printer.log('Creating cache of fiducial process matrices.', 3)
-        circuit_cache= create_circuit_cache(target_model,availableFidList)
+        circuit_cache= create_circuit_cache(target_model, availableFidList)
         printer.log('Completed cache of fiducial process matrices.', 3)
         
         #Now that we have a cache of PTMs as numpy arrays for the initial list of available fiducials
@@ -186,8 +151,14 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
         #Use a flag to check if we can assume these are clifford circuits in which case
         #we can use a more efficient deduping routine.
         cleaned_availableFidList, cleaned_circuit_cache = clean_fid_list(target_model, circuit_cache, availableFidList,
-                                                                            drop_identities=True, drop_duplicates=True,
-                                                                            eq_thresh=eq_thresh, assume_clifford=assume_clifford)
+                                                                         drop_identities=True, drop_duplicates=True,
+                                                                         eq_thresh=eq_thresh, assume_clifford=assume_clifford)
+        
+        #add in logic forcing the empty fiducial into the candidate list if force_empty is true and it is not present.
+        if not any([len(ckt)==0 for ckt in cleaned_availableFidList]) and force_empty:
+            cleaned_availableFidList.append(_circuits.Circuit(_baseobjs.Label(()), line_labels= target_model.state_space.state_space_labels))
+            #and add this to the circuit cache.
+            cleaned_circuit_cache.update(create_circuit_cache(target_model, [cleaned_availableFidList[-1]]))
         
         printer.log('Length Available Fiducial List Dropped Identities and Duplicates: ' + str(len(cleaned_availableFidList)), 1)
         
@@ -198,7 +169,7 @@ def find_fiducials(target_model, omit_identity=True, eq_thresh=1e-6,
     #create the circuit cache.
     else:
         cleaned_availableFidList = candidate_list
-        cleaned_circuit_cache= create_circuit_cache(target_model,cleaned_availableFidList)
+        cleaned_circuit_cache= create_circuit_cache(target_model, cleaned_availableFidList)
     
     #generate a cache for the allowed preps and effects based on availableFidList
     if prep_fids:
@@ -532,30 +503,93 @@ def clean_fid_list(model, circuit_cache, available_fid_list,drop_identities=True
             #Now get the values of the unique_vec_perm_reps dictionary
             #These should be the depuped circuits.
             deduped_ckt_list= list(unique_vec_perm_reps.values())     
+            
+            #rebuild the circuit cache now that it has been de-duped:
+            cleaned_circuit_cache_2= {ckt_key: cleaned_circuit_cache_1[ckt_key] for ckt_key in deduped_ckt_list}
         
         #otherwise use a more generic method that doesn't rely on the structure of cliffords (but is slower).
+        #TODO: There are even more heuristics that can be used to further refine the equivalence classes
+        #if needed for additional performance improvements down the line.
         else:
-            unseen_circs  = list(cleaned_circuit_cache.keys())
-            unseen_circs.reverse()
-            deduped_ckt_list  = []
+            cleaned_circs  = _np.asarray(list(cleaned_circuit_cache_1.keys()))
             
-            #While unseen_circs is not empty
-            while unseen_circs:
-                current_ckt = unseen_circs.pop()
-                current_ckt_PTM = cleaned_circuit_cache_1[current_ckt]
-                deduped_ckt_list.append(current_ckt)            
-                #now iterate through the remaining elements of the set of unseen circuits and remove any duplicates.
-                is_not_duplicate=[True]*len(unseen_circs)
-                for i, ckt in enumerate(unseen_circs):
-                    #the default tolerance for allclose is probably fine.
-                    if _np.linalg.norm(cleaned_circuit_cache_1[ckt]-current_ckt_PTM)<eq_thresh: #use same threshold as defined in the base find_fiducials function
-                        is_not_duplicate[i]=False
-                #reset the set of unseen circuits.
-                unseen_circs=list(itertools.compress(unseen_circs, is_not_duplicate))
+            #initialize an empty circuit cache for storing the deduped results.
+            cleaned_circuit_cache_2={}
             
-        #rebuild the circuit cache now that it has been de-duped:
-        cleaned_circuit_cache_2= {ckt_key: cleaned_circuit_cache_1[ckt_key] for ckt_key in deduped_ckt_list}
-    
+            #split the list of circuits into equivalence classes corresponding to their trace.
+            #if the trace of two matrices isn't the same they certainly can't be duplicates.
+            traces = _np.zeros(len(cleaned_circs))
+            for i, ckt_ptm in enumerate(cleaned_circuit_cache_1.values()):
+                traces[i] = _np.round(_np.trace(ckt_ptm), decimals = 7) #HARDCODED
+            #get the permutation that sorts the trace array.
+            trace_perm = _np.argsort(traces)
+            
+            sorted_traces = traces[trace_perm]
+            sorted_circs = cleaned_circs[trace_perm]
+            
+            #Now I need to split the arrays into subarrays based on the values of the trace.
+            _, unique_trace_counts = _np.unique(sorted_traces, return_counts=True)
+            if len(unique_trace_counts)>1:     
+                trace_split_points = [unique_trace_counts[0]]  
+                for i, unique_count in enumerate(unique_trace_counts[1:-1], start=1):
+                    trace_split_points.append(unique_count+trace_split_points[i-1])
+                #now split the array
+                split_circs_trace= _np.split(sorted_circs, trace_split_points)
+            #otherwise don't split and set split_circs_trace to a list containting
+            #sorted_circs as a sublist
+            else:
+                split_circs_trace = [sorted_circs]
+
+            for circ_trace_sublist in split_circs_trace:
+                #next let's split these up into equivalence classes using the
+                #number of nonzero entries.
+                num_nonzero_entries = _np.zeros(len(circ_trace_sublist))
+                for i, ckt in enumerate(circ_trace_sublist):
+                    num_nonzero_entries[i] = _np.count_nonzero(_np.abs(cleaned_circuit_cache_1[ckt])>1e-8) #HARDCODED
+                #now sort the list of circuits by the number of nonzero elements:
+                nonzero_perm = _np.argsort(num_nonzero_entries)
+                
+                sorted_nonzero_entries = num_nonzero_entries[nonzero_perm]
+                sorted_circs_nonzero = circ_trace_sublist[nonzero_perm]
+                #Now I need to split the arrays into subarrays based on the values of the trace.
+                _, unique_nonzero_counts = _np.unique(sorted_nonzero_entries, return_counts=True)
+                if len(unique_nonzero_counts)>1:
+                    nonzero_split_points = [unique_nonzero_counts[0]]
+                    if len(unique_nonzero_counts>1):        
+                        for i, unique_count in enumerate(unique_nonzero_counts[1:-1], start=1):
+                            nonzero_split_points.append(unique_count+nonzero_split_points[i-1])
+                    #now split the array
+                    split_circs_nonzero= _np.split(sorted_circs_nonzero, nonzero_split_points)
+                #otherwise don't split and set split_circs_nonzero to a list containting
+                #sorted_circs_nonzero as a sublist
+                else:
+                    split_circs_nonzero = [sorted_circs_nonzero]
+            
+                #Now for each of these sublists we can independently perform the deduping routine.
+                for circ_sublist in split_circs_nonzero: 
+                    unseen_circs = list(circ_sublist)
+                    #with the new search routines above there is a good chance these sublists
+                    #are not longer sorted by circuit length, so this reverse may or may not
+                    #be useful.
+                    unseen_circs.reverse()
+                    deduped_ckt_list  = []
+
+                    #While unseen_circs is not empty
+                    while unseen_circs:
+                        current_ckt = unseen_circs.pop()
+                        current_ckt_PTM = cleaned_circuit_cache_1[current_ckt]
+                        deduped_ckt_list.append(current_ckt)            
+                        #now iterate through the remaining elements of the set of unseen circuits and remove any duplicates.
+                        is_not_duplicate=[True]*len(unseen_circs)
+                        for i, ckt in enumerate(unseen_circs):
+                            test_ptm= cleaned_circuit_cache_1[ckt]
+                            if _np.linalg.norm(test_ptm-current_ckt_PTM)<eq_thresh: #use same threshold as defined in the base find_fiducials functi 
+                                is_not_duplicate[i]=False
+                        #reset the set of unseen circuits.
+                        unseen_circs=list(itertools.compress(unseen_circs, is_not_duplicate))
+                    #update the circuit cache with the deduped entries of the sublist.
+                    cleaned_circuit_cache_2.update({ckt_key: cleaned_circuit_cache_1[ckt_key] for ckt_key in deduped_ckt_list}) 
+        
     #otherwise just make cleaned_circuit_cache_2 a copy of cleaned_circuit_cache from
     #the identity dropping step.
     else:
@@ -1889,3 +1923,98 @@ def add_penalties_greedy(unpenalized_score, fid_list, l1_penalty=0, op_penalty=0
                 penalized_score+= num_gate_instances*penalty_value
     
     return penalized_score
+    
+def create_candidate_fiducial_list(target_model, omit_identity= True, ops_to_omit = None, 
+                                   candidate_fid_counts=2, max_fid_length= None, eq_thresh=1e-6,
+                                   candidate_seed=None):  
+    """
+    Generate prep and measurement fiducials for a given target model.
+
+    Parameters
+    ----------
+    target_model : Model
+        The model you are aiming to implement.
+
+    omit_identity : bool, optional
+        Whether to remove the identity gate from the set of gates with which
+        fiducials are constructed. Identity gates do nothing to alter
+        fiducials, and so should almost always be left out.
+
+    ops_to_omit : list of string, optional
+        List of strings identifying gates in the model that should not be
+        used in fiducials. Oftentimes this will include the identity gate, and
+        may also include entangling gates if their fidelity is anticipated to
+        be much worse than that of single-system gates.
+
+    candidate_fid_counts : int or dic, optional
+        A dictionary of *fid_length* : *count* key-value pairs, specifying
+        the fiducial "candidate list" - a list of potential fiducials to draw from.
+        *count* is either an integer specifying the number of random fiducials
+        considered at the given *fid_length* or the special values `"all upto"`
+        that considers all of the of all the fiducials of length up to
+        the corresponding *fid_length*. If the keyword 'all' is used for the
+        count value then all circuits at that particular length are added. 
+        If and integer, all germs of up to length
+        that length are used, the equivalent of `{specified_int: 'all upto'}`.
+        
+    max_fid_length : int, optional (deprecated)
+        The maximum number of gates to include in a fiducial. The default is
+        not guaranteed to work for arbitrary models (particularly for quantum
+        systems larger than a single qubit). This keyword is now deprecated.
+        The behavior of the keyword is now equivalent to passing in an int
+        for the candidate_fid_counts argument.
+
+    Returns
+    -------
+    availableFidList : list of Circuits
+        A list containing candidate fiducial circuits.
+    """
+    
+    if ops_to_omit is None:
+        ops_to_omit = []
+        
+    fidOps = [gate for gate in target_model.operations if gate not in ops_to_omit]
+        
+    if omit_identity:
+        # we assume identity gate is always the identity mx regardless of basis
+        Identity = _np.identity(target_model.dim, 'd')
+
+        for gate in fidOps:
+            mx = target_model.operations[gate]
+            if not isinstance(mx, _np.ndarray):
+                mx = mx.to_dense()
+            try:
+                if frobeniusdist_squared(mx, Identity) < eq_thresh:
+                    fidOps.remove(gate)
+            except ValueError as e:
+                raise ValueError('If shapes do not match, this may be a unitary/process matrix mismatch. ' +
+                    'Consider using a parameterization like "full" or "full TP" to avoid this.') from e
+    
+    availableFidList = []
+    if max_fid_length is not None:
+        warn('max_fid_length is now deprecated and will be replaced by the kwarg candidate_fid_counts. See documentation for how to achieve the old behavior with the new kwarg.')
+        if candidate_fid_counts is not None:
+            warn('Specifying max_fid_length without setting candidate_fid_counts results the settings specified in candidate_fid_counts being overridden.\
+            candidate_fid_counts is set by defaults, so this might be expected, but if this is not the desired behavior then please verify your arguments.')
+        #now overrive the value of candidate_fid_counts
+        candidate_fid_counts= max_fid_length
+    if isinstance(candidate_fid_counts, int): 
+        candidate_fid_counts = {candidate_fid_counts: 'all upto'}
+    
+    for fidLength, count in candidate_fid_counts.items():
+        if count == "all upto":
+            #Add the empty fiducial separate to get the circuit labels correct.
+            availableFidList.append(_circuits.Circuit(_baseobjs.Label(()), line_labels= target_model.state_space.state_space_labels))
+            #add everything else up to fidLength
+            availableFidList.extend(_circuits.list_all_circuits(fidOps, 1, fidLength))
+        #if "all" then include all circuits at that particular length.
+        elif count =="all":
+            availableFidList.extend(_circuits.list_all_circuits_one_len(fidOps, fidLength))
+        else:
+            availableFidList.extend(_circuits.list_random_circuits_onelen(
+                fidOps, fidLength, count, seed=candidate_seed))
+    return availableFidList
+    
+    
+    
+    

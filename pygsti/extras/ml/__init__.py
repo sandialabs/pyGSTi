@@ -10,6 +10,9 @@
 
 from . import neuralnets
 from . import tools
+from . import newtools
 # just import everything for now
 from .neuralnets import *
 from .tools import *
+from .newtools import *
+from .newneuralnets import *

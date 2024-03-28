@@ -434,6 +434,9 @@ class Circuit(object):
         from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
         layer_labels_objs = None  # layer_labels elements as Label objects (only if needed)
         if isinstance(layer_labels, str):
+            if stringrep is None:  # then take the given string as the initial string rep
+                stringrep = layer_labels
+                check = False  # no need to check whether this matches since we're parsing it now (below)
             cparser = _CircuitParser(); cparser.lookup = None
             layer_labels, chk_labels, chk_occurrence, chk_compilable_inds = cparser.parse(layer_labels)
             if chk_labels is not None:
@@ -784,7 +787,7 @@ class Circuit(object):
         """
         assert(not self._static), \
             ("Cannot edit a read-only circuit!  "
-             "Set editable=True when calling pygsti.obj.Circuit to create editable circuit.")
+             "Set editable=True when calling pygsti.baseobjs.Circuit to create editable circuit.")
         from pygsti.circuits.circuitparser import CircuitParser as _CircuitParser
         cparser = _CircuitParser()
         chk, chk_labels, chk_occurrence, chk_compilable_inds = cparser.parse(value)
@@ -3641,6 +3644,59 @@ class Circuit(object):
         f.write("\\end{document}")
         f.close()
 
+
+    def convert_to_stim_tableau_layers(self,gate_name_conversions=None):
+        """
+        Converts this circuit to a list of stim tableau layers
+
+        Parameters
+        ----------
+        gate_name_conversions : Dict
+            A map from pygsti gatenames to standard stim tableaus. If set to None a standard set of gate names is used
+
+        Returns
+        -------
+        A layer by layer list of stim tabluaes    
+        """
+        try:
+            import stim
+        except ImportError:
+            raise ImportError("Stim is required for this operation, and it does not appear to be installed.")
+        if gate_name_conversions is None:
+            gate_name_conversions = _itgs.standard_gatenames_stim_conversions()
+
+        qubits=len(self.line_labels)
+        stim_layers=[]
+        for j in range(self.depth):
+            layer = self.layer(j)
+            stim_layer=stim.Tableau(qubits)
+            for sub_lbl in layer:
+                temp = gate_name_conversions[sub_lbl.name]    
+                stim_layer.append(temp,sub_lbl.qubits)
+            stim_layers.append(stim_layer)
+        return stim_layers
+    
+    def convert_to_stim_tableau(self,gate_name_conversions=None):
+        """
+        Converts this circuit to a stim tableu
+
+        Parameters
+        ----------
+        gate_name_conversions : Dict
+            A map from pygsti gatenames to standard stim tableaus. If set to None a standard set of gate names is used
+
+        Returns
+        -------
+        A single stim tableu representing the entire circuit 
+        """
+        layers=self.convert_to_stim_tableau_layers(gate_name_conversions)
+        tableu=layers.pop(0)
+        for layer in layers:
+            tableu=tableu*layer
+        return tableu
+        
+    
+
     def convert_to_cirq(self,
                         qubit_conversion,
                         wait_duration=None,
@@ -3959,6 +4015,8 @@ class Circuit(object):
 
         # Init the openqasm string.
         openqasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\n'
+        # Include a delay instruction
+        openqasm += 'opaque delay(t) q;\n\n'
 
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
         # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
@@ -4037,7 +4095,9 @@ class Circuit(object):
             if not block_between_gates:
                 for q in self.line_labels:
                     if q not in qubits_used:
-                        openqasm += 'id' + ' q[' + str(qubit_conversion[q]) + '];\n'
+                        # Delay 0 works because of the barrier
+                        # In OpenQASM3, this should probably be a stretch instead
+                        openqasm += 'delay(0)' + ' q[' + str(qubit_conversion[q]) + '];\n'
 
             # Add in a barrier after every circuit layer if block_between_layers==True.
             # Including barriers is critical for QCVV testing, circuits should usually

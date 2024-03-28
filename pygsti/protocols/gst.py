@@ -1102,7 +1102,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
                         goparams = goparams.copy()
                         goparams['comm'] = None
                     to_pickle['gaugeopt_argument_dicts'][lbl] = goparams
-                else:  # goparams is a list
+                elif isinstance(goparams, list):  # goparams is a list
                     new_goparams = []  # new list
                     for goparams_dict in goparams:
                         if 'comm' in goparams_dict:
@@ -1110,6 +1110,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
                             goparams_dict['comm'] = None
                         new_goparams.append(goparams_dict)
                     to_pickle['gaugeopt_argument_dicts'][lbl] = new_goparams
+                elif lbl == 'trivial_gauge_opt':
+                    to_pickle['gaugeopt_argument_dicts'][lbl] = None
         return to_pickle
 
     def _to_nice_serialization(self):
@@ -2153,7 +2155,7 @@ def _add_badfit_estimates(results, base_estimate_label, badfit_options,
                     #corresponding to the elements of gaugeopt_labels. In this case let's  make
                     #base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] a dictionary of
                     #the serialized PrimitiveOpsSingleScaleWildcardBudget elements
-                    if gaugeopt_suite is not None:
+                    if gaugeopt_suite is not None and gaugeopt_suite.gaugeopt_suite_names is not None:
                         gaugeopt_labels = gaugeopt_suite.gaugeopt_suite_names
                         base_estimate.extra_parameters['wildcard1d' + "_unmodeled_error"] = {lbl: budget[lbl].to_nice_serialization() for lbl in gaugeopt_labels} 
                         base_estimate.extra_parameters['wildcard1d' + "_unmodeled_active_constraints"] \
@@ -2279,14 +2281,14 @@ def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, paramete
     redbox_threshold = _chi2.ppf(1 - percentile / nboxes, 1)
 
     ref, reference_name = _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_suite)
-    
-    if gaugeopt_suite is None: 
+
+    if gaugeopt_suite is None or gaugeopt_suite.gaugeopt_suite_names is None:
         gaugeopt_labels = None
         primitive_ops = list(ref.keys())
     else:
-        gaugeopt_labels= gaugeopt_suite.gaugeopt_suite_names
+        gaugeopt_labels = gaugeopt_suite.gaugeopt_suite_names
         primitive_ops = list(ref[list(gaugeopt_labels)[0]].keys())
-    
+
     if gaugeopt_labels is None:
         wcm = _wild.PrimitiveOpsSingleScaleWildcardBudget(primitive_ops, [ref[k] for k in primitive_ops],
                                                       reference_name=reference_name)
@@ -2307,7 +2309,7 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
     DOCSTRING: TODO
     '''
     if badfit_options.wildcard1d_reference == 'diamond distance':
-        if gaugeopt_suite is None:
+        if gaugeopt_suite is None or gaugeopt_suite.gaugeopt_suite_names is None:
             final_model = estimate.models['final iteration estimate']
             target_model = estimate.models['target']
             gaugeopt_model = _alg.gaugeopt_to_target(final_model, target_model)
@@ -2338,6 +2340,10 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
             for gaugeopt_model, lbl in zip(gaugeopt_models, gaugeopt_suite.gaugeopt_suite_names):
                 for key, op in gaugeopt_model.operations.items():
                     dd[lbl][key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+                    if dd[lbl][key] < 0:  # indicates that diamonddist failed (cvxpy failure)
+                        _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
+                                        " Falling back to trace distance.") % str(key))
+                        dd[lbl][key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
 
             spamdd = {}
             for key, op in gaugeopt_model.preps.items():
@@ -2500,8 +2506,6 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
     # if p is prob that box is red and there are N boxes, then prob of no red boxes is q = (1-p)^N ~= 1-p*N
     # and so probability of any red boxes is ~p*N.  Here `percentile` is the probability of seeing *any* red
     # boxes, i.e. ~p*N, so to compute the prob of a single box being red we compute `p = percentile/N`.
-
-    #print("DB2: ",twoDeltaLogL_threshold,redbox_threshold)
 
     assert(isinstance(mdc_objfn, _objfns.PoissonPicDeltaLogLFunction)), \
         "Can only use wildcard scaling with 'logl' objective!"

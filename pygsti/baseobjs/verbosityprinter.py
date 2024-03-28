@@ -485,7 +485,7 @@ class VerbosityPrinter(object):
 
     # A wrapper for show_progress that only works if verbosity is above a certain value (Status by default)
     def show_progress(self, iteration, total, bar_length=50, num_decimals=2, fill_char='#',
-                      empty_char='-', prefix='Progress:', suffix='', verbose_messages=[], indent_char='  ', end='\n'):
+                      empty_char='-', prefix='Progress:', suffix='', verbose_messages=None, indent_char='  ', end='\n'):
         """
         Displays a progress message (to be used within a `progress_logging` block).
 
@@ -534,6 +534,8 @@ class VerbosityPrinter(object):
         -------
         None
         """
+        if verbose_messages is None:
+            verbose_messages = []
         indent = indent_char * (self._progressStack[-1] - 1 + self.extra_indents)
         # -1 so no indent at verbosity == 1
 

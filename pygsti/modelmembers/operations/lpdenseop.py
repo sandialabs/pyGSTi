@@ -34,7 +34,7 @@ class LinearlyParameterizedElementTerm(object):
         together (and finally, with `coeff`) to form this term.
     """
 
-    def __init__(self, coeff=1.0, param_indices=[]):
+    def __init__(self, coeff=1.0, param_indices=None):
         """
         Create a new LinearlyParameterizedElementTerm
 
@@ -47,6 +47,8 @@ class LinearlyParameterizedElementTerm(object):
             A list of integers, specifying which parameters are muliplied
             together (and finally, with `coeff`) to form this term.
         """
+        if param_indices is None:
+            param_indices = []
         self.coeff = coeff
         self.paramIndices = param_indices
 

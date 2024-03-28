@@ -609,6 +609,7 @@ class OpModel(Model):
         raise NotImplementedError("Derived Model classes should implement _iter_parameterized_objs")
         #return # default is to have no parameterized objects
 
+    #TODO: Make this work with param interposers.
     def _check_paramvec(self, debug=False):
         if debug: print("---- Model._check_paramvec ----")
 

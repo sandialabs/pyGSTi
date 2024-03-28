@@ -77,7 +77,7 @@ def split(n, a):
 
 
 def run_process_tomography(state_to_density_matrix_fn, n_qubits=1, comm=None,
-                           verbose=False, basis='pp', time_dependent=False, opt_args={}):
+                           verbose=False, basis='pp', time_dependent=False, opt_args=None):
     """
     A function to compute the process matrix for a quantum channel given a function
     that maps a pure input state to an output density matrix.
@@ -111,6 +111,8 @@ def run_process_tomography(state_to_density_matrix_fn, n_qubits=1, comm=None,
             specified by 'basis'. If 'time_dependent'=True, then this will be an array
             of process matrices.
     """
+    if opt_args is None:
+        opt_args = {}
     if comm is not None:
         rank = comm.Get_rank()
         size = comm.Get_size()

@@ -83,7 +83,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         Dictionary whose keys are operation label "aliases" and whose values are circuits
         corresponding to what that operation label should be expanded into before querying
         the dataset.  Defaults to the empty dictionary (no aliases defined)
-        e.g. op_label_aliases['Gx^3'] = pygsti.obj.Circuit(['Gx','Gx','Gx'])
+        e.g. op_label_aliases['Gx^3'] = pygsti.baseobjs.Circuit(['Gx','Gx','Gx'])
 
     guess_model_for_gauge : Model, optional
         A model used to compute a gauge transformation that is applied to
@@ -856,7 +856,23 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
         ret = ()
         for artype, cnt in max_cnts.items(): ret += (artype,) * cnt
         return ret
-
+   
+    #These lines were previously in the loop below, but we should be able to move it out from there so we can use it
+    #in precomputing layouts:
+    method_names = optimizer.called_objective_methods
+    array_types = optimizer.array_types + \
+                _max_array_types([builder.compute_array_types(method_names, mdl.sim)
+                                  for builder in iteration_objfn_builders + final_objfn_builders])
+    
+    #precompute the COPA layouts. During the layout construction there are memory availability checks,
+    #So by doing it this way we should be able to reduce the number of instances of running out of memory before the end.
+    #The ModelDatasetCircuitsStore
+    printer.log('Precomputing CircuitOutcomeProbabilityArray layouts for each iteration.', 2)
+    precomp_layouts = []
+    for i, circuit_list in enumerate(circuit_lists):
+        printer.log(f'Layout for iteration {i}', 2)
+        precomp_layouts.append(mdl.sim.create_layout(circuit_list, dataset, resource_alloc, array_types, verbosity= printer - 1))
+    
     with printer.progress_logging(1):
         for i in range(starting_index, len(circuit_lists)):
             circuitsToEstimate = circuit_lists[i]
@@ -871,12 +887,9 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
             if circuitsToEstimate is None or len(circuitsToEstimate) == 0: continue
 
             mdl.basis = start_model.basis  # set basis in case of CPTP constraints (needed?)
-            method_names = optimizer.called_objective_methods
-            array_types = optimizer.array_types + \
-                _max_array_types([builder.compute_array_types(method_names, mdl.sim)
-                                  for builder in iteration_objfn_builders + final_objfn_builders])
             initial_mdc_store = _objfns.ModelDatasetCircuitsStore(mdl, dataset, circuitsToEstimate, resource_alloc,
-                                                                  array_types=array_types, verbosity=printer - 1)
+                                                                  array_types=array_types, verbosity=printer - 1, 
+                                                                  precomp_layout = precomp_layouts[i])
             mdc_store = initial_mdc_store
 
             for j, obj_fn_builder in enumerate(iteration_objfn_builders):

@@ -32,7 +32,7 @@ class CircuitList(_NicelySerializable):
         and whose values are circuits corresponding to what that operation label
         should be expanded into before querying the dataset.  Defaults to the
         empty dictionary (no aliases defined).  e.g. op_label_aliases['Gx^3'] =
-        pygsti.obj.Circuit(['Gx','Gx','Gx'])
+        pygsti.baseobjs.Circuit(['Gx','Gx','Gx'])
 
     circuit_weights : numpy.ndarray, optional
         If not None, an array of per-circuit weights (of length equal to the number of
@@ -74,7 +74,7 @@ class CircuitList(_NicelySerializable):
             and whose values are circuits corresponding to what that operation label
             should be expanded into before querying the dataset.  Defaults to the
             empty dictionary (no aliases defined).  e.g. op_label_aliases['Gx^3'] =
-            pygsti.obj.Circuit(['Gx','Gx','Gx'])
+            pygsti.baseobjs.Circuit(['Gx','Gx','Gx'])
 
         circuit_rules : list, optional
             A list of `(find,replace)` 2-tuples which specify circuit-label replacement
