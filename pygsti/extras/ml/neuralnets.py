@@ -110,6 +110,34 @@ class CircuitErrorVec(_keras.Model):
         # This mixes up the outputs of the networks for the different elements of the error vector
         #self.output_layer_int = keras.layers.Dense(self.output_dim, activation = 'linear')
         #self.output_layer_final = keras.layers.Dense(self.output_dim, activation = 'linear')
+    
+        def new_call(self, inputs):
+        # This is very slow when it is called on a large number of circuits. It's because it is not implemented as efficiently (map_fn is the slow part)
+        # But that may not be an issue if you keep the batch sizes smallish
+        def calc_end_of_circ_err_vec(M, P):
+            flat_M, flat_P = _tf.reshape(M, [-1]), _tf.reshape(P, [-1])
+            num_segments = _tf.reduce_max(flat_P) + 1
+            return _tf.math.unsorted_segment_sum(flat_M, flat_P, num_segments)
+
+        def calc_fidelity(final_evec):
+            return _tf.reduce_sum(final_evec**2, axis = -1)
+
+        def circuit_to_fidelity(input):
+            # This doesn't work correctly because it doesn't use S correctly. 
+            # This approach assumes that you can apply the permutation step to the signed error rates
+            # But right now S works only after permutating (I think)
+            # Regardless, we can test for SPEED
+            # We need S to tell us if the i-th entry in the initial vector contributes positively or negatively
+            # right now S tells us if the i-th entry in the propogated vector contributes positively or negatively
+            C = input[:, 0:24]
+            P = _tf.cast(input[:, 24:24+256], _tf.int32)
+            S = input[:, 24+256:25+512]
+            evecs = self.embedding_layer(self.local_dense(self.input_layer(C)))
+            signed_evecs = _tf.math.multiply(S, evecs)
+            total_evec = calc_end_of_circ_err_vec(signed_evecs, P)
+            return calc_fidelity(total_evec)
+        
+        return _tf.map_fn(circuit_to_fidelity, inputs)
 
     def call(self, inputs):
         depth = inputs.shape[-2]      
