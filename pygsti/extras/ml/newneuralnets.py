@@ -121,6 +121,7 @@ class CircuitErrorVec(_keras.Model):
             """
             signed_M = _tf.math.multiply(S, M)
             flat_M, flat_P = _tf.reshape(signed_M, [-1]), _tf.reshape(P, [-1])
+            
             num_segments = _tf.reduce_max(flat_P) + 1
             return _tf.math.unsorted_segment_sum(flat_M, flat_P, num_segments)  # This returns a larger vector than necessary
 
