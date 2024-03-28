@@ -131,7 +131,7 @@ class CircuitErrorVec(_keras.Model):
             # right now S tells us if the i-th entry in the propogated vector contributes positively or negatively
             C = input[:, 0:24]
             P = _tf.cast(input[:, 24:24+256], _tf.int32)
-            S = input[:, 24+256:25+512]
+            S = input[:, 24+256:24+512]
             evecs = self.embedding_layer(self.local_dense(self.input_layer(C)))
             signed_evecs = _tf.math.multiply(S, evecs)
             total_evec = calc_end_of_circ_err_vec(signed_evecs, P)

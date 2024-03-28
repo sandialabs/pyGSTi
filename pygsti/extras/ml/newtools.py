@@ -7,6 +7,8 @@ from . import tools as _tools
 from ..errorgenpropagation import propagatableerrorgen as _peg
 from ..errorgenpropagation import errorpropagator as _ep
 
+from tensorflow import unique
+
 
 def numberToBase(n, b):
     """
@@ -181,6 +183,12 @@ def create_error_propagation_matrix(c, error_gens):
 
     return indices, signs
 
+def remap_indices(c_indices):
+    flat_indices = c_indices.flatten()
+    unique_values, idx = _np.unique(flat_indices, return_inverse = True)
+    return idx.reshape(c_indices.shape)
+
+
 def create_input_data(circs, fidelities, tracked_error_gens: list, num_channels: int, num_qubits: int, max_depth=None):
     
     if max_depth is None: max_depth = _np.max([c.depth for c in circs])
@@ -201,6 +209,7 @@ def create_input_data(circs, fidelities, tracked_error_gens: list, num_channels:
             print(i,end=',')
         x_circs[i, :, :, :] = _tools.circuit_to_tensor(c, max_depth)              
         c_indices, c_signs = create_error_propagation_matrix(c, tracked_error_gens)
+        c_indices = remap_indices(c_indices)
         x_indices[i, :, 0:c.depth] = c_indices.T # deprecated: np.rint(c_indices)
         x_signs[i, :, 0:c.depth] = c_signs.T # deprecated: np.rint(c_signs)
         
