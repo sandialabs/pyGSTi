@@ -111,7 +111,7 @@ class CircuitErrorVec(_keras.Model):
         #self.output_layer_int = keras.layers.Dense(self.output_dim, activation = 'linear')
         #self.output_layer_final = keras.layers.Dense(self.output_dim, activation = 'linear')
     
-        def new_call(self, inputs):
+    def call(self, inputs):
         # This is very slow when it is called on a large number of circuits. It's because it is not implemented as efficiently (map_fn is the slow part)
         # But that may not be an issue if you keep the batch sizes smallish
         def calc_end_of_circ_err_vec(M, P):
@@ -139,7 +139,7 @@ class CircuitErrorVec(_keras.Model):
         
         return _tf.map_fn(circuit_to_fidelity, inputs)
 
-    def call(self, inputs):
+    def old_call(self, inputs):
         depth = inputs.shape[-2]      
         cs = inputs[:,:,0:24]
         signs = inputs[:,:,24+256:24+512]        

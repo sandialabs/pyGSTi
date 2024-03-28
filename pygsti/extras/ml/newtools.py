@@ -2,6 +2,8 @@
 import numpy as _np
 import itertools as _itertools
 
+from . import tools as _tools
+
 from ..errorgenpropagation import propagatableerrorgen as _peg
 from ..errorgenpropagation import errorpropagator as _ep
 
@@ -178,3 +180,28 @@ def create_error_propagation_matrix(c, error_gens):
     signs = _np.array(signs)
 
     return indices, signs
+
+def create_input_data(circs, fidelities, tracked_error_gens: list, num_channels: int, num_qubits: int, max_depth=None):
+    
+    if max_depth is None: max_depth = _np.max([c.depth for c in circs])
+    print(max_depth)
+    
+    numchannels = num_channels
+    numqubits = num_qubits
+    numcircs = len(circs)
+    num_error_gens = len(tracked_error_gens)
+    
+    x_circs = _np.zeros((numcircs, numqubits, max_depth, numchannels), float)
+    x_signs = _np.zeros((numcircs, num_error_gens, max_depth), int)
+    x_indices = _np.zeros((numcircs, num_error_gens, max_depth), int)
+    y = _np.array(fidelities)
+                    
+    for i, c in enumerate(circs):
+        if i % 25 == 0:
+            print(i,end=',')
+        x_circs[i, :, :, :] = _tools.circuit_to_tensor(c, max_depth)              
+        c_indices, c_signs = create_error_propagation_matrix(c, tracked_error_gens)
+        x_indices[i, :, 0:c.depth] = c_indices.T # deprecated: np.rint(c_indices)
+        x_signs[i, :, 0:c.depth] = c_signs.T # deprecated: np.rint(c_signs)
+        
+    return x_circs, x_signs, x_indices, y

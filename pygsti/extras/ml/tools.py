@@ -258,6 +258,8 @@ def populate_target_model(verbose=0):
 
 ###### Functions that encode a circuit into a tensor ###
 
+# TO DO: Make more general
+
 qubit_to_index = {0:0, 1:1, 2:2, 3:3}
            
 def clockwise_cnot(g):
