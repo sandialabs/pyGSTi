@@ -15,3 +15,4 @@ from . import newtools
 from .neuralnets import *
 from .tools import *
 from .newtools import *
+from .newneuralnets import *
