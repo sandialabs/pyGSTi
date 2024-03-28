@@ -65,7 +65,10 @@ class TensorNetworkOp(_ModelMember):
         self.tensor_network = _TensorNetwork(self.tensor_list, virtual=True)
            
         #initialize parameter vector
-        self.paramvals = _np.concatenate([tensor_array for tensor_array in tensor_array_list], axis=None)
+        concatenated_tensor_arrays = _np.concatenate([tensor_array for tensor_array in tensor_array_list], axis=None)
+        self.paramvals = _np.empty((2*concatenated_tensor_arrays.size,))
+        self.paramvals[0::2] = concatenated_tensor_arrays.real
+        self.paramvals[1::2] = concatenated_tensor_arrays.imag
         
         #track the shapes of the tensors
         self.tensor_shapes = [tensor.shape for tensor in tensor_array_list]
@@ -78,23 +81,28 @@ class TensorNetworkOp(_ModelMember):
     def from_vector(self, v, close=False, dirty_value=True):
         #print('RUNNING IN TENSOR NETWORK')
         #print(f'{v=}')
+
+        #convert v into a complex array by pairwise combining the terms.
+        v_complex = v[0::2] + 1j*v[1::2]
+
         #start by partitioning the vector v into sections with sizes given by tensor_element_counts
         partitioned_vector = []
         for i, element_count in enumerate(self.tensor_element_counts):
             if i ==0:
-                partitioned_vector.append(v[0:element_count])
+                partitioned_vector.append(v_complex[0:element_count])
                 total_seen = element_count
             else:
-                partitioned_vector.append(v[total_seen: total_seen+element_count])
+                partitioned_vector.append(v_complex[total_seen: total_seen+element_count])
                 total_seen += element_count
             
         #reshape the flattened_array arrays in the multi-dimensional tensors
         reshaped_arrays = [_np.reshape(flattened_array, new_shape) for flattened_array, new_shape in zip(partitioned_vector, self.tensor_shapes)]
         
-        #update the quimb tensor reps
-        for quimb_tensor, new_data in zip(self.tensor_list, reshaped_arrays):
-            quimb_tensor.modify(data= new_data)
-        
+        #update the quimb tensor reps in both tensor_network and the tensor_list
+        for tensor_list_elem, tensor_network_elem, new_data in zip(self.tensor_list, self.tensor_network.tensors, reshaped_arrays):
+            tensor_list_elem.modify(data= new_data)
+            tensor_network_elem.modify(data= new_data)
+            
         #print(f'{self.paramvals=}')
         #print(f'{self.tensor_list[0].data=}')
               
@@ -135,7 +143,27 @@ class LPDOTensorOp(TensorNetworkOp):
         self.bra_tensor_network.reindex_({I : rand_uuid() for I in self.bra_tensor_network.inner_inds()})
         
         self.LPDO_tensor_network = self.tensor_network & self.bra_tensor_network
-        
+
+    #TODO: There must be a better/more efficient way to do this using in-place modifications
+    #of the LPDO_tensor_network and/or bra_tensor_network
+    def from_vector(self, v, close=False, dirty_value=True):
+        #import pdb
+        #pdb.set_trace()
+        #print('HIT from_vector')
+        #print(f'{v=}')
+        #run parent method to update self.tensor_network
+        #print(f'{super()=}')
+        super().from_vector(v, close, dirty_value)
+#
+        #Since I haven't figured out the better way to do this yet, essentially
+        #redo the LPDO construction from init.
+        self.bra_tensor_network = self.tensor_network.copy().H
+#
+        self.bra_tensor_network.reindex_({ind : 'b' + ind[1:] for ind in self.bra_tensor_network.outer_inds() if ind[0]=='k'})
+        self.bra_tensor_network.reindex_({I : rand_uuid() for I in self.bra_tensor_network.inner_inds()})
+#
+        self.LPDO_tensor_network = self.tensor_network & self.bra_tensor_network
+
      
 class LPDOTensorState(LPDOTensorOp):
     

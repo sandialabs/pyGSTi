@@ -638,10 +638,12 @@ class ForwardSimulator(_NicelySerializable):
 
         probs2 = _np.empty(len(layout), 'd')
         orig_vec = self.model.to_vector().copy()
+        #print(f'{orig_vec=}')
         for i in range(self.model.num_params):
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
-                vec = orig_vec.copy(); vec[i] += eps
+                vec = orig_vec.copy()
+                vec[i] += eps
                 self.model.from_vector(vec, close=True)
                 self._bulk_fill_probs_block(probs2, layout)
                 array_to_fill[:, iFinal] = (probs2 - probs) / eps
