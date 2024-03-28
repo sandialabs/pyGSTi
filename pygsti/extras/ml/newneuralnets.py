@@ -4,6 +4,7 @@ import numpy as _np
 # from . import tools as qcl
 import copy as _copy
 
+
 class DenseSubNetwork(_keras.layers.Layer):
     def __init__(self, outdim):
         super().__init__()
@@ -23,61 +24,6 @@ class DenseSubNetwork(_keras.layers.Layer):
         x = self.dense2(x)
         x = self.dense3(x)
         return self.output_layer(x)
-
-
-# class LocalizedDenseToErrVec(_keras.layers.Layer):
-#     def __init__(self, laplace, hops, error_interactions, num_tracked_error_gens):
-#         """
-#         laplace: the lapalcian matrix for the connectivity of the qubits. It must be 
-#         a num_qubits X num_qubits numpy.array.
-        
-#         hops: int
-        
-#         outdim: the dimension of the output error vector. This does *not* need to be
-#         4^num_qubits.
-#         """
-#         super().__init__()
-        
-#         self.outdim = num_tracked_error_gens
-
-#         self.error_interactions = error_interactions
-#         self.num_qubits = laplace.shape[0]
-#         self.hops = hops
-#         self.laplace = laplace
-        
-#         laplace_power = _np.linalg.matrix_power(laplace, hops)
-#         nodes_within_hops = []
-#         for i in range(self.num_qubits):
-#             nodes_within_hops.append(_np.arange(self.num_qubits)[abs(laplace_power[i, :]) > 0])
-
-#         # Used for deciding which parts of the data to take as input
-#         self.nodes_within_hops = nodes_within_hops 
-            
-#         self.indices_for_error = []
-#         for i, qubits in enumerate(error_interactions):
-#             for _ in range(num_error_types[i]):
-#                 # This hard codes that the qubits are numbered from 0.
-#                 relevant_qubits = _np.concatenate([[p for p in self.nodes_within_hops[q]] for q in qubits])
-#                 indices_for_error = _np.concatenate([[6 * q + 0, 6 * q + 1, 6 * q + 2, 6 * q + 3, 6 * q + 4, 6 * q + 5] for q in relevant_qubits])
-#                 self.indices_for_error.append(indices_for_error)
-
-#     def build(self, input_shape):
-#         self.dense = {}
-#         for node in range(self.outdim):
-#             self.dense[node] = LocalizedDenseSubNetwork(1)
-#         super().build(input_shape)
-
-#     def call(self, inputs):
-#         x = [self.dense[i](_tf.gather(inputs, self.indices_for_error[i], axis=-1)) for i in range(0, self.outdim)]
-#         x = _tf.concat(x, axis=-1)
-#         return x
-
-def graph_laplacian_from_adjacency(adjacency):
-
-    dim = _np.shape(adjacency)[0]
-    deg = 2 * _np.identity(dim)
-    laplace = deg - adjacency
-    return laplace
 
 
 def layer_snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_graph_laplacian, num_hops):
@@ -135,7 +81,8 @@ class LocalizedDenseToErrVec(_keras.layers.Layer):
 
 
 class CircuitErrorVec(_keras.Model):
-    def __init__(self, num_qubits, num_channels, tracked_error_gens, layer_snipper, layer_snipper_args, input_shape=None):
+    def __init__(self, num_qubits, num_channels, tracked_error_gens, layer_snipper, layer_snipper_args, 
+                 input_shape=None):
         """
         num_qubits: int
             The number of qubits that this neural network models.
@@ -152,23 +99,28 @@ class CircuitErrorVec(_keras.Model):
             of a circuit layer to `snip out` as input to dense neural network that predicts the error rate
             of that primitive error generator.
 
-        input_shape: ??? to do
-
+        input_shape: optional
         """
         super().__init__()
         self.num_qubits = num_qubits
         self.tracked_error_gens = _copy.deepcopy(tracked_error_gens)
         self.num_tracked_error_gens = len(self.tracked_error_gens)
         self.num_channels = num_channels
-        self.len_gate_encoding = self.numqubits * self.numchannels
+        self.len_gate_encoding = self.num_qubits * self.num_channels
         self.input_layer = _keras.layers.InputLayer(input_shape=input_shape)
-        self.local_dense = LocalizedDenseToErrVec(layer_snipper, layer_snipper_args, self.num_tracked_error_gens)
+        self.local_dense = LocalizedDenseToErrVec(layer_snipper, layer_snipper_args, self.tracked_error_gens)
    
     def call(self, inputs):
-        # This is very slow when it is called on a large number of circuits. It's because it is not implemented as efficiently (map_fn is the slow part)
+        # This is very slow when it is called on a large number of circuits. It's because it is not implemented
+        # as efficiently (map_fn is the slow part)
         # But that may not be an issue if you keep the batch sizes smallish
-        def calc_end_of_circ_err_vec(M, P):
-            flat_M, flat_P = _tf.reshape(M, [-1]), _tf.reshape(P, [-1])
+        def calc_end_of_circ_err_vec(M, P, S):
+            """
+            A function that maps the error rates (M) to an end-of-circuit error generator
+            using the permutation matrix P.
+            """
+            signed_M = _tf.math.multiply(S, M)
+            flat_M, flat_P = _tf.reshape(signed_M, [-1]), _tf.reshape(P, [-1])
             num_segments = _tf.reduce_max(flat_P) + 1
             return _tf.math.unsorted_segment_sum(flat_M, flat_P, num_segments)  # This returns a larger vector than necessary
 
@@ -177,12 +129,14 @@ class CircuitErrorVec(_keras.Model):
             return _tf.reduce_sum(final_evec**2, axis=-1)
 
         def circuit_to_fidelity(input):
+            """
+            A function that maps a single circuit to the prediction for its process fidelity (a single real number).
+            """
             C = input[:, 0:self.len_gate_encoding]
-            P = input[:, self.len_gate_encoding:self.len_gate_encoding + self.tracked_error_gens]
-            S = input[:, self.len_gate_encoding + self.tracked_error_gens:self.len_gate_encoding + 2 * self.tracked_error_gens]
+            P = _tf.cast(input[:, self.len_gate_encoding:self.len_gate_encoding + self.num_tracked_error_gens], _tf.int32)
+            S = input[:, self.len_gate_encoding + self.num_tracked_error_gens:self.len_gate_encoding + 2 * self.num_tracked_error_gens]
             evecs = self.local_dense(self.input_layer(C))
-            signed_evecs = _tf.math.multiply(S, evecs)
-            total_evec = calc_end_of_circ_err_vec(signed_evecs, P)
+            total_evec = calc_end_of_circ_err_vec(evecs, P, S)
             return calc_fidelity(total_evec)
         
         return _tf.map_fn(circuit_to_fidelity, inputs)   
