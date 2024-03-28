@@ -595,6 +595,241 @@ def hamiltonian_jac_alt(num_qubits, prep_meas_fid_pairs = None):
     #TODO: Delete second return, this is currently only for testing/diagnostics.
     return ham_jac, prep_meas_eigenstate_pairs
 
+def stochastic_jac_alt(num_qubits, prep_meas_fid_pairs = None):
+    #The jacobian we are trying to construct has columns corresponding to
+    #intrisic hamiltonian generator rates, and rows corresponding to prep-measure
+    #experiment pairs, where prep means prepare some eigenstate of some pauli,
+    #and measure means measure the inner product with some eigenstate of some
+    #pauli. We can write these as (I+Q)/sqrt(d) and (I+R)/sqrt(d) for some
+    #signed paulis Q and R.
+
+    #TODO: Reduce code repetition by spinning some of this off into a different function.
+
+    #Dictionary of all of the n-qubit (unsigned) paulis.
+    pauli_matrices = basisconstructors.pp_matrices_dict(2**num_qubits, normalize=False)
+
+    #all possible parities for the pauli strings
+    parities = list(product([1, -1], repeat=num_qubits))
+
+    #get rid of the all identity string, we don't need it.
+    identKey = "I" * num_qubits
+    del pauli_matrices[identKey]
+
+    #constuct list of strictly non-trivial paulis for prep and measurement
+    all_nontrivial_paulis = [key for key in pauli_matrices.keys() if "I" not in key]
+    
+    #for ham keys the only restriction is not the all identity string
+    #let's make the hamiltonian_pauli_idxs values stim PauliString objects
+    stochastic_pauli_idxs = [stim.PauliString(pauli) for pauli in pauli_matrices.keys()]
+    #if prep_meas_eigenstate_pairs are specified then use these,
+    #casting to appropriate overall signed stim PauliStrings
+    #otherwise, generate a set of all possible pairs, but with
+    #the last all '-' parity skipped on the measurements (to get
+    #the number of dof correct).
+
+    if prep_meas_fid_pairs is None:
+        #For the eigenstates, we are going to want to loop through the non-trivial paulis
+        #and construct the different possible parities.
+        signed_nontrivial_paulis_prep = []
+        signed_nontrivial_paulis_meas = []
+        
+        #an alternate version of the signed paulis where we only track
+        #the overall sign from pulling the scalars signs out front.
+        overall_signed_nontrivial_paulis_prep = []
+        overall_signed_nontrivial_paulis_meas = []
+
+        for pauli in all_nontrivial_paulis:
+            for j, parity in enumerate(parities):
+                signed_pauli = ''
+                for i,subpauli in enumerate(pauli):
+                    if parity[i]>0:
+                        signed_pauli += f'+{subpauli}'
+                    else:
+                        signed_pauli += f'-{subpauli}'
+                signed_nontrivial_paulis_prep.append(signed_pauli)
+                if _np.prod(parity)>0:
+                    overall_signed_pauli = '+' + pauli
+                else:
+                    overall_signed_pauli = '-' + pauli
+                #append this as a stim PauliString object,
+                #which can handle overall signed paulis (but not individually
+                #signed ones).
+                overall_signed_nontrivial_paulis_prep.append(stim.PauliString(overall_signed_pauli))
+                
+                #skip the all - parity on the meas
+                if j != (len(parities)-1):
+                    signed_nontrivial_paulis_meas.append(signed_pauli)
+                    overall_signed_nontrivial_paulis_meas.append(stim.PauliString(overall_signed_pauli))
+        #loop through  prep_meas_pairs, create a list of tuples corresponding to prep eigenstates
+        #and meas eigenstates.
+        prep_meas_eigenstate_pairs = list(product(signed_nontrivial_paulis_prep, signed_nontrivial_paulis_meas))
+        #create a similar iterator but for the overall-signed pairs.
+        prep_meas_overall_signed_pairs = list(product(overall_signed_nontrivial_paulis_prep, overall_signed_nontrivial_paulis_meas))
+        #otherwise a set of prep measure pairs has been specified. For now assume that this has been specified
+        #in the form of a list of tuples of NQPauliState objects, though we'll eventually probably loosen this.    
+    else:
+        prep_meas_eigenstate_pairs = []
+        prep_meas_overall_signed_pairs = []
+        for prep, meas in prep_meas_fid_pairs:
+            prep_meas_eigenstate_pairs.append((str(prep), str(meas)))
+            #remove the pluses and minuses
+            stripped_prep = str(prep).replace('+', '').replace('-', '')
+            stripped_meas = str(meas).replace('+', '').replace('-', '')
+            
+            #calculate the overall parity
+            overall_sign_prep = _np.prod(prep.signs) #(-1)**_np.sum(prep.signs)
+            overall_sign_meas = _np.prod(meas.signs) #(-1)**_np.sum(meas.signs)
+
+            overall_signed_pauli_prep = '+' + stripped_prep if overall_sign_prep>0 else '-' + stripped_prep
+            overall_signed_pauli_meas = '+' + stripped_meas if overall_sign_meas>0 else '-' + stripped_meas
+
+            prep_meas_overall_signed_pairs.append((stim.PauliString(overall_signed_pauli_prep), stim.PauliString(overall_signed_pauli_meas)))
+
+    #initialize an empty numpy array for the jacobian:
+    sto_jac = _np.zeros((len(prep_meas_eigenstate_pairs), len(stochastic_pauli_idxs)))
+
+    #for each of these pairs we then want to loop through all of the elements of
+    #stochastic_pauli_idxs and compute the component of the jacobian for this
+    #stochastic index.
+    for row_idx, ((prep, meas), (prep_overall, meas_overall)) in enumerate(zip(prep_meas_eigenstate_pairs, prep_meas_overall_signed_pairs)):
+        for col_idx, sto_pauli_idx in enumerate(stochastic_pauli_idxs):
+
+            #for the stochastic terms the condition we need is that 
+            #meas_overall ~= prep_overall (i.e. up to a sign) and that
+            #prep_overall and sto_pauli_idx anticommute.
+            if not sto_pauli_idx.commutes(prep_overall):
+                #next check whether prep_overall==meas_overall up to a sign:
+                if is_unsigned_pauli_equiv(meas_overall, prep_overall):
+                    #Finally just compare the signs to determine if this is +2 or -2:
+                    sto_jac[row_idx, col_idx] = -2 if meas_overall.sign == prep_overall.sign else 2
+
+    #TODO: Delete second return, this is currently only for testing/diagnostics.
+    return sto_jac, prep_meas_eigenstate_pairs
+
+def correlation_jac_alt(num_qubits, prep_meas_fid_pairs = None):
+    #The jacobian we are trying to construct has columns corresponding to
+    #intrisic hamiltonian generator rates, and rows corresponding to prep-measure
+    #experiment pairs, where prep means prepare some eigenstate of some pauli,
+    #and measure means measure the inner product with some eigenstate of some
+    #pauli. We can write these as (I+Q)/sqrt(d) and (I+R)/sqrt(d) for some
+    #signed paulis Q and R.
+
+    #TODO: Reduce code repetition by spinning some of this off into a different function.
+
+    #Dictionary of all of the n-qubit (unsigned) paulis.
+    pauli_matrices = basisconstructors.pp_matrices_dict(2**num_qubits, normalize=False)
+
+    #all possible parities for the pauli strings
+    parities = list(product([1, -1], repeat=num_qubits))
+
+    #get rid of the all identity string, we don't need it.
+    identKey = "I" * num_qubits
+    del pauli_matrices[identKey]
+
+    #constuct list of strictly non-trivial paulis for prep and measurement
+    all_nontrivial_paulis = [key for key in pauli_matrices.keys() if "I" not in key]
+    
+    #for ham keys the only restriction is not the all identity string
+    #let's make the hamiltonian_pauli_idxs values stim PauliString objects
+    pauli_idxs = [stim.PauliString(pauli) for pauli in pauli_matrices.keys()]
+
+    #For the correlation terms we want the indices to be pairs of paulis
+    #such that the paulis are not equal, and we only need half of these
+    #due to the correlation terms being symmetric.
+    correlation_pauli_idxs = _np.fromiter(_itertools.product(pauli_idxs, repeat=2), dtype=object).reshape((len(pauli_idxs), len(pauli_idxs)))
+    #Then we only want the upper diagonal of this matrix.
+    #correlation_pauli_idxs = _np.u
+    #if prep_meas_eigenstate_pairs are specified then use these,
+    #casting to appropriate overall signed stim PauliStrings
+    #otherwise, generate a set of all possible pairs, but with
+    #the last all '-' parity skipped on the measurements (to get
+    #the number of dof correct).
+
+    if prep_meas_fid_pairs is None:
+        #For the eigenstates, we are going to want to loop through the non-trivial paulis
+        #and construct the different possible parities.
+        signed_nontrivial_paulis_prep = []
+        signed_nontrivial_paulis_meas = []
+        
+        #an alternate version of the signed paulis where we only track
+        #the overall sign from pulling the scalars signs out front.
+        overall_signed_nontrivial_paulis_prep = []
+        overall_signed_nontrivial_paulis_meas = []
+
+        for pauli in all_nontrivial_paulis:
+            for j, parity in enumerate(parities):
+                signed_pauli = ''
+                for i,subpauli in enumerate(pauli):
+                    if parity[i]>0:
+                        signed_pauli += f'+{subpauli}'
+                    else:
+                        signed_pauli += f'-{subpauli}'
+                signed_nontrivial_paulis_prep.append(signed_pauli)
+                if _np.prod(parity)>0:
+                    overall_signed_pauli = '+' + pauli
+                else:
+                    overall_signed_pauli = '-' + pauli
+                #append this as a stim PauliString object,
+                #which can handle overall signed paulis (but not individually
+                #signed ones).
+                overall_signed_nontrivial_paulis_prep.append(stim.PauliString(overall_signed_pauli))
+                
+                #skip the all - parity on the meas
+                if j != (len(parities)-1):
+                    signed_nontrivial_paulis_meas.append(signed_pauli)
+                    overall_signed_nontrivial_paulis_meas.append(stim.PauliString(overall_signed_pauli))
+        #loop through  prep_meas_pairs, create a list of tuples corresponding to prep eigenstates
+        #and meas eigenstates.
+        prep_meas_eigenstate_pairs = list(product(signed_nontrivial_paulis_prep, signed_nontrivial_paulis_meas))
+        #create a similar iterator but for the overall-signed pairs.
+        prep_meas_overall_signed_pairs = list(product(overall_signed_nontrivial_paulis_prep, overall_signed_nontrivial_paulis_meas))
+        #otherwise a set of prep measure pairs has been specified. For now assume that this has been specified
+        #in the form of a list of tuples of NQPauliState objects, though we'll eventually probably loosen this.    
+    else:
+        prep_meas_eigenstate_pairs = []
+        prep_meas_overall_signed_pairs = []
+        for prep, meas in prep_meas_fid_pairs:
+            prep_meas_eigenstate_pairs.append((str(prep), str(meas)))
+            #remove the pluses and minuses
+            stripped_prep = str(prep).replace('+', '').replace('-', '')
+            stripped_meas = str(meas).replace('+', '').replace('-', '')
+            
+            #calculate the overall parity
+            overall_sign_prep = _np.prod(prep.signs) #(-1)**_np.sum(prep.signs)
+            overall_sign_meas = _np.prod(meas.signs) #(-1)**_np.sum(meas.signs)
+
+            overall_signed_pauli_prep = '+' + stripped_prep if overall_sign_prep>0 else '-' + stripped_prep
+            overall_signed_pauli_meas = '+' + stripped_meas if overall_sign_meas>0 else '-' + stripped_meas
+
+            prep_meas_overall_signed_pairs.append((stim.PauliString(overall_signed_pauli_prep), stim.PauliString(overall_signed_pauli_meas)))
+
+    #initialize an empty numpy array for the jacobian:
+    sto_jac = _np.zeros((len(prep_meas_eigenstate_pairs), len(stochastic_pauli_idxs)))
+
+    #for each of these pairs we then want to loop through all of the elements of
+    #stochastic_pauli_idxs and compute the component of the jacobian for this
+    #stochastic index.
+    for row_idx, ((prep, meas), (prep_overall, meas_overall)) in enumerate(zip(prep_meas_eigenstate_pairs, prep_meas_overall_signed_pairs)):
+        for col_idx, sto_pauli_idx in enumerate(stochastic_pauli_idxs):
+
+            #for the stochastic terms the condition we need is that 
+            #meas_overall ~= prep_overall (i.e. up to a sign) and that
+            #prep_overall and sto_pauli_idx anticommute.
+            if not sto_pauli_idx.commutes(prep_overall):
+                #next check whether prep_overall==meas_overall up to a sign:
+                if is_unsigned_pauli_equiv(meas_overall, prep_overall):
+                    #Finally just compare the signs to determine if this is +2 or -2:
+                    sto_jac[row_idx, col_idx] = -2 if meas_overall.sign == prep_overall.sign else 2
+
+    #TODO: Delete second return, this is currently only for testing/diagnostics.
+    return sto_jac, prep_meas_eigenstate_pairs
+
+
+
+
+
+
+
 def half_pauli_comm(pauli1, pauli2):
     '''
     Computes the commutator between two unsigned pauli strings.
