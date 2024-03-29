@@ -11,6 +11,7 @@ Utility functions operating on operation matrices
 #***************************************************************************************************
 
 import collections as _collections
+import contextlib as _contextlib
 import warnings as _warnings
 
 import numpy as _np
@@ -402,11 +403,13 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
         
     Parameters
     ----------
-    a : numpy array
-        First matrix.
+    a : array or gate
+        The gate to compute the entanglement fidelity to b of. E.g., an 
+        imperfect implementation of b.
 
-    b : numpy array
-        Second matrix.
+    b : array or gate
+        The gate to compute the entanglement fidelity to a of. E.g., the 
+        target gate corresponding to a.
 
     mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis of the matrices.  Allowed values are Matrix-unit (std),
@@ -430,6 +433,13 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     -------
     float
     """
+    # Attempt to cast to dense array. If this is already an array, the AttributeError
+    # will be suppressed.
+    with _contextlib.suppress(AttributeError):
+        a = a.to_dense()
+    with _contextlib.suppress(AttributeError):
+        b = b.to_dense()
+
     d2 = a.shape[0]
     
     #if the tp flag isn't set we'll calculate whether it is true here
