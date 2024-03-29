@@ -514,6 +514,10 @@ def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     AGI : float
         The AGI of a to b.
     """
+    # Cast to dense to ensure we can extract the shape.
+    with _contextlib.suppress(AttributeError):
+        a = a.to_dense()
+
     d = int(round(_np.sqrt(a.shape[0])))
     PF = entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
     AGF = (d * PF + 1) / (1 + d)
@@ -720,6 +724,10 @@ def unitarity(a, mx_basis="gm"):
     -------
     float
     """
+    # Cast to dense to ensure we can extract the shape.
+    with _contextlib.suppress(AttributeError):
+        a = a.to_dense()
+        
     d = int(round(_np.sqrt(a.shape[0])))
     basisMxs = _bt.basis_matrices(mx_basis, a.shape[0])
 
