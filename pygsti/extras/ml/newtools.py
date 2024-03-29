@@ -10,9 +10,16 @@ from ..errorgenpropagation import errorpropagator as _ep
 
 from tensorflow import unique
 
+def ring_adj_matrix(num_qubits: int):
+    adj_matrix = _np.zeros((num_qubits, num_qubits))
+    for i in range(num_qubits):
+        adj_matrix[i, (i-1) % num_qubits] = 1
+        adj_matrix[i, (i+1) % num_qubits] = 1
+    return adj_matrix
+
 def laplace_from_qubit_graph(adj_matrix: _np.array):
     deg_matrix = _np.diag(_np.sum(adj_matrix, axis = 1))
-    return deg_matrix = adj_matrix
+    return deg_matrix - adj_matrix
 
 def numberToBase(n, b):
     """
