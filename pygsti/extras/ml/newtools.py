@@ -1,6 +1,7 @@
 
 import numpy as _np
 import itertools as _itertools
+import copy as _copy
 
 from . import tools as _tools
 
@@ -78,7 +79,7 @@ def up_to_weight_k_paulis(k, n):
     for i in range(n):
         for p in ['X', 'Y', 'Z']:
             nq_pauli = n * ['I']
-            nq_pauli[n - 1 - i] = p
+            nq_pauli[n - 1 - i] = p # reversed index
             paulis.append(''.join(nq_pauli))
 
     # weight 2
@@ -88,13 +89,78 @@ def up_to_weight_k_paulis(k, n):
                 for p in ['X', 'Y', 'Z']:
                     for q in ['X', 'Y', 'Z']:
                         nq_pauli = n * ['I']
-                        nq_pauli[n - 1 - i] = p
-                        nq_pauli[n - 1 - j] = q
+                        nq_pauli[n - 1 - i] = p # reversed index
+                        nq_pauli[n - 1 - j] = q # reversed index
                         paulis.append(''.join(nq_pauli))
 
     return paulis
 
+def up_to_weight_k_paulis_from_qubit_graph(k, n, qubit_graph_laplacian, num_hops):
+    """
+    Returns the string representation of all n-qubit Pauli operators that 
+    are weight 1 up to weight k (i.e., all Paulis contain at least one and
+    at most k non-identity Paulis) with support on qubits connected by m 
+    hops in the qubit connectivity graph.
 
+    Assumes that the device's connectivity graph is connected!!!!!
+
+    Paulis are in reverse order: [qubit n, qubit n-1, ..., qubit 0]
+    """
+    assert (k <= 2), "Only implemented up to k = 2!"
+    paulis = []
+
+    # weight 1
+    for i in range(n):
+        for p in ['X', 'Y', 'Z']:
+            nq_pauli = n * ['I']
+            nq_pauli[n - 1 - i] = p # reverse indexing
+            paulis.append(''.join(nq_pauli))
+    
+    # weight 2
+    if k > 1:
+        qubit_graph_laplacian = _copy.deepcopy(qubit_graph_laplacian) # Don't delete! Otherwise this function modifies the laplacian globally for some reason?
+        laplace_power = _np.linalg.matrix_power(qubit_graph_laplacian, num_hops)
+        for i in _np.arange(n):
+            laplace_power[i, i] = 0
+        assert (laplace_power == 0).all(axis=1).any() == False, 'Graph must be connected'
+    
+        nodes_within_hops = []
+        for i in range(n):
+            nodes_within_hops.append(_np.arange(n)[abs(laplace_power[i, :]) > 0])
+    
+        for i , qubit_list in enumerate(nodes_within_hops):
+            unseen_qubits = qubit_list[_np.where(qubit_list > i)[0]]
+            for j in unseen_qubits:
+                for p in ['X', 'Y', 'Z']:
+                        for q in ['X', 'Y', 'Z']:
+                            nq_pauli = n * ['I']
+                            nq_pauli[n - 1 - i] = p # reverse indexing
+                            nq_pauli[n - 1 - j] = q # reverse indexing
+                            paulis.append(''.join(nq_pauli))
+    
+    return paulis
+
+def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int, qubit_graph_laplacian: _np.array, num_hops: int, egtypes=['H', 'S']):
+    """
+    Returns a list of all n-qubit error generators up to weight k, of types given in
+    egtypes and based on the qubit connectivity graph, in a tuple-of-strings format.
+
+    k: int
+
+    n: int, the number of qubits.
+
+    Returns
+    -------
+    List of error generators, represented as a tuple where the first element is 
+    the error generators type (e.g., 'H' or 'S'') and the second element is a 
+    tuple specifying the Pauli(s) that index that error generator.
+    """
+    relevant_paulis = up_to_weight_k_paulis_from_qubit_graph(k, n, qubit_graph_laplacian, num_hops)
+    error_generators = []
+    for egtype in egtypes:
+        error_generators += [(egtype, (p,)) for p in relevant_paulis]
+    return error_generators
+    
 def up_to_weight_k_error_gens(k, n, egtypes=['H', 'S']):
     """
     Returns a list of all n-qubit error generators up to weight k, of types given in
@@ -212,7 +278,7 @@ def create_input_data(circs, fidelities, tracked_error_gens: list, num_channels:
             print(i, end=',')
         x_circs[i, :, :, :] = _tools.circuit_to_tensor(c, max_depth)              
         c_indices, c_signs = create_error_propagation_matrix(c, tracked_error_gens)
-        c_indices = remap_indices(c_indices)
+        # c_indices = remap_indices(c_indices)
         x_indices[i, :, 0:c.depth] = c_indices.T # deprecated: np.rint(c_indices)
         x_signs[i, :, 0:c.depth] = c_signs.T # deprecated: np.rint(c_signs)
         

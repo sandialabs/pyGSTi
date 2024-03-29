@@ -41,12 +41,14 @@ def layer_snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_gr
     
     # The Pauli that labels the error gen, as a string of length num_qubits containing 'I', 'X', 'Y', and 'Z'.
     pauli_string = error_gen[1][0]
+    pauli_string = pauli_string[::-1] # for reverse indexing
     # The indices of `pauli` that are not equal to 'I'.
-    qubits_acted_on_by_error = list(_np.where(_np.array(list(pauli_string)) != 'I')[0])
+    qubits_acted_on_by_error = _np.where(_np.array(list(pauli_string)) != 'I')[0]
+    qubits_acted_on_by_error = list(qubits_acted_on_by_error)
+
     # All the qubits that are within `hops` steps, of the qubits acted on by the error, on the connectivity
     # graph of the qubits
     relevant_qubits = _np.unique(_np.concatenate([nodes_within_hops[i] for i in qubits_acted_on_by_error]))
-
     indices_for_error = _np.concatenate([[num_channels * q + i for i in range(num_channels)] for q in relevant_qubits])
 
     return indices_for_error
@@ -121,13 +123,17 @@ class CircuitErrorVec(_keras.Model):
             """
             signed_M = _tf.math.multiply(S, M)
             flat_M, flat_P = _tf.reshape(signed_M, [-1]), _tf.reshape(P, [-1])
-            
-            num_segments = _tf.reduce_max(flat_P) + 1
-            return _tf.math.unsorted_segment_sum(flat_M, flat_P, num_segments)  # This returns a larger vector than necessary
+            unique_P, idx = _tf.unique(flat_P) # This reduces NN performance compared to pre-processing.
+            num_segments = _tf.reduce_max(idx) + 1
+            error_types = _tf.ones(num_segments) # tensor with a 1 if Hamiltonian, 0 if Stochastic
+            return _tf.math.unsorted_segment_sum(flat_M, idx, num_segments), error_types  # This returns a larger vector than necessary
 
-        def calc_fidelity(final_evec):
+        def calc_fidelity(final_evec, error_types):
             # TO DO: This needs to be generalized when we include 'S' errors.
-            return _tf.reduce_sum(final_evec**2, axis=-1)
+            # We are going to use error_types to determine if we are going to square or not.
+            ham_contribution = _tf.reduce_sum((final_evec*error_types)**2, axis = -1)
+            stoch_contribution = _tf.reduce_sum(final_evec*(1-error_types), axis = -1)
+            return ham_contribution + stoch_contribution
 
         def circuit_to_fidelity(input):
             """
@@ -137,7 +143,7 @@ class CircuitErrorVec(_keras.Model):
             P = _tf.cast(input[:, self.len_gate_encoding:self.len_gate_encoding + self.num_tracked_error_gens], _tf.int32)
             S = input[:, self.len_gate_encoding + self.num_tracked_error_gens:self.len_gate_encoding + 2 * self.num_tracked_error_gens]
             evecs = self.local_dense(self.input_layer(C))
-            total_evec = calc_end_of_circ_err_vec(evecs, P, S)
-            return calc_fidelity(total_evec)
+            total_evec, error_types = calc_end_of_circ_err_vec(evecs, P, S)
+            return calc_fidelity(total_evec, error_types)
         
         return _tf.map_fn(circuit_to_fidelity, inputs)   
