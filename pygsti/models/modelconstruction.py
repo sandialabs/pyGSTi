@@ -799,6 +799,9 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                 and processor_spec.nonstd_gate_unitaries[gn].shape == std_gate_unitaries[gn].shape
                 and _np.allclose(processor_spec.nonstd_gate_unitaries[gn], std_gate_unitaries[gn]))):
             stdname = gn  # setting `stdname` != None means we can try to create a StaticStandardOp below
+        #if gate_unitary is an integer we'll be creating an n-qubit idle gate and won't associate a standard name to it
+        elif isinstance(gate_unitary, (int, _np.int64)):
+            stdname=None  
         else:
             stdname = _itgs.unitary_to_standard_gatename(gate_unitary)  # possibly None
 
@@ -1448,7 +1451,7 @@ def _setup_local_gates(processor_spec, evotype, modelnoise=None, custom_gates=No
                     and processor_spec.nonstd_gate_unitaries[name].shape == std_gate_unitaries[name].shape
                     and _np.allclose(processor_spec.nonstd_gate_unitaries[name], std_gate_unitaries[name]))):
             stdname = name  # setting `stdname` != None means we can try to create a StaticStandardOp below
-        elif name in processor_spec.gate_unitaries:
+        elif name in processor_spec.gate_unitaries and not isinstance(U, (int, _np.int64)):
             stdname = _itgs.unitary_to_standard_gatename(U)  # possibly None
         else:
             stdname = None
@@ -1656,7 +1659,7 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     """
     Create a n-qudit "crosstalk-free" model.
 
-    Similar to :method:`create_crosstalk_free_model` but the noise is input more generally,
+    Similar to :meth:`create_crosstalk_free_model` but the noise is input more generally,
     as a :class:`ModelNoise` object.  Arguments are the same as this function except that
     `modelnoise` is given instead of several more specific noise-describing arguments.
 
@@ -1846,7 +1849,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
     """
     Create a n-qudit "cloud-crosstalk" model.
 
-    Similar to :method:`create_cloud_crosstalk_model` but the noise is input more generally,
+    Similar to :meth:`create_cloud_crosstalk_model` but the noise is input more generally,
     as a :class:`ModelNoise` object.  Arguments are the same as this function except that
     `modelnoise` is given instead of several more specific noise-describing arguments.
 
@@ -2016,8 +2019,8 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The circuit simulator used to compute any
-        requested probabilities, e.g. from :method:`probs` or
-        :method:`bulk_probs`.  Using `"auto"` selects `"matrix"` when there
+        requested probabilities, e.g. from :meth:`probs` or
+        :meth:`bulk_probs`.  Using `"auto"` selects `"matrix"` when there
         are 2 qudits or less, and otherwise selects `"map"`.
 
     evotype : Evotype or str, optional
