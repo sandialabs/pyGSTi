@@ -1439,7 +1439,7 @@ class GateSetTomography(_proto.Protocol):
             target_model = self.gaugeopt_suite.gaugeopt_target
         elif self.initial_model.target_model is not None:
             target_model = self.initial_model.target_model.copy()
-        elif self.initial_model.model is not None and self.gaugeopt_suite.is_empty() is False:
+        elif self.initial_model.model is not None:
             # when we desparately need a target model but none have been specifically given: use initial model
             target_model = self.initial_model.model.copy()
         else:
