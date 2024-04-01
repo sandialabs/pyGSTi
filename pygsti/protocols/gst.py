@@ -1089,7 +1089,14 @@ class GSTGaugeOptSuite(_NicelySerializable):
             raise ValueError(("unreliable2Q is no longer a separate 'suite'.  You should precede it with the suite"
                               " name, e.g. 'stdgaugeopt-unreliable2Q' or 'varySpam-unreliable2Q'"))
         elif suite_name == "none":
-            pass  # add nothing
+            msg = "Passing in 'none' as a gauge optimization suitename is deprecated. " \
+                 +"To replicate this behavior, simply construct a GSTGaugeOptSuite object using default arguments. "\
+                 +"(i.e. all None). " 
+            _warnings.warn(msg)
+            #In anticipation of future behavior described in warning for this set the suite name and dictionary to None.
+            self.gaugeopt_suite_names = None
+            self.gaugeopt_argument_dicts = None
+            self.gaugeopt_target = None
         else:
             raise ValueError("Unknown gauge-optimization suite '%s'" % suite_name)
 
@@ -1443,6 +1450,11 @@ class GateSetTomography(_proto.Protocol):
             # when we desparately need a target model but none have been specifically given: use initial model
             target_model = self.initial_model.model.copy()
         else:
+            msg = 'Could not identify a suitable target model, this may result'\
+                 +' in unexpected behavior or missing plots in reports.'
+            _warnings.warn(msg)
+            import pdb
+            pdb.set_trace()
             target_model = None
 
         if target_model is not None and simulator is not None:
