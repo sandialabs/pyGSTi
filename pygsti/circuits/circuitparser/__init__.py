@@ -10,7 +10,7 @@
 """
 Encapsulates a text parser for reading GST input files.
 
-** Grammar **
+**Grammar**
 
 expop   :: '^'
 multop  :: '*'
@@ -116,7 +116,10 @@ class CircuitLexer:
 
     @staticmethod
     def t_GATE(t):                                                                       # noqa
-        r'G[a-z0-9_]+(;[a-zQ0-9_\./]+)*(:[a-zQ0-9_]+)*(![0-9\.]+)?'
+        """
+        ``'G[a-z0-9_]+(;[a-zQ0-9_\./]+)*(:[a-zQ0-9_]+)*(![0-9\.]+)?'``
+        """
+        
         #Note: Q is only capital letter allowed in qubit label
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
         lbl = CircuitLexer.make_label(t.value)
@@ -124,8 +127,10 @@ class CircuitLexer:
         return t
 
     @staticmethod
-    def t_INSTRMT(t):                                                                    # noqa
-        r'I[a-z0-9_]+(![0-9\.]+)?'
+    def t_INSTRMT(t):                                                               # noqa
+        """
+        ``'I[a-z0-9_]+(![0-9\.]+)?'``
+        """
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
         lbl = CircuitLexer.make_label(t.value)
         t.value = lbl,  # make it a tuple
@@ -133,7 +138,9 @@ class CircuitLexer:
 
     @staticmethod
     def t_PREP(t):                                                                       # noqa
-        r'rho[a-z0-9_]+(![0-9\.]+)?'
+        """
+        ``'rho[a-z0-9_]+(![0-9\.]+)?'``
+        """
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
         lbl = CircuitLexer.make_label(t.value)
         t.value = lbl,  # make it a tuple
@@ -141,7 +148,9 @@ class CircuitLexer:
 
     @staticmethod
     def t_POVM(t):                                                                       # noqa
-        r'M[a-z0-9_]+(![0-9\.]+)?'
+        """
+        ``'M[a-z0-9_]+(![0-9\.]+)?'``
+        """
         #Note: don't need to convert parts[1],etc, to integers (if possible) as Label automatically does this
         lbl = CircuitLexer.make_label(t.value)
         t.value = lbl,  # make it a tuple
@@ -149,12 +158,16 @@ class CircuitLexer:
 
     @staticmethod
     def t_STRINGIND(t):                                                                  # noqa
-        r'S(?=\s*\<)'
+        """
+        ``'S(?=\s*\<)'``
+        """
         return t
 
     @staticmethod
     def t_REFLBL(t):                                                                     # noqa
-        r'<\s*[a-zA-Z0-9_]+\s*>'
+        """
+        ``'<\s*[a-zA-Z0-9_]+\s*>'``
+        """
         t.value = t.value[1:-1].strip()
         return t
 
@@ -171,13 +184,17 @@ class CircuitLexer:
 
     @staticmethod
     def t_NOP(t):                                                                        # noqa
-        r'\{\}'
+        """
+        ``'\{\}'``
+        """
         t.value = tuple()
         return t
 
     @staticmethod
     def t_INTEGER(t):                                                                    # noqa
-        r'\d+'
+        """
+        ``'\d+'``
+        """
         t.value = int(t.value)
         return t
 
@@ -198,7 +215,9 @@ class CircuitParser(object):
     tokens = CircuitLexer.tokens
     mode = "simple"
 
-    def __init__(self, lexer_object=None, lookup={}):
+    def __init__(self, lexer_object=None, lookup=None):
+        if lookup is None:
+            lookup = {}
         if self.mode == "ply":
             from ply import lex, yacc  # these aren't needed for "simple" mode
             self._lookup = lookup

@@ -138,7 +138,7 @@ class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
 
         state_space = _statespace.default_space_for_num_qubits(len(self._zvals)) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
-        basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
+        basis = _Basis.cast(basis, state_space)  # basis for Hilbert-Schmidt (superop) space
 
         evotype = _Evotype.cast(evotype)
         self._evotype = evotype  # set this before call to _State.__init__ so self.to_dense() can work...
@@ -226,7 +226,7 @@ class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         if order == 0:  # only 0-th order term exists
             coeff = _Polynomial({(): 1.0}, max_polynomial_vars)
@@ -309,7 +309,7 @@ class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)

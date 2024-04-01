@@ -11,41 +11,16 @@ Welcome to pyGSTi's documentation
 Packages
 --------
 
-.. autosummary::
-   :toctree: _autosummary
-   :template: custom-module-template.rst
-   :recursive:
-   
+.. toctree::
+   :maxdepth: 2
 
-   .. This list must be manually updated with all
-   .. the pygsti subpackages we want documented
-
-   pygsti.algorithms
-   pygsti.baseobjs
-   pygsti.circuits
-   pygsti.data
-   pygsti.drivers
-   pygsti.evotypes
-   pygsti.extras
-   pygsti.forwardsims
-   pygsti.io
-   pygsti.layouts
-   pygsti.modelmembers
-   pygsti.modelpacks
-   pygsti.models
-   pygsti.objectivefns
-   pygsti.optimize
-   pygsti.processors
-   pygsti.protocols
-   pygsti.report
-   pygsti.serialization
-   pygsti.tools
+   autoapi/pygsti/index
 
 License & Copyright
 -------------------
 .. toctree::
    :maxdepth: 1
-
+   
    LICENSE
    NOTICE
 

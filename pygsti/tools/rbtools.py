@@ -19,7 +19,7 @@ def p_to_r(p, d, rtype='EI'):
 
     Here `p` is (normally) obtained from fitting data to `A + Bp^m`. There are two
     'types' of RB error rate corresponding to different rescalings of `1 - p`.
-     These are the entanglement infidelity (EI) type r and the average gate
+    These are the entanglement infidelity (EI) type r and the average gate
     infidelity (AGI) type `r`. The EI-type `r` is given by:
 
     `r =  (d^2 - 1)(1 - p)/d^2`,

@@ -134,15 +134,15 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
             resource_alloc, (a.shape[1] + 1,), 'd')
 
         # Scratch buffers
-        host_index_buf = _np.empty((resource_alloc.interhost_comm.size, 2), _np.int64) \
+        host_index_buf = _np.zeros((resource_alloc.interhost_comm.size, 2), _np.int64) \
             if resource_alloc.interhost_comm.rank == 0 else None
-        host_val_buf = _np.empty((resource_alloc.interhost_comm.size, 1), 'd') \
+        host_val_buf = _np.zeros((resource_alloc.interhost_comm.size, 1), 'd') \
             if resource_alloc.interhost_comm.rank == 0 else None
     else:
         shared_floats = shared_ints = shared_rowb = None
 
-        host_index_buf = _np.empty((comm.size, 1), _np.int64) if comm.rank == 0 else None
-        host_val_buf = _np.empty((comm.size, 1), 'd') if comm.rank == 0 else None
+        host_index_buf = _np.zeros((comm.size, 1), _np.int64) if comm.rank == 0 else None
+        host_val_buf = _np.zeros((comm.size, 1), 'd') if comm.rank == 0 else None
 
     # Idea: bring a|b into RREF then back-substitute to get x.
 
@@ -152,11 +152,12 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
     b_orig = b.copy()  # (they're updated as we go)
 
     #Scratch space
-    local_pivot_rowb = _np.empty(a.shape[1] + 1, 'd')
-    smbuf1 = _np.empty(1, 'd')
-    smbuf2 = _np.empty(2, _np.int64)
-    smbuf3 = _np.empty(3, _np.int64)
-
+    local_pivot_rowb = _np.zeros(a.shape[1] + 1, 'd')
+    smbuf1 = _np.zeros(1, 'd')
+    smbuf1b = _np.zeros(1, _np.int64)
+    smbuf2 = _np.zeros(2, _np.int64)
+    smbuf3 = _np.zeros(3, _np.int64)
+    
     for icol in range(a.shape[1]):
 
         # Step 1: find the index of the row that is the best pivot.
@@ -191,7 +192,10 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
     # Back substitution:
     # We've accumulated a list of (global) row indices of the rows containing a nonzero
     # element in a given column and zeros in prior columns.
-    pivot_row_indices = _np.array(pivot_row_indices)
+    #I'm hitting a bug in _back_substitution that looks like it is related to pivot_row_indices
+    #being a column vector, we don't need this shape so far as I can tell so get a view of the flattened
+    #reshaped version.
+    pivot_row_indices = _np.array(pivot_row_indices, dtype= _np.int64).reshape(-1)
     _back_substitution(a, b, x, pivot_row_indices, my_row_slice, ari, resource_alloc, host_comm)
 
     a[:, :] = a_orig  # restore original values of a and b
@@ -207,8 +211,12 @@ def custom_solve(a, b, x, ari, resource_alloc, proc_threshold=100):
 
 
 def _find_pivot(a, b, icol, potential_pivot_inds, my_row_slice, shared_floats, shared_ints,
-                resource_alloc, comm, host_comm, buf1, buf2, buf3, best_host_indices, best_host_vals):
-
+                resource_alloc, comm, host_comm, buf1, buf1b, buf2, buf3, best_host_indices, best_host_vals):
+    
+    #print(f'Length potential_pivot_inds {len(potential_pivot_inds)}')
+    #print(f'potential_pivot_inds: {potential_pivot_inds}')
+    #print(f'best_host_indices: {best_host_indices}')
+    
     if len(potential_pivot_inds) > 0:
         best_abs_local_potential_pivot, ibest_local = _restricted_abs_argmax(a[:, icol], potential_pivot_inds)
         #abs_local_potential_pivots = _np.abs(a[potential_pivot_inds, icol])
@@ -274,10 +282,11 @@ def _find_pivot(a, b, icol, potential_pivot_inds, my_row_slice, shared_floats, s
         buf1[0] = best_abs_local_potential_pivot
         best_local_vals = best_host_vals  # each proc is a "host"
         comm.Gather(buf1, best_local_vals, root=0)
-
-        buf1[0] = ibest_local_as_global
+        buf1b[0] = ibest_local_as_global
         best_local_gindices = best_host_indices  # each proc is a "host"
-        comm.Gather(buf1, best_local_gindices, root=0)
+        
+        #print(f'rank {comm.rank} best_local_gindices before gather: {best_local_gindices}')
+        comm.Gather(buf1b, best_local_gindices, root=0)
 
         # root proc determines best global pivot and broadcasts row# to others (& it's recorded for later)
         if comm.rank == 0:

@@ -278,7 +278,7 @@ class FASTPolynomial(object):
         #FUTURE: make this function smarter (Russian peasant)
         ret = 0
         for ivar, coeff in self.coeffs.items():
-            ret += coeff * _np.product([variable_values[i] for i in ivar])
+            ret += coeff * _np.prod([variable_values[i] for i in ivar])
         return ret
 
     def compact(self, complex_coeff_tape=True):
@@ -286,7 +286,7 @@ class FASTPolynomial(object):
         Generate a compact form of this polynomial designed for fast evaluation.
 
         The resulting "tapes" can be evaluated using
-        :function:`opcalc.bulk_eval_compact_polynomials`.
+        :func:`opcalc.bulk_eval_compact_polynomials`.
 
         Parameters
         ----------
@@ -365,7 +365,7 @@ class FASTPolynomial(object):
         """
         Performs a bulk find & replace on this polynomial's variable indices.
 
-        This function is similar to :method:`map_indices` but uses a *vector*
+        This function is similar to :meth:`map_indices` but uses a *vector*
         to describe *individual* index updates instead of a function for
         increased performance.
 
@@ -374,7 +374,7 @@ class FASTPolynomial(object):
         mapvec : numpy.ndarray
             An array whose i-th element gives the updated "new" index for
             the i-th variable.  Note that this vector maps *individual*
-            variable indices old->new, whereas `mapfn` in :method:`map_indices`
+            variable indices old->new, whereas `mapfn` in :meth:`map_indices`
             maps between *tuples* of indices.
 
         Returns
@@ -389,7 +389,7 @@ class FASTPolynomial(object):
         """
         Performs an in-place bulk find & replace on this polynomial's variable indices.
 
-        This function is similar to :method:`map_indices_inplace` but uses a *vector*
+        This function is similar to :meth:`map_indices_inplace` but uses a *vector*
         to describe *individual* index updates instead of a function for increased
         performance.
 
@@ -399,7 +399,7 @@ class FASTPolynomial(object):
             An array whose i-th element gives the updated "new" index for
             the i-th variable.  Note that this vector maps *individual*
             variable indices old->new, whereas `mapfn` in
-            :method:`map_indices_inplace` maps between *tuples* of indices.
+            :meth:`map_indices_inplace` maps between *tuples* of indices.
 
         Returns
         -------
@@ -768,7 +768,7 @@ Polynomial = FASTPolynomial
 #         #FUTURE: make this function smarter (Russian peasant)
 #         ret = 0
 #         for ivar, coeff in self.items():
-#             ret += coeff * _np.product([variable_values[i] for i in ivar])
+#             ret += coeff * _np.prod([variable_values[i] for i in ivar])
 #         assert(_np.isclose(ret, self.fastpoly.evaluate(variable_values)))
 #         self._check_fast_polynomial()
 #         return ret
@@ -778,7 +778,7 @@ Polynomial = FASTPolynomial
 #         Generate a compact form of this polynomial designed for fast evaluation.
 #
 #         The resulting "tapes" can be evaluated using
-#         :function:`opcalc.bulk_eval_compact_polynomials`.
+#         :func:`opcalc.bulk_eval_compact_polynomials`.
 #
 #         Parameters
 #         ----------
@@ -1138,7 +1138,7 @@ def bulk_load_compact_polynomials(vtape, ctape, keep_compact=False, max_num_vars
 
     ctape : numpy.ndarray
         A 1D array of coefficients that, together with `vtape`, specify an
-       efficient means for evaluating a set of polynoials.
+        efficient means for evaluating a set of polynoials.
 
     keep_compact : bool, optional
         If True the returned list has elements which are (vtape,ctape) tuples

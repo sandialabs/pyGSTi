@@ -14,9 +14,10 @@ import numpy as _np
 from scipy import linalg as _linalg
 
 from pygsti.baseobjs import Basis as _Basis, statespace as _statespace
-from pygsti.models.gaugegroup import FullGaugeGroup as _FullGaugeGroup
-from pygsti.modelmembers.operations import FullArbitraryOp as _FullArbitraryOp
-from pygsti.modelmembers.povms import UnconstrainedPOVM as _UnconstrainedPOVM
+from pygsti.models.gaugegroup import TPGaugeGroup as _TPGaugeGroup
+from pygsti.modelmembers.operations import FullTPOp as _FullTPOp
+from pygsti.modelmembers.povms import TPPOVM as _TPPOVM
+from pygsti.modelmembers.states import TPState as _TPState
 from pygsti.models import ExplicitOpModel as _ExplicitOpModel
 from pygsti.tools import unitary_to_superop, change_basis
 
@@ -27,8 +28,8 @@ A = _np.matrix([[1, 0, 0, 0],
                 [0, 1. / _np.sqrt(2), -1. / _np.sqrt(2), 0],
                 [0, 0, 0, 1], ])
 
-X = _np.matrix([[0, 1], [1, 0]])
-Y = _np.matrix([[0, -1j], [1j, 0]])
+X = _np.array([[0, 1], [1, 0]])
+Y = _np.array([[0, -1j], [1j, 0]])
 
 
 def _x_2qubit(theta):
@@ -44,7 +45,7 @@ def _x_2qubit(theta):
     -------
     numpy.ndarray
     """
-    x = _np.matrix(_linalg.expm(-1j / 2. * theta * _np.matrix([[0, 1], [1, 0]])))
+    x = _np.array(_linalg.expm(-1j / 2. * theta * _np.array([[0, 1], [1, 0]])))
     return _np.kron(x, x)
 
 
@@ -61,7 +62,7 @@ def _y_2qubit(theta):
     -------
     numpy.ndarray
     """
-    y = _np.matrix(_linalg.expm(-1j / 2. * theta * _np.matrix([[0, -1j], [1j, 0]])))
+    y = _np.array(_linalg.expm(-1j / 2. * theta * _np.array([[0, -1j], [1j, 0]])))
     return _np.kron(y, y)
 
 
@@ -85,7 +86,7 @@ def _ms_2qubit(theta, phi):
     -------
     numpy.ndarray
     """
-    return _np.matrix(_linalg.expm(-1j / 2 * theta
+    return _np.array(_linalg.expm(-1j / 2 * theta
                                    * _np.kron(
                                        _np.cos(phi) * X + _np.sin(phi) * Y,
                                        _np.cos(phi) * X + _np.sin(phi) * Y)
@@ -96,7 +97,7 @@ def _ms_2qubit(theta, phi):
 
 
 #Removes columns and rows from input_arr
-def _remove_from_matrix(input_arr, columns, rows, output_type=_np.matrix):
+def _remove_from_matrix(input_arr, columns, rows, output_type=_np.array):
     input_arr = _np.array(input_arr)
     return output_type([
         [input_arr[row_num][col_num]
@@ -120,8 +121,8 @@ def to_qutrit_space(input_mat):
     -------
     numpy.ndarray
     """
-    input_mat = _np.matrix(input_mat)
-    return _remove_from_matrix(A * input_mat * A**-1, [2], [2])
+    input_mat = _np.array(input_mat)
+    return _remove_from_matrix(A * input_mat * _np.linalg.inv(A), [2], [2])
 #    return (A * input_mat * A**-1)[:3,:3]#Comment out above line and uncomment this line if you want the state space
 #labelling to be |0>=|00>,|1>=|11>,|2>~|01>+|10>
 
@@ -282,14 +283,14 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
 
     state_space = _statespace.ExplicitStateSpace(['QT'], [3])
     qutritMDL = _ExplicitOpModel(state_space, _Basis.cast(basis, 9), evotype=evotype)
-    qutritMDL.preps['rho0'] = rho0final
-    qutritMDL.povms['Mdefault'] = _UnconstrainedPOVM([('0bright', E0final),
-                                                      ('1bright', E1final),
-                                                      ('2bright', E2final)], evotype=evotype)
-    qutritMDL.operations['Gi'] = _FullArbitraryOp(arrType(gateISOfinal), basis, evotype, state_space)
-    qutritMDL.operations['Gx'] = _FullArbitraryOp(arrType(gateXSOfinal), basis, evotype, state_space)
-    qutritMDL.operations['Gy'] = _FullArbitraryOp(arrType(gateYSOfinal), basis, evotype, state_space)
-    qutritMDL.operations['Gm'] = _FullArbitraryOp(arrType(gateMSOfinal), basis, evotype, state_space)
-    qutritMDL.default_gauge_group = _FullGaugeGroup(state_space, qutritMDL.basis, evotype)
+    qutritMDL.preps['rho0'] = _TPState(rho0final, evotype=evotype)
+    qutritMDL.povms['Mdefault'] = _TPPOVM([('0bright', E0final),
+                                           ('1bright', E1final),
+                                           ('2bright', E2final)], evotype=evotype)
+    qutritMDL.operations['Gi', 'QT'] = _FullTPOp(arrType(gateISOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gx', 'QT'] = _FullTPOp(arrType(gateXSOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gy', 'QT'] = _FullTPOp(arrType(gateYSOfinal), basis, evotype, state_space)
+    qutritMDL.operations['Gm', 'QT'] = _FullTPOp(arrType(gateMSOfinal), basis, evotype, state_space)
+    qutritMDL.default_gauge_group = _TPGaugeGroup(state_space, qutritMDL.basis, evotype)
 
     return qutritMDL

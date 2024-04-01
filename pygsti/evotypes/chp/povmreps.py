@@ -10,6 +10,7 @@ POVM representation classes for the `chp` evolution type.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import copy as _cp
 import os as _os
 import re as _re
 import subprocess as _sp
@@ -30,6 +31,7 @@ class POVMRep(_basereps.POVMRep):
         chp_program = '\n'.join(chp_ops)
         if len(chp_program) > 0: chp_program += '\n'
         chpexe = _chpexe_path()
+        #print("CHP program input (debug):\n", chp_program)
 
         fd, path = _tf.mkstemp()
         try:
@@ -49,12 +51,15 @@ class POVMRep(_basereps.POVMRep):
 
         # Extract outputs
         #print("CHP program out (debug): ", out.decode('utf-8'))
-        pattern = _re.compile('Outcome of measuring qubit (\d+): (\d)(\s?\S*)')
+        pattern = _re.compile('Outcome of measuring qubit (\d+): (\d)( ?\S*)')
         matched_values = []  # elements = (qubit_index, outcome, '(random)' or '') tuples
         for match in pattern.finditer(out.decode('utf-8')):
             matched_values.append((int(match.group(1)), match.group(2), match.group(3)))
 
         # Sorting orders matches by qubit index.
+        # TODO: Could have multiple measurements for each qubit...
+        assert(len(set([mv[0] for mv in matched_values])) == len(matched_values)), \
+            "Cannot currently handle more than one measurement per qubit"
         outcomes = [mv[1] for mv in sorted(matched_values)]
         random_flags = [bool(mv[2] == ' (random)') for mv in sorted(matched_values)]
         return outcomes, random_flags
@@ -67,7 +72,7 @@ class ComputationalPOVMRep(POVMRep):
         super(ComputationalPOVMRep, self).__init__()
 
     def sample_outcome(self, state, rand_state):
-        chp_ops = state.chp_ops
+        chp_ops = _cp.copy(state.chp_ops)
 
         povm_qubits = _np.array(range(self.nqubits))
         for iqubit in povm_qubits:
@@ -81,7 +86,7 @@ class ComputationalPOVMRep(POVMRep):
         return outcome_label
 
     def probabilities(self, state, rand_state, effect_labels):
-        chp_ops = state.chp_ops
+        chp_ops = _cp.copy(state.chp_ops)
 
         povm_qubits = _np.array(range(self.nqubits))
         for iqubit in povm_qubits:

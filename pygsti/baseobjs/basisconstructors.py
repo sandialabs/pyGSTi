@@ -709,17 +709,22 @@ def qsim_matrices(matrix_dim):
     The returned matrices are given in the QuantumSim representation of the
     density matrix space, and are thus kronecker products of
     the standard representation of the QuantumSim matrices:
-        '0' == [[1, 0],[0,0]]
-        'X' == [[0, 1],[1,0]]
-        'Y' == [[0,-1.j],[1.j,0]]
-        '1' == [[0, 0],[0,1]]
+    
+    * `'0' == [[1, 0],[0,0]]`
+    * `'X' == [[0, 1],[1,0]]`
+    * `'Y' == [[0,-1.j],[1.j,0]]`
+    * `'1' == [[0, 0],[0,1]]`
+    
     The normalization is such that the resulting basis is orthonormal
     under the trace inner product:
-        Tr( dot(Mi,Mj) ) == delta_ij.
+    
+    `Tr( dot(Mi,Mj) ) == delta_ij`.
+    
     In the returned list, the right-most factor of the kronecker product
     varies the fastest, so, for example, when matrix_dim == 4 the
     returned list is:
-        [ 00,0X,0Y,01,X0,XX,XY,X1,Y0,Y0,YX,YY,Y1,10,1X,1Y,11 ].
+        
+    `[ 00,0X,0Y,01,X0,XX,XY,X1,Y0,Y0,YX,YY,Y1,10,1X,1Y,11 ]`.
 
     Parameters
     ----------
@@ -736,7 +741,7 @@ def qsim_matrices(matrix_dim):
     Notes
     -----
     Matrices are ordered with first qubit being most significant,
-    e.g., for 2 qubits: 00, 0X, 0Y, 01, X0, XX, XY, X1, Y0, ... 11
+    e.g., for 2 qubits: `00, 0X, 0Y, 01, X0, XX, XY, X1, Y0, ... 11`
     """
     sig0q = _np.array([[1., 0], [0, 0]], dtype='complex')
     sigXq = _np.array([[0, 1], [1, 0]], dtype='complex')
@@ -836,14 +841,14 @@ def pp_matrices(matrix_dim, max_weight=None, normalize=True):
     Returns
     -------
     list
-        A list of N numpy arrays each of shape (matrix_dim, matrix_dim), where N == matrix_dim^2,
+        A list of N numpy arrays each of shape (matrix_dim, matrix_dim), where `N == matrix_dim^2`,
         the dimension of the density-matrix space. (Exception: when max_weight
         is not None, the returned list may have fewer than N elements.)
 
     Notes
     -----
     Matrices are ordered with first qubit being most significant,
-    e.g., for 2 qubits: II, IX, IY, IZ, XI, XX, XY, XZ, YI, ... ZZ
+    e.g., for 2 qubits: `II, IX, IY, IZ, XI, XX, XY, XZ, YI, ... ZZ`
     """
     _check_dim(matrix_dim)
     sigmaVec = (id2x2, sigmax, sigmay, sigmaz)

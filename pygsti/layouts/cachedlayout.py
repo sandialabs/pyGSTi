@@ -31,7 +31,7 @@ class CachedCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
     unique_circuits : list of Circuits
         The same as `circuits`, except duplicates are removed.  Often this value is obtained
-        by a derived class calling the class method :method:`_compute_unique_circuits`.
+        by a derived class calling the class method :meth:`_compute_unique_circuits`.
 
     to_unique : dict
         A mapping that translates an index into `circuits` to one into `unique_circuits`.
@@ -61,7 +61,7 @@ class CachedCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
     cache : dict
         The cache dictionary for this layout.  Its keys are the elements of `circuits` and
         its values can be whatever the user wants.  These values are provided when calling
-        :method:`iter_unique_circuits_with_cache`, so that a forward simulator using this
+        :meth:`iter_unique_circuits_with_cache`, so that a forward simulator using this
         layout can cache arbitrary precomputed information within the layout.
     """
 
@@ -99,7 +99,7 @@ class CachedCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         cache : dict
             A dictionary whose keys are the elements of `circuits` and values can be
             whatever the user wants.  These values are provided when calling
-            :method:`iter_unique_circuits_with_cache`.
+            :meth:`iter_unique_circuits_with_cache`.
         """
         if cache is None: cache = {}
         ret = super().create_from(circuits, model, dataset, param_dimensions)
@@ -119,9 +119,9 @@ class CachedCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
 
         A generator used to iterate over a `(element_indices, circuit, outcomes, cache)` tuple
         for each *unique* circuit held by this layout, where `element_indices` and `outcomes`
-        are the values that would be retrieved by the :method:`indices` and :method:`outcomes`
+        are the values that would be retrieved by the :meth:`indices` and :meth:`outcomes`
         methods, `circuit` is the unique circuit itself, and `cache` is the user-defined value
-        of the cache-dictionary entry for this circuit..
+        of the cache-dictionary entry for this circuit.
 
         Returns
         -------

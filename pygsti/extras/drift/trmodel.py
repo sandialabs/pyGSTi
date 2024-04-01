@@ -67,7 +67,7 @@ class TimeResolvedModel(object):
 
     def probabilities(self, circuit, times):
         """
-        *** Specified in each derive class ***
+        **Specified in each derived class**
 
         Specifying this method is the core to building a time-resolved model. This method should return the
         probabiilties for each outcome, for the input circuit at the specified times.
@@ -126,7 +126,7 @@ def negloglikelihood(trmodel, ds, minp=0, maxp=1):
 
 
 def maxlikelihood(trmodel, ds, minp=1e-4, maxp=1 - 1e-6, bounds=None, returnoptout=False,
-                  optoptions={}, verbosity=1):
+                  optoptions=None, verbosity=1):
     """
     Finds the maximum likelihood TimeResolvedModel given the data.
 
@@ -157,6 +157,8 @@ def maxlikelihood(trmodel, ds, minp=1e-4, maxp=1 - 1e-6, bounds=None, returnopto
         The maximum loglikelihood model
 
     """
+    if optoptions is None:
+        optoptions = dict()
     maxlmodel = trmodel.copy()
 
     def objfunc(parameters):

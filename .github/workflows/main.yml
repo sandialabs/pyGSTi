@@ -5,9 +5,7 @@ name: Build and run tests
 
 on:
   push:
-    branches-ignore: [ "beta" ]
-  # Hacky way to only run pull requests from forked repositories (assumes : is not used in branch names unless forked)
-  # https://github.community/t/how-to-trigger-an-action-on-push-or-pull-request-but-not-both/16662/10
+    branches: [ "develop", "master" ]
   pull_request:
     branches: [ "**:**" ]
   # Allow running manually from Actions tab
@@ -15,16 +13,6 @@ on:
 
 env:
   SKIP_DEAP: 1
-  NOSE_VERBOSE: 2
-  NOSE_WITH_TIMER: 1
-  NOSE_WITH_ID: 1
-  NOSE_REDNOSE: 1
-  NOSE_WITH_COVERAGE: 1
-  NOSE_COVER_PACKAGE: "pygsti"
-  #NOSE_PROCESSES: -1
-  NOSE_NOPATH: 1  use installed package, not source tree under CWD
-  NOSE_PROCESS_TIMEOUT: 2400
-  NOSE_WHERE: "test/unit/"
 
 jobs:
   build: # Main build + unit test check
@@ -32,20 +20,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-18.04, windows-2019]
-        python-version: [3.6, 3.7, 3.8, 3.9]
+        os: [ubuntu-latest, windows-latest]
+        python-version: [3.8, 3.9, '3.10', '3.11']
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up installation environment
+    - uses: actions/checkout@v4
+    - name: Set up installation environment (Ubuntu or Windows)
+      if: ${{matrix.os == 'ubuntu-latest' || matrix.os == 'windows-latest'}}
       run: |
         ./.github/ci-scripts/before_install.sh
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Cache pip packages
-      uses: actions/cache@v2
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}-${{ hashFiles('**/*requirements.txt') }}
@@ -54,39 +43,38 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install wheel
         python -m pip install flake8
-        python -m pip install .[testing]
+        python -m pip install -e .[testing]
+        python setup.py build_ext --inplace
         # python -m pip freeze  # this isn't relevant anymore since pip install builds a wheel separately
     - name: Lint with flake8
-      if: ${{matrix.os != 'windows-2019'}}
+      if: ${{matrix.os != 'windows-latest'}}
       run: |
         # Critical errors, exit on failure
         flake8 . --count --show-source --statistics --config=.flake8-critical
         # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
         flake8 . --exit-zero --statistics
     - name: Run unit tests ubuntu
-      if: ${{matrix.os == 'ubuntu-18.04'}}
+      if: ${{matrix.os == 'ubuntu-latest'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       echo "nosetests: $NOSETESTS"  
-       nosetests --processes=-1 $NOSETESTS
+       python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
     - name: Run unit tests windows  
-      if: ${{matrix.os == 'windows-2019'}}
+      if: ${{matrix.os == 'windows-latest'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       echo "nosetests: $Env:NOSETESTS"  
-       #nosetests $Env:NOSETESTS
-       nosetests --traverse-namespace
+       python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
+    
   
   push: # Push to stable "beta" branch on successful build
 
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
 
     # Only run on "develop" branch if tests pass
     needs: build
     if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
         token: ${{ secrets.PYGSTI_TOKEN }}

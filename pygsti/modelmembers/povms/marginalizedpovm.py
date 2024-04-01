@@ -14,6 +14,7 @@ import collections as _collections
 
 # from .. import modelmember as _mm
 from pygsti.modelmembers.povms.povm import POVM as _POVM
+from pygsti.modelmembers.povms import ComposedPOVMEffect as _ComposedPOVMEffect
 from pygsti.modelmembers.povms.staticeffect import StaticPOVMEffect as _StaticPOVMEffect
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from pygsti.baseobjs.label import Label as _Label
@@ -100,7 +101,7 @@ class MarginalizedPOVM(_POVM):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
@@ -193,8 +194,8 @@ class MarginalizedPOVM(_POVM):
                     effect_vec = e.to_dense()
                 else:
                     effect_vec += e.to_dense()
-            effect = _StaticPOVMEffect(effect_vec, e._basis, self._evotype)
-            # UNSPECIFIED BASIS -- may need to rename e._basis -> e._rep.basis above if that's the std attribute name?
+            rep = e.effect_vec._rep if isinstance(e, _ComposedPOVMEffect) else e._rep
+            effect = _StaticPOVMEffect(effect_vec, rep.basis, self._evotype)
             assert(effect.allocate_gpindices(0, self.parent) == 0)  # functional! (do not remove)
             _collections.OrderedDict.__setitem__(self, key, effect)
             return effect

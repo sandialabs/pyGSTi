@@ -15,6 +15,8 @@ import json as _json
 from pygsti.serialization.jsoncodec import decode_obj
 from pygsti.serialization.jsoncodec import encode_obj
 
+from pygsti.tools.legacytools import deprecate as _deprecated_fn
+
 
 class PygstiJSONEncoder(_json.JSONEncoder):
     """
@@ -37,6 +39,11 @@ class PygstiJSONEncoder(_json.JSONEncoder):
         return super(PygstiJSONEncoder, self).encode(encode_obj(item, False))
 
 
+_deprecation_msg= 'Use of the python json module for serialization of pygsti objects is deprecated.'\
+                  +' Most pysgti objects now natively support json serialization and deserialization and '\
+                  + 'users should migrate to that functionality when possible.'
+
+@_deprecated_fn(_deprecation_msg)
 def dumps(obj, **kwargs):
     """
     An overload of json.dumps that works with pyGSTi types
@@ -53,7 +60,7 @@ def dumps(obj, **kwargs):
     kwargs['cls'] = PygstiJSONEncoder
     return _json.dumps(obj, **kwargs)
 
-
+@_deprecated_fn(_deprecation_msg)
 def dump(obj, f, **kwargs):
     """
     An overload of json.dump that works with pyGSTi types
@@ -74,7 +81,7 @@ def dump(obj, f, **kwargs):
     enc = encode_obj(obj, False)  # this shouldn't be needed... bug in json I think.
     return _json.dump(enc, f, **kwargs)
 
-
+@_deprecated_fn(_deprecation_msg)
 def loads(s, **kwargs):
     """
     An overload of json.loads that works with pyGSTi types
@@ -91,7 +98,7 @@ def loads(s, **kwargs):
     decoded_json = _json.loads(s, **kwargs)  # load normal JSON
     return decode_obj(decoded_json, False)  # makes pygsti objects
 
-
+@_deprecated_fn(_deprecation_msg)
 def load(f, **kwargs):
     """
     An overload of json.load that works with pyGSTi types

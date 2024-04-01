@@ -324,7 +324,7 @@ def column_norms(m, ord=None):
 
     if _sps.issparse(m):
         #this could be done more efficiently, e.g. by converting to csc and taking column norms directly
-        norms = _np.array([_np.linalg.norm(m[:, j].todense(), ord=o) for j, o in enumerate(ord_list)])
+        norms = _np.array([_np.linalg.norm(m[:, j].toarray(), ord=o) for j, o in enumerate(ord_list)])
     else:
         norms = _np.array([_np.linalg.norm(m[:, j], ord=o) for j, o in enumerate(ord_list)])
     return norms
@@ -1053,7 +1053,9 @@ def complex_compare(a, b):
     Returns
     -------
     -1 if a < b
-        0 if a == b
+    
+    0 if a == b
+    
     +1 if a > b
     """
     if a.real < b.real: return -1
@@ -2109,6 +2111,7 @@ def to_unitary(scaled_unitary):
     Returns
     -------
     scale : float
+    
     unitary : ndarray
         Such that `scale * unitary == scaled_unitary`.
     """
@@ -2134,6 +2137,7 @@ def sorted_eig(mx):
     Returns
     -------
     eigenvalues : numpy.ndarray
+    
     eigenvectors : numpy.ndarray
     """
     ev, U = _np.linalg.eig(mx)

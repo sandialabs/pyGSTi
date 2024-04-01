@@ -11,8 +11,10 @@ Defines the MapForwardSimulator calculator class
 #***************************************************************************************************
 
 import importlib as _importlib
+import warnings as _warnings
 
 import numpy as _np
+from numpy import linalg as _nla
 
 from pygsti.forwardsims.distforwardsim import DistributableForwardSimulator as _DistributableForwardSimulator
 from pygsti.forwardsims.forwardsim import ForwardSimulator as _ForwardSimulator
@@ -121,7 +123,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
     num_atoms : int, optional
         The number of atoms (sub-prefix-tables) to use when creating the layout (i.e. when calling
-        :method:`create_layout`).  This determines how many units the element (circuit outcome
+        :meth:`create_layout`).  This determines how many units the element (circuit outcome
         probability) dimension is divided into, and doesn't have to correclate with the number of
         processors.  When multiple processors are used, if `num_atoms` is less than the number of
         processors then `num_atoms` should divide the number of processors evenly, so that
@@ -191,7 +193,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                                    self._processor_grid, self._pblk_sizes)
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
-                      derivative_dimension=None, verbosity=0):
+                      derivative_dimensions=None, verbosity=0):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
@@ -210,12 +212,13 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             the layout (evaluation strategy) is constructed.
 
         array_types : tuple, optional
-            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+            A tuple of string-valued array types.  See :meth:`ForwardSimulator.create_layout`.
 
-        derivative_dimension : int, optional
+        derivative_dimensions : int or tuple[int], optional
             Optionally, the parameter-space dimension used when taking first
             and second derivatives with respect to the cirucit outcome probabilities.  This must be
             non-None when `array_types` contains `'ep'` or `'epp'` types.
+            If a tuple, then must be length 1.
 
         verbosity : int or VerbosityPrinter
             Determines how much output to send to stdout.  0 means no output, higher
@@ -231,7 +234,13 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             if (resource_alloc.mem_limit is not None) else None  # *per-processor* memory limit
         nprocs = resource_alloc.comm_size
         comm = resource_alloc.comm
-        num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
+        if isinstance(derivative_dimensions, int):
+            num_params = derivative_dimensions
+        elif isinstance(derivative_dimensions, tuple):
+            assert len(derivative_dimensions) == 1
+            num_params = derivative_dimensions[0]
+        else:
+            num_params = self.model.num_params
         C = 1.0 / (1024.0**3)
 
         if mem_limit is not None:
@@ -248,11 +257,12 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
             array_types, nprocs, num_params, len(circuits), default_natoms=2 * self.model.dim)  # heuristic?
-
+        printer.log(f'Num Param Processors {npp}')
+        
         printer.log("MapLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
-                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
+                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)))
         printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
-        assert(_np.product((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
         layout = _MapCOPALayout(circuits, self.model, dataset, self._max_cache_size, natoms, na, npp,
                                 param_dimensions, param_blk_sizes, resource_alloc, verbosity)
@@ -385,7 +395,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -437,7 +447,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         """
         Compute the chi2 jacobian contributions for an entire tree of circuits, allowing for time dependent operations.
 
-        Similar to :method:`bulk_fill_timedep_chi2` but compute the *jacobian*
+        Similar to :meth:`bulk_fill_timedep_chi2` but compute the *jacobian*
         of the summed chi2 contributions for each circuit with respect to the
         model's parameters.
 
@@ -450,7 +460,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -468,7 +478,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         min_prob_clip_for_weighting : float, optional
             Sets the minimum and maximum probability p allowed in the chi^2
-            weights: N/(p*(1-p)) by clipping probability p values to lie within
+            weights: `N/(p*(1-p))` by clipping probability p values to lie within
             the interval [ min_prob_clip_for_weighting, 1-min_prob_clip_for_weighting ].
 
         prob_clip_interval : 2-tuple or None, optional
@@ -478,7 +488,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         chi2_array_to_fill : numpy array, optional
             when not None, an already-allocated length-E numpy array that is filled
             with the per-circuit chi2 contributions, just like in
-            bulk_fill_timedep_chi2(...).
+            `bulk_fill_timedep_chi2(...)`.
 
         Returns
         -------
@@ -514,9 +524,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             an already-allocated 1D numpy array of length equal to the
             total number of computed elements (i.e. layout.num_elements)
 
-       layout : CircuitOutcomeProbabilityArrayLayout
+        layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -574,7 +584,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         """
         Compute the ("poisson picture")log-likelihood jacobian contributions for an entire tree of circuits.
 
-        Similar to :method:`bulk_fill_timedep_loglpp` but compute the *jacobian*
+        Similar to :meth:`bulk_fill_timedep_loglpp` but compute the *jacobian*
         of the summed logl (in posison picture) contributions for each circuit
         with respect to the model's parameters.
 
@@ -587,7 +597,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -616,7 +626,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         logl_array_to_fill : numpy array, optional
             when not None, an already-allocated length-E numpy array that is filled
             with the per-circuit logl contributions, just like in
-            bulk_fill_timedep_loglpp(...).
+            `bulk_fill_timedep_loglpp(...)` .
 
         Returns
         -------
@@ -638,3 +648,72 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
 
         return self._bulk_fill_timedep_deriv(layout, dataset, ds_circuits, num_total_outcomes,
                                              array_to_fill, dloglpp, logl_array_to_fill, loglpp)
+
+    
+    #Utility method for generating process matrices for circuits. Should not be used for forward
+    #simulation when using the MapForwardSimulator.
+    def product(self, circuit, scale=False):
+        """
+        Compute the product of a specified sequence of operation labels.
+
+        Note: LinearOperator matrices are multiplied in the reversed order of the tuple. That is,
+        the first element of circuit can be thought of as the first gate operation
+        performed, which is on the far right of the product of matrices.
+
+        Parameters
+        ----------
+        circuit : Circuit or tuple of operation labels
+            The sequence of operation labels.
+
+        scale : bool, optional
+            When True, return a scaling factor (see below).
+
+        Returns
+        -------
+        product : numpy array
+            The product or scaled product of the operation matrices.
+        scale : float
+            Only returned when scale == True, in which case the
+            actual product == product * scale.  The purpose of this
+            is to allow a trace or other linear operation to be done
+            prior to the scaling.
+        """
+        _warnings.warn('Generating dense process matrix representations of circuits or gates \n'
+                       'can be inefficient and should be avoided for the purposes of forward \n'
+                       'simulation/calculation of circuit outcome probability distributions \n' 
+                       'when using the MapForwardSimulator.')
+        
+        # Smallness tolerances, used internally for conditional scaling required
+        # to control bulk products, their gradients, and their Hessians.
+        _PSMALL = 1e-100
+        
+        if scale:
+            scaledGatesAndExps = {}
+            scale_exp = 0
+            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
+            for lOp in circuit:
+                if lOp not in scaledGatesAndExps:
+                    opmx = self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal')
+                    ng = max(_nla.norm(opmx), 1.0)
+                    scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
+
+                gate, ex = scaledGatesAndExps[lOp]
+                H = _np.dot(gate, G)   # product of gates, starting with identity
+                scale_exp += ex   # scale and keep track of exponent
+                if H.max() < _PSMALL and H.min() > -_PSMALL:
+                    nG = max(_nla.norm(G), _np.exp(-scale_exp))
+                    G = _np.dot(gate, G / nG); scale_exp += _np.log(nG)  # LEXICOGRAPHICAL VS MATRIX ORDER
+                else: G = H
+
+            old_err = _np.seterr(over='ignore')
+            scale = _np.exp(scale_exp)
+            _np.seterr(**old_err)
+
+            return G, scale
+
+        else:
+            G = _np.identity(self.model.evotype.minimal_dim(self.model.state_space))
+            for lOp in circuit:
+                G = _np.dot(self.model.circuit_layer_operator(lOp, 'op').to_dense(on_space='minimal'), G)
+                # above line: LEXICOGRAPHICAL VS MATRIX ORDER
+            return G

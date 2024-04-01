@@ -203,7 +203,7 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
     to_type : {"full","full TP","static","static unitary","clifford",LINDBLAD}
         The type of parameterizaton to convert to.  "LINDBLAD" is a placeholder
         for the various Lindblad parameterization types.  See
-        :method:`Model.set_all_parameterizations` for more details.
+        :meth:`Model.set_all_parameterizations` for more details.
 
     basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis for `state`.  Allowed values are Matrix-unit (std),

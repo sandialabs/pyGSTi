@@ -10,6 +10,9 @@ Defines the MongoSerializable class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 import importlib as _importlib
+import numpy as _np
+
+_indexinformation_cache = {}  # used to speedup mondodb index_information() queries
 
 
 class MongoSerializable(object):
@@ -37,7 +40,7 @@ class MongoSerializable(object):
 
     def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing,
                                                 **kwargs):
-        """ Add to `write_ops` and update `doc` so that all of `self`'s data is serialized """
+        """ Add to `write_ops` and update `doc` so that all of `self` 's data is serialized """
         raise NotImplementedError("Subclasses must implement this!")
 
     @classmethod
@@ -45,8 +48,8 @@ class MongoSerializable(object):
         """ Remove the records corresponding to the object with `doc_id`, minding the filter given by `recursive` """
         mongodb[collection_name].delete_one({'_id': doc_id}, session=session)  # just delete main document
 
-    def __init__(self):
-        self._dbcoordinates = None
+    def __init__(self, doc_id=None):
+        self._dbcoordinates = (self.collection_name, doc_id) if (doc_id is not None) else None
         #self.tags = {}  # FUTURE feature: save and load tags automatically?
 
     @classmethod
@@ -64,7 +67,7 @@ class MongoSerializable(object):
             document is loaded from the collection given by the `collection_name` attribute of
             this class.
 
-        **kwargs : dict
+        `**kwargs` : dict
             Additional keyword arguments poentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_create_obj_from_doc_and_mongodb` method is allowed here.
 
@@ -80,10 +83,10 @@ class MongoSerializable(object):
         doc = _find_one_doc(mongodb, cls.collection_name, doc_id)
         if doc is None:
             raise ValueError(f"No document found in collection '{cls.collection_name}' identified by {doc_id}")
-        return cls.from_mongodb_doc(mongodb, doc, **kwargs)
+        return cls.from_mongodb_doc(mongodb, cls.collection_name, doc, **kwargs)
 
     @classmethod
-    def from_mongodb_doc(cls, mongodb, doc, **kwargs):
+    def from_mongodb_doc(cls, mongodb, collection_name, doc, **kwargs):
         """
         Create and initialize an object from a MongoDB instance and pre-loaded primary document.
 
@@ -92,11 +95,15 @@ class MongoSerializable(object):
         mongodb : pymongo.database.Database
             The MongoDB instance to load from.
 
+        collection_name : str
+            The collection name within `mongodb` that `doc` was loaded from.  This is needed
+            for the sole purpose of setting the created (returned) object's database "coordinates".
+
         doc : dict
             The already-retrieved main document for the object being loaded.  This takes the place
             of giving an identifier for this object.
 
-        **kwargs : dict
+        `**kwargs` : dict
             Additional keyword arguments poentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_create_obj_from_doc_and_mongodb` method is allowed here.
 
@@ -113,7 +120,7 @@ class MongoSerializable(object):
                 raise ValueError("Class '%s' is trying to load a serialized '%s' object (not a subclass)!"
                                  % (cls.__module__ + '.' + cls.__name__, doc['module'] + '.' + doc['class']))
             ret = c._create_obj_from_doc_and_mongodb(doc, mongodb, **kwargs)
-        ret._dbcoordinates = (cls.collection_name, doc['_id'])
+        ret._dbcoordinates = (collection_name, doc['_id'])
         return ret
 
     def write_to_mongodb(self, mongodb, session=None, overwrite_existing=False, **kwargs):
@@ -138,7 +145,7 @@ class MongoSerializable(object):
             a ValueError to be raised if a document with the given `_id` already exists
             and is different from what is being written.
 
-        **kwargs : dict
+        `**kwargs` : dict
             Additional keyword arguments poentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_add_auxiliary_write_ops_and_update_doc` method is allowed here.
 
@@ -156,12 +163,12 @@ class MongoSerializable(object):
         """
         Accumulate write and update operations for writing this object to a MongoDB database.
 
-        Similar to :method:`write_to_mongodb` but collects write operations instead of actually
+        Similar to :meth:`write_to_mongodb` but collects write operations instead of actually
         executing any write operations on the database.  This function may be preferred to
-        :method:`write_to_mongodb` when this object is being written as a part of a larger entity
+        :meth:`write_to_mongodb` when this object is being written as a part of a larger entity
         and executing write operations is saved until the end.
 
-        As in :method:`write_to_mongodb`, `self.collection_name` is the collection name and `_id` is either:
+        As in :meth:`write_to_mongodb`, `self.collection_name` is the collection name and `_id` is either:
         1) the ID used by a previous write or initial read-in, if one exists, OR
         2) a new random `bson.objectid.ObjectId`
 
@@ -180,7 +187,7 @@ class MongoSerializable(object):
             a ValueError to be raised if a document with the given `_id` already exists
             and is different from what is being written.
 
-        **kwargs : dict
+        `**kwargs` : dict
             Additional keyword arguments poentially used by subclass implementations.  Any arguments
             allowed by a subclass's `_add_auxiliary_write_ops_and_update_doc` method is allowed here.
 
@@ -356,15 +363,19 @@ class WriteOpsByCollection(dict):
         if self.allowed_collection_names is None and collection_name not in self:
             self[collection_name] = []
 
+        existing_doc = None
+        tried_to_find_existing_doc = False
+
         #Get or create an id for the document to be inserted or replaced (or left as is)
         if isinstance(uid, dict):
             if '_id' in uid:
                 doc_id = uid['_id']
             else:
-                existing_doc = _find_one_doc(mongodb, collection_name, uid, ('_id',))
+                existing_doc = _find_one_doc(mongodb, collection_name, uid) #, ('_id',))  # entire doc so can use later
                 if existing_doc is None and check_local_ops:
                     existing_doc = self._find_one_local_doc(collection_name, uid)
                 doc_id = _ObjectId() if (existing_doc is None) else existing_doc['_id']
+                tried_to_find_existing_doc = True
         else:
             assert isinstance(uid, _ObjectId)
             doc_id = uid
@@ -376,7 +387,8 @@ class WriteOpsByCollection(dict):
             self[collection_name].append(ReplaceOne({'_id': doc_id}, doc, upsert=True))
             #mongodb[collection_name].replace_one(doc_id, doc, upsert=True)  # alt line for DEBUG
         else:
-            existing_doc = mongodb[collection_name].find_one(doc_id)
+            if not tried_to_find_existing_doc:  # then try now
+                existing_doc = mongodb[collection_name].find_one(doc_id)
             if existing_doc is None and check_local_ops:
                 existing_doc = self._find_one_local_doc(collection_name, doc_id)
                 if existing_doc is not None:
@@ -387,10 +399,11 @@ class WriteOpsByCollection(dict):
                 #mongodb[collection_name].insert_one(doc)  # alt line for DEBUG
             else:
                 #print("Found existing doc: ", doc.get('module','?'), doc.get('class','?'), doc.get('circuit_str','?'))
+                existing_to_chk = prepare_doc_for_existing_doc_check(existing_doc, None, False, False, False)
                 info_to_check = prepare_doc_for_existing_doc_check(doc, existing_doc)
-                if existing_doc != info_to_check:
+                if existing_to_chk != info_to_check:
                     # overwrite_existing=False and a doc already exists AND docs are *different* => error
-                    diff_lines = recursive_compare_str(existing_doc, info_to_check, 'existing doc', 'doc to insert')
+                    diff_lines = recursive_compare_str(existing_to_chk, info_to_check, 'existing doc', 'doc to insert')
                     raise ValueError("*Different* document with %s exists and `overwrite_existing=False`:\n%s"
                                      % (str(uid), '\n'.join(diff_lines)))
                 # else do nothing, since doc exists and matches what we want to write => no error
@@ -401,7 +414,7 @@ class WriteOpsByCollection(dict):
         Add a GridFS put operation to this dictionary of write operations.
 
         This is a special type of operation for placing large chunks of binary data into a MongoDB.
-        Arguments are similar to :method:`add_one_op`.
+        Arguments are similar to :meth:`add_one_op`.
         """
         import gridfs as _gridfs
         fs = _gridfs.GridFS(mongodb, collection=collection_name)
@@ -411,6 +424,7 @@ class WriteOpsByCollection(dict):
             self.special_ops.append({'type': 'GridFS_put',
                                      'collection_name': collection_name,
                                      'data': binary_data,
+                                     'overwrite_existing': overwrite_existing,
                                      'id': doc_id})
         return doc_id
 
@@ -418,8 +432,8 @@ class WriteOpsByCollection(dict):
         """
         Execute all of the "queued" operations within this dictionary on a MongoDB instance.
 
-        Note that `mongodb` should be the same as the `mongodb` given to any :method:`add_one_op` and
-        :method:`add_gridfs_put_op` method calls.  The session given at the initialization of
+        Note that `mongodb` should be the same as the `mongodb` given to any :meth:`add_one_op` and
+        :meth:`add_gridfs_put_op` method calls.  The session given at the initialization of
         this object is used for these write operations.  On exit, this dictionary is empty, indicating
         there are no more queued operations.
 
@@ -436,7 +450,15 @@ class WriteOpsByCollection(dict):
             if op_info['type'] == 'GridFS_put':
                 import gridfs as _gridfs
                 fs = _gridfs.GridFS(mongodb, collection=op_info['collection_name'])
-                file_id = fs.put(op_info['data'], _id=op_info['id'])
+                try:
+                    file_id = fs.put(op_info['data'], _id=op_info['id'])
+                except _gridfs.errors.FileExists as e:
+                    if op_info['overwrite_existing']:
+                        fs.delete(op_info['id'])
+                        file_id = fs.put(op_info['data'], _id=op_info['id'])  # try again
+                    else:
+                        raise e
+
                 assert file_id == op_info['id']
             else:
                 raise ValueError("Invalid special op:" + str(op_info))
@@ -459,16 +481,19 @@ class WriteOpsByCollection(dict):
         return None
 
 
-def prepare_doc_for_existing_doc_check(doc, existing_doc, set_id=True, convert_tuples_to_lists=True):
+def prepare_doc_for_existing_doc_check(doc, existing_doc, set_id=True, convert_tuples_to_lists=True,
+                                       convert_numpy_dtypes=True, round_to_sigfigs=6):
     """
     Prepares a to-be inserted document for comparison with an existing document.
 
     Optionally (see parameters):
-    1) sets _id of `doc` to that of `existing_doc`.  This is useful in cases where the _id
+    1. sets _id of `doc` to that of `existing_doc` .  This is useful in cases where the _id
        field is redundant with other uniquely identifying fields in the document, and so inserted
        documents don't need to match this field.
-    2) converts all of `doc`'s tuples to lists, as the existing_doc is typically read from a MongoDB
+    2. converts all of `doc` 's tuples to lists, as the existing_doc is typically read from a MongoDB
        which only stores lists and doesn't distinguish between lists and tuples.
+    3. converts numpy datatypes to native python types
+    4. rounds floating point values
 
     Parameters
     ----------
@@ -485,23 +510,35 @@ def prepare_doc_for_existing_doc_check(doc, existing_doc, set_id=True, convert_t
     convert_tuples_to_lists : bool, optional
         when `True` convert all of the tuples within `doc` to lists.
 
+    convert_numpy_dtypes : bool, optional
+        when `True` convert numpy data types to native python types, e.g. np.float64 -> float.
+
     Returns
     -------
     dict
         the prepared document.
     """
-    def tup_to_list(obj):
-        if isinstance(obj, (tuple, list)):
-            return [tup_to_list(v) for v in obj]
+    def process(obj):
+        if isinstance(obj, list):
+            return [process(v) for v in obj]
+        elif isinstance(obj, tuple):
+            if convert_tuples_to_lists:
+                return [process(v) for v in obj]  # changes tuple -> list
+            else:
+                return tuple((process(v) for v in obj))
         elif isinstance(obj, dict):
-            return {k: tup_to_list(v) for k, v in obj.items()}
-        else:
-            return obj
+            return {k: process(v) for k, v in obj.items()}
+        elif isinstance(obj, _np.generic) and convert_numpy_dtypes:
+            obj = obj.item()
+
+        if isinstance(obj, float) and round_to_sigfigs:
+            obj = float(('%.' + str(round_to_sigfigs) + 'g') % obj)
+        return obj
 
     doc = doc.copy()
-    if '_id' not in doc:  # Allow doc to lack an _id field and still be considered same as existing_doc
+    if '_id' not in doc and set_id:  # Allow doc to lack an _id field and still be considered same as existing_doc
         doc['_id'] = existing_doc['_id']
-    return tup_to_list(doc)
+    return process(doc)
 
 
 def recursive_compare_str(a, b, a_name='first obj', b_name='second obj', prefix="", diff_accum=None):
@@ -546,7 +583,7 @@ def recursive_compare_str(a, b, a_name='first obj', b_name='second obj', prefix=
             diff_accum.append(f"{prefix}.{k}: missing from {a_name}")
         for k in (a_keys - b_keys):  # keys missing from b
             diff_accum.append(f"{prefix}.{k}: missing from {b_name}")
-    elif isinstance(a, (list, tuple)):
+    elif isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
         if len(a) != len(b):
             diff_accum.append(f"{prefix}: have different lengths ({len(a)} vs {len(b)})")
         else:
@@ -561,10 +598,24 @@ def recursive_compare_str(a, b, a_name='first obj', b_name='second obj', prefix=
 def _find_one_doc(db, collection_name, doc_id, projection=None, error_if_no_doc=False):
     if doc_id is not None and not isinstance(doc_id, dict):
         doc_id = {'_id': doc_id}
+
     if '_id' not in doc_id:  # otherwise can bypass since if _id is specified a doc must be unique
-        if db[collection_name].count_documents(doc_id, limit=2) > 1:
-            raise ValueError((f"Multiple records where identified by the given `doc_id` ({doc_id})."
-                              " `doc_id` must specify exactly one record."))
+        #Check to see if uid is a single lookup that corresponds to a *unique* index
+        doc_id_known_to_be_unique = False
+        doc_id_fields = set(doc_id.keys())
+
+        if (id(db), collection_name) not in _indexinformation_cache:  # cache index_information call for speed
+            _indexinformation_cache[id(db), collection_name] = db[collection_name].index_information()
+        for index_name, index_info in _indexinformation_cache[id(db), collection_name].items():
+            if index_info.get('unique', False) and doc_id_fields.issubset(set([k for k, d in index_info['key']])):
+                doc_id_known_to_be_unique = True
+                break
+        if not doc_id_known_to_be_unique:  # then check that this doc_id is indeed unique with a db call
+            # for DEBUG: print("UID without _id and not known unique: ", doc_id, " for ", collection_name)
+            if db[collection_name].count_documents(doc_id, limit=2) > 1:
+                raise ValueError((f"Multiple records where identified by the given `doc_id` ({doc_id})."
+                                  " `doc_id` must specify exactly one record."))
+
     single_doc = db[collection_name].find_one(doc_id, projection)
     if single_doc is None and error_if_no_doc:
         raise ValueError(f"Could not find document specified by {doc_id}!")

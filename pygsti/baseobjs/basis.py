@@ -333,7 +333,7 @@ class Basis(_NicelySerializable):
         int
         """
         if self.elshape is None: return 0
-        return int(_np.product(self.elshape))
+        return int(_np.prod(self.elshape))
 
     @property
     def first_element_is_identity(self):
@@ -366,7 +366,7 @@ class Basis(_NicelySerializable):
 
     def is_partial(self):
         """
-        The negative of :method:`is_complete`, effectively "is_incomplete".
+        The negative of :meth:`is_complete`, effectively "is_incomplete".
 
         Returns
         -------
@@ -509,7 +509,7 @@ class Basis(_NicelySerializable):
         """
         Get the matrix that transforms a vector from `from_basis` to this basis.
 
-        The reverse of :method:`create_transform_matrix`.
+        The reverse of :meth:`create_transform_matrix`.
 
         Parameters
         ----------
@@ -781,7 +781,7 @@ class LazyBasis(Basis):
     def __init__(self, name, longname, real, sparse):
         """
         Creates a new LazyBasis.  Parameters are the same as those to
-        :method:`Basis.__init__`.
+        :meth:`Basis.__init__`.
         """
         self._elements = None        # "natural-shape" elements - can be vecs or matrices
         self._labels = None          # element labels
@@ -957,7 +957,7 @@ class ExplicitBasis(Basis):
                 if elshape is None: elshape = el.shape
                 else: assert(elshape == el.shape), "Inconsistent element shapes!"
                 self.elements.append(el)
-            dim = int(_np.product(elshape))
+            dim = int(_np.prod(elshape))
         self.ellookup = {lbl: el for lbl, el in zip(self.labels, self.elements)}  # fast by-label element lookup
 
         if vector_elements is not None:
@@ -1047,10 +1047,10 @@ class ExplicitBasis(Basis):
 
     def __hash__(self):
         if self.sparse:
-            els_to_hash = tuple(((_np.round(el.data, 6).tostring(), el.indices.tostring(), el.indptr.tostring())
+            els_to_hash = tuple(((_np.round(el.data, 6).tobytes(), el.indices.tobytes(), el.indptr.tobytes())
                                  for el in self.elements))   # hash sparse matrices
         else:
-            els_to_hash = tuple((_np.round(el, 6).tostring() for el in self.elements))
+            els_to_hash = tuple((_np.round(el, 6).tobytes() for el in self.elements))
         return hash((self.dim, self.elshape, self.sparse, self.labels, els_to_hash))  # TODO: hash vector els?
         # OLD return hash((self.name, self.dim, self.elshape, self.sparse))  # better?
 
@@ -1210,7 +1210,7 @@ class DirectSumBasis(LazyBasis):
     ----------
     component_bases : iterable
         A list of the component bases.  Each list elements may be either
-        a Basis object or a tuple of arguments to :function:`Basis.cast`,
+        a Basis object or a tuple of arguments to :func:`Basis.cast`,
         e.g. `('pp',4)`.
 
     name : str, optional
@@ -1236,7 +1236,7 @@ class DirectSumBasis(LazyBasis):
         ----------
         component_bases : iterable
             A list of the component bases.  Each list elements may be either
-            a Basis object or a tuple of arguments to :function:`Basis.cast`,
+            a Basis object or a tuple of arguments to :func:`Basis.cast`,
             e.g. `('pp',4)`.
 
         name : str, optional
@@ -1459,7 +1459,7 @@ class DirectSumBasis(LazyBasis):
             number of vectors).
         """
         assert(not self.sparse), "to_elementstd_transform_matrix not implemented for sparse mode"
-        expanddim = self.elsize  # == _np.product(self.elshape)
+        expanddim = self.elsize  # == _np.prod(self.elshape)
         if self.sparse:
             toSimpleStd = _sps.lil_matrix((expanddim, self.size), dtype='complex')
         else:
@@ -1542,7 +1542,7 @@ class TensorProdBasis(LazyBasis):
     ----------
     component_bases : iterable
         A list of the component bases.  Each list elements may be either
-        a Basis object or a tuple of arguments to :function:`Basis.cast`,
+        a Basis object or a tuple of arguments to :func:`Basis.cast`,
         e.g. `('pp',4)`.
 
     name : str, optional
@@ -1563,7 +1563,7 @@ class TensorProdBasis(LazyBasis):
         ----------
         component_bases : iterable
             A list of the component bases.  Each list elements may be either
-            a Basis object or a tuple of arguments to :function:`Basis.cast`,
+            a Basis object or a tuple of arguments to :func:`Basis.cast`,
             e.g. `('pp',4)`.
 
         name : str, optional
@@ -1617,7 +1617,7 @@ class TensorProdBasis(LazyBasis):
         spans.  Equivalently, the length of the `vector_elements` of the
         basis.
         """
-        dim = int(_np.product([c.dim for c in self.component_bases]))
+        dim = int(_np.prod([c.dim for c in self.component_bases]))
 
         #NOTE: this is actually to restrictive -- what we need is a test/flag for whether the elements of a
         # basis are in their "natrual" representation where it makes sense to take tensor products.  For
@@ -1635,7 +1635,7 @@ class TensorProdBasis(LazyBasis):
         """
         The number of elements (or vector-elements) in the basis.
         """
-        return int(_np.product([c.size for c in self.component_bases]))
+        return int(_np.prod([c.size for c in self.component_bases]))
 
     @property
     def elshape(self):
@@ -1840,7 +1840,7 @@ class EmbeddedBasis(LazyBasis):
     @classmethod
     def unembed_label(cls, lbl, target_labels):
         """
-        Convenience method that performs the reverse of :method:`embed_label`
+        Convenience method that performs the reverse of :meth:`embed_label`
 
         Parameters
         ----------

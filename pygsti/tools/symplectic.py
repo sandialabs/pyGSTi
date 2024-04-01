@@ -13,7 +13,6 @@ Symplectic representation utility functions
 import numpy as _np
 import copy as _copy
 
-from scipy.sparse.construct import rand
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.smartcache import smart_cached
 from pygsti.tools import matrixmod2 as _mtx
@@ -427,10 +426,13 @@ def find_premultipled_pauli(s, p_implemented, p_target, qubit_labels=None):
     return pauli_layer
 
 
-def find_pauli_layer(pvec, qubit_labels, pauli_labels=['I', 'X', 'Y', 'Z']):
+def find_pauli_layer(pvec, qubit_labels, pauli_labels=None):
     """
     TODO: docstring
+    pauli_labels defaults to ['I', 'X', 'Y', 'Z'].
     """
+    if pauli_labels is None:
+        pauli_labels = ['I', 'X', 'Y', 'Z']
     paulis_as_int_list = find_pauli_number(pvec)
     return [(pauli_labels[p], q) for p, q in zip(paulis_as_int_list, qubit_labels)]
 
@@ -790,7 +792,7 @@ def colsum_acc(acc_s, acc_p, j, s, p, n):
     """
     A helper routine used for manipulating stabilizer state representations.
 
-    Similar to :function:`colsum` except a separate "accumulator" column is
+    Similar to :func:`colsum` except a separate "accumulator" column is
     used instead of the `i`-th column of `s` and element of `p`. I.e., this
     performs:
 

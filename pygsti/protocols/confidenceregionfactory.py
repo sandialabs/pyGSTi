@@ -298,7 +298,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
         Checks whether this factory has enough information to construct 'views' of itself.
 
         `ConfidenceRegionFactoryView` view objects are created using the
-        :method:`view` method, which can in turn be used to construct
+        :meth:`view` method, which can in turn be used to construct
         confidence intervals.
 
         Returns
@@ -340,7 +340,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
 
         approximate : bool, optional
             Whether to compute the true Hessian or just an approximation of it.
-            See :function:`logl_approximate_hessian`.  Setting to True can
+            See :func:`logl_approximate_hessian`.  Setting to True can
             significantly reduce the run time.
 
         Returns
@@ -431,7 +431,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
         self.nonMarkRadiusSq = nonMarkRadiusSq
         return hessian
 
-    def project_hessian(self, projection_type, label=None, tol=1e-7, maxiter=10000):
+    def project_hessian(self, projection_type, label=None, tol=1e-7, maxiter=10000, verbosity=3):
         """
         Projects the Hessian onto the non-gauge space.
 
@@ -468,6 +468,9 @@ class ConfidenceRegionFactory(_NicelySerializable):
             Maximum iterations for optimal Hessian projection.  Only used when
             `projection_type == 'optimal gate CIs'`.
 
+        verbosity : int or VerbosityPrinter, optional
+            Controls amount of detail printed to stdout (higher = more detail).
+
         Returns
         -------
         numpy.ndarray
@@ -490,9 +493,9 @@ class ConfidenceRegionFactory(_NicelySerializable):
             projected_hessian = self._project_hessian(self.hessian, nongauge_space, gauge_space, self.jacobian)
         elif projection_type == 'optimal gate CIs':
             projected_hessian = self._opt_projection_for_operation_cis("L-BFGS-B", maxiter, maxiter,
-                                                                       tol, verbosity=3)  # verbosity for DEBUG
+                                                                       tol, verbosity=verbosity)
         elif projection_type == 'intrinsic error':
-            projected_hessian = self._opt_projection_from_split(verbosity=3)  # verbosity for DEBUG
+            projected_hessian = self._opt_projection_from_split(verbosity=verbosity)
         else:
             raise ValueError("Invalid value of projection_type argument: %s" % projection_type)
 
@@ -819,7 +822,7 @@ class ConfidenceRegionFactoryView(object):
         Creates a new ConfidenceRegionFactoryView.
 
         Usually this constructor is not called directly, and objects of
-        this type are obtained by calling the :method:`view` method of
+        this type are obtained by calling the :meth:`view` method of
         a `ConfidenceRegionFactory` object.
 
         Parameters

@@ -24,6 +24,7 @@ from pygsti.tools import NamedDict as _NamedDict
 from pygsti.tools import listtools as _lt
 from pygsti.tools.dataframetools import _process_dataframe
 from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
 
 class Protocol(_MongoSerializable):
@@ -67,17 +68,17 @@ class Protocol(_MongoSerializable):
         Protocol
         """
         ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret)
         ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         ret._init_unserialized_attributes()
-        _MongoSerializable.__init__(ret)
         return ret
 
     @classmethod
     def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
         ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret, doc.get('_id', None))
         ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
         ret._init_unserialized_attributes()
-        _MongoSerializable.__init__(ret)
         return ret
 
     def __init__(self, name=None):
@@ -98,7 +99,7 @@ class Protocol(_MongoSerializable):
         super().__init__()
         self.name = name if name else self.__class__.__name__
         self.tags = {}  # string-values (key,val) pairs that serve to label this protocol instance
-        self.auxfile_types = {'_dbcoordinates': 'none'}
+        self.auxfile_types = {}
         self._nameddict_attributes = ()  # (('name', 'ProtocolName', 'category'),) implied in setup_nameddict
 
     def run(self, data, memlimit=None, comm=None):
@@ -260,9 +261,9 @@ class MultiPassProtocol(Protocol):
 
 class ProtocolRunner(object):
     """
-    Used to run :class:`Protocol`(s) on an entire *tree* of data
+    Used to run :class:`Protocol` objects on an entire *tree* of data
 
-    This class provides a way of combining multiple calls to :method:`Protocol.run`,
+    This class provides a way of combining multiple calls to :meth:`Protocol.run`,
     potentially running multiple protocols on different data.  From the outside, a
     :class:`ProtocolRunner` object behaves similarly, and can often be used
     interchangably, with a Protocol object.  It posesses a `run` method that takes a
@@ -553,7 +554,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
         names (the same as the keys of `children`).  If None, then the
         keys of `children` must be strings and are used as directory
         names.  Directory names are used when saving the object (via
-        :method:`write`).
+        :meth:`write`).
 
     child_category : str, optional
         The category that describes the children of this object.  This
@@ -593,10 +594,10 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
         """
         dirname = _pathlib.Path(dirname)
         ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret)
         ret.__dict__.update(_io.load_meta_based_dir(dirname / 'edesign', 'auxfile_types', quick_load=quick_load))
         ret._init_children(dirname, 'edesign', quick_load=quick_load)
         ret._loaded_from = str(dirname.absolute())
-        _MongoSerializable.__init__(ret)
 
         #Fixes to JSON codec's conversion of tuples => lists
         ret.qubit_labels = tuple(ret.qubit_labels) if isinstance(ret.qubit_labels, list) else ret.qubit_labels
@@ -606,9 +607,12 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
     @classmethod
     def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, parent=None, name=None, quick_load=False):
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
+        _MongoSerializable.__init__(ret, doc.get('_id', None))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types',
+                                                              ignore_meta=('_id', 'type', 'children_ids'),
+                                                              quick_load=quick_load))
         ret._init_children_from_mongodb_doc(doc, mongodb, quick_load=quick_load)
-        _MongoSerializable.__init__(ret)
+        ret._loaded_from = None
 
         #Fixes to JSON codec's conversion of tuples => lists
         ret.qubit_labels = tuple(ret.qubit_labels) if isinstance(ret.qubit_labels, list) else ret.qubit_labels
@@ -660,7 +664,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
             names (the same as the keys of `children`).  If None, then the
             keys of `children` must be strings and are used as directory
             names.  Directory names are used when saving the object (via
-            :method:`write`).
+            :meth:`write`).
 
         Returns
         -------
@@ -687,7 +691,7 @@ class ExperimentDesign(_TreeNode, _MongoSerializable):
                               'default_protocols': 'dict:dir-serialized-object'}
 
         # because TreeNode takes care of its own serialization:
-        self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_loaded_from': 'none', '_dbcoordinates': 'none'})
+        self.auxfile_types.update({'_dirs': 'none', '_vals': 'none', '_loaded_from': 'none'})
 
         if qubit_labels is None:
             if children:
@@ -1211,7 +1215,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         A dictionary of other :class:`ExperimentDesign` objects whose keys
         are names for each sub-edesign (used for directories and to index
         the sub-edesigns from this experiment design).  If a list is given instead,
-        a default names of the form "**<number>" are used.
+        a default names of the form " `**<number>` " are used.
 
     all_circuits : list, optional
         A list of :class:`Circuit`s, specifying all the circuits needing
@@ -1228,7 +1232,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
         names (the same as the keys of `sub_designs`).  If None, then the
         keys of `sub_designs` must be strings and are used as directory
         names.  Directory names are used when saving the object (via
-        :method:`write`).
+        :meth:`write`).
 
     interleave : bool, optional
         Whether the circuits of the `sub_designs` should be interleaved to
@@ -1274,7 +1278,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             A dictionary of other :class:`ExperimentDesign` objects whose keys
             are names for each sub-edesign (used for directories and to index
             the sub-edesigns from this experiment design).  If a list is given instead,
-            a default names of the form "**<number>" are used.
+            a default names of the form " `**<number>` " are used.
 
         all_circuits : list, optional
             A list of :class:`Circuit`s, specifying all the circuits needing
@@ -1291,7 +1295,7 @@ class CombinedExperimentDesign(ExperimentDesign):  # for multiple designs on the
             names (the same as the keys of `sub_designs`).  If None, then the
             keys of `sub_designs` must be strings and are used as directory
             names.  Directory names are used when saving the object (via
-            :method:`write`).
+            :meth:`write`).
 
         interleave : bool, optional
             Whether the circuits of the `sub_designs` should be interleaved to
@@ -1745,7 +1749,8 @@ class ProtocolData(_TreeNode, _MongoSerializable):
     CACHE_COLLECTION_NAME = "pygsti_protocol_data_caches"
 
     @classmethod
-    def from_dir(cls, dirname, parent=None, name=None, preloaded_edesign=None, quick_load=False):
+    def from_dir(cls, dirname, parent=None, name=None, preloaded_edesign=None, quick_load=False,
+                 record_zero_counts=True):
         """
         Initialize a new ProtocolData object from `dirname`.
 
@@ -1776,6 +1781,10 @@ class ProtocolData(_TreeNode, _MongoSerializable):
             when loading takes a long time and all the information of interest
             lies elsewhere, e.g. in an encompassing results object.
 
+        record_zero_counts : bool, optional
+            Whether zero-counts are actually recorded (stored) in the datasets
+            held within this ProtocolData object.
+
         Returns
         -------
         ProtocolData
@@ -1786,8 +1795,7 @@ class ProtocolData(_TreeNode, _MongoSerializable):
              _io.read_edesign_from_dir(dirname, quick_load=quick_load))
 
         data_dir = p / 'data'
-        #with open(data_dir / 'meta.json', 'r') as f:
-        #    meta = _json.load(f)
+        attributes_from_meta = _io.load_meta_based_dir(data_dir, auxfile_types_member=None, quick_load=quick_load)
 
         if quick_load:
             dataset = None  # don't load any dataset - just the cache (usually b/c loading is slow)
@@ -1799,9 +1807,11 @@ class ProtocolData(_TreeNode, _MongoSerializable):
                 if parent is None: parent = ProtocolData.from_dir(dirname / '..')
                 dataset = parent.dataset
             elif len(dataset_files) == 1 and dataset_files[0].name == 'dataset.txt':  # a single dataset.txt file
-                dataset = _io.read_dataset(dataset_files[0], ignore_zero_count_lines=False, verbosity=0)
+                dataset = _io.read_dataset(dataset_files[0], record_zero_counts=record_zero_counts,
+                                           ignore_zero_count_lines=False, verbosity=0)
             else:
-                dataset = {pth.stem: _io.read_dataset(pth, ignore_zero_count_lines=False, verbosity=0)
+                dataset = {pth.stem: _io.read_dataset(pth, record_zero_counts=record_zero_counts,
+                                                      ignore_zero_count_lines=False, verbosity=0)
                            for pth in dataset_files}
                 #FUTURE: use MultiDataSet, BUT in addition to init_from_dict we'll need to add truncate, filter, and
                 # process_circuits support for MultiDataSet objects -- for now (above) we just use dicts of DataSets.
@@ -1812,12 +1822,13 @@ class ProtocolData(_TreeNode, _MongoSerializable):
         cache = _io.metadir._read_json_or_pkl_files_to_dict(data_dir / 'cache')
 
         ret = cls(edesign, dataset, cache)
+        ret.__dict__.update(attributes_from_meta)  # attribute updates, e.g. dbcoordinates
         ret._init_children(dirname, 'data', quick_load=quick_load)  # loads child nodes
         return ret
 
     @classmethod
     def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, parent=None, name=None,
-                                         quick_load=False, preloaded_edesign=None):
+                                         quick_load=False, preloaded_edesign=None, record_zero_counts=True):
         edesign = parent.edesign[name] if parent and name else \
             (preloaded_edesign if preloaded_edesign is not None else
              _io.read_edesign_from_mongodb(mongodb, doc['edesign_id'], quick_load=quick_load, comm=None))
@@ -1827,11 +1838,11 @@ class ProtocolData(_TreeNode, _MongoSerializable):
         else:
             #Load dataset or multidataset from database
             if 'dataset_id' in doc:
-                dataset = _data.DataSet.from_mongodb(mongodb, doc['dataset_id'])
+                dataset = _data.DataSet.from_mongodb(mongodb, doc['dataset_id'], record_zero_counts=record_zero_counts)
             elif 'dataset_ids' in doc:
                 dataset = {}
                 for dsname, ds_id in doc['dataset_ids'].items():
-                    dataset[dsname] = _data.DataSet.from_mongodb(mongodb, ds_id)
+                    dataset[dsname] = _data.DataSet.from_mongodb(mongodb, ds_id, record_zero_counts=record_zero_counts)
 
         doc_id = doc['_id']
         cache = _io.read_dict_from_mongodb(mongodb, cls.CACHE_COLLECTION_NAME,
@@ -2007,7 +2018,9 @@ class ProtocolData(_TreeNode, _MongoSerializable):
         dirname = _pathlib.Path(dirname)
         data_dir = dirname / 'data'
         data_dir.mkdir(parents=True, exist_ok=True)
-        _io.metadir._obj_to_meta_json(self, data_dir)
+        _io.metadir.write_obj_to_meta_based_dir(self, data_dir, auxfile_types_member=None,
+                                                include_attributes=('_dbcoordinates',))  # just include DB coordinates
+        #Write our class information but no member data other than _dbcoordinates to meta.json
 
         if parent is None and not edesign_already_written:
             self.edesign.write(dirname)  # otherwise assume parent has already written edesign
@@ -2069,9 +2082,10 @@ class ProtocolData(_TreeNode, _MongoSerializable):
                     doc['dataset_collection_name'] = self.dataset.collection_name
 
         if self.cache:
-            _io.add_dict_to_mongodb_write_ops(self.cache, mongodb, self.CACHE_COLLECTION_NAME,
+            _io.add_dict_to_mongodb_write_ops(self.cache, write_ops, mongodb, self.CACHE_COLLECTION_NAME,
                                               {'member': 'cache',
-                                               'protocoldata_parent': doc_id})
+                                               'protocoldata_parent': doc_id}, overwrite_existing=overwrite_existing)
+            # Maybe always overwrite_existing should be True?
 
         self._add_children_write_ops_and_update_doc(doc, write_ops, mongodb,
                                                     overwrite_existing)  # writes sub-datas
@@ -2225,18 +2239,20 @@ class ProtocolResults(_MongoSerializable):
         """
         ignore = ('type',) if load_protocol else ('type', 'protocol')
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.load_meta_based_dir(dirname, 'auxfile_types', ignore, quick_load=quick_load))
         _MongoSerializable.__init__(ret)
+        ret.__dict__.update(_io.load_meta_based_dir(dirname, 'auxfile_types', ignore, quick_load=quick_load))
         return ret
 
     @classmethod
     def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False,
                                          preloaded_data=None, load_protocol=True, load_data=True):
-        ignore = ('_id', 'type',) if load_protocol else ('_id', 'type', 'protocol')
+        ignore = ('_id', 'type', 'protocoldata_id')  # don't load these as members
+        if not load_protocol:
+            ignore += ('protocol',)
         ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret, doc.get('_id', None))
         ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', ignore,
                                                               quick_load=quick_load))
-        _MongoSerializable.__init__(ret)
 
         if load_data:  # can we get rid of this?
             ret.data = (preloaded_data if preloaded_data is not None else
@@ -2264,8 +2280,7 @@ class ProtocolResults(_MongoSerializable):
         self.name = protocol_instance.name  # just for convenience in JSON dir
         self.protocol = protocol_instance
         self.data = data
-        self.auxfile_types = {'data': 'none', 'protocol': 'dir-serialized-object',
-                              '_dbcoordinates': 'none'}
+        self.auxfile_types = {'data': 'none', 'protocol': 'dir-serialized-object'}
 
     def write(self, dirname=None, data_already_written=False):
         """
@@ -2524,6 +2539,7 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
     child-:class:`ProtocolResultsDir` objects representing sub-directories.
 
     This container object holds two things:
+    
     1. A `.for_protocol` dictionary of :class:`ProtocolResults` corresponding
        to different protocols (keys are protocol names).
 
@@ -2592,6 +2608,9 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         #Load results in results_dir
         results = {}
         results_dir = dirname / 'results'
+        attributes_from_meta = _io.load_meta_based_dir(results_dir, auxfile_types_member=None, quick_load=quick_load) \
+            if (results_dir / 'meta.json').exists() else {}  # Back-compatibility (old result dirs have no meta.json)
+
         if results_dir.is_dir():  # if results_dir doesn't exist that's ok (just no results to load)
             for pth in results_dir.iterdir():
                 if pth.is_dir() and (pth / 'meta.json').is_file():
@@ -2599,12 +2618,13 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
                         dirname, pth.name, preloaded_data=data, quick_load=quick_load)
 
         ret = cls(data, results, {})  # don't initialize children now
+        ret.__dict__.update(attributes_from_meta)  # attribute updates, e.g. dbcoordinates
         ret._init_children(dirname, meta_subdir='results', quick_load=quick_load)
         return ret
 
     @classmethod
     def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, parent=None, name=None,
-                                         quick_load=False, preloaded_data=None):
+                                         quick_load=False, preloaded_data=None, read_all_results_for_data=False):
         data_id = doc['protocoldata_id']
         data = parent.data[name] if (parent and name) else \
             (preloaded_data if preloaded_data is not None else
@@ -2614,12 +2634,47 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         #Load results with same protocoldata_id as us (we don't actually use doc['result_ids'])
         results = {}
         result_collection = ProtocolResults.collection_name  # could store this in db (?)
-        for res_doc in mongodb[result_collection].find({'protocoldata_id': data_id}):
-            results[res_doc['name']] = ProtocolResults.from_mongodb_doc(mongodb, res_doc, preloaded_data=data,
-                                                                        quick_load=quick_load)
+
+        #First pass - results that have their IDs stored directly
+        loaded_ids = set()
+        for result_name, result_id in doc['result_ids'].items():
+            try:
+                res = ProtocolResults.from_mongodb(mongodb, result_id, preloaded_data=data, quick_load=quick_load)
+                loaded_ids.add(result_id)
+            except Exception as e:
+                print("Failed to load results ", result_name, ' (so skipping):\n', str(e))
+            else:
+                results[result_name] = res
+
+        if read_all_results_for_data:
+            #Second pass - results with our protocol data id -- but don't let these overwrite existing results!
+            for res_doc in mongodb[result_collection].find({'protocoldata_id': data_id}):
+                if res_doc['_id'] in loaded_ids:
+                    continue  # already loaded
+
+                try:
+                    res = ProtocolResults.from_mongodb_doc(mongodb, result_collection, res_doc,
+                                                           preloaded_data=data, quick_load=quick_load)
+                except Exception as e:
+                    print("Failed to load results ", str(res_doc['name']), ':\n', str(e))
+                else:
+                    tag = 2
+                    nm = res_doc['name']
+                    while nm in results:
+                        nm = res_doc['name'] + ("-%d" % tag)
+                        tag += 1
+                    if nm != res_doc['name']:
+                        print("Note: result for key '%s' already exists -> storing as '%s'" % (res_doc['name'], nm))
+                    results[nm] = res
 
         ret = cls(data, results, {})  # don't initialize children now
-        ret._init_children_from_mongodb_doc(doc, mongodb, preloaded_data=data, quick_load=quick_load)
+        #Note: we never call the below update as it currently doesn't have anything in it.
+        #ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types',
+        #                                                      ignore_meta=('_id', 'type', 'children_ids',
+        #                                                                   'protocoldata_id', 'result_ids'),
+        #                                                      quick_load=quick_load))
+        ret._init_children_from_mongodb_doc(doc, mongodb, preloaded_data=data, quick_load=quick_load,
+                                            read_all_results_for_data=read_all_results_for_data)
         return ret
 
     def __init__(self, data, protocol_results=None, children=None):
@@ -2627,6 +2682,7 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         Create a new ProtocolResultsDir object.
 
         This container object holds two things:
+        
         1. A `.for_protocol` dictionary of :class:`ProtocolResults` corresponding
            to different protocols (keys are protocol names).
 
@@ -2639,10 +2695,11 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
             The data from which *all* the Results objects in this
             ProtocolResultsDir are derived.
 
-        protocol_results : ProtocolResults, optional
-            An initial (single) results object to add.  The name of the
-            results object is used as its key within the `.for_protocol`
-            dictionary.  If None, then an empty results directory is created.
+        protocol_results : ProtocolResults or dict, optional
+            An initial dictionary of :class:`ProtocolResults` objects to add, or a single
+            results object. The name(s) of the results object(s) must be used as keys (and
+            will used as its key for a single results object).  This beccomes the created
+            object's `.for_protocol` dictionary.  If None, then an empty results directory is created.
 
         children : dict, optional
             A dictionary of the :class:`ProtocolResultsDir` objects that are
@@ -2655,7 +2712,12 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
         ProtocolResultsDir
         """
         self.data = data  # edesign and data
-        self.for_protocol = protocol_results.copy() if protocol_results else {}
+        if isinstance(protocol_results, dict):
+            self.for_protocol = protocol_results.copy()
+        elif isinstance(protocol_results, ProtocolResults):
+            self.for_protocol = {protocol_results.name: protocol_results}
+        else:
+            self.for_protocol = {}
         assert(all([r.data is self.data for r in self.for_protocol.values()]))
 
         #self._children = children if (children is not None) else {}
@@ -2670,6 +2732,31 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
 
         _MongoSerializable.__init__(self)
         _TreeNode.__init__(self, self.data.edesign._dirs, children)
+
+    def add_results(self, for_protocol_name, results):
+        """
+        Add a new results object to this results directory node.
+
+        The added results object must share this result directory's data, i.e., its
+        `.data` attribute must match the `.data` of this directory.  This requirement
+        is usually met because the results have been created by running a protocol on
+        this directory's `.data`.  The results object is stored in the
+        `.for_protocol[for_protocol_name]` attribute of this directory.
+
+        Parameters
+        ----------
+        for_protocol_name : str
+            Name of the protocol to be added.
+
+        results : ProtocolResults
+            The results object to be added
+
+        Returns
+        -------
+        None
+        """
+        assert results.data is self.data, "Added result.data must be result directory's .data!"
+        self.for_protocol[for_protocol_name] = results
 
     def _create_childval(self, key):  # (this is how children are created on-demand)
         """ Create the value for `key` on demand. """
@@ -2727,7 +2814,9 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
 
         results_dir = dirname / 'results'
         results_dir.mkdir(parents=True, exist_ok=True)
-        _io.metadir._obj_to_meta_json(self, results_dir)
+        _io.metadir.write_obj_to_meta_based_dir(self, results_dir, auxfile_types_member=None,
+                                                include_attributes=('_dbcoordinates',))  # just include DB coordinates
+        #Write our class information but no member data other than _dbcoordinates to meta.json
 
         #write the results
         for name, results in self.for_protocol.items():
@@ -3120,6 +3209,36 @@ class DataCountsSimulator(DataSimulator):
                             self.record_zero_counts, comm, memlimit, self.times)
         return ProtocolData(edesign, ds)
 
+class ProtocolCheckpoint(_NicelySerializable):
+    """
+    Class for storing checkpointing intermediate progress during
+    the running of a protocol in order to enable restarting subsequent
+    runs of the protocol from that point.
+    
+    Parameters
+    ----------
+    name : str
+        Name of the protocol associated with this checkpoint.
+
+    parent : ProtocolCheckpoint, optional (default None)
+        When specified this checkpoint object is treated as the child of another ProtocolCheckpoint
+        object that acts as the parent. When present, the parent's `write` method supersedes
+        the child objects and is called when calling `write` on the child. Currently only used
+        in the implementation of StandardGSTCheckpoint.
+    """
+
+    def __init__(self, name, parent = None):
+        self.name = name
+        self.parent = parent
+        #Need to add this for MongoDB serialization related reasons.
+        self._dbcoordinates = None
+
+    def write(self, path):
+        if self.parent is not None:
+            self.parent.write(path)
+        else:
+            super().write(path)
+
 
 #In the future, we could put this function into a base class for
 # the classes that utilize it above, so it would become a proper method.
@@ -3127,7 +3246,7 @@ def _convert_nameddict_attributes(obj):
     """
     A helper function that converts the elements of the "_nameddict_attributes"
     attribute of several classes to the (key, value, type) array expected by
-    :method:`NamedDict.create_nested`.
+    :meth:`NamedDict.create_nested`.
     """
     keys_vals_types = []
     for tup in obj._nameddict_attributes:

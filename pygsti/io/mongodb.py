@@ -243,20 +243,21 @@ def _load_auxdoc_member(mongodb, member_name, typ, metadata, quick_load):
 
         elif cur_typ == 'dir-serialized-object':
             obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
-            val = _MongoSerializable.from_mongodb_doc(mongodb, obj_doc, quick_load=quick_load)
+            val = _MongoSerializable.from_mongodb_doc(mongodb, metadata['collection_name'],
+                                                      obj_doc, quick_load=quick_load)
 
         elif cur_typ == 'partialdir-serialized-object':
             obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
-            val = _MongoSerializable.from_mongodb_doc(mongodb, obj_doc, quick_load=quick_load, load_data=False)
+            val = _MongoSerializable.from_mongodb_doc(mongodb, metadata['collection_name'],
+                                                      obj_doc, quick_load=quick_load, load_data=False)
 
         elif cur_typ == 'serialized-object':
             obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
-            val = _MongoSerializable.from_mongodb_doc(mongodb, obj_doc)  #, quick_load=quick_load)
+            val = _MongoSerializable.from_mongodb_doc(mongodb, metadata['collection_name'], obj_doc)
 
         elif cur_typ == 'circuit-str-json':
-            from .readers import convert_strings_to_circuits as _convert_strings_to_circuits
             obj_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
-            val = _convert_strings_to_circuits(obj_doc['circuit_str_json'])
+            val = _load.convert_strings_to_circuits(obj_doc['circuit_str_json'])
 
         elif typ == 'numpy-array':
             array_doc = mongodb[metadata['collection_name']].find_one(metadata['id'])
@@ -436,11 +437,10 @@ def add_obj_auxtree_write_ops_and_update_doc(obj, doc, write_ops, mongodb, colle
     meta = {'type': _full_class_name(obj)}
     if additional_meta is not None: meta.update(additional_meta)
 
-    if (auxfile_types_member is not None) and ('_dbcoordinates' not in obj.__dict__[auxfile_types_member]):
-        # HACK for writing to DB old files that were loaded and don't have
-        # '_dbcoordinates': 'none' in their auxfile_types dict
-        obj._dbcoordinates = None
-        obj.__dict__[auxfile_types_member]['_dbcoordinates'] = 'none'
+    # Unless explicitly included, don't store _dbcoordinates in DB
+    coords_explicitly_included = include_attributes is not None and '_dbcoordinates' in include_attributes
+    if '_dbcoordinates' not in omit_attributes and not coords_explicitly_included:
+        omit_attributes = tuple(omit_attributes) + ('_dbcoordinates',)
 
     if include_attributes is not None:  # include_attributes takes precedence over omit_attributes
         vals = {}
@@ -459,7 +459,7 @@ def add_obj_auxtree_write_ops_and_update_doc(obj, doc, write_ops, mongodb, colle
             if o in vals: del vals[o]
             if o in auxtypes: del auxtypes[o]
     else:
-        vals = obj.__dict__
+        vals = obj.__dict__.copy()
         auxtypes = obj.__dict__[auxfile_types_member] if (auxfile_types_member is not None) else {}
 
     return add_auxtree_write_ops_and_update_doc(doc, write_ops, mongodb, collection_name, vals,
@@ -692,7 +692,7 @@ def _write_auxdoc_member(mongodb, write_ops, parent_collection_name, parent_id, 
         if val is None:   # None values don't get written
             pass
         elif cur_typ in ('none', 'reset'):  # explicitly don't get written
-            pass
+            pass  # and really we shouldn't ever get here since we short circuit in auxmember loop
 
         elif cur_typ == 'text-circuit-list':
             circuit_doc_ids = []
@@ -863,7 +863,7 @@ def _remove_auxdoc_member(mongodb, member_name, typ, metadata, session, recursiv
 
 def read_dict_from_mongodb(mongodb, collection_name, identifying_metadata):
     """
-    Read a dictionary serialized via :function:`write_dict_to_mongodb` into a dictionary.
+    Read a dictionary serialized via :func:`write_dict_to_mongodb` into a dictionary.
 
     The elements of the constructed dictionary are stored as a separate documents in a
     the specified MongoDB collection.
@@ -1018,3 +1018,41 @@ def remove_dict_from_mongodb(mongodb, collection_name, identifying_metadata, ses
     None
     """
     return mongodb[collection_name].delete_many(identifying_metadata, session=session)
+
+
+def create_mongodb_indices_for_pygsti_collections(mongodb):
+    """
+    Create, if not existing already, indices useful for speeding up pyGSTi MongoDB operations.
+
+    Indices are created as necessary within `pygsti_*` collections.  While
+    not necessary for database operations, these indices may dramatically speed
+    up the reading and writing of pygsti objects to/from a Mongo database.  You
+    only need to call this *once* per database, typically when the database is
+    first setup.
+
+    Parameters
+    ----------
+    mongodb : pymongo.database.Database
+        The MongoDB instance to create indices in.
+
+    Returns
+    -------
+    None
+    """
+    import pymongo as _pymongo
+
+    def create_unique_index(collection_name, index_name, keys):
+        ii = mongodb[collection_name].index_information()
+        if index_name in ii:
+            print("Index %s in %s collection already exists." % (index_name, collection_name))
+        else:
+            mongodb[collection_name].create_index(keys, name=index_name, unique=True)
+            print("Created index %s in %s collection." % (index_name, collection_name))
+
+    create_unique_index('pygsti_circuits', 'circuit_str', [('circuit_str', _pymongo.ASCENDING)])
+    create_unique_index('pygsti_datarows', 'parent_and_circuit', [('parent', _pymongo.ASCENDING),
+                                                                  ('circuit', _pymongo.ASCENDING)])
+    create_unique_index('pygsti_protocol_data_caches', 'parent_member_key',
+                        [('protocoldata_parent', _pymongo.ASCENDING),
+                         ('member', _pymongo.ASCENDING),
+                         ('key', _pymongo.ASCENDING)])

@@ -98,7 +98,7 @@ class EffectRepTensorProduct(EffectRep):
         factordims = _np.ascontiguousarray(
             _np.array([fct.state_space.udim for fct in povm_factors], _np.int64))
 
-        #dim = _np.product(factordims)
+        #dim = _np.prod(factordims)
         self.povm_factors = povm_factors
         self.effect_labels = effect_labels
         self.kron_array = kron_array
@@ -106,7 +106,7 @@ class EffectRepTensorProduct(EffectRep):
         self.nfactors = len(self.povm_factors)
         self.max_factor_dim = max_factor_dim  # Unused
         state_space = _StateSpace.cast(state_space)
-        assert(_np.product(factordims) == state_space.udim)
+        assert(_np.prod(factordims) == state_space.udim)
         super(EffectRepTensorProduct, self).__init__(state_space)
         self.factor_effects_have_changed()
 

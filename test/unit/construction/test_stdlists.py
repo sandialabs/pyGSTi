@@ -1,4 +1,5 @@
 import unittest
+import pytest
 
 from pygsti.modelpacks.legacy import std1Q_XY
 from pygsti.baseobjs import Label
@@ -7,6 +8,7 @@ from pygsti.data import DataSet
 from ..util import BaseCase
 
 
+@pytest.mark.filterwarnings('ignore:The function make_lsgst_structs is deprecated') # Explicitly testing this function
 class StdListTester(BaseCase):
     def setUp(self):
         self.opLabels = [Label('Gx'), Label('Gy')]

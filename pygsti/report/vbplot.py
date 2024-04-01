@@ -281,8 +281,7 @@ def capability_region_plot(vbdataframe, metric='polarization', threshold=1 / _np
 
 
 def volumetric_distribution_plot(vbdataframe, metric='polarization', threshold=1 / _np.e, hypothesis_test='standard',
-                                 significance=0.05, figsize=(10, 10), scale={'min': 1.95, 'mean': 1, 'max': 0.13},
-                                 title=None, cmap=None):
+                                 significance=0.05, figsize=(10, 10), scale=None, title=None, cmap=None):
     """
     Creates volumetric benchmarking plots that display the maximum, mean and minimum of a given figure-of-merit (by
     default, circuit polarization) as a function of circuit shape. This function can be used to create figures like
@@ -303,12 +302,9 @@ def volumetric_distribution_plot(vbdataframe, metric='polarization', threshold=1
 
     hypothesis_test : string, optional
         The type of statistical significance adjustment to apply to the boundaries. The options are
-        - 'standard': this reproduces the method used and described in arXiv:2008.11294 (see the
-            appendices for details). With this option, there will be a difference between the
-            boundary for the minimum and maximum polarization only if there is statistically significant
-            evidence in the data for this.
-        - 'none': no statistical significance adjustment: all three boundaries show the point at which
-            relevant statistic (maximum, mean, minimum) drops below the threshold.
+        
+        * 'standard': this reproduces the method used and described in arXiv:2008.11294 (see the appendices for details). With this option, there will be a difference between the boundary for the minimum and maximum polarization only if there is statistically significant evidence in the data for this.
+        * 'none': no statistical significance adjustment: all three boundaries show the point at which relevant statistic (maximum, mean, minimum) drops below the threshold.
 
     significance : float, optional
         The statistical significance in the hypothesis tests. Only used in `hypothesis_test` is not 'none'.
@@ -318,6 +314,7 @@ def volumetric_distribution_plot(vbdataframe, metric='polarization', threshold=1
 
     scale : dict, optional
         The scale for the three concentric squares, showing the maximum, mean and minimum.
+        Defaults to {'min': 1.95, 'mean': 1, 'max': 0.13}.
 
     title : sting, optional
         The figure title.
@@ -329,6 +326,8 @@ def volumetric_distribution_plot(vbdataframe, metric='polarization', threshold=1
     ------
     fig, ax : matplolib fig and ax.
     """
+    if scale is None:
+        scale = {'min': 1.95, 'mean': 1, 'max': 0.13}
     linescale = {'min': 1, 'mean': 0, 'max': 0}
     boundary_color = {'min': '#ff0000', 'mean': '#000000', 'max': '#2ecc71'}
     boundary_dashing = {'min': [1, 1], 'mean': None, 'max': [0.5, 0.5]}

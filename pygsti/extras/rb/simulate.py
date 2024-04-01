@@ -617,7 +617,7 @@ def oneshot_circuit_simulator_for_tensored_independent_pauli_errors(circuit, psp
 
 
 def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, qubit_subset=None, filename=None, rbtype='DRB',
-                         rbspec=[], returndata=True, appenddata=False, verbosity=0, idle1q_placeholder='I'):
+                         rbspec=None, returndata=True, appenddata=False, verbosity=0, idle1q_placeholder='I'):
     """
     Simulates RB with Pauli errors. Can be used to simulated Clifford RB, direct RB and mirror RB. This
     function:
@@ -688,6 +688,8 @@ def rb_with_pauli_errors(pspec, errormodel, lengths, k, counts, qubit_subset=Non
         If `returndata` an RBSummaryDataset containing the results. Else, None
 
     """
+    if rbspec is None:
+        rbspec = []
     assert(rbtype == 'CRB' or rbtype == 'DRB' or rbtype == 'MRB'), "RB type not valid!"
 
     if filename is not None:
@@ -852,7 +854,7 @@ def create_iid_pauli_error_model(pspec, one_qubit_gate_errorrate, two_qubit_gate
     return errormodel
 
 
-def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict, measurement_errorrate_dict={},
+def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict, measurement_errorrate_dict=None,
                                                       ptype='uniform', idle1q_placeholder='I'):
     """
     Returns a dictionary encoding a Pauli-stochastic error model whereby the errors are independent of the gates,
@@ -890,6 +892,8 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict
         `circuit_simulator_for_tensored_independent_pauli_errors()`.
 
     """
+    if measurement_errorrate_dict is None:
+        measurement_errorrate_dict = {}
     if ptype == 'uniform':
         def error_row(er): return _np.array([1 - er, er / 3, er / 3, er / 3])
 
@@ -938,7 +942,7 @@ def create_locally_gate_independent_pauli_error_model(pspec, gate_errorrate_dict
 
 
 def create_local_pauli_error_model(pspec, one_qubit_gate_errorrate_dict, two_qubit_gate_errorrate_dict,
-                                   measurement_errorrate_dict={}, ptype='uniform'):
+                                   measurement_errorrate_dict=None, ptype='uniform'):
     """
     Returns a dictionary encoding a Pauli-stochastic error model whereby the errors caused by a gate act
     only on the "target" qubits of the gate, all the 1-qubit gates on a qubit have the same error rate,
@@ -979,6 +983,8 @@ def create_local_pauli_error_model(pspec, one_qubit_gate_errorrate_dict, two_qub
         `circuit_simulator_for_tensored_independent_pauli_errors()`.
 
     """
+    if measurement_errorrate_dict is None:
+        measurement_errorrate_dict = {}
     if ptype == 'uniform':
         def error_row(er): return _np.array([1 - er, er / 3, er / 3, er / 3])
 

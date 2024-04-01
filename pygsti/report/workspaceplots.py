@@ -1484,10 +1484,8 @@ class ColorBoxPlot(WorkspacePlot):
     ws : Workspace
         The containing (parent) workspace.
 
-    plottype : {"chi2","logl","tvd","blank","errorrate","dscmp",
-                "driftdetector", "driftsize"}
-        Specifies the type of plot. "errorate" requires that
-        `direct_gst_models` be set.
+    plottype : {"chi2","logl","tvd","blank","errorrate","dscmp", "driftdetector", "driftsize"}
+        Specifies the type of plot. "errorate" requires that `direct_gst_models` be set.
 
     circuits : CircuitList or list of Circuits
         Specifies the set of circuits, usually along with their structure, e.g.
@@ -1517,10 +1515,10 @@ class ColorBoxPlot(WorkspacePlot):
 
     prec : int, optional
         Precision for box labels.  Allowed values are:
-          'compact' = round to nearest whole number using at most 3 characters
-          'compacthp' = show as much precision as possible using at most 3 characters
-          int >= 0 = fixed precision given by int
-          int <  0 = number of significant figures given by -int
+        * 'compact' = round to nearest whole number using at most 3 characters
+        * 'compacthp' = show as much precision as possible using at most 3 characters
+        *  int >= 0 = fixed precision given by int
+        *  int <  0 = number of significant figures given by -int
 
     linlg_pcntle : float, optional
         Specifies the (1 - linlg_pcntle) percentile to compute for the boxplots
@@ -1596,10 +1594,8 @@ class ColorBoxPlot(WorkspacePlot):
 
         Parameters
         ----------
-        plottype : {"chi2","logl","tvd","blank","errorrate","dscmp",
-                    "driftdetector", "driftsize"}
-            Specifies the type of plot. "errorate" requires that
-            `direct_gst_models` be set.
+        plottype : {"chi2","logl","tvd","blank","errorrate","dscmp", "driftdetector", "driftsize"}
+            Specifies the type of plot. "errorate" requires that `direct_gst_models` be set.
 
         circuits : CircuitList or list of Circuits
             Specifies the set of circuits, usually along with their structure, e.g.
@@ -2113,7 +2109,8 @@ def _mx_fn_blank(plaq, x, y, unused):
 
 def _mx_fn_errorrate(plaq, x, y, direct_gst_models):  # error rate as 1x1 matrix which we have plotting function sum up
     base_circuit = plaq.base if isinstance(plaq, _GermFiducialPairPlaquette) \
-        else _Circuit(())
+        else _Circuit((), line_labels=list(direct_gst_models.keys())[0].line_labels) #Taking the line labels from the first circuit in direct_gst_models will probably work
+        #most of the time. TODO: Cook up a better scheme.
     return _np.array([[_ph.small_eigenvalue_err_rate(base_circuit, direct_gst_models)]])
 
 
@@ -2774,7 +2771,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
                 xd = yd = 16  # include identity in basis dimensions
         else:
             if projections.size == d2 - 1:  # == 4**nQubits - 1
-                projections = _np.concatenate(([0.0], projections)).reshape((4, projections.size // 4))
+                projections = _np.concatenate(([0.0], projections)).reshape((4, (projections.size+1) // 4))
                 eb_matrix = _np.concatenate(([0.0], eb_matrix)) if (eb_matrix is not None) else None
                 xlabel = "Q*"; ylabel = "Q1"
                 yd, xd = projections.shape
@@ -3062,7 +3059,7 @@ class FitComparisonBarPlot(WorkspacePlot):
         Specifies the set of circuits used at each x-value.
 
     model_by_x : list of Models
-        `Model`s corresponding to each x-value.
+        `Model` corresponding to each x-value.
 
     dataset_by_x : DataSet or list of DataSets
         The data sets to compare each model against.  If a single
@@ -3113,7 +3110,7 @@ class FitComparisonBarPlot(WorkspacePlot):
             Specifies the set of circuits used at each x-value.
 
         model_by_x : list of Models
-            `Model`s corresponding to each x-value.
+            `Model` corresponding to each x-value.
 
         dataset_by_x : DataSet or list of DataSets
             The data sets to compare each model against.  If a single
@@ -3261,10 +3258,10 @@ class FitComparisonBoxPlot(WorkspacePlot):
         are X and Y indices, respectively.
 
     model_by_y_then_x : list of lists of Models
-        `Model`s corresponding to each X and Y value.
+        `Model` corresponding to each X and Y value.
 
     dataset_by_y_then_x : list of lists of DataSets
-        `DataSet`s corresponding to each X and Y value.
+        `DataSet` corresponding to each X and Y value.
 
     objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
         The objective function to use, or one of the given strings
@@ -3311,10 +3308,10 @@ class FitComparisonBoxPlot(WorkspacePlot):
             are X and Y indices, respectively.
 
         model_by_y_then_x : list of lists of Models
-            `Model`s corresponding to each X and Y value.
+            `Model` corresponding to each X and Y value.
 
         dataset_by_y_then_x : list of lists of DataSets
-            `DataSet`s corresponding to each X and Y value.
+            `DataSet` corresponding to each X and Y value.
 
         objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
             The objective function to use, or one of the given strings
@@ -3384,7 +3381,7 @@ class DatasetComparisonSummaryPlot(WorkspacePlot):
     A grid of grayscale boxes comparing data sets pair-wise.
 
     This class creates a plot showing the total 2*deltaLogL values for each
-    pair of :class:`DataSet`s out of some number of total `DataSet`s.
+    pair of :class:`DataSet` out of some number of total `DataSets`.
 
     Background: For every pair of data sets, the likelihood is computed for
     two different models: 1) the model in which a single set of
@@ -3854,19 +3851,22 @@ class RandomizedBenchmarkingPlot(WorkspacePlot):
 
         if decay:
             lengths = _np.linspace(0, max(rb_r.depths), 200)
-            A = rb_r.fits[fitkey].estimates['a']
-            B = rb_r.fits[fitkey].estimates['b']
-            p = rb_r.fits[fitkey].estimates['p']
+            try:
+                A = rb_r.fits[fitkey].estimates['a']
+                B = rb_r.fits[fitkey].estimates['b']
+                p = rb_r.fits[fitkey].estimates['p']
 
-            data.append(go.Scatter(
-                x=lengths,
-                y=A + B * p**lengths,
-                mode='lines',
-                line=dict(width=1, color="rgb(120,120,120)"),
-                name='Fit, r = {:.2} +/- {:.1}'.format(rb_r.fits[fitkey].estimates['r'],
-                                                       rb_r.fits[fitkey].stds['r']),
-                showlegend=legend,
-            ))
+                data.append(go.Scatter(
+                    x=lengths,
+                    y=A + B * p**lengths,
+                    mode='lines',
+                    line=dict(width=1, color="rgb(120,120,120)"),
+                    name='Fit, r = {:.2} +/- {:.1}'.format(rb_r.fits[fitkey].estimates['r'],
+                                                        rb_r.fits[fitkey].stds['r']),
+                    showlegend=legend,
+                ))
+            except KeyError:
+                _warnings.warn(f'RB fit for {fitkey} likely failed, skipping plot...')
 
         if success_probabilities:
             all_success_probs_by_depth = [data_per_depth[depth] for depth in rb_r.depths]

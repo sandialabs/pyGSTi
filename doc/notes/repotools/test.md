@@ -2,6 +2,9 @@
 
 ### By default, `./runTests.py` runs tests for all packages.
 
+*Warning*. This file was designed around nosetests. When we converted to pytest
+we didn't port all the available functionality (particularly the "parallel"
+option). Correct behavior of coverage reporting has not been verified.
 
 ##### Optional flags:
 
@@ -23,9 +26,9 @@ ex:  *`./runTests.py tools io`* Runs only the `tools` and `io` packages
 *`./runTests.py report/testReport.py`* runs only tests in `report`  
 *`./runTests.py report/testReport.py:TestReport.test_reports_logL_TP_wCIs`* runs the specific test `test_reports_logL_TP_wCIs`, which is a method of the test case `TestReport`
 
-`runTests.py` now uses nose by default  
+`runTests.py` now uses pytest by default  
 (So, the above example of `./runTests.py report/testReport.py` would expand to:  
-`python3.5 -m nose report/testReport.py`)  
+`pytest report/testReport.py`)  
 
 
  - Current test coverage is outlined in test/coverage_status.txt

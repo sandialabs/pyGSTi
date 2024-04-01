@@ -25,8 +25,6 @@ from pygsti.models.layerrules import LayerRules as _LayerRules
 from pygsti.models.modelparaminterposer import LinearInterposer as _LinearInterposer
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims import forwardsim as _fwdsim
-from pygsti.forwardsims import mapforwardsim as _mapfwdsim
-from pygsti.forwardsims import matrixforwardsim as _matrixfwdsim
 from pygsti.modelmembers import modelmember as _gm
 from pygsti.modelmembers import operations as _op
 from pygsti.baseobjs.basis import Basis as _Basis, TensorProdBasis as _TensorProdBasis
@@ -65,7 +63,10 @@ class Model(_NicelySerializable):
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
-        state.update({'state_space': self.state_space.to_nice_serialization()})
+        state.update({'state_space': self.state_space.to_nice_serialization(),
+                      'parameter_labels': list(self._paramlbls) if len(self._paramlbls) > 0 else None,
+                      'parameter_bounds': (self._encodemx(self._param_bounds)
+                                           if (self._param_bounds is not None) else None)})
         return state
 
     @property
@@ -107,7 +108,7 @@ class Model(_NicelySerializable):
         """
         The parameter count to use when testing this model against data.
 
-        Often times, this is the same as :method:`num_params`, but there are times
+        Often times, this is the same as :meth:`num_params`, but there are times
         when it can convenient or necessary to use a parameter count different than
         the actual number of parameters in this model.
 
@@ -502,7 +503,7 @@ class OpModel(Model):
         except:
             nqubits = None
         # TODO: This should probably also take evotype (e.g. 'chp' should probably use a CHPForwardSim, etc)
-        self._sim = simulator = _fwdsim.ForwardSimulator.cast(simulator, nqubits)
+        self._sim = _fwdsim.ForwardSimulator.cast(simulator, nqubits)
         self._sim.model = self  # ensure the simulator's `model` is set to this object
 
     @property
@@ -606,6 +607,7 @@ class OpModel(Model):
         raise NotImplementedError("Derived Model classes should implement _iter_parameterized_objs")
         #return # default is to have no parameterized objects
 
+    #TODO: Make this work with param interposers.
     def _check_paramvec(self, debug=False):
         if debug: print("---- Model._check_paramvec ----")
 
@@ -1610,6 +1612,10 @@ class OpModel(Model):
         self._clean_paramvec()  # ensure _paramvec is rebuilt if needed
         if OpModel._pcheck: self._check_paramvec()
         ret = Model.copy(self)
+        if self._param_bounds is not None and self.parameter_labels is not None:
+            ret._clean_paramvec()  # will *always* rebuild paramvec; do now so we can preserve param bounds
+            assert _np.all(self.parameter_labels == ret.parameter_labels)  # ensure ordering is the same
+            ret._param_bounds = self._param_bounds.copy()
         if OpModel._pcheck: ret._check_paramvec()
         return ret
 
@@ -1636,7 +1642,7 @@ class OpModel(Model):
 
         If `True`, then the two models are the same except for, perhaps, being
         at different parameter-space points (i.e. having different parameter vectors).
-        Similar models, A and B, can be made equivalent (see :method:`is_equivalent`) by
+        Similar models, A and B, can be made equivalent (see :meth:`is_equivalent`) by
         calling `modelA.from_vector(modelB.to_vector())`.
 
         Parameters

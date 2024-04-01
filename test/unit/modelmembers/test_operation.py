@@ -3,7 +3,6 @@ import pickle
 import sys
 import numpy as np
 import scipy.sparse as sps
-
 import pygsti.modelmembers.operations as op
 import pygsti.tools.internalgates as itgs
 import pygsti.tools.lindbladtools as lt
@@ -22,7 +21,7 @@ from ..util import BaseCase, needs_cvxpy
 SKIP_DIAMONDIST_ON_WIN = True
 
 
-class OpBase(object):
+class OpBase:
     def setUp(self):
         ExplicitOpModel._strict = False
         self.gate = self.build_gate()
@@ -95,7 +94,7 @@ class OpBase(object):
             pass  # ok if some classes don't implement this
 
 
-class LinearOpTester(OpBase):
+class LinearOpTester(BaseCase):
     n_params = 0
 
     @staticmethod
@@ -103,11 +102,18 @@ class LinearOpTester(OpBase):
         dim = 4
         evotype = Evotype.cast('default')
         state_space = statespace.default_space_for_dim(dim)
-        rep = evotype.create_dense_superop_rep(np.identity(dim, 'd'), state_space)
+        # rep = evotype.create_dense_superop_rep(np.identity(dim, 'd'), state_space)
+        #   ^ Original, failing line. My fix below.
+        rep = evotype.create_dense_superop_rep(None, np.identity(dim, 'd'), state_space)
         return op.LinearOperator(rep, evotype)
 
+    def setUp(self):
+        ExplicitOpModel._strict = False
+        self.gate = self.build_gate()
+
     def test_raise_on_invalid_method(self):
-        T = FullGaugeGroupElement(np.array([[0, 1], [1, 0]], 'd'))
+        mat = np.kron(np.array([[0, 1], [1, 0]], 'd'), np.eye(2))
+        T = FullGaugeGroupElement(mat)
         with self.assertRaises(NotImplementedError):
             self.gate.transform_inplace(T)
         with self.assertRaises(NotImplementedError):
@@ -213,12 +219,6 @@ class MutableDenseOpBase(DenseOpBase):
         self.gate.rotate([0.01, 0.02, 0.03], 'gm')
         # TODO assert correctness
 
-    #REMOVED - we don't have compose methods anymore
-    #def test_compose(self):
-    #    cgate = self.gate.compose(self.gate)
-    #    # TODO assert correctness
-
-
 class ImmutableDenseOpBase(DenseOpBase):
     def test_raises_on_set_value(self):
         M = np.asarray(self.gate)  # gate as a matrix
@@ -319,28 +319,6 @@ class FullOpTester(MutableDenseOpBase, BaseCase):
     def build_gate():
         return create_operation("X(pi/8,Q0)", [('Q0',)], "gm", parameterization="full")
 
-    #REMOVED - we don't support .compose methods anymore
-    #def test_composition(self):
-    #    gate_linear = LinearlyParamOpTester.build_gate()
-    #    gate_tp = TPOpTester.build_gate()
-    #    gate_static = StaticOpTester.build_gate()
-    #
-    #    c = op.compose(self.gate, self.gate, "gm", "full")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, self.gate))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-    #
-    #    c = op.compose(self.gate, gate_tp, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_tp))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-    #
-    #    c = op.compose(self.gate, gate_static, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_static))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-    #
-    #    c = op.compose(self.gate, gate_linear, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_linear))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-
     def test_convert_to_linear(self):
         converted = op.convert(self.gate, "linear", "gm")
         self.assertArraysAlmostEqual(converted.to_dense(), self.gate.to_dense())
@@ -387,26 +365,6 @@ class LinearlyParamOpTester(MutableDenseOpBase, BaseCase):
             op.LinearlyParamArbitraryOp(baseMx, np.array([1.0 + 1j, 1.0]), parameterToBaseIndicesMap,
                                         real=True)  # must be real
 
-    #REMOVED - we don't support .compose methods anymore
-    #def test_composition(self):
-    #    gate_full = FullOpTester.build_gate()
-    #
-    #    c = op.compose(self.gate, gate_full, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_full))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-    #
-    #    #c = op.compose(self.gate, gate_tp, "gm")
-    #    #self.assertArraysAlmostEqual(c, np.dot(self.gate,gate_tp) )
-    #    #self.assertEqual(type(c), op.FullTPOp)
-    #
-    #    #c = op.compose(self.gate, gate_static, "gm")
-    #    #self.assertArraysAlmostEqual(c, np.dot(self.gate,gate_static) )
-    #    #self.assertEqual(type(c), op.LinearlyParamArbitraryOp)
-    #
-    #    #c = op.compose(self.gate, self.gate, "gm")
-    #    #self.assertArraysAlmostEqual(c, np.dot(self.gate,self.gate) )
-    #    #self.assertEqual(type(c), op.LinearlyParamArbitraryOp)
-
     def test_build_from_scratch(self):
         # TODO what is actually being tested here?
         baseMx = np.zeros((4, 4))
@@ -431,27 +389,6 @@ class TPOpTester(MutableDenseOpBase, BaseCase):
     def build_gate():
         return create_operation("Y(pi/4,Q0)", [('Q0',)], "gm", parameterization="full TP")
 
-    #REMOVED - we don't support .compose methods anymore
-    #def test_composition(self):
-    #    gate_full = FullOpTester.build_gate()
-    #    gate_static = StaticOpTester.build_gate()
-    #
-    #    c = op.compose(self.gate, gate_full, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_full))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-    #
-    #    c = op.compose(self.gate, self.gate, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, self.gate))
-    #    self.assertEqual(type(c), op.FullTPOp)
-    #
-    #    c = op.compose(self.gate, gate_static, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_static))
-    #    self.assertEqual(type(c), op.FullTPOp)
-    #
-    #    #c = op.compose(self.gate, gate_linear, "gm")
-    #    #self.assertArraysAlmostEqual(c, np.dot(self.gate,gate_linear) )
-    #    #self.assertEqual(type(c), op.FullTPOp)
-
     def test_convert(self):
         conv = op.convert(self.gate, "full", "gm")
         conv = op.convert(self.gate, "full TP", "gm")
@@ -473,6 +410,49 @@ class TPOpTester(MutableDenseOpBase, BaseCase):
         with self.assertRaises(ValueError):
             self.gate[0][1:2] = [0]
 
+class AffineShiftOpTester(DenseOpBase, BaseCase):
+    n_params = 3
+
+    @staticmethod
+    def build_gate():
+        mat = np.array([[1,0,0,0],[.1, 1, 0, 0], [.1, 0, 1, 0], [.1, 0, 0, 1]])
+        return op.AffineShiftOp(mat)
+
+    def test_set_dense(self):
+        M = np.asarray(self.gate)  # gate as a matrix
+        self.gate.set_dense(M)
+
+    def test_transform(self):
+        gate_copy = self.gate.copy()
+        T = FullGaugeGroupElement(np.identity(4, 'd'))
+        gate_copy.transform_inplace(T)
+        self.assertArraysAlmostEqual(gate_copy, self.gate)
+
+    def test_element_accessors(self):
+        e1 = self.gate[1, 1]
+        e2 = self.gate[1][1]
+        self.assertAlmostEqual(e1, e2)
+
+        s1 = self.gate[1, :]
+        s2 = self.gate[1]
+        s3 = self.gate[1][:]
+        a1 = self.gate[:]
+        self.assertArraysAlmostEqual(s1, s2)
+        self.assertArraysAlmostEqual(s1, s3)
+
+        s4 = self.gate[2:4, 1]
+
+    def test_set_elements(self):
+        gate_copy = self.gate.copy()
+
+        #allowed sets:
+        gate_copy[1,0] = 2
+        gate_copy[2,0] = 2
+
+        #unallowed sets:
+        with self.assertRaises(ValueError):
+            gate_copy[1,1] = 2 
+
 
 class StaticOpTester(ImmutableDenseOpBase, BaseCase):
     n_params = 0
@@ -480,27 +460,6 @@ class StaticOpTester(ImmutableDenseOpBase, BaseCase):
     @staticmethod
     def build_gate():
         return create_operation("Z(pi/3,Q0)", [('Q0',)], "gm", parameterization="static")
-
-    #REMOVED - we don't support .compose methods anymore
-    #def test_compose(self):
-    #    gate_full = FullOpTester.build_gate()
-    #    gate_tp = TPOpTester.build_gate()
-    #
-    #    c = op.compose(self.gate, gate_full, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_full))
-    #    self.assertEqual(type(c), op.FullArbitraryOp)
-    #
-    #    c = op.compose(self.gate, gate_tp, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, gate_tp))
-    #    self.assertEqual(type(c), op.FullTPOp)
-    #
-    #    c = op.compose(self.gate, self.gate, "gm")
-    #    self.assertArraysAlmostEqual(c, np.dot(self.gate, self.gate))
-    #    self.assertEqual(type(c), op.StaticArbitraryOp)
-    #
-    #    #c = op.compose(self.gate, gate_linear, "gm")
-    #    #self.assertArraysAlmostEqual(c, np.dot(self.gate,gate_linear) )
-    #    #self.assertEqual(type(c), op.LinearlyParamArbitraryOp)
 
     def test_convert(self):
         conv = op.convert(self.gate, "static", "gm")
@@ -600,6 +559,7 @@ class ComplexEigenvalueParamDenseOpTester(EigenvalueParamDenseOpBase, BaseCase):
              [(1j, (1, 0)), (-1j, (3, 2))]]   # Im part of 1,0 and 3,2 els (lower triangle); (1,0) and (3,2) must be conjugates
         )
 
+
 class LindbladErrorgenTester(BaseCase):
 
     def test_errgen_construction(self):
@@ -621,7 +581,7 @@ class LindbladErrorgenTester(BaseCase):
         errgen = bt.change_basis(errgen, 'std', mx_basis)
 
         eg = op.LindbladErrorgen.from_error_generator(                                                                                                              
-            errgen, "CPTP", 'pp', truncate=False, mx_basis="pp", evotype='default')
+            errgen, "CPTPLND", 'pp', truncate=False, mx_basis="pp", evotype='default')
         self.assertTrue(np.allclose(eg.to_dense(), errgen))
 
         errgen_copy = eg.copy()
@@ -636,51 +596,11 @@ class LindbladErrorgenTester(BaseCase):
                             [0, 0, 0, 1],
                             [0, 0, -1, 0]], 'd')
         eg = op.LindbladErrorgen.from_error_generator(
-            densemx, "CPTP", 'pp', truncate=True, mx_basis="pp", evotype='default')
+            densemx, "CPTPLND", 'pp', truncate=True, mx_basis="pp", evotype='default')
         errgen_copy = eg.copy()
         T = UnitaryGaugeGroupElement(np.identity(4, 'd'))
         errgen_copy.transform_inplace(T)
         self.assertTrue(np.allclose(errgen_copy.to_dense(), eg.to_dense()))
-
-#TODO - maybe update this to a test of ExpErrorgenOp, which can have dense/sparse versions?
-#class LindbladOpBase(object):
-#    def test_has_nonzero_hessian(self):
-#        self.assertTrue(self.gate.has_nonzero_hessian())
-#
-#class LindbladErrorgenBase(LindbladOpBase, MutableDenseOpBase):
-#    def test_transform(self):
-#        gate_copy = self.gate.copy()
-#        T = UnitaryGaugeGroupElement(np.identity(4, 'd'))
-#        gate_copy.transform_inplace(T)
-#        self.assertArraysAlmostEqual(gate_copy, self.gate)
-#        # TODO test a non-trivial case
-#
-#    def test_element_accessors(self):
-#        e1 = self.gate[1, 1]
-#        e2 = self.gate[1][1]
-#        self.assertAlmostEqual(e1, e2)
-#
-#        s1 = self.gate[1, :]
-#        s2 = self.gate[1]
-#        s3 = self.gate[1][:]
-#        a1 = self.gate[:]
-#        self.assertArraysAlmostEqual(s1, s2)
-#        self.assertArraysAlmostEqual(s1, s3)
-#
-#        s4 = self.gate[2:4, 1]
-#
-#        result = len(self.gate)
-#        # TODO assert correctness
-#
-#    def test_convert(self):
-#        g = op.convert(self.gate, "CPTP", Basis.cast("pp", 4))
-#        # TODO assert correctness
-#
-#
-#class LindbladSparseOpBase(LindbladOpBase, OpBase):
-#    def assertArraysEqual(self, a, b):
-#        # Sparse LindbladOp does not support equality natively, so compare errorgen matrices
-#        self.assertEqual((a.errorgen.to_sparse() != b.errorgen.to_sparse()).nnz, 0)
 
 
 class LindbladErrorgenBase(OpBase):
@@ -702,7 +622,7 @@ class CPTPLindbladErrorgenTester(LindbladErrorgenBase, BaseCase):
     def build_gate():
         mx = np.identity(4, 'd')
         return op.LindbladErrorgen.from_operation_matrix(
-            mx, "CPTP", "pp", truncate=True, mx_basis="pp", evotype='default'
+            mx, "CPTPLND", "pp", truncate=True, mx_basis="pp", evotype='default'
         )
 
 
@@ -728,7 +648,7 @@ class CPTPLindbladSparseOpTester(LindbladErrorgenBase, BaseCase):
                             [0, 0, -1, 0]], 'd')
         sparsemx = sps.csr_matrix(densemx, dtype='d')
         return op.LindbladErrorgen.from_operation_matrix(
-            sparsemx, "CPTP", 'pp', truncate=True, mx_basis="pp", evotype='default'
+            sparsemx, "CPTPLND", 'pp', truncate=True, mx_basis="pp", evotype='default'
         )
 
 
@@ -859,7 +779,6 @@ class TPInstrumentOpTester(ImmutableDenseOpBase, BaseCase):
         return inst['plus']
 
     def test_vector_conversion(self):
-        #with self.assertRaises(ValueError):
         self.gate.to_vector()  # now to_vector is allowed
 
     def test_deriv_wrt_params(self):

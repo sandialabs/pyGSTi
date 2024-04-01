@@ -25,7 +25,7 @@ class StdoutText(WorkspaceText):
 
     vb_recorded_output : list
         A list of `(type,level,message)` tuples, one per line/message
-        as returned by :method:`VerbosityPrinter.stop_recording`.
+        as returned by :meth:`VerbosityPrinter.stop_recording`.
     """
 
     def __init__(self, ws, vb_recorded_output):
@@ -36,7 +36,7 @@ class StdoutText(WorkspaceText):
         ----------
         vb_recorded_output : list
             A list of `(type,level,message)` tuples, one per line/message
-            as returned by :method:`VerbosityPrinter.stop_recording`.
+            as returned by :meth:`VerbosityPrinter.stop_recording`.
         """
         super(StdoutText, self).__init__(ws, self._create, vb_recorded_output)
 

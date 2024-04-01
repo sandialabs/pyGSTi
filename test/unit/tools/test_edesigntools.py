@@ -9,10 +9,10 @@ from pygsti.circuits import Circuit as C
 from ..util import BaseCase
 
 
-class EdesignToolsTester(BaseCase):
+class ExperimentDesignTimeEstimationTester(BaseCase):
 
     def test_time_estimation(self):
-        edesign = smq2Q_XYICNOT.create_gst_experiment_design(256)
+        edesign = smq2Q_XYICNOT.create_gst_experiment_design(8)
         
         # Dummy test: No time
         time0 = et.calculate_edesign_estimated_runtime(
@@ -110,43 +110,66 @@ class EdesignToolsTester(BaseCase):
         )
         self.assertGreater(time3, time1)
     
-    def test_fisher_information(self):
-        target_model = smq1Q_XYI.target_model('TP')
-        edesign = smq1Q_XYI.create_gst_experiment_design(8)
+class FisherInformationTester(BaseCase):
 
+    def setUp(self):
+
+        self.target_model = smq1Q_XYI.target_model('full TP')
+        self.edesign = smq1Q_XYI.create_gst_experiment_design(8)
+        self.Ls = [1,2,4,8]
+        self.regularized_model = self.target_model.copy().depolarize(spam_noise=1e-3)
+
+    def test_calculate_fisher_information_matrix(self):
+        
         # Basic usage
         start = time.time()
-        fim1 = et.calculate_fisher_information_matrix(target_model, edesign.all_circuits_needing_data)
+        fim1 = et.calculate_fisher_information_matrix(self.target_model, self.edesign.all_circuits_needing_data, 
+                                                      regularize_spam= True)
         fim1_time = time.time() - start
 
         # Try external regularized model version
-        regularized_model = target_model.copy().depolarize(spam_noise=1e-3)
-        fim2 = et.calculate_fisher_information_matrix(regularized_model, edesign.all_circuits_needing_data,
+        fim2 = et.calculate_fisher_information_matrix(self.regularized_model, self.edesign.all_circuits_needing_data,
                                                       regularize_spam=False)
         self.assertArraysAlmostEqual(fim1, fim2)
-
+    
         # Try pre-cached version
-        fim3_terms = et.calculate_fisher_information_per_circuit(regularized_model, edesign.all_circuits_needing_data)
+        fim3_terms, _ = et.calculate_fisher_information_per_circuit(self.regularized_model, self.edesign.all_circuits_needing_data)
         start = time.time()
-        fim3 = et.calculate_fisher_information_matrix(target_model, edesign.all_circuits_needing_data, term_cache=fim3_terms)
+        fim3 = et.calculate_fisher_information_matrix(self.target_model, self.edesign.all_circuits_needing_data, term_cache=fim3_terms)
         fim3_time = time.time() - start
         
         self.assertArraysAlmostEqual(fim1, fim3)
         self.assertLess(10*fim3_time, fim1_time) # Cached version should be very fast compared to uncached
 
+    def test_calculate_fisher_info_by_L(self):
+
+        fim1 = et.calculate_fisher_information_matrix(self.target_model, self.edesign.all_circuits_needing_data, 
+                                                      regularize_spam= True)
+
         # Try by-L version
-        fim_by_L = et.calculate_fisher_information_matrices_by_L(target_model, edesign.all_circuits_needing_data)
+        fim_by_L = et.calculate_fisher_information_matrices_by_L(self.target_model, self.edesign.circuit_lists, self.Ls)
         self.assertArraysAlmostEqual(fim1, fim_by_L[8])
 
-        # Try pre-cached by-L version
-        start = time.time()
-        fim_by_L2 = et.calculate_fisher_information_matrices_by_L(target_model, edesign.all_circuits_needing_data, term_cache=fim3_terms)
-        fim_by_L2_time = time.time() - start
-        for k,v in fim_by_L2.items():
-            self.assertArraysAlmostEqual(v, fim_by_L[k])
-        self.assertLess(10*fim_by_L2_time, fim1_time) # Cached version should be very fast compared to uncached
+    #test approximate versions of the fisher information calculation.
+    def test_fisher_information_approximate(self):
 
-    
+        #Test approximate fisher information calculations:
+        fim_approx = et.calculate_fisher_information_matrix(self.target_model, self.edesign.all_circuits_needing_data, 
+                                                            approx=True)
+
+        #test per-circuit
+        fim_approx_per_circuit = et.calculate_fisher_information_per_circuit(self.regularized_model, 
+                                                                             self.edesign.all_circuits_needing_data, 
+                                                                             approx=True)
+
+        #Test by L:
+        fim_approx_by_L = et.calculate_fisher_information_matrices_by_L(self.target_model, self.edesign.circuit_lists, self.Ls,
+                                                                        approx=True)
+        self.assertArraysAlmostEqual(fim_approx, fim_approx_by_L[8])
+
+
+class EdesignPaddingTester(BaseCase):
+
     def test_generic_design_padding(self):
         # Create a series of designs with some overlap when they will be padded out
         design_124 = CircuitListsDesign([[

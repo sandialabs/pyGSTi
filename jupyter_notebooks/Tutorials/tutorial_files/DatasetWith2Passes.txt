@@ -1,0 +1,15 @@
+{}
+times:        1  1  2  2
+outcomes:     0  1  0  1
+repetitions: 20 80 25 75
+
+Gx
+times:        1  1  2  2
+outcomes:     0  1  0  1
+repetitions: 50 50 55 45
+
+Gy
+times:        1  1  2  2
+outcomes:     0  1  0  1
+repetitions: 63 37 52 48
+

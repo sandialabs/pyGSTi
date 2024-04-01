@@ -157,7 +157,7 @@ class OpRepSparse(OpRep):
     def to_dense(self, on_space):
         if on_space not in ('minimal', 'HilbertSchmidt'):
             raise ValueError("'densitymx_slow' evotype cannot produce Hilbert-space ops!")
-        return self.A.todense()
+        return self.A.toarray()
 
 
 class OpRepStandard(OpRepDenseSuperop):
@@ -329,7 +329,7 @@ class OpRepEmbedded(OpRep):
         # final map just acts as identity w.r.t.
         labelIndices = [tensorProdBlkLabels.index(label) for label in target_labels]
         actionInds = _np.array(labelIndices, _np.int64)
-        assert(_np.product([numBasisEls[i] for i in actionInds]) == embedded_rep.dim), \
+        assert(_np.prod([numBasisEls[i] for i in actionInds]) == embedded_rep.dim), \
             "Embedded operation has dimension (%d) inconsistent with the given target labels (%s)" % (
                 embedded_rep.dim, str(target_labels))
 
@@ -337,7 +337,7 @@ class OpRepEmbedded(OpRep):
         iActiveBlock = iTensorProdBlk
         nComponents = len(state_space.tensor_product_block_labels(iActiveBlock))
         #embeddedDim = embedded_rep.dim
-        blocksizes = _np.array([_np.product(state_space.tensor_product_block_dimensions(k))
+        blocksizes = _np.array([_np.prod(state_space.tensor_product_block_dimensions(k))
                                 for k in range(nBlocks)], _np.int64)
 
         self.embedded_rep = embedded_rep

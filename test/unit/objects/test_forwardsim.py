@@ -412,7 +412,7 @@ class CPTPMatrixForwardSimTester(MatrixForwardSimTester):
     def setUpClass(cls):
         super(CPTPMatrixForwardSimTester, cls).setUpClass()
         cls.model = cls.model.copy()
-        cls.model.set_all_parameterizations("CPTP")  # so gates have nonzero hessians
+        cls.model.set_all_parameterizations("CPTPLND")  # so gates have nonzero hessians
 
 
 class MapForwardSimTester(ForwardSimBase, BaseCase):

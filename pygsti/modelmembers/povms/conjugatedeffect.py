@@ -139,12 +139,15 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
         i.e, a (dim,1)-shaped array.
     """
 
-    def __init__(self, state):
+    def __init__(self, state, called_from_reduce=False):
         self.state = state
         evotype = state._evotype
         rep = evotype.create_conjugatedstate_effect_rep(state._rep)
         _POVMEffect.__init__(self, rep, evotype)
-        self.init_gpindices()  # initialize our gpindices based on sub-members
+        if not called_from_reduce:
+            self.init_gpindices()  # initialize our gpindices based on sub-members
+        else:
+            self.allocate_gpindices(10000, None, submembers_already_allocated=True)
 
     @property
     def _basis(self):
@@ -355,7 +358,7 @@ class ConjugatedStatePOVMEffect(DenseEffectInterface, _POVMEffect):
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         ret = self.state.taylor_order_terms(order, max_polynomial_vars, return_coeff_polys)
         state_terms = ret[0] if return_coeff_polys else ret
