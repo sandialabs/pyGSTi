@@ -1526,6 +1526,10 @@ class LinearGateSetTomography(_proto.Protocol):
         self.oplabel_aliases = None
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
 
+        self.auxfile_types['target_model'] = 'serialized-object'
+        self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
+        self.auxfile_types['badfit_options'] = 'serialized-object'
+
     def check_if_runnable(self, data):
         """
         Raises a ValueError if LGST cannot be run on data
