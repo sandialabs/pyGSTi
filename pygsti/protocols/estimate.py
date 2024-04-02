@@ -361,6 +361,10 @@ class Estimate(_MongoSerializable):
 
         if model is not None:
             last_gs = model  # just use user-supplied result
+            #sort the parameters by name for consistency
+            for gop in goparams_list:
+                ordered_goparams.append(_collections.OrderedDict(
+                    [(k, gop[k]) for k in sorted(list(gop.keys()))]))
         else:
             for i, gop in enumerate(goparams_list):
                 from ..algorithms import gaugeopt_to_target as _gaugeopt_to_target
@@ -415,8 +419,14 @@ class Estimate(_MongoSerializable):
 
         if goparams_list: #only do this if goparams_list wasn't empty to begin with.
             #which would be the case except for the special case where the label is 'none'.
-            self._gaugeopt_suite.gaugeopt_argument_dicts[label] = ordered_goparams \
-                if len(goparams_list) > 1 else ordered_goparams[0]
+            try:
+                self._gaugeopt_suite.gaugeopt_argument_dicts[label] = ordered_goparams \
+                    if len(goparams_list) > 1 else ordered_goparams[0]
+            except IndexError:
+                print(f'{goparams_list=}')
+                print(f'{ordered_goparams=}')
+                print(f'{model=}')
+                raise IndexError
         else:
             self._gaugeopt_suite.gaugeopt_argument_dicts[label] = None
 
