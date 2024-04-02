@@ -841,7 +841,6 @@ class GSTGaugeOptSuite(_NicelySerializable):
           - "varyValidSpamWt" : varies spam weight with SPAM penalty == 1.
           - "toggleValidSpam" : toggles spame penalty (0 or 1); fixed SPAM wt.
           - "unreliable2Q" : adds branch to a spam suite that weights 2Q gates less
-          - "none" : no gauge optimizations are performed.
 
     gaugeopt_argument_dicts : dict, optional
         A dictionary whose string-valued keys label different gauge optimizations (e.g. within a
