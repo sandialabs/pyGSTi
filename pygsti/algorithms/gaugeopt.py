@@ -384,9 +384,9 @@ def _create_objective_fn(model, target_model, item_weights=None,
         assert(gates_metric.startswith("frobenius") and spam_metric.startswith("frobenius")), \
             "Only 'frobenius' and 'frobeniustt' metrics can be used when `method='ls'`!"
         assert(gates_metric == spam_metric)
-        frobenius_transform_target = bool(gates_metric == 'frobeniustt')  # tt = "transform target"; this is rarely True
+        frobenius_transform_target = bool(gates_metric == 'frobeniustt')  # tt = "transform target"
 
-        if frobenius_transform_target: # Riley note: this is rare!
+        if frobenius_transform_target:
             full_target_model = target_model.copy()
             full_target_model.convert_members_inplace("full")  # so we can gauge-transform the target model.
         else:
@@ -401,7 +401,7 @@ def _create_objective_fn(model, target_model, item_weights=None,
                 transformed = _transform_with_oob_check(model, gauge_group_el, oob_check)
                 other = target_model
 
-            residuals, _ = transformed.residuals(other, None, item_weights) # < Metrics will be computed.
+            residuals, _ = transformed.residuals(other, None, item_weights)
 
             # We still the non-target model to be transformed and checked for these penalties
             if cptp_penalty_factor > 0 or spam_penalty_factor > 0:
@@ -453,33 +453,31 @@ def _create_objective_fn(model, target_model, item_weights=None,
 
             jacMx = _np.zeros((L, N))
 
-            """
-            Overview of terms:
-            objective: op_term = (S_inv * gate * S - target_op)
-            jac:       d(op_term) = (d (S_inv) * gate * S + S_inv * gate * dS )
-                       d(op_term) = (-(S_inv * dS * S_inv) * gate * S + S_inv * gate * dS )
+            #Overview of terms:
+            # objective: op_term = (S_inv * gate * S - target_op)
+            # jac:       d(op_term) = (d (S_inv) * gate * S + S_inv * gate * dS )
+            #            d(op_term) = (-(S_inv * dS * S_inv) * gate * S + S_inv * gate * dS )
 
-            objective: rho_term = (S_inv * rho - target_rho)
-            jac:       d(rho_term) = d (S_inv) * rho
-                       d(rho_term) = -(S_inv * dS * S_inv) * rho
+            # objective: rho_term = (S_inv * rho - target_rho)
+            # jac:       d(rho_term) = d (S_inv) * rho
+            #            d(rho_term) = -(S_inv * dS * S_inv) * rho
 
-            objective: ET_term = (E.T * S - target_E.T)
-            jac:       d(ET_term) = E.T * dS
+            # objective: ET_term = (E.T * S - target_E.T)
+            # jac:       d(ET_term) = E.T * dS
 
-            Overview of terms when frobenius_transform_target == True).  Note that the objective
-            expressions are identical to the above except for an additional overall minus sign and S <=> S_inv.
+            #Overview of terms when frobenius_transform_target == True).  Note that the objective
+            #expressions are identical to the above except for an additional overall minus sign and S <=> S_inv.
 
-            objective: op_term = (gate - S * target_op * S_inv)
-            jac:       d(op_term) = -(dS * target_op * S_inv + S * target_op * -(S_inv * dS * S_inv) )
-                       d(op_term) = (-dS * target_op * S_inv + S * target_op * (S_inv * dS * S_inv) )
+            # objective: op_term = (gate - S * target_op * S_inv)
+            # jac:       d(op_term) = -(dS * target_op * S_inv + S * target_op * -(S_inv * dS * S_inv) )
+            #            d(op_term) = (-dS * target_op * S_inv + S * target_op * (S_inv * dS * S_inv) )
 
-            objective: rho_term = (rho - S * target_rho)
-            jac:       d(rho_term) = - dS * target_rho
+            # objective: rho_term = (rho - S * target_rho)
+            # jac:       d(rho_term) = - dS * target_rho
 
-            objective: ET_term = (E.T - target_E.T * S_inv)
-            jac:       d(ET_term) = - target_E.T * -(S_inv * dS * S_inv)
-                       d(ET_term) = target_E.T * (S_inv * dS * S_inv)
-            """
+            # objective: ET_term = (E.T - target_E.T * S_inv)
+            # jac:       d(ET_term) = - target_E.T * -(S_inv * dS * S_inv)
+            #            d(ET_term) = target_E.T * (S_inv * dS * S_inv)
 
             #Distribute computation across processors
             allDerivColSlice = slice(0, N)
