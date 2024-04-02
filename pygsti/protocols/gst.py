@@ -841,6 +841,9 @@ class GSTGaugeOptSuite(_NicelySerializable):
           - "varyValidSpamWt" : varies spam weight with SPAM penalty == 1.
           - "toggleValidSpam" : toggles spame penalty (0 or 1); fixed SPAM wt.
           - "unreliable2Q" : adds branch to a spam suite that weights 2Q gates less
+          - "none" : no gauge optimizations are performed. When passed individually
+             (not in a list with other suite names) then this results in an empty
+             GSTGaugeOptSuite object (w/gaugeopt_suite_names set to None).
 
     gaugeopt_argument_dicts : dict, optional
         A dictionary whose string-valued keys label different gauge optimizations (e.g. within a
@@ -871,8 +874,11 @@ class GSTGaugeOptSuite(_NicelySerializable):
     def __init__(self, gaugeopt_suite_names=None, gaugeopt_argument_dicts=None, gaugeopt_target=None):
         super().__init__()
         if gaugeopt_suite_names is not None:
-            self.gaugeopt_suite_names = (gaugeopt_suite_names,) \
-                if isinstance(gaugeopt_suite_names, str) else tuple(gaugeopt_suite_names)
+            if gaugeopt_suite_names == 'none':
+                self.gaugeopt_suite_names = None
+            else:
+                self.gaugeopt_suite_names = (gaugeopt_suite_names,) \
+                    if isinstance(gaugeopt_suite_names, str) else tuple(gaugeopt_suite_names)
         else:
             self.gaugeopt_suite_names = None
 
@@ -1087,15 +1093,6 @@ class GSTGaugeOptSuite(_NicelySerializable):
         elif suite_name == "unreliable2Q":
             raise ValueError(("unreliable2Q is no longer a separate 'suite'.  You should precede it with the suite"
                               " name, e.g. 'stdgaugeopt-unreliable2Q' or 'varySpam-unreliable2Q'"))
-        elif suite_name == "none":
-            msg = "Passing in 'none' as a gauge optimization suitename is deprecated. " \
-                 +"To replicate this behavior, simply construct a GSTGaugeOptSuite object using default arguments. "\
-                 +"(i.e. all None). " 
-            _warnings.warn(msg)
-            #In anticipation of future behavior described in warning for this set the suite name and dictionary to None.
-            self.gaugeopt_suite_names = None
-            self.gaugeopt_argument_dicts = None
-            self.gaugeopt_target = None
         else:
             raise ValueError("Unknown gauge-optimization suite '%s'" % suite_name)
 
