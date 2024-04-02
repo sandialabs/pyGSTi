@@ -557,18 +557,18 @@ MEASURE 2 ro[2]
         converted_pygsti_circuit = circuit.Circuit.from_cirq(cirq_circuit, 
                                                              qubit_conversion= {qubit_00: 0, qubit_01: 1})
         
-        ckt = circuit.Circuit([Label('Gxpi2',0), Label([Label('Gi',0), Label('Gi',1)]), Label('Gn',0), Label([Label('Gh',0), Label('Gtdag',1)]), 
+        ckt = circuit.Circuit([Label('Gxpi2',0), Label(()), Label('Gn',0), Label([Label('Gh',0), Label('Gtdag',1)]), 
                                Label('Gcnot', (0,1))], line_labels=(0,1))
         
         self.assertEqual(ckt, converted_pygsti_circuit)
 
-        #test without stipping implied idles:
+        #test without stripping implied idles:
         converted_pygsti_circuit_implied_idles = circuit.Circuit.from_cirq(cirq_circuit, 
                                                              qubit_conversion= {qubit_00: 0, qubit_01: 1},
-                                                             implied_idles= True)
+                                                             remove_implied_idles= False)
 
         ckt_implied_idles = circuit.Circuit([Label([Label('Gxpi2',0), Label('Gi',1)]), 
-                                             Label([Label('Gi',0), Label('Gi',1)]), 
+                                             Label(()), 
                                              Label([Label('Gn',0), Label('Gi',1)]), 
                                              Label([Label('Gh',0), Label('Gtdag',1)]), 
                                              Label('Gcnot', (0,1))], line_labels=(0,1))
@@ -581,22 +581,31 @@ MEASURE 2 ro[2]
         ckt_global_idle_custom = circuit.Circuit([Label('Gxpi2',0), Label('Gbanana', (0,1)), Label('Gn',0), Label([Label('Gh',0), Label('Gtdag',1)]), 
                                Label('Gcnot', (0,1))], line_labels=(0,1))
         
+        ckt_global_idle_none = circuit.Circuit([Label('Gxpi2',0), Label([Label('Gi',0), Label('Gi',1)]), Label('Gn',0), Label([Label('Gh',0), Label('Gtdag',1)]), 
+                               Label('Gcnot', (0,1))], line_labels=(0,1))
+        
         converted_pygsti_circuit_global_idle = circuit.Circuit.from_cirq(cirq_circuit, 
                                                              qubit_conversion= {qubit_00: 0, qubit_01: 1},
-                                                             global_idle=True)
+                                                             global_idle_replacement_label='auto')
         
         converted_pygsti_circuit_global_idle_custom = circuit.Circuit.from_cirq(cirq_circuit, 
                                                              qubit_conversion= {qubit_00: 0, qubit_01: 1},
-                                                             global_idle='Gbanana')
+                                                             global_idle_replacement_label='Gbanana')
         
         converted_pygsti_circuit_global_idle_custom_1 = circuit.Circuit.from_cirq(cirq_circuit, 
                                                              qubit_conversion= {qubit_00: 0, qubit_01: 1},
-                                                             global_idle=Label('Gbanana', (0,1)))
+                                                             global_idle_replacement_label=Label('Gbanana', (0,1)))
         
+        converted_pygsti_circuit_global_idle_none = circuit.Circuit.from_cirq(cirq_circuit, 
+                                                             qubit_conversion= {qubit_00: 0, qubit_01: 1},
+                                                             global_idle_replacement_label=None)
+        
+
         self.assertEqual(ckt_global_idle, converted_pygsti_circuit_global_idle)
         self.assertEqual(ckt_global_idle_custom, converted_pygsti_circuit_global_idle_custom)
         self.assertEqual(ckt_global_idle_custom, converted_pygsti_circuit_global_idle_custom_1)
-
+        self.assertEqual(ckt_global_idle_none, converted_pygsti_circuit_global_idle_none)
+        
     def test_done_editing(self):
         self.c.done_editing()
         with self.assertRaises(AssertionError):
