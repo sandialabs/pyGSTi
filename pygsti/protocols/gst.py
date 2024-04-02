@@ -956,6 +956,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
                 if hasattr(goparams, 'keys'):  # goparams is a simple dict
                     gaugeopt_suite_dict[lbl] = goparams.copy()
                     gaugeopt_suite_dict[lbl].update({'verbosity': printer})
+                elif goparams is None:
+                    gaugeopt_suite_dict[lbl] = None
                 else:  # assume goparams is an iterable
                     assert(isinstance(goparams, (list, tuple))), \
                         "If not a dictionary, gauge opt params should be a list or tuple of dicts!"
@@ -968,7 +970,13 @@ class GSTGaugeOptSuite(_NicelySerializable):
         if self.gaugeopt_target is not None:
             assert(isinstance(self.gaugeopt_target, _Model)), "`gaugeopt_target` must be None or a Model"
             for goparams in gaugeopt_suite_dict.values():
-                goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
+                if hasattr(goparams, 'keys'):
+                    goparams_list = [goparams] 
+                elif goparams is None: #edge case for 'none' suite
+                    continue
+                else:
+                    goparams_list = goparams
+
                 for goparams_dict in goparams_list:
                     if 'target_model' in goparams_dict:
                         _warnings.warn(("`gaugeOptTarget` argument is overriding"
@@ -1094,7 +1102,7 @@ class GSTGaugeOptSuite(_NicelySerializable):
             raise ValueError(("unreliable2Q is no longer a separate 'suite'.  You should precede it with the suite"
                               " name, e.g. 'stdgaugeopt-unreliable2Q' or 'varySpam-unreliable2Q'"))
         elif suite_name == 'none':
-            pass
+            gaugeopt_suite_dict[root_lbl] = None
         else:
             raise ValueError("Unknown gauge-optimization suite '%s'" % suite_name)
 
@@ -2084,26 +2092,31 @@ def _add_gauge_opt(results, base_est_label, gaugeopt_suite, starting_model,
 
         printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (go_label, base_est_label), 2)
 
-        #Get starting model
-        results.estimates[base_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
+        #add logic for the case where no gauge optimization is performed.
+        if go_label == 'none':
+            results.estimates[base_est_label].add_gaugeoptimized(goparams, starting_model, go_label, comm, printer - 3)
+        else:
+            results.estimates[base_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
+        
+        #Get starting model for next stage
         mdl_start = results.estimates[base_est_label].retrieve_start_model(goparams)
+        if mdl_start is not None:
+            #Gauge optimize data-scaled estimate also
+            for suffix in ROBUST_SUFFIX_LIST:
+                robust_est_label = base_est_label + suffix
+                if robust_est_label in results.estimates:
+                    mdl_start_robust = results.estimates[robust_est_label].retrieve_start_model(goparams)
 
-        #Gauge optimize data-scaled estimate also
-        for suffix in ROBUST_SUFFIX_LIST:
-            robust_est_label = base_est_label + suffix
-            if robust_est_label in results.estimates:
-                mdl_start_robust = results.estimates[robust_est_label].retrieve_start_model(goparams)
-
-                if mdl_start_robust.frobeniusdist(mdl_start) < 1e-8:
-                    printer.log("-- Conveying '%s' gauge optimization from %s to %s estimate --" %
-                                (go_label, base_est_label, robust_est_label), 2)
-                    params = results.estimates[base_est_label].goparameters[go_label]  # no need to copy here
-                    gsopt = results.estimates[base_est_label].models[go_label].copy()
-                    results.estimates[robust_est_label].add_gaugeoptimized(params, gsopt, go_label, comm, printer - 3)
-                else:
-                    printer.log("-- Performing '%s' gauge optimization on %s estimate --" %
-                                (go_label, robust_est_label), 2)
-                    results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
+                    if mdl_start_robust.frobeniusdist(mdl_start) < 1e-8:
+                        printer.log("-- Conveying '%s' gauge optimization from %s to %s estimate --" %
+                                    (go_label, base_est_label, robust_est_label), 2)
+                        params = results.estimates[base_est_label].goparameters[go_label]  # no need to copy here
+                        gsopt = results.estimates[base_est_label].models[go_label].copy()
+                        results.estimates[robust_est_label].add_gaugeoptimized(params, gsopt, go_label, comm, printer - 3)
+                    else:
+                        printer.log("-- Performing '%s' gauge optimization on %s estimate --" %
+                                    (go_label, robust_est_label), 2)
+                        results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
 
 
 def _add_badfit_estimates(results, base_estimate_label, badfit_options,
