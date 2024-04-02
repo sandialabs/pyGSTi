@@ -10,7 +10,7 @@ class DenseSubNetwork(_keras.layers.Layer):
         super().__init__()
         self.outdim = outdim
         self.output_layer = _keras.layers.Dense(outdim, kernel_initializer=_keras.initializers.random_uniform(minval=-0.00001, maxval=0.00001))
-
+        # set output activation to 'relu?'
     def build(self, input_shape):
         # Define the sub-unit's dense layers
         self.dense1 = _keras.layers.Dense(30, activation='relu')
@@ -111,8 +111,10 @@ class CircuitErrorVec(_keras.Model):
         self.len_gate_encoding = self.num_qubits * self.num_channels
         self.input_layer = _keras.layers.InputLayer(input_shape=input_shape)
         self.local_dense = LocalizedDenseToErrVec(layer_snipper, layer_snipper_args, self.tracked_error_gens)
-   
-    def call(self, inputs):
+        self.hamiltonian_mask = _tf.constant([1 if error[0] == 'H' else 0 for error in tracked_error_gens], _tf.int32)
+        self.stochastic_mask = _tf.constant([1 if error[0] == 'S' else 0 for error in tracked_error_gens], _tf.int32)
+    
+    def old_call(self, inputs):
         # This is very slow when it is called on a large number of circuits. It's because it is not implemented
         # as efficiently (map_fn is the slow part)
         # But that may not be an issue if you keep the batch sizes smallish
@@ -147,3 +149,38 @@ class CircuitErrorVec(_keras.Model):
             return calc_fidelity(total_evec, error_types)
         
         return _tf.map_fn(circuit_to_fidelity, inputs)   
+
+    def call(self, inputs):
+        # This is very slow when it is called on a large number of circuits. It's because it is not implemented
+        # as efficiently (map_fn is the slow part)
+        # But that may not be an issue if you keep the batch sizes smallish
+
+        def calc_masked_err_rates(M, P, mask):
+            masked_M = _tf.math.multiply(_tf.cast(mask, _tf.float32), M)
+            masked_P = _tf.math.multiply(mask, P)
+            flat_masked_M, flat_masked_P = _tf.reshape(masked_M, [-1]), _tf.reshape(masked_P, [-1])
+            unique_masked_P, idx = _tf.unique(flat_masked_P)
+            num_segments = _tf.reduce_max(idx) + 1
+            return _tf.math.unsorted_segment_sum(flat_masked_M, idx, num_segments)
+        def calc_end_of_circ_error(M, P, S):
+            """
+            A function that maps the error rates (M) to an end-of-circuit error generator
+            using the permutation matrix P.
+            """
+            signed_M = _tf.math.multiply(S, M)
+            final_stochastic_error_rates = calc_masked_err_rates(signed_M, P, self.stochastic_mask)
+            final_hamiltonian_error_rates = calc_masked_err_rates(signed_M, P, self.hamiltonian_mask)
+            return _tf.reduce_sum(final_stochastic_error_rates) + _tf.reduce_sum(_tf.square(final_hamiltonian_error_rates))
+
+        def circuit_to_fidelity(input):
+            """
+            A function that maps a single circuit to the prediction for its process fidelity (a single real number).
+            """
+            C = input[:, 0:self.len_gate_encoding]
+            P = _tf.cast(input[:, self.len_gate_encoding:self.len_gate_encoding + self.num_tracked_error_gens], _tf.int32)
+            S = input[:, self.len_gate_encoding + self.num_tracked_error_gens:self.len_gate_encoding + 2 * self.num_tracked_error_gens]
+            evecs = self.local_dense(self.input_layer(C))
+            return calc_end_of_circ_error(evecs, P, S)
+            
+        return _tf.map_fn(circuit_to_fidelity, inputs)   
+

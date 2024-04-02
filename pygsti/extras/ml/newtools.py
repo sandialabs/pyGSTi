@@ -17,7 +17,10 @@ def ring_adj_matrix(num_qubits: int):
         adj_matrix[i, (i+1) % num_qubits] = 1
     return adj_matrix
 
-def laplace_from_qubit_graph(adj_matrix: _np.array):
+def laplace_from_qubit_graph(adj_matrix: _np.array) -> _np.array: 
+    """
+    Returns the graph laplacian for the graph defined by a given adjacency matrix.
+    """
     deg_matrix = _np.diag(_np.sum(adj_matrix, axis = 1))
     return deg_matrix - adj_matrix
 
@@ -105,7 +108,8 @@ def up_to_weight_k_paulis(k, n):
 
     return paulis
 
-def up_to_weight_k_paulis_from_qubit_graph(k, n, qubit_graph_laplacian, num_hops):
+    
+def up_to_weight_k_paulis_from_qubit_graph(k: int, n: int, qubit_graph_laplacian: _np.array, num_hops: int) -> list:
     """
     Returns the string representation of all n-qubit Pauli operators that 
     are weight 1 up to weight k (i.e., all Paulis contain at least one and
@@ -150,7 +154,7 @@ def up_to_weight_k_paulis_from_qubit_graph(k, n, qubit_graph_laplacian, num_hops
     
     return paulis
 
-def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int, qubit_graph_laplacian: _np.array, num_hops: int, egtypes=['H', 'S']):
+def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int, qubit_graph_laplacian: _np.array, num_hops: int, egtypes=['H', 'S']) -> list:
     """
     Returns a list of all n-qubit error generators up to weight k, of types given in
     egtypes and based on the qubit connectivity graph, in a tuple-of-strings format.
@@ -284,7 +288,7 @@ def create_input_data(circs, fidelities, tracked_error_gens: list, num_channels:
     y = _np.array(fidelities)
                     
     for i, c in enumerate(circs):
-        if i % 25 == 0:
+        if i % 200 == 0:
             print(i, end=',')
         x_circs[i, :, :, :] = _tools.circuit_to_tensor(c, max_depth)              
         c_indices, c_signs = create_error_propagation_matrix(c, tracked_error_gens)
