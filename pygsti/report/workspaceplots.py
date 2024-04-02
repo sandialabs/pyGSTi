@@ -741,7 +741,7 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
                             else:
                                 texts.append(str(sub_mxs[iy][ix][iiy][iix]))
     elif isinstance(g, _CircuitList):
-        for i, ckt in enumerate(circuit_list):
+        for i, ckt in enumerate(g):
             if ckt in gstrs:
                 continue
             else:
