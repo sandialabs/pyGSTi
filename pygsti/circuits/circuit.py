@@ -3973,6 +3973,9 @@ class Circuit(object):
         openqasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\n'
         # Include a delay instruction
         openqasm += 'opaque delay(t) q;\n\n'
+        #Include an ECR instruction 
+        #openqasm += 'gate rzx(param0) q0,q1 { h q1; cx q0,q1; rz(param0) q1; cx q0,q1; h q1; }\n\n'
+        #openqasm += 'gate ecr q0,q1 { rzx(pi/4) q0,q1; x q0; rzx(-pi/4) q0,q1; }\n\n'
 
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
         # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
@@ -4037,7 +4040,8 @@ class Circuit(object):
                                     openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
 
                 else:
-                    assert gate.name.__str__() == 'Iz' or 'Ipc' or 'Ipc_swap' or 'Ipc_swap_old', "Only mid-circuit Z basis measurement 'Iz' and parity check 'Ipc' supported at present."
+                    assert gate.name.__str__()[0] == 'I', "Please use instrument prefix 'I'. There may also be an object that cannot be parsed to QASM"
+                    assert gate.name.__str__() == 'Iz' or 'Ipc' in gate.name.__str__(), "Only mid-circuit Z basis measurement 'Iz' and various parity checks 'Ipc' supported at present."
                     if gate.name.__str__() == 'Iz':
                         q = gate.qubits[0] 
                         # classical_bit = num_IMs_used
@@ -4045,69 +4049,143 @@ class Circuit(object):
                     else:
                         assert ancilla_label is not None, "Parity check 'Ipc' requires an ancilla, did you forget to set 'ancilla_label'?"
                         openqasm_for_gate = ""
-                        if gate.name.__str__() == 'Ipc_swap': 
-                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[0]]), qubit_conversion[gate_qubits[1]])
+                        if 'cnot' in gate.name.__str__():  
+                            CNOT_qasm = "cx q[{0}], q[{1}];\n"
+                        elif 'ecr' in gate.name.__str__(): 
+                            CNOT_qasm = 'rz(-pi/2) q[{0}];\n'
+                            if block_between_layers:
+                                CNOT_qasm += 'barrier '
+                                for q in self.line_labels:
+                                    CNOT_qasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                CNOT_qasm += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            CNOT_qasm += 'rz(-pi) q[{1}];\n'
+                            if block_between_layers:
+                                CNOT_qasm += 'barrier '
+                                for q in self.line_labels:
+                                    CNOT_qasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                CNOT_qasm += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            CNOT_qasm += 'sx q[{1}];\n'
+                            if block_between_layers:
+                                CNOT_qasm += 'barrier '
+                                for q in self.line_labels:
+                                    CNOT_qasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                CNOT_qasm += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            CNOT_qasm += 'rz(-pi) q[{1}];\n'
+                            if block_between_layers:
+                                CNOT_qasm += 'barrier '
+                                for q in self.line_labels:
+                                    CNOT_qasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                CNOT_qasm += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            CNOT_qasm += 'ecr q[{0}], q[{1}];\n' 
+                            if block_between_layers:
+                                CNOT_qasm += 'barrier '
+                                for q in self.line_labels:
+                                    CNOT_qasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                CNOT_qasm += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            CNOT_qasm += 'x q[{0}];\n'
+                        elif 'cz' in gate.name.__str__(): 
+                            CNOT_qasm = 'rz(pi/2) q[{1}];\n'
+                            if block_between_layers:
+                                CNOT_qasm += 'barrier '
+                                for q in self.line_labels:
+                                    CNOT_qasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                CNOT_qasm += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            CNOT_qasm += 'sx q[{1}];\n'
+                            if block_between_layers:
+                                CNOT_qasm += 'barrier '
+                                for q in self.line_labels:
+                                    CNOT_qasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                CNOT_qasm += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            CNOT_qasm += 'rz(pi) q[{1}];\n'
+                            if block_between_layers:
+                                CNOT_qasm += 'barrier '
+                                for q in self.line_labels:
+                                    CNOT_qasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                CNOT_qasm += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))  
+                            CNOT_qasm += 'cz q[{0}], q[{1}];\n' 
+                            if block_between_layers:
+                                CNOT_qasm += 'barrier '
+                                for q in self.line_labels:
+                                    CNOT_qasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                CNOT_qasm += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            CNOT_qasm += 'sx q[{1}];\n' 
+                            if block_between_layers:
+                                CNOT_qasm += 'barrier '
+                                for q in self.line_labels:
+                                    CNOT_qasm += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                CNOT_qasm += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))   
+                            CNOT_qasm += 'rz(pi/2) q[{1}];\n'
+                        else:
+                            _warnings.warn(("Parity check could not be converted to QASM! Please format instrument name as 'Ipc_NumEntanglingGatesEntanglingGateName'. Options are ECR, CZ, CNOT and 2, 3, 8."))
+                        if 'three' in gate.name.__str__(): 
+                            openqasm_for_gate += CNOT_qasm.format(str(qubit_conversion[gate_qubits[0]]), qubit_conversion[gate_qubits[1]])
                             openqasm_for_gate += 'barrier '
                             for q in self.line_labels:
                                 openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
-                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[1]]), qubit_conversion[ancilla_label])
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))
+                            openqasm_for_gate += CNOT_qasm.format(str(qubit_conversion[gate_qubits[1]]), qubit_conversion[ancilla_label])
                             openqasm_for_gate += 'barrier '
                             for q in self.line_labels:
                                 openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
-                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[0]]), qubit_conversion[gate_qubits[1]])
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))
+                            openqasm_for_gate += CNOT_qasm.format(str(qubit_conversion[gate_qubits[0]]), qubit_conversion[gate_qubits[1]])
                             openqasm_for_gate += 'barrier '
                             for q in self.line_labels:
                                 openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))
                             openqasm_for_gate += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[ancilla_label]), num_IMs_used)
-                        elif gate.name.__str__() == 'Ipc_swap_old':
-                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[1]]), qubit_conversion[ancilla_label])
+                        elif 'eight' in gate.name.__str__():
+                            openqasm_for_gate += CNOT_qasm.format(str(qubit_conversion[gate_qubits[1]]), qubit_conversion[ancilla_label])
                             openqasm_for_gate += 'barrier '
                             for q in self.line_labels:
                                 openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
-                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[0]]), str(qubit_conversion[gate_qubits[1]]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))
+                            openqasm_for_gate += CNOT_qasm.format(str(qubit_conversion[gate_qubits[0]]), str(qubit_conversion[gate_qubits[1]]))
                             openqasm_for_gate += 'barrier '
                             for q in self.line_labels:
                                 openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
-                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[1]]), str(qubit_conversion[gate_qubits[0]]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))
+                            openqasm_for_gate += CNOT_qasm.format(str(qubit_conversion[gate_qubits[1]]), str(qubit_conversion[gate_qubits[0]]))
                             openqasm_for_gate += 'barrier '
                             for q in self.line_labels:
                                 openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
-                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[0]]), str(qubit_conversion[gate_qubits[1]]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))
+                            openqasm_for_gate += CNOT_qasm.format(str(qubit_conversion[gate_qubits[0]]), str(qubit_conversion[gate_qubits[1]]))
                             openqasm_for_gate += 'barrier '
                             for q in self.line_labels:
                                 openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
-                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[1]]), qubit_conversion[ancilla_label])
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))
+                            openqasm_for_gate += CNOT_qasm.format(str(qubit_conversion[gate_qubits[1]]), qubit_conversion[ancilla_label])
                             openqasm_for_gate += 'barrier '
                             for q in self.line_labels:
                                 openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
-                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[0]]), str(qubit_conversion[gate_qubits[1]]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))
+                            openqasm_for_gate += CNOT_qasm.format(str(qubit_conversion[gate_qubits[0]]), str(qubit_conversion[gate_qubits[1]]))
                             openqasm_for_gate += 'barrier '
                             for q in self.line_labels:
                                 openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
-                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[1]]), str(qubit_conversion[gate_qubits[0]]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))
+                            openqasm_for_gate += CNOT_qasm.format(str(qubit_conversion[gate_qubits[1]]), str(qubit_conversion[gate_qubits[0]]))
                             openqasm_for_gate += 'barrier '
                             for q in self.line_labels:
                                 openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
-                            openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[gate_qubits[0]]), str(qubit_conversion[gate_qubits[1]]))
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))
+                            openqasm_for_gate += CNOT_qasm.format(str(qubit_conversion[gate_qubits[0]]), str(qubit_conversion[gate_qubits[1]]))
                             openqasm_for_gate += 'barrier '
                             for q in self.line_labels:
                                 openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
-                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label])) 
+                            openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))
                             openqasm_for_gate += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[ancilla_label]), num_IMs_used) 
-                        else: 
+                        elif 'two' in gate.name.__str__(): 
                             for control in gate_qubits:
-                                openqasm_for_gate += "cx q[{0}], q[{1}];\n".format(str(qubit_conversion[control]), qubit_conversion[ancilla_label])
+                                openqasm_for_gate += CNOT_qasm.format(str(qubit_conversion[control]), qubit_conversion[ancilla_label])
+                                openqasm_for_gate += 'barrier '
+                                for q in self.line_labels:
+                                    openqasm_for_gate += 'q[{0}], '.format(str(qubit_conversion[q]))
+                                openqasm_for_gate += 'q[{0}];\n'.format(str(qubit_conversion[ancilla_label]))
                             openqasm_for_gate += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[ancilla_label]), num_IMs_used)
+                        else: 
+                            _warnings.warn(("Instrument could not be converted to QASM! You may be using the wrong instrument name. Please format instrument name as 'Iz' or 'Ipc_NumEntanglingGatesEntanglingGateName'. Options are ECR, CZ, CNOT and 2, 3, 8."))
                     num_IMs_used += 1 
 
                 # Add the openqasm for the gate to the openqasm string.

@@ -1394,6 +1394,7 @@ class DataSet(_MongoSerializable):
             return f
         
         keyerrors = 0
+        valuerrors = 0
         for opstr in circuits:
             dsRow = self[opstr]
             circ_dof = 0
@@ -1404,6 +1405,9 @@ class DataSet(_MongoSerializable):
                 except KeyError: 
                     probs = None
                     keyerrors += 1 
+                except ValueError:
+                    probs = None
+                    valuerrors += 1
                 if probs is not None: 
                     for outcome in probs.keys():
                             if outcome not in self.olIndex: 
@@ -1448,8 +1452,9 @@ class DataSet(_MongoSerializable):
             model.sim = 'matrix'
         
         if keyerrors != 0:
-                    _warnings.warn(f'The dataset includes circuits the model cannot calculate probabilities for (e.g. the model does not include instruments for an instrument-containing dataset). Skipping {keyerrors} circuits in calculation of degrees of freedom.')
-
+            _warnings.warn(f'The dataset includes circuits the model cannot calculate probabilities for (e.g. the model does not include instruments for an instrument-containing dataset). Skipping KeyErrors = {keyerrors} circuits in calculation of degrees of freedom.')
+        if valuerrors != 0: 
+            _warnings.warn(f'The dataset includes circuits the model cannot calculate probabilities for (e.g. the model does not include instruments for an instrument-containing dataset). Skipping ValueErrors = {valuerrors} circuits in calculation of degrees of freedom.')
         return nDOF
 
     def _collisionaction_update_circuit(self, circuit):

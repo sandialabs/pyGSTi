@@ -18,8 +18,34 @@ import os as _os
 import warnings as _warnings
 import datetime as _datetime
 
-try: import qiskit as _qiskit
+try: 
+    import qiskit as _qiskit
+    from qiskit.circuit.library import XGate
+    from qiskit.transpiler import PassManager
+    from qiskit.transpiler.passes import ALAPScheduleAnalysis, PadDynamicalDecoupling
 except: _qiskit = None
+
+
+
+
+def insert_dd(circ, backend):
+        durations = qiskit.transpiler.InstructionDurations.from_backend(backend)
+	#print(durations)
+        pa = backend.configuration().timing_constraints['pulse_alignment']
+        # balanced X-X sequence on all qubits
+        dd_sequence = [XGate(), XGate()]
+        pm = PassManager([ALAPScheduleAnalysis(durations),PadDynamicalDecoupling(durations, dd_sequence, pulse_alignment=pa)])
+        circ_dd = pm.run(circ)
+        return circ_dd
+
+def add_dd_to_exp(exp, backend):
+    for i, batch in enumerate(exp['qiskit_QuantumCircuits']):
+        circuits = []
+        for qiskit_circ in batch:
+            circ_dd = insert_dd(qiskit_circ, backend)
+            circuits.append(circ_dd)
+        exp['qiskit_DD_QuantumCircuits'][i] = circuits
+    return exp
 
 # Most recent version of QisKit that this has been tested on:
 #qiskit.__qiskit_version__ = {
@@ -79,7 +105,7 @@ def q_list_to_ordered_target_indices(q_list, num_qubits):
 class IBMQExperiment(dict):
 
     def __init__(self, edesign, pspec, ancilla_label=None,remove_duplicates=True, randomized_order=True, seed=None, circuits_per_batch=75,
-                 num_shots=1024):
+                 num_shots=1024, do_dd = False):
         """
         A object that converts pyGSTi ExperimentDesigns into jobs to be submitted to IBM Q, submits these
         jobs to IBM Q and receives the results.
@@ -140,6 +166,8 @@ class IBMQExperiment(dict):
         # Populated when grabbing results from IBM Q with .retrieve_results()
         self['batch_result_object'] = None
         self['data'] = None
+        if do_dd: 
+            self['DD_data'] = None 
 
         circuits = edesign.all_circuits_needing_data.copy()
         if randomized_order:
@@ -159,6 +187,9 @@ class IBMQExperiment(dict):
         self['qiskit_QuantumCircuits_as_openqasm'] = [[] for i in range(num_batches)]
         self['submit_time_calibration_data'] = []
         self['qobj'] = []
+
+        if do_dd: 
+            self['qiskit_QuantumCircuits_DD'] = 
 
         batch_idx = 0
         for circ_idx, circ in enumerate(circuits):
