@@ -1453,8 +1453,6 @@ class GateSetTomography(_proto.Protocol):
             msg = 'Could not identify a suitable target model, this may result'\
                  +' in unexpected behavior or missing plots in reports.'
             _warnings.warn(msg)
-            import pdb
-            pdb.set_trace()
             target_model = None
 
         if target_model is not None and simulator is not None:
@@ -1463,10 +1461,22 @@ class GateSetTomography(_proto.Protocol):
         estimate = _Estimate.create_gst_estimate(ret, target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
 
-        return _add_gaugeopt_and_badfit(ret, self.name, target_model,
-                                        self.gaugeopt_suite, self.unreliable_ops,
-                                        self.badfit_options, self.optimizer, resource_alloc, printer)
-
+        #Add some better handling for when gauge optimization is turned off (current code path isn't working.)
+        if not self.gaugeopt_suite.is_empty():
+            ret = _add_gaugeopt_and_badfit(ret, self.name, target_model,
+                                           self.gaugeopt_suite, self.unreliable_ops,
+                                           self.badfit_options, self.optimizer, 
+                                           resource_alloc, printer)
+        else:
+            #add a model to the estimate that we'll call the trivial gauge optimized model which
+            #will be set to be equal to the final iteration estimate.
+            ret.estimates[self.name].models['trivial_gauge_opt'] = mdl_lsgst_list[-1]
+            #and add a key for this to the goparameters dict (this is what the report
+            #generation looks at to determine the names of the gauge optimized models).
+            #Set the value to None as a placeholder.
+            ret.estimates[self.name].goparameters['trivial_gauge_opt'] = None
+        
+        return ret
 
 class LinearGateSetTomography(_proto.Protocol):
     """
@@ -1624,9 +1634,22 @@ class LinearGateSetTomography(_proto.Protocol):
                                    'final iteration estimate': mdl_lgst},
                              parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, target_model, self.gaugeopt_suite,
+
+        #Add some better handling for when gauge optimization is turned off (current code path isn't working.)
+        if not self.gaugeopt_suite.is_empty():
+            ret = _add_gaugeopt_and_badfit(ret, self.name, target_model, self.gaugeopt_suite,
                                         self.unreliable_ops, self.badfit_options,
                                         None, resource_alloc, printer)
+        else:
+            #add a model to the estimate that we'll call the trivial gauge optimized model which
+            #will be set to be equal to the final iteration estimate.
+            ret.estimates[self.name].models['trivial_gauge_opt'] = mdl_lgst
+            #and add a key for this to the goparameters dict (this is what the report
+            #generation looks at to determine the names of the gauge optimized models).
+            #Set the value to None as a placeholder.
+            ret.estimates[self.name].goparameters['trivial_gauge_opt'] = None
+
+        return ret
 
 
 class StandardGST(_proto.Protocol):
@@ -1657,6 +1680,14 @@ class StandardGST(_proto.Protocol):
         for gauge optimization.  This model is used as the "target" for gauge-
         optimization (only), and is useful when you want to gauge optimize toward
         something other than the *ideal* target gates.
+
+    target_model : Model, optional (default None)
+        If specified use this Model as the target model. Depending on other
+        specified keyword arguments this model may be used as the target for
+        the purposes of gauge optimization, report generation/analysis, and
+        initial seeding for optimization. (For almost all of these it may be the
+        case that other keyword argument values override this for certain
+        tasks).
 
     models_to_test : dict, optional
         A dictionary of Model objects representing (gate-set) models to
