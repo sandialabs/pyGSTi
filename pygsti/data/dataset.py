@@ -11,6 +11,7 @@ Defines the DataSet class and supporting classes and functions
 #***************************************************************************************************
 
 import bisect as _bisect
+from collections.abc import Iterable as _Iterable
 import copy as _copy
 import itertools as _itertools
 import numbers as _numbers
@@ -1031,7 +1032,7 @@ class DataSet(_MongoSerializable):
             self.olIndex = outcome_label_indices
             self.olIndex_max = max(self.olIndex.values()) if len(self.olIndex) > 0 else -1
         elif outcome_labels is not None:
-            if isinstance(outcome_labels, (list, tuple)):
+            if isinstance(outcome_labels, _Iterable):
                 tup_outcomeLabels = [_ld.OutcomeLabelDict.to_outcome(ol)
                                      for ol in outcome_labels]  # strings -> tuple outcome labels
             else: # Given an int which signifies how many qubits
