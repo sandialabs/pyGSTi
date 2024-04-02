@@ -1031,12 +1031,13 @@ class DataSet(_MongoSerializable):
             self.olIndex = outcome_label_indices
             self.olIndex_max = max(self.olIndex.values()) if len(self.olIndex) > 0 else -1
         elif outcome_labels is not None:
-            if isinstance(outcome_labels, _np.int64):
-                nqubits = outcome_labels
-                tup_outcomeLabels = [("".join(x),) for x in _itertools.product(*([('0', '1')] * nqubits))]
-            else:
+            if isinstance(outcome_labels, (list, tuple)):
                 tup_outcomeLabels = [_ld.OutcomeLabelDict.to_outcome(ol)
                                      for ol in outcome_labels]  # strings -> tuple outcome labels
+            else: # Given an int which signifies how many qubits
+                nqubits = outcome_labels
+                tup_outcomeLabels = [("".join(x),) for x in _itertools.product(*([('0', '1')] * nqubits))]
+                
             self.olIndex = _OrderedDict([(ol, i) for (i, ol) in enumerate(tup_outcomeLabels)])
             self.olIndex_max = len(tup_outcomeLabels) - 1
         else:
