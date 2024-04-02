@@ -19,7 +19,7 @@ try:
     np.float = float  # types within numpy.  So this is a HACK to get around this.
     np.complex = complex
     import qibo as _qibo
-    if version.parse(_qibo.__version__) < version.parse("0.1.7"):
+    if version.parse(_qibo.__version__) != version.parse("0.1.7"):
         _qibo = None  # version too low - doesn't contain all the builtin gates, e.g. qibo.gates.S
 except (ImportError, AttributeError):
     _qibo = None

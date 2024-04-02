@@ -443,7 +443,7 @@ class LabelTup(Label, tuple):
         -------
         LabelTup
         """
-        return LabelTup(newname, self.sslbls) if (self.name == oldname) else self
+        return LabelTup.init(newname, self.sslbls) if (self.name == oldname) else self
 
     def is_simple(self):
         """

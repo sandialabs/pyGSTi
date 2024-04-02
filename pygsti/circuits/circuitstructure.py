@@ -670,7 +670,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         else:
             op_label_aliases = weights_dict = name = None
 
-        return cls({}, [], [], circuits_or_structure,
+        return cls({}, [], [], '', '', circuits_or_structure,
                    op_label_aliases, weights_dict, name)
 
     def __init__(self, plaquettes, x_values, y_values, xlabel, ylabel, additional_circuits=None, op_label_aliases=None,

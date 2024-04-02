@@ -330,7 +330,7 @@ class TestCodecs(CodecsTestCase):
     #Debugging, because there was some weird python3 vs 2 json incompatibility with string labels
     # - turned out to be that the unit test files needed to import unicode_literals from __future__
     #def test_labels(self):
-    #    strLabel = pygsti.obj.Label("Gi")
+    #    strLabel = pygsti.baseobjs.Label("Gi")
     #    #strLabel = ("Gi",)
     #    from pygsti.modelpacks.legacy import std1Q_XYI as std
     #

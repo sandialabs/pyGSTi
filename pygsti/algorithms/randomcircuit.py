@@ -115,12 +115,16 @@ def sample_compiled_random_clifford_one_qubit_gates_zxzxz_circuit(pspec, zname='
 
 def sample_random_cz_zxzxz_circuit(pspec, length, qubit_labels=None, two_q_gate_density=0.25,
                                    one_q_gate_type='haar',
-                                   two_q_gate_args_lists={'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}):
+                                   two_q_gate_args_lists=None):
     '''
     TODO: docstring
     Generates a forward circuits with benchmark depth d for non-clifford mirror randomized benchmarking.
-    The circuits alternate Haar-random 1q unitaries and layers of Gczr gates
+    The circuits alternate Haar-random 1q unitaries and layers of Gczr gates.
+
+    If two_q_gate_args_lists is None, then we set it to {'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}.
     '''
+    if two_q_gate_args_lists is None:
+        two_q_gate_args_lists = {'Gczr': [(str(_np.pi / 2),), (str(-_np.pi / 2),)]}
     #choose length to be the number of (2Q layer, 1Q layer) blocks
     circuit = _cir.Circuit(layer_labels=[], line_labels=qubit_labels, editable=True)
     for a in range(length):
@@ -777,8 +781,8 @@ def sample_circuit_layer_of_one_q_gates(pspec, qubit_labels=None, one_q_gate_nam
     return sampled_layer
 
 
-def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', samplerargs=[],
-                          addlocal=False, lsargs=[], rand_state=None):
+def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qelimination', samplerargs=None,
+                          addlocal=False, lsargs=None, rand_state=None):
     """
     Samples a random circuit of the specified length (or ~ twice this length).
 
@@ -849,6 +853,10 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
         A random circuit of length `length` (if not addlocal) or length 2*`length`+1 (if addlocal)
         with layers independently sampled using the specified sampling distribution.
     """
+    if samplerargs is None:
+        samplerargs = []
+    if lsargs is None:
+        lsargs = []
     if rand_state is None:
         rand_state = _np.random.RandomState()
 
@@ -1342,8 +1350,8 @@ def create_random_circuit(pspec, length, qubit_labels=None, sampler='Qeliminatio
 
 
 def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=None, sampler='Qelimination',
-                             samplerargs=[], addlocal=False, lsargs=[], randomizeout=True, cliffordtwirl=True,
-                             conditionaltwirl=True, citerations=20, compilerargs=[], partitioned=False, seed=None):
+                             samplerargs=None, addlocal=False, lsargs=None, randomizeout=True, cliffordtwirl=True,
+                             conditionaltwirl=True, citerations=20, compilerargs=None, partitioned=False, seed=None):
     """
     Generates a "direct randomized benchmarking" (DRB) circuit.
 
@@ -1467,6 +1475,12 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
         In both cases, the ith element of the tuple corresponds to the error-free outcome for the
         qubit on the ith wire of the output circuit.
     """
+    if samplerargs is None:
+        samplerargs = []
+    if compilerargs is None:
+        compilerargs = []
+    if lsargs is None:
+        lsargs = []
     if qubit_labels is not None: n = len(qubit_labels)
     else: n = pspec.num_qubits
 
@@ -2125,7 +2139,7 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
 
 
 def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_labels=None, randomizeout=False,
-                               citerations=20, compilerargs=[], interleaved_circuit=None, seed=None):
+                               citerations=20, compilerargs=None, interleaved_circuit=None, seed=None):
     """
     Generates a "Clifford randomized benchmarking" (CRB) circuit.
 
@@ -2223,7 +2237,8 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
         In both cases, the ith element of the tuple corresponds to the error-free outcome for the
         qubit on the ith wire of the output circuit.
     """
-    
+    if compilerargs is None:
+        compilerargs = []
     # Find the labels of the qubits to create the circuit for.
     if qubit_labels is not None: qubits = qubit_labels[:]  # copy this list
     else: qubits = pspec.qubit_labels[:]  # copy this list
@@ -2403,7 +2418,7 @@ def sample_one_q_clifford_layer_as_compiled_circuit(pspec, absolute_compilation,
 
 
 def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=None, sampler='Qelimination',
-                             samplerargs=[], localclifford=True, paulirandomize=True, seed=None):
+                             samplerargs=None, localclifford=True, paulirandomize=True, seed=None):
     """
     Generates a "mirror randomized benchmarking" (MRB) circuit.
 
@@ -2508,6 +2523,8 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
         In both cases, the ith element of the tuple corresponds to the error-free outcome for the
         qubit on the ith wire of the output circuit.
     """
+    if samplerargs is None:
+        samplerargs = []
     assert(length % 2 == 0), "The mirror rb length `length` must be even!"
     random_natives_circuit_length = length // 2
 
@@ -3408,8 +3425,8 @@ def _determine_sign(s_state, p_state, measurement):
 
 
 def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=None, layer_sampling = 'mixed1q2q', sampler='Qelimination',
-                             samplerargs=[], addlocal=False, lsargs=[],
-                              seed=None):
+                             samplerargs=None, addlocal=False, lsargs=None,
+                             seed=None):
     """
     Generates a "binary randomized benchmarking" (BiRB) circuit.
 
@@ -3480,7 +3497,11 @@ def create_binary_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
         The circuit, when run without errors, produces an eigenstate of the target Pauli operator.  
     Int (Either 1 or -1)
         Specifies the sign of the target Pauli measurement.
-    """    
+    """
+    if lsargs is None:
+        lsargs = []
+    if samplerargs is None:
+        samplerargs = []
     if qubit_labels is not None: n = len(qubit_labels)
     else: 
         n = pspec.num_qubits

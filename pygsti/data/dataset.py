@@ -1767,7 +1767,9 @@ class DataSet(_MongoSerializable):
 
     def _add_raw_arrays(self, circuit, oli_array, time_array, rep_array,
                         overwrite_existing, record_zero_counts, aux):
-
+        assert not self.bStatic, "Attempting to add arrays to a static DataSet. " + \
+            "Consider using .copy_nonstatic() to get a mutable DataSet first."
+        
         if rep_array is None:
             if self.repData is not None:
                 rep_array = _np.ones(len(oli_array), self.repType)
@@ -2165,7 +2167,8 @@ class DataSet(_MongoSerializable):
         -------
         None
         """
-        if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
+        if self.bStatic: raise ValueError("Cannot add data to a static DataSet object." + \
+            "Consider using .copy_nonstatic() to get a mutable DataSet first.")
         for circuit, dsRow in other_data_set.items():
             self.add_raw_series_data(circuit, dsRow.outcomes, dsRow.time, dsRow.reps, False)
 

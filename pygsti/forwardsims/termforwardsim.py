@@ -214,7 +214,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
     @classmethod
     def _from_nice_serialization(cls, state):
         #Note: resets processor-distribution information
-        return cls(state['mode'], state['max_taylor_order'],
+        return cls(None, state['mode'], state['max_taylor_order'],
                    state['desired_pathintegral_approximation_error'],
                    state['allowed_pathintegral_approximation_error'],
                    state['minimum_retained_term_magnitude'],

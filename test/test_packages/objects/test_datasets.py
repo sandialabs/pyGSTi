@@ -437,11 +437,11 @@ Gy 11001100
 
     @unittest.skip("We probably won't be able to unpickle old files given the amount of refactoring")
     def test_load_old_dataset(self):
-        #pygsti.obj.results.enable_old_python_results_unpickling()
+        #pygsti.baseobjs.results.enable_old_python_results_unpickling()
         with pygsti.io.enable_old_object_unpickling():
             with open(compare_files + "/pygsti0.9.6.dataset.pkl", 'rb') as f:
                 ds = pickle.load(f)
-        #pygsti.obj.results.disable_old_python_results_unpickling()
+        #pygsti.baseobjs.results.disable_old_python_results_unpickling()
         #pygsti.io.disable_old_object_unpickling()
         with open(temp_files + "/repickle_old_dataset.pkl", 'wb') as f:
             pickle.dump(ds, f)

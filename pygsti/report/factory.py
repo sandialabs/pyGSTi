@@ -1373,7 +1373,8 @@ def construct_standard_report(results, title="auto",
         'est_labels': tuple(est_labels),
         'gauge_opt_labels': tuple(gauge_opt_labels),
         'max_lengths': tuple(Ls),
-        'switchbd_maxlengths': tuple(swLs)
+        'switchbd_maxlengths': tuple(swLs),
+        'show_unmodeled_error': bool('ShowUnmodeledError' in flags)
     }
 
     templates = dict(
