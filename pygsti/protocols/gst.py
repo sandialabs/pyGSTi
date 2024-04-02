@@ -1093,6 +1093,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
         elif suite_name == "unreliable2Q":
             raise ValueError(("unreliable2Q is no longer a separate 'suite'.  You should precede it with the suite"
                               " name, e.g. 'stdgaugeopt-unreliable2Q' or 'varySpam-unreliable2Q'"))
+        elif suite_name == 'none':
+            pass
         else:
             raise ValueError("Unknown gauge-optimization suite '%s'" % suite_name)
 
