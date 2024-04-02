@@ -3789,10 +3789,11 @@ class Circuit(object):
             and values given by pygsti gate names which overrides the built-in
             conversion dictionary used by default.
 
-        remove_implied_idles : bool, optional (default False)
-            A flag indicating whether to explicitly include
-            implied idles as part of a circuit layer containing
-            other explicitly specified gates.
+        remove_implied_idles : bool, optional (default True)
+            A flag indicating whether to remove explicit idles
+            that are part of a circuit layer containing
+            other explicitly specified gates
+            (i.e., whether to abide by the normal pyGSTi implicit idle convention).
 
         global_idle_replacement_label : string or Label or None, optional (default 'auto')
             An option specified for the handling of global idle layers.
