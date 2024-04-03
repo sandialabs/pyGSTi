@@ -11,7 +11,6 @@ Utility functions operating on operation matrices
 #***************************************************************************************************
 
 import collections as _collections
-import contextlib as _contextlib
 import warnings as _warnings
 
 import numpy as _np
