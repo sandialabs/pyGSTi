@@ -19,7 +19,6 @@ import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 import functools as _functools
 
-from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jam
 from pygsti.tools import lindbladtools as _lt
@@ -433,6 +432,8 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     -------
     float
     """
+    from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+
     # Attempt to cast to dense array. If this is already an array, the AttributeError
     # will be suppressed.
     if isinstance(a, _LinearOperator):
@@ -514,6 +515,8 @@ def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     AGI : float
         The AGI of a to b.
     """
+    from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+    
     # Cast to dense to ensure we can extract the shape.
     if isinstance(a, _LinearOperator):
         a = a.to_dense()
@@ -724,6 +727,8 @@ def unitarity(a, mx_basis="gm"):
     -------
     float
     """
+    from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
+
     # Cast to dense to ensure we can extract the shape.
     if isinstance(a, _LinearOperator):
         a = a.to_dense()
