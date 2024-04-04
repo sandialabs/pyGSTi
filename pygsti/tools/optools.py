@@ -19,6 +19,7 @@ import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 import functools as _functools
 
+from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jam
 from pygsti.tools import lindbladtools as _lt
@@ -402,11 +403,13 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
         
     Parameters
     ----------
-    a : numpy array
-        First matrix.
+    a : array or gate
+        The gate to compute the entanglement fidelity to b of. E.g., an 
+        imperfect implementation of b.
 
-    b : numpy array
-        Second matrix.
+    b : array or gate
+        The gate to compute the entanglement fidelity to a of. E.g., the 
+        target gate corresponding to a.
 
     mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
         The basis of the matrices.  Allowed values are Matrix-unit (std),
@@ -430,6 +433,13 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     -------
     float
     """
+    # Attempt to cast to dense array. If this is already an array, the AttributeError
+    # will be suppressed.
+    if isinstance(a, _LinearOperator):
+        a = a.to_dense()
+    if isinstance(b, _LinearOperator):
+        b = b.to_dense()
+
     d2 = a.shape[0]
     
     #if the tp flag isn't set we'll calculate whether it is true here
@@ -504,6 +514,10 @@ def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     AGI : float
         The AGI of a to b.
     """
+    # Cast to dense to ensure we can extract the shape.
+    if isinstance(a, _LinearOperator):
+        a = a.to_dense()
+
     d = int(round(_np.sqrt(a.shape[0])))
     PF = entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
     AGF = (d * PF + 1) / (1 + d)
@@ -710,6 +724,10 @@ def unitarity(a, mx_basis="gm"):
     -------
     float
     """
+    # Cast to dense to ensure we can extract the shape.
+    if isinstance(a, _LinearOperator):
+        a = a.to_dense()
+        
     d = int(round(_np.sqrt(a.shape[0])))
     basisMxs = _bt.basis_matrices(mx_basis, a.shape[0])
 
