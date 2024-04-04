@@ -693,7 +693,6 @@ def stochastic_jac_alt(num_qubits, prep_meas_fid_pairs = None):
     #stochastic index.
     for row_idx, ((prep, meas), (prep_overall, meas_overall)) in enumerate(zip(prep_meas_eigenstate_pairs, prep_meas_overall_signed_pairs)):
         for col_idx, sto_pauli_idx in enumerate(stochastic_pauli_idxs):
-
             #for the stochastic terms the condition we need is that 
             #meas_overall ~= prep_overall (i.e. up to a sign) and that
             #prep_overall and sto_pauli_idx anticommute.
@@ -738,7 +737,8 @@ def correlation_jac_alt(num_qubits, prep_meas_fid_pairs = None):
     #due to the correlation terms being symmetric.
     correlation_pauli_idxs = _np.fromiter(_itertools.product(pauli_idxs, repeat=2), dtype=object).reshape((len(pauli_idxs), len(pauli_idxs)))
     #Then we only want the upper diagonal of this matrix.
-    #correlation_pauli_idxs = _np.u
+    #this will extract those values as a flattened array.
+    correlation_pauli_idxs = correlation_pauli_idxs[_np.triu_indices_from(correlation_pauli_idxs, k=1)]
     #if prep_meas_eigenstate_pairs are specified then use these,
     #casting to appropriate overall signed stim PauliStrings
     #otherwise, generate a set of all possible pairs, but with
@@ -804,35 +804,80 @@ def correlation_jac_alt(num_qubits, prep_meas_fid_pairs = None):
             prep_meas_overall_signed_pairs.append((stim.PauliString(overall_signed_pauli_prep), stim.PauliString(overall_signed_pauli_meas)))
 
     #initialize an empty numpy array for the jacobian:
-    sto_jac = _np.zeros((len(prep_meas_eigenstate_pairs), len(stochastic_pauli_idxs)))
+    cor_jac = _np.zeros((len(prep_meas_eigenstate_pairs), len(correlation_pauli_idxs)))
 
     #for each of these pairs we then want to loop through all of the elements of
     #stochastic_pauli_idxs and compute the component of the jacobian for this
     #stochastic index.
-    for row_idx, ((prep, meas), (prep_overall, meas_overall)) in enumerate(zip(prep_meas_eigenstate_pairs, prep_meas_overall_signed_pairs)):
-        for col_idx, sto_pauli_idx in enumerate(stochastic_pauli_idxs):
+    #Cases are as follows.
+    #Let P and Q be the indices of the correlation term. S and R are the prep eigenstate pauli
+    #and meas eigenstate pauli respectively.
+    #1. P and Q anti-commute
+    #   1a. S commutes with P and Q -> 0
+    #   1b. S anticommutes with P and Q -> 0
+    #   1c. S commutes with P and anticommutes with Q
+    #       1ci. R commutes with S -> 0
+    #       1cii. [R,S] !~ PQ -> 0
+    #       1ciii. else ~2
+    #   1d. S anticommutes with P and commutes with Q
+    #       1di. R commutes with S -> 0
+    #       1dii. [R,S] !~ PQ -> 0
+    #       1diii. else ~2
+    #2. P and Q commute
+    #   2a. S anticommutes with P and Q
+    #       2ai. S anticommutes with R -> 0
+    #       2aii. {S,R} !~ PQ -> 0
+    #       2aiii. else ~4
+    #   2b. S commutes with P and Q -> 0
+    #   2c. S commutes with P and anticommutes with Q -> 0
+    #   2d. S anticommutes with P and commutes with Q -> 0
 
-            #for the stochastic terms the condition we need is that 
-            #meas_overall ~= prep_overall (i.e. up to a sign) and that
-            #prep_overall and sto_pauli_idx anticommute.
-            if not sto_pauli_idx.commutes(prep_overall):
-                #next check whether prep_overall==meas_overall up to a sign:
-                if is_unsigned_pauli_equiv(meas_overall, prep_overall):
-                    #Finally just compare the signs to determine if this is +2 or -2:
-                    sto_jac[row_idx, col_idx] = -2 if meas_overall.sign == prep_overall.sign else 2
+    for row_idx, ((prep, meas), (prep_overall, meas_overall)) in enumerate(zip(prep_meas_eigenstate_pairs, prep_meas_overall_signed_pairs)):
+        for col_idx, cor_pauli_idx in enumerate(correlation_pauli_idxs):
+            #calculate a bunch of commutators to use for traversing the cases for the jacobian.
+            cor_pauli_idxs_commute = cor_pauli_idx[0].commutes(cor_pauli_idx[1])
+            prep_cor_pauli_idx_0_commute = prep_overall.commutes(cor_pauli_idx[0])
+            prep_cor_pauli_idx_1_commute = prep_overall.commutes(cor_pauli_idx[1])
+            prep_meas_commute = prep_overall.commutes(meas_overall)
+
+            #case 1: {cor_pauli_idx[0], cor_pauli_idx[1]} = 0
+            if not cor_pauli_idxs_commute:
+                #only need to compute the subcases with nonzero contributions.
+                #case 1c: prep_overall commutes with cor_pauli_idx[0] and anticommutes with cor_pauli_idx[1]
+                if prep_cor_pauli_idx_0_commute and not prep_cor_pauli_idx_1_commute:
+                    #case 1ciii: R anticommutes with S; [R,S]~RS ~PQ
+                    if not prep_meas_commute and is_unsigned_pauli_equiv(prep_overall*meas_overall, cor_pauli_idx[0]*cor_pauli_idx[1]):
+                        #Do we need to do the full pauli product out?
+                        final_pauli = half_pauli_comm(meas_overall, prep_overall)*cor_pauli_idx[0]*cor_pauli_idx[1]
+                        final_sign = final_pauli.sign
+                        cor_jac[row_idx, col_idx] = _np.real_if_close(final_sign)*2
+                        
+                #case 1d: prep_overall anticommutes with cor_pauli_idx[0] and commutes with cor_pauli_idx[1]
+                if not prep_cor_pauli_idx_0_commute and prep_cor_pauli_idx_1_commute:
+                    #case 1diii: R anticommutes with S; [R,S]~RS ~PQ
+                    if not prep_meas_commute and is_unsigned_pauli_equiv(prep_overall*meas_overall, cor_pauli_idx[0]*cor_pauli_idx[1]):
+                        final_pauli = half_pauli_comm(meas_overall, prep_overall)*cor_pauli_idx[0]*cor_pauli_idx[1]
+                        final_sign = -final_pauli.sign
+                        cor_jac[row_idx, col_idx] = _np.real_if_close(final_sign)*2
+
+            #case 2: [cor_pauli_idx[0], cor_pauli_idx[1]] = 0
+            else:
+                #case 2a: prep_overall anticommutes with cor_pauli_idx[0] and cor_pauli_idx[1]
+                if not prep_cor_pauli_idx_0_commute and not prep_cor_pauli_idx_1_commute:
+                    #case 2aiii: prep_overall commutes with meas_overall, and {prep_overall,meas_overall} ~ cor_pauli_idx[0]*cor_pauli_idx[1]
+                    if prep_meas_commute and is_unsigned_pauli_equiv(prep_overall*meas_overall, cor_pauli_idx[0]*cor_pauli_idx[1]):
+                        final_pauli = half_pauli_anticomm(prep_overall, meas_overall)*cor_pauli_idx[0]*cor_pauli_idx[1]
+                        final_sign = -final_pauli.sign
+                        cor_jac[row_idx, col_idx] = _np.real_if_close(final_sign)*4
 
     #TODO: Delete second return, this is currently only for testing/diagnostics.
-    return sto_jac, prep_meas_eigenstate_pairs
-
-
-
-
+    return cor_jac, prep_meas_eigenstate_pairs, correlation_pauli_idxs
 
 
 
 def half_pauli_comm(pauli1, pauli2):
     '''
-    Computes the commutator between two unsigned pauli strings.
+    Computes 1/2 the commutator between two unsigned pauli strings.
     [pauli1, pauli2]
 
     Parameters
@@ -858,6 +903,39 @@ def half_pauli_comm(pauli1, pauli2):
     #multiple of a pauli string, so we'll just return the product.
 
     if pauli1.commutes(pauli2):
+        return 0
+    else:
+        return pauli1*pauli2
+    
+
+def half_pauli_anticomm(pauli1, pauli2):
+    '''
+    Computes 1/2 the anticommutator between two unsigned pauli strings.
+    {pauli1, pauli2}
+
+    Parameters
+    ----------
+    pauli1 : stim.PauliString
+    
+    pauli2 : stim.PauliString
+    
+    Returns
+    -------
+    anticomm : stim.PauliString or int
+        The signed pauli string corresponding to the anticommutator,
+        up to a missing factor of 2.
+        If the paulis anticommute then 0 is returned.
+    '''
+    
+    #Every pair of paulis either commute or anticommute (see 
+    #https://arxiv.org/pdf/1909.08123.pdf for more on commutation structure
+    #of the n-qubit pauli group). So this breaks into two cases. If
+    #pauli1 and pauli2 anticommute, then {pauli1, paulii} = 0. If they commute
+    #then {pauli1,pauli2} = 2*pauli1@pauli2. Stim has a nice built-in method
+    #for checking this. But, stim doesn't have a nice way to represent a scalar
+    #multiple of a pauli string, so we'll just return the product.
+
+    if not pauli1.commutes(pauli2):
         return 0
     else:
         return pauli1*pauli2
