@@ -697,17 +697,13 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     plotly.Figure
     """
     g = circuit_structure
-    
-    if isinstance(g, _PlaquetteGridCircuitStructure):
-        xvals = g.used_xs
-        yvals = g.used_ys
 
     if addl_hover_submxs is None:
         addl_hover_submxs = {}
 
     if hover_info:
         if isinstance(g, _PlaquetteGridCircuitStructure):
-            hover_info = _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_submxs)
+            hover_info = _create_hover_info_fn(circuit_structure, g.used_xs, g.used_ys, sum_up, addl_hover_submxs)
         elif isinstance(g, _CircuitList) or (isinstance(g, list) and all([isinstance(el, _CircuitList) for el in g])):
             hover_info = _create_hover_info_fn_circuit_list(circuit_structure, sum_up, addl_hover_submxs)
         
@@ -2025,8 +2021,6 @@ class ColorBoxPlot(WorkspacePlot):
                                                     colorbar, hover_info, sum_up, ytitle,
                                                     scale, addl_hover_info)
             elif typ == "histogram":
-                #print(subMxs)
-                #print(circuit_struct)
                 newfig = _circuit_color_histogram(circuit_struct, subMxs, colormap,
                                                   ytitle, scale)
             else:
@@ -2073,7 +2067,7 @@ class ColorBoxPlot(WorkspacePlot):
 
 #Helper function for ColorBoxPlot matrix computation
 def _mx_fn_from_elements(plaq, x, y, extra):
-    return plaq.elementvec_to_matrix(extra[0], extra[1], mergeop=extra[2])
+    return plaq.elementvec_to_array(extra[0], extra[1], mergeop=extra[2])
 
 #modified version of the above meant for working with circuit lists
 def _mx_fn_from_elements_circuit_list(circuit_list, extra):
@@ -2081,28 +2075,17 @@ def _mx_fn_from_elements_circuit_list(circuit_list, extra):
     #extra[0] is the thing we want to index into, extra[1] is the layout and extra[2]
     #is something called the merge op, which indicated how to combine the elements of extra[0]
     #for each circuit in the circuit_list
-    #The following logic reworks that from the elementvec_to_matrix method of a plaquette
-    #to be applicable to a circuit list.
-    elementvec= extra[0]
-    layout= extra[1]
-    mergeop= extra[2]
-    
-    if mergeop == "sum":
-            ret = _np.nan * _np.ones(len(circuit_list), 'd')
-            for i,ckt in enumerate(circuit_list):
-                ret[i] = sum(elementvec[layout.indices(ckt)])
-    elif '%' in mergeop:
-        fmt = mergeop
-        ret = _np.nan * _np.ones(len(circuit_list), dtype=_np.object_)
-        for i,ckt in enumerate(circuit_list):
-            ret[i] = ", ".join(["NaN" if _np.isnan(x) else
-                                   (fmt % x) for x in elementvec[layout.indices(ckt)]])
+    if isinstance(circuit_list, _CircuitList):
+        pass
+    elif isinstance(circuit_list, list) and all([isinstance(el, _CircuitList) for el in circuit_list]):
+        circuit_list = _CircuitList.cast(circuit_list)
     else:
-        raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))
+        msg = 'Invalid type. _mx_fn_from_elements_circuit_list is only presently implemented for CircuitList'\
+             +'objects and lists of Circuit objects.'
+        raise ValueError(msg)
+
+    return circuit_list.elementvec_to_array(extra[0], extra[1], mergeop=extra[2])
     
-    return ret
-
-
 def _mx_fn_blank(plaq, x, y, unused):
     return _np.nan * _np.zeros((plaq.num_rows, plaq.num_cols), 'd')
 

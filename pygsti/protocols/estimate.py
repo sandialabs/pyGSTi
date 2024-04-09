@@ -419,14 +419,8 @@ class Estimate(_MongoSerializable):
 
         if goparams_list: #only do this if goparams_list wasn't empty to begin with.
             #which would be the case except for the special case where the label is 'none'.
-            try:
-                self._gaugeopt_suite.gaugeopt_argument_dicts[label] = ordered_goparams \
-                    if len(goparams_list) > 1 else ordered_goparams[0]
-            except IndexError:
-                print(f'{goparams_list=}')
-                print(f'{ordered_goparams=}')
-                print(f'{model=}')
-                raise IndexError
+            self._gaugeopt_suite.gaugeopt_argument_dicts[label] = ordered_goparams \
+                if len(goparams_list) > 1 else ordered_goparams[0]
         else:
             self._gaugeopt_suite.gaugeopt_argument_dicts[label] = None
 
