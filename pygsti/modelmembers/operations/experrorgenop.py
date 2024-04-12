@@ -703,6 +703,9 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             else:
                 mx = _mt.safe_dot(mx, U)
             self.set_dense(mx)  # calls _update_rep() and sets dirty flag
+        else:
+            raise ValueError("Invalid transform for this LindbladErrorgen: type %s"
+                             % str(type(s)))
 
     def __str__(self):
         s = "Exponentiated operation map with dim = %d, num params = %d\n" % \

@@ -1,5 +1,6 @@
 from io import BytesIO
 
+import pytest
 import pygsti.data as pdata
 from pygsti import io
 from pygsti.drivers import longsequence as ls
@@ -12,7 +13,7 @@ from ..util import BaseCase, with_temp_path
 
 
 # TODO optimize everything
-class LongSequenceBase(BaseCase):
+class LongSequenceBasePlain:
     @classmethod
     def setUpClass(cls):
         cls.pspec = pkg.pspec
@@ -29,44 +30,73 @@ class LongSequenceBase(BaseCase):
         self.model = self.model.copy()
         self.ds = self.ds.copy()
 
+class LongSequenceBase(LongSequenceBasePlain, BaseCase):
+    # just wrap the version that doesn't inherit from BaseCase
+    pass
 
-class ModelTestTester(LongSequenceBase):
+
+class MapForwardSimulatorWrapper(mapforwardsim.MapForwardSimulator):
+
+    Message = """
+        Hit the forward simulator wrapper!
+    """
+
+    def _bulk_fill_probs(self, array_to_fill, layout):
+        print(self.Message)
+        super(MapForwardSimulatorWrapper, self)._bulk_fill_probs(array_to_fill, layout)
+
+    def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
+        print(self.Message)
+        super(MapForwardSimulatorWrapper, self)._bulk_fill_probs_atom(array_to_fill, layout_atom, resource_alloc)
+
+
+
+class ModelTestTester(LongSequenceBasePlain):
+
     def setUp(self):
+        super(ModelTestTester, self).setUpClass()
         super(ModelTestTester, self).setUp()
         self.mdl_guess = self.model.depolarize(op_noise=0.01, spam_noise=0.01)
 
     def test_model_test(self):
+        self.setUp()
         result = ls.run_model_test(
             self.mdl_guess, self.ds, self.pspec, self.prep_fids,
             self.meas_fids, self.germs, self.maxLens
         )
         # TODO assert correctness
 
-    def test_model_test_advanced_options(self):
+    def test_model_test_advanced_options(self, capfd: pytest.LogCaptureFixture):
+        self.setUp()
         result = ls.run_model_test(
-            self.mdl_guess, self.ds, self.pspec, self.prep_fids,
-            self.meas_fids, self.germs, self.maxLens,
-            advanced_options=dict(objective='chi2', profile=2)
-        )
+                    self.mdl_guess, self.ds, self.pspec, self.prep_fids,
+                    self.meas_fids, self.germs, self.maxLens,
+                    advanced_options=dict(objective='chi2', profile=2),
+                    simulator=MapForwardSimulatorWrapper
+                )
+        stdout, _ = capfd.readouterr()
+        assert MapForwardSimulatorWrapper.Message in stdout
         # TODO assert correctness
 
     def test_model_test_pickle_output(self):
+        self.setUp()
         with BytesIO() as pickle_stream:
             result = ls.run_model_test(
                 self.mdl_guess, self.ds, self.pspec, self.prep_fids,
                 self.meas_fids, self.germs, self.maxLens, output_pkl=pickle_stream
             )
-            self.assertTrue(len(pickle_stream.getvalue()) > 0)
+            assert len(pickle_stream.getvalue()) > 0
             # TODO assert correctness
 
     def test_model_test_raises_on_bad_options(self):
-        with self.assertRaises(ValueError):
+        self.setUp()
+        with pytest.raises(ValueError):
             ls.run_model_test(
                 self.mdl_guess, self.ds, self.pspec, self.prep_fids,
                 self.meas_fids, self.germs, self.maxLens,
                 advanced_options=dict(objective='foobar')
             )
-        with self.assertRaises(ValueError):
+        with pytest.raises(ValueError):
             ls.run_model_test(
                 self.mdl_guess, self.ds, self.pspec, self.prep_fids,
                 self.meas_fids, self.germs, self.maxLens,

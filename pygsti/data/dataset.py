@@ -11,6 +11,7 @@ Defines the DataSet class and supporting classes and functions
 #***************************************************************************************************
 
 import bisect as _bisect
+from collections.abc import Iterable as _Iterable
 import copy as _copy
 import itertools as _itertools
 import numbers as _numbers
@@ -1031,12 +1032,13 @@ class DataSet(_MongoSerializable):
             self.olIndex = outcome_label_indices
             self.olIndex_max = max(self.olIndex.values()) if len(self.olIndex) > 0 else -1
         elif outcome_labels is not None:
-            if isinstance(outcome_labels, _np.int64):
-                nqubits = outcome_labels
-                tup_outcomeLabels = [("".join(x),) for x in _itertools.product(*([('0', '1')] * nqubits))]
-            else:
+            if isinstance(outcome_labels, _Iterable):
                 tup_outcomeLabels = [_ld.OutcomeLabelDict.to_outcome(ol)
                                      for ol in outcome_labels]  # strings -> tuple outcome labels
+            else: # Given an int which signifies how many qubits
+                nqubits = outcome_labels
+                tup_outcomeLabels = [("".join(x),) for x in _itertools.product(*([('0', '1')] * nqubits))]
+                
             self.olIndex = _OrderedDict([(ol, i) for (i, ol) in enumerate(tup_outcomeLabels)])
             self.olIndex_max = len(tup_outcomeLabels) - 1
         else:
@@ -1716,7 +1718,9 @@ class DataSet(_MongoSerializable):
 
     def _add_raw_arrays(self, circuit, oli_array, time_array, rep_array,
                         overwrite_existing, record_zero_counts, aux):
-
+        assert not self.bStatic, "Attempting to add arrays to a static DataSet. " + \
+            "Consider using .copy_nonstatic() to get a mutable DataSet first."
+        
         if rep_array is None:
             if self.repData is not None:
                 rep_array = _np.ones(len(oli_array), self.repType)
@@ -2114,7 +2118,8 @@ class DataSet(_MongoSerializable):
         -------
         None
         """
-        if self.bStatic: raise ValueError("Cannot add data to a static DataSet object")
+        if self.bStatic: raise ValueError("Cannot add data to a static DataSet object." + \
+            "Consider using .copy_nonstatic() to get a mutable DataSet first.")
         for circuit, dsRow in other_data_set.items():
             self.add_raw_series_data(circuit, dsRow.outcomes, dsRow.time, dsRow.reps, False)
 

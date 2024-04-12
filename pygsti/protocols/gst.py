@@ -20,6 +20,7 @@ import pathlib as _pathlib
 
 import numpy as _np
 from scipy.stats import chi2 as _chi2
+from typing import Optional
 
 from pygsti.baseobjs.profiler import DummyProfiler as _DummyProfiler
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -44,6 +45,7 @@ from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAl
 from pygsti.modelmembers import states as _states, povms as _povms
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
 from pygsti.circuits import Circuit
+from pygsti.forwardsims import ForwardSimulator
 
 
 #For results object:
@@ -535,7 +537,7 @@ class GSTInitialModel(_NicelySerializable):
         if comm is None or comm.Get_rank() == 0:
             #Advanced Options can specify further manipulation of starting model
             if self.contract_start_to_cptp:
-                mdl_start = _alg.contract(mdl_start, "CPTP")
+                mdl_start = _alg.contract(mdl_start, "CPTPLND")
                 raise ValueError(
                     "'contractStartToCPTP' has been removed b/c it can change the parameterization of a model")
             if self.depolarize_start > 0:
@@ -1257,20 +1259,8 @@ class GateSetTomography(_proto.Protocol):
         self.circuit_weights = None
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
 
-    #TODO: Maybe make methods like this separate functions??
-    #def run_using_germs_and_fiducials(self, dataset, target_model, prep_fiducials, meas_fiducials, germs, max_lengths):
-    #    design = StandardGSTDesign(target_model, prep_fiducials, meas_fiducials, germs, max_lengths)
-    #    return self.run(_proto.ProtocolData(design, dataset))
-    #
-    #def run_using_circuit_structures(self, target_model, circuit_structs, dataset):
-    #    design = StructuredGSTDesign(target_model, circuit_structs)
-    #    return self.run(_proto.ProtocolData(design, dataset))
-    #
-    #def run_using_circuit_lists(self, target_model, circuit_lists, dataset):
-    #    design = GateSetTomographyDesign(target_model, circuit_lists)
-    #    return self.run(_proto.ProtocolData(design, dataset))
-
-    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing = False):
+    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None, disable_checkpointing=False,
+            simulator: Optional[ForwardSimulator.Castable]=None):
         """
         Run this protocol on `data`.
 
@@ -1302,6 +1292,11 @@ class GateSetTomography(_proto.Protocol):
             When set to True checkpoint objects will not be constructed and written
             to disk during the course of this protocol. It is strongly recommended
             that this be kept set to False without good reason to disable the checkpoints.
+
+        simulator : ForwardSimulator.Castable or None
+            Ignored if None. If not None, then we call
+                fwdsim = ForwardSimulator.cast(simulator),
+            and we set the .sim attribute of every Model we encounter to fwdsim.
 
         Returns
         -------
@@ -1337,53 +1332,55 @@ class GateSetTomography(_proto.Protocol):
         tnxt = _time.time(); profiler.add_time('GST: loading', tref); tref = tnxt
         mdl_start = self.initial_model.retrieve_model(data.edesign, self.gaugeopt_suite.gaugeopt_target,
                                                       data.dataset, comm)
-        
-        if not disable_checkpointing:
-            #Set the checkpoint_path variable if None
+        if simulator is not None:
+            mdl_start.sim = simulator
+
+        if disable_checkpointing:
+            seed_model = mdl_start.copy()
+            mdl_lsgst_list = []
+            starting_idx = 0
+        else:
+            # Set the checkpoint_path variable if None
             if checkpoint_path is None:
                 checkpoint_path = _pathlib.Path('./gst_checkpoints/' + self.name)
             else:
-                #cast this to a pathlib path with the file extension (suffix) dropped
+                # cast this to a pathlib path with the file extension (suffix) dropped
                 checkpoint_path = _pathlib.Path(checkpoint_path).with_suffix('')
-            
-            #create the parent directory of the checkpoint if needed:
+
+            # create the parent directory of the checkpoint if needed:
             checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            #If there is no checkpoint we should start from with the seed model,
-            #otherwise we should seed the next iteration with the last iteration's result.
-            #If there is no checkpoint initialize mdl_lsgst_list and final_objfn to be empty, 
-            #otherwise re-initialize their values from the checkpoint   
+
+            # If there is no checkpoint we should start from with the seed model,
+            # otherwise we should seed the next iteration with the last iteration's result.
+            # If there is no checkpoint initialize mdl_lsgst_list and final_objfn to be empty,
+            # otherwise re-initialize their values from the checkpoint
             if checkpoint is None:
                 seed_model = mdl_start.copy()
                 mdl_lsgst_list = []
                 checkpoint = GateSetTomographyCheckpoint()
             elif isinstance(checkpoint, GateSetTomographyCheckpoint):
-                #if the checkpoint's last completed iteration is non-negative
-                #(i.e. the checkpoint actually has data in it)
+                # if the checkpoint's last completed iteration is non-negative
+                # (i.e. the checkpoint actually has data in it)
                 if checkpoint.last_completed_iter >= 0:
                     seed_model = checkpoint.mdl_list[-1]
-                #otherwise seed with target
+                # otherwise seed with target
                 else:
                     seed_model = mdl_start.copy()
                 mdl_lsgst_list = checkpoint.mdl_list
                 final_objfn = checkpoint.final_objfn
-                #final_objfn initialized to None in the GateSetTomographyCheckpoint and will be overwritten
-                #during the loop below unless the last completed iteration is the final iteration
-                #in which case the loop should be skipped. If so I think it is ok that this gets
-                #left set to None. There looks to be some logic for handling this and it looks
-                #like the serialization routines effectively do this already, as the value
-                #of this is lost between writing and reading.
+                # final_objfn initialized to None in the GateSetTomographyCheckpoint and will be overwritten
+                # during the loop below unless the last completed iteration is the final iteration
+                # in which case the loop should be skipped. If so I think it is ok that this gets
+                # left set to None. There looks to be some logic for handling this and it looks
+                # like the serialization routines effectively do this already, as the value
+                # of this is lost between writing and reading.
             else:
-                NotImplementedError('The only currently valid checkpoint inputs are None and GateSetTomographyCheckpoint.')
-            
-            #note the last_completed_iter value is initialized to -1 so the below line 
+                NotImplementedError(
+                    'The only currently valid checkpoint inputs are None and GateSetTomographyCheckpoint.')
+
+            # note the last_completed_iter value is initialized to -1 so the below line
             # will have us correctly starting at 0 if this is a fresh checkpoint.
             starting_idx = checkpoint.last_completed_iter + 1
-
-        else:
-            seed_model = mdl_start.copy()
-            mdl_lsgst_list = []
-            starting_idx = 0
 
         tnxt = _time.time(); profiler.add_time('GST: Prep Initial seed', tref); tref = tnxt
         
@@ -1404,18 +1401,18 @@ class GateSetTomography(_proto.Protocol):
             #then do the final iteration slightly differently since the generator should
             #give three return values.
             if i==len(bulk_circuit_lists)-1:
-                mdl_iter, opt_iter, final_objfn =  next(gst_iter_generator)
+                mdl_iter, opt_iter, final_objfn = next(gst_iter_generator)
             else:
                 mdl_iter, opt_iter =  next(gst_iter_generator)
             mdl_lsgst_list.append(mdl_iter)
             optima_list.append(opt_iter)
 
             if not disable_checkpointing:
-                #update the checkpoint along the way:
+                # update the checkpoint along the way:
                 checkpoint.mdl_list = mdl_lsgst_list
                 checkpoint.last_completed_iter += 1
                 checkpoint.last_completed_circuit_list = bulk_circuit_lists[i]
-                #write the updated checkpoint to disk:
+                # write the updated checkpoint to disk:
                 if resource_alloc.comm_rank == 0:
                     checkpoint.write(f'{checkpoint_path}_iteration_{i}.json')
 
@@ -1447,6 +1444,9 @@ class GateSetTomography(_proto.Protocol):
             target_model = self.initial_model.model.copy()
         else:
             target_model = None
+
+        if target_model is not None and simulator is not None:
+            target_model.sim = simulator
 
         estimate = _Estimate.create_gst_estimate(ret, target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
@@ -1629,13 +1629,13 @@ class StandardGST(_proto.Protocol):
         parameterizations/constraints to apply to the estimated model.
         The default value is usually fine.  Allowed values are:
 
-        - "full" : full (completely unconstrained)
-        - "TP"   : TP-constrained
-        - "CPTP" : Lindbladian CPTP-constrained
-        - "H+S"  : Only Hamiltonian + Stochastic errors allowed (CPTP)
-        - "S"    : Only Stochastic errors allowed (CPTP)
-        - "Target" : use the target (ideal) gates as the estimate
-        - <model> : any key in the `models_to_test` argument
+        - "full"    : full (completely unconstrained)
+        - "TP"      : TP-constrained
+        - "CPTPLND" : Lindbladian CPTP-constrained
+        - "H+S"     : Only Hamiltonian + Stochastic errors allowed (CPTP)
+        - "S"       : Only Stochastic errors allowed (CPTP)
+        - "Target"  : use the target (ideal) gates as the estimate
+        - <model>   : any key in the `models_to_test` argument
 
     gaugeopt_suite : GSTGaugeOptSuite, optional
         Specifies which gauge optimizations to perform on each estimate.  Can also
@@ -1718,7 +1718,8 @@ class StandardGST(_proto.Protocol):
     #    data = _proto.ProtocolData(design, dataset)
     #    return self.run(data)
 
-    def run(self, data, memlimit=None, comm=None, checkpoint= None, checkpoint_path=None, disable_checkpointing = False):
+    def run(self, data, memlimit=None, comm=None, checkpoint=None, checkpoint_path=None,
+            disable_checkpointing=False, simulator: Optional[ForwardSimulator.Castable]=None):
         """
         Run this protocol on `data`.
 
@@ -1751,6 +1752,11 @@ class StandardGST(_proto.Protocol):
             to disk during the course of this protocol. It is strongly recommended
             that this be kept set to False without good reason to disable the checkpoints.
 
+        simulator : ForwardSimulator.Castable or None
+            Ignored if None. If not None, then we call
+                fwdsim = ForwardSimulator.cast(simulator),
+            and we set the .sim attribute of every Model we encounter to fwdsim.
+
         Returns
         -------
         ProtocolResults
@@ -1779,6 +1785,10 @@ class StandardGST(_proto.Protocol):
                 embed_gates=False, basis='pp')  # HARDCODED basis!
         else:
             target_model = None  # Usually this path leads to an error being raised below.
+
+        if target_model is not None:
+            if simulator is not None:
+                target_model.sim = simulator
 
         if not disable_checkpointing:
             #Set the checkpoint_path variable if None
@@ -1813,8 +1823,12 @@ class StandardGST(_proto.Protocol):
         with printer.progress_logging(1):
             for i, mode in enumerate(modes):
                 printer.show_progress(i, len(modes), prefix='-- Std Practice: ', suffix=' (%s) --' % mode)
-                if not disable_checkpointing:
-                    #pre python 3.9 compatible version.
+                if disable_checkpointing:
+                    checkpoint_path = None
+                    child_checkpoint = None
+                else:
+                    child_checkpoint = checkpoint.children[mode]
+                    #The line below is for compatibility with Python 3.8 and lower.
                     checkpoint_path = checkpoint_path_base.with_name(f"{checkpoint_path_base.stem}_{mode.replace(' ', '_')}")
                     #The line below only works for python 3.9+
                     #checkpoint_path = checkpoint_path_base.with_stem(f"{checkpoint_path_base.stem}_{mode.replace(' ', '_')}")
@@ -1825,21 +1839,22 @@ class StandardGST(_proto.Protocol):
                     
                     mdltest = _ModelTest(target_model, target_model, self.gaugeopt_suite,
                                          mt_builder, self.badfit_options, verbosity=printer - 1, name=mode)
-                    if not disable_checkpointing:
-                        result = mdltest.run(data, memlimit, comm, checkpoint = checkpoint.children[mode],
-                                            checkpoint_path=checkpoint_path)
-                    else:
-                        result = mdltest.run(data, memlimit, comm, disable_checkpointing=True)
+                    result = mdltest.run(data, memlimit, comm,
+                                         disable_checkpointing=disable_checkpointing,
+                                         checkpoint=child_checkpoint,
+                                         checkpoint_path=checkpoint_path)
                     ret.add_estimates(result)
 
                 elif mode in models_to_test:
-                    mdltest = _ModelTest(models_to_test[mode], target_model, self.gaugeopt_suite,
+                    mdl = models_to_test[mode]
+                    if simulator is not None:
+                        mdl.sim = simulator
+                    mdltest = _ModelTest(mdl, target_model, self.gaugeopt_suite,
                                          None, self.badfit_options, verbosity=printer - 1, name=mode)
-                    if not disable_checkpointing:
-                        result = mdltest.run(data, memlimit, comm, checkpoint = checkpoint.children[mode],
-                                            checkpoint_path=checkpoint_path)
-                    else:
-                        result = mdltest.run(data, memlimit, comm, disable_checkpointing=True)
+                    result = mdltest.run(data, memlimit, comm,
+                                         disable_checkpointing=disable_checkpointing,
+                                         checkpoint=child_checkpoint,
+                                         checkpoint_path=checkpoint_path)
                     ret.add_estimates(result)
 
                 else:
@@ -1849,7 +1864,7 @@ class StandardGST(_proto.Protocol):
 
                     #Try to interpret `mode` as a parameterization
                     parameterization = mode  # for now, 1-1 correspondence
-                    initial_model = target_model
+                    initial_model = target_model.copy()
 
                     try:
                         initial_model.set_all_parameterizations(parameterization)
@@ -1858,13 +1873,14 @@ class StandardGST(_proto.Protocol):
                                          % (mode, str(e)))
 
                     initial_model = GSTInitialModel(initial_model, self.starting_point.get(mode, None))
+                    if simulator is not None:
+                        initial_model.sim = simulator
                     gst = GST(initial_model, self.gaugeopt_suite, self.objfn_builders,
                               self.optimizer, self.badfit_options, verbosity=printer - 1, name=mode)
-                    if not disable_checkpointing:
-                        result = gst.run(data, memlimit, comm, checkpoint = checkpoint.children[mode],
-                                        checkpoint_path=checkpoint_path)
-                    else:
-                        result = gst.run(data, memlimit, comm, disable_checkpointing=True)
+                    result = gst.run(data, memlimit, comm,
+                                     disable_checkpointing=disable_checkpointing,
+                                     checkpoint=child_checkpoint,
+                                     checkpoint_path=checkpoint_path)
                     ret.add_estimates(result)
 
         return ret
@@ -2983,7 +2999,8 @@ class ModelEstimateResults(_proto.ProtocolResults):
         self.estimates[estimate_key] = estimate
 
     def add_model_test(self, target_model, themodel,
-                       estimate_key='test', gaugeopt_keys="auto", verbosity=2):
+                       estimate_key='test', gaugeopt_keys="auto", verbosity=2,
+                       simulator: Optional[ForwardSimulator.Castable]=None):
         """
         Add a new model-test (i.e. non-optimized) estimate to this `Results` object.
 
@@ -3010,6 +3027,11 @@ class ModelEstimateResults(_proto.ProtocolResults):
         verbosity : int, optional
             Level of detail printed to stdout.
 
+        simulator : ForwardSimulator.Castable or None
+            Ignored if None. If not None, then we call
+                fwdsim = ForwardSimulator.cast(simulator),
+            and we set the .sim attribute of every Model we encounter to fwdsim.
+
         Returns
         -------
         None
@@ -3030,7 +3052,7 @@ class ModelEstimateResults(_proto.ProtocolResults):
         from .modeltest import ModelTest as _ModelTest
         mdltest = _ModelTest(themodel, target_model, gaugeopt_suite,
                              objfn_builder, badfit_options, name=estimate_key, verbosity=verbosity)
-        test_result = mdltest.run(self.data)
+        test_result = mdltest.run(self.data, simulator=simulator)
         self.add_estimates(test_result)
 
     def view(self, estimate_keys, gaugeopt_keys=None):
