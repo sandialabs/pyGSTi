@@ -2,19 +2,58 @@
 import numpy as _np
 import itertools as _itertools
 import copy as _copy
+import warnings as _warnings
 
 from . import tools as _tools
+
+import warnings as _warning
 
 from ..errorgenpropagation import propagatableerrorgen as _peg
 from ..errorgenpropagation import errorpropagator as _ep
 
 from tensorflow import unique
 
+
 def ring_adj_matrix(num_qubits: int):
     adj_matrix = _np.zeros((num_qubits, num_qubits))
     for i in range(num_qubits):
         adj_matrix[i, (i-1) % num_qubits] = 1
         adj_matrix[i, (i+1) % num_qubits] = 1
+    return adj_matrix
+
+def t_bar_adj_matrix(num_qubits: int):
+    '''
+    Builds the adjacency matrix for a five-qubit T-bar graph:
+
+    0 - 1 - 2
+        |
+        3
+        |
+        4
+    '''
+    assert(num_qubits == 5), "We only support 5 qubits"
+    adj_matrix = _np.zeros((num_qubits, num_qubits))
+    adj_matrix[0, 1] = 1
+    adj_matrix[1, 2], adj_matrix[1, 3] = 1, 1
+    adj_matrix[3, 4] = 1
+    adj_matrix = adj_matrix + adj_matrix.T
+    return adj_matrix
+
+def algiers_t_bar_adj_matrix():
+    '''
+    Builds the adjacency matrix for a five-qubit T-bar graph:
+
+    0 - 1 - 4
+        |
+        2
+        |
+        3
+    '''
+    adj_matrix = _np.zeros((5,5))
+    adj_matrix[0, 1] = 1
+    adj_matrix[1, 2], adj_matrix[1, 4] = 1, 1
+    adj_matrix[2, 3] = 1
+    adj_matrix = adj_matrix + adj_matrix.T
     return adj_matrix
 
 def laplace_from_qubit_graph(adj_matrix: _np.array) -> _np.array: 
@@ -108,7 +147,6 @@ def up_to_weight_k_paulis(k, n):
 
     return paulis
 
-    
 def up_to_weight_k_paulis_from_qubit_graph(k: int, n: int, qubit_graph_laplacian: _np.array, num_hops: int) -> list:
     """
     Returns the string representation of all n-qubit Pauli operators that 
@@ -169,6 +207,7 @@ def up_to_weight_k_error_gens_from_qubit_graph(k: int, n: int, qubit_graph_lapla
     the error generators type (e.g., 'H' or 'S'') and the second element is a 
     tuple specifying the Pauli(s) that index that error generator.
     """
+    if n is None: n = qubit_graph_laplacian.shape[0]
     relevant_paulis = up_to_weight_k_paulis_from_qubit_graph(k, n, qubit_graph_laplacian, num_hops)
     error_generators = []
     for egtype in egtypes:
@@ -271,9 +310,10 @@ def remap_indices(c_indices):
     unique_values, idx = _np.unique(flat_indices, return_inverse = True)
     return idx.reshape(c_indices.shape)
 
-
-def create_input_data(circs, fidelities, tracked_error_gens: list, num_channels: int, num_qubits: int, max_depth=None, return_separate = False):
+### DEPRECATED: Use create_input_data in encoding.py ###
     
+def create_input_data(circs, fidelities, tracked_error_gens: list, num_channels: int, num_qubits: int, max_depth=None, return_separate = False):
+    _warning.warn('newtools create_input_data is deprecated. Use the version in encoding.py.')
     if max_depth is None: max_depth = _np.max([c.depth for c in circs])
     print(max_depth)
     
