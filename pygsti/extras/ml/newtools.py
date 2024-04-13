@@ -12,6 +12,7 @@ from ..errorgenpropagation import propagatableerrorgen as _peg
 from ..errorgenpropagation import errorpropagator as _ep
 
 from tensorflow import unique
+import tensorflow as _tf
 
 
 def ring_adj_matrix(num_qubits: int):
@@ -259,7 +260,6 @@ def error_gen_to_index(typ, paulis):
         raise ValueError('Invali error generator specification! Note "C" and "A" errors are not implemented yet.') 
     # Future to do: C and A errors
     return base + paulistring_to_index(p1, n)
-
 
 def index_to_error_gen(i, n):
     """
