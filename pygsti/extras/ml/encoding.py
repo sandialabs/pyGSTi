@@ -148,7 +148,119 @@ def active_qubits(ctensor):
     measurement[used_qubits[0]] = 1 
     return measurement
 
+# def screen_z_errors(P, measurement):
+#     """
+#     A function that takes in a circuit's permutation matrix and its measurement tensor (i.e., the matrices that tell you where every 
+#     error vector gets mapped to at the end of the circuit) and creates a mask that masks out
+#     all error's that are Z-type on the active qubits in a circuit. 
+#     """
+#     active_qubits = _tf.where(measurement == 1)[:, 0]
+#     flattened_P = _tf.reshape(P, [-1])
+#     unique_P, _ = _tf.unique(flattened_P) # Get the unique values in P as well as their indices. 
+#     condition_mask = _tf.map_fn(lambda x: good_error(x, active_qubits), unique_P, fn_output_signature=_tf.bool)
+#     good_errors = _tf.boolean_mask(unique_P, condition_mask)
+#     expand_flat_P = _tf.expand_dims(flattened_P, axis = -1)
+#     masked_P = _tf.reduce_any(_tf.equal(expand_flat_P, good_errors), axis = -1)
+#     masked_P = _tf.reshape(masked_P, P.shape)
+#     masked_P = _tf.cast(masked_P, _tf.float32)
+    
+#     return masked_P
+
+def z_mask(P, measurement):
+    """
+    A function that takes in a circuit's permutation matrix and its measurement tensor (i.e., the matrices that tell you where every 
+    error vector gets mapped to at the end of the circuit) and creates a mask that masks out
+    all error's that are Z-type on the active qubits in a circuit. 
+    """
+    return _np.zeros(P.shape)
+
+        
 def create_input_data(circs:list, fidelities:list, tracked_error_gens: list, 
+                      pspec, geometry: str, num_qubits = None, num_channels = None, 
+                      measurement_encoding = None,
+                      indexmapper = None, indexmapper_kwargs = {}, 
+                      valuemapper = None, valuemapper_kwargs = {},
+                      max_depth = None, return_separate=False):
+    '''
+    Maps a list of circuits and fidelities to numpy arrays of encoded circuits and fidelities. 
+
+    Args:
+       - tracked_error_gens: a list of the tracked error generators.
+       - pspec: the processor on which the circuits are defined. Used to determine the number of qubits and channels (optional)
+       - geometry: the geometry in which you plan to embed the circuits (i.e., ring, grid, linear). Optional.
+       - num_qubits: the number of qubits (optional, if pspec and geometry are specified)
+       - num_channels: the number of channels used to embed a (qubit, gate) pair (optional, if pspec and geometry are specified.)
+       - indexmapper: function specifying how to map a gate to a channel.
+       - valuemapper: function specifying how to encode each gate in pspec (optional, defaults to assigning each gate a value of 1)
+       - measurement_encoding: int or NoneType specifying how to encode measurements. 
+            - If NoneType, then no measurements are returned.
+            - If 1, then measurements are encoded as extra channels in the circuit tensor.
+            - If 2, then the measurements are returned separately in a tensor of shape (num_qubits,)
+    '''
+    num_circs = len(circs)
+    num_error_gens = len(tracked_error_gens)
+
+    if max_depth is None: max_depth = _np.max([c.depth for c in circs])
+    print(max_depth)
+    
+    if num_channels is None: num_channels = compute_channels(pspec, geometry)
+    encode_measurements = False
+    if measurement_encoding == 1:
+        encode_measurements = True
+        num_channels += 1
+        max_depth += 1 # adding an additional layer to each circuit for the measurements.
+    elif measurement_encoding == 2:
+        measurements = _np.zeros((num_circs, num_qubits))
+        x_zmask = _np.zeros((num_circs, max_depth, num_error_gens), int)
+    
+    if num_qubits is None: num_qubits = len(pspec.qubit_labels)
+    if valuemapper is None: valuemapper = lambda x: 1
+    assert(indexmapper is not None), 'I need a way to map gates to an index!!!!'
+
+    x_circs = _np.zeros((num_circs, num_qubits, max_depth, num_channels), float)
+    x_signs = _np.zeros((num_circs, max_depth, num_error_gens), int)
+    x_indices = _np.zeros((num_circs, max_depth, num_error_gens), int)
+    if type(fidelities) is list: y = _np.array(fidelities)
+                    
+    for i, c in enumerate(circs):
+        if i % 200 == 0:
+            print(i, end=',')
+        x_circs[i, :, :, :] = circuit_to_tensor(c, max_depth, num_qubits, num_channels, encode_measurements,
+                                                         indexmapper, indexmapper_kwargs,
+                                                         valuemapper, valuemapper_kwargs 
+                                                         )              
+        c_indices, c_signs = create_error_propagation_matrix(c, tracked_error_gens)
+        x_indices[i, 0:c.depth, :] = c_indices # deprecated: np.rint(c_indices)
+        x_signs[i, 0:c.depth, :] = c_signs # deprecated: np.rint(c_signs)
+        if measurement_encoding == 1:
+            # This is where update the signs and indices to account for the measurements
+            # NOT IMPLEMENTED!!!!!
+            x_signs[i, :, -1] = 1 
+            x_indices[i, :, -1] = 0 # ??? Need to figure this out ??? Need to take the tracked error gens and map them to their unique id
+        elif measurement_encoding == 2:
+            measurements[i, :] = active_qubits(x_circs[i, :, :, :])
+            x_zmask[i, 0:c.depth, :] = z_mask(c_indices, measurements[i, :])
+           
+    if return_separate:
+        return x_circs, x_signs, x_indices, y
+
+    else:
+        len_gate_encoding = num_qubits * num_channels
+        xc_reshaped = _np.zeros((x_circs.shape[0], x_circs.shape[2], x_circs.shape[1] * x_circs.shape[3]), float)
+        for qi in range(num_qubits): 
+            for ci in range(num_channels): 
+                xc_reshaped[:, :, qi * num_channels + ci] = x_circs[:, qi, :, ci].copy()
+            
+        x = _np.zeros((x_indices.shape[0], x_indices.shape[1], 2 * num_error_gens + len_gate_encoding), float)
+        x[:, :, 0:len_gate_encoding] = xc_reshaped[:, :, :]
+        x[:, :, len_gate_encoding:num_error_gens + len_gate_encoding] = x_indices[:, :, :]
+        x[:, :, num_error_gens + len_gate_encoding:2 * num_error_gens + len_gate_encoding] = x_signs[:, :, :]
+        if measurement_encoding == 2:
+            # xt = _np.concatenate((xt, x_zmask), axis = 0)
+            return x, y, measurements
+        return x, y
+            
+def old_create_input_data(circs:list, fidelities:list, tracked_error_gens: list, 
                       pspec, geometry: str, num_qubits = None, num_channels = None, 
                       measurement_encoding = None,
                       indexmapper = None, indexmapper_kwargs = {}, 
@@ -212,8 +324,7 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
             x_indices[i, :, -1] = 0 # ??? Need to figure this out ??? Need to take the tracked error gens and map them to their unique id
         elif measurement_encoding == 2:
             measurements[i, :] = active_qubits(x_circs[i, :, :, :])
-            
-            
+           
     if return_separate:
         return x_circs, x_signs, x_indices, y
 
@@ -232,6 +343,7 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
         xt[:, :, 0:len_gate_encoding] = xc2[:, :, :]
         xt[:, :, len_gate_encoding:num_error_gens + len_gate_encoding] = xi2[:, :, :]
         xt[:, :, num_error_gens + len_gate_encoding:2 * num_error_gens + len_gate_encoding] = xs2[:, :, :]
+
         if measurement_encoding == 2:
             return xt, y, measurements
         return xt, y
