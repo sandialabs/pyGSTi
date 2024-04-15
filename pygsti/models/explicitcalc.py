@@ -153,31 +153,31 @@ class ExplicitOpModelCalc(object):
         float
         """
         if isinstance(transform_mx, tuple):
-            T, Ti = transform_mx
+            P, invP = transform_mx
         else:
-            T = transform_mx
-            Ti = None if T is None else _np.linalg.pinv(T)
+            P = transform_mx
+            invP = None if P is None else _np.linalg.pinv(P)
         d = 0
         nSummands = 0.0
         if item_weights is None: item_weights = {}
         opWeight = item_weights.get('gates', 1.0)
         spamWeight = item_weights.get('spam', 1.0)
 
-        if (T is None and Ti is None) or isinstance(transform_mx, _np.ndarray):
+        if (P is None and invP is None) or isinstance(transform_mx, _np.ndarray):
             # use the original implementation.
             for opLabel, gate in self.operations.items():
                 wt = item_weights.get(opLabel, opWeight)
-                d += wt * gate.frobeniusdist_squared(other_calc.operations[opLabel], T, Ti)
+                d += wt * gate.frobeniusdist_squared(other_calc.operations[opLabel], P, invP)
                 nSummands += wt * (gate.dim)**2
 
             for lbl, rhoV in self.preps.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], T, Ti)
+                d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], P, invP)
                 nSummands += wt * rhoV.dim
 
             for lbl, Evec in self.effects.items():
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl], T, Ti)
+                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl], P, invP)
                 nSummands += wt * Evec.dim
         else:
             # we're in the special case that I'm creating.
@@ -186,24 +186,27 @@ class ExplicitOpModelCalc(object):
                 gate_mx = gate.to_dense()
                 other_mx = other_calc.operations[opLabel].to_dense()
                 delta = gate_mx - other_mx
-                if T is not None:
-                    delta = delta @ T
-                if Ti is not None:
-                    delta = Ti @ delta
+                if P is not None:
+                    delta = delta @ P
+                if invP is not None:
+                    delta = invP @ delta
                 val = _np.linalg.norm(delta.flatten())
                 d += wt * val**2
                 nSummands += wt * (gate.dim)**2
 
             for lbl, rhoV in self.preps.items():
-                # keep the original implementation, for now.
                 wt = item_weights.get(lbl, spamWeight)
                 d += wt * rhoV.frobeniusdist_squared(other_calc.preps[lbl], None, None)
                 nSummands += wt * rhoV.dim
 
             for lbl, Evec in self.effects.items():
-                # keep the original implementation, for now.
                 wt = item_weights.get(lbl, spamWeight)
-                d += wt * Evec.frobeniusdist_squared(other_calc.effects[lbl], None, None)
+                evec = Evec.to_dense()
+                other = other_calc.effects[lbl].to_dense()
+                delta = evec - other
+                delta = delta @ P
+                val = _np.linalg.norm(delta.flatten())
+                d += wt * val**2
                 nSummands += wt * Evec.dim
 
         if normalize and nSummands > 0:
