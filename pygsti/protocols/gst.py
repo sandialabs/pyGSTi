@@ -2505,6 +2505,7 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
                     spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
 
                 dd[lbl]['SPAM'] = sum(spamdd.values())
+
         return dd, 'diamond distance'
     else:
         raise ValueError("Invalid wildcard1d_reference value (%s) in bad-fit options!"
