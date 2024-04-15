@@ -841,7 +841,9 @@ class GSTGaugeOptSuite(_NicelySerializable):
           - "varyValidSpamWt" : varies spam weight with SPAM penalty == 1.
           - "toggleValidSpam" : toggles spame penalty (0 or 1); fixed SPAM wt.
           - "unreliable2Q" : adds branch to a spam suite that weights 2Q gates less
-          - "none" : no gauge optimizations are performed.
+          - "none" : no gauge optimizations are performed. When passed individually
+             (not in a list with other suite names) then this results in an empty
+             GSTGaugeOptSuite object (w/gaugeopt_suite_names set to None).
 
     gaugeopt_argument_dicts : dict, optional
         A dictionary whose string-valued keys label different gauge optimizations (e.g. within a
@@ -872,8 +874,11 @@ class GSTGaugeOptSuite(_NicelySerializable):
     def __init__(self, gaugeopt_suite_names=None, gaugeopt_argument_dicts=None, gaugeopt_target=None):
         super().__init__()
         if gaugeopt_suite_names is not None:
-            self.gaugeopt_suite_names = (gaugeopt_suite_names,) \
-                if isinstance(gaugeopt_suite_names, str) else tuple(gaugeopt_suite_names)
+            if gaugeopt_suite_names == 'none':
+                self.gaugeopt_suite_names = None
+            else:
+                self.gaugeopt_suite_names = (gaugeopt_suite_names,) \
+                    if isinstance(gaugeopt_suite_names, str) else tuple(gaugeopt_suite_names)
         else:
             self.gaugeopt_suite_names = None
 
@@ -951,6 +956,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
                 if hasattr(goparams, 'keys'):  # goparams is a simple dict
                     gaugeopt_suite_dict[lbl] = goparams.copy()
                     gaugeopt_suite_dict[lbl].update({'verbosity': printer})
+                elif goparams is None:
+                    gaugeopt_suite_dict[lbl] = None
                 else:  # assume goparams is an iterable
                     assert(isinstance(goparams, (list, tuple))), \
                         "If not a dictionary, gauge opt params should be a list or tuple of dicts!"
@@ -963,7 +970,13 @@ class GSTGaugeOptSuite(_NicelySerializable):
         if self.gaugeopt_target is not None:
             assert(isinstance(self.gaugeopt_target, _Model)), "`gaugeopt_target` must be None or a Model"
             for goparams in gaugeopt_suite_dict.values():
-                goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
+                if hasattr(goparams, 'keys'):
+                    goparams_list = [goparams] 
+                elif goparams is None: #edge case for 'none' suite
+                    continue
+                else:
+                    goparams_list = goparams
+
                 for goparams_dict in goparams_list:
                     if 'target_model' in goparams_dict:
                         _warnings.warn(("`gaugeOptTarget` argument is overriding"
@@ -1088,8 +1101,8 @@ class GSTGaugeOptSuite(_NicelySerializable):
         elif suite_name == "unreliable2Q":
             raise ValueError(("unreliable2Q is no longer a separate 'suite'.  You should precede it with the suite"
                               " name, e.g. 'stdgaugeopt-unreliable2Q' or 'varySpam-unreliable2Q'"))
-        elif suite_name == "none":
-            pass  # add nothing
+        elif suite_name == 'none':
+            gaugeopt_suite_dict[root_lbl] = None
         else:
             raise ValueError("Unknown gauge-optimization suite '%s'" % suite_name)
 
@@ -1439,10 +1452,13 @@ class GateSetTomography(_proto.Protocol):
             target_model = self.gaugeopt_suite.gaugeopt_target
         elif self.initial_model.target_model is not None:
             target_model = self.initial_model.target_model.copy()
-        elif self.initial_model.model is not None and self.gaugeopt_suite.is_empty() is False:
+        elif self.initial_model.model is not None:
             # when we desparately need a target model but none have been specifically given: use initial model
             target_model = self.initial_model.model.copy()
         else:
+            msg = 'Could not identify a suitable target model, this may result'\
+                 +' in unexpected behavior or missing plots in reports.'
+            _warnings.warn(msg)
             target_model = None
 
         if target_model is not None and simulator is not None:
@@ -1451,10 +1467,22 @@ class GateSetTomography(_proto.Protocol):
         estimate = _Estimate.create_gst_estimate(ret, target_model, mdl_start, mdl_lsgst_list, parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
 
-        return _add_gaugeopt_and_badfit(ret, self.name, target_model,
-                                        self.gaugeopt_suite, self.unreliable_ops,
-                                        self.badfit_options, self.optimizer, resource_alloc, printer)
-
+        #Add some better handling for when gauge optimization is turned off (current code path isn't working.)
+        if not self.gaugeopt_suite.is_empty():
+            ret = _add_gaugeopt_and_badfit(ret, self.name, target_model,
+                                           self.gaugeopt_suite, self.unreliable_ops,
+                                           self.badfit_options, self.optimizer, 
+                                           resource_alloc, printer)
+        else:
+            #add a model to the estimate that we'll call the trivial gauge optimized model which
+            #will be set to be equal to the final iteration estimate.
+            ret.estimates[self.name].models['trivial_gauge_opt'] = mdl_lsgst_list[-1]
+            #and add a key for this to the goparameters dict (this is what the report
+            #generation looks at to determine the names of the gauge optimized models).
+            #Set the value to None as a placeholder.
+            ret.estimates[self.name].goparameters['trivial_gauge_opt'] = None
+        
+        return ret
 
 class LinearGateSetTomography(_proto.Protocol):
     """
@@ -1503,6 +1531,10 @@ class LinearGateSetTomography(_proto.Protocol):
         self.oplabels = "default"
         self.oplabel_aliases = None
         self.unreliable_ops = ('Gcnot', 'Gcphase', 'Gms', 'Gcn', 'Gcx', 'Gcz')
+
+        self.auxfile_types['target_model'] = 'serialized-object'
+        self.auxfile_types['gaugeopt_suite'] = 'serialized-object'
+        self.auxfile_types['badfit_options'] = 'serialized-object'
 
     def check_if_runnable(self, data):
         """
@@ -1612,9 +1644,22 @@ class LinearGateSetTomography(_proto.Protocol):
                                    'final iteration estimate': mdl_lgst},
                              parameters)
         ret.add_estimate(estimate, estimate_key=self.name)
-        return _add_gaugeopt_and_badfit(ret, self.name, target_model, self.gaugeopt_suite,
+
+        #Add some better handling for when gauge optimization is turned off (current code path isn't working.)
+        if not self.gaugeopt_suite.is_empty():
+            ret = _add_gaugeopt_and_badfit(ret, self.name, target_model, self.gaugeopt_suite,
                                         self.unreliable_ops, self.badfit_options,
                                         None, resource_alloc, printer)
+        else:
+            #add a model to the estimate that we'll call the trivial gauge optimized model which
+            #will be set to be equal to the final iteration estimate.
+            ret.estimates[self.name].models['trivial_gauge_opt'] = mdl_lgst
+            #and add a key for this to the goparameters dict (this is what the report
+            #generation looks at to determine the names of the gauge optimized models).
+            #Set the value to None as a placeholder.
+            ret.estimates[self.name].goparameters['trivial_gauge_opt'] = None
+
+        return ret
 
 
 class StandardGST(_proto.Protocol):
@@ -1645,6 +1690,14 @@ class StandardGST(_proto.Protocol):
         for gauge optimization.  This model is used as the "target" for gauge-
         optimization (only), and is useful when you want to gauge optimize toward
         something other than the *ideal* target gates.
+
+    target_model : Model, optional (default None)
+        If specified use this Model as the target model. Depending on other
+        specified keyword arguments this model may be used as the target for
+        the purposes of gauge optimization, report generation/analysis, and
+        initial seeding for optimization. (For almost all of these it may be the
+        case that other keyword argument values override this for certain
+        tasks).
 
     models_to_test : dict, optional
         A dictionary of Model objects representing (gate-set) models to
@@ -2039,26 +2092,31 @@ def _add_gauge_opt(results, base_est_label, gaugeopt_suite, starting_model,
 
         printer.log("-- Performing '%s' gauge optimization on %s estimate --" % (go_label, base_est_label), 2)
 
-        #Get starting model
-        results.estimates[base_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
+        #add logic for the case where no gauge optimization is performed.
+        if go_label == 'none':
+            results.estimates[base_est_label].add_gaugeoptimized(goparams, starting_model, go_label, comm, printer - 3)
+        else:
+            results.estimates[base_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
+        
+        #Get starting model for next stage
         mdl_start = results.estimates[base_est_label].retrieve_start_model(goparams)
+        if mdl_start is not None:
+            #Gauge optimize data-scaled estimate also
+            for suffix in ROBUST_SUFFIX_LIST:
+                robust_est_label = base_est_label + suffix
+                if robust_est_label in results.estimates:
+                    mdl_start_robust = results.estimates[robust_est_label].retrieve_start_model(goparams)
 
-        #Gauge optimize data-scaled estimate also
-        for suffix in ROBUST_SUFFIX_LIST:
-            robust_est_label = base_est_label + suffix
-            if robust_est_label in results.estimates:
-                mdl_start_robust = results.estimates[robust_est_label].retrieve_start_model(goparams)
-
-                if mdl_start_robust.frobeniusdist(mdl_start) < 1e-8:
-                    printer.log("-- Conveying '%s' gauge optimization from %s to %s estimate --" %
-                                (go_label, base_est_label, robust_est_label), 2)
-                    params = results.estimates[base_est_label].goparameters[go_label]  # no need to copy here
-                    gsopt = results.estimates[base_est_label].models[go_label].copy()
-                    results.estimates[robust_est_label].add_gaugeoptimized(params, gsopt, go_label, comm, printer - 3)
-                else:
-                    printer.log("-- Performing '%s' gauge optimization on %s estimate --" %
-                                (go_label, robust_est_label), 2)
-                    results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
+                    if mdl_start_robust.frobeniusdist(mdl_start) < 1e-8:
+                        printer.log("-- Conveying '%s' gauge optimization from %s to %s estimate --" %
+                                    (go_label, base_est_label, robust_est_label), 2)
+                        params = results.estimates[base_est_label].goparameters[go_label]  # no need to copy here
+                        gsopt = results.estimates[base_est_label].models[go_label].copy()
+                        results.estimates[robust_est_label].add_gaugeoptimized(params, gsopt, go_label, comm, printer - 3)
+                    else:
+                        printer.log("-- Performing '%s' gauge optimization on %s estimate --" %
+                                    (go_label, robust_est_label), 2)
+                        results.estimates[robust_est_label].add_gaugeoptimized(goparams, None, go_label, comm, printer - 3)
 
 
 def _add_badfit_estimates(results, base_estimate_label, badfit_options,

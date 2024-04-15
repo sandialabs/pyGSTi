@@ -621,7 +621,7 @@ objects:
     CircuitPlaquette:
       __name__: null
       copy: null
-      elementvec_to_matrix: null
+      elementvec_to_array: null
       expand_aliases: null
       get_all_strs: all_strs  # XXX make property?
       iter_simplified: null
