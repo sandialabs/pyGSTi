@@ -25,11 +25,8 @@ try:
     from qiskit.transpiler.passes import ALAPScheduleAnalysis, PadDynamicalDecoupling
 except: _qiskit = None
 
-
-
-
 def insert_dd(circ, backend):
-        durations = qiskit.transpiler.InstructionDurations.from_backend(backend)
+        durations = _qiskit.transpiler.InstructionDurations.from_backend(backend)
 	#print(durations)
         pa = backend.configuration().timing_constraints['pulse_alignment']
         # balanced X-X sequence on all qubits
@@ -105,7 +102,7 @@ def q_list_to_ordered_target_indices(q_list, num_qubits):
 class IBMQExperiment(dict):
 
     def __init__(self, edesign, pspec, ancilla_label=None,remove_duplicates=True, randomized_order=True, seed=None, circuits_per_batch=75,
-                 num_shots=1024, do_dd = False):
+                 num_shots=1024, parallel_DD = False, backend=None):
         """
         A object that converts pyGSTi ExperimentDesigns into jobs to be submitted to IBM Q, submits these
         jobs to IBM Q and receives the results.
@@ -166,8 +163,10 @@ class IBMQExperiment(dict):
         # Populated when grabbing results from IBM Q with .retrieve_results()
         self['batch_result_object'] = None
         self['data'] = None
-        if do_dd: 
-            self['DD_data'] = None 
+        self['DD_data'] = None 
+        self.DD = parallel_DD
+        if self.DD: 
+            assert(backend is not None), "Can only do DD given a specific backend!"
 
         circuits = edesign.all_circuits_needing_data.copy()
         if randomized_order:
@@ -179,6 +178,9 @@ class IBMQExperiment(dict):
         else:
             assert(not remove_duplicates), "Can only remove duplicates if randomizing order!"
 
+        if self.DD: 
+            circuits_per_batch = circuits_per_batch/2
+
         num_batches = int(_np.ceil(len(circuits) / circuits_per_batch))
 
         self['pygsti_circuits'] = [[] for i in range(num_batches)]
@@ -187,9 +189,6 @@ class IBMQExperiment(dict):
         self['qiskit_QuantumCircuits_as_openqasm'] = [[] for i in range(num_batches)]
         self['submit_time_calibration_data'] = []
         self['qobj'] = []
-
-        if do_dd: 
-            self['qiskit_QuantumCircuits_DD'] = 
 
         batch_idx = 0
         for circ_idx, circ in enumerate(circuits):
@@ -208,15 +207,21 @@ class IBMQExperiment(dict):
                 pygsti_openqasm_circ = circ.convert_to_openqasm(num_qubits=pspec.num_qubits,
                                                                 standard_gates_version='x-sx-rz', ancilla_label=ancilla_label)
                 qiskit_qc = _qiskit.QuantumCircuit.from_qasm_str(pygsti_openqasm_circ)
-
                 self['pygsti_openqasm_circuits'][batch_idx].append(pygsti_openqasm_circ)
                 self['qiskit_QuantumCircuits'][batch_idx].append(qiskit_qc)
                 self['qiskit_QuantumCircuits_as_openqasm'][batch_idx].append(qiskit_qc.qasm())
-
+                if self.DD: 
+                    dd_circ = insert_dd(qiskit_qc, backend)
+                    self['qiskit_QuantumCircuits'][batch_idx].append(dd_circ)
+                    self['qiskit_QuantumCircuits_as_openqasm'][batch_idx].append(dd_circ.qasm())
                 #print(batch_idx, circ_idx, len(submitted_openqasm_circuits), total_num)
                 total_num += 1
 
-            self['qobj'].append(_qiskit.compiler.assemble(self['qiskit_QuantumCircuits'][batch_idx], shots=num_shots))
+            try:
+                self['qobj'].append(_qiskit.compiler.assemble(self['qiskit_QuantumCircuits'][batch_idx], shots=num_shots))
+            except:
+                _warnings.warn("Couldn't create qobj!")
+                self['qobj'] = None
 
     def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True,
                wait_time=1, wait_steps=10):
@@ -387,6 +392,9 @@ class IBMQExperiment(dict):
         self['batch_result_object'] = []
         #get results from backend jobs and add to dict
         ds = _data.DataSet()
+        if self.DD: 
+            dd_ds = _data.DataSet()
+
         for exp_idx, qjob in enumerate(self['qjob']):
             print("Querying IBMQ for results objects for batch {}...".format(exp_idx + 1))
             batch_result = qjob.result()
@@ -394,13 +402,27 @@ class IBMQExperiment(dict):
             #exp_dict['batch_data'] = []
             num_qubits_in_pspec = self['pspec'].num_qubits
             for i, circ in enumerate(self['pygsti_circuits'][exp_idx]): 
-                ordered_target_indices = [self['pspec'].qubit_labels.index(q) for q in circ.line_labels]
-                #assumes qubit labeling of the form 'Q0' not '0' 
-                labeled_counts = to_labeled_counts(batch_result.get_counts(i), ordered_target_indices, num_qubits_in_pspec)
-                outcome_labels = labeled_counts[0]
-                counts_data = labeled_counts[1]
-                ds.add_count_list(circ, outcome_labels, counts_data)
+                if self.DD: 
+                    ordered_target_indices = [self['pspec'].qubit_labels.index(q) for q in circ.line_labels]
+                    #assumes qubit labeling of the form 'Q0' not '0' 
+                    labeled_counts = to_labeled_counts(batch_result.get_counts(2*i), ordered_target_indices, num_qubits_in_pspec)
+                    dd_labeled_counts = to_labeled_counts(batch_result.get_counts(2*i+1), ordered_target_indices, num_qubits_in_pspec)
+                    outcome_labels = labeled_counts[0]
+                    counts_data = labeled_counts[1]
+                    dd_outcome_labels = dd_labeled_counts[0]
+                    dd_counts_data = dd_labeled_counts[1]
+                    ds.add_count_list(circ, outcome_labels, counts_data)
+                    dd_ds.add_count_list(circ, dd_outcome_labels, dd_counts_data)
+                else: 
+                    ordered_target_indices = [self['pspec'].qubit_labels.index(q) for q in circ.line_labels]
+                    #assumes qubit labeling of the form 'Q0' not '0' 
+                    labeled_counts = to_labeled_counts(batch_result.get_counts(i), ordered_target_indices, num_qubits_in_pspec)
+                    outcome_labels = labeled_counts[0]
+                    counts_data = labeled_counts[1]
+                    ds.add_count_list(circ, outcome_labels, counts_data)              
         self['data'] = _ProtocolData(self['edesign'], ds)
+        if self.DD: 
+            self['DD_data'] = _ProtocolData(self['edesign'], dd_ds)
         print('Finished retrieving results!') #Changed this 
 
     def write(self, dirname=None):
@@ -423,6 +445,8 @@ class IBMQExperiment(dict):
             if dirname is None: raise ValueError("`dirname` must be given because there's no default directory")
 
         self['data'].write(dirname)
+        if self.DD:
+            self['DD_data'].write(dirname)
 
         dict_to_json = {atr: self[atr] for atr in _attribute_to_json}
 
