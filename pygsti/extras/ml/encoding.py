@@ -248,6 +248,7 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
             x_indices[i, :, -1] = 0 # ??? Need to figure this out ??? Need to take the tracked error gens and map them to their unique id
         elif measurement_encoding == 2:
             measurements[i, :] = active_qubits(x_circs[i, :, :, :])
+            measurements[i, ::-1] = measurements[i, :] # flip it and reverse it
             x_zmask[i, 0:c.depth, :] = z_mask(c_indices, measurements[i, :])
            
     if return_separate:

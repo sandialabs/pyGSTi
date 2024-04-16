@@ -18,6 +18,8 @@ class DenseSubNetwork(_keras.layers.Layer):
         self.dense1 = _keras.layers.Dense(30, activation='relu')
         self.dense2 = _keras.layers.Dense(20, activation='relu')
         self.dense3 = _keras.layers.Dense(10, activation='relu')
+        self.dense4 = _keras.layers.Dense(5, activation = 'relu')
+        self.dense5 = _keras.layers.Dense(5, activation = 'relu')
         super().build(input_shape)
 
     def call(self, inputs):
@@ -25,6 +27,8 @@ class DenseSubNetwork(_keras.layers.Layer):
         x = self.dense1(inputs)
         x = self.dense2(x)
         x = self.dense3(x)
+        x = self.dense4(x)
+        x = self.dense5(x)
         return self.output_layer(x)
 
 
@@ -241,8 +245,8 @@ class CircuitErrorVecScreenZErrors(CircuitErrorVec):
             signed_M = _tf.math.multiply(S, M)
             # Zero out the entries in signed_M that get sent to errors that are Z-type Paulis on the active qubits
             masked_signed_M = _tf.math.multiply(signed_M, z_mask)
-            final_stochastic_error_rates = calc_masked_err_rates(signed_M, P, self.stochastic_mask)
-            final_hamiltonian_error_rates = calc_masked_err_rates(signed_M, P, self.hamiltonian_mask)
+            final_stochastic_error_rates = calc_masked_err_rates(masked_signed_M, P, self.stochastic_mask)
+            final_hamiltonian_error_rates = calc_masked_err_rates(masked_signed_M, P, self.hamiltonian_mask)
             return _tf.reduce_sum(final_stochastic_error_rates) + _tf.reduce_sum(_tf.square(final_hamiltonian_error_rates))
 
         def circuit_to_fidelity(input):
