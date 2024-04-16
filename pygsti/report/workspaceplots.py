@@ -1894,6 +1894,58 @@ class ColorBoxPlot(WorkspacePlot):
             #TODO: propagate mdc_store down into compute_sub_mxs?
             if (submatrices is not None) and ptyp in submatrices:
                 subMxs = submatrices[ptyp]  # "custom" type -- all mxs precomputed by user
+
+                #some of the branches below rely on circuit_struct being defined, which is previously
+                #wasn't when hitting this condition on the if statement, so add those definitions here.
+                #also need to built the addl_hover_info as well, based on circuit_struct.
+                if isinstance(circuits, _PlaquetteGridCircuitStructure):
+                    circuit_struct = circuits
+
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+
+                elif isinstance(circuits, _CircuitList):
+                    circuit_struct = [circuits]
+
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+
+                elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
+                    circuit_struct = circuits
+
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+
+                #Otherwise fall-back to the old casting behavior and proceed
+                else:
+                    circuit_struct = _PlaquetteGridCircuitStructure.cast(circuits)
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+                
             elif isinstance(circuits, _PlaquetteGridCircuitStructure):
                 circuit_struct= circuits
                 subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model, mx_fn, dataset, extra_arg)
