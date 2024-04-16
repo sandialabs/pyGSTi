@@ -1622,8 +1622,8 @@ class DataSet(_MongoSerializable):
         convert_int_to_binary : bool, optional (defaut True)
             By default the keys in the cirq Results object are the integers representing
             the bitstrings of the measurements on a set of qubits, in big-endian convention.
-            If True this uses the cirq function `cirq.big_endian_int_to_bits` to convert back
-            to a binary string before adding the counts as a entry into the pygsti dataset.
+            If True this converts back to a binary string before adding the counts as a 
+            entry into the pygsti dataset.
 
         num_qubits : int, optional (default None)
             Number of qubits used in the conversion from integers to binary when convert_int_to_binary
