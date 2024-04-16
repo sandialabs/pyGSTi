@@ -158,10 +158,22 @@ $(document).ready(function() {
     // Render KaTeX
     render_katex('body');
 
+    // Iterate through all figure captions and add a default caption detail
+    const figcaptions = document.getElementsByTagName("figcaption")
+    for (const figcap of figcaptions) {
+        const defaultcaption = document.createElement('span')
+        defaultcaption.className = 'defaultcaptiondetail'
+        defaultcaption.innerHTML = '(Click to expand details)'
+        defaultcaption.classList.toggle("showcaption")
+        figcap.appendChild(defaultcaption)
+    }
+
     // Enable figure caption toggling
     $('figcaption').on('click', function() {
         // captiondetails should be divs, not spans
         $(this).children('.captiondetail').toggleClass('showcaption')
+        // Also turn off default caption
+        $(this).children('.defaultcaptiondetail').toggleClass('showcaption')
     });
 });
 
