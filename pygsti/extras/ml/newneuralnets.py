@@ -8,27 +8,31 @@ from pygsti.extras.ml import newtools
 
 
 class DenseSubNetwork(_keras.layers.Layer):
-    def __init__(self, outdim):
+    def __init__(self, outdim, units = [30, 20, 10, 5, 5]):
         super().__init__()
         self.outdim = outdim
         self.output_layer = _keras.layers.Dense(outdim, kernel_initializer=_keras.initializers.random_uniform(minval=-0.00001, maxval=0.00001))
-        # set output activation to 'relu?'
+        self.units = _copy.deepcopy(units)
+    # set output activation to 'relu?'
     def build(self, input_shape):
         # Define the sub-unit's dense layers
-        self.dense1 = _keras.layers.Dense(30, activation='relu')
-        self.dense2 = _keras.layers.Dense(20, activation='relu')
-        self.dense3 = _keras.layers.Dense(10, activation='relu')
-        self.dense4 = _keras.layers.Dense(5, activation = 'relu')
-        self.dense5 = _keras.layers.Dense(5, activation = 'relu')
+        self.sequential = _keras.Sequential([_keras.layers.Dense(i, activation = 'relu') for i in self.units])
+        # self.dense1 = _keras.layers.Dense(30, activation='relu')
+        # self.dense2 = _keras.layers.Dense(20, activation='relu')
+        # self.dense3 = _keras.layers.Dense(10, activation='relu')
+        # self.dense4 = _keras.layers.Dense(5, activation = 'relu')
+        # self.dense5 = _keras.layers.Dense(5, activation = 'relu')
+
         super().build(input_shape)
 
     def call(self, inputs):
         # This should naturally handle batches....
-        x = self.dense1(inputs)
-        x = self.dense2(x)
-        x = self.dense3(x)
-        x = self.dense4(x)
-        x = self.dense5(x)
+        # x = self.dense1(inputs)
+        # x = self.dense2(x)
+        # x = self.dense3(x)
+        # x = self.dense4(x)
+        # x = self.dense5(x)
+        x = self.sequential(inputs)
         return self.output_layer(x)
 
 
@@ -61,7 +65,7 @@ def layer_snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_gr
     
 
 class LocalizedDenseToErrVec(_keras.layers.Layer):
-    def __init__(self, layer_snipper, layer_snipper_args, tracked_error_gens):
+    def __init__(self, layer_snipper, layer_snipper_args, tracked_error_gens, dense_units = [30, 20, 10, 5, 5]):
         """
         layer_snipper: func
             A function that takes a primitive error generator and maps it to a list that encodes which parts
@@ -76,9 +80,10 @@ class LocalizedDenseToErrVec(_keras.layers.Layer):
         self.num_tracked_error_gens = len(tracked_error_gens)  # This is the output dimenision of the network
         self.tracked_error_gens = tracked_error_gens  
         self.layer_encoding_indices_for_error_gen = [layer_snipper(error_gen, *layer_snipper_args) for error_gen in tracked_error_gens]
-
+        self.dense_units = dense_units
+    
     def build(self, input_shape):
-        self.dense = {error_gen_idx: DenseSubNetwork(1) for error_gen_idx in range(self.num_tracked_error_gens)}
+        self.dense = {error_gen_idx: DenseSubNetwork(1, self.dense_units) for error_gen_idx in range(self.num_tracked_error_gens)}
         super().build(input_shape)
 
     def call(self, inputs):
@@ -89,21 +94,60 @@ class LocalizedDenseToErrVec(_keras.layers.Layer):
 
 class CircuitErrorVecWithMeasurementsv1(_keras.Model):
     """
-        This class defines a NN architecture that takes in: encoded circuits and a measurement tensors for each circuit.
+        This class defines a NN architecture that takes in: encoded circuits, measurement tensors, and Z-masks.
         The measurement tensor for a circuit has shape (num_qubits,).
 
         The NN learns to output the infidelity of the measurement layer as well as the infidelity of the circuit.  
     """
-    def __init__(self, num_qubits, num_channels, tracked_error_gens, layer_snipper, layer_snipper_args, input_shapes=[None, None]):
+    def __init__(self, num_qubits, num_channels, tracked_error_gens, 
+                 layer_snipper, layer_snipper_args, 
+                 dense_units = [30, 20, 10, 5, 5], input_shapes=[None, None, None]):
         super(CircuitErrorVecWithMeasurementsv1, self).__init__()
         self.num_qubits = num_qubits
         self.tracked_error_gens = tracked_error_gens
         self.num_tracked_error_gens = len(self.tracked_error_gens)
         self.num_channels = num_channels
         self.len_gate_encoding = self.num_qubits * self.num_channels
+        self.dense_units = dense_units
         self.input_shapes = input_shapes
         self.circuit_error_vec = CircuitErrorVecScreenZErrors(num_qubits, num_channels, tracked_error_gens, 
-                                                 layer_snipper, layer_snipper_args, self.input_shapes)
+                                                 layer_snipper, layer_snipper_args, dense_units, self.input_shapes)
+        self.measurement_network = _keras.Sequential([
+            _keras.layers.Dense(60, 'relu', input_shape = input_shapes[1]),
+            _keras.layers.Dense(30, 'relu'),
+            _keras.layers.Dense(1, 'relu')
+        ])
+
+    def call(self, inputs):
+        circuits, measurements, z_masks  = inputs
+        circuit_infidelities = self.circuit_error_vec(inputs)
+        measurement_infidelities = self.measurement_network(measurements)
+        measurement_infidelities = _tf.squeeze(measurement_infidelities, axis=1)
+        return circuit_infidelities + measurement_infidelities
+
+class CircuitErrorVecWithMeasurementsAndBitstringsv1(_keras.Model):
+    """
+        This class defines a NN architecture that takes in: encoded circuits, measurement tensors, and Z-masks.
+        The measurement tensor for a circuit has shape (2*num_qubits,). The first num_qubits entries mark the measured qubits,
+        while the last num_qubits entries denote a circuit's target bitstring (padded if necessary).
+
+        Unlike CircuitErrorVecWithMeasurementsv1, this network uses attention to learn the measurement infidelity. 
+
+        The NN learns to output the infidelity of the measurement layer as well as the infidelity of the circuit.  
+    """
+    def __init__(self, num_qubits, num_channels, tracked_error_gens, 
+                 layer_snipper, layer_snipper_args, 
+                 dense_units = [30, 20, 10, 5, 5], input_shapes=[None, None, None]):
+        super(CircuitErrorVecWithMeasurementsv1, self).__init__()
+        self.num_qubits = num_qubits
+        self.tracked_error_gens = tracked_error_gens
+        self.num_tracked_error_gens = len(self.tracked_error_gens)
+        self.num_channels = num_channels
+        self.len_gate_encoding = self.num_qubits * self.num_channels
+        self.dense_units = dense_units
+        self.input_shapes = input_shapes
+        self.circuit_error_vec = CircuitErrorVecScreenZErrors(num_qubits, num_channels, tracked_error_gens, 
+                                                 layer_snipper, layer_snipper_args, dense_units, self.input_shapes)
         self.measurement_network = _keras.Sequential([
             _keras.layers.Dense(60, 'relu', input_shape = input_shapes[1]),
             _keras.layers.Dense(30, 'relu'),
@@ -118,8 +162,9 @@ class CircuitErrorVecWithMeasurementsv1(_keras.Model):
         return circuit_infidelities + measurement_infidelities
 
 class CircuitErrorVec(_keras.Model):
-    def __init__(self, num_qubits: int, num_channels: int, tracked_error_gens: list, layer_snipper, layer_snipper_args: dict,
-                 input_shape=None):
+    def __init__(self, num_qubits: int, num_channels: int, tracked_error_gens: list, 
+                layer_snipper, layer_snipper_args: dict,
+                dense_units = [30, 20, 10, 5, 5], input_shape=None):
         """
         num_qubits: int
             The number of qubits that this neural network models.
@@ -144,8 +189,9 @@ class CircuitErrorVec(_keras.Model):
         self.num_tracked_error_gens = len(self.tracked_error_gens)
         self.num_channels = num_channels
         self.len_gate_encoding = self.num_qubits * self.num_channels
+        self.dense_units = dense_units
         self.input_layer = _keras.layers.InputLayer(input_shape=input_shape)
-        self.local_dense = LocalizedDenseToErrVec(layer_snipper, layer_snipper_args, self.tracked_error_gens)
+        self.local_dense = LocalizedDenseToErrVec(layer_snipper, layer_snipper_args, self.tracked_error_gens, self.dense_units)
         self.hamiltonian_mask = _tf.constant([1 if error[0] == 'H' else 0 for error in tracked_error_gens], _tf.int32)
         self.stochastic_mask = _tf.constant([1 if error[0] == 'S' else 0 for error in tracked_error_gens], _tf.int32)
     
@@ -223,8 +269,8 @@ class CircuitErrorVec(_keras.Model):
             
 class CircuitErrorVecScreenZErrors(CircuitErrorVec):
     def __init__(self, num_qubits: int, num_channels: int, tracked_error_gens: list, layer_snipper, layer_snipper_args: dict,
-                 input_shapes=[None, None, None]):
-        super().__init__(num_qubits, num_channels, tracked_error_gens, layer_snipper, layer_snipper_args, input_shapes[0])
+                 dense_units: list, input_shapes=[None, None, None]):
+        super().__init__(num_qubits, num_channels, tracked_error_gens, layer_snipper, layer_snipper_args, dense_units, input_shapes[0])
 
     def call(self, inputs):
 
@@ -261,7 +307,7 @@ class CircuitErrorVecScreenZErrors(CircuitErrorVec):
             S = circuit[:, self.len_gate_encoding + self.num_tracked_error_gens:self.len_gate_encoding + 2 * self.num_tracked_error_gens]
             evecs = self.local_dense(self.input_layer(C))
             return calc_end_of_circ_error(evecs, P, S, measurement, z_mask)
-
+        # TO DO: Put the signed_M and masked_signed_M calculations outside of circuit_to_fidelity
         return _tf.map_fn(circuit_to_fidelity, inputs, fn_output_signature=_tf.float32)
 
 class CircuitErrorVecWithMeasurementsv2(CircuitErrorVec):
