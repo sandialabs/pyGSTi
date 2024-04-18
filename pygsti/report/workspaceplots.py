@@ -101,7 +101,14 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
     heatmapArgs = {'z': colormap.normalize(masked_data),
                    'colorscale': colormap.create_plotly_colorscale(),
                    'showscale': colorbar, 'hoverinfo': 'none',
-                   'zmin': colormap.hmin, 'zmax': colormap.hmax}
+                   'zmin': colormap.hmin, 'zmax': colormap.hmax,
+                   'xgap':3, 'ygap':3}
+    
+    heatmapArgsborderbg = {'z': masked_data,
+                   'colorscale': ['#000', '#000'],
+                   'showscale': False,
+                   'xgap':1, 'ygap':1,
+                   'hoverinfo': 'none'}
 
     #if xlabels is not None: heatmapArgs['x'] = xlabels
     #if ylabels is not None: heatmapArgs['y'] = ylabels
@@ -133,8 +140,9 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
         heatmapArgs['text'] = hover_labels
 
     trace = go.Heatmap(**heatmapArgs)
-    #trace = dict(type='heatmapgl', **heatmapArgs)
-    data = [trace]
+    trace_border = go.Heatmap(**heatmapArgsborderbg)
+
+    data = [trace_border, trace]
 
     xaxis = go_x_axis(
         showgrid=False,
@@ -144,7 +152,7 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
         showticklabels=True,
         mirror=True,
         linewidth=2,
-        range=[-0.5, plt_data.shape[1] - 0.5]
+        range=[-1, plt_data.shape[1]]
     )
     yaxis = go_y_axis(
         showgrid=False,
@@ -154,7 +162,7 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
         showticklabels=True,
         mirror=True,
         linewidth=2,
-        range=[-0.5, plt_data.shape[0] - 0.5]
+        range=[-1, plt_data.shape[0]]
     )
 
     layout = go.Layout(
@@ -164,6 +172,7 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
     )
 
     fig = go.Figure(data=data, layout=layout)
+    
     return ReportFigure(fig, colormap, plt_data, plt_data=plt_data)
 
 
@@ -253,6 +262,22 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     #Layout updates: add tic marks (but not labels - leave that to user)
     fig.plotlyfig['layout']['xaxis'].update(tickvals=xtics)
     fig.plotlyfig['layout']['yaxis'].update(tickvals=ytics)
+    
+    #I *think* it is the case that the only context in which this function is currrently
+    #used is in the per-sequence detail plots, so adding the boundaries between
+    #plaquettes here should (hopefully) not break anything.
+
+    #add boundaries between plaquettes.
+    #if either of these is length 1 then the diff will be empty
+    #this should stick the boundaries halfway between the ticks.
+    x_boundaries = _np.array(xtics[:-1]) + .5*(xtics[1]-xtics[0]) if len(xtics)>1 else []
+    y_boundaries = _np.array(ytics[:-1]) + .5*(ytics[1]-ytics[0]) if len(ytics)>1 else []
+    
+    for x_bnd in x_boundaries:
+        fig.plotlyfig.add_vline(x_bnd, line_width=1, line_color = "#616263")
+    for y_bnd in y_boundaries:
+        fig.plotlyfig.add_hline(y_bnd, line_width=1, line_color = "#616263")
+
     return fig
 
 
