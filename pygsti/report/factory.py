@@ -1192,8 +1192,7 @@ def construct_standard_report(results, title="auto",
 
     Returns
     -------
-    Workspace
-        The workspace object used to create the report
+    Report
     """
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
