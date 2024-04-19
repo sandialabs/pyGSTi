@@ -186,7 +186,7 @@ def z_mask(P, measurement):
         
 def create_input_data(circs:list, fidelities:list, tracked_error_gens: list, 
                       pspec, geometry: str, num_qubits = None, num_channels = None, 
-                      measurement_encoding = None,
+                      measurement_encoding = None, idealouts = None,
                       indexmapper = None, indexmapper_kwargs = {}, 
                       valuemapper = None, valuemapper_kwargs = {},
                       max_depth = None, return_separate=False):
@@ -205,6 +205,7 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
             - If NoneType, then no measurements are returned.
             - If 1, then measurements are encoded as extra channels in the circuit tensor.
             - If 2, then the measurements are returned separately in a tensor of shape (num_qubits,)
+       - list of each circuit's target outcome. Only used when measurement_encoding = 2.
     '''
     num_circs = len(circs)
     num_error_gens = len(tracked_error_gens)
@@ -219,6 +220,11 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
         num_channels += 1
         max_depth += 1 # adding an additional layer to each circuit for the measurements.
     elif measurement_encoding == 2:
+        # Encodes the measurements as a seperate vector.
+        measurements = _np.zeros((num_circs, num_qubits))
+        x_zmask = _np.zeros((num_circs, max_depth, num_error_gens), int)
+    elif measurement_encoding == 2:
+        # Encodes the measurements as a seperate vector.
         measurements = _np.zeros((num_circs, num_qubits))
         x_zmask = _np.zeros((num_circs, max_depth, num_error_gens), int)
     
@@ -266,7 +272,9 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
         x[:, :, len_gate_encoding:num_error_gens + len_gate_encoding] = x_indices[:, :, :]
         x[:, :, num_error_gens + len_gate_encoding:2 * num_error_gens + len_gate_encoding] = x_signs[:, :, :]
         if measurement_encoding == 2:
-            # xt = _np.concatenate((xt, x_zmask), axis = 0)
+            if idealouts is not None:
+                target_outcomes = _np.array([list(idealout) for idealout in idealouts], dtype = float)
+                return x, y, measurements, target_outcomes, x_zmask
             return x, y, measurements, x_zmask
         return x, y
             
