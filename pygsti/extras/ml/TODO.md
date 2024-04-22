@@ -2,7 +2,7 @@ TO DO:
     - Model biased readout error:
         - ~~Easy: give the network the target bitstring as a tensor.~~
         - Harder: individual networks learn errors for each qubit, networks get the target bitstring for that qubit. Add up the failure rates (or predict multiplied success probability and do one minus the result.)
-        - Harder: predict an error rate vector for the measurements
+        - Harder: predict an error rate vector for the measurements (UPDATE: create_input_data to output measurement masks)
     - Explore the data: see how networks trained on subsets of the data work.
     - Verify that we are writing down the Paulis in the correct order (i.e., should an XY error on qubits 0 and 1 be "XY" or "YX"? This has implications for interfacing with Ashe's code, for the layer snipper, and screening Z-type errors. Looks like pyGSTi does not reverse index Paulis?)
     - ~~Verify that the circuit encoding code works. It's odd because of all the transpositions!~~

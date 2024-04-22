@@ -257,7 +257,7 @@ def error_gen_to_index(typ, paulis):
     elif typ == 'S':
         base = 4**n  
     else:
-        raise ValueError('Invali error generator specification! Note "C" and "A" errors are not implemented yet.') 
+        raise ValueError('Invalid error generator specification! Note "C" and "A" errors are not implemented yet.') 
     # Future to do: C and A errors
     return base + paulistring_to_index(p1, n)
 
