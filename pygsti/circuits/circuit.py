@@ -874,8 +874,8 @@ class Circuit(object):
         #Check if a the circuit or labels being added are all global idles, if so inherit the
         #line labels from the circuit being added to. Otherwise, enforce compatibility.
         layertup_x = x.layertup if isinstance(x, Circuit) else x
-        gbl_idle_x= all([lbl == _Label(()) for lbl in layertup_x])
-        gbl_idle_self= all([lbl == _Label(()) for lbl in self.layertup])
+        gbl_idle_x= all([lbl == _Label(()) for lbl in layertup_x]) and len(layertup_x)>0 #second condition checks for empty circuit
+        gbl_idle_self= all([lbl == _Label(()) for lbl in self.layertup]) and len(self.layertup)>0
 
         if not (gbl_idle_x or gbl_idle_self):
             combined_labels = {x.line_labels, self.line_labels}
