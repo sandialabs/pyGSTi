@@ -190,49 +190,13 @@ def find_germs(target_model, randomize=True, randomization_strength=1e-2,
     printer = _baseobjs.VerbosityPrinter.create_printer(verbosity, comm)
     modelList = _setup_model_list(target_model, randomize,
                                   randomization_strength, num_gs_copies, seed)
-    gates = list(target_model.operations.keys())
-    availableGermsList = []
+    
     if candidate_germ_counts is None: candidate_germ_counts = {6: 'all upto'}
-    for germLength, count in candidate_germ_counts.items():
-        if count == "all upto":
-            availableGermsList.extend(_circuits.list_all_circuits_without_powers_and_cycles(
-                gates, max_length=germLength))
-        else:
-            if (candidate_seed is None) and (seed is not None):
-                candidate_seed=seed
-            availableGermsList.extend(_circuits.list_random_circuits_onelen(
-                gates, germLength, count, seed=candidate_seed))
+    if (candidate_seed is None) and (seed is not None): candidate_seed=seed
 
-    printer.log('Initial Length Available Germ List: '+ str(len(availableGermsList)), 1)
+    availableGermsList = construct_available_germs_list(candidate_germ_counts, target_model, toss_random_frac, force, 
+                                                        candidate_seed, seed, printer)
 
-    #Let's try deduping the available germ list too:
-    #build a ckt cache
-    ckt_cache= create_circuit_cache(target_model, availableGermsList)
-    #Then dedupe this cache:
-    #The second value returned is an updated ckt cache which we don't need right now
-    availableGermsList, _ = clean_germ_list(target_model, ckt_cache, eq_thresh= 1e-6)
-    
-    printer.log('Length Available Germ List After Deduping: '+ str(len(availableGermsList)), 1)
-    
-    #If specified, drop a random fraction of the remaining candidate germs. 
-    if toss_random_frac is not None:
-        availableGermsList = drop_random_germs(availableGermsList, toss_random_frac, target_model, keep_bare=True, seed=seed)
-    
-    printer.log('Length Available Germ List After Dropping Random Fraction: '+ str(len(availableGermsList)), 1)
-    
-    #If we have specified a user specified germs to force inclusion of then there is a chance
-    #they got removed by the deduping and removal of random circuits above. The right way to fix this
-    #would be to add some logic to those subroutines that prevent this, but for now I am going to just 
-    #manually add them back in (this will result almost suredly in a couple duplicate circuits, but oh well).
-    if force is not None:
-        #iterate through the list of forced germs to check for inclusion and
-        #if missing append to the list of available germs.
-        if isinstance(force, list):
-            for forced_germ in force:
-                if not forced_germ in availableGermsList:
-                    availableGermsList.append(forced_germ)
-        printer.log('Length Available Germ List After Adding Back In Forced Germs: '+ str(len(availableGermsList)), 1)
-    
     #Add some checks related to the new option to switch up data types:
     if not assume_real:
         if not (float_type is _np.cdouble or float_type is _np.csingle):
@@ -5011,5 +4975,108 @@ def rank_one_psuedoinverse_update(vector_update, pinv_A, proj_A, force_rank_incr
     
     return updated_pinv, rank_increase_flag
     
+#helper function for candidate germ list construction
+def construct_available_germs_list(candidate_germ_counts, target_model, toss_random_frac = None, 
+                                   force = None, candidate_seed = None, seed = None,  printer= None):
 
-                                                   
+    """
+    Helper function for constructing a candidate germ list
+
+    Parameters
+    ----------
+
+    candidate_germ_counts : dict
+        A dictionary of *germ_length* : *count* key-value pairs, specifying
+        the germ "candidate list" - a list of potential germs to draw from.
+        *count* is either an integer specifying the number of random germs
+        considered at the given *germ_length* or the special values `"all upto"`
+        that considers all of the of all non-equivalent germs of length up to
+        the corresponding *germ_length*.
+    
+    target_model : Model
+        The model you are aiming to implement.
+
+    toss_random_frac : float, optional
+        If specified this is a number between 0 and 1 that indicates the random fraction of candidate
+        germs to drop randomly following the deduping procedure.
+        
+    force : str or list, optional (default None)
+        A list of Circuits which *must* be included in the final germ set.
+        If set to the special string "singletons" then all length-1 strings will
+        be included.  Seting to None is the same as an empty list.
+
+    candidate_seed : int, optional
+        A seed value used when randomly selecting candidate germs.  For each
+        germ length being randomly selected, the germ length is added to
+        the value of `candidate_seed` to get the actual seed used.
+
+    seed : int, optional
+        Seed passed along to the rng for dropping random fraction of germs.   
+    
+    printer : VerbosityPrinter, optional
+        If specified, output logging messages using this printer object.
+
+    Return
+    ------
+    finalGermsList : list of Circuits
+        A list of candidate germs to search over.
+    """
+
+    gates = list(target_model.operations.keys())
+
+    availableGermsList = []
+    for germLength, count in candidate_germ_counts.items():
+        if count == "all upto":
+            availableGermsList.extend(_circuits.list_all_circuits_without_powers_and_cycles(
+                gates, max_length=germLength))
+        else:
+            availableGermsList.extend(_circuits.list_random_circuits_onelen(
+                gates, germLength, count, seed=candidate_seed))
+    if printer is not None:
+        printer.log('Initial Length Available Germ List: '+ str(len(availableGermsList)), 1)
+
+    #Let's try deduping the available germ list too:
+    #build a ckt cache
+    ckt_cache= create_circuit_cache(target_model, availableGermsList)
+    #Then dedupe this cache:
+    #The second value returned is an updated ckt cache which we don't need right now
+    availableGermsList, _ = clean_germ_list(target_model, ckt_cache, eq_thresh= 1e-6)
+    
+    if printer is not None:
+        printer.log('Length Available Germ List After Deduping: '+ str(len(availableGermsList)), 1)
+    
+    #If specified, drop a random fraction of the remaining candidate germs. 
+    if toss_random_frac is not None:
+        availableGermsList = drop_random_germs(availableGermsList, toss_random_frac, target_model, keep_bare=True, seed=seed)
+    
+    if printer is not None:
+        printer.log('Length Available Germ List After Dropping Random Fraction: '+ str(len(availableGermsList)), 1)
+    
+    #If we have specified a user specified germs to force inclusion of then there is a chance
+    #they got removed by the deduping and removal of random circuits above. The right way to fix this
+    #would be to add some logic to those subroutines that prevent this, but for now I am going to just 
+    #manually add them back in (this will result almost suredly in a couple duplicate circuits, but oh well).
+    if force is not None:
+        #iterate through the list of forced germs to check for inclusion and
+        #if missing append to the list of available germs.
+        if isinstance(force, list):
+            for forced_germ in force:
+                if not forced_germ in availableGermsList:
+                    availableGermsList.append(forced_germ)
+        if printer is not None:
+            printer.log('Length Available Germ List After Adding Back In Forced Germs: '+ str(len(availableGermsList)), 1)
+
+    #force the line labels on each circuit to match the state space labels for the target model.
+    #this is suboptimal for many-qubit models, so will probably want to revisit this. #TODO
+    finalGermsList = []
+    for ckt in availableGermsList:
+        if ckt._static:
+            new_ckt = ckt.copy(editable=True)
+            new_ckt.line_labels = target_model.state_space.state_space_labels
+            new_ckt.done_editing()
+            finalGermsList.append(new_ckt)
+        else:
+            ckt.line_labels = target_model.state_space.state_space_labels
+            finalGermsList.append(ckt)
+
+    return finalGermsList
