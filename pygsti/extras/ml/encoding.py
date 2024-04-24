@@ -1,7 +1,8 @@
 import numpy as _np
+import warnings as _warnings
 
 from pygsti.processors.processorspec import QubitProcessorSpec as QPS
-from pygsti.extras.ml.newtools import create_error_propagation_matrix, index_to_error_gen
+from pygsti.extras.ml.newtools import create_error_propagation_matrix, index_to_error_gen, error_gen_to_index
 
 ###### Functions that encode a circuit into a tensor ###
 
@@ -216,6 +217,7 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
     if num_channels is None: num_channels = compute_channels(pspec, geometry)
     encode_measurements = False
     if measurement_encoding == 1:
+        _warnings.warn('Measurement encoding scheme 1 is not implemented yet!')
         encode_measurements = True
         num_channels += 1
         max_depth += 1 # adding an additional layer to each circuit for the measurements.
@@ -223,10 +225,12 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
         # Encodes the measurements as a seperate vector.
         measurements = _np.zeros((num_circs, num_qubits))
         x_zmask = _np.zeros((num_circs, max_depth, num_error_gens), int)
-    elif measurement_encoding == 2:
-        # Encodes the measurements as a seperate vector.
+    elif measurement_encoding == 3:
+        # Encodes the measurements as a seperate vector and returns a measurement mask.
         measurements = _np.zeros((num_circs, num_qubits))
         x_zmask = _np.zeros((num_circs, max_depth, num_error_gens), int)
+        x_mmask = _np.zeros((num_circs, num_error_gens), int)
+        tracked_error_indices = _np.array([error_gen_to_index(error[0], error[1]) for error in tracked_error_gens])
     
     if num_qubits is None: num_qubits = len(pspec.qubit_labels)
     if valuemapper is None: valuemapper = lambda x: 1
@@ -256,6 +260,12 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
             measurements[i, :] = active_qubits(x_circs[i, :, :, :])
             measurements[i, ::-1] = measurements[i, :] # flip it and reverse it
             x_zmask[i, 0:c.depth, :] = z_mask(c_indices, measurements[i, :])
+        elif measurement_encoding == 3:
+            measurements[i, :] = active_qubits(x_circs[i, :, :, :])
+            measurements[i, ::-1] = measurements[i, :] # flip it and reverse it
+            x_zmask[i, 0:c.depth, :] = z_mask(c_indices, measurements[i, :])
+            x_mmask[i, :] = z_mask(tracked_error_indices, measurements[i, :])
+
            
     if return_separate:
         return x_circs, x_signs, x_indices, y
@@ -276,6 +286,12 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
                 target_outcomes = _np.array([list(idealout) for idealout in idealouts], dtype = float)
                 return x, y, measurements, target_outcomes, x_zmask
             return x, y, measurements, x_zmask
+        elif measurement_encoding == 3:
+            if idealouts is not None:
+                target_outcomes = _np.array([list(idealout) for idealout in idealouts], dtype = float)
+                return x, y, measurements, target_outcomes, x_zmask, x_mmask
+            return x, y, measurements, x_zmask, x_mmask
+
         return x, y
             
 # def old_create_input_data(circs:list, fidelities:list, tracked_error_gens: list, 

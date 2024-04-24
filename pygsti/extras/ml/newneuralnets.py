@@ -30,12 +30,14 @@ class MeasurementToErrVec(_keras.layers.Layer):
         self.num_tracked_error_gens = len(tracked_error_gens)  # This is the output dimenision of the network
         self.tracked_error_gens = tracked_error_gens  
         self.dense_units = dense_units
+        self.input_layer = _keras.layers.InputLayer(input_shape)
     
     def build(self, input_shape):
         self.dense = {error_gen_idx: DenseSubNetwork(1, self.dense_units) for error_gen_idx in range(self.num_tracked_error_gens)}
         super().build(input_shape)
 
     def call(self, inputs):
+        inputs = self.input_layer(inputs)
         x = [self.dense[i](inputs) for i in range(0, self.num_tracked_error_gens)]
         x = _tf.concat(x, axis=-1)
         return x
@@ -141,7 +143,7 @@ class CircuitErrorVecWithMeasurementsAndBitstringsv1(_keras.Model):
     """
     def __init__(self, num_qubits, num_channels, tracked_error_gens, 
                  layer_snipper, layer_snipper_args, 
-                 dense_units = [30, 20, 10, 5, 5], input_shapes=[None, None, None, None]):
+                 dense_units = [30, 20, 10, 5, 5], measurement_units = [60, 30, 1], input_shapes=[None, None, None, None]):
         super(CircuitErrorVecWithMeasurementsAndBitstringsv1, self).__init__()
         self.num_qubits = num_qubits
         self.tracked_error_gens = tracked_error_gens
@@ -149,14 +151,12 @@ class CircuitErrorVecWithMeasurementsAndBitstringsv1(_keras.Model):
         self.num_channels = num_channels
         self.len_gate_encoding = self.num_qubits * self.num_channels
         self.dense_units = dense_units
+        self.measurement_units = measurement_units
         self.input_shapes = input_shapes
         self.circuit_error_vec = CircuitErrorVecScreenZErrors(num_qubits, num_channels, tracked_error_gens, 
                                                  layer_snipper, layer_snipper_args, dense_units, [self.input_shapes[0], self.input_shapes[-1]])
-        self.measurement_network = _keras.Sequential([
-            _keras.layers.Dense(60, 'relu'),
-            _keras.layers.Dense(30, 'relu'),
-            _keras.layers.Dense(1, 'relu')
-        ])
+        assert(self.measurement_units[-1] == 1)
+        self.measurement_network = _keras.Sequential([_keras.layers.Dense(u, 'relu') for u in measurement_units])
 
     def call(self, inputs):
         circuits, measurements, target_outcomes, z_masks  = inputs
@@ -277,7 +277,7 @@ class CircuitErrorVecScreenZErrors(CircuitErrorVec):
                  dense_units: list, input_shapes=[None, None]):
         super().__init__(num_qubits, num_channels, tracked_error_gens, layer_snipper, layer_snipper_args, dense_units, input_shapes[0])
         self.input_shapes = {'circuit': input_shapes[0], 
-                             'z_masks': input_shapes[2]}
+                             'z_masks': input_shapes[1]}
     def call(self, inputs):
 
         def calc_masked_err_rates(M, P, mask):
@@ -319,13 +319,13 @@ class CircuitErrorVecScreenZErrors(CircuitErrorVec):
 class CircuitErrorVecScreenZErrorsWithMeasurementsBitstrings(CircuitErrorVec):
     def __init__(self, num_qubits: int, num_channels: int, tracked_error_gens: list, tracked_error_indices: list,
                 layer_snipper, layer_snipper_args: dict,
-                dense_units: list, input_shapes=[None, None, None, None, None]):
+                dense_units: [30, 20, 10, 5, 5], input_shapes=[None, None, None, None, None]):
         super().__init__(num_qubits, num_channels, tracked_error_gens, layer_snipper, layer_snipper_args, dense_units, input_shapes[0])
-        self.input_shapes = {'circuit': input_shapes[0], 'measurements': input_shapes[1], 'target_outcomes': input_shapes[2]
+        self.input_shapes = {'circuit': input_shapes[0], 'measurements': input_shapes[1], 'target_outcomes': input_shapes[2],
                              'z_masks': input_shapes[3], 'measurement_masks': input_shapes[4]}
-        self.meas_bitstring_shape = input_shapes[1][0]+input_shapes[3][0]
-        self.measurement_dense = MeasurementToErrVec(self.tracked_error_gens, self.dense_units, tuple(meas_bitstring_shape,))
-        self.error_indices = _tf.constant(tracked_error_indices, dtype = _tf.int32)
+        self.meas_bitstring_shape = input_shapes[1][0]+input_shapes[2][0]
+        self.measurement_dense = MeasurementToErrVec(self.tracked_error_gens, self.dense_units, tuple([1, self.meas_bitstring_shape]))
+        self.error_indices = _tf.constant(_np.array(tracked_error_indices).reshape((1,-1)), dtype = _tf.int32)
 
     def call(self, inputs):
 
@@ -354,22 +354,19 @@ class CircuitErrorVecScreenZErrorsWithMeasurementsBitstrings(CircuitErrorVec):
             """
             A function that maps a single circuit to the prediction for its process fidelity (a single real number).
             """
-            circuit, measurement, target_outcome, z_mask, measurement_mask  = input
-            # circuit, z_mask = _tf.cast(circuit, _tf.float32), _tf.cast(z_mask, _tf.float32)
+            circuit, measurement_and_outcome, mask = [_tf.cast(i, _tf.float32) for i in input]
             
+
             C = circuit[:, 0:self.len_gate_encoding]
             P = _tf.cast(circuit[:, self.len_gate_encoding:self.len_gate_encoding + self.num_tracked_error_gens], _tf.int32)
             S = circuit[:, self.len_gate_encoding + self.num_tracked_error_gens:self.len_gate_encoding + 2 * self.num_tracked_error_gens]
-            combo_measurements_outcomes = _tf.concat([measurement, target_outcome], axis = 1)
             
             circuit_evecs = self.local_dense(self.input_layer(C))
-            measurement_evecs = self.measurement_dense(combo_measurements_outcomes)
+            measurement_evecs = self.measurement_dense(measurement_and_outcome)
 
-            all_evecs = _tf.stack([circuit_evecs, measurement_evecs])
-            padded_P = _tf.stack([P, self.error_indices])
-            padded_S = _tf.stack([S, _tf.ones([1,len(self.num_tracked_error_gens)])])
-            padded_z_mask = _tf.stack([z_mask, measurement_mask])
+            all_evecs = _tf.concat([circuit_evecs, measurement_evecs], axis = 0)
+            padded_P = _tf.concat([P, self.error_indices], axis = 0)
+            padded_S = _tf.concat([S, _tf.ones([1,self.num_tracked_error_gens])], axis = 0)
 
-            return calc_end_of_circ_error(all_evecs, padded_P, padded_S, padded_z_mask)
-        # TO DO: Put the signed_M and masked_signed_M calculations outside of circuit_to_fidelity
+            return calc_end_of_circ_error(all_evecs, padded_P, padded_S, mask)
         return _tf.map_fn(circuit_to_fidelity, inputs, fn_output_signature=_tf.float32)
