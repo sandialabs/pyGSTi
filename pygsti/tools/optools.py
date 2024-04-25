@@ -105,17 +105,15 @@ def fidelity(a, b):
         evals = _np.linalg.eigvals(a)
         _warnings.warn(("sqrtm(a) failure when computing fidelity - beware result. "
                         "Maybe due to rank defficiency - eigenvalues of a are: %s") % evals)
-    F = (_mt.trace(_hack_sqrtm(_np.dot(sqrtA, _np.dot(b, sqrtA)))).real)**2  # Tr( sqrt{ sqrt(a) * b * sqrt(a) } )^2
+    F = (_np.trace(_hack_sqrtm(_np.dot(sqrtA, _np.dot(b, sqrtA)))).real)**2  # Tr( sqrt{ sqrt(a) * b * sqrt(a) } )^2
     return float(F)
 
 
 def frobeniusdist(a, b):
     """
-    Returns the frobenius distance between gate or density matrices.
+    Returns the frobenius distance between arrays: ||a - b||_Fro.
 
-    This is given by :
-
-      `sqrt( sum( (a_ij-b_ij)^2 ) )`
+    This could be inlined, but we're keeping it for API consistency with other distance functions.
 
     Parameters
     ----------
@@ -130,16 +128,14 @@ def frobeniusdist(a, b):
     float
         The resulting frobenius distance.
     """
-    return _mt.frobeniusnorm(a - b)
+    return _np.linalg.norm((a - b).ravel())
 
 
 def frobeniusdist_squared(a, b):
     """
-    Returns the square of the frobenius distance between gate or density matrices.
+    Returns the square of the frobenius distance between arrays: (||a - b||_Fro)^2.
 
-    This is given by :
-
-      `sum( (A_ij-B_ij)^2 )`
+    This could be inlined, but we're keeping it for API consistency with other distance functions.
 
     Parameters
     ----------
@@ -154,7 +150,7 @@ def frobeniusdist_squared(a, b):
     float
         The resulting frobenius distance.
     """
-    return _mt.frobeniusnorm_squared(a - b)
+    return frobeniusdist(a, b)**2
 
 
 def residuals(a, b):
@@ -742,10 +738,7 @@ def unitarity(a, mx_basis="gm"):
         B = _bt.change_basis(a, mx_basis, "gm")  # everything should be able to be put in the "gm" basis
 
     unital = B[1:d**2, 1:d**2]
-    #old version
-    #u = _np.trace(_np.dot(_np.conj(_np.transpose(unital)), unital)) / (d**2 - 1)
-    #new version
-    u= _np.einsum('ij,ji->', unital.conjugate().T, unital ) / (d**2 - 1)
+    u = _np.linalg.norm(unital.ravel())**2 / (d**2 - 1)
     return u
 
 
@@ -778,7 +771,7 @@ def fidelity_upper_bound(operation_mx):
     # # gives same result:
     # closestUnitaryJmx = _np.dot(choi_evecs, _np.dot( _np.diag(new_evals), _np.linalg.inv(choi_evecs) ) )
     closestJmx = _np.kron(closestVec, _np.transpose(_np.conjugate(closestVec)))  # closest rank-1 Jmx
-    closestJmx /= _mt.trace(closestJmx)  # normalize so trace of Jmx == 1.0
+    closestJmx /= _np.trace(closestJmx)  # normalize so trace of Jmx == 1.0
 
     maxF = fidelity(choi, closestJmx)
 
@@ -791,7 +784,7 @@ def fidelity_upper_bound(operation_mx):
         #    print "DEBUG choi_evals = ",choi_evals, " iMax = ",iMax
         #    #print "DEBUG: J = \n", closestUnitaryJmx
         #    print "DEBUG: eigvals(J) = ", _np.linalg.eigvals(closestJmx)
-        #    print "DEBUG: trace(J) = ", _mt.trace(closestJmx)
+        #    print "DEBUG: trace(J) = ", _np.trace(closestJmx)
         #    print "DEBUG: maxF = %f,  maxF_direct = %f" % (maxF, maxF_direct)
         #    raise ValueError("ERROR: maxF - maxF_direct = %f" % (maxF -maxF_direct))
         assert(abs(maxF - maxF_direct) < 1e-6)

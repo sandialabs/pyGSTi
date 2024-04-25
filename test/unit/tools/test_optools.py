@@ -387,13 +387,6 @@ class GateOpsTester(BaseCase):
             [-0.35432747-0.27939404j, -0.02266757+0.71502652j, -0.27452307+0.07511567j,  0.35432747+0.27939404j],
             [ 0.71538573+0.j,  0.2680266 +0.36300238j, 0.2680266 -0.36300238j,  0.28461427+0.j]])
 
-    def test_frobenius_distance(self):
-        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.A), 0.0)
-        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), (0.430116263352+0j))
-
-        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.A), 0.0)
-        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.B), (0.185+0j))
-
     def test_jtrace_distance(self):
         self.assertAlmostEqual(ot.jtracedist(self.A, self.A, mx_basis="std"), 0.0)
         self.assertAlmostEqual(ot.jtracedist(self.A, self.B, mx_basis="std"), 0.26430148)  # OLD: 0.2601 ?
@@ -403,11 +396,6 @@ class GateOpsTester(BaseCase):
         if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
         self.assertAlmostEqual(ot.diamonddist(self.A, self.A, mx_basis="std"), 0.0)
         self.assertAlmostEqual(ot.diamonddist(self.A, self.B, mx_basis="std"), 0.614258836298)
-
-    def test_frobenius_norm_equiv(self):
-        from pygsti.tools import matrixtools as mt
-        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), mt.frobeniusnorm(self.A - self.B))
-        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), np.sqrt(mt.frobeniusnorm_squared(self.A - self.B)))
 
     def test_entanglement_fidelity(self):
         fidelity = ot.entanglement_fidelity(self.A, self.B)

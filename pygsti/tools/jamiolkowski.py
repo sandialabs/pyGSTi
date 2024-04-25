@@ -117,9 +117,14 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp'):
     for i in range(M):
         for j in range(M):
             BiBj = _np.kron(BVec[i], _np.conjugate(BVec[j]))
-            BiBj_dag = _np.transpose(_np.conjugate(BiBj))
-            choiMx[i, j] = _mt.trace(_np.dot(opMxInStdBasis, BiBj_dag)) \
-                / _mt.trace(_np.dot(BiBj, BiBj_dag))
+            # BiBj_dag = _np.transpose(_np.conjugate(BiBj))
+            # num = _np.trace(_np.dot(opMxInStdBasis, BiBj_dag))  # original code
+            #     = _np.trace(_np.dot(BiBj_dag, opMxInStdBasis))  # cycle the trace
+            #     = _np.vdot(BiBj, opMxInStdBasis)                # efficient version
+            # den = _np.trace(_np.dot(BiBj, BiBj_dag))
+            num = _np.vdot(BiBj, opMxInStdBasis)
+            den = _np.linalg.norm(BiBj.ravel()) ** 2
+            choiMx[i, j] = num / den 
 
     # This construction results in a Jmx with trace == dim(H) = sqrt(operation_mx.shape[0])
     #  (dimension of density matrix) but we'd like a Jmx with trace == 1, so normalize:

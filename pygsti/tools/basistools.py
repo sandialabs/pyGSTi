@@ -549,9 +549,9 @@ def stdmx_to_vec(m, basis):
     v = _np.empty((basis.size, 1))
     for i, mx in enumerate(basis.elements):
         if basis.real:
-            v[i, 0] = _np.real(_mt.trace(_np.dot(mx, m)))
+            v[i, 0] = _np.real(_np.vdot(mx, m))
         else:
-            v[i, 0] = _np.real_if_close(_mt.trace(_np.dot(mx, m)))
+            v[i, 0] = _np.real_if_close(_np.vdot(mx, m))
     return v
 
 
