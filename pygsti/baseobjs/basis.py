@@ -609,7 +609,7 @@ class Basis(_NicelySerializable):
                 # we'd need to construct a different pseudo-inverse if the above assert fails
 
                 A = self.to_std_transform_matrix  # shape (dim,size) - should have indep *cols*
-                Adag = A.transpose().conjugate()  # shape (size, dim)
+                Adag = A.T.conj()  # shape (size, dim)
                 return _np.dot(_inv(_np.dot(Adag, A)), Adag)
 
     @property

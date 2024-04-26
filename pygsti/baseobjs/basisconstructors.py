@@ -949,7 +949,7 @@ def qt_matrices(matrix_dim, selected_pp_indices=(0, 5, 10, 11, 1, 2, 3, 6, 7)):
                    [0, 0, 0, 1]], 'd')  # projector onto symmetric space
 
     def _to_qutrit_space(input_matrix):
-        return _np.dot(A, _np.dot(input_matrix, A.transpose()))
+        return _np.dot(A, _np.dot(input_matrix, A.T))
 
     qt_mxs = []
     pp_mxs = pp_matrices(4)

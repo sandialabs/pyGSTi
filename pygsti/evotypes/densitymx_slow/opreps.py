@@ -151,7 +151,7 @@ class OpRepSparse(OpRep):
 
     def adjoint_acton(self, state):
         """ Act the adjoint of this operation matrix on an input state """
-        Aadj = self.A.conjugate(copy=True).transpose()
+        Aadj = self.A.conjugate(copy=True).T
         return _StateRepDense(Aadj.dot(state.data), state.state_space, None)
 
     def to_dense(self, on_space):
