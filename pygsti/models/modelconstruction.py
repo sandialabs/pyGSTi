@@ -892,7 +892,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                     for ekey, effect_vec in _povm.ComputationalBasisPOVM(nqubits=len(qudit_labels), evotype=evotype,
                                                                          state_space=state_space).items():
                         E = effect_vec.to_dense('HilbertSchmidt').reshape((state_space.dim, 1))
-                        inst_members[ekey] = E @ E.T  # (effect vector is a column vector)
+                        inst_members[ekey] = _np.dot(E, E.T)  # (effect vector is a column vector)
                     ideal_instrument = _instrument.Instrument(inst_members)
                 else:
                     raise ValueError("Unrecognized instrument spec '%s'" % instrument_spec)

@@ -139,7 +139,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             #        #check_sparse_scipy = _spsl.expm_multiply(self.errorgen.to_sparse(), v.copy())
             #        prep = _mt.expm_multiply_prep(self.errorgen.to_sparse())
             #        check_sparse = _mt.expm_multiply_fast(prep, v)
-            #        check_dense = Mdense @ v
+            #        check_dense = _np.dot(Mdense, v)
             #
             #        diff = _np.linalg.norm(check_dense - check_acton)
             #        #diff2 = _np.linalg.norm(check_sparse_scipy - check_sparse)

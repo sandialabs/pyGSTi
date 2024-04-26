@@ -733,9 +733,9 @@ class GaugeRobustModelTable(WorkspaceTable):
             M = _np.dot(Finv, _np.dot(G, _np.dot(F, _np.linalg.inv(G0))))
             assert(_np.linalg.norm(M.imag) < 1e-8)
 
-            M0 = _np.dot(U0inv, M @ U0)  # M in G0's eigenbasis
+            M0 = _np.dot(U0inv, _np.dot(M, U0))  # M in G0's eigenbasis
             assert(_np.linalg.norm(_tools.project_onto_antikite(M0, kite)) < 1e-8)  # should be block diagonal
-            assert(_np.allclose(G, _np.dot(F, _np.dot(M, G0 @ Finv))))  # this is desired decomp
+            assert(_np.allclose(G, _np.dot(F, _np.dot(M, _np.dot(G0, Finv)))))  # this is desired decomp
             assert(_np.linalg.norm(M.imag) < 1e-6 and _np.linalg.norm(F.imag) < 1e-6)  # and everthing should be real
             return F, M, Finv
 

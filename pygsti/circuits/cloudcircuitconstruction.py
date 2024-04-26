@@ -1266,7 +1266,7 @@ def _compute_reps_for_synthetic_idle(model, germ_str, nqubits, core_qubits):
     reps = 1; target = _np.identity(core_dim, 'd')
     repeated = product
     while(_np.linalg.norm(repeated - target) > 1e-6 and reps < 20):  # HARDCODED MAX_REPS
-        repeated = repeated @ product; reps += 1
+        repeated = _np.dot(repeated, product); reps += 1
 
     return reps
 

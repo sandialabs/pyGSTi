@@ -143,7 +143,7 @@ def nullspace_qr(m, tol=1e-7):
     rank = (_np.abs(_np.diagonal(r)) > tol).sum()
 
     #DEBUG: requires q,r,p = _sql.qr(...) above
-    #assert( _np.linalg.norm(q @ r - m.T[:,p]) < 1e-8) #check QR decomp
+    #assert( _np.linalg.norm(_np.dot(q,r) - m.T[:,p]) < 1e-8) #check QR decomp
     #print("Rank QR = ",rank)
     #print('\n'.join(map(str,_np.abs(_np.diagonal(r)))))
     #print("Ret = ", q[:,rank:].shape, " Q = ",q.shape, " R = ",r.shape)
@@ -460,7 +460,7 @@ def matrix_sign(m):
 
     #Quick & dirty - not always stable:
     #U,_,Vt = _np.linalg.svd(M)
-    #return U @ Vt
+    #return _np.dot(U,Vt)
 
 
 def print_mx(mx, width=9, prec=4, withbrackets=False):
@@ -1395,7 +1395,7 @@ def safe_dot(a, b):
         # --> return _sps.csr_matrix(a).dot(b) # numpyMx.dot can't handle sparse argument
         return _np.dot(a, b.toarray())
     else:
-        return a @ b
+        return _np.dot(a, b)
 
 
 def safe_real(a, inplace=False, check=False):
@@ -2152,7 +2152,7 @@ def find_zero_communtant_connection(u, u_inv, u0, u0_inv, kite):
     assert(_np.linalg.norm(R.imag) < 1e-8)
 
     def project_onto_commutant(x):
-        a = _np.dot(u0_inv, x @ u0)
+        a = _np.dot(u0_inv, _np.dot(x, u0))
         a = project_onto_kite(a, kite)
         return _np.dot(u0, _np.dot(a, u0_inv))
 
@@ -2161,7 +2161,7 @@ def find_zero_communtant_connection(u, u_inv, u0, u0_inv, kite):
         #Starting condition = u_inv * R * u0 is diagonal, so
         # G' = R G0 Rinv where G' has the same spectrum as G0 but different eigenvecs (u vs u0)
         assert(_np.linalg.norm(R.imag) < 1e-8)
-        test = _np.dot(u_inv, R @ u0)
+        test = _np.dot(u_inv, _np.dot(R, u0))
         assert(_np.linalg.norm(project_onto_antikite(test, kite)) < 1e-8)
 
         r = real_matrix_log(R)
@@ -2179,7 +2179,7 @@ def find_zero_communtant_connection(u, u_inv, u0, u0_inv, kite):
         assert(_np.linalg.norm(X.imag) < 1e-8)
 
         lastR = R
-        R = R @ X
+        R = _np.dot(R, X)
         iter += 1
 
     assert(_np.linalg.norm(R.imag) < 1e-8), "R should always be real!"
@@ -2307,8 +2307,8 @@ def jamiolkowski_angle(hamiltonian_mx):
         x = _np.zeros(d); x[i] = 1.0
         xx = _np.kron(x, x)
         psi += xx / _np.sqrt(d)
-    assert(_np.isclose(psi @ psi, 1.0))
-    cos_theta = abs(_np.dot(psi.conj(), errmap @ psi))
+    assert(_np.isclose(_np.dot(psi, psi), 1.0))
+    cos_theta = abs(_np.dot(psi.conj(), _np.dot(errmap, psi)))
     return _np.real_if_close(_np.arccos(cos_theta))
     #cos_squared_theta = entanglement_infidelity(expm(1j * Hmx), identity)
     #return _np.arccos(_np.sqrt(cos_squared_theta))

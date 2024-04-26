@@ -1152,7 +1152,7 @@ class ExplicitOpModel(_mdl.OpModel):
 
             randOp = _ot.unitary_to_superop(randUnitary, self.basis)
 
-            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(randOp @ gate)
+            mdl_randomized.operations[opLabel] = _op.FullArbitraryOp(_np.dot(randOp, gate))
 
         #Note: this function does NOT randomize instruments
 

@@ -342,7 +342,7 @@ class CPTPState(_DenseState):
                     dpdP[ij, kl] = - self.params[ij] * self.params[kl] / paramNorm**3
 
         #Apply the chain rule to get dVdP:
-        dVdP = dVdp @ dpdP  # shape (vecLen, nP) - the jacobian!
+        dVdP = _np.dot(dVdp, dpdP)  # shape (vecLen, nP) - the jacobian!
         dVdp = dpdP = None  # free memory!
 
         assert(_np.linalg.norm(_np.imag(dVdP)) < IMAG_TOL)

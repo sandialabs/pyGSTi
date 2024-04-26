@@ -627,7 +627,7 @@ class PrimitiveOpsWildcardBudgetBase(WildcardBudget):
             circuit_budgets = _np.array([self.circuit_budget(circ) for circ in circuits])
         else:
             Wvec = _np.abs(self.wildcard_vector)
-            circuit_budgets = precomp @ Wvec
+            circuit_budgets = _np.dot(precomp, Wvec)
         return circuit_budgets
 
     def precompute_for_same_circuits(self, circuits):

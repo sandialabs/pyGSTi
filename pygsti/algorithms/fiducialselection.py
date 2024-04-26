@@ -934,7 +934,7 @@ def compute_composite_fiducial_score(model, fid_list, prep_or_meas, score_func='
 
     numFids = len(fid_list)
     scoreMx = _np.concatenate(fidArrayList, axis=1)  # shape = (dimRho, nFiducials*nPrepsOrEffects)
-    scoreSqMx = scoreMx @ scoreMx.T  # shape = (dimRho, dimRho)
+    scoreSqMx = _np.dot(scoreMx, scoreMx.T)  # shape = (dimRho, dimRho)
     spectrum = _np.sort(_np.abs(_np.linalg.eigvalsh(scoreSqMx)))
     
     specLen = len(spectrum)
@@ -1298,7 +1298,7 @@ def _find_fiducials_integer_slack(model, fid_list, prep_or_meas=None,
             for fidArray in fidArrayList:
                 scoreMx[:, colInd:colInd + int(numFids)] = fidArray[:, wtsLoc]
                 colInd += int(numFids)
-            scoreSqMx = scoreMx @ scoreMx.T
+            scoreSqMx = _np.dot(scoreMx, scoreMx.T)
 #            score = numFids * _np.sum(1./_np.linalg.eigvalsh(scoreSqMx))
             score = numFids * _scoring.list_score(
                 _np.linalg.eigvalsh(scoreSqMx), score_func)

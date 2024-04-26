@@ -187,7 +187,7 @@ def change_basis(mx, from_basis, to_basis):
 
     isMx = len(mx.shape) == 2 and mx.shape[0] == mx.shape[1]
     if isMx:
-        # want ret = toMx.dot( mx @ fromMx) but need to deal
+        # want ret = toMx.dot( _np.dot(mx, fromMx)) but need to deal
         # with some/all args being sparse:
         ret = _mt.safe_dot(toMx, _mt.safe_dot(mx, fromMx))
     else:  # isVec

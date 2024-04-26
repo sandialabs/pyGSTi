@@ -398,7 +398,7 @@ class UndistributedArraysInterface(ArraysInterface):
         -------
         float
         """
-        return x1 @ x2
+        return _np.dot(x1, x2)
 
     def norm2_x(self, x):
         """
@@ -413,7 +413,7 @@ class UndistributedArraysInterface(ArraysInterface):
         -------
         float
         """
-        return x @ x
+        return _np.dot(x, x)
 
     def infnorm_x(self, x):
         """
@@ -458,7 +458,7 @@ class UndistributedArraysInterface(ArraysInterface):
         -------
         float
         """
-        return f @ f
+        return _np.dot(f, f)
 
     def norm2_jtj(self, jtj):
         """
@@ -509,7 +509,7 @@ class UndistributedArraysInterface(ArraysInterface):
         -------
         None
         """
-        jtf[:] = j.T @ f
+        jtf[:] = _np.dot(j.T, f)
 
     def fill_jtj(self, j, jtj, shared_mem_buf=None):
         """
@@ -531,7 +531,7 @@ class UndistributedArraysInterface(ArraysInterface):
         -------
         None
         """
-        jtj[:, :] = j.T @ j
+        jtj[:, :] = _np.dot(j.T, j)
 
     def allocate_jtj_shared_mem_buf(self):
         """
@@ -1007,7 +1007,7 @@ class DistributedArraysInterface(ArraysInterface):
         float
         """
         # assumes x's are in "fine" mode
-        local_dot = _np.array(x1 @ x2)
+        local_dot = _np.array(_np.dot(x1, x2))
         local_dot.shape = (1,)  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_dot,
@@ -1117,7 +1117,7 @@ class DistributedArraysInterface(ArraysInterface):
         -------
         float
         """
-        local_dot = _np.array(f @ f)
+        local_dot = _np.array(_np.dot(f, f))
         local_dot.shape = (1,)  # for compatibility with allreduce_sum
         result, result_shm = _smt.create_shared_ndarray(self.resource_alloc, (1,), 'd')
         self.resource_alloc.allreduce_sum(result, local_dot,

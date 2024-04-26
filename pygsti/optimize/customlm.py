@@ -687,7 +687,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             ##if my_mpidot_qtys is None:
             ##    my_mpidot_qtys = _mpit.distribute_for_dot(Jac.T.shape, Jac.shape, resource_alloc)
             #JTJ, JTJ_shm = _mpit.mpidot(Jac.T, Jac, my_mpidot_qtys[0], my_mpidot_qtys[1],
-            #                            my_mpidot_qtys[2], resource_alloc, JTJ, JTJ_shm)  # Jac.T @ Jac 'PP'
+            #                            my_mpidot_qtys[2], resource_alloc, JTJ, JTJ_shm)  # _np.dot(Jac.T,Jac) 'PP'
 
             ari.fill_jtj(Jac, JTJ, jtj_buf)
             ari.fill_jtf(Jac, f, JTf)  # 'P'-type
@@ -1372,7 +1372,7 @@ def _hack_dx(obj_fn, x, dx, jac, jtj, jtf, f, norm_f):
         print("HACK3 - checking if there's a simple dx that is better...")
         test_f = obj_fn(x + dx); cmp_normf = _np.dot(test_f, test_f)
         orig_prediction = norm_f + _np.dot(2 * jtf, dx)
-        Jdx = jac @ dx
+        Jdx = _np.dot(jac, dx)
         op2_f = f + Jdx
         orig_prediction2 = _np.dot(op2_f, op2_f)
         # main objective = fT*f = norm_f
@@ -1380,7 +1380,7 @@ def _hack_dx(obj_fn, x, dx, jac, jtj, jtf, f, norm_f):
         #                                  = norm_f + 2*(fT*J)dx (b/c transpose of real# does nothing)
         #                                  = norm_f + 2*dxT*(JT*f)
         # prediction 2 also includes (J*dx)T * (J*dx) term = dxT * (jtj) * dx
-        orig_prediction3 = orig_prediction + Jdx @ Jdx
+        orig_prediction3 = orig_prediction + _np.dot(Jdx, Jdx)
         norm_dx = _np.linalg.norm(dx)
         print("Compare with suggested |dx| = ", norm_dx, " => ", cmp_normf,
               "(predicted: ", orig_prediction, orig_prediction2, orig_prediction3)
@@ -1470,8 +1470,8 @@ def _hack_dx(obj_fn, x, dx, jac, jtj, jtf, f, norm_f):
 #        tm = _time.time()
 #        if my_cols_slice is None:
 #            my_cols_slice = _mpit.distribute_for_dot(jac.shape[0], comm)
-#        jtj = _mpit.mpidot(jac.T,jac,my_cols_slice,comm)   #jac.T @ jac
-#        jtf = jac.T @ f
+#        jtj = _mpit.mpidot(jac.T,jac,my_cols_slice,comm)   #_np.dot(jac.T,jac)
+#        jtf = _np.dot(jac.T,f)
 #        if profiler: profiler.add_time("custom_leastsq: dotprods",tm)
 #
 #        idiag = _np.diag_indices_from(jtj)

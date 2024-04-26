@@ -520,14 +520,14 @@ class ExplicitOpModelCalc(object):
             for j in range(dim):  # *generator* mx, not gauge mx itself
                 unitMx = _bc.mut(i, j, dim)
                 for lbl, rhoVec in self_preps.items():
-                    mdlDeriv_preps[lbl] = unitMx @ rhoVec
+                    mdlDeriv_preps[lbl] = _np.dot(unitMx, rhoVec)
                 for lbl, EVec in self_effects.items():
-                    mdlDeriv_effects[lbl] = -EVec.T @ unitMx.T
+                    mdlDeriv_effects[lbl] = -_np.dot(EVec.T, unitMx).T
 
                 for lbl, gate in self_operations.items():
                     #if isinstance(gate,_op.DenseOperator):
-                    mdlDeriv_ops[lbl] = unitMx @ gate - \
-                        gate @ unitMx
+                    mdlDeriv_ops[lbl] = _np.dot(unitMx, gate) - \
+                        _np.dot(gate, unitMx)
                     #else:
                     #    #use acton... maybe throw error if dim is too large (maybe above?)
                     #    deriv = _np.zeros((dim,dim),'d')
@@ -680,9 +680,9 @@ class ExplicitOpModelCalc(object):
                         unitMx_j = _bc.mut(j1, j2, dim)
                         antiComm = (unitMx_i @ unitMx_j + unitMx_j @ unitMx_i)
                         for lbl, rhoVec in self_preps.items():
-                            mdlHess_preps[lbl] = 0.5 * antiComm @ rhoVec
+                            mdlHess_preps[lbl] = 0.5 * _np.dot(antiComm, rhoVec)
                         for lbl, EVec in self_effects.items():
-                            mdlHess_effects[lbl] = 0.5 * EVec.T @ antiComm.T
+                            mdlHess_effects[lbl] = 0.5 * _np.dot(EVec.T, antiComm).T
                         for lbl, gate in self_operations.items():
                             mdlHess_ops[lbl] = 0.5 * (antiComm @ gate + gate @ antiComm) \
                                 - unitMx_i @ gate @ unitMx_j - unitMx_j @ gate @ unitMx_i

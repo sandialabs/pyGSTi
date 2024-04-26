@@ -517,7 +517,7 @@ def predicted_observable_rates(idtresults, typ, nqubits, maxweight, model):
                         predicted_intrinsic_rates(nqubits, maxweight, model, False, True, affine)
                     intrinsic = _np.concatenate([sto_intrinsic_rates, aff_intrinsic_rates]) \
 
-                predicted_rate = Jrow @ intrinsic
+                predicted_rate = _np.dot(Jrow, intrinsic)
                 ret[fidpair][obsORoutcome] = predicted_rate
 
     elif typ == "diffbasis":

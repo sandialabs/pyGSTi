@@ -897,7 +897,7 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         ralloc = None
 
     if comm is None or comm.Get_size() == 1:
-        return a @ b, None
+        return _np.dot(a, b), None
 
     if out is None:
         if ralloc is None:
@@ -933,8 +933,8 @@ def mpidot(a, b, loc_row_slice, loc_col_slice, slice_tuples_by_rank, comm,
         result[cur_row_slice, cur_col_slice] = buf
     comm.barrier()  # wait for all ranks to finish writing to result
 
-    #assert(_np.linalg.norm(a @ b - result)/(_np.linalg.norm(result) + result.size) < 1e-6),\
-    #    "DEBUG: %g, %g, %d" % (_np.linalg.norm(a @ b - result), _np.linalg.norm(result), result.size)
+    #assert(_np.linalg.norm(_np.dot(a,b) - result)/(_np.linalg.norm(result) + result.size) < 1e-6),\
+    #    "DEBUG: %g, %g, %d" % (_np.linalg.norm(_np.dot(a,b) - result), _np.linalg.norm(result), result.size)
     return result, result_shm
 
 

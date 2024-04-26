@@ -265,10 +265,10 @@ def create_qutrit_model(error_scale, x_angle=_np.pi / 2, y_angle=_np.pi / 2,
         gateImx = _np.dot(_np.dot(_np.conj(Irand).T, gateImx), Irand)
 
     else:
-        gateXmx = gateXmx @ Xrand
-        gateYmx = gateYmx @ Yrand
-        gateMmx = gateMmx @ Mrand
-        gateImx = gateImx @ Irand
+        gateXmx = _np.dot(gateXmx, Xrand)
+        gateYmx = _np.dot(gateYmx, Yrand)
+        gateMmx = _np.dot(gateMmx, Mrand)
+        gateImx = _np.dot(gateImx, Irand)
 
     #Change gate representation to superoperator in Gell-Mann basis
     gateISOfinal = unitary_to_superop(gateImx, basis)

@@ -489,10 +489,10 @@ def _tallskinny_custom_solve(a, b, resource_alloc):
 
     # Step 3:  all processors performs a simple dot product to get
     # the pieces of the final Q matrix
-    Qi = Q1i @ Q2i
+    Qi = _np.dot(Q1i, Q2i)
 
     # we could gather Qi => Q, but just need b' = Q.T * b, so compute:
-    bprime_i = Qi.T @ b
+    bprime_i = _np.dot(Qi.T, b)
 
     # Step 4: gather b'_i => b' on root proc (or host) then solve Rx = b'
     # (on root) via back-substitution.

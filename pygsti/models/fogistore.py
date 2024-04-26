@@ -195,7 +195,7 @@ class FirstOrderGaugeInvariantStore(object):
         # #_mt.print_mx(U, width=6, prec=2)
         # #print("U * Udag = ")
         # #_mt.print_mx(_np.dot(U,_np.conjugate(U.T)), width=6, prec=2)
-        # #print(_np.linalg.norm(Vh @ Vh.T - _np.identity(Vh.shape[0])))
+        # #print(_np.linalg.norm(_np.dot(Vh,Vh.T) - _np.identity(Vh.shape[0])))
         # #full_mix = _np.dot(Vh.T, _np.dot(_np.diag(inv_s), U.T))  # _np.linalg.pinv(gauge_space_directions)
         # #full_mixed_gauge_space_dirs = _np.dot(gauge_space_directions, full_mix)
         # #print("full_mixed_gauge_space_dirs = ");  _mt.print_mx(full_mixed_gauge_space_dirs, width=6, prec=2)

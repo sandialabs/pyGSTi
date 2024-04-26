@@ -1422,7 +1422,7 @@ def _unitary_to_symplectic_2q(u, flagnonclifford=True):
 
                             tempx = _np.dot(_np.linalg.matrix_power(xi, xi_l), _np.linalg.matrix_power(ix, ix_l))
                             tempz = _np.dot(_np.linalg.matrix_power(zi, zi_l), _np.linalg.matrix_power(iz, iz_l))
-                            pauli = (1j**(phase_l)) * tempx @ tempz
+                            pauli = (1j**(phase_l)) * _np.dot(tempx, tempz)
 
                             if _np.allclose(conj, pauli):
                                 s[:, pauli_label] = _np.array([xi_l, ix_l, zi_l, iz_l])
