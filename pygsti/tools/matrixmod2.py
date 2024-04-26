@@ -31,7 +31,7 @@ def dot_mod2(m1, m2):
     -------
     numpy.ndarray
     """
-    return _np.dot(m1, m2) % 2
+    return m1 @ m2 % 2
 
 
 def multidot_mod2(mlist):
@@ -156,7 +156,7 @@ def gaussian_elimination_mod2(a):
         aijn = _np.array([a[i, j:]])
         col = _np.array([a[:, j]]).T
         col[i] = 0
-        flip = _np.dot(col, aijn)
+        flip = col @ aijn
         a[:, j:] = _np.bitwise_xor(a[:, j:], flip)
         i += 1
         j += 1
@@ -281,7 +281,7 @@ def albert_factor(d, failcount=0, rand_state=None):
         z = block[0, 1:]
         B = block[1:, 1:]
         n = Axb_mod2(B, z).T
-        x = _np.array(_np.dot(n, L), dtype='int')
+        x = _np.array(n @ L, dtype='int')
         zer = _np.zeros([t - ind - 1, 1])
         L = _np.array(_np.bmat([[_np.eye(1), x], [zer, L]]), dtype='int')
 

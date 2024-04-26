@@ -191,7 +191,7 @@ class EigenvalueParamDenseOp(_DenseOperator):
                     nullsp = nullsp[:, 0:nToReal]  # truncate #cols if there are more than we need
 
                     Cmx = nullsp[nToReal:, :] + 1j * nullsp[0:nToReal, :]  # Cr + i*Ci
-                    new_vecs = _np.dot(vecs, Cmx)
+                    new_vecs = vecs @ Cmx
                     assert(_np.linalg.norm(new_vecs.imag) < IMAG_TOL), \
                         "Imaginary mag = %g!" % _np.linalg.norm(new_vecs.imag)
                     for ik, k in enumerate(evecIndsToMakeReal):

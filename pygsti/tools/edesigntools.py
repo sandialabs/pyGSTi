@@ -781,13 +781,13 @@ def accumulate_fim_matrix(subcircuits, num_params, num_shots, outcomes, ps, js, 
         for i, outcome in enumerate(outcomes):
             if not approx:
                 jvec = _np.sqrt(num_shots_for_circuit/p[outcome])*(j[outcome].reshape(num_params,1))
-                fisher_info_terms +=_np.dot(jvec, jvec.T) -  num_shots_for_circuit*h[outcome]
+                fisher_info_terms +=jvec @ jvec.T -  num_shots_for_circuit*h[outcome]
                 total_hterm += num_shots_for_circuit*h[outcome]
             else:
                 #fisher_info_terms += _np.outer(j[outcome], j[outcome]) / p[outcome]
                 #faster outer product
                 jvec = _np.sqrt(num_shots_for_circuit/p[outcome])*(j[outcome].reshape(num_params,1))
-                fisher_info_terms +=_np.dot(jvec, jvec.T)
+                fisher_info_terms +=jvec @ jvec.T
     if approx:
         return fisher_info_terms
     else:
@@ -808,13 +808,13 @@ def accumulate_fim_matrix_per_circuit(subcircuits, num_params, outcomes, ps, js,
         for i, outcome in enumerate(outcomes):
             if not approx:
                 jvec = (1/_np.sqrt(p[outcome]))*(j[outcome].reshape(num_params,1))
-                fisher_info_terms[k,:,:] +=_np.dot(jvec, jvec.T) - h[outcome]
+                fisher_info_terms[k,:,:] +=jvec @ jvec.T - h[outcome]
                 total_hterm[k,:,:] += h[outcome]
             else:
                 #fisher_info_terms[circuit] += _np.outer(j[outcome], j[outcome]) / p[outcome]
                 #faster outer product
                 jvec = (1/_np.sqrt(p[outcome]))*(j[outcome].reshape(num_params,1))
-                fisher_info_terms[k,:,:] +=_np.dot(jvec, jvec.T)
+                fisher_info_terms[k,:,:] +=jvec @ jvec.T
     if approx:
         return fisher_info_terms
     else:

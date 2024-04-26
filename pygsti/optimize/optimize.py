@@ -321,7 +321,7 @@ def _fmin_simplex(fn, x0, slide=1.0, tol=1e-8, maxiter=1000):
         d = (-(n + 1) * x[high] + sum(x)) / n
 
         # Break if value is close
-        if _np.sqrt(_np.dot(d, d) / n) < tol or counter == maxiter:
+        if _np.sqrt(d @ d / n) < tol or counter == maxiter:
             solution = _optResult()
             solution.x = x[low]; solution.fun = f[low]
             if counter < maxiter:

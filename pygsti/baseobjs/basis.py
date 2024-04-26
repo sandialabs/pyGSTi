@@ -610,7 +610,7 @@ class Basis(_NicelySerializable):
 
                 A = self.to_std_transform_matrix  # shape (dim,size) - should have indep *cols*
                 Adag = A.T.conj()  # shape (size, dim)
-                return _np.dot(_inv(_np.dot(Adag, A)), Adag)
+                return _np.dot(_inv(Adag @ A), Adag)
 
     @property
     @lru_cache(maxsize=128)

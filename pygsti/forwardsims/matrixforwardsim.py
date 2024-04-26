@@ -89,7 +89,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
                     scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
 
                 gate, ex = scaledGatesAndExps[lOp]
-                H = _np.dot(gate, G)   # product of gates, starting with identity
+                H = gate @ G   # product of gates, starting with identity
                 scale_exp += ex   # scale and keep track of exponent
                 if H.max() < _PSMALL and H.min() > -_PSMALL:
                     nG = max(_nla.norm(G), _np.exp(-scale_exp))
@@ -604,18 +604,18 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
                 G, scale = self.product(circuit_ops, True)
                 # TODO - add a ".dense_space_type" attribute of evotype that == either "Hilbert" or "Hilbert-Schmidt"?
                 if self.model.evotype == "statevec":
-                    ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)) * scale)**2)
+                    ps = _np.real(_np.abs(_np.dot(Es, G @ rho) * scale)**2)
                 else:  # evotype == "densitymx"
                     # probability, with scaling applied (may generate overflow, but OK)
-                    ps = _np.real(_np.dot(Es, _np.dot(G, rho)) * scale)
+                    ps = _np.real(_np.dot(Es, G @ rho) * scale)
                 _np.seterr(**old_err)
 
             else:  # no scaling -- faster but susceptible to overflow
                 G = self.product(circuit_ops, False)
                 if self.model.evotype == "statevec":
-                    ps = _np.real(_np.abs(_np.dot(Es, _np.dot(G, rho)))**2)
+                    ps = _np.real(_np.abs(_np.dot(Es, G @ rho))**2)
                 else:  # evotype == "densitymx"
-                    ps = _np.real(_np.dot(Es, _np.dot(G, rho)))
+                    ps = _np.real(_np.dot(Es, G @ rho))
             array_to_fill[indices] = ps.flat
 
 
@@ -752,14 +752,14 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             # (iRight,iLeft,iFinal) = tup implies circuit[i] = circuit[iLeft] + circuit[iRight], but we want:
             # since then matrixOf(circuit[i]) = matrixOf(circuit[iLeft]) * matrixOf(circuit[iRight])
             L, R = prodCache[iLeft], prodCache[iRight]
-            prodCache[iDest] = _np.dot(L, R)
+            prodCache[iDest] = L @ R
             scaleCache[iDest] = scaleCache[iLeft] + scaleCache[iRight]
 
             if prodCache[iDest].max() < _PSMALL and prodCache[iDest].min() > -_PSMALL:
                 nL, nR = max(_nla.norm(L), _np.exp(-scaleCache[iLeft]),
                              1e-300), max(_nla.norm(R), _np.exp(-scaleCache[iRight]), 1e-300)
                 sL, sR = L / nL, R / nR
-                prodCache[iDest] = _np.dot(sL, sR); scaleCache[iDest] += _np.log(nL) + _np.log(nR)
+                prodCache[iDest] = sL @ sR; scaleCache[iDest] += _np.log(nL) + _np.log(nR)
 
         nanOrInfCacheIndices = (~_np.isfinite(prodCache)).nonzero()[0]  # may be duplicates (a list, not a set)
         # since all scaled gates start with norm <= 1, products should all have norm <= 1
@@ -853,8 +853,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             # since then matrixOf(circuit[i]) = matrixOf(circuit[iLeft]) * matrixOf(circuit[iRight])
             L, R = prod_cache[iLeft], prod_cache[iRight]
             dL, dR = dProdCache[iLeft], dProdCache[iRight]
-            dProdCache[iDest] = _np.dot(dL, R) + \
-                _np.swapaxes(_np.dot(L, dR), 0, 1)  # dot(dS, T) + dot(S, dT)
+            dProdCache[iDest] = dL @ R + \
+                _np.swapaxes(L @ dR, 0, 1)  # dot(dS, T) + dot(S, dT)
             profiler.add_time("compute_dproduct_cache: dots", tm)
             profiler.add_count("compute_dproduct_cache: dots")
 
@@ -1007,11 +1007,11 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             hL, hR = hProdCache[iLeft], hProdCache[iRight]
             # Note: L, R = GxG ; dL,dR = vgs x GxG ; hL,hR = vgs x vgs x GxG
 
-            dLdRa = _np.swapaxes(_np.dot(dL1, dR2), 1, 2)
-            dLdRb = _np.swapaxes(_np.dot(dL2, dR1), 1, 2)
+            dLdRa = _np.swapaxes(dL1 @ dR2, 1, 2)
+            dLdRb = _np.swapaxes(dL2 @ dR1, 1, 2)
             dLdR_sym = dLdRa + _np.swapaxes(dLdRb, 0, 1)
 
-            hProdCache[iDest] = _np.dot(hL, R) + dLdR_sym + _np.transpose(_np.dot(L, hR), (1, 2, 0, 3))
+            hProdCache[iDest] = hL @ R + dLdR_sym + _np.transpose(L @ hR, (1, 2, 0, 3))
 
             scale = scale_cache[iDest] - (scale_cache[iLeft] + scale_cache[iRight])
             if abs(scale) > 1e-8:  # _np.isclose(scale,0) is SLOW!
@@ -1171,7 +1171,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         #  vp[i] = sum_k e[0,k] dot(gs, rho)[i,k,0]  * scale_vals[i]
         #  vp[i] = dot( e, dot(gs, rho))[0,i,0]      * scale_vals[i]
         #  vp    = squeeze( dot( e, dot(gs, rho)), axis=(0,2) ) * scale_vals
-        return _np.squeeze(_np.dot(e, _np.dot(gs, rho)), axis=(0, 2)) * scale_vals
+        return _np.squeeze(_np.dot(e, gs @ rho), axis=(0, 2)) * scale_vals
         # shape == (len(circuit_list),) ; may overflow but OK
 
     def _dprobs_from_rho_e(self, spam_tuple, rho, e, gs, d_gs, scale_vals, wrt_slice=None):
@@ -1210,13 +1210,13 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
             dp_drhos = _np.zeros((nCircuits, nOpDerivCols))
             _fas(dp_drhos, [None, rhoVec.gpindices],
-                 _np.squeeze(_np.dot(_np.dot(e, gs), rhoVec.deriv_wrt_params()),  # *don't* apply wrt filter here
+                 _np.squeeze(_np.dot(e @ gs, rhoVec.deriv_wrt_params()),  # *don't* apply wrt filter here
                              axis=(0,)) * scale_vals[:, None])  # may overflow, but OK
             dp_drhos = _np.dot(dp_drhos, self.model._param_interposer.deriv_op_params_wrt_model_params())
             if wrt_slice is not None: dp_drhos = dp_drhos[:, wrt_slice]
 
             dp_dEs = _np.zeros((nCircuits, nOpDerivCols))
-            dp_dAnyE = _np.squeeze(_np.dot(gs, rho), axis=(2,)) * scale_vals[:, None]
+            dp_dAnyE = _np.squeeze(gs @ rho, axis=(2,)) * scale_vals[:, None]
             _fas(dp_dEs, [None, EVec.gpindices], _np.dot(dp_dAnyE, EVec.deriv_wrt_params()))
             dp_dEs = _np.dot(dp_dEs, self.model._param_interposer.deriv_op_params_wrt_model_params())
             if wrt_slice is not None: dp_dEs = dp_dEs[:, wrt_slice]
@@ -1237,7 +1237,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
             dp_drhos = _np.zeros((nCircuits, nOpDerivCols))
             _fas(dp_drhos, [None, rho_gpindices],
-                 _np.squeeze(_np.dot(_np.dot(e, gs),
+                 _np.squeeze(_np.dot(e @ gs,
                                      rhoVec.deriv_wrt_params(rho_wrtFilter)),
                              axis=(0,)) * scale_vals[:, None])  # may overflow, but OK
 
@@ -1249,7 +1249,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             # dp_dEs[:,J0+J] = dot(squeeze(dot(gs, rho),axis=(2,)), dEP)[:,J]
             dp_dEs = _np.zeros((nCircuits, nOpDerivCols))
             # may overflow, but OK (deriv w.r.t any of self.effects - independent of which)
-            dp_dAnyE = _np.squeeze(_np.dot(gs, rho), axis=(2,)) * scale_vals[:, None]
+            dp_dAnyE = _np.squeeze(gs @ rho, axis=(2,)) * scale_vals[:, None]
             _fas(dp_dEs, [None, E_gpindices],
                  _np.dot(dp_dAnyE, EVec.deriv_wrt_params(E_wrtFilter)))
 
@@ -1355,7 +1355,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         # d2pr_dErhos[:,J0+J,K0+K] = swapaxes(dot(dEPT,prod,drhoP),0,1)[:,J,K]
         d2pr_dErhos1 = _np.zeros((nCircuits, nDerivCols1, nDerivCols2))
         drho = rhoVec.deriv_wrt_params(rho_wrtFilter2)
-        dp_dAnyE = _np.dot(gs, drho) * scale_vals[:, None, None]  # overflow OK
+        dp_dAnyE = gs @ drho * scale_vals[:, None, None]  # overflow OK
         devec = EVec.deriv_wrt_params(E_wrtFilter1)
         _fas(d2pr_dErhos1, (None, E_gpindices1, rho_gpindices2),
              _np.swapaxes(_np.dot(_np.transpose(devec), dp_dAnyE), 0, 1))
@@ -1366,7 +1366,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         else:
             d2pr_dErhos2 = _np.zeros((nCircuits, nDerivCols2, nDerivCols1))
             drho = rhoVec.deriv_wrt_params(rho_wrtFilter1)
-            dp_dAnyE = _np.dot(gs, drho) * scale_vals[:, None, None]  # overflow OK
+            dp_dAnyE = gs @ drho * scale_vals[:, None, None]  # overflow OK
             devec = EVec.deriv_wrt_params(E_wrtFilter2)
             _fas(d2pr_dErhos2, [None, E_gpindices2, rho_gpindices1],
                  _np.swapaxes(_np.dot(_np.transpose(devec), dp_dAnyE), 0, 1))
@@ -1375,7 +1375,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         #Note: these 2nd derivatives are non-zero when the spam vectors have
         # a more than linear dependence on their parameters.
         if self.model.circuit_layer_operator(rholabel, 'prep').has_nonzero_hessian():
-            dp_dAnyRho = _np.dot(e, gs).squeeze(0) * scale_vals[:, None]  # overflow OK
+            dp_dAnyRho = e @ gs.squeeze(0) * scale_vals[:, None]  # overflow OK
             d2pr_d2rhos = _np.zeros((nCircuits, nDerivCols1, nDerivCols2))
             _fas(d2pr_d2rhos, [None, rho_gpindices1, rho_gpindices2],
                  _np.tensordot(dp_dAnyRho, self.model.circuit_layer_operator(rholabel, 'prep').hessian_wrt_params(
@@ -1386,7 +1386,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             d2pr_d2rhos = 0
 
         if self.model.circuit_layer_operator(elabel, 'povm').has_nonzero_hessian():
-            dp_dAnyE = _np.dot(gs, rho).squeeze(2) * scale_vals[:, None]  # overflow OK
+            dp_dAnyE = gs @ rho.squeeze(2) * scale_vals[:, None]  # overflow OK
             d2pr_d2Es = _np.zeros((nCircuits, nDerivCols1, nDerivCols2))
             _fas(d2pr_d2Es, [None, E_gpindices1, E_gpindices2],
                  _np.tensordot(dp_dAnyE, self.model.circuit_layer_operator(elabel, 'povm').hessian_wrt_params(

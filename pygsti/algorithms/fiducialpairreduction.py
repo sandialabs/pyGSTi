@@ -1048,9 +1048,9 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, prep_povm_tuple
     # each of the germ parameters (~eigenvalues), which is *all* we
     # want sensitivity to.
     RANK_TOL = 1e-7 #HARDCODED
-    #rank = _np.linalg.matrix_rank(_np.dot(dPall, dPall.T), RANK_TOL)
+    #rank = _np.linalg.matrix_rank(dPall @ dPall.T, RANK_TOL)
     
-    spectrum_full_fid_set= _np.abs(_np.linalg.eigvalsh(_np.dot(dPall, dPall.T)))
+    spectrum_full_fid_set= _np.abs(_np.linalg.eigvalsh(dPall @ dPall.T))
     
     #use the spectrum to calculate the rank instead.
     rank= _np.count_nonzero(spectrum_full_fid_set>RANK_TOL)
@@ -1058,7 +1058,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, prep_povm_tuple
     if rank < gsGerm.num_params:  # full fiducial set should work!
         raise ValueError("Incomplete fiducial-pair set!")
 
-    spectrum_full_fid_set= list(sorted(_np.abs(_np.linalg.eigvalsh(_np.dot(dPall, dPall.T)))))
+    spectrum_full_fid_set= list(sorted(_np.abs(_np.linalg.eigvalsh(dPall @ dPall.T))))
     
     imin_full_fid_set = len(spectrum_full_fid_set) - gsGerm.num_params
     condition_full_fid_set = spectrum_full_fid_set[-1] / spectrum_full_fid_set[imin_full_fid_set] if (spectrum_full_fid_set[imin_full_fid_set] > 0) else _np.inf
@@ -1122,7 +1122,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, prep_povm_tuple
                 # subset of the total fiducial pairs.
                 elementIndicesToTest = _np.concatenate([elIndicesForPair[i] for i in pairIndicesToTest])
                 dP = _np.take(dPall, elementIndicesToTest, axis=0)  # subset_of_num_elements x num_params
-                spectrum = _np.abs(_np.linalg.eigvalsh(_np.dot(dP, dP.T)))
+                spectrum = _np.abs(_np.linalg.eigvalsh(dP @ dP.T))
                 current_rank= _np.count_nonzero(spectrum>1e-10) #HARDCODED
                 spectrum= list(sorted(spectrum))
                 
@@ -1218,7 +1218,7 @@ def _get_per_germ_power_fidpairs(prep_fiducials, meas_fiducials, prep_povm_tuple
                 elementIndicesToTest = _np.concatenate([elIndicesForPair[i] for i in pairIndicesToTest])
                 dP = _np.take(dPall, elementIndicesToTest, axis=0)  # subset_of_num_elements x num_params
                 
-                spectrum = _np.abs(_np.linalg.eigvalsh(_np.dot(dP, dP.T)))
+                spectrum = _np.abs(_np.linalg.eigvalsh(dP @ dP.T))
                 current_rank= _np.count_nonzero(spectrum>1e-10)
                 spectrum= list(sorted(spectrum))
                 
@@ -1354,10 +1354,10 @@ def _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, prep_pov
     # each of the germ parameters (~eigenvalues), which is *all* we
     # want sensitivity to.
     RANK_TOL = 1e-7 #HARDCODED
-    #rank = _np.linalg.matrix_rank(_np.dot(dPall, dPall.T), RANK_TOL)
+    #rank = _np.linalg.matrix_rank(dPall @ dPall.T, RANK_TOL)
     
     if check_complete_fid_set:
-        spectrum_full_fid_set= _np.abs(_np.linalg.eigvalsh(_np.dot(dPall, dPall.T)))
+        spectrum_full_fid_set= _np.abs(_np.linalg.eigvalsh(dPall @ dPall.T))
         
         #use the spectrum to calculate the rank instead.
         rank= _np.count_nonzero(spectrum_full_fid_set>RANK_TOL)
@@ -1365,7 +1365,7 @@ def _get_per_germ_power_fidpairs_greedy(prep_fiducials, meas_fiducials, prep_pov
         if rank < gsGerm.num_params:  # full fiducial set should work!
             raise ValueError("Incomplete fiducial-pair set!")
     
-        spectrum_full_fid_set= list(sorted(_np.abs(_np.linalg.eigvalsh(_np.dot(dPall, dPall.T)))))
+        spectrum_full_fid_set= list(sorted(_np.abs(_np.linalg.eigvalsh(dPall @ dPall.T))))
         
         imin_full_fid_set = len(spectrum_full_fid_set) - gsGerm.num_params
         condition_full_fid_set = spectrum_full_fid_set[-1] / spectrum_full_fid_set[imin_full_fid_set] if (spectrum_full_fid_set[imin_full_fid_set] > 0) else _np.inf

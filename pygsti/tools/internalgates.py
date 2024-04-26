@@ -246,9 +246,9 @@ def standard_gatename_unitaries():
     std_unitaries['Gh'] = H
     std_unitaries['Gp'] = P
     std_unitaries['Gpdag'] = Pdag
-    #std_unitaries['Ghp'] = _np.dot(H,P)
-    #std_unitaries['Gph'] = _np.dot(P,H)
-    #std_unitaries['Ghph'] = _np.dot(H,_np.dot(P,H))
+    #std_unitaries['Ghp'] = H @ P
+    #std_unitaries['Gph'] = P @ H
+    #std_unitaries['Ghph'] = _np.dot(H,P @ H)
     std_unitaries['Gt'] = _np.array([[1., 0.], [0., _np.exp(1j * _np.pi / 4)]], complex)
     std_unitaries['Gtdag'] = _np.array([[1., 0.], [0., _np.exp(-1j * _np.pi / 4)]], complex)
     

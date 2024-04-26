@@ -247,7 +247,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
 
         dT.shape = (d, d, n)  # call it (d1,d2,n)
         dT = _np.rollaxis(dT, 2)  # shape (n, d1, d2)
-        deriv = -_np.dot(Tinv, _np.dot(dT, Tinv))  # d,d * (n,d,d * d,d) => d,d * n,d,d => d,n,d
+        deriv = -_np.dot(Tinv, dT @ Tinv)  # d,d * (n,d,d * d,d) => d,d * n,d,d => d,n,d
         return _np.swapaxes(deriv, 1, 2).reshape(d * d, n)  # d,n,d => d,d,n => (d*d, n)
 
     def to_vector(self):

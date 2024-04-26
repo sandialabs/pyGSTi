@@ -86,7 +86,7 @@ def fidelity(a, b):
         # special case when a is rank 1, a = vec * vec^T and sqrt(a) = a
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
-        F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(b, vec)).real  # vec^T * b * vec
+        F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), b @ vec).real  # vec^T * b * vec
         return float(F[0, 0])
 
     evals, U = _np.linalg.eig(b)
@@ -94,18 +94,18 @@ def fidelity(a, b):
         # special case when b is rank 1 (recally fidelity is sym in args)
         ivec = _np.argmax(evals)
         vec = U[:, ivec:(ivec + 1)]
-        F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), _np.dot(a, vec)).real  # vec^T * a * vec
+        F = evals[ivec].real * _np.dot(_np.conjugate(_np.transpose(vec)), a @ vec).real  # vec^T * a * vec
         return float(F[0, 0])
 
     #if _np.array_equal(a, b): return 1.0  # HACK - some cases when a and b are perfecty equal sqrtm(a) fails...
     sqrtA = _hack_sqrtm(a)  # _spl.sqrtm(a)
     # test the scipy sqrtm function - sometimes fails when rank defficient
-    #assert(_np.linalg.norm(_np.dot(sqrtA, sqrtA) - a) < 1e-8)
-    if _np.linalg.norm(_np.dot(sqrtA, sqrtA) - a) > 1e-8:
+    #assert(_np.linalg.norm(sqrtA @ sqrtA - a) < 1e-8)
+    if _np.linalg.norm(sqrtA @ sqrtA - a) > 1e-8:
         evals = _np.linalg.eigvals(a)
         _warnings.warn(("sqrtm(a) failure when computing fidelity - beware result. "
                         "Maybe due to rank defficiency - eigenvalues of a are: %s") % evals)
-    F = (_np.trace(_hack_sqrtm(_np.dot(sqrtA, _np.dot(b, sqrtA)))).real)**2  # Tr( sqrt{ sqrt(a) * b * sqrt(a) } )^2
+    F = (_np.trace(_hack_sqrtm(_np.dot(sqrtA, b @ sqrtA))).real)**2  # Tr( sqrt{ sqrt(a) * b * sqrt(a) } )^2
     return float(F)
 
 
@@ -1031,8 +1031,8 @@ def decompose_gate_matrix(operation_mx):
             # the remaining eigenvectors w.r.t this one.
             A = _np.take(op_evecs, unit_eval_indices, axis=1)
             b = _np.array([[1], [0], [0], [0]], 'd')  # identity density mx
-            x = _np.dot(_np.linalg.pinv(_np.dot(A.T, A)), _np.dot(A.T, b))
-            fixedPtVec = _np.dot(A, x)  # fixedPtVec / _np.linalg.norm(fixedPtVec)
+            x = _np.dot(_np.linalg.pinv(A.T @ A), A.T @ b)
+            fixedPtVec = A @ x  # fixedPtVec / _np.linalg.norm(fixedPtVec)
             fixedPtVec = fixedPtVec[:, 0]
 
             iLargestContrib = _np.argmax(_np.abs(x))  # index of gate eigenvector which contributed the most
@@ -1235,7 +1235,7 @@ def std_process_mx_to_unitary(superop_mx):
             densitymx_ij = _np.zeros((d, d), 'd'); densitymx_ij[i, j] = 1.0  # |i><j|
             UijU = _np.dot(superop_mx, densitymx_ij.flat).reshape((d, d))  # U|i><j|U^dag
             Uj = U[:, j]
-            Ui = _np.dot(UijU, Uj)
+            Ui = UijU @ Uj
         else:
             ##method1: use random state projection
             #rand_state = _np.random.rand(d)
@@ -2151,7 +2151,7 @@ def compute_best_case_gauge_transform(gate_mx, target_gate_mx, return_all=False)
                         if combos.shape[1] != dim:
                             raise ValueError(("Can only find %d (< %d) *real* linear combinations of"
                                               " vectors in eigenspace for %s!") % (combos.shape[1], dim, str(ev)))
-                        U[:, info['indices']] = _np.dot(Usub, combos)
+                        U[:, info['indices']] = Usub @ combos
                         assert(_np.linalg.norm(U[:, info['indices']].imag) < tol)
 
                     #Add real eigenvalues and vectors
@@ -2203,7 +2203,7 @@ def compute_best_case_gauge_transform(gate_mx, target_gate_mx, return_all=False)
                     break
                 dstart += kk
             start += k
-        Utgt = _np.dot(Utgt, D)  # update Utgt
+        Utgt = Utgt @ D  # update Utgt
 
         Utrans = _np.dot(Utgt, _np.linalg.inv(Uop))
         assert(_np.linalg.norm(_np.imag(Utrans)) < 1e-7)
@@ -2243,8 +2243,8 @@ def compute_best_case_gauge_transform(gate_mx, target_gate_mx, return_all=False)
         # --> inv(E.dag * E) * E.dag * v = coeffs
         # E*coeffs = E * inv(E.dag * E) * E.dag * v
         E = _np.array(eigenspace[i]).T; Edag = E.T.conjugate()
-        coeffs = _np.dot(_np.dot(_np.linalg.inv(_np.dot(Edag, E)), Edag), Uop[:, j])
-        evectors[j] = _np.dot(E, coeffs)
+        coeffs = _np.dot(_np.dot(_np.linalg.inv(Edag @ E), Edag), Uop[:, j])
+        evectors[j] = E @ coeffs
 
         #check for conjugate pair
         #DB: print("Looking for conjugate:")
@@ -2253,7 +2253,7 @@ def compute_best_case_gauge_transform(gate_mx, target_gate_mx, return_all=False)
                and _np.allclose(Uop[:, j], Uop[:, j2].conj()):
                 #DB: print("Found conjugate at j = ",j2)
                 evectors[j2] = _np.conjugate(evectors[j])
-                # x = _np.linalg.solve(_np.dot(Edag, E), _np.dot(Edag, evectors[j2]))
+                # x = _np.linalg.solve(Edag @ E, _np.dot(Edag, evectors[j2]))
                 #assert(_np.isclose(_np.linalg.norm(x),_np.linalg.norm(coeffs))) ??
                 #check that this vector is in the span of eigenspace[i2]?
 

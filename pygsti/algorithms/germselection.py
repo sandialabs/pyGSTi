@@ -1241,7 +1241,7 @@ def _twirled_deriv(model, circuit, eps=1e-6, float_type=_np.cdouble):
     twirler = _super_op_for_perfect_twirl(prod, eps, float_type=float_type)
 
     # flattened_op_dim x vec_model_dim
-    return _np.dot(twirler, dProd)
+    return twirler @ dProd
 
 
 def _bulk_twirled_deriv(model, circuits, eps=1e-6, check=False, comm=None, float_type=_np.cdouble):

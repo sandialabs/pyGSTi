@@ -563,7 +563,7 @@ def R_matrix(model, group, group_to_model=None, weights=None):  # noqa N802
 #     for i in range(0, 1 + i_max):
 #         m[i] = m_min + i * m_step
 #         P_m[i] = _np.dot(extended_E, _np.dot(Riterate, extended_rho))
-#         Riterate = _np.dot(Rstep, Riterate)
+#         Riterate = Rstep @ Riterate
 
 #     return m, P_m
 
@@ -694,7 +694,7 @@ def R_matrix(model, group, group_to_model=None, weights=None):  # noqa N802
 #         else:
 #             L_m_rdd = _mtls.unvec(_np.dot(Literate, identity_vec))
 #         P_m[i] = _np.dot(E_eff, _np.dot(L_m_rdd, model_go.preps[success_prepLabel]))
-#         Literate = _np.dot(Lstep, Literate)
+#         Literate = Lstep @ Literate
 #         upper_bound[i] = P_m[i] + delta / 2
 #         lower_bound[i] = P_m[i] - delta / 2
 #         if upper_bound[i] > 1:

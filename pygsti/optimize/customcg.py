@@ -72,13 +72,13 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag=None, xopt=None):
     while(step < maxiters and ((stepsize > MIN_STEPSIZE) or (step % RESET != 1 and RESET > 1))):
 
         grad, boundaryFlag = dfdx_and_bdflag(x)
-        gradnorm = _np.dot(grad, grad)
+        gradnorm = grad @ grad
         if step % RESET == 0:  # reset change == gradient
             change = grad[:]
         else:  # add gradient to change (conjugate gradient)
             #beta = gradnorm / lastgradnorm # Fletcher-Reeves
-            beta = (gradnorm - _np.dot(grad, lastgrad)) / lastgradnorm  # Polak-Ribiere
-            #beta = (gradnorm - _np.dot(grad,lastgrad))/(_np.dot(lastchange,grad-lastgrad)) #Hestenes-Stiefel
+            beta = (gradnorm - grad @ lastgrad) / lastgradnorm  # Polak-Ribiere
+            #beta = (gradnorm - grad @ lastgrad)/(_np.dot(lastchange,grad-lastgrad)) #Hestenes-Stiefel
             change = grad + beta * lastchange
 
         for i in range(len(change)):
@@ -107,7 +107,7 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag=None, xopt=None):
         def g(s): return f(x + s * change)  # f along a line given by changedir.  Argument to function is stepsize.
         stepsize = _maximize_1d(g, 0, abs(stepsize), last_fx)  # find optimal stepsize along change direction
 
-        predicted_difference = stepsize * _np.dot(grad, change)
+        predicted_difference = stepsize * grad @ change
         if xopt is not None: xopt_dot = _np.dot(change, xopt - x) / \
             (_np.linalg.norm(change) * _np.linalg.norm(xopt - x))
         x += stepsize * change; fx = f(x)
@@ -115,7 +115,7 @@ def fmax_cg(f, x0, maxiters=100, tol=1e-8, dfdx_and_bdflag=None, xopt=None):
         print("DEBUG: Max iter ", step, ": f=", fx, ", dexpct=", predicted_difference - difference,
               ", step=", stepsize, ", xopt_dot=", xopt_dot if xopt is not None else "--",
               ", chg_dot=",
-              _np.dot(change, lastchange) / (_np.linalg.norm(change) * _np.linalg.norm(lastchange) + 1e-6))
+              change @ lastchange / (_np.linalg.norm(change) * _np.linalg.norm(lastchange) + 1e-6))
 
         if abs(difference) < tol: break  # Convergence condition
 

@@ -1286,7 +1286,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
             jtf[:] = _np.dot(j.T[self.fine_param_subslice, :], f)
             return
 
-        local_jtf = _np.dot(j.T, f)  # need to sum this value across all atoms
+        local_jtf = j.T @ f  # need to sum this value across all atoms
 
         # assume jtf is created from allocate_local_array('jtf', 'd')
         scratch, scratch_shm = _smt.create_shared_ndarray(
@@ -1374,7 +1374,7 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
                     else:
                         assert(self.param_slice_owners[i] == 0)
 
-                    atom_jtj[:, param_slice] = jT @ j  # _np.dot(jT, j)
+                    atom_jtj[:, param_slice] = jT @ j  # jT @ j
                 else:
                     atom_ralloc.comm.Bcast(buf[0:ncols, :], root=self.param_slice_owners[i])
                     other_j = buf[0:ncols, :].T

@@ -573,7 +573,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         -------
         None
         """
-        jtf[:] = _np.dot(j.T, f)
+        jtf[:] = j.T @ f
 
     def fill_jtj(self, j, jtj):
         """
@@ -596,7 +596,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         -------
         None
         """
-        jtj[:] = _np.dot(j.T, j)
+        jtj[:] = j.T @ j
 
     #Not needed
     #def allocate_jtj_shared_mem_buf(self):

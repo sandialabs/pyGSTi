@@ -1097,7 +1097,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
 
         for gname1, u1 in nontrivial_gname_pauligate_pairs:
             for gname2, u2 in nontrivial_gname_pauligate_pairs:
-                ucombined = _np.dot(u2, u1)
+                ucombined = u2 @ u1
                 for gname3, u3 in nontrivial_gname_pauligate_pairs:
                     if _np.allclose(u3, ucombined):
                         # If ucombined is u3, add the gate composition relation.
@@ -1150,7 +1150,7 @@ class QubitProcessorSpec(QuditProcessorSpec):
 
                     u2 = _ot.unitary_to_pauligate(U2)
                     if _np.shape(u2) == _np.shape(u1):
-                        ucombined = _np.dot(u2, u1)
+                        ucombined = u2 @ u1
                         if _np.allclose(ucombined, _np.identity(_np.shape(u2)[0], float)):
                             gate_inverse[gname1] = gname2
                             gate_inverse[gname2] = gname1

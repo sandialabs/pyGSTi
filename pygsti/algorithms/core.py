@@ -216,13 +216,13 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         X_ps = []
         for X in Xs:
             # shape (K,K) this should be close to rank "svd_truncate_to" (which is <= K) -- TODO: check this
-            X2 = _np.dot(Ud, _np.dot(X, Vd))
+            X2 = _np.dot(Ud, X @ Vd)
 
             #if svd_truncate_to > 0:
             #    printer.log("LGST DEBUG: %s before trunc to first %d row and cols = \n" % (opLabel,svd_truncate_to), 3)
             #    if printer.verbosity >= 3:
             #        _tools.print_mx(X2)
-            X_p = _np.dot(Pjt, _np.dot(X2, Pj))  # truncate X => X', shape (trunc, trunc)
+            X_p = _np.dot(Pjt, X2 @ Pj)  # truncate X => X', shape (trunc, trunc)
             X_ps.append(X_p)
 
         if opLabel in target_model.instruments:
@@ -251,7 +251,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                 # that all effect labels are present (only ones with non-zero counts are)
                 # so return 0 for the fraction in that case.
                 EVec[0, i] = dsRow_fractions.get((effectLabel,), 0)
-            EVec_p = _np.dot(_np.dot(EVec, Vd), Pj)  # truncate Evec => Evec', shape (1,trunc)
+            EVec_p = _np.dot(EVec @ Vd, Pj)  # truncate Evec => Evec', shape (1,trunc)
             povm_effects.append((effectLabel, _np.transpose(EVec_p)))
         lgstModel.povms[povmLabel] = _povm.UnconstrainedPOVM(povm_effects, evotype='default')
         # unconstrained POVM for now - wait until after guess gauge for TP-constraining)
@@ -270,7 +270,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
             # so return 0 for the fraction in that case.
             rhoVec[eoff:eoff + povmLen, 0] = [dsRow_fractions.get((ol,),0) for ol in target_model.povms[povmLbl]]
             eoff += povmLen
-        rhoVec_p = _np.dot(Pjt, _np.dot(Ud, rhoVec))  # truncate rhoVec => rhoVec', shape (trunc, 1)
+        rhoVec_p = _np.dot(Pjt, Ud @ rhoVec)  # truncate rhoVec => rhoVec', shape (trunc, 1)
         rhoVec_p = _np.dot(invABMat_p, rhoVec_p)
         lgstModel.preps[prepLabel] = rhoVec_p
 
@@ -286,12 +286,12 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         # guessPjt = _np.transpose(guessPj)         # shape = (guessTrunc, K)
 
         AMat = _construct_a(effect_fiducials, guess_model_for_gauge)    # shape = (nESpecs, gsDim)
-        # AMat_p = _np.dot( guessPjt, _np.dot(Ud, AMat)) #truncate Evec => Evec', shape (guessTrunc,gsDim) (square!)
+        # AMat_p = _np.dot( guessPjt, Ud @ AMat) #truncate Evec => Evec', shape (guessTrunc,gsDim) (square!)
 
         BMat = _construct_b(prep_fiducials, guess_model_for_gauge)  # shape = (gsDim, nRhoSpecs)
-        BMat_p = _np.dot(_np.dot(BMat, Vd), guessPj)  # truncate Evec => Evec', shape (gsDim,guessTrunc) (square!)
+        BMat_p = _np.dot(BMat @ Vd, guessPj)  # truncate Evec => Evec', shape (gsDim,guessTrunc) (square!)
 
-        guess_ABMat = _np.dot(AMat, BMat)
+        guess_ABMat = AMat @ BMat
         _, guess_s, _ = _np.linalg.svd(guess_ABMat, full_matrices=False)
 
         printer.log("Singular values of target I_tilde (truncating to first %d of %d) = "

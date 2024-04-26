@@ -1326,7 +1326,7 @@ def do_idle_tomography(nqubits, dataset, max_lengths, pauli_basis_dicts, maxweig
                     # J_ham * Hintrinsic = observed_rates - J_aff * Aintrinsic
                     Jaff = _np.concatenate(Jaff_list, axis=0)
                     Aintrinsic = intrinsic_rates['affine']
-                    corr = _np.dot(Jaff, Aintrinsic)
+                    corr = Jaff @ Aintrinsic
                     obs_err_rates -= corr
 
                 rank = _np.linalg.matrix_rank(J)

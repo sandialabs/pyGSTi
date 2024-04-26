@@ -1619,7 +1619,7 @@ def model_model_angles_btwn_axes(a, b, mx_basis):  # Note: default 'gm' basis
     if axisOfRotn is None or axisOfRotn2 is None:
         return _np.nan
 
-    real_dot = _np.clip(_np.real(_np.dot(axisOfRotn, axisOfRotn2)), -1.0, 1.0)
+    real_dot = _np.clip(_np.real(axisOfRotn @ axisOfRotn2), -1.0, 1.0)
     return _np.arccos(abs(real_dot)) / _np.pi
     #Note: abs() allows axis to be off by 180 degrees -- if showing *angle* as
     #      well, must flip sign of angle of rotation if you allow axis to
@@ -2043,7 +2043,7 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
                 # for errOut in error_superops:
                 #     arg1 = _tools.jamiolkowski_iso(errOut, mxBasis, mxBasis).conj().T
                 #     arg2 = _tools.jamiolkowski_iso(noise,  mxBasis, mxBasis)
-                #     check.append(_np.trace(_np.dot(arg1, arg2)) * 4)
+                #     check.append(_np.trace(arg1 @ arg2) * 4)
                 # ---------------------------- efficient code -----------------------------
                 check = []
                 for errOut in error_superops:
@@ -2081,7 +2081,7 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
         #if rank >= nSuperOps*nOperations: #then we can extract error terms for the gates
         #    # J*vec_opErrs = Y => vec_opErrs = (J^T*J)^-1 J^T*Y (lin least squares)
         #    J,JT = runningJac, runningJac.T
-        #    vec_opErrs = _np.dot( _np.linalg.inv(_np.dot(JT,J)), _np.dot(JT,runningY))
+        #    vec_opErrs = _np.dot( _np.linalg.inv(JT @ J), JT @ runningY)
         #    return vec_to_projdict(vec_opErrs)
     #raise ValueError("Not enough synthetic idle sequences to extract gauge-robust error rates.")
 

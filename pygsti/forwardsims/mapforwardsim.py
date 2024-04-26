@@ -698,7 +698,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                     scaledGatesAndExps[lOp] = (opmx / ng, _np.log(ng))
 
                 gate, ex = scaledGatesAndExps[lOp]
-                H = _np.dot(gate, G)   # product of gates, starting with identity
+                H = gate @ G   # product of gates, starting with identity
                 scale_exp += ex   # scale and keep track of exponent
                 if H.max() < _PSMALL and H.min() > -_PSMALL:
                     nG = max(_nla.norm(G), _np.exp(-scale_exp))

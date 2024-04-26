@@ -757,12 +757,12 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, two_dlogl_thresho
 
         def NewtonObjective(x):
             barrier_val = bFn(x, compute_deriv=False)
-            #return t_value * _np.dot(c.T, x) + barrier_val
+            #return t_value * c.T @ x + barrier_val
             return float(t * _np.sum(_np.sqrt((c * x)**2 + SMALL2)) + barrier_val)
 
         def NewtonObjective_derivs(x):
             barrier, Dbarrier, Hbarrier = bFn(x)
-            #obj = t * _np.dot(c.T, x) + barrier
+            #obj = t * c.T @ x + barrier
             #Dobj = t * c.T + Dbarrier
             #Hobj = Hbarrier
             if SMALL2 == 0.0:  # then obj = |c * x|, Dobj = c, Hobj = 0
@@ -779,7 +779,7 @@ def optimize_wildcard_budget_barrier(budget, L1weights, objfn, two_dlogl_thresho
         #import scipy.optimize
         #def barrier_obj(x):
         #    x = _np.clip(x, 1e-10, None)
-        #    return t * _np.dot(c.T, x) - _np.log(-barrierF(x, False))
+        #    return t * c.T @ x - _np.log(-barrierF(x, False))
         #result = scipy.optimize.minimize(barrier_obj, x, method="CG")
         #x = _np.clip(result.x, 0, None)
 
