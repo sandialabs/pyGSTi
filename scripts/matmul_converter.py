@@ -1,4 +1,5 @@
 import re
+import os
 
 
 def make_dotdot_pattern(dotarg):
@@ -10,17 +11,12 @@ def make_dotdot_pattern(dotarg):
     dotdot = re.compile(pattern_spec)
     return dotdot
 
-# def make_composed_dotdot_pattern(dotarg):
-#     spaces = '[ ]*'  # one or more spaces
-#     composed_dotarg = dotarg + spaces + '@' + spaces + dotarg
-#     arg_left = 
-#     return
 
 def replacer(match):
     return f"{match.group('left')} @ {match.group('right')}"
 
 
-if __name__ == '__main__':
+def demo_dotdot_replacer():
     dotarg = r'[A-Za-z0-9]+(\.T)?(\.conj\(\))?'
     # ^ expressions given by <variable name>, with optional transpose or conjugation.
     npdotdot = make_dotdot_pattern(dotarg)
@@ -38,6 +34,35 @@ if __name__ == '__main__':
     print('\nInstances where we do NOT expect to replace ...')
     out = npdotdot.sub(replacer, '_np.dot(aAa.I, B11), nice to see you. _np.dot(aAa, B12.J)'); print(out)
     out = npdotdot.sub(replacer, '_np.dot(aAa.H, B11.K), nice to see you. _np.dot(aAa.T, B12.A)'); print(out)
+    print(0)
+    return
+
+
+def process_file(file_path, line_transformer):
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+    transformed_lines = [line_transformer(line) for line in lines]
+    with open(file_path, 'w') as file:
+        file.writelines(transformed_lines)
+
+def traverse_directory(directory, line_transformer):
+    # Walk through all directories and files starting from the given directory
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            # Check if the file is a Python file
+            if file.endswith('.py'):
+                file_path = os.path.join(root, file)
+                # Process the file
+                process_file(file_path, line_transformer)
+
+
+if __name__ == '__main__':
+    dotarg = r'[A-Za-z0-9]+(\.T)?(\.conj\(\))?'
+    # ^ expressions given by <variable name>, with optional transpose or conjugation.
+    npdotdot = make_dotdot_pattern(dotarg)
+    transformer = lambda line: npdotdot.sub(replacer, line)
+    traverse_directory('/Users/rjmurr/Documents/pygsti-general/pyGSTi/pygsti', transformer)
+
 
 
     print(0)
