@@ -33,23 +33,12 @@ from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _P
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.data import DataSet as _DataSet
 
-#Plotly v3 changes heirarchy of graph objects
-# Do this to avoid deprecation warning is plotly 3+
-if int(plotly.__version__.split('.')[0]) >= 3:  # Plotly 3+
-    go_x_axis = go.layout.XAxis
-    go_y_axis = go.layout.YAxis
-    go_margin = go.layout.Margin
-    go_annotation = go.layout.Annotation
-else:
-    go_x_axis = go.XAxis
-    go_y_axis = go.YAxis
-    go_margin = go.Margin
-    go_annotation = go.Annotation
 
+go_x_axis = go.layout.XAxis
+go_y_axis = go.layout.YAxis
+go_margin = go.layout.Margin
+go_annotation = go.layout.Annotation
 
-#DEBUG
-#import time as _time  #DEBUG TIMER
-#from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
 
 def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
                    prec=0, hover_label_fn=None, hover_labels=None):
@@ -102,12 +91,12 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
                    'colorscale': colormap.create_plotly_colorscale(),
                    'showscale': colorbar, 'hoverinfo': 'none',
                    'zmin': colormap.hmin, 'zmax': colormap.hmax,
-                   'xgap':3, 'ygap':3}
+                   'xgap':1, 'ygap':1}
     
     heatmapArgsborderbg = {'z': masked_data,
                    'colorscale': ['#000', '#000'],
                    'showscale': False,
-                   'xgap':1, 'ygap':1,
+                   'xgap':0, 'ygap':0,
                    'hoverinfo': 'none'}
 
     #if xlabels is not None: heatmapArgs['x'] = xlabels
@@ -154,6 +143,7 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
         linewidth=2,
         range=[-1, plt_data.shape[1]]
     )
+
     yaxis = go_y_axis(
         showgrid=False,
         zeroline=False,
@@ -178,7 +168,7 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
 
 def _nested_color_boxplot(plt_data_list_of_lists, colormap,
                           colorbar=False, box_label_size=0, prec=0,
-                          hover_label_fn=None):
+                          hover_label_fn=None, return_hover_labels= False):
     """
     Creates a "nested" color box plot.
 
@@ -212,6 +202,10 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
         A function with signature `f(z,i,j)` where `z ==plt_data[i,j]` which
         computes the hover label for the each element of `plt_data`.  Cannot
         be used with `hoverLabels`.
+
+    return_hover_labels : bool, optional (default False)
+        If True, additionally return the parsed (nested) lists of
+        hover labels for each point.
 
     Returns
     -------
@@ -273,12 +267,137 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     x_boundaries = _np.array(xtics[:-1]) + .5*(xtics[1]-xtics[0]) if len(xtics)>1 else []
     y_boundaries = _np.array(ytics[:-1]) + .5*(ytics[1]-ytics[0]) if len(ytics)>1 else []
     
-    for x_bnd in x_boundaries:
-        fig.plotlyfig.add_vline(x_bnd, line_width=1, line_color = "#616263")
-    for y_bnd in y_boundaries:
-        fig.plotlyfig.add_hline(y_bnd, line_width=1, line_color = "#616263")
+    plaquette_boundary_lines = []
 
-    return fig
+    for x_bnd in x_boundaries:
+        #fig.plotlyfig.add_vline(x_bnd, line_width=1, line_color = "#616263")
+        #a ref value of 'x'/'y' means this value is relative to the axis data.
+        #a ref value of 'paper' means this is relative/proportional to the plot area.
+        plaquette_boundary_lines.append(dict(type="line", xref= 'x', yref='paper', x0=x_bnd, y0=0, x1=x_bnd, y1=1, 
+             line={'color':"#616263", 'width':1, 'dash':"solid"}))
+    for y_bnd in y_boundaries:
+        #fig.plotlyfig.add_hline(y_bnd, line_width=1, line_color = "#616263")
+        plaquette_boundary_lines.append(dict(type="line", xref= 'paper', yref='y', x0=0, y0=y_bnd, x1=1, y1=y_bnd, 
+             line={'color':"#616263", 'width':1, 'dash':"solid"}))
+    #print(f'{fig.plotlyfig.layout.shapes=}')
+    for bnd_line in plaquette_boundary_lines:
+        fig.plotlyfig.add_shape(bnd_line)
+    #Add grid lines between the squares within a plaquette
+    #Can use a construction similar to the x/y boundary one to
+    #get some reference points, but we need to include the endpoints here.
+    if len(xtics)>1:
+        x_ref = _np.zeros(len(xtics)+1)
+        x_ref[1:] = _np.array(xtics) + .5*(xtics[1]-xtics[0])
+        #The left edge of the figure isn't zero, since we've shifted that
+        #in _color_boxplot, so shift the first reference point back a bit.
+        x_ref[0] = -1
+    else: #just pick out the end points
+        x_ref = _np.array([-1, 2*xtics[0]+1])
+    if len(ytics)>1:
+        y_ref = _np.zeros(len(ytics)+1)
+        y_ref[1:] = _np.array(ytics) + .5*(ytics[1]-ytics[0])
+        #The bottom edge of the figure isn't zero, since we've shifted that
+        #in _color_boxplot, so shift the first reference point back a bit.
+        y_ref[0] = -1
+    else: #just pick out the end points
+        y_ref = _np.array([-1, 2*ytics[0]+1]) 
+
+    #Now we want to construct pairs of end points. We can do this by iterating
+    #through the x_ref and y_ref lists pairwise and then adjusting their values
+    #to match the size of the plaquette.
+    x_endpoints = [(x_ref[i-1]+.5 , x_ref[i]-.5) for i in range(1, len(x_ref))]
+    y_endpoints = [(y_ref[i-1]+.5 , y_ref[i]-.5) for i in range(1, len(y_ref))]
+
+    #also create a flattened list of these endpoints for use in the next filtering
+    #step.
+    x_endpoint_list = [pt for pair in x_endpoints for pt in pair]
+    y_endpoint_list = [pt for pair in y_endpoints for pt in pair]
+    
+    #need to couple these end points with either constant x or y coordinates
+    #which are halfway betweent the boxes.
+    y_pos = _np.arange(.5, data.shape[0]-1, 1)
+    x_pos = _np.arange(.5, data.shape[1]-1, 1)
+
+    #To get just the ones between the boxes, remove the points in x_endpoints and
+    #y_endpoints, which correspond to the edges of the plaquettes.
+    y_pos_filtered = [y for y in y_pos if not any([abs(y-elem)<1e-6 for elem in y_endpoint_list])]
+    x_pos_filtered = [x for x in x_pos if not any([abs(x-elem)<1e-6 for elem in x_endpoint_list])]
+    
+    plaquette_grid_lines = []
+    for y in y_pos_filtered:
+        for endpoints in x_endpoints:
+            #fig.plotlyfig.add_shape(type="line", x0=endpoints[0], y0=y, x1=endpoints[1], y1=y, 
+            #                        line={'color':"MediumPurple", 'width':.25, 'dash':"dot"})
+            plaquette_grid_lines.append(dict(type="line", x0=endpoints[0], y0=y, x1=endpoints[1], y1=y, 
+                                             line={'color':"MediumPurple", 'width':.35, 'dash':"1px"}))
+    for x in x_pos_filtered:
+        for endpoints in y_endpoints:
+            #fig.plotlyfig.add_shape(type="line", x0=x, y0=endpoints[0], x1=x, y1=endpoints[1], 
+            #                        line={'color':"MediumPurple", 'width':.25, 'dash':"dot"})
+            plaquette_grid_lines.append(dict(type="line", x0=x, y0=endpoints[0], x1=x, y1=endpoints[1], 
+                                             line={'color':"MediumPurple", 'width':.35, 'dash':"1px"}))
+    
+    #Add an alternative annotation option for click activated versions of the hover label information
+    #with the information plotted off to one of the sides of the figure.
+    #I believe hoverLabels should be organized into y, x formatting for the indexing.
+    on_click_annotations = []
+    for j in range(data.shape[0]):
+        for i in range(data.shape[1]):
+            #the clicktoshow functionality appears to be (after some extensive testing) bugged and not
+            #working properly when using paper and domain x and y references. The coordinate versions
+            #work, but they refuse to place annotations at positions fully outside of the plotting area.
+            #but, it looks like adding in a manual xshift value hacks around this limitation, since we *can*
+            #place an annotation at the very edge of the plotable area, and then semi-manually shift it over.
+            
+            if hoverLabels[j][i]: #unpopulated squares should have the empty string as their hover labels, skip those.
+                on_click_annotations.append(go_annotation(x= data.shape[1], y= .5*data.shape[0],
+                                            yanchor= 'middle', xanchor= 'left',
+                                            text = hoverLabels[j][i], align= 'left',
+                                            bordercolor= 'black', borderwidth= 1,
+                                            clicktoshow= 'onout', xclick=i, yclick=j,
+                                            xshift= 20,
+                                            visible= False, font = dict(size=12),
+                                            showarrow=False))
+        
+    #create a pair of buttons for toggling on and off the inner grids:
+    grid_button = dict(type="buttons",
+                        active=1,
+                        x= 0,
+                        y= -.075,
+                        direction= 'right',
+                        xanchor= 'right',
+                        buttons=[dict(label="Grid On/Off", method="relayout", 
+                                      args=  ["shapes", plaquette_boundary_lines+plaquette_grid_lines], 
+                                      args2= ["shapes", plaquette_boundary_lines])])
+
+    #create a pair of buttons for toggling on-click and hover labels on and off.
+    #there is an interaction (maybe a bug? maybe just undocumented?) between hovermode and the clicktoshow behavior of
+    #the annotations such that when hovermode if off the clicktoshow no longer does anything. To circumvent this
+    #try toggling on the hoverlabels using the hoverinfo attribute instead.
+    #The last of the entries in the list for args and args2 is a list of indices into the figures data attribute selecting
+    #which traces to apply the update to (in our case the heatmap we care about is the second trace).
+    hover_button = dict(type="buttons",
+                        active=0,
+                        x= 1,
+                        y= -.075,
+                        direction= 'right',
+                        xanchor= 'left',
+                        buttons=[dict(label="Hover On/Off", method="restyle", args=['hoverinfo', 'text', [1]], args2= ['hoverinfo', 'none', [1]] )])
+
+    click_button = dict(type="buttons",
+                        active=1,
+                        x= 1,
+                        y= -.19,
+                        direction= 'right',
+                        xanchor= 'left',
+                        buttons=[dict(label="Click On/Off", method="relayout", args=['annotations', on_click_annotations], args2=['annotations', []] )])
+
+    fig.plotlyfig.update_layout(updatemenus=[grid_button, hover_button, click_button])
+    
+    if return_hover_labels:
+        return fig, hoverLabels
+    else:
+        return fig
 
 
 def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
@@ -455,13 +574,12 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
         else: hover_label_fn = None
 
         boxLabelSize = 8 if box_labels else 0  # do not scale (OLD: 8*scale)
-        fig = _nested_color_boxplot(sub_mxs, colormap, colorbar, boxLabelSize,
-                                    prec, hover_label_fn)
+        fig, hover_labels = _nested_color_boxplot(sub_mxs, colormap, colorbar, boxLabelSize,
+                                    prec, hover_label_fn, return_hover_labels=True)
 
         xBoxes = nXs * (nIXs + 1) - 1
         yBoxes = nYs * (nIYs + 1) - 1
-
-    #assert(fig is not None), "No data to display!"
+    
     if fig is not None:  # i.e., if there was data to plot
         pfig = fig.plotlyfig
         if xlabel: pfig['layout']['xaxis'].update(title=xlabel,
@@ -493,9 +611,37 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
         if 10 * xBoxes < 200: rmargin = max(200 - 10 * xBoxes, rmargin)
         if 10 * yBoxes < 200: bmargin = max(200 - 10 * xBoxes, bmargin)
 
-        width = lmargin + 10 * xBoxes + rmargin
+        #We also need to add additional margin on the right to account for
+        #on-click text annotations. Loop through hover_labels and use PIL to
+        #estimate the rendered width of the text. It is likely that the longest strings
+        #are in the final few columns of the color box plot, so only check those
+        #to same some computation (the rendering for size checking takes non-trivial time).
+        hover_label_widths = []
+        #create a PIL ImageFont object which will be used as a helper for estimating the
+        #rendered width of the hover labels/annotations below.
+        from PIL import ImageFont
+        font = ImageFont.truetype('fonts/OpenSans-Regular.ttf', 12)
+        if hover_labels: #if not None or empty list:
+            for j, label_row in enumerate(hover_labels): 
+                for i in range(len(label_row)-nIXs, len(label_row)):
+                    #nIXs is the width of the plaquette
+                    #split the label using the linebreaks
+                    split_label= hover_labels[j][i].split('<br>')
+                    #loop through elements of split label and get the
+                    #widths of each substring using PIL. Add these to a running
+                    #list.
+                    hover_label_widths.extend([font.getlength(substring) for substring in split_label])
+            #Now get the maximum width.
+            max_annotation_width = max(hover_label_widths)
+                
+        width = lmargin + 10 * xBoxes + rmargin + max_annotation_width
+        rmargin +=max_annotation_width
+        #manually add in some additional bottom margin for the new toggle buttons for controlling
+        #display
+        button_wiggle_factor = 50
+        bmargin += button_wiggle_factor
         height = tmargin + 10 * yBoxes + bmargin
-
+        
         width *= scale
         height *= scale
         lmargin *= scale
@@ -507,6 +653,28 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
                               height=height,
                               margin=go_margin(l=lmargin, r=rmargin, b=bmargin, t=tmargin),
                               plot_bgcolor=bgcolor)
+        
+        #it is only at this point that we have a height attribute officially set. We need to use this to tweak the placement
+        #of the toggleable control buttons, as those only have the option to set their positions in normalized coordinates,
+        #so the spacing gets all messed up as the height of the figure gets taller.
+
+        #decide on some absolute distances (in pixels?) between the buttons and the bottom of the printable area.
+        y_abs_0= 25
+        y_abs_1= 65
+        #vertical plotting area should be (approximately at least) height - tmargin - bmargin
+        plottable_height = height - tmargin - bmargin
+        new_y_0 = -y_abs_0/plottable_height
+        new_y_1 = -y_abs_1/plottable_height
+        #Now let's update the updatemenus
+        new_updatemenus = list(pfig.layout.updatemenus)
+        #The first entry is the grid button, the second the hover button, and the third the clickable element button.
+        #the last of these needs an additional vertical shift added.
+        new_updatemenus[0].y = new_y_0
+        new_updatemenus[1].y = new_y_0
+        new_updatemenus[2].y = new_y_1
+
+        #now let's update the updatemenus in the figure.
+        pfig.update_layout(updatemenus = new_updatemenus)
 
     else:  # fig is None => use a "No data to display" placeholder figure
         trace = go.Heatmap(z=_np.zeros((10, 10), 'd'),
