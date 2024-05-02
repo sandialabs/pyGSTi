@@ -24,8 +24,11 @@ multiple error iterations
 MultiGate: lets the code know 
 returns: list of propagatableerrorgens
 '''
-def ErrorPropagator(circ,errorModel,MultiGateDict={},BCHOrder=1,BCHLayerwise=False,NonMarkovian=False,MultiGate=False,ErrorLayerDef=False):
-    stim_dict=standard_gatenames_stim_conversions()
+def ErrorPropagator(circ,errorModel,MultiGateDict={},BCHOrder=1,
+                    BCHLayerwise=False,NonMarkovian=False,MultiGate=False,
+                    ErrorLayerDef=False, stim_dict = None):
+    if stim_dict is None:
+        stim_dict=standard_gatenames_stim_conversions()
     if MultiGate:
         for key in MultiGateDict:
             stim_dict[key]=stim_dict[MultiGateDict[key]]

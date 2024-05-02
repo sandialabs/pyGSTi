@@ -9,13 +9,48 @@ from pygsti.extras.ml.newtools import create_error_propagation_matrix, index_to_
 # TO DO: Make more general
 
 qubit_to_index = {0:0, 1:1, 2:2, 3:3}
-geometry_cnot_channels = {'ring': 4, 'linear': 4, 'grid': 8} # you get 2 channels for each cnot gate
+geometry_cnot_channels = {'ring': 4, 'linear': 4, 'bowtie': 12, 'grid': 8} # you get 2 channels for each cnot gate
 
 def compute_channels(pspec: QPS, geometry: str) -> int:
     return len(pspec.gate_names) - 1 + geometry_cnot_channels[geometry]
            
 def clockwise_cnot(g, num_qubits):
     return (g.qubits[0] - g.qubits[1]) % num_qubits == num_qubits - 1
+
+def bowtie_gate_to_index(g, q, pspec)-> int:
+    '''
+    Works for Yorktown.
+    '''
+    assert(q in g.qubits)
+    single_qubit_gates = list(pspec.gate_names)
+    single_qubit_gates.remove('Gcnot')
+    if g.name == 'Gcnot':
+        if g.qubits in [(0,1), (3,4)]:
+            if q == g.qubits[0]: return 0
+            else: return 1
+        elif g.qubits in [(1,0), (4,3)]:
+            if q == g.qubits[0]: return 2
+            else: return 3
+        elif g.qubits in [(0,2), (2,4)]:
+            if q == g.qubits[0]: return 4
+            else: return 5
+        elif g.qubits in [(2,0), (4,2)]:
+            if q == g.qubits[0]: return 6
+            else: return 7
+        elif g.qubits in [(1,2), (2,3)]:
+            if q == g.qubits[0]: return 8
+            else: return 9
+        elif g.qubits in [(2,1), (3,2)]:
+            if q == g.qubits[0]: return 10
+            else: return 11
+        else:
+            raise ValueError('Invalid gate name for this encoding!')
+    elif g.name in pspec.gate_names:
+        # We have a single-qubit Clifford gate
+        return 12+single_qubit_gates.index(g.name) # we put the single-qubit gates after the CNOT channels.
+    else:
+        raise ValueError('Invalid gate name for this encoding!')
+
 
 def algiers_t_bar_gate_to_index(g, q, pspec)-> int:
     '''
@@ -31,10 +66,10 @@ def algiers_t_bar_gate_to_index(g, q, pspec)-> int:
         elif g.qubits in [(1,0), (4,1)]:
             if q == g.qubits[0]: return 2
             else: return 3
-        elif g.qubits in [(1,2), (3,2)]:
+        elif g.qubits in [(1,2), (2,3)]:
             if q == g.qubits[0]: return 4
             else: return 5
-        elif g.qubits in [(2,1), (2,3)]:
+        elif g.qubits in [(2,1), (3,2)]:
             if q == g.qubits[0]: return 6
             else: return 7
         else:
@@ -47,23 +82,23 @@ def algiers_t_bar_gate_to_index(g, q, pspec)-> int:
 
 def t_bar_gate_to_index(g, q, pspec)-> int:
     '''
-    Works for Ourense, Belem, etc.
+    Works for London, Burlington, Essex, Vigo
     '''
     assert(q in g.qubits)
     single_qubit_gates = list(pspec.gate_names)
     single_qubit_gates.remove('Gcnot')
     if g.name == 'Gcnot':
-        if g.qubits in [('Q0','Q1'), ('Q1', 'Q2')]:
-            if q == int(g.qubits[0][1:]): return 0
+        if g.qubits in [(0,1), (1,2)]:
+            if q == g.qubits[0]: return 0
             else: return 1
-        elif g.qubits in [('Q1','Q0'), ('Q2','Q1')]:
-            if q == int(g.qubits[0][1:]): return 2
+        elif g.qubits in [(1,0), (2,1)]:
+            if q == g.qubits[0]: return 2
             else: return 3
-        elif g.qubits in [('Q1','Q3'), ('Q3','Q4')]:
-            if q == int(g.qubits[0][1:]): return 4
+        elif g.qubits in [(1,3), (3,4)]:
+            if q == g.qubits[0]: return 4
             else: return 5
-        elif g.qubits in [('Q3','Q1'), ('Q4','Q3')]:
-            if q == int(g.qubits[0][1:]): return 6
+        elif g.qubits in [(3,1), (4,3)]:
+            if q == g.qubits[0]: return 6
             else: return 7
         else:
             raise ValueError('Invalid gate name for this encoding!')
@@ -190,7 +225,7 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
                       measurement_encoding = None, idealouts = None,
                       indexmapper = None, indexmapper_kwargs = {}, 
                       valuemapper = None, valuemapper_kwargs = {},
-                      max_depth = None, return_separate=False):
+                      max_depth = None, return_separate=False, stimDict = None):
     '''
     Maps a list of circuits and fidelities to numpy arrays of encoded circuits and fidelities. 
 
@@ -248,7 +283,7 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
                                                          indexmapper, indexmapper_kwargs,
                                                          valuemapper, valuemapper_kwargs 
                                                          )              
-        c_indices, c_signs = create_error_propagation_matrix(c, tracked_error_gens)
+        c_indices, c_signs = create_error_propagation_matrix(c, tracked_error_gens, stim_dict = stimDict)
         x_indices[i, 0:c.depth, :] = c_indices # deprecated: np.rint(c_indices)
         x_signs[i, 0:c.depth, :] = c_signs # deprecated: np.rint(c_signs)
         if measurement_encoding == 1:

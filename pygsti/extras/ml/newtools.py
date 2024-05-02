@@ -22,7 +22,26 @@ def ring_adj_matrix(num_qubits: int):
         adj_matrix[i, (i+1) % num_qubits] = 1
     return adj_matrix
 
-def t_bar_adj_matrix(num_qubits: int):
+def t_bar_adj_matrix(num_qubits = 5):
+    '''
+    Builds the adjacency matrix for a five-qubit bowtie graph:
+
+    0 - 1
+     \ /
+      2
+     / \
+    3 - 4 
+    '''
+    assert(num_qubits == 5), "We only support 5 qubits"
+    adj_matrix = _np.zeros((num_qubits, num_qubits))
+    adj_matrix[0, 1], adj_matrix[0, 2] = 1, 1
+    adj_matrix[1, 2] = 1
+    adj_matrix[2, 3], adj_matrix[2, 4] = 1, 1
+    adj_matrix[3, 4] = 1
+    adj_matrix = adj_matrix + adj_matrix.T
+    return adj_matrix
+
+def t_bar_adj_matrix(num_qubits = 5):
     '''
     Builds the adjacency matrix for a five-qubit T-bar graph:
 
@@ -279,7 +298,7 @@ def index_to_error_gen(i, n):
     return typ, paulis
 
 
-def create_error_propagation_matrix(c, error_gens):
+def create_error_propagation_matrix(c, error_gens, stim_dict = None):
     """
     Computes how the errors in error_gens propogate through the circuit c.
     
@@ -289,7 +308,7 @@ def create_error_propagation_matrix(c, error_gens):
         layer and propagate through the circuit. These primative error generators 
     """
     error_gen_objs = [_peg.propagatableerrorgen(egen[0], egen[1], 1) for egen in error_gens]
-    propagated_errors = _ep.ErrorPropagator(c, error_gen_objs, NonMarkovian=True, ErrorLayerDef=True)
+    propagated_errors = _ep.ErrorPropagator(c, error_gen_objs, NonMarkovian=True, ErrorLayerDef=True, stim_dict = stim_dict)
     
     indices, signs = [], []
     for l in range(c.depth):
@@ -312,7 +331,8 @@ def remap_indices(c_indices):
 
 ### DEPRECATED: Use create_input_data in encoding.py ###
     
-def create_input_data(circs, fidelities, tracked_error_gens: list, num_channels: int, num_qubits: int, max_depth=None, return_separate = False):
+def create_input_data(circs, fidelities, tracked_error_gens: list, num_channels: int,
+    _qubits: int, max_depth=None, return_separate = False, stimDict = None):
     _warning.warn('newtools create_input_data is deprecated. Use the version in encoding.py.')
     if max_depth is None: max_depth = _np.max([c.depth for c in circs])
     print(max_depth)
@@ -331,7 +351,7 @@ def create_input_data(circs, fidelities, tracked_error_gens: list, num_channels:
         if i % 200 == 0:
             print(i, end=',')
         x_circs[i, :, :, :] = _tools.circuit_to_tensor(c, max_depth)              
-        c_indices, c_signs = create_error_propagation_matrix(c, tracked_error_gens)
+        c_indices, c_signs = create_error_propagation_matrix(c, tracked_error_gens, stimDict = stimDict)
         # c_indices = remap_indices(c_indices)
         x_indices[i, :, 0:c.depth] = c_indices.T # deprecated: np.rint(c_indices)
         x_signs[i, :, 0:c.depth] = c_signs.T # deprecated: np.rint(c_signs)
