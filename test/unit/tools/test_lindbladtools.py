@@ -88,3 +88,48 @@ class LindbladToolsTester(BaseCase):
                     dot_mx[i,j] = np.vdot(dual.flatten(), primal.flatten())
 
             self.assertTrue(np.allclose(dot_mx, np.identity(len(lbls), 'd')))
+    
+    def test_paulistr_tools(self):
+        # Multiplication
+        self.assertTrue(lt.paulistr_multiply("X", "Y") == (1j, "Z")) # Weight-1 product...
+        self.assertTrue(lt.paulistr_multiply("Y", "X") == (-1j, "Z")) # ... and its cyclic counterpart
+        self.assertTrue(lt.paulistr_multiply("I", "Z") == (1, "Z")) # Product with I leaves string unchanged
+        self.assertTrue(lt.paulistr_multiply("Y", "Y") == (1, "I")) # and self-product gives I
+        self.assertTrue(lt.paulistr_multiply("YZ", "YX") == (1j, "IY")) # One Pauli difference
+        self.assertTrue(lt.paulistr_multiply("XY", "ZI") == (-1j, "YY")) # Single I formula
+        self.assertTrue(lt.paulistr_multiply("XI", "ZI") == (-1j, "YI")) # I in single place in both strings
+        self.assertTrue(lt.paulistr_multiply("XX", "II") == (1, "XX")) # Weight-2 product with I
+        self.assertTrue(lt.paulistr_multiply("IX", "XI") == (1, "XX")) # ...and with I in both places
+        self.assertTrue(lt.paulistr_multiply("XYZ", "XZX") == (-1, "IXY")) # Product in two places = 1j^2 = -1
+        self.assertTrue(lt.paulistr_multiply("XYZ", "YZX") == (-1j, "ZXY")) # Product in three places => 1j^3 = -1j
+        self.assertTrue(lt.paulistr_multiply("XYX", "YZZ") == (1j, "ZXY")) # Product in three places, but one is flipped => 1j^1 = 1j
+        self.assertTrue(lt.paulistr_multiply("YZZ", "XYX") == (-1j, "ZXY")) # Product in three places, flipped other way => 1j^-1 = -1j
+        self.assertTrue(lt.paulistr_multiply("XYZXI", "YZXYZ") == (1, "ZXYZZ")) # Product in four places => 1j^4 = 1
+        self.assertTrue(lt.paulistr_multiply("XYZXY", "YZXYZ") == (1j, "ZXYZX")) # Product in five places => 1j^5 = 1j
+
+        # Commutator
+        self.assertTrue(lt.paulistr_commutator("X", "Y") == (2j, "Z")) # Weight-1 commutator
+        self.assertTrue(lt.paulistr_commutator("Y", "X") == (-2j, "Z")) # Weight-1 commutator
+        self.assertTrue(lt.paulistr_commutator("I", "Z") == (0, "Z")) # Commutes with I
+        self.assertTrue(lt.paulistr_commutator("YZ", "YX") == (2j, "IY")) # One Pauli difference
+        self.assertTrue(lt.paulistr_commutator("XY", "ZI") == (-2j, "YY")) # Single I formula
+        self.assertTrue(lt.paulistr_commutator("XI", "ZI") == (-2j, "YI")) # I in single place in both strings
+        self.assertTrue(lt.paulistr_commutator("XX", "II") == (0, "XX")) # II commutes...
+        self.assertTrue(lt.paulistr_commutator("IX", "XI") == (0, "XX")) # ...so does I in both places
+        self.assertTrue(lt.paulistr_commutator("XYZ", "XZX") == (0, "IXY")) # Difference in two places, commutes
+        self.assertTrue(lt.paulistr_commutator("XYZ", "YZX") == (-2j, "ZXY")) # Difference in three places => 2 * 1j^3 = -2j
+        self.assertTrue(lt.paulistr_commutator("XYX", "YZZ") == (2j, "ZXY")) # Difference in three places, but one is flipped => 2 * 1j^1 = 2j
+        self.assertTrue(lt.paulistr_commutator("YZZ", "XYX") == (-2j, "ZXY")) # Difference in three places, flipped other way => 2 * 1j^-1 = -2j
+        self.assertTrue(lt.paulistr_commutator("XYZXY", "YZXYZ") == (2j, "ZXYZX")) # Difference in five places => 2 * 1j^5 = 2j
+
+        # Anticommutator
+        self.assertTrue(lt.paulistr_anticommutator("Z", "Z") == (2, "I")) # Weight-1 anticommutator
+        self.assertTrue(lt.paulistr_anticommutator("Z", "I") == (2, "Z")) # Weight-1 anticommutator
+        self.assertTrue(lt.paulistr_anticommutator("X", "Y") == (0, "Z")) # and those that commute do not anticommute
+        self.assertTrue(lt.paulistr_anticommutator("XX", "II") == (2, "XX")) # Anticommutations for X 
+        self.assertTrue(lt.paulistr_anticommutator("XX", "XI") == (2, "IX")) 
+        self.assertTrue(lt.paulistr_anticommutator("XX", "XX") == (2, "II")) 
+        self.assertTrue(lt.paulistr_anticommutator("IX", "XI") == (2, "XX"))
+        self.assertTrue(lt.paulistr_anticommutator("YZ", "YX") == (0, "IY")) # One Pauli difference, does not anticommute
+        self.assertTrue(lt.paulistr_anticommutator("XY", "ZI") == (0, "YY")) # Commutes so does not anticommute
+        self.assertTrue(lt.paulistr_anticommutator("XI", "ZI") == (0, "YI"))

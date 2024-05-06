@@ -10,8 +10,10 @@ Utility functions relevant to Lindblad forms and projections
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from collections.abc import Iterable
 import numpy as _np
 import scipy.sparse as _sps
+from typing import Tuple, Union
 
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools.basistools import basis_matrices
@@ -230,3 +232,122 @@ def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N8
 
     if sparse: lind_errgen = lind_errgen.tocsr()
     return lind_errgen
+
+#############################################
+### Error generator commutation/BCH tools ###
+#############################################
+
+## Some Pauli string tools first (multiplication, commutation, anticommutation)
+def paulistr_multiply(pstr1: Iterable[str], pstr2: Iterable[str]) -> Tuple[complex, str]:
+    '''
+    Compute "symbolically" the product sigma_pstr1 * sigma_pstr2
+    
+    Parameters
+    ----------
+    pstr1: 
+        Pauli string consisting of "IXYZ"
+    
+    pstr2: 
+        Pauli string consisting of "IXYZ"
+    
+    Returns
+    ---------
+    output : tuple
+        Tuple corresponding to the product of sigma_pstr1 * sigma_pstr2
+        output[0] : complex
+            Coefficient of the product. Possible values are 1, -1, 1j, -1j.
+        output[1] : list
+            Pauli string of the product.
+    '''
+    assert len(pstr1) == len(pstr2), "Pauli strings must have same length"
+    
+    idx_str_map = {k:i for i,k in enumerate("IXYZ")}
+    try:
+        ilist = [idx_str_map[p] for p in pstr1]
+        jlist = [idx_str_map[p] for p in pstr2]
+    except KeyError as e:
+        raise ValueError("Pauli strings must have IXYZ labels") from e
+    
+    output_idxs = []
+    sgn_ctr = 0
+    for k in range(len(ilist)):
+        if ilist[k]==jlist[k]:#If local Paulis match, get identity
+            output_idxs.append(0)
+        elif ilist[k] == 0:#If one local Pauli is identity, get the other local Pauli
+            output_idxs.append(jlist[k])
+        elif jlist[k] == 0:
+            output_idxs.append(ilist[k])
+        else:#If neither local Pauli is identity nor do they match, get the third non-trivial Pauli.
+            output_idxs.append({1,2,3}.difference({ilist[k],jlist[k]}).pop())
+            if (jlist[k] - ilist[k]) % 3 == 1:#Are the local Paulis cyclic ((1,2), (2,3), or (3,1))?
+                sgn_ctr += 1
+            else:
+                #They must be anti-cyclic ((2,1), (3,2), or (1,3))
+                sgn_ctr -= 1
+            
+    str_idx_map = {v:k for k,v in idx_str_map.items()}
+    output = (1j**sgn_ctr,''.join([str_idx_map[idx] for idx in output_idxs]))
+    
+    return output
+
+
+def paulistr_commutator(pstr1: Iterable[str], pstr2: Iterable[str]) -> Tuple[Union[int, complex], str]:
+    '''
+    Compute "symbolically" the commutator [sigma_pstr1, sigma_pstr2]
+    
+    Parameters
+    ----------
+    pstr1:
+        Pauli string consisting of "IXYZ"
+    
+    pstr2: 
+        Pauli string consisting of "IXYZ"
+    
+    Returns
+    ---------
+    output : tuple
+        Tuple corresponding to the commutator of [sigma_pstr1, sigma_pstr2]
+        output[0] : int/complex
+            Coefficient of the commutator.  
+            If commutator is 0, then output[0]==0.
+            Possible values are 0, 2j, -2j.  
+            (Can't have output[0] = 2 or -2 because an even number of differences means inputs commute.)
+        output[1] : list
+            Pauli string of the commutator.
+    '''
+    output = paulistr_multiply(pstr1, pstr2)
+    if output[0].imag == 0:# Even number of differences, commutator is 0
+        return (0,output[1])
+    
+    # Double weight from product for the two terms in the commutator
+    return (2*output[0], output[1])
+
+def paulistr_anticommutator(pstr1: Iterable[str], pstr2: Iterable[str]) -> Tuple[int, str]:
+    '''
+    Compute "symbolically" the anticommutator {sigma_pstr1, sigma_pstr2}
+    
+    Parameters
+    ----------
+    pstr1: 
+        Pauli string consisting of "IXYZ"
+    
+    pstr2: 
+        Pauli string consisting of "IXYZ"
+    
+    Returns
+    ---------
+    output : tuple
+        Tuple corresponding to the anticommutator of {sigma_pstr1, sigma_pstr2}
+        output[0] : int
+            Coefficient of the anticommutator.  
+            If anticommutator is 0, then output[0]==0.
+            Possible values are 0 and 2.
+        output[1] : list
+            Pauli string of the anticommutator.
+    '''
+    output = paulistr_multiply(pstr1, pstr2)
+    if output[0].real == 0:# Odd number of differences, anticommutator is 0
+        return (0,output[1])
+    
+    # Double weight from product for the two terms in the anticommutator
+    return (2, output[1])
