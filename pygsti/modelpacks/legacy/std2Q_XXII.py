@@ -204,7 +204,7 @@ def target_model(parameterization_type="full", sim_type="auto"):
 
     Parameters
     ----------
-    parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
+    parameterization_type : {"TP", "CPTPLND", "H+S", "S", ... }
         The gate and SPAM vector parameterization type. See
         :func:`Model.set_all_parameterizations` for all allowed values.
 

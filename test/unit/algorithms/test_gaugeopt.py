@@ -159,7 +159,7 @@ class CPTPGaugeOptTester(GaugeOptMethodBase, GaugeOptWithGaugeGroupInstance, Bas
         super(CPTPGaugeOptTester, cls).setUpClass()
         # TODO construct directly
         mdl_lgst_target = go.gaugeopt_to_target(fixtures.mdl_lgst, fixtures.model, check_jac=True)
-        mdl_clgst_cptp = alg.contract(mdl_lgst_target, "CPTP", verbosity=0, tol=10.0)
+        mdl_clgst_cptp = alg.contract(mdl_lgst_target, "CPTPLND", verbosity=0, tol=10.0)
         cls._model = mdl_clgst_cptp
 
 

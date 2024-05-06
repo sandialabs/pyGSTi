@@ -188,7 +188,7 @@ class InstrumentTestCase(BaseTestCase):
 
         model.instruments["Itest"] = pygsti.modelmembers.instruments.Instrument([('0', P0), ('1', P1)])
 
-        for param in ("full","full TP","CPTP"):
+        for param in ("full","full TP","CPTPLND"):
             print(param)
             model.set_all_parameterizations(param)
             model.to_vector() # builds & cleans paramvec for tests below

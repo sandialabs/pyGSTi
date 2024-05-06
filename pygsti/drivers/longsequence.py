@@ -702,7 +702,7 @@ def run_stdpractice_gst(data_filename_or_set, target_model_filename_or_object, p
 
         - "full" : full (completely unconstrained)
         - "TP"   : TP-constrained
-        - "CPTP" : Lindbladian CPTP-constrained
+        - "CPTPLND" : Lindbladian CPTP-constrained
         - "H+S"  : Only Hamiltonian + Stochastic errors allowed (CPTP)
         - "S"    : Only Stochastic errors allowed (CPTP)
         - "Target" : use the target (ideal) gates as the estimate

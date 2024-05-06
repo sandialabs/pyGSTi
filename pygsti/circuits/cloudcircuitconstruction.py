@@ -1390,7 +1390,7 @@ def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_e
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
 
-    paramroot : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
+    paramroot : {"CPTPLND", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
         The "root" (no trailing " terms", etc.) parameterization used for the
         cloud noise model (which specifies what needs to be amplified).
 
@@ -1519,7 +1519,7 @@ def create_cloudnoise_circuits(processor_spec, max_lengths, single_q_fiducials,
         this equals 1, for instance, then 1-qubit gates can have up to weight-2
         errors and 2-qubit gates can have up to weight-3 errors.
 
-    parameterization : {"CPTP", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
+    parameterization : {"CPTPLND", "H+S+A", "H+S", "S", "H+D+A", "D+A", "D"}
         The parameterization used to define which parameters need to be
         amplified.
 

@@ -287,7 +287,7 @@ class ModelConstructionTester(BaseCase):
         self.assertTrue(isinstance(Gi_op.factorops[1], op.StochasticNoiseOp))
         self.assertEqual(mdl_sto1.num_params, 3)
 
-        # Use LindbladOp with "cptp", "diagonal" param
+        # Use LindbladOp with "CPTPLND", "diagonal" param
         mdl_sto3 = mc.create_crosstalk_free_model(
             pspec, stochastic_error_probs={'Gi': (0.1, 0.1, 0.1)},
             stochastic_parameterization='lindblad',

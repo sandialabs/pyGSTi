@@ -90,7 +90,7 @@ class CalcMethods2QTestCase(BaseTestCase):
     def test_stdgst_matrix(self):
         # Using matrix-based calculations
         target_model = std.target_model().copy()
-        target_model.set_all_parameterizations("CPTP")
+        target_model.set_all_parameterizations("CPTPLND")
         target_model.set_simtype('matrix')  # the default for 1Q, so we could remove this line
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                                self.germs, self.maxLengths, advanced_options=self.advOpts,
@@ -108,7 +108,7 @@ class CalcMethods2QTestCase(BaseTestCase):
     def test_stdgst_map(self):
         # Using map-based calculation
         target_model = std.target_model().copy()
-        target_model.set_all_parameterizations("CPTP")
+        target_model.set_all_parameterizations("CPTPLND")
         target_model.set_simtype('map')
         results = pygsti.run_long_sequence_gst(self.ds, target_model, std.prepStrs, std.effectStrs,
                                                self.germs, self.maxLengths, advanced_options=self.advOpts,

@@ -666,7 +666,7 @@ class CPTPLindbladSparseOpTester(LindbladErrorgenBase, BaseCase):
 #        sparsemx = sps.csr_matrix(densemx, dtype='d')
 #        return op.LindbladErrorgen.from_operation_matrix(
 #            None, unitary_postfactor=sparsemx, ham_basis="pp",
-#            nonham_basis="pp", param_mode="cptp", nonham_mode="all",
+#            nonham_basis="pp", param_mode="CPTPLND", nonham_mode="all",
 #            truncate=True, mx_basis="pp"
 #        )
 

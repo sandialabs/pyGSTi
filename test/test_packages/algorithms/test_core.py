@@ -19,7 +19,7 @@ class TestCoreMethods(AlgorithmsBase):
         self.assertAlmostEqual(mdl_lgst.frobeniusdist(mdl_lgst_verb),0)
 
         mdl_lgst_go = pygsti.gaugeopt_to_target(mdl_lgst, self.model, {'spam':1.0, 'gates': 1.0}, check_jac=True)
-        mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTP")
+        mdl_clgst = pygsti.contract(mdl_lgst_go, "CPTPLND")
 
 
     def test_LGST_no_sample_error(self):

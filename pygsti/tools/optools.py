@@ -2358,7 +2358,7 @@ def is_valid_lindblad_paramtype(typ):
 
     A *Lindblad type* is comprised of a parameter specification followed
     optionally by an evolution-type suffix.  The parameter spec can be
-    "GLND" (general unconstrained Lindbladian), "CPTP" (cptp-constrained),
+    "GLND" (general unconstrained Lindbladian), "CPTPLND" (cptp-constrained),
     or any/all of the letters "H" (Hamiltonian), "S" (Stochastic, CPTP),
     "s" (Stochastic), "A" (Affine), "D" (Depolarization, CPTP),
     "d" (Depolarization) joined with plus (+) signs.  Note that "A" cannot
@@ -2383,7 +2383,7 @@ def is_valid_lindblad_paramtype(typ):
     except ValueError:
         return False
 
-    #OLD: return typ in ("CPTP", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
+    #OLD: return typ in ("CPTPLND", "H+S", "S", "H+S+A", "S+A", "H+D", "D", "H+D+A", "D+A",
     #OLD:                "GLND", "H+s", "s", "H+s+A", "s+A", "H+d", "d", "H+d+A", "d+A", "H")
 
 

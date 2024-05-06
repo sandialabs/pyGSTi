@@ -69,7 +69,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
     #        The high-level "parameter type" of the gate to create.  This
     #        specifies both which Lindblad parameters are included and what
     #        type of evolution is used.  Examples of valid values are
-    #        `"CPTP"`, `"H+S"`, `"S terms"`, and `"GLND clifford terms"`.
+    #        `"CPTPLND"`, `"H+S"`, `"S terms"`, and `"GLND clifford terms"`.
     #
     #    purevec : numpy array or SPAMVec object, optional
     #        A SPAM vector which represents a pure-state, taken as the "ideal"
@@ -122,7 +122,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
     #    from .operation import LindbladOp as _LPGMap
     #    bTyp, evotype, nonham_mode, param_mode = _LPGMap.decomp_paramtype(param_type)
     #
-    #    ham_basis = proj_basis if (("H" == bTyp) or ("H+" in bTyp) or bTyp in ("CPTP", "GLND")) else None
+    #    ham_basis = proj_basis if (("H" == bTyp) or ("H+" in bTyp) or bTyp in ("CPTPLND", "GLND")) else None
     #    nonham_basis = None if bTyp == "H" else proj_basis
     #
     #    def beq(b1, b2):
@@ -158,7 +158,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
     #
     #@classmethod
     #def from_spam_vector(cls, spam_vec, pure_vec, typ,
-    #                     ham_basis="pp", nonham_basis="pp", param_mode="cptp",
+    #                     ham_basis="pp", nonham_basis="pp", param_mode="CPTPLND",
     #                     nonham_mode="all", truncate=True, mx_basis="pp",
     #                     evotype="densitymx"):
     #    """
@@ -195,11 +195,11 @@ class ComposedState(_State):  # , _ErrorMapContainer
     #        Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
     #        and Qutrit (qt), list of numpy arrays, or a custom basis object.
     #
-    #    param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+    #    param_mode : {"GLND", "CPTPLND", "depol", "reldepol"}
     #        Describes how the Lindblad coefficients/projections relate to the
     #        SPAM vector's parameter values.  Allowed values are:
-    #        `"unconstrained"` (coeffs are independent unconstrained parameters),
-    #        `"cptp"` (independent parameters but constrained so map is CPTP),
+    #        `"GLND"` (coeffs are independent unconstrained parameters),
+    #        `"CPTPLND"` (independent parameters but constrained so map is CPTP),
     #        `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
     #        `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
     #
@@ -280,7 +280,7 @@ class ComposedState(_State):  # , _ErrorMapContainer
 
     #@classmethod
     #def from_lindblad_terms(cls, pure_vec, lindblad_term_dict, typ, basisdict=None,
-    #                        param_mode="cptp", nonham_mode="all", truncate=True,
+    #                        param_mode="CPTPLND", nonham_mode="all", truncate=True,
     #                        mx_basis="pp", evotype="densitymx"):
     #    """
     #    Create a Lindblad-parameterized spamvec with a given set of Lindblad terms.
@@ -314,11 +314,11 @@ class ComposedState(_State):  # , _ErrorMapContainer
     #        keys of `lindblad_term_dict` to basis matrices (numpy arrays or Scipy sparse
     #        matrices).
     #
-    #    param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+    #    param_mode : {"GLND", "CPTPLND", "depol", "reldepol"}
     #        Describes how the Lindblad coefficients/projections relate to the
     #        SPAM vector's parameter values.  Allowed values are:
-    #        `"unconstrained"` (coeffs are independent unconstrained parameters),
-    #        `"cptp"` (independent parameters but constrained so map is CPTP),
+    #        `"GLND"` (coeffs are independent unconstrained parameters),
+    #        `"CPTPLND"` (independent parameters but constrained so map is CPTP),
     #        `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
     #        `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
     #

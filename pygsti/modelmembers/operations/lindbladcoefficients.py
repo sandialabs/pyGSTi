@@ -658,7 +658,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
                     "Lindblad stochastic coefficients are not positive (truncate == %s)!" % str(truncate)
                 coeffs = self.block_data.clip(0, 1e100)  # was 1e-16
                 params = _np.sqrt(coeffs.real)  # shape (len(self._bel_labels),)
-            elif self._param_mode == "elements":  # "unconstrained":
+            elif self._param_mode == "elements":  # "GLND":
                 # params is a 1D vector of the real diagonal els of coefficient mx
                 params = self.block_data.real  # shape (len(self._bel_labels),)
             else:
@@ -902,7 +902,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             elif self._param_mode == "cholesky":
                 assert(nP == num_bels), "expected number of parameters == %d, not %d!" % (num_bels, nP)
                 block_data_deriv[:, :] = 2.0 * _np.diag(v)
-            elif self._param_mode == "elements":  # "unconstrained"
+            elif self._param_mode == "elements":  # "GLND"
                 assert(nP == num_bels), "expected number of parameters == %d, not %d!" % (num_bels, nP)
                 block_data_deriv[:, :] = _np.identity(num_bels, 'd')
             else:
@@ -1025,7 +1025,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
             elif self._param_mode == "cholesky":  # (coeffs = params^2)
                 #dOdp  = _np.einsum('alj,a->lja', self.otherGens, 2*otherParams)
                 dOdp = _np.transpose(superops, (1, 2, 0)) * 2 * v  # just a broadcast
-            elif self._param_mode == "elements":  # "unconstrained" (coeff == params)
+            elif self._param_mode == "elements":  # "GLND" (coeff == params)
                 #dOdp  = _np.einsum('alj->lja', self.otherGens)
                 dOdp = _np.transpose(superops, (1, 2, 0))
             else:
@@ -1048,7 +1048,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 dOdp += _np.einsum('malj,mb,ab->ljab', superops, L, F1)    # ditto
                 dOdp += _np.einsum('bmlj,ma,ab->ljab', superops, Lbar, F2)  # only b > a nonzero (F2)
                 dOdp += _np.einsum('mblj,ma,ab->ljab', superops, L, F2.conjugate())  # ditto
-            elif self._param_mode == "elements":  # "unconstrained"
+            elif self._param_mode == "elements":  # "GLND"
                 if superops_are_flat:  # then un-flatten
                     superops = superops.reshape((num_bels, num_bels, superops.shape[1], superops.shape[2]))
                 F0 = _np.identity(num_bels, 'd')
@@ -1112,11 +1112,11 @@ class LindbladCoefficientBlock(_NicelySerializable):
             if self._param_mode == "depol":
                 #d2Odp2  = _np.einsum('alj->lj', self.otherGens)[:,:,None,None] * 2
                 d2Odp2 = _np.sum(superops, axis=0)[:, :, None, None] * 2
-            elif self.parameterization.param_mode == "cptp":
+            elif self.parameterization.param_mode == "CPTPLND":
                 assert(nP == num_bels)
                 #d2Odp2  = _np.einsum('alj,aq->ljaq', self.otherGens, 2*_np.identity(nP,'d'))
                 d2Odp2 = _np.transpose(superops, (1, 2, 0))[:, :, :, None] * 2 * _np.identity(nP, 'd')
-            else:  # param_mode == "unconstrained" or "reldepol"
+            else:  # param_mode == "GLND" or "reldepol"
                 assert(nP == num_bels)
             d2Odp2 = _np.zeros((superops.shape[1], superops.shape[2], nP, nP), 'd')
 

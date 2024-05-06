@@ -62,7 +62,7 @@ class ExplicitOpModel(_mdl.OpModel):
     basis : {"pp","gm","qt","std","sv"} or Basis, optional
         The basis used for the state space by dense superoperator representations.
 
-    default_param : {"full", "TP", "CPTP", etc.}, optional
+    default_param : {"full", "TP", "CPTPLND", etc.}, optional
         Specifies the default gate and SPAM vector parameterization type.
         Can be any value allowed by :meth:`set_all_parameterizations`,
         which also gives a description of each parameterization type.

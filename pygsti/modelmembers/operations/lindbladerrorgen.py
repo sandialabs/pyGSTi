@@ -72,11 +72,11 @@ class LindbladErrorgen(_LinearOperator):
         A basis mapping the labels used in the keys of `lindblad_term_dict` to
         basis matrices (e.g. numpy arrays or Scipy sparse matrices).
 
-    param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+    param_mode : {"GLND", "CPTPLND", "depol", "reldepol"}
         Describes how the Lindblad coefficients/projections relate to the
         error generator's parameter values.  Allowed values are:
-        `"unconstrained"` (coeffs are independent unconstrained parameters),
-        `"cptp"` (independent parameters but constrained so map is CPTP),
+        `"GLND"` (coeffs are independent unconstrained parameters),
+        `"CPTPLND"` (independent parameters but constrained so map is CPTP),
         `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
         `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
 
@@ -133,7 +133,7 @@ class LindbladErrorgen(_LinearOperator):
         return cls(lindblad_coefficient_blocks, lindblad_basis, mx_basis, evotype, state_space)
 
     @classmethod
-    def from_operation_matrix(cls, op_matrix, parameterization='CPTP', lindblad_basis='PP',
+    def from_operation_matrix(cls, op_matrix, parameterization='CPTPLND', lindblad_basis='PP',
                               mx_basis='pp', truncate=True, evotype="default", state_space=None):
         """
         Creates a Lindblad-parameterized error generator from an operation.
@@ -163,11 +163,11 @@ class LindbladErrorgen(_LinearOperator):
             (std), Gell-Mann (gm), Pauli-product (pp), and Qutrit (qt), list of
             numpy arrays, or a custom basis object.
 
-        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+        param_mode : {"GLND", "CPTPLND", "depol", "reldepol"}
             Describes how the Lindblad coefficients/projections relate to the
             operation's parameter values.  Allowed values are:
-            `"unconstrained"` (coeffs are independent unconstrained parameters),
-            `"cptp"` (independent parameters but constrained so map is CPTP),
+            `"GLND"` (coeffs are independent unconstrained parameters),
+            `"CPTPLND"` (independent parameters but constrained so map is CPTP),
             `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
             `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
 
@@ -223,7 +223,7 @@ class LindbladErrorgen(_LinearOperator):
                                         mx_basis, truncate, evotype, state_space=state_space)
 
     @classmethod
-    def from_error_generator(cls, errgen_or_dim, parameterization="CPTP", lindblad_basis='PP', mx_basis='pp',
+    def from_error_generator(cls, errgen_or_dim, parameterization="CPTPLND", lindblad_basis='PP', mx_basis='pp',
                              truncate=True, evotype="default", state_space=None):
         """
         TODO: docstring - take from now-private version below Note: errogen_or_dim can be an integer => zero errgen
@@ -247,7 +247,7 @@ class LindbladErrorgen(_LinearOperator):
         return cls(lindblad_coefficient_blocks, lindblad_basis, mx_basis, evotype, state_space)
 
     @classmethod
-    def _from_error_generator(cls, errgen, parameterization="CPTP", lindblad_basis="PP",
+    def _from_error_generator(cls, errgen, parameterization="CPTPLND", lindblad_basis="PP",
                               mx_basis="pp", truncate=True, evotype="default", state_space=None):
         """
         Create a Lindblad-form error generator from an error generator matrix and a basis.
@@ -274,11 +274,11 @@ class LindbladErrorgen(_LinearOperator):
             Allowed values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
             and Qutrit (qt), list of numpy arrays, or a custom basis object.
 
-        param_mode : {"unconstrained", "cptp", "depol", "reldepol"}
+        param_mode : {"GLND", "CPTPLND", "depol", "reldepol"}
             Describes how the Lindblad coefficients/projections relate to the
             operation's parameter values.  Allowed values are:
-            `"unconstrained"` (coeffs are independent unconstrained parameters),
-            `"cptp"` (independent parameters but constrained so map is CPTP),
+            `"GLND"` (coeffs are independent unconstrained parameters),
+            `"CPTPLND"` (independent parameters but constrained so map is CPTP),
             `"reldepol"` (all non-Ham. diagonal coeffs take the *same* value),
             `"depol"` (same as `"reldepol"` but coeffs must be *positive*)
 
@@ -1610,8 +1610,8 @@ class LindbladParameterization(_NicelySerializable):
     param_mode : str
         The "parameter mode" describes how the Lindblad coefficients/projections
         are converted into parameter values.  This can be:
-        `"unconstrained"` (coefficients are independent unconstrained parameters),
-        `"cptp"` (independent parameters but constrained so map is CPTP),
+        `"GLND"` (coefficients are independent unconstrained parameters),
+        `"CPTPLND"` (independent parameters but constrained so map is CPTP),
         `"depol"` (all non-Ham. diagonal coeffs are the *same, positive* value), or
         `"reldepol"` (same as `"depol"` but no positivity constraint).
 
@@ -1646,10 +1646,9 @@ class LindbladParameterization(_NicelySerializable):
         if any([lbl.errorgen_type == 'S' for lbl in errs]): paramtypes.append('S')
         if any([lbl.errorgen_type == 'C' for lbl in errs]): paramtypes.append('C')
         if any([lbl.errorgen_type == 'A' for lbl in errs]): paramtypes.append('A')
-        #if any([lbl.errorgen_type == 'S' and len(lbl.basis_element_labels) == 2 for lbl in errs]):
-        #    # parameterization must be "CPTP" if there are any ('S',b1,b2) keys
+        # parameterization must be "CPTPLND" if there are any ('C',b1,b2) or ('A',b1,b2) keys
         if 'C' in paramtypes or 'A' in paramtypes:
-            parameterization = "CPTP"
+            parameterization = "CPTPLND"
         else:
             parameterization = '+'.join(paramtypes)
         return cls.cast(parameterization)

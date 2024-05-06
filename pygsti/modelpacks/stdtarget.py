@@ -307,7 +307,7 @@ def _copy_target(std_module, param_type, simulator="auto", gscache=None):
         The standard model module whose target model should be
         copied and returned.
 
-    param_type : {"TP", "CPTP", "H+S", "S", ... }
+    param_type : {"TP", "CPTPLND", "H+S", "S", ... }
         The gate and SPAM vector parameterization type. See
         :func:`Model.set_all_parameterizations` for all allowed values.
 
@@ -510,7 +510,7 @@ def stdmodule_to_smqmodule(std_module):
 
         Parameters
         ----------
-        parameterization_type : {"TP", "CPTP", "H+S", "S", ... }
+        parameterization_type : {"TP", "CPTPLND", "H+S", "S", ... }
             The gate and SPAM vector parameterization type. See
             :func:`Model.set_all_parameterizations` for all allowed values.
 

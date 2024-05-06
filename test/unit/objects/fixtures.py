@@ -44,7 +44,7 @@ def mdl_lgst_go(self):
 
 @ns.memo
 def mdl_clgst(self):
-    return pygsti.contract(self.mdl_lgst_go, "CPTP")
+    return pygsti.contract(self.mdl_lgst_go, "CPTPLND")
 
 
 @ns.memo

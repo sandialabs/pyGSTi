@@ -1756,5 +1756,5 @@ def create_drift_report(results, title='auto', ws=None, verbosity=1):
 #
 #        # ...
 #        models = (model, gsHS, gsH, gsS, gsLND, cptpGateset, gsLNDCP, gsHSCPTP)
-#        modelTyps = ("Full","H + S","H","S","LND","CPTP","LND CPTP","H + S CPTP")
+#        modelTyps = ("Full","H + S","H","S","LND","CPTPLND","LND CPTP","H + S CPTP")
 #        Nps = (Nng, Np_HS, Np_H, Np_S, Np_LND, Nng, Np_LND, Np_HS)

@@ -861,7 +861,7 @@ class StochasticNoise(OpNoise):
         represent the stochastic noise, respectively. When `"stochastic"`, elements of `error_probs`
         are used as coefficients in a linear combination of stochastic channels (the default).
         When `"lindblad"`, the elements of `error_probs` are coefficients of stochastic error
-        generators (which are exponentiated to form a LindbladErrorgen with "cptp" non-Hammiltonian
+        generators (which are exponentiated to form a LindbladErrorgen with "CPTPLND" non-Hammiltonian
         parameterization).
     """
     def __init__(self, error_probs, parameterization='stochastic'):
@@ -923,11 +923,11 @@ class StochasticNoise(OpNoise):
         if self.parameterization == "stochastic":  # StochasticNoiseOp
             return _op.StochasticNoiseOp(state_space, basis="pp", evotype=evotype, initial_rates=sto_rates)
 
-        elif self.parameterization in ("lindblad", "exp(lindblad)"):  # LindbladErrorgen with "cptp", "diagonal" param
+        elif self.parameterization in ("lindblad", "exp(lindblad)"):  # LindbladErrorgen with "CPTPLND", "diagonal" param
             errgen = self.create_errorgen(evotype, state_space)
             return _op.ExpErrorgenOp(errgen)
 
-        elif self.parameterization == "1+lindblad":  # LindbladErrorgen with "cptp", "diagonal" parameterization
+        elif self.parameterization == "1+lindblad":  # LindbladErrorgen with "CPTPLND", "diagonal" parameterization
             errgen = self.create_errorgen(evotype, state_space)
             return _op.IdentityPlusErrorgenOp(errgen)
 
@@ -981,7 +981,7 @@ class LindbladNoise(OpNoise):
         parameterization : str or LindbladParameterization
             The Lindblad parameterization, specifying what constitutes the "complete" set of
             Lindblad terms.  For example, `"H"` means that just Hamiltonian terms are included
-            whereas `"CPTP"` includes all the terms in a standard Lindblad decomposition.
+            whereas `"CPTPLND"` includes all the terms in a standard Lindblad decomposition.
 
         lindblad_basis : str or Basis
             The basis used to construct the Lindblad terms.

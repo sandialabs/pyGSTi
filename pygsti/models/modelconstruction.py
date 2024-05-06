@@ -987,7 +987,7 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
     elif (ideal_gate_type in ("full TP", "TP") and ideal_prep_type in ("full TP", "TP")
           and ideal_povm_type in ("full TP", "TP")):
         ret.default_gauge_group = _gg.TPGaugeGroup(ret.state_space, basis, evotype)
-    elif ideal_gate_type == "CPTP" and ideal_prep_type == "CPTP" and ideal_povm_type == "CPTP":
+    elif ideal_gate_type == "CPTPLND" and ideal_prep_type == "CPTPLND" and ideal_povm_type == "CPTPLND":
         ret.default_gauge_group = _gg.UnitaryGaugeGroup(ret.state_space, basis, evotype)
     else:
         ret.default_gauge_group = _gg.TrivialGaugeGroup(ret.state_space)
@@ -1576,7 +1576,7 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
         are used as coefficients in a linear combination of stochastic channels (the default).
         When "lindblad", the elements of `stochastic_error_probs` are coefficients of
         stochastic error generators (which are exponentiated to form a LindbladErrorgen with the
-        "cptp" parameterization).
+        "CPTPLND" parameterization).
 
     lindblad_parameterization : "auto" or a LindbladErrorgen paramtype
         Determines the parameterization of the LindbladErrorgen. When "auto" (the default), the parameterization
@@ -1784,7 +1784,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
         are used as coefficients in a linear combination of stochastic channels (the default).
         When "lindblad", the elements of `stochastic_error_probs` are coefficients of
         stochastic error generators (which are exponentiated to form a LindbladErrorgen with the
-        "cptp" parameterization).
+        "CPTPLND" parameterization).
 
     lindblad_parameterization : "auto" or a LindbladErrorgen paramtype
         Determines the parameterization of the LindbladErrorgen. When "auto" (the default), the parameterization

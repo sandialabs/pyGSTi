@@ -69,7 +69,7 @@ class TPContractBigKickTester(TPContractLGSTTester, ContractBigKickModelBase):
 
 
 class CPTPContractLGSTTester(ContractFunctionBase, ContractLGSTModelBase, BaseCase):
-    target = "CPTP"
+    target = "CPTPLND"
 
 
 class NonDirectCPTPContractLGSTTester(CPTPContractLGSTTester):
