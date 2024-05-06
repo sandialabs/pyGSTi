@@ -358,7 +358,8 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
                                             xshift= 20,
                                             visible= False, font = dict(size=12),
                                             showarrow=False))
-        
+    fig.plotlyfig.update_layout(annotations = on_click_annotations)
+     
     #create a pair of buttons for toggling on and off the inner grids:
     grid_button = dict(type="buttons",
                         active=1,
@@ -385,7 +386,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
                         buttons=[dict(label="Hover On/Off", method="restyle", args=['hoverinfo', 'text', [1]], args2= ['hoverinfo', 'none', [1]] )])
 
     click_button = dict(type="buttons",
-                        active=1,
+                        active=0,
                         x= 1,
                         y= -.19,
                         direction= 'right',
