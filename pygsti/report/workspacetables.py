@@ -829,6 +829,7 @@ class GaugeRobustMetricTable(WorkspaceTable):
 
         - "inf" :     entanglement infidelity
         - "agi" :     average gate infidelity
+        - "geni":     generator infidelity
         - "trace" :   1/2 trace distance
         - "diamond" : 1/2 diamond norm distance
         - "nuinf" :   non-unitary entanglement infidelity
@@ -865,6 +866,7 @@ class GaugeRobustMetricTable(WorkspaceTable):
 
             - "inf" :     entanglement infidelity
             - "agi" :     average gate infidelity
+            - "geni"      generator infidelity
             - "trace" :   1/2 trace distance
             - "diamond" : 1/2 diamond norm distance
             - "nuinf" :   non-unitary entanglement infidelity
@@ -1109,6 +1111,7 @@ class GatesVsTargetTable(WorkspaceTable):
 
         - "inf" :     entanglement infidelity
         - "agi" :     average gate infidelity
+        - "geni":     generator infidelity
         - "trace" :   1/2 trace distance
         - "diamond" : 1/2 diamond norm distance
         - "nuinf" :   non-unitary entanglement infidelity
@@ -1154,6 +1157,7 @@ class GatesVsTargetTable(WorkspaceTable):
 
             - "inf" :     entanglement infidelity
             - "agi" :     average gate infidelity
+            - "geni" :    generator infidelity
             - "trace" :   1/2 trace distance
             - "diamond" : 1/2 diamond norm distance
             - "nuinf" :   non-unitary entanglement infidelity
@@ -3009,6 +3013,7 @@ class GatesSingleMetricTable(WorkspaceTable):
 
         - "inf" :     entanglement infidelity
         - "agi" :     average gate infidelity
+        - "geni":     generator infidelity
         - "trace" :   1/2 trace distance
         - "diamond" : 1/2 diamond norm distance
         - "nuinf" :   non-unitary entanglement infidelity
@@ -3075,6 +3080,7 @@ class GatesSingleMetricTable(WorkspaceTable):
 
             - "inf" :     entanglement infidelity
             - "agi" :     average gate infidelity
+            - "geni":     generator infidelity
             - "trace" :   1/2 trace distance
             - "diamond" : 1/2 diamond norm distance
             - "nuinf" :   non-unitary entanglement infidelity

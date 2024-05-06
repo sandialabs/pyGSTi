@@ -170,7 +170,7 @@ class GaugeVariantSection(_Section):
                                               ci_brevity=1, **kwargs):
         return workspace.GatesVsTargetTable(
             switchboard.mdl_final, switchboard.mdl_target, _cri(1, switchboard, confidence_level, ci_brevity),
-            display=('inf', 'agi', 'trace', 'diamond', 'nuinf', 'nuagi')
+            display=('inf', 'agi', 'geni', 'trace', 'diamond', 'nuinf', 'nuagi')
         )
 
     @_Section.figure_factory(3)
@@ -178,7 +178,7 @@ class GaugeVariantSection(_Section):
                                                    ci_brevity=1, **kwargs):
         return workspace.GatesVsTargetTable(
             switchboard.mdl_final, switchboard.mdl_target, _cri(0, switchboard, confidence_level, ci_brevity),
-            display=('inf', 'trace', 'nuinf'), virtual_ops=switchboard.germs
+            display=('inf', 'trace', 'geni', 'nuinf'), virtual_ops=switchboard.germs
         )
 
     @_Section.figure_factory(4)
@@ -285,7 +285,7 @@ def _create_single_metric_switchboard(ws, results_dict, b_gauge_inv,
         metric_abbrevs = ["evinf", "evagi", "evnuinf", "evnuagi", "evdiamond",
                           "evnudiamond"]
     else:
-        metric_abbrevs = ["inf", "agi", "trace", "diamond", "nuinf", "nuagi",
+        metric_abbrevs = ["inf", "agi", "geni", "trace", "diamond", "nuinf", "nuagi",
                           "frob"]
     metric_names = [_reportables.info_of_opfn_by_name(abbrev)[0].replace('|', ' ')
                     for abbrev in metric_abbrevs]
