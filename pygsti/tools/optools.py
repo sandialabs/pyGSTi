@@ -145,7 +145,7 @@ def fidelity(a, b):
     
     sqrt_a = psd_square_root(a)
     tr_arg = psd_square_root(sqrt_a @ b @ sqrt_a)
-    f = _mt.trace(tr_arg).real ** 2  # Tr( sqrt{ sqrt(a) * b * sqrt(a) } )^2
+    f = _np.trace(tr_arg).real ** 2  # Tr( sqrt{ sqrt(a) * b * sqrt(a) } )^2
     return f
 
 
