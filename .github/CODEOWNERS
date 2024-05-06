@@ -1,5 +1,93 @@
-# This is a comment.
-# Each line is a file pattern followed by one or more owners.
+## Global owners (default to pyGSTi maintainers) ##
+# These will also be owners for everything below
+# so they can approve minor PRs without adding
+# undue burden on volunteer code owners
+*       @sandialabs/pygsti-maintainers @sandialabs/pygsti-gatekeepers
 
-# Global owners
-*       @sserita @coreyostrove @rileyjmurray
+
+## Drift analysis ##
+pygsti/protocols/stability.py @tjproct @sandialabs/pygsti-gatekeepers
+pygsti/report/section/drift.py @tjproct @sandialabs/pygsti-gatekeepers
+pygsti/report/templates/drift_html_report/ @tjproct @sandialabs/pygsti-gatekeepers
+
+## Forward simulators ##
+pygsti/forwardsims @rileyjmurray @sandialabs/pygsti-gatekeepers
+pygsti/forwardsims/termforwardsim* @adhumu @sandialabs/pygsti-gatekeepers
+
+## IBMQ interface ##
+pygsti/extras/devices @sandialabs/pygsti-ibmq @sandialabs/pygsti-gatekeepers
+pygsti/extras/ibmq @sandialabs/pygsti-ibmq @sandialabs/pygsti-gatekeepers
+
+## Interpygate ##
+pygsti/extras/interpygate/ @kevincyoung @sandialabs/pygsti-gatekeepers
+
+## Modelmembers ##
+pygsti/modelmembers/ @rileyjmurray @sandialabs/pygsti-gatekeepers
+pygsti/modelmembers/instruments/ @sandialabs/pygsti-mcm @sandialabs/pygsti-gatekeepers
+
+## Modelpack owners ##
+pygsti/modelpacks/ @kmrudin @sandialabs/pygsti-gatekeepers
+
+## Optimizer owners ##
+pygsti/objectivefns @rileyjmurray @sandialabs/pygsti-gatekeepers
+pygsti/optimize @rileyjmurray @sandialabs/pygsti-gatekeepers
+
+## RB owners ##
+pygsti/algorithms/compilers.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/algorithms/mirroring.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/algorithms/randomcircuit.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/algorithms/rbfit.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/extras/rb.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers # Should this just be deprecated and removed?
+pygsti/protocols/rb.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/tools/rbtheory.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/tools/rbtools.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+pygsti/tools/symplectic.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+
+## RPE owners ##
+pygsti/extras/rpe @kmrudin @sandialabs/pygsti-gatekeepers
+pygsti/models/rpemodel.py @kmrudin @sandialabs/pygsti-gatekeepers
+pygsti/protocols/rpe.py @kmrudin @sandialabs/pygsti-gatekeepers
+
+## Reporting owners ##
+# Specifically just for workspace plots/tables
+pygsti/report/workspace*.py @pcwysoc @sandialabs/pygsti-gatekeepers
+
+
+
+## Tutorial owners ##
+# In addition to general tutorial owners,
+# we will also have specific tutorials be owned
+# by topics owners are responsible for above
+jupyter_notebooks/ @sandialabs/pygsti-tutorials @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/**/*RB-*.ipynb @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/Examples/1QGST-InterpolatedOps.ipynb @kevincyoung @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/Tutorials/algorithms/DriftCharacterization.ipynb @tjproct @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/Tutorials/algorithms/MirrorCircuitBenchmarks.ipynb @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/Tutorials/algorithms/RobustPhaseEstimation.ipynb @kmrudin @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/Tutorials/objects/advanced/IBMQExperiment.ipynb @sandialabs/pygsti-ibmq @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/Tutorials/objects/advanced/Instruments.ipynb @sandialabs/pygsti-mcm @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/Tutorials/objects/advanced/InterpolatedOperators.ipynb @kevincyoung @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/Tutorials/objects/advanced/ModelPacks.ipynb @kmrudin @sandialabs/pygsti-gatekeepers
+jupyter_notebooks/Tutorials/reporting/ @pcwysoc @sandialabs/pygsti-gatekeepers
+
+## Test owners ##
+test/ @rileyjmurray @sandialabs/pygsti-gatekeepers
+test/test_packages/extras/test_drift.py @tjproct @sandialabs/pygsti-gatekeepers
+test/test_packages/extras/test_interpygate.py @kevincyoung @sandialabs/pygsti-gatekeepers
+test/test_packages/extras/test_rb.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+test/test_packages/extras/test_rpe.py @kmrudin @sandialabs/pygsti-gatekeepers
+test/test_packages/extras/test_rpeobjects.py @kmrudin @sandialabs/pygsti-gatekeepers
+test/test_packages/objects/test_instruments.py @sandialabs/pygsti-mcm @sandialabs/pygsti-gatekeepers
+test/test_packages/report/ @pcwysoc @sandialabs/pygsti-gatekeepers
+test/test_packages/reportb/ @pcwysoc @sandialabs/pygsti-gatekeepers
+test/unit/algorithms/test_randomcircuit.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+test/unit/extras/interpygate @kevincyoung @sandialabs/pygsti-gatekeepers
+test/unit/extras/rb/ @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+test/unit/extras/rpe/ @kmrudin @sandialabs/pygsti-gatekeepers
+test/unit/modelpacks/ @kmrudin @sandialabs/pygsti-gatekeepers
+test/unit/objects/test_instrument.py @sandialabs/pygsti-mcm @sandialabs/pygsti-gatekeepers
+test/unit/protocols/test_rb.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+test/unit/report/ @pcwysoc @sandialabs/pygsti-gatekeepers
+test/unit/tools/test_symplectic.py @sandialabs/pygsti-rb @sandialabs/pygsti-gatekeepers
+
+

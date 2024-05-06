@@ -2,7 +2,8 @@
 A standard multi-qubit gate set module.
 
 Variables for working with the 2-qubit model containing the gates
-I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, and CPHASE.
+I*I, I*X(pi/2), I*Y(pi/2), X(pi/2)*I, Y(pi/2)*I, X(pi/2)*X(pi/2),
+Y(pi/2)*Y(pi/2), X(pi/2)*Y(pi/2), and Y(pi/2)*X(pi/2) gates.
 """
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).

@@ -64,7 +64,7 @@ extras = {
         'pytest-cov',
         'nbval',
         'csaps',
-        'cvxopt<=1.3.0.1',
+        'cvxopt',
         'cvxpy',
         'cython',
         'matplotlib',
