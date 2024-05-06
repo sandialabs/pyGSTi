@@ -72,6 +72,7 @@ def fidelity(a, b):
     # ^ use for checks that have no dimensional dependence; about 1e-12 for double precision.
     __VECTOR_TOL__ = (a.shape[0] ** 0.5) * __SCALAR_TOL__
     # ^ use for checks that do have dimensional dependence (will naturally increase for larger matrices)
+
     def assert_hermitian(mat):
         hermiticity_error = _np.abs(mat - mat.T.conj())
         if _np.any(hermiticity_error > __SCALAR_TOL__):
@@ -85,39 +86,66 @@ def fidelity(a, b):
     assert_hermitian(b)
 
     def check_rank_one_density(mat):
-        # Check if mat = alpha * np.outer(v, v.conj()) for some unit vector v and scalar alpha > 0.
-        #     If this holds up to some numerical tolerance, then we return (alpha, v)
-        #     If (we believe) no such vector exists, then we return None.
-        # 
-        # This function runs on O(n^2) time, where mat is n-by-n.
-        #
-        _np.random.seed(0)
+        """
+        mat is Hermitian of order n. This function uses an O(n^2) time randomized algorithm to
+        test if mat is a PSD matrix of rank 0 or 1. It returns a tuple (r, vec), where
+
+            If r == 0, then vec is the zero vector. Either mat's numerical rank is zero
+            OR the projection of mat onto the set of PSD matrices is zero.
+
+            If r == 1, then mat is a PSD matrix of numerical rank one, and vec is mat's
+            unique nontrivial eigenvector.
+
+            If r == 2, then vec is None and our best guess is that mat's (numerical) rank
+            is at least two. In exact arithmetic, this "guess" is correct with probability
+            one. Additional computations will be needed to determine if mat is PSD.
+
+        Conceptually, this function just takes a single step of the power iteration method
+        for estimating mat's largest eigenvalue (with size measured in absolute value).
+        See https://en.wikipedia.org/wiki/Power_iteration for more information.
+        """
         n = mat.shape[0]
-        test_vec = _np.random.randn(n)
-        if _np.iscomplexobj(mat):
-            test_vec = test_vec + 1j * _np.random.randn(n)
+
+        if _np.linalg.norm(mat) < __VECTOR_TOL__:
+            # We prefer to return the zero vector instead of None to simplify how we handle
+            # this function's output.
+            return 0, _np.zeros(n, dtype=complex)
+
+        _np.random.seed(0)
+        test_vec = _np.random.randn(n) + 1j * _np.random.randn(n)
         test_vec /= _np.linalg.norm(test_vec)
+
         candidate_v = mat @ test_vec
         candidate_v /= _np.linalg.norm(candidate_v)
         alpha = _np.real(candidate_v.conj() @ mat @ candidate_v)
         reconstruction = alpha * _np.outer(candidate_v, candidate_v.conj())
-        if _np.linalg.norm(mat - reconstruction) < __VECTOR_TOL__:
-            return alpha, candidate_v
-        else:
-            return None
 
-    alphavec = check_rank_one_density(a)
-    if alphavec is not None:
-        # special case when a is rank 1, a = vec * vec^T and sqrt(a) = a
-        alpha, vec = alphavec
-        f = alpha * (vec.T.conj() @ b @ vec).real  # vec^T * b * vec
+        if _np.linalg.norm(mat - reconstruction) > __VECTOR_TOL__:
+            # We can't certify that mat is rank-1.
+            return 2, None
+        
+        if alpha <= 0.0:
+            # Ordinarily we'd project out the negative eigenvalues and proceed with the
+            # PSD part of the matrix, but at this point we know that the PSD part is zero.
+            return 0, _np.zeros(n)
+        
+        if abs(alpha - 1) > __SCALAR_TOL__:
+            message = f"The input matrix is not trace-1 up to tolerance {__SCALAR_TOL__}. Beware result!"
+            _warnings.warn(message)
+            candidate_v *= _np.sqrt(alpha)
+
+        return 1, candidate_v
+  
+    r, vec = check_rank_one_density(a)
+    if r <= 1:
+        # special case when a is rank 1, a = vec * vec^T.
+        f = (vec.T.conj() @ b @ vec).real  # vec^T * b * vec
         return f
 
-    alphavec = check_rank_one_density(b)
-    if alphavec is not None:
-        # special case when b is rank 1 (recally fidelity is sym in args)
-        alpha, vec = alphavec
-        f = alpha * (vec.T.conj() @ a @ vec).real  # vec^T * a * vec
+    r, vec = check_rank_one_density(b)
+    if r <= 1:
+        # special case when b is rank 1 (recall fidelity is sym in args)
+        f = (vec.T.conj() @ a @ vec).real  # vec^T * a * vec
         return f
     
     # Neither a nor b are rank-1. We need to actually evaluate the matrix square root of
