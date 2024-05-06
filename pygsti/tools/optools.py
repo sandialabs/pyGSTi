@@ -128,7 +128,7 @@ def frobeniusdist(a, b):
     float
         The resulting frobenius distance.
     """
-    return _np.linalg.norm((a - b).ravel())
+    return _np.linalg.norm(a - b)
 
 
 def frobeniusdist_squared(a, b):
@@ -738,7 +738,7 @@ def unitarity(a, mx_basis="gm"):
         B = _bt.change_basis(a, mx_basis, "gm")  # everything should be able to be put in the "gm" basis
 
     unital = B[1:d**2, 1:d**2]
-    u = _np.linalg.norm(unital.ravel())**2 / (d**2 - 1)
+    u = _np.linalg.norm(unital)**2 / (d**2 - 1)
     return u
 
 

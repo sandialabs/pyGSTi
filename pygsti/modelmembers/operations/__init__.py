@@ -480,7 +480,7 @@ def optimize_operation(op_to_optimize, target_op):
 
     def _objective_func(param_vec):
         op_to_optimize.from_vector(param_vec)
-        return _np.linalg.norm((op_to_optimize.to_dense() - targetMatrix).ravel())
+        return _np.linalg.norm(op_to_optimize.to_dense() - targetMatrix)
 
     x0 = op_to_optimize.to_vector()
     minSol = _opt.minimize(_objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,

@@ -431,7 +431,7 @@ def optimize_state(vec_to_optimize, target_vec):
 
     def _objective_func(param_vec):
         vec_to_optimize.from_vector(param_vec)
-        return _np.linalg.norm((vec_to_optimize.to_dense() - targetVector).ravel())
+        return _np.linalg.norm(vec_to_optimize.to_dense() - targetVector)
 
     x0 = vec_to_optimize.to_vector()
     minSol = _opt.minimize(_objective_func, x0, method='BFGS', maxiter=10000, maxfev=10000,

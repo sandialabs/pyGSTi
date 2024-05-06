@@ -123,7 +123,7 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp'):
             #     = _np.vdot(BiBj, opMxInStdBasis)                # efficient version
             # den = _np.trace(_np.dot(BiBj, BiBj_dag))
             num = _np.vdot(BiBj, opMxInStdBasis)
-            den = _np.linalg.norm(BiBj.ravel()) ** 2
+            den = _np.linalg.norm(BiBj) ** 2
             choiMx[i, j] = num / den 
 
     # This construction results in a Jmx with trace == dim(H) = sqrt(operation_mx.shape[0])
