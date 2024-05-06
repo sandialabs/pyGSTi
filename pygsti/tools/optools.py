@@ -72,7 +72,7 @@ def fidelity(a, b):
     # ^ use for checks that have no dimensional dependence; about 1e-12 for double precision.
     __VECTOR_TOL__ = (a.shape[0] ** 0.5) * __SCALAR_TOL__
     # ^ use for checks that do have dimensional dependence (will naturally increase for larger matrices)
-    def assert_hermicity(mat):
+    def assert_hermitian(mat):
         hermiticity_error = _np.abs(mat - mat.T.conj())
         if _np.any(hermiticity_error > __SCALAR_TOL__):
             message = f"""
@@ -81,8 +81,8 @@ def fidelity(a, b):
             """
             raise ValueError(message)
     
-    assert_hermicity(a)
-    assert_hermicity(b)
+    assert_hermitian(a)
+    assert_hermitian(b)
 
     def check_rank_one_density(mat):
         # Check if mat = alpha * np.outer(v, v.conj()) for some unit vector v and scalar alpha > 0.
