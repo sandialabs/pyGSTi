@@ -10,9 +10,16 @@ Defines the TorchForwardSimulator class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import Tuple, Optional, Dict, TYPE_CHECKING
+if TYPE_CHECKING:
+    from pygsti.baseobjs.label import Label
+    from pygsti.models.explicitmodel import ExplicitOpModel
+    from pygsti.circuits.circuit import SeparatePOVMCircuit
+    from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout
+
 from collections import OrderedDict
 import warnings as warnings
-from typing import Tuple, Optional, TypeVar, Dict
 
 import numpy as np
 try:
@@ -22,14 +29,6 @@ except ImportError:
     TORCH_ENABLED = False
 
 from pygsti.forwardsims.forwardsim import ForwardSimulator
-
-# Below: variables for type annotations.
-#   We have to create variable aliases rather than importing the types
-#   directly, since importing the types would cause circular imports.
-Label = TypeVar('Label')
-ExplicitOpModel = TypeVar('ExplicitOpModel')
-SeparatePOVMCircuit = TypeVar('SeparatePOVMCircuit')
-CircuitOutcomeProbabilityArrayLayout = TypeVar('CircuitOutcomeProbabilityArrayLayout')
 
 
 """Efficiency ideas
