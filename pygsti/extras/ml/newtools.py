@@ -22,7 +22,35 @@ def ring_adj_matrix(num_qubits: int):
         adj_matrix[i, (i+1) % num_qubits] = 1
     return adj_matrix
 
-def t_bar_adj_matrix(num_qubits = 5):
+def melbourne_adj_matrix(num_qubits = 14):
+    '''
+    Builds the adjacency matrix for a five-qubit bowtie graph:
+
+    0 - 1
+     \ /
+      2
+     / \
+    3 - 4 
+    '''
+    assert(num_qubits == 14), "We only support 5 qubits"
+    adj_matrix = _np.zeros((num_qubits, num_qubits))
+    adj_matrix[0,1] = 1
+    adj_matrix[1,2], adj_matrix[1,13] = 1,1
+    adj_matrix[2,3], adj_matrix[2,12] = 1,1
+    adj_matrix[3,4], adj_matrix[3,11] = 1,1
+    adj_matrix[4,5], adj_matrix[4,10] = 1,1
+    adj_matrix[5,6], adj_matrix[5,9] = 1,1
+    adj_matrix[6,8] = 1
+    adj_matrix[7,8] = 1
+    adj_matrix[8,9] = 1
+    adj_matrix[9,10] = 1
+    adj_matrix[10,11] = 1
+    adj_matrix[11,12] = 1
+    adj_matrix[12,13] = 1
+    adj_matrix = adj_matrix + adj_matrix.T
+    return adj_matrix
+
+def bowtie_adj_matrix(num_qubits = 5):
     '''
     Builds the adjacency matrix for a five-qubit bowtie graph:
 

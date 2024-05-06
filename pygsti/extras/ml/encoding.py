@@ -9,7 +9,7 @@ from pygsti.extras.ml.newtools import create_error_propagation_matrix, index_to_
 # TO DO: Make more general
 
 qubit_to_index = {0:0, 1:1, 2:2, 3:3}
-geometry_cnot_channels = {'ring': 4, 'linear': 4, 'bowtie': 12, 'grid': 8} # you get 2 channels for each cnot gate
+geometry_cnot_channels = {'ring': 4, 'linear': 4, 'bowtie': 12, 't-bar': 8, 'algiers-t-bar': 8, 'grid': 8, 'melbourne': 8} # you get 2 channels for each cnot gate
 
 def compute_channels(pspec: QPS, geometry: str) -> int:
     return len(pspec.gate_names) - 1 + geometry_cnot_channels[geometry]
@@ -17,6 +17,31 @@ def compute_channels(pspec: QPS, geometry: str) -> int:
 def clockwise_cnot(g, num_qubits):
     return (g.qubits[0] - g.qubits[1]) % num_qubits == num_qubits - 1
 
+def melbourne_gate_to_index(g, q, pspec)-> int:
+    '''
+    Works for Melbourne
+    '''
+    assert(q in g.qubits)
+    single_qubit_gates = list(pspec.gate_names)
+    single_qubit_gates.remove('Gcnot')
+    if g.name == 'Gcnot':
+        if g.qubits in [(0,1),(1,2),(2,3),(3,4),(4,5),(5,6),(13,12),(12,11),(11,10),(10,9),(9,8),(8,7)]:
+            if q == g.qubits[0]: return 0
+            else: return 1
+        elif g.qubits in [(1,0),(2,1),(3,2),(4,3),(5,4),(6,5),(12,13),(11,12),(10,11),(9,10),(8,9),(7,8)]:
+            if q == g.qubits[0]: return 2
+            else: return 3
+        elif g.qubits in [(1,13),(2,12),(3,11),(4,10),(5,9),(6,8)]:
+            if q == g.qubits[0]: return 4
+            else: return 5
+        elif g.qubits in [(13,1),(12,2),(11,3),(10,4),(9,5),(8,6)]:
+            if q == g.qubits[0]: return 6
+            else: return 7
+    elif g.name in pspec.gate_names:
+        # We have a single-qubit Clifford gate
+        return geometry_cnot_channels['melbourne']+single_qubit_gates.index(g.name) # we put the single-qubit gates after the CNOT channels.
+    else:
+        raise ValueError('Invalid gate name for this encoding!')
 def bowtie_gate_to_index(g, q, pspec)-> int:
     '''
     Works for Yorktown.
@@ -47,7 +72,7 @@ def bowtie_gate_to_index(g, q, pspec)-> int:
             raise ValueError('Invalid gate name for this encoding!')
     elif g.name in pspec.gate_names:
         # We have a single-qubit Clifford gate
-        return 12+single_qubit_gates.index(g.name) # we put the single-qubit gates after the CNOT channels.
+        return geometry_cnot_channels['bowtie']+single_qubit_gates.index(g.name) # we put the single-qubit gates after the CNOT channels.
     else:
         raise ValueError('Invalid gate name for this encoding!')
 
@@ -247,7 +272,7 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
     num_error_gens = len(tracked_error_gens)
 
     if max_depth is None: max_depth = _np.max([c.depth for c in circs])
-    print(max_depth)
+    # print(max_depth)
     
     if num_channels is None: num_channels = compute_channels(pspec, geometry)
     encode_measurements = False
@@ -278,7 +303,7 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
                     
     for i, c in enumerate(circs):
         if i % 200 == 0:
-            print(i, end=',')
+            print(i, end=',', flush = True)
         x_circs[i, :, :, :] = circuit_to_tensor(c, max_depth, num_qubits, num_channels, encode_measurements,
                                                          indexmapper, indexmapper_kwargs,
                                                          valuemapper, valuemapper_kwargs 
@@ -320,7 +345,7 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
             if idealouts is not None:
                 target_outcomes = _np.array([list(idealout) for idealout in idealouts], dtype = float)
                 return x, y, measurements, target_outcomes, x_zmask
-            return x, y, measurements, x_zmask
+            return x, y, measurements, x_zmask, 
         elif measurement_encoding == 3:
             if idealouts is not None:
                 target_outcomes = _np.array([list(idealout) for idealout in idealouts], dtype = float)

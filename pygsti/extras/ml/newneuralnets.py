@@ -6,42 +6,60 @@ import copy as _copy
 import warnings
 from pygsti.extras.ml import newtools
 
-
+# @_keras.utils.register_keras_serializable()
 class DenseSubNetwork(_keras.layers.Layer):
     def __init__(self, outdim, units = [30, 20, 10, 5, 5]):
         super().__init__()
         self.outdim = outdim
-        self.output_layer = _keras.layers.Dense(outdim, kernel_initializer=_keras.initializers.random_uniform(minval=-0.00001, maxval=0.00001))
         self.units = _copy.deepcopy(units)
     def build(self, input_shape):
         # Define the sub-unit's dense layers
         self.sequential = _keras.Sequential([_keras.layers.Dense(i, activation = 'relu') for i in self.units])
+        self.output_layer = _keras.layers.Dense(self.outdim, kernel_initializer=_keras.initializers.random_uniform(minval=-0.00001, maxval=0.00001))
+
         super().build(input_shape)
+    
+    def get_config(self):
+        config = super(DenseSubNetwork, self).get_config()
+        config.update({
+            'outdim': self.outdim,
+            'units': self.units
+        })
+        return config
 
     def call(self, inputs):
         # This should naturally handle batches....
         x = self.sequential(inputs)
         return self.output_layer(x)
 
+# @_keras.utils.register_keras_serializable()
 class MeasurementToErrVec(_keras.layers.Layer):
-    def __init__(self, tracked_error_gens: list, dense_units: list, input_shape: tuple):
+    def __init__(self, tracked_error_gens: list, dense_units: list):
         super(MeasurementToErrVec, self).__init__()
 
         self.num_tracked_error_gens = len(tracked_error_gens)  # This is the output dimenision of the network
         self.tracked_error_gens = tracked_error_gens  
         self.dense_units = dense_units
-        self.input_layer = _keras.layers.InputLayer(input_shape)
     
     def build(self, input_shape):
-        self.dense = {error_gen_idx: DenseSubNetwork(1, self.dense_units) for error_gen_idx in range(self.num_tracked_error_gens)}
+        self.dense = [DenseSubNetwork(1, self.dense_units) for error_gen_idx in range(self.num_tracked_error_gens)]
         super().build(input_shape)
+    
+    def get_config(self):
+        config = super(MeasurementToErrVec, self).get_config()
+        config.update({
+            'tracked_error_gens': self.tracked_error_gens,
+            'dense_units': self.dense_units
+        })
+        return config
 
     def call(self, inputs):
-        inputs = self.input_layer(inputs)
+        # inputs = self.input_layer(inputs)
         x = [self.dense[i](inputs) for i in range(0, self.num_tracked_error_gens)]
         x = _tf.concat(x, axis=-1)
         return x
 
+# @_keras.utils.register_keras_serializable()
 def layer_snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_graph_laplacian, num_hops):
     """
 
@@ -69,9 +87,9 @@ def layer_snipper_from_qubit_graph(error_gen, num_qubits, num_channels, qubit_gr
 
     return indices_for_error
     
-
+# @_keras.utils.register_keras_serializable()
 class LocalizedDenseToErrVec(_keras.layers.Layer):
-    def __init__(self, layer_snipper, layer_snipper_args, tracked_error_gens, dense_units = [30, 20, 10, 5, 5]):
+    def __init__(self, layer_snipper, layer_snipper_args, tracked_error_gens, dense_units = [30, 20, 10, 5, 5], **kwargs):
         """
         layer_snipper: func
             A function that takes a primitive error generator and maps it to a list that encodes which parts
@@ -87,9 +105,28 @@ class LocalizedDenseToErrVec(_keras.layers.Layer):
         self.tracked_error_gens = tracked_error_gens  
         self.layer_encoding_indices_for_error_gen = [layer_snipper(error_gen, *layer_snipper_args) for error_gen in tracked_error_gens]
         self.dense_units = dense_units
+        self.layer_snipper = layer_snipper
+        self.layer_snipper_args = layer_snipper_args
+
+    def get_config(self):
+        config = super(LocalizedDenseToErrVec, self).get_config()
+        config.update({
+            'tracked_error_gens': self.tracked_error_gens,
+            'dense_units': self.dense_units,
+            'layer_snipper': _keras.utils.serialize_keras_object(self.layer_snipper),
+            'layer_snipper_args': self.layer_snipper_args
+        })
+        return config
+
+    @classmethod
+    def from_config(cls, config):
+        layer_snipper_config = config.pop("layer_snipper")
+        layer_snipper = _keras.utils.deserialize_keras_object(layer_snipper_config)
+        return cls(layer_snipper, **config)
     
     def build(self, input_shape):
-        self.dense = {error_gen_idx: DenseSubNetwork(1, self.dense_units) for error_gen_idx in range(self.num_tracked_error_gens)}
+        # self.dense = {error_gen_idx: DenseSubNetwork(1, self.dense_units) for error_gen_idx in range(self.num_tracked_error_gens)}
+        self.dense = [DenseSubNetwork(1, self.dense_units) for error_gen_idx in range(self.num_tracked_error_gens)]
         super().build(input_shape)
 
     def call(self, inputs):
@@ -166,10 +203,11 @@ class CircuitErrorVecWithMeasurementsAndBitstringsv1(_keras.Model):
         measurement_infidelities = _tf.squeeze(measurement_infidelities, axis=1)
         return circuit_infidelities + measurement_infidelities
 
+@_keras.utils.register_keras_serializable(package='Blah1')
 class CircuitErrorVec(_keras.Model):
     def __init__(self, num_qubits: int, num_channels: int, tracked_error_gens: list, 
-                layer_snipper, layer_snipper_args: dict,
-                dense_units = [30, 20, 10, 5, 5], input_shape=None):
+                layer_snipper, layer_snipper_args: list,
+                dense_units = [30, 20, 10, 5, 5], input_shape=None, **kwargs):
         """
         num_qubits: int
             The number of qubits that this neural network models.
@@ -195,10 +233,24 @@ class CircuitErrorVec(_keras.Model):
         self.num_channels = num_channels
         self.len_gate_encoding = self.num_qubits * self.num_channels
         self.dense_units = dense_units
+        self.layer_snipper = layer_snipper
+        self.layer_snipper_args = layer_snipper_args
         self.input_layer = _keras.layers.InputLayer(input_shape=input_shape)
-        self.local_dense = LocalizedDenseToErrVec(layer_snipper, layer_snipper_args, self.tracked_error_gens, self.dense_units)
+        self.local_dense = LocalizedDenseToErrVec(self.layer_snipper, self.layer_snipper_args, self.tracked_error_gens, self.dense_units)
         self.hamiltonian_mask = _tf.constant([1 if error[0] == 'H' else 0 for error in tracked_error_gens], _tf.int32)
         self.stochastic_mask = _tf.constant([1 if error[0] == 'S' else 0 for error in tracked_error_gens], _tf.int32)
+    
+    def get_config(self):
+        config = super(CircuitErrorVec, self).get_config()
+        config.update({
+            'num_qubits': self.num_qubits,
+            'tracked_error_gens': self.tracked_error_gens,
+            'num_channels': self.num_channels,
+            'dense_units': self.dense_units,
+            'layer_snipper': _keras.utils.serialize_keras_object(self.layer_snipper),
+            'layer_snipper_args': self.layer_snipper_args,
+        })
+        return config
     
     def old_call(self, inputs):
         # This is very slow when it is called on a large number of circuits. It's because it is not implemented
@@ -271,7 +323,63 @@ class CircuitErrorVec(_keras.Model):
             return calc_end_of_circ_error(evecs, P, S)
 
         return _tf.map_fn(circuit_to_fidelity, inputs)
+
+@_keras.utils.register_keras_serializable(package='Blah')
+class CircuitErrorVecScreenZErrorsWithMeasurementsBitstrings(CircuitErrorVec):
+    def __init__(self, num_qubits: int, num_channels: int, tracked_error_gens: list, tracked_error_indices: list,
+                layer_snipper, layer_snipper_args: dict,
+                dense_units: [30, 20, 10, 5, 5], input_shapes=[None, None, None, None, None]):
+        
+        super().__init__(num_qubits, num_channels, tracked_error_gens, layer_snipper, layer_snipper_args, dense_units, input_shapes[0])
+        self.input_shapes = {'circuit': input_shapes[0], 'measurements': input_shapes[1], 'target_outcomes': input_shapes[2],
+                             'z_masks': input_shapes[3], 'measurement_masks': input_shapes[4]}
+        self.meas_bitstring_shape = input_shapes[1][0]+input_shapes[2][0]
+        self.measurement_dense = MeasurementToErrVec(self.tracked_error_gens, self.dense_units)
+        self.error_indices = _tf.constant(_np.array(tracked_error_indices).reshape((1,-1)), dtype = _tf.int32)
+
+    def call(self, inputs):
+        def calc_masked_err_rates(M, P, mask):
+            masked_M = _tf.math.multiply(_tf.cast(mask, _tf.float32), M)
+            masked_P = _tf.math.multiply(mask, P)
+            flat_masked_M, flat_masked_P = _tf.reshape(masked_M, [-1]), _tf.reshape(masked_P, [-1])
+            unique_masked_P, idx = _tf.unique(flat_masked_P)
+            num_segments = _tf.reduce_max(idx) + 1
+            return _tf.math.unsorted_segment_sum(flat_masked_M, idx, num_segments)
+        
+        def calc_end_of_circ_error(M, P, S, z_mask):
+            """
+            A function that maps the signed error rates (S*M) to an end-of-circuit error generator
+            using the permutation matrix P. It also screens out errors that are Z-type on the 
+            measured qubits.
+            """
+            signed_M = _tf.math.multiply(S, M)
+            # Zero out the entries in signed_M that get sent to errors that are Z-type Paulis on the active qubits
+            masked_signed_M = _tf.math.multiply(signed_M, z_mask)
+            final_stochastic_error_rates = calc_masked_err_rates(masked_signed_M, P, self.stochastic_mask)
+            final_hamiltonian_error_rates = calc_masked_err_rates(masked_signed_M, P, self.hamiltonian_mask)
+            return _tf.reduce_sum(final_stochastic_error_rates) + _tf.reduce_sum(_tf.square(final_hamiltonian_error_rates))
+
+        def circuit_to_fidelity(input):
+            """
+            A function that maps a single circuit to the prediction for its process fidelity (a single real number).
+            """
+            circuit, measurement_and_outcome, mask = [_tf.cast(i, _tf.float32) for i in input]
             
+
+            C = circuit[:, 0:self.len_gate_encoding]
+            P = _tf.cast(circuit[:, self.len_gate_encoding:self.len_gate_encoding + self.num_tracked_error_gens], _tf.int32)
+            S = circuit[:, self.len_gate_encoding + self.num_tracked_error_gens:self.len_gate_encoding + 2 * self.num_tracked_error_gens]
+            
+            circuit_evecs = self.local_dense(self.input_layer(C))
+            measurement_evecs = self.measurement_dense(measurement_and_outcome)
+
+            all_evecs = _tf.concat([circuit_evecs, measurement_evecs], axis = 0)
+            padded_P = _tf.concat([P, self.error_indices], axis = 0)
+            padded_S = _tf.concat([S, _tf.ones([1,self.num_tracked_error_gens])], axis = 0)
+
+            return calc_end_of_circ_error(all_evecs, padded_P, padded_S, mask)
+        return _tf.map_fn(circuit_to_fidelity, inputs, fn_output_signature=_tf.float32)
+    
 class CircuitErrorVecScreenZErrors(CircuitErrorVec):
     def __init__(self, num_qubits: int, num_channels: int, tracked_error_gens: list, layer_snipper, layer_snipper_args: dict,
                  dense_units: list, input_shapes=[None, None]):
@@ -314,59 +422,4 @@ class CircuitErrorVecScreenZErrors(CircuitErrorVec):
             evecs = self.local_dense(self.input_layer(C))
             return calc_end_of_circ_error(evecs, P, S, z_mask)
         # TO DO: Put the signed_M and masked_signed_M calculations outside of circuit_to_fidelity
-        return _tf.map_fn(circuit_to_fidelity, inputs, fn_output_signature=_tf.float32)
-
-class CircuitErrorVecScreenZErrorsWithMeasurementsBitstrings(CircuitErrorVec):
-    def __init__(self, num_qubits: int, num_channels: int, tracked_error_gens: list, tracked_error_indices: list,
-                layer_snipper, layer_snipper_args: dict,
-                dense_units: [30, 20, 10, 5, 5], input_shapes=[None, None, None, None, None]):
-        super().__init__(num_qubits, num_channels, tracked_error_gens, layer_snipper, layer_snipper_args, dense_units, input_shapes[0])
-        self.input_shapes = {'circuit': input_shapes[0], 'measurements': input_shapes[1], 'target_outcomes': input_shapes[2],
-                             'z_masks': input_shapes[3], 'measurement_masks': input_shapes[4]}
-        self.meas_bitstring_shape = input_shapes[1][0]+input_shapes[2][0]
-        self.measurement_dense = MeasurementToErrVec(self.tracked_error_gens, self.dense_units, tuple([1, self.meas_bitstring_shape]))
-        self.error_indices = _tf.constant(_np.array(tracked_error_indices).reshape((1,-1)), dtype = _tf.int32)
-
-    def call(self, inputs):
-
-        def calc_masked_err_rates(M, P, mask):
-            masked_M = _tf.math.multiply(_tf.cast(mask, _tf.float32), M)
-            masked_P = _tf.math.multiply(mask, P)
-            flat_masked_M, flat_masked_P = _tf.reshape(masked_M, [-1]), _tf.reshape(masked_P, [-1])
-            unique_masked_P, idx = _tf.unique(flat_masked_P)
-            num_segments = _tf.reduce_max(idx) + 1
-            return _tf.math.unsorted_segment_sum(flat_masked_M, idx, num_segments)
-        
-        def calc_end_of_circ_error(M, P, S, z_mask):
-            """
-            A function that maps the signed error rates (S*M) to an end-of-circuit error generator
-            using the permutation matrix P. It also screens out errors that are Z-type on the 
-            measured qubits.
-            """
-            signed_M = _tf.math.multiply(S, M)
-            # Zero out the entries in signed_M that get sent to errors that are Z-type Paulis on the active qubits
-            masked_signed_M = _tf.math.multiply(signed_M, z_mask)
-            final_stochastic_error_rates = calc_masked_err_rates(masked_signed_M, P, self.stochastic_mask)
-            final_hamiltonian_error_rates = calc_masked_err_rates(masked_signed_M, P, self.hamiltonian_mask)
-            return _tf.reduce_sum(final_stochastic_error_rates) + _tf.reduce_sum(_tf.square(final_hamiltonian_error_rates))
-
-        def circuit_to_fidelity(input):
-            """
-            A function that maps a single circuit to the prediction for its process fidelity (a single real number).
-            """
-            circuit, measurement_and_outcome, mask = [_tf.cast(i, _tf.float32) for i in input]
-            
-
-            C = circuit[:, 0:self.len_gate_encoding]
-            P = _tf.cast(circuit[:, self.len_gate_encoding:self.len_gate_encoding + self.num_tracked_error_gens], _tf.int32)
-            S = circuit[:, self.len_gate_encoding + self.num_tracked_error_gens:self.len_gate_encoding + 2 * self.num_tracked_error_gens]
-            
-            circuit_evecs = self.local_dense(self.input_layer(C))
-            measurement_evecs = self.measurement_dense(measurement_and_outcome)
-
-            all_evecs = _tf.concat([circuit_evecs, measurement_evecs], axis = 0)
-            padded_P = _tf.concat([P, self.error_indices], axis = 0)
-            padded_S = _tf.concat([S, _tf.ones([1,self.num_tracked_error_gens])], axis = 0)
-
-            return calc_end_of_circ_error(all_evecs, padded_P, padded_S, mask)
         return _tf.map_fn(circuit_to_fidelity, inputs, fn_output_signature=_tf.float32)
