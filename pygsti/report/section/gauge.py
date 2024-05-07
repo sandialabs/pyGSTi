@@ -168,9 +168,13 @@ class GaugeVariantSection(_Section):
     @_Section.figure_factory(4)
     def final_gates_vs_target_table_gauge_var(workspace, switchboard=None, confidence_level=None,
                                               ci_brevity=1, **kwargs):
+        if kwargs.get('n_leak', 0) == 0:
+            display = ('inf', 'agi', 'trace', 'diamond', 'nuinf', 'nuagi')
+        else:
+            display = ('inf', 'la-inf', 'agi', 'trace', 'la-trace', 'diamond', 'nuinf', 'nuagi')
         return workspace.GatesVsTargetTable(
             switchboard.mdl_final, switchboard.mdl_target, _cri(1, switchboard, confidence_level, ci_brevity),
-            display=('inf', 'agi', 'trace', 'diamond', 'nuinf', 'nuagi')
+            display=display
         )
 
     @_Section.figure_factory(3)
