@@ -17,8 +17,7 @@ class Torchable(ModelMember):
 
     def stateless_data(self) -> Tuple:
         """
-        Return the data of this model that is considered considered constant for purposes
-        of model fitting.
+        Return this ModelMember's data that is considered constant for purposes of model fitting.
 
         Note: the word "stateless" here is used in the sense of object-oriented programming.
         """
@@ -27,18 +26,18 @@ class Torchable(ModelMember):
     @staticmethod
     def torch_base(sd : Tuple, t_param : Tensor) -> Tensor:
         """
-        Suppose "obj" is an instance of some ModelMember subclass. If we compute
+        Suppose "obj" is an instance of some Torchable subclass. If we compute
 
             sd = obj.stateless_data()
             vec = obj.to_vector()
             t_param = torch.from_numpy(vec)
-            T = type(obj).torch_base(sd, t_param, grad)
+            t = type(obj).torch_base(sd, t_param, grad)
 
-        then T will be a PyTorch Tensor that represents "obj" in a canonical numerical way.
+        then t will be a PyTorch Tensor that represents "obj" in a canonical numerical way.
 
         The meaning of "canonical" is implementation dependent. If type(obj) implements
         the ``.base`` attribute, then a reasonable implementation will probably satisfy
 
-            np.allclose(obj.base, T.numpy()).
+            np.allclose(obj.base, t.numpy()).
         """
         raise NotImplementedError()
