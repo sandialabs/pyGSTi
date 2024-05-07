@@ -15,11 +15,12 @@ import numpy as _np
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.baseobjs.protectedarray import ProtectedArray as _ProtectedArray
-from typing import Tuple, Optional, TypeVar
-Tensor = TypeVar('Tensor')  # torch.tensor.
+from pygsti.modelmembers.torchable import Torchable as _Torchable
+from typing import Tuple
 
 
-class FullTPOp(_DenseOperator):
+
+class FullTPOp(_DenseOperator, _Torchable):
     """
     A trace-preserving operation matrix.
 
@@ -157,19 +158,17 @@ class FullTPOp(_DenseOperator):
         self._ptr_has_changed()  # because _rep.base == _ptr (same memory)
         self.dirty = dirty_value
 
-    def stateless_data(self):
+    def stateless_data(self) -> Tuple[int]:
         return (self.dim,)
 
     @staticmethod
-    def torch_base(sd: Tuple[int], t_param: Tensor, torch_handle=None):
-        if torch_handle is None:
-            import torch as torch_handle
-
+    def torch_base(sd: Tuple[int], t_param: _Torchable.Tensor) -> _Torchable.Tensor:
+        torch = _Torchable.torch_handle
         dim = sd[0]
-        t_const = torch_handle.zeros(size=(1, dim), dtype=torch_handle.double)
+        t_const = torch.zeros(size=(1, dim), dtype=torch.double)
         t_const[0,0] = 1.0
         t_param_mat = t_param.reshape((dim - 1, dim))
-        t = torch_handle.row_stack((t_const, t_param_mat))
+        t = torch.row_stack((t_const, t_param_mat))
         return t
 
 

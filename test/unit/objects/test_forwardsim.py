@@ -5,7 +5,6 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from pygsti.models import modelconstruction as _setc
 import pygsti.models as models
 from pygsti.forwardsims import ForwardSimulator, \
     MapForwardSimulator, SimpleMapForwardSimulator, \

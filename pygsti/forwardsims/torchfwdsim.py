@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from pygsti.circuits.circuit import SeparatePOVMCircuit
     from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout
 
+from pygsti.modelmembers.torchable import Torchable
 from collections import OrderedDict
 import warnings as warnings
 
@@ -84,6 +85,7 @@ class StatelessModel:
 
         self.param_metadata = []
         for lbl, obj in model._iter_parameterized_objs():
+            assert isinstance(obj, Torchable)
             param_type = type(obj)
             param_data = (lbl, param_type) + (obj.stateless_data(),)
             self.param_metadata.append(param_data)

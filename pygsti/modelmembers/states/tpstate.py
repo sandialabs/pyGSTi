@@ -15,14 +15,14 @@ import numpy as _np
 
 from pygsti.baseobjs import Basis as _Basis
 from pygsti.baseobjs import statespace as _statespace
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.modelmembers.states.densestate import DenseState as _DenseState
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.baseobjs.protectedarray import ProtectedArray as _ProtectedArray
-from typing import Tuple, Optional, TypeVar
-Tensor = TypeVar('Tensor')  # torch.tensor.
+from typing import Tuple
 
 
-class TPState(_DenseState):
+class TPState(_DenseState, _Torchable):
     """
     A fixed-unit-trace state vector.
 
@@ -160,17 +160,15 @@ class TPState(_DenseState):
         self._ptr_has_changed()
         self.dirty = dirty_value
 
-    def stateless_data(self):
+    def stateless_data(self) -> Tuple[int]:
         return (self.dim,)
 
     @staticmethod
-    def torch_base(sd: Tuple[int], t_param: Tensor, torch_handle=None):
-        if torch_handle is None:
-            import torch as torch_handle
-
+    def torch_base(sd: Tuple[int], t_param: _Torchable.Tensor) -> _Torchable.Tensor:
+        torch = _Torchable.torch_handle
         dim = sd[0]
-        t_const = (dim ** -0.25) * torch_handle.ones(1, dtype=torch_handle.double) 
-        t = torch_handle.concat((t_const, t_param)) 
+        t_const = (dim ** -0.25) * torch.ones(1, dtype=torch.double) 
+        t = torch.concat((t_const, t_param)) 
         return t
 
     def deriv_wrt_params(self, wrt_filter=None):

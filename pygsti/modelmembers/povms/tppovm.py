@@ -11,15 +11,13 @@ Defines the TPPOVM class
 #***************************************************************************************************
 
 import numpy as _np
+from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
-from pygsti.modelmembers.povms.effect import POVMEffect as _POVMEffect
 from pygsti.modelmembers.povms.fulleffect import FullPOVMEffect as _FullPOVMEffect
-from pygsti.modelmembers.povms.conjugatedeffect import ConjugatedStatePOVMEffect as _ConjugatedStatePOVMEffect
-from typing import Tuple, Optional, TypeVar
-Tensor = TypeVar('Tensor')  # torch.tensor.
+from typing import Tuple
 
 
-class TPPOVM(_BasePOVM):
+class TPPOVM(_BasePOVM, _Torchable):
     """
     A POVM whose sum-of-effects is constrained to what, by definition, we call the "identity".
 
@@ -78,19 +76,18 @@ class TPPOVM(_BasePOVM):
         vec = _np.concatenate(effect_vecs)
         return vec
 
-    def stateless_data(self):
+    def stateless_data(self) -> Tuple[int, int]:
         dim1 = len(self)
         dim2 = self.dim
         return (dim1, dim2)
 
     @staticmethod
-    def torch_base(sd: Tuple[int, int], t_param: Tensor, torch_handle=None):
-        if torch_handle is None:
-            import torch as torch_handle
+    def torch_base(sd: Tuple[int, int], t_param: _Torchable.Tensor) -> _Torchable.Tensor:
+        torch = _Torchable.torch_handle
         num_effects, dim = sd
-        first_basis_vec = torch_handle.zeros(size=(1, dim), dtype=torch_handle.double)
+        first_basis_vec = torch.zeros(size=(1, dim), dtype=torch.double)
         first_basis_vec[0,0] = dim ** 0.25
         t_param_mat = t_param.reshape((num_effects - 1, dim))
         t_func = first_basis_vec - t_param_mat.sum(axis=0, keepdim=True)
-        t = torch_handle.row_stack((t_param_mat, t_func))
+        t = torch.row_stack((t_param_mat, t_func))
         return t

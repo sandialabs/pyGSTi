@@ -1058,49 +1058,6 @@ class ModelMember(ModelChild, _NicelySerializable):
     def _oneline_contents(self):
         """ Summarizes the contents of this object in a single line.  Does not summarize submembers. """
         return "(contents not available)"
-    
-    def stateless_data(self):
-        """
-        Return the data of this model that is considered considered constant for purposes
-        of model fitting.
-
-        Note: the word "stateless" here is used in the sense of object-oriented programming.
-        """
-        raise NotImplementedError()
-    
-    # TODO: verify that something like that following won't work for AD.
-    # def moretorch(self, vec):
-    #     import torch
-    #     oldvec = self.to_vector()
-    #     self.from_vector(vec)
-    #     numpyrep = self.base
-    #     torchrep = torch.from_numpy(numpyrep)
-    #     self.from_vector(oldvec)
-    #     return torchrep        
-    
-    @staticmethod
-    def torch_base(sd, vec, torch_handle=None):
-        """
-        Suppose "obj" is an instance of some ModelMember subclass. If we compute
-
-            sd = obj.stateless_data()
-            vec = obj.to_vector()
-            T = type(obj).torch_base(sd, vec, grad)
-
-        then T will be a PyTorch Tensor that represents "obj" in a canonical numerical way.
-
-        The meaning of "canonical" is implementation dependent. If type(obj) implements
-        the ``.base`` attribute, then a reasonable implementation will probably satisfy
-
-            np.allclose(obj.base, T.numpy()).
-
-        Optional args
-        -------------    
-        torch_handle can be None or it can be a reference to torch as a Python package
-        (analogous to the variable "np" after we do "import numpy as np"). If it's none
-        then we'll import torch as the first step of this function.
-        """
-        raise NotImplementedError()
 
 
 def _compose_gpindices(parent_gpindices, child_gpindices):
