@@ -175,13 +175,11 @@ class StatelessModel:
 
 class TorchForwardSimulator(ForwardSimulator):
 
-    ENABLED = TORCH_ENABLED
-
     """
     A forward simulator that leverages automatic differentiation in PyTorch.
     """
     def __init__(self, model : Optional[ExplicitOpModel] = None):
-        if not TorchForwardSimulator.ENABLED:
+        if not TORCH_ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
         self.model = model
         super(ForwardSimulator, self).__init__(model)

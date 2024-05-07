@@ -9,7 +9,7 @@ import pygsti.models as models
 from pygsti.forwardsims import ForwardSimulator, \
     MapForwardSimulator, SimpleMapForwardSimulator, \
     MatrixForwardSimulator,  SimpleMatrixForwardSimulator, \
-    TorchForwardSimulator
+    TorchForwardSimulator, TORCH_ENABLED
 from pygsti.models import ExplicitOpModel
 from pygsti.circuits import Circuit
 from pygsti.baseobjs import Label as L
@@ -177,7 +177,7 @@ class ForwardSimIntegrationTester(BaseProtocolData):
     def test_simple_map_fwdsim(self):
         self._run(SimpleMapForwardSimulator)
 
-    @pytest.mark.skipif(not TorchForwardSimulator.ENABLED, reason="PyTorch is not installed.")
+    @pytest.mark.skipif(not TORCH_ENABLED, reason="PyTorch is not installed.")
     def test_torch_fwdsim(self):
         self._run(TorchForwardSimulator)
 
