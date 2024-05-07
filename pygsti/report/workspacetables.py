@@ -1570,9 +1570,15 @@ class ErrgenTable(WorkspaceTable):
                         T = "Captures %.1f%% of E.G.<br>Frobenius Norm" % (100 * info['CA projection power'].value)
                         caProjs, EB = info['CA projections'].value_and_errorbar
                         m, M = _get_min_max(caProjsM, _np.max(_np.abs(caProjs)))
+                        #replace zeros along diagonal in CA projections with nans, 
+                        #this should make it so that they are skipped in the heatmap.
+                        diag_indices = _np.diag_indices_from(caProjs)
+                        caProjs[diag_indices] = _np.nan
+
                         affdecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, caProjs, basis, m, M,
-                            box_labels=True, eb_matrix=EB, title=T)
+                            box_labels=True, eb_matrix=EB, title=T,
+                            proj_type='CA')
                         row_data.append(affdecomp_fig)
                         row_formatters.append('Figure')
                     else:

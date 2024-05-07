@@ -1347,8 +1347,10 @@ def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     for i in range(matrix.shape[0]):
         hoverLabels.append([hover_label_fn(i, j)
                             for j in range(matrix.shape[1])])
-
-    trace = go.Heatmap(z=colormap.normalize(flipped_mx),
+        
+    #allow for possibilities of nans.
+    masked_matrix = _np.ma.array(flipped_mx, mask=_np.isnan(flipped_mx))
+    trace = go.Heatmap(z=colormap.normalize(masked_matrix),
                        colorscale=colormap.create_plotly_colorscale(),
                        showscale=colorbar, zmin=colormap.hmin,
                        zmax=colormap.hmax, hoverinfo='text',
@@ -1454,8 +1456,17 @@ def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
 
     width = lmargin + boxSizeX * matrix.shape[1] + rmargin
     height = tmargin + boxSizeY * matrix.shape[0] + bmargin
-    #print("DB: _matrix_color_boxplot dims: ",width,height) # to check auto-width/height
 
+    #create a PIL ImageFont object which will be used as a helper for estimating the
+    #rendered width of the title. If this is larger than the manually specified width above
+    #then change the width to this value.
+    if title is not None:
+        from PIL import ImageFont
+        font = ImageFont.truetype('fonts/OpenSans-Regular.ttf', 10)
+        split_title= title.split('<br>')
+        max_title_width = max([font.getlength(subtitle) for subtitle in split_title])
+        width = max(width, max_title_width)
+        
     width *= scale
     height *= scale
     lmargin *= scale
@@ -1463,7 +1474,7 @@ def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     tmargin *= scale
     bmargin *= scale
 
-    layout = dict(  # go.Layout(  #use dict for speed (no plotly validation)
+    layout = go.Layout(
         title=title,
         titlefont=dict(size=10 * scale),
         width=width,
@@ -1482,7 +1493,6 @@ def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
             linewidth=2,
             ticktext=[str(xl) for xl in xlabels],
             tickvals=[i for i in range(len(xlabels))],
-            tickangle=-90,
             range=[-0.5, len(xlabels) - 0.5]
         ),
         yaxis=dict(
@@ -1504,7 +1514,7 @@ def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
         annotations=annotations
     )
 
-    return ReportFigure(dict(data=data, layout=layout),  # go.Figure - use dict for speed (no validation)
+    return ReportFigure(go.Figure(data=data, layout=layout),
                         colormap, flipped_mx, plt_data=flipped_mx)
 
 
@@ -2903,7 +2913,7 @@ class ProjectionsBoxPlot(WorkspacePlot):
 
     def __init__(self, ws, projections, projection_basis, color_min=None, color_max=None,
                  box_labels=False, colorbar=None, prec="compacthp", scale=1.0,
-                 eb_matrix=None, title=None):
+                 eb_matrix=None, title=None, proj_type=None):
         """
         Creates a color box plot displaying projections.
 
@@ -2955,18 +2965,24 @@ class ProjectionsBoxPlot(WorkspacePlot):
 
         title : str, optional
             A title for the plot
+
+        proj_type : str, optional
+            Optional flag for controlling special formatting behavior on certain
+            project types. E.g. enabling additional annotations when plotting CA
+            error generator projections.
         """
         super(ProjectionsBoxPlot, self).__init__(ws, self._create, projections,
                                                  projection_basis, color_min, color_max,
                                                  box_labels, colorbar, prec, scale,
-                                                 eb_matrix, title)
+                                                 eb_matrix, title, proj_type)
 
     def _create(self, projections,
                 projection_basis, color_min, color_max,
                 box_labels, colorbar, prec, scale,
-                eb_matrix, title):
-
-        absMax = _np.max(_np.abs(projections))
+                eb_matrix, title, proj_type):
+        
+        masked_projections = _np.ma.array(projections, mask=_np.isnan(projections))
+        absMax = _np.max(_np.abs(masked_projections))
         if color_min is None: color_min = -absMax
         if color_max is None: color_max = absMax
 
@@ -3036,20 +3052,98 @@ class ProjectionsBoxPlot(WorkspacePlot):
             except:
                 basis_for_xlabels = basis_for_ylabels = None
 
-        return _opmatrix_color_boxplot(
-            projections, color_min, color_max,
-            basis_for_xlabels,
-            basis_for_ylabels,
-            xlabel, ylabel, box_labels, colorbar, prec,
-            scale, eb_matrix, title)
+        fig = _opmatrix_color_boxplot(projections, color_min, color_max,
+                                      basis_for_xlabels, basis_for_ylabels,
+                                      xlabel, ylabel, box_labels, colorbar, 
+                                      prec, scale, eb_matrix, title)
+
+        #if plotting CA error generator projections add some additional
+        #shapes to delineate between the C and A parts of the array.
+        if proj_type == 'CA':
+            #--------bottom triangle--------#
+            #bottom vertical
+            fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
+                                    x0=-.06, y0=-.06, x1=-.06, y1=1.03,
+                                    line={'color':"#2cb802", 'width':1, 'dash':"dot"})
+            #bottom horizontal
+            fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
+                                    x0=-.06, y0=-.06, x1=.80, y1=-.06,
+                                    line={'color':"#2cb802", 'width':1, 'dash':"dot"})
+            #bottom diagonal
+            fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
+                                    x0=-.06, y0=1.03, x1=1.03, y1=-.06,
+                                    line={'color':"#2cb802", 'width':1, 'dash':"dot"})
+            #Add a tab-like area for the annotation
+            fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
+                                    x0=.80, y0=-.06, x1=.80, y1=-.26,
+                                    line={'color':"#2cb802", 'width':1, 'dash':"dot"})
+            fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
+                                    x0=.80, y0=-.26, x1=1.03, y1=-.26,
+                                    line={'color':"#2cb802", 'width':1, 'dash':"dot"})
+            fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
+                                    x0=1.03, y0=-.26, x1=1.03, y1=-.06,
+                                    line={'color':"#2cb802", 'width':1, 'dash':"dot"})
 
 
-#    def choi_eigenvalue_barplot(evals, errbars=None, size=(8,5), barWidth=1,
-#                            save_to=None, fontSize=15, xlabel="index",
-#                            ylabel="Re[eigenvalue]", title=None):
+            #----------top triangle---------#
+            #top horizontal
+            fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
+                                    x0=-.04, y0=1.06, x1=1.06, y1=1.06,
+                                    line={'color':"#6002b8", 'width':1, 'dash':"dot"})
+            #top vertical
+            fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
+                                    x0=1.06, y0=1.06, x1=1.06, y1=.2,
+                                    line={'color':"#6002b8", 'width':1, 'dash':"dot"})
+            #top diagonal
+            fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
+                                    x0=-.04, y0=1.06, x1=1.06, y1=-.03,
+                                    line={'color':"#6002b8", 'width':1, 'dash':"dot"})
+            #Add a tab-like area for the annotation
+            fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
+                                    x0=1.06, y0=.2, x1=1.26, y1=.2,
+                                    line={'color':"#6002b8", 'width':1, 'dash':"dot"})
+            fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
+                                    x0=1.26, y0=.2, x1=1.26, y1=-.03,
+                                    line={'color':"#6002b8", 'width':1, 'dash':"dot"})
+            fig.plotlyfig.add_shape(type='line', xref='paper', yref='paper', 
+                                    x0=1.26, y0=-.03, x1=1.06, y1=-.03,
+                                    line={'color':"#6002b8", 'width':1, 'dash':"dot"})
+            
+            #adjust margins to allow space to annotations
+            new_bmargin = fig.plotlyfig.layout.margin.b + 20
+            new_height = fig.plotlyfig.layout.height + 20
+            new_rmargin = fig.plotlyfig.layout.margin.r + 20
+            #the CA plots currently have excessive area on the left, so steal
+            #some of this area from there and leave the width alone.
+            new_lmargin = fig.plotlyfig.layout.margin.l - 20
 
-# xlabel="index", ylabel="Re[eigenvalue]", title=None
-# TODO: maybe a "postFormat" or "addToFigure" fn to add title & axis labels to any figure?
+            #add annotations for the upper and lower triangles.
+            fig.plotlyfig.add_annotation(x= .92, y= -.16, xref= 'paper', yref= 'paper',
+                                         text= 'A', showarrow=False, xanchor='center',
+                                         yanchor='middle', font=dict(color='#2cb802'))
+            fig.plotlyfig.add_annotation(x= 1.16, y= .1, xref= 'paper', yref= 'paper',
+                                         text= 'C', showarrow=False, xanchor='center',
+                                         yanchor='middle', font=dict(color='#6002b8'))
+
+            
+            #hack in extra spacing between tick labels and axes (plotly does not
+            #appear to have a handle on this presently). A natural way to do this
+            #would be with ticksuffix, but this does not work in tandem with ticktext
+            #being set.
+            new_yaxis_ticktext = [text + (' '*5) for text in fig.plotlyfig.layout.yaxis.ticktext]
+            new_xaxis_ticktext = [text+ ('<br>'*1) for text in fig.plotlyfig.layout.xaxis.ticktext]
+            
+            
+            fig.plotlyfig.update_layout(yaxis_ticktext=new_yaxis_ticktext,
+                                        xaxis_ticktext=new_xaxis_ticktext,
+                                        margin_b= new_bmargin,
+                                        margin_r= new_rmargin,
+                                        margin_l= new_lmargin,
+                                        height = new_height)
+            
+        return fig
+
+
 class ChoiEigenvalueBarPlot(WorkspacePlot):
     """
     Bar plot of eigenvalues showing red bars for negative values
