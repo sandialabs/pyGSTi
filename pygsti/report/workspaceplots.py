@@ -12,12 +12,14 @@ Classes corresponding to plots within a Workspace context.
 
 import collections as _collections
 import warnings as _warnings
+from pathlib import Path
 
 import numpy as _np
 import plotly
 import plotly.graph_objs as go
 import scipy as _scipy
 from scipy.stats import chi2 as _chi2
+from PIL import ImageFont as _ImageFont
 
 from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _ModelDatasetCircuitStore
 from pygsti.report import colormaps as _colormaps
@@ -158,7 +160,8 @@ def _color_boxplot(plt_data, colormap, colorbar=False, box_label_size=0,
     layout = go.Layout(
         xaxis=xaxis,
         yaxis=yaxis,
-        annotations=annotations
+        annotations=annotations,
+        hoverlabel= dict(font_family = 'monospace') #add hoverlabel formatting
     )
 
     fig = go.Figure(data=data, layout=layout)
@@ -356,7 +359,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
                                             bordercolor= 'black', borderwidth= 1,
                                             clicktoshow= 'onout', xclick=i, yclick=j,
                                             xshift= 20,
-                                            visible= False, font = dict(size=12),
+                                            visible= False, font = dict(size=12, family='monospace'),
                                             showarrow=False))
     fig.plotlyfig.update_layout(annotations = on_click_annotations)
      
@@ -620,8 +623,8 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
         hover_label_widths = []
         #create a PIL ImageFont object which will be used as a helper for estimating the
         #rendered width of the hover labels/annotations below.
-        from PIL import ImageFont
-        font = ImageFont.truetype('fonts/OpenSans-Regular.ttf', 12)
+        font_path = str(Path(__file__).parent / 'fonts'/ 'NotoSansMono-Regular.ttf')
+        font = _ImageFont.truetype(font_path, 12)
         if hover_labels: #if not None or empty list:
             for j, label_row in enumerate(hover_labels): 
                 for i in range(len(label_row)-nIXs, len(label_row)):
@@ -719,9 +722,9 @@ def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_su
             if _np.isnan(val): return ""
             plaq = circuit_structure.plaquette(xvals[ix], yvals[iy], empty_if_missing=True)
             txt = plaq.element_label(iiy, iix)  # note: *row* index = iiy
-            txt += ("<br>value: %g" % val)
+            txt += (f"<br>val: {val:.3g}")
             for lbl, addl_subMxs in addl_hover_submxs.items():
-                txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][iiy][iix]))
+                txt += f"<br>{lbl:<9}: {addl_subMxs[iy][ix][iiy][iix]}"
             return txt
     return hover_label_fn
     
@@ -998,6 +1001,7 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
         hovermode='closest',
         xaxis=xaxis,
         yaxis=yaxis,
+        hoverlabel= dict(font_family = 'monospace', bgcolor='#dbd9d9') #add hoverlabel formatting
     )
     return ReportFigure(go.Figure(data=[trace], layout=layout), colormap,
                         {'x': xs, 'y': ys})
@@ -1461,8 +1465,8 @@ def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
     #rendered width of the title. If this is larger than the manually specified width above
     #then change the width to this value.
     if title is not None:
-        from PIL import ImageFont
-        font = ImageFont.truetype('fonts/OpenSans-Regular.ttf', 10)
+        font_path = str(Path(__file__).parent / 'fonts'/ 'OpenSans-Regular.ttf')
+        font = _ImageFont.truetype(font_path, 10)
         split_title= title.split('<br>')
         max_title_width = max([font.getlength(subtitle) for subtitle in split_title])
         width = max(width, max_title_width)
@@ -1960,21 +1964,17 @@ class ColorBoxPlot(WorkspacePlot):
                 
                 if isinstance(circuits, _PlaquetteGridCircuitStructure):
                     # (function, extra_arg) tuples
-                    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes, objfn.layout)
-                    addl_hover_info_fns['p'] = (_mx_fn_from_elements, (objfn.probs, objfn.layout, "%.5g"))
-                    addl_hover_info_fns['f'] = (_mx_fn_from_elements, (objfn.freqs, objfn.layout, "%.5g"))
-                    addl_hover_info_fns['counts'] = (_mx_fn_from_elements, (objfn.counts, objfn.layout, "%d"))
-                elif isinstance(circuits, _CircuitList):
+                    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes, (objfn.layout, '>11s'))
+                    addl_hover_info_fns['probs'] = (_mx_fn_from_elements, (objfn.probs, objfn.layout, "%11.4g"))
+                    addl_hover_info_fns['freqs'] = (_mx_fn_from_elements, (objfn.freqs, objfn.layout, "%11.4g"))
+                    addl_hover_info_fns['counts'] = (_mx_fn_from_elements, (objfn.counts, objfn.layout, "%11d"))
+                elif isinstance(circuits, _CircuitList) or \
+                    (isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits])):
                      # (function, extra_arg) tuples
-                    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes_circuit_list, objfn.layout)
-                    addl_hover_info_fns['p'] = (_mx_fn_from_elements_circuit_list, (objfn.probs, objfn.layout, "%.5g"))
-                    addl_hover_info_fns['f'] = (_mx_fn_from_elements_circuit_list, (objfn.freqs, objfn.layout, "%.5g"))
-                    addl_hover_info_fns['counts'] = (_mx_fn_from_elements_circuit_list, (objfn.counts, objfn.layout, "%d"))
-                elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
-                    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes_circuit_list, objfn.layout)
-                    addl_hover_info_fns['p'] = (_mx_fn_from_elements_circuit_list, (objfn.probs, objfn.layout, "%.5g"))
-                    addl_hover_info_fns['f'] = (_mx_fn_from_elements_circuit_list, (objfn.freqs, objfn.layout, "%.5g"))
-                    addl_hover_info_fns['counts'] = (_mx_fn_from_elements_circuit_list, (objfn.counts, objfn.layout, "%d"))
+                    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes_circuit_list, (objfn.layout, '>11s'))
+                    addl_hover_info_fns['probs'] = (_mx_fn_from_elements_circuit_list, (objfn.probs, objfn.layout, "%11.4g"))
+                    addl_hover_info_fns['freqs'] = (_mx_fn_from_elements_circuit_list, (objfn.freqs, objfn.layout, "%11.4g"))
+                    addl_hover_info_fns['counts'] = (_mx_fn_from_elements_circuit_list, (objfn.counts, objfn.layout, "%11d"))
                 
             elif ptyp == "blank":
                 colormapType = "trivial"
@@ -2394,21 +2394,29 @@ def _outcome_to_str(x):  # same function as in writers.py
     else: return ":".join([str(i) for i in x])
 
 
-def _addl_mx_fn_outcomes(plaq, x, y, layout):
+def _addl_mx_fn_outcomes(plaq, x, y, extra):
+    layout = extra[0]
+    fmt_spec = extra[1]
     slmx = _np.empty((plaq.num_rows, plaq.num_cols), dtype=_np.object_)
     for i, j, opstr in plaq:
-        slmx[i, j] = ", ".join([_outcome_to_str(ol) for ol in layout.outcomes(opstr)])
+        if fmt_spec is not None:
+            slmx[i, j] = "".join([f'{_outcome_to_str(ol):{fmt_spec}}' for ol in layout.outcomes(opstr)])
+        else:
+            slmx[i, j] = "".join([_outcome_to_str(ol) for ol in layout.outcomes(opstr)])
     return slmx
 
 #modified version of the above function meant to work for CircuitList objects
-def _addl_mx_fn_outcomes_circuit_list(circuit_list, layout):
+def _addl_mx_fn_outcomes_circuit_list(circuit_list, extra):
+    layout = extra[0]
+    fmt_spec = extra[1]
     slmx = _np.empty(len(circuit_list), dtype=_np.object_)
     for i,ckt in enumerate(circuit_list):
-        slmx[i] = ", ".join([_outcome_to_str(ol) for ol in layout.outcomes(ckt)])
+        if fmt_spec is not None:
+            slmx[i] = ", ".join([f'{_outcome_to_str(ol):{fmt_spec}}' for ol in layout.outcomes(ckt)])
+        else:
+            slmx[i] = ", ".join([_outcome_to_str(ol) for ol in layout.outcomes(ckt)])
     return slmx
     
-    
-
 
 class GateMatrixPlot(WorkspacePlot):
     """
