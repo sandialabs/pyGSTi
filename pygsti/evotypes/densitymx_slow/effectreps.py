@@ -96,7 +96,7 @@ class EffectRepTensorProduct(EffectRep):
         self.factor_dims = factordims
         self.max_factor_dim = max_factor_dim  # Unused
         state_space = _StateSpace.cast(state_space)
-        assert(_np.product(factordims) == state_space.dim)
+        assert(_np.prod(factordims) == state_space.dim)
         super(EffectRepTensorProduct, self).__init__(state_space)
         self.factor_effects_have_changed()
 

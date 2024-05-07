@@ -21,7 +21,7 @@ import scipy.stats as _stats
 from pygsti import optimize as _opt
 from pygsti import tools as _tools
 from pygsti.models.explicitcalc import P_RANK_TOL
-from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.objectivefns.objectivefns import PoissonPicDeltaLogLFunction as _PoissonPicDeltaLogLFunction
@@ -54,7 +54,7 @@ from pygsti.objectivefns.objectivefns import FreqWeightedChi2Function as _FreqWe
 #
 
 
-class ConfidenceRegionFactory(_MongoSerializable):
+class ConfidenceRegionFactory(_NicelySerializable):
     """
     An object which is capable of generating confidence intervals/regions.
 
@@ -91,6 +91,7 @@ class ConfidenceRegionFactory(_MongoSerializable):
         whenver `hessian` is, and should be left as `None` when `hessian`
         is not specified.
     """
+    collection_name = "pygsti_confidence_region_factories"
 
     def __init__(self, parent, model_lbl, circuit_list_lbl,
                  hessian=None, non_mark_radius_sq=None):
@@ -123,6 +124,7 @@ class ConfidenceRegionFactory(_MongoSerializable):
             whenver `hessian` is, and should be left as `None` when `hessian`
             is not specified.
         """
+        super().__init__()
 
         #May be specified (together) whey hessian has already been computed
         assert(hessian is None or non_mark_radius_sq is not None), \
@@ -186,57 +188,72 @@ class ConfidenceRegionFactory(_MongoSerializable):
             ret.nGaugeParams = state['num_gauge_params']
         return ret
 
-    def _to_mongodb_serialization(self, mongodb):
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):
         #Serialize hessian matrices separately using GridFS
+        doc_id_str = str(doc['_id'])
         if self.hessian is not None:
-            import gridfs as _gridfs
             import pickle as _pickle
-            fs = _gridfs.GridFS(mongodb, collection='pygsti_gridfs')
-            hessian_id = str(fs.put(_pickle.dumps(self.hessian, protocol=2)))  # str(.) to serialize bson.ObjectId
-            inv_hessian_projection_ids = {k: str(fs.put(_pickle.dumps(v, protocol=2)))
-                                          for k, v in self.inv_hessian_projections.items()}
+            hessian_id = doc_id_str + "/hessian"
+            write_ops.add_gridfs_put_op('pygsti_gridfs', hessian_id,
+                                        _pickle.dumps(self.hessian, protocol=2),
+                                        overwrite_existing, mongodb)
+
+            inv_hessian_projection_ids = {}
+            for k, v in self.inv_hessian_projections.items():
+                inv_hessian_proj_id = doc_id_str + "/inv_hessian_projections/" + k
+                write_ops.add_gridfs_put_op('pygsti_gridfs', inv_hessian_proj_id,
+                                            _pickle.dumps(v, protocol=2), overwrite_existing, mongodb)
+                inv_hessian_projection_ids[k] = inv_hessian_proj_id
         else:
             hessian_id = None
             inv_hessian_projection_ids = {}
 
-        state = super()._to_mongodb_serialization(mongodb)
-        state.update({'model_label': self.model_lbl,
-                      'circuit_list_label': self.circuit_list_lbl,
-                      'nonmarkovian_radius_squared': self.nonMarkRadiusSq,
-                      'hessian_matrix_id': hessian_id,
-                      'hessian_projection_parameters': {k: v for k, v in self.hessian_projection_parameters.items()},
-                      'inverse_hessian_projection_ids': inv_hessian_projection_ids,
-                      'num_nongauge_params': int(self.nNonGaugeParams) if (self.nNonGaugeParams is not None) else None,
-                      'num_gauge_params': int(self.nGaugeParams) if (self.nGaugeParams is not None) else None,
-                      #Note: need int(.) casts above because int64 is *not* JSON serializable (?)
-                      #Note: we don't currently serialize self.linresponse_gstfit_params (!)
-                      })
-
-        return state
+        doc.update({'model_label': self.model_lbl,
+                    'circuit_list_label': self.circuit_list_lbl,
+                    'nonmarkovian_radius_squared': self.nonMarkRadiusSq,
+                    'hessian_matrix_id': hessian_id,
+                    'hessian_projection_parameters': {k: v for k, v in self.hessian_projection_parameters.items()},
+                    'inverse_hessian_projection_ids': inv_hessian_projection_ids,
+                    'num_nongauge_params': int(self.nNonGaugeParams) if (self.nNonGaugeParams is not None) else None,
+                    'num_gauge_params': int(self.nGaugeParams) if (self.nGaugeParams is not None) else None,
+                    #Note: need int(.) casts above because int64 is *not* JSON serializable (?)
+                    #Note: we don't currently serialize self.linresponse_gstfit_params (!)
+                    })
 
     @classmethod
-    def _from_mongodb_serialization(cls, state, mongodb):
-        if state['hessian_matrix_id'] is not None:
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb):
+        if doc['hessian_matrix_id'] is not None:
             import gridfs as _gridfs
             import pickle as _pickle
-            from bson import ObjectId as _ObjectId
             fs = _gridfs.GridFS(mongodb, collection='pygsti_gridfs')
-            hessian_mx = _pickle.loads(fs.get(_ObjectId(state['hessian_matrix_id'])).read())
-            inv_hessian_projections = {projection_lbl: _pickle.loads(fs.get(_ObjectId(projection_id)).read())
-                                       for projection_lbl, projection_id in state['inverse_hessian_projection_ids'].items()}
+            hessian_mx = _pickle.loads(fs.get(doc['hessian_matrix_id']).read())
+            inv_hessian_projections = {proj_lbl: _pickle.loads(fs.get(proj_id).read())
+                                       for proj_lbl, proj_id in doc['inverse_hessian_projection_ids'].items()}
         else:
             hessian_mx = None
             inv_hessian_projections = {}
 
-        ret = cls(None, state['model_label'], state['circuit_list_label'],
-                  hessian_mx, state['nonmarkovian_radius_squared'])
-        if 'hessian_projection_parameters' in state:
-            for projection_lbl, params in state['hessian_projection_parameters'].items():
+        ret = cls(None, doc['model_label'], doc['circuit_list_label'],
+                  hessian_mx, doc['nonmarkovian_radius_squared'])
+        if 'hessian_projection_parameters' in doc:
+            for projection_lbl, params in doc['hessian_projection_parameters'].items():
                 ret.hessian_projection_parameters[projection_lbl] = params  # (param dict is entirely JSON-able)
                 ret.inv_hessian_projections[projection_lbl] = inv_hessian_projections[projection_lbl]
-            ret.nNonGaugeParams = state['num_nongauge_params']
-            ret.nGaugeParams = state['num_gauge_params']
+            ret.nNonGaugeParams = doc['num_nongauge_params']
+            ret.nGaugeParams = doc['num_gauge_params']
         return ret
+
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        doc = mongodb[collection_name].find_one_and_delete({'_id': doc_id}, session=session)
+        if doc is not None:
+            if doc['hessian_matrix_id'] is not None:
+                import gridfs as _gridfs
+                import pickle as _pickle
+                fs = _gridfs.GridFS(mongodb, collection='pygsti_gridfs')
+                fs.delete(doc['hessian_matrix_id'], session=session)
+                for proj_id in doc['inverse_hessian_projection_ids'].values():
+                    fs.delete(proj_id, session=session)
 
     def set_parent(self, parent):
         """
@@ -281,7 +298,7 @@ class ConfidenceRegionFactory(_MongoSerializable):
         Checks whether this factory has enough information to construct 'views' of itself.
 
         `ConfidenceRegionFactoryView` view objects are created using the
-        :method:`view` method, which can in turn be used to construct
+        :meth:`view` method, which can in turn be used to construct
         confidence intervals.
 
         Returns
@@ -323,7 +340,7 @@ class ConfidenceRegionFactory(_MongoSerializable):
 
         approximate : bool, optional
             Whether to compute the true Hessian or just an approximation of it.
-            See :function:`logl_approximate_hessian`.  Setting to True can
+            See :func:`logl_approximate_hessian`.  Setting to True can
             significantly reduce the run time.
 
         Returns
@@ -414,7 +431,7 @@ class ConfidenceRegionFactory(_MongoSerializable):
         self.nonMarkRadiusSq = nonMarkRadiusSq
         return hessian
 
-    def project_hessian(self, projection_type, label=None, tol=1e-7, maxiter=10000):
+    def project_hessian(self, projection_type, label=None, tol=1e-7, maxiter=10000, verbosity=3):
         """
         Projects the Hessian onto the non-gauge space.
 
@@ -451,6 +468,9 @@ class ConfidenceRegionFactory(_MongoSerializable):
             Maximum iterations for optimal Hessian projection.  Only used when
             `projection_type == 'optimal gate CIs'`.
 
+        verbosity : int or VerbosityPrinter, optional
+            Controls amount of detail printed to stdout (higher = more detail).
+
         Returns
         -------
         numpy.ndarray
@@ -473,9 +493,9 @@ class ConfidenceRegionFactory(_MongoSerializable):
             projected_hessian = self._project_hessian(self.hessian, nongauge_space, gauge_space, self.jacobian)
         elif projection_type == 'optimal gate CIs':
             projected_hessian = self._opt_projection_for_operation_cis("L-BFGS-B", maxiter, maxiter,
-                                                                       tol, verbosity=3)  # verbosity for DEBUG
+                                                                       tol, verbosity=verbosity)
         elif projection_type == 'intrinsic error':
-            projected_hessian = self._opt_projection_from_split(verbosity=3)  # verbosity for DEBUG
+            projected_hessian = self._opt_projection_from_split(verbosity=verbosity)
         else:
             raise ValueError("Invalid value of projection_type argument: %s" % projection_type)
 
@@ -802,7 +822,7 @@ class ConfidenceRegionFactoryView(object):
         Creates a new ConfidenceRegionFactoryView.
 
         Usually this constructor is not called directly, and objects of
-        this type are obtained by calling the :method:`view` method of
+        this type are obtained by calling the :meth:`view` method of
         a `ConfidenceRegionFactory` object.
 
         Parameters

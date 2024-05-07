@@ -54,7 +54,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
     unique_circuits : list of Circuits
         The same as `circuits`, except duplicates are removed.  Often this value is obtained
-        by a derived class calling the class method :method:`_compute_unique_circuits`.
+        by a derived class calling the class method :meth:`_compute_unique_circuits`.
 
     to_unique : dict
         A mapping that translates an index into `circuits` to one into `unique_circuits`.
@@ -185,6 +185,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         # elindex_outcome_tuples : dict w/keys == indices into `unique_circuits` (which is why `unique_circuits`
         #                          is needed) and values == lists of (element_index, outcome) pairs.
 
+        super().__init__()
         self.circuits = circuits if isinstance(circuits, _CircuitList) else _CircuitList(circuits)
         if unique_circuits is None and to_unique is None:
             unique_circuits, to_unique = self._compute_unique_circuits(circuits)
@@ -323,7 +324,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
         memory_tracker : ResourceAllocation, optional
             If not None, the amount of memory being allocated is added, using
-            :method:`add_tracked_memory` to this resource allocation object.
+            :meth:`add_tracked_memory` to this resource allocation object.
 
         extra_elements : int, optional
             The number of additional "extra" elements to append to the element
@@ -362,10 +363,10 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
     def free_local_array(self, local_array):
         """
-        Frees an array allocated by :method:`allocate_local_array`.
+        Frees an array allocated by :meth:`allocate_local_array`.
 
         This method should always be paired with a call to
-        :method:`allocate_local_array`, since the allocated array
+        :meth:`allocate_local_array`, since the allocated array
         may utilize shared memory, which must be explicitly de-allocated.
 
         Parameters
@@ -382,11 +383,11 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
     def gather_local_array_base(self, array_type, array_portion, extra_elements=0,
                                 all_gather=False, return_shared=False):
         """
-        Gathers an array onto the root processor or all the processors..
+        Gathers an array onto the root processor or all the processors.
 
         Gathers the portions of an array that was distributed using this
         layout (i.e. according to the host_element_slice, etc. slices in
-        this layout).  This could be an array allocated by :method:`allocate_local_array`
+        this layout).  This could be an array allocated by :meth:`allocate_local_array`
         but need not be, as this routine does not require that `array_portion` be
         shared.  Arrays can be 1, 2, or 3-dimensional.  The dimensions
         are understood to be along the "element", "parameter", and
@@ -396,7 +397,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         ----------
         array_type : ("e", "ep", "ep2", "epp", "p", "jtj", "jtf", "c", "cp", "cp2", "cpp")
             The type of array to allocate, often corresponding to the array shape.  See
-            :method:`allocate_local_array` for a more detailed description.
+            :meth:`allocate_local_array` for a more detailed description.
 
         array_portion : numpy.ndarray
             The portion of the final array that is local to the calling
@@ -406,7 +407,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         extra_elements : int, optional
             The number of additional "extra" elements to append to the element
             dimension, beyond those called for by this layout.  Should match
-            usage in :method:`allocate_local_array`.
+            usage in :meth:`allocate_local_array`.
 
         all_gather : bool, optional
             Whether the result should be returned on all the processors (when `all_gather=True`)
@@ -417,7 +418,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
             in a small performance gain because the array used internally to gather the results
             can be returned directly. When `True` a shared memory handle is also returned, and
             the caller assumes responsibilty for freeing the memory via
-            :function:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
+            :func:`pygsti.tools.sharedmemtools.cleanup_shared_ndarray`.
 
         Returns
         -------
@@ -440,7 +441,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
         Gathers the portions of an array that was distributed using this
         layout (i.e. according to the host_element_slice, etc. slices in
-        this layout).  This could be an array allocated by :method:`allocate_local_array`
+        this layout).  This could be an array allocated by :meth:`allocate_local_array`
         but need not be, as this routine does not require that `array_portion` be
         shared.  Arrays can be 1, 2, or 3-dimensional.  The dimensions
         are understood to be along the "element", "parameter", and
@@ -456,7 +457,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         extra_elements : int, optional
             The number of additional "extra" elements to append to the element
             dimension, beyond those called for by this layout.  Should match
-            usage in :method:`allocate_local_array`.
+            usage in :meth:`allocate_local_array`.
 
         return_shared : bool, optional
             If `True` then, when shared memory is being used, the shared array used
@@ -482,7 +483,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
         Gathers the portions of an array that was distributed using this
         layout (i.e. according to the host_element_slice, etc. slices in
-        this layout).  This could be an array allocated by :method:`allocate_local_array`
+        this layout).  This could be an array allocated by :meth:`allocate_local_array`
         but need not be, as this routine does not require that `array_portion` be
         shared.  Arrays can be 1, 2, or 3-dimensional.  The dimensions
         are understood to be along the "element", "parameter", and
@@ -498,7 +499,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         extra_elements : int, optional
             The number of additional "extra" elements to append to the element
             dimension, beyond those called for by this layout.  Should match
-            usage in :method:`allocate_local_array`.
+            usage in :meth:`allocate_local_array`.
 
         return_shared : bool, optional
             If `True` then, when shared memory is being used, the shared array used
@@ -551,7 +552,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         Calculate the matrix-vector product `j.T @ f`.
 
         Here `j` is often a jacobian matrix, and `f` a vector of objective function term
-        values.  `j` and `f` must be local arrays, created with :method:`allocate_local_array`.
+        values.  `j` and `f` must be local arrays, created with :meth:`allocate_local_array`.
         This function performs any necessary MPI/shared-memory communication when the
         arrays are distributed over multiple processors.
 
@@ -610,7 +611,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         array_type : {'e', 'ep', 'epp'}
             The type of array.  This string specifies the shape of the array,
             with `'e'` indicating dimension holding the layout's elements and
-            `'p'`s indicating parameter dimensions.
+            `'p'` indicating parameter dimensions.
 
         dtype : numpy.dtype
             The NumPy data type for the array.
@@ -632,10 +633,10 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         The element indices corresponding to a circuit in this layout.
 
         This is a slice into the element-dimension of arrays allocated using this layout,
-        e.g. an `'e'`-type array allocated by :method:`allocate_local_array`.  The
+        e.g. an `'e'`-type array allocated by :meth:`allocate_local_array`.  The
         entries of such an array correspond to different outcomes of this circuit, which
-        are separately given by :method:`outcomes` or alongside the indices in
-        :method:`indices_and_outcomes`.
+        are separately given by :meth:`outcomes` or alongside the indices in
+        :meth:`indices_and_outcomes`.
 
         Parameters
         ----------
@@ -669,7 +670,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
         Returns both the element indices and outcome labels corresponding
         to a circuit in this layout.  These quantities can be separately obtained
-        using the :method:`indices` and :method:`outcomes` methods, respectively.
+        using the :meth:`indices` and :meth:`outcomes` methods, respectively.
 
         Parameters
         ----------
@@ -688,7 +689,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         """
         Lookup the element indices corresponding to a given circuit by the circuit's index.
 
-        Similar to :method:`indices` but uses a circuit's index within this layout directly,
+        Similar to :meth:`indices` but uses a circuit's index within this layout directly,
         thus avoiding having to hash a :class:`Circuit` object and gaining a modicum of
         performance.
 
@@ -707,7 +708,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         """
         Lookup the outcomes of a given circuit by the circuit's index.
 
-        Similar to :method:`outcomes` but uses a circuit's index within this layout directly,
+        Similar to :meth:`outcomes` but uses a circuit's index within this layout directly,
         thus avoiding having to hash a :class:`Circuit` object and gaining a modicum of
         performance.
 
@@ -726,7 +727,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         """
         Lookup the element indices and outcomes corresponding to a given circuit by the circuit's index.
 
-        Similar to :method:`indices_and_outcomes` but uses a circuit's index within this layout
+        Similar to :meth:`indices_and_outcomes` but uses a circuit's index within this layout
         directly, thus avoiding having to hash a :class:`Circuit` object and gaining a modicum of
         performance.
 
@@ -754,7 +755,7 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
 
         A generator used to iterate over a `(element_indices, circuit, outcomes)` tuple
         for each *unique* circuit held by this layout, where `element_indices` and `outcomes`
-        are the values that would be retrieved by the :method:`indices` and :method:`outcomes`
+        are the values that would be retrieved by the :meth:`indices` and :meth:`outcomes`
         methods, and `circuit` is the unique circuit itself.
 
         Returns

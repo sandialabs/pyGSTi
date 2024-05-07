@@ -66,9 +66,9 @@ class ProbTrajectory(object):
 
     def basisfunction(self, i, times):
         """
-        The ith basis function of the model, evaluated at the times in `times.
+        The ith basis function of the model, evaluated at the times in `times`.
 
-        *** Defined in a derived class ***
+        **Defined in a derived class**
 
         Parameters
         ----------
@@ -266,7 +266,7 @@ class CosineProbTrajectory(ProbTrajectory):
 
         numtimes : int
             The number of data collection times defining the DCT basis functions (defines the total number
-            of DCT basis functions: the hyperparameters list is then a subset of this [0,1,2,...,numtimes-1]).
+            of DCT basis functions: the hyperparameters list is then a subset of this `[0,1,2,...,numtimes-1]`).
             This is typically set to the number of data collection times for the circuit that this probability
             trajectory is being defined for.
 
@@ -402,7 +402,7 @@ def probsdict_negloglikelihood(probs, clickstreams, minp=0., maxp=1.):
 
 
 def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.999999, method='Nelder-Mead',
-                  return_opt_output=False, options={}, verbosity=1):
+                  return_opt_output=False, options=None, verbosity=1):
     """
     Implements maximum likelihood estimation over a model for a time-resolved probabilities trajectory,
     and returns the maximum likelihood model.
@@ -450,6 +450,8 @@ def maxlikelihood(probtrajectory, clickstreams, times, minp=0.0001, maxp=0.99999
         optout
             The output of the optimizer.
     """
+    if options is None:
+        options = dict()
     maxlprobtrajectory = probtrajectory.copy()
 
     def objfunc(parameterslist):

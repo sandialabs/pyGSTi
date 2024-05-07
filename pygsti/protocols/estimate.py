@@ -27,12 +27,13 @@ from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.baseobjs.mongoserializable import MongoSerializable as _MongoSerializable
 
 #Class for holding confidence region factory keys
 CRFkey = _collections.namedtuple('CRFkey', ['model', 'circuit_list'])
 
 
-class Estimate(object):
+class Estimate(_MongoSerializable):
     """
     A class encapsulating the `Model` objects related to a single GST estimate up-to-gauge freedoms.
 
@@ -53,6 +54,7 @@ class Estimate(object):
         A dictionary of parameters associated with how these models
         were obtained.
     """
+    collection_name = "pygsti_estimates"
 
     @classmethod
     def from_dir(cls, dirname, quick_load=False):
@@ -77,35 +79,18 @@ class Estimate(object):
         Protocol
         """
         ret = cls.__new__(cls)
+        _MongoSerializable.__init__(ret)
         ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         for crf in ret.confidence_region_factories.values():
             crf.set_parent(ret)  # re-link confidence_region_factories
         return ret
 
     @classmethod
-    def from_mongodb(cls, mongodb_collection, doc_id, quick_load=False):
-        """
-        Initialize a new Estimate object from a Mongo database.
-
-        Parameters
-        ----------
-        mongodb_collection : pymongo.collection.Collection
-            The MongoDB collection to load data from.
-
-        doc_id : str
-            The user-defined identifier of the protocol object to load.
-
-        quick_load : bool, optional
-            Setting this to True skips the loading of components that may take
-            a long time to load.
-
-        Returns
-        -------
-        Protocol
-        """
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
+        #def from_mongodb(cls, mongodb_collection, doc_id, ):
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.read_auxtree_from_mongodb(mongodb_collection, doc_id,
-                                                          'auxfile_types', quick_load=quick_load))
+        _MongoSerializable.__init__(ret, doc.get('_id', None))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
         for crf in ret.confidence_region_factories.values():
             crf.set_parent(ret)  # re-link confidence_region_factories
         return ret
@@ -168,6 +153,7 @@ class Estimate(object):
             A dictionary of parameters associated with how these models
             were obtained.
         """
+        super().__init__()
         self.parent = parent
         #self.parameters = _collections.OrderedDict()
         #self.goparameters = _collections.OrderedDict()
@@ -249,36 +235,14 @@ class Estimate(object):
         """
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
-    def write_to_mongodb(self, mongodb_collection, doc_id=None, session=None, overwrite_existing=False):
-        """
-        Write this Estimate to a MongoDB database.
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):
+        _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                     'auxfile_types', overwrite_existing=overwrite_existing)
 
-        Parameters
-        ----------
-        mongodb_collection : pymongo.collection.Collection
-            The MongoDB collection to write to.
-
-        doc_id : str, optional
-            The user-defined identifier of the Estimate to write.  Can be
-            left as `None` to generate a random identifier.
-
-        session : pymongo.client_session.ClientSession, optional
-            MongoDB session object to use when interacting with the MongoDB
-            database. This can be used to implement transactions
-            among other things.
-
-        overwrite_existing : bool, optional
-            Whether existing documents should be overwritten.  The default of `False` causes
-            a ValueError to be raised if a document with the given `doc_id` already exists.
-            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
-            to a path can be done regardless of whether it already exists.
-
-        Returns
-        -------
-        None
-        """
-        _io.write_obj_to_mongodb_auxtree(self, mongodb_collection, doc_id, 'auxfile_types',
-                                         session=session, overwrite_existing=overwrite_existing)
+    @classmethod
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
+        _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
+                                        recursive=recursive)
 
     @classmethod
     def remove_from_mongodb(cls, mongodb_collection, doc_id, session=None):
@@ -313,7 +277,10 @@ class Estimate(object):
         Model
         """
         goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
-        return goparams_list[0].get('model', self.models['final iteration estimate'])
+        if goparams_list:
+            return goparams_list[0].get('model', self.models['final iteration estimate'])
+        else:
+            return None
 
     def add_gaugeoptimized(self, goparams, model=None, label=None, comm=None, verbosity=None):
         """
@@ -367,8 +334,14 @@ class Estimate(object):
                 label = "go%d" % i; i += 1
                 if (label not in self._gaugeopt_suite.gaugeopt_argument_dicts) and \
                    (label not in self.models): break
-
-        goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
+        if hasattr(goparams, 'keys'):
+            goparams_list = [goparams]
+        elif goparams is None:
+            goparams_list = []
+            #since this will be empty much of the code/iteration below will
+            #be skipped.
+        else:
+            goparams_list = goparams
         ordered_goparams = []
         last_gs = None
 
@@ -386,11 +359,14 @@ class Estimate(object):
         printer = _VerbosityPrinter.create_printer(max_vb, printer_comm)
         printer.log("-- Adding Gauge Optimized (%s) --" % label)
 
-        for i, gop in enumerate(goparams_list):
-
-            if model is not None:
-                last_gs = model  # just use user-supplied result
-            else:
+        if model is not None:
+            last_gs = model  # just use user-supplied result
+            #sort the parameters by name for consistency
+            for gop in goparams_list:
+                ordered_goparams.append(_collections.OrderedDict(
+                    [(k, gop[k]) for k in sorted(list(gop.keys()))]))
+        else:
+            for i, gop in enumerate(goparams_list):
                 from ..algorithms import gaugeopt_to_target as _gaugeopt_to_target
                 default_model = default_target_model = False
                 gop = gop.copy()  # so we don't change the caller's dict
@@ -434,14 +410,20 @@ class Estimate(object):
                 if default_model: del gop['model']
                 if default_target_model: del gop['target_model']
 
-            #sort the parameters by name for consistency
-            ordered_goparams.append(_collections.OrderedDict(
-                [(k, gop[k]) for k in sorted(list(gop.keys()))]))
+                #sort the parameters by name for consistency
+                ordered_goparams.append(_collections.OrderedDict(
+                    [(k, gop[k]) for k in sorted(list(gop.keys()))]))
 
         assert(last_gs is not None)
         self.models[label] = last_gs
-        self._gaugeopt_suite.gaugeopt_argument_dicts[label] = ordered_goparams \
-            if len(goparams_list) > 1 else ordered_goparams[0]
+
+        if goparams_list: #only do this if goparams_list wasn't empty to begin with.
+            #which would be the case except for the special case where the label is 'none'.
+            self._gaugeopt_suite.gaugeopt_argument_dicts[label] = ordered_goparams \
+                if len(goparams_list) > 1 else ordered_goparams[0]
+        else:
+            self._gaugeopt_suite.gaugeopt_argument_dicts[label] = None
+
 
     def add_confidence_region_factory(self,
                                       model_label='final iteration estimate',
@@ -787,7 +769,7 @@ class Estimate(object):
             The resource allocation object used to create the MDC store underlying the objective function.
             This can just be left as `None` unless multiple processors are being utilized - and in this case
             the *cached* objective function doesn't even benefit from these processors (but calls to
-            :method:`final_objective_fn` will return an objective function setup for multiple processors).
+            :meth:`final_objective_fn` will return an objective function setup for multiple processors).
             Note that this argument is only used when there is no existing cached objective function and
             an underlying MDC store needs to be created.
 
@@ -937,6 +919,7 @@ class Estimate(object):
         #  comm objects (in their layouts)
         del to_pickle['_final_mdc_store']
         del to_pickle['_final_objfn']
+        del to_pickle['_final_objfn_cache']
 
         # don't pickle parent (will create circular reference)
         del to_pickle['parent']
@@ -955,6 +938,7 @@ class Estimate(object):
         # reset MDC objective function and store objects
         state_dict['_final_mdc_store'] = None
         state_dict['_final_objfn'] = None
+        state_dict['_final_objfn_cache'] = None
 
         self.__dict__.update(state_dict)
         for crf in self.confidence_region_factories.values():

@@ -90,7 +90,7 @@ class StdInputParser(object):
         """ Create a new standard-input parser object """
         pass
 
-    def parse_circuit(self, s, lookup={}, create_subcircuits=True):
+    def parse_circuit(self, s, lookup=None, create_subcircuits=True):
         """
         Parse a circuit from a string.
 
@@ -112,6 +112,8 @@ class StdInputParser(object):
         -------
         Circuit
         """
+        if lookup is None:
+            lookup = dict()
         circuit = None
         if self.use_global_parse_cache:
             circuit = _global_parse_cache[create_subcircuits].get(s, None)
@@ -132,7 +134,7 @@ class StdInputParser(object):
                 _global_parse_cache[create_subcircuits][s] = circuit
         return circuit
 
-    def parse_circuit_raw(self, s, lookup={}, create_subcircuits=True):
+    def parse_circuit_raw(self, s, lookup=None, create_subcircuits=True):
         """
         Parse a circuit's constituent pieces from a string.
 
@@ -168,6 +170,8 @@ class StdInputParser(object):
             is non-`None` only when there are explicit markers within the circuit string indicating
             the presence or absence of barriers.
         """
+        if lookup is None:
+            lookup = dict()
         self._circuit_parser.lookup = lookup
         circuit_tuple, circuit_labels, occurrence_id, compilable_indices = \
             self._circuit_parser.parse(s, create_subcircuits)
@@ -175,7 +179,7 @@ class StdInputParser(object):
         # print "DB: stack = ",self.exprStack
         return circuit_tuple, circuit_labels, occurrence_id, compilable_indices
 
-    def parse_dataline(self, s, lookup={}, expected_counts=-1, create_subcircuits=True,
+    def parse_dataline(self, s, lookup=None, expected_counts=-1, create_subcircuits=True,
                        line_labels=None):
         """
         Parse a data line (dataline in grammar)
@@ -207,6 +211,8 @@ class StdInputParser(object):
         """
 
         # get counts from end of s
+        if lookup is None:
+            lookup = {}
         parts = s.split()
         circuitStr = parts[0]
 
@@ -418,6 +424,7 @@ class StdInputParser(object):
         orig_cwd = _os.getcwd()
         outcomeLabels = None
         outcome_labels_specified_in_preamble = False
+        dbID = None
         if len(_os.path.dirname(filename)) > 0: _os.chdir(
             _os.path.dirname(filename))  # allow paths relative to datafile path
         try:
@@ -443,14 +450,28 @@ class StdInputParser(object):
                 outcomeLabels = [l.strip().split(':') for l in preamble_directives['Outcomes'].split(",")]
                 outcome_labels_specified_in_preamble = True
             if 'StdOutcomeQubits' in preamble_directives:
-                outcomeLabels = int(preamble_directives['Outcomes'])
+                outcomeLabels = int(preamble_directives['StdOutcomeQubits'])
                 outcome_labels_specified_in_preamble = True
+            if not outcome_labels_specified_in_preamble and 'Columns' in preamble_directives:
+                outcomeLabels = sorted(fixed_column_outcome_labels)
+                outcome_labels_specified_in_preamble = True
+            if 'DatabaseID' in preamble_directives:
+                try:
+                    from bson.objectid import ObjectId as _ObjectId
+                    dbID = _ObjectId(preamble_directives['DatabaseID'])
+                except ImportError:
+                    _warnings.warn("Could not import DataSet's database ID because `bson` package is missing.")
+                    dbID = None
+
         finally:
             _os.chdir(orig_cwd)
 
         #Read data lines of data file
         dataset = _DataSet(outcome_labels=outcomeLabels, collision_action=collision_action,
                            comment="\n".join(preamble_comments))
+
+        if dbID is not None:
+            dataset._dbcoordinates = (_DataSet.collection_name, dbID)
 
         if outcome_labels_specified_in_preamble and (fixed_column_outcome_labels is not None):
             fixed_column_outcome_indices = [dataset.olIndex[ol] for ol in fixed_column_outcome_labels]
@@ -549,11 +570,19 @@ class StdInputParser(object):
                                               if v != '--'])  # drop "empty" sentinels
                                     dataset.add_outcome_labels(outcome_labels, update_ol=False)
                                     outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
+
                             else:  # assume valueList is a list of (outcomeLabel, count) tuples -- see parse_dataline
                                 outcome_labels, count_values = zip(*valueList) if len(valueList) else ([], [])
                                 if not outcome_labels_specified_in_preamble:
                                     dataset.add_outcome_labels(outcome_labels, update_ol=False)
                                 outcome_indices = [dataset.olIndex[ol] for ol in outcome_labels]
+
+                            # When reading in time-independent data (all at a single time), order (sort)
+                            # the counts according to outcome index to make it easier to compare datarows.
+                            assert len(set(outcome_indices)) == len(outcome_indices), "Duplicate fixed column!"
+                            if len(outcome_indices) > 0:  # sort count values by outcome index unless there aren't any
+                                outcome_indices, count_values = zip(*sorted(zip(outcome_indices, count_values)))
+
                             oliArray = _np.array(outcome_indices, dataset.oliType)
                             countArray = _np.array(count_values, dataset.repType)
 

@@ -15,7 +15,6 @@ import numpy as _np
 
 from pygsti.baseobjs import _compatibility as _compat
 
-
 class ProtectedArray(object):
     """
     A numpy ndarray-like class that allows certain elements to be treated as read-only.
@@ -25,39 +24,63 @@ class ProtectedArray(object):
     input_array : numpy.ndarray
         The base array.
 
-    indices_to_protect : tuple or list, optional
-        A list or tuple of length `input_array.shape`, specifying
+    indices_to_protect : int or list of tuples, optional
+        A list of length `input_array.shape`, specifying
         the indices to protect along each axis.  Values may be
         integers, slices, or lists of integers,
         e.g. `(0, slice(None, None, None))`.
+        Also supported are iterables over tuples/lists, each
+        of length `input_array.shape`, specifying
+        the indices to protect along each axis.
+
+    protected_index_mask : numpy.ndarray, optional
+        An optional array with the same shape as `input_array` which if
+        specified is used to initialize the mask for protected indices
+        used by this array. Note that is specified the value overrides
+        any specification given in indices_to_protect, meaning that argument
+        is ignored.
     """
 
-    def __init__(self, input_array, indices_to_protect=None):
+    def __init__(self, input_array, indices_to_protect=None, protected_index_mask= None):
         self.base = input_array
 
-        #Get protected indices, a specified as:
-        self.indicesToProtect = []
-        if indices_to_protect is not None:
-            if not isinstance(indices_to_protect, (list, tuple)):
-                indices_to_protect = (indices_to_protect,)
+        if protected_index_mask is not None:
+            #check this has the correct shape
+            assert protected_index_mask.shape == input_array.shape
+            
+            #Cast this to a binary dtype (to save space since we only
+            #need boolean values).
+            self.protected_index_mask = protected_index_mask.astype(_np.bool_)
 
-            assert(len(indices_to_protect) <= len(self.base.shape))
-            for ky, L in zip(indices_to_protect, self.base.shape):
-                if isinstance(ky, slice):
-                    pindices = range(*ky.indices(L))
-                elif _compat.isint(ky):
-                    i = ky + L if ky < 0 else ky
-                    if i < 0 or i > L:
-                        raise IndexError("index (%d) is out of range." % ky)
-                    pindices = (i,)
-                elif isinstance(ky, list):
-                    pindices = ky
-                else: raise TypeError("Invalid index type: %s" % type(ky))
-                self.indicesToProtect.append(pindices)
+        #otherwise use the value passed into indices to protect to construct
+        #a mask.
+        #add in support for multiple sets of indices to protect
+        #by allowing a nested iterable format. Do this by forcing
+        #everything into this format and then looping over the nested
+        #submembers.
+        elif indices_to_protect is not None:
+            if isinstance(indices_to_protect, int):
+                indices_to_protect= [(indices_to_protect,)]
+            #if this is a list go through and wrap any integers
+            #at the top level in a tuple.
+            elif isinstance(indices_to_protect, (list, tuple)):
+                #check whether this is a single-level tuple/list corresponding
+                #containing only ints and/or slices. If so wrap this in a list.
+                if all([isinstance(idx, (int, slice)) for idx in indices_to_protect]):
+                    indices_to_protect = [indices_to_protect]
+                
+                #add some logic for mixing of unwrapped top-level ints and tuples/lists.
+                indices_to_protect = [tuple(indices) if isinstance(indices, (list, tuple)) else (indices,) for indices in indices_to_protect]
+            #initialize an empty mask
+            self.protected_index_mask = _np.zeros(input_array.shape , dtype= _np.bool_)
 
-        if len(self.indicesToProtect) == 0:
-            self.indicesToProtect = None
-
+            #now loop over the nested subelements and add them to the mask:
+            for indices in indices_to_protect:
+                assert(len(indices) <= len(self.base.shape))
+                self.protected_index_mask[indices]=1
+        #otherwise set the mask to all zeros.
+        else:
+            self.protected_index_mask = _np.zeros(input_array.shape , dtype= _np.bool_)
         #Note: no need to set self.base.flags.writeable = True anymore,
         # since this flag can only apply to a data owner as of numpy 1.16 or so.
         # Instead, we just copy the data whenever we return a readonly array.
@@ -102,7 +125,7 @@ class ProtectedArray(object):
         self.__dict__.update(state)
 
     #Access to underlying ndarray
-
+        
     def __getattr__(self, attr):
         # set references to our memory as (entirely) read-only
         ret = getattr(self.__dict__['base'], attr)
@@ -116,115 +139,32 @@ class ProtectedArray(object):
         return self.__getitem__(slice(i, j))
 
     def __getitem__(self, key):
+        #Use key to extract subarray of self.base and self.protected_index_mask
+        ret = self.base[key]
+        new_protected_mask = self.protected_index_mask[key]
 
-        writeable = True
-
-        #check if key matches/overlaps protected region
-        if self.indicesToProtect is not None:
-            new_indicesToProtect = []; nUnprotectedIndices = 0
-            tup_key = key if isinstance(key, tuple) else (key,)
-
-            while len(tup_key) < len(self.base.shape):
-                tup_key = tup_key + (slice(None, None, None),)
-
-            for ky, pindices, L in zip(tup_key, self.indicesToProtect, self.base.shape):
-
-                #Get requested indices
-                if isinstance(ky, slice):
-                    indices = range(*ky.indices(L))
-
-                    new_pindices = []
-                    for ii, i in enumerate(indices):
-                        if i in pindices:
-                            new_pindices.append(ii)  # index of i within indices
-                    new_pindices = sorted(list(set(new_pindices)))
-                    new_indicesToProtect.append(new_pindices)
-
-                    #tally how many indices in this dimension are unprotected
-                    nTotalInDim = len(indices)
-                    nUnprotectedInCurDim = (len(indices) - len(new_pindices))
-
-                elif _compat.isint(ky):
-                    i = ky + L if ky < 0 else ky
-                    if i > L:
-                        raise IndexError("The index (%d) is out of range." % ky)
-
-                    nTotalInDim = 1
-                    if i not in pindices:  # single index that is unprotected => all unprotected
-                        nUnprotectedInCurDim = 1  # a single unprotected index
-                    else:
-                        nUnprotectedInCurDim = 0
-
-                else: raise TypeError("Invalid index type: %s" % type(ky))
-
-                nUnprotectedIndices += nUnprotectedInCurDim
-
-                #if there exists a single dimension with no protected indices, then
-                # the whole array is writeable.
-                if nTotalInDim == nUnprotectedInCurDim:
-                    writeable = True
-                    new_indicesToProtect = None
-                    break
-
-            else:
-                # if we didn't break b/c of above block, which means each dim has
-                # at least one protected index
-
-                #if there are no unprotected indices, then just set writeable == False
-                if nUnprotectedIndices == 0:
-                    writeable = False
-                    new_indicesToProtect = None
-                else:
-                    #There is at least one writeable (unprotected) index in some dimension
-                    # and at least one protected index in *every* dimension. We need to
-                    # set indicesToProtect to describe what to protect
-                    assert(len(new_indicesToProtect) > 0)  # b/c otherwise another case would hold
-                    writeable = True
-                    new_indicesToProtect = tuple(new_indicesToProtect)
-
-        else:  # (if nothing is protected)
-            writeable = True
-            new_indicesToProtect = None
-
-        ret = _np.ndarray.__getitem__(self.base, key)
-
+        #If ret is not a scalar return a new ProtectedArray corresponding to the
+        #selected subarray with the set of protected indices inherited over from the
+        #original.
         if not _np.isscalar(ret):
-            if writeable:  # then some of the indices are writeable
-                ret = ProtectedArray(ret)
-                ret.indicesToProtect = new_indicesToProtect
-            else:
+            if not _np.all(new_protected_mask):  # then some of the indices are writeable
+                ret = ProtectedArray(ret, protected_index_mask= new_protected_mask)
+            else: #otherwise all of the values are masked off.
                 ret = _np.require(ret.copy(), requirements=['OWNDATA'])  # copy to a new read-only array
                 ret.flags.writeable = False  # a read-only array
-                ret = ProtectedArray(ret)  # return a ProtectedArray that is read-only
-
-            #print "   writeable = ",ret.flags.writeable
-            #print "   new_toProtect = ",ret.indicesToProtect
-            #print "<< END getitem"
+                ret = ProtectedArray(ret, protected_index_mask=new_protected_mask)  # return a ProtectedArray that is read-only
         return ret
 
     def __setitem__(self, key, val):
-        #print "In setitem with key = ", key, "val = ",val
-
-        protectionViolation = []  # per dimension
-        if self.indicesToProtect is not None:
-            tup_key = key if isinstance(key, tuple) else (key,)
-            for ky, pindices, L in zip(tup_key, self.indicesToProtect, self.base.shape):
-
-                #Get requested indices
-                if isinstance(ky, slice):
-                    indices = range(*ky.indices(L))
-                    if any(i in pindices for i in indices):
-                        protectionViolation.append(True)
-                    else: protectionViolation.append(False)
-
-                elif _compat.isint(ky):
-                    i = ky + L if ky < 0 else ky
-                    if i > L:
-                        raise IndexError("The index (%d) is out of range." % ky)
-                    protectionViolation.append(i in pindices)
-
-                else: raise TypeError("Invalid index type: %s" % type(ky))
-
-            if all(protectionViolation):  # assigns to a protected index in each dim
-                raise ValueError("**assignment destination is read-only")
+                #check if any of the indices in key have been masked off.
+        if _np.any(self.protected_index_mask[key]):  # assigns to a protected index in each dim
+            raise ValueError("**some or all of assignment destination is read-only")
+        #not sure what the original logic was for this return statement, but I don't see any
+        #harm in keeping it.
         return self.base.__setitem__(key, val)
+
+    #add a repr method that prints the base array, which is typically what
+    #we want.
+    def __repr__(self):
+        return _np.array2string(self.base)
+        

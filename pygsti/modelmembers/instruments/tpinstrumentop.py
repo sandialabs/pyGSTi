@@ -30,7 +30,7 @@ class TPInstrumentOp(_DenseOperator):
     param_ops : list of LinearOperator objects
         A list of the underlying operation objects which constitute a simple
         parameterization of a :class:`TPInstrument`.  Namely, this is
-        the list of [MT,D1,D2,...Dn] operations which parameterize *all* of the
+        the list of `[MT,D1,D2,...Dn]` operations which parameterize *all* of the
         `TPInstrument`'s elements.
 
     index : int
@@ -86,7 +86,7 @@ class TPInstrumentOp(_DenseOperator):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)

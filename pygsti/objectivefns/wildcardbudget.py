@@ -27,11 +27,11 @@ class WildcardBudget(_NicelySerializable):
     an amount "slack" in its outcomes probabilities.  The way in which this
     slack is computed - or "distributed", though it need not necessarily sum to
     a fixed total - per circuit depends on each derived class's implementation
-    of the :method:`circuit_budget` method.  Goodness-of-fit quantities such as
+    of the :meth:`circuit_budget` method.  Goodness-of-fit quantities such as
     the log-likelihood or chi2 can utilize a `WildcardBudget` object to compute
     a value that shifts the circuit outcome probabilities within their allowed
     slack (so `|p_used - p_actual| <= slack`) to achieve the best goodness of
-    fit.  For example, see the `wildcard` argument of :function:`two_delta_logl_terms`.
+    fit.  For example, see the `wildcard` argument of :func:`two_delta_logl_terms`.
 
     This is a base class, which must be inherited from in order to obtain a
     full functional wildcard budge (the `circuit_budget` method must be
@@ -54,6 +54,7 @@ class WildcardBudget(_NicelySerializable):
             which can be varied when trying to find an optimal budget (similar
             to the parameters of a :class:`Model`).
         """
+        super().__init__()
         self.wildcard_vector = w_vec
 
     def to_vector(self):
@@ -118,7 +119,7 @@ class WildcardBudget(_NicelySerializable):
 
         precomp : numpy.ndarray, optional
             A precomputed quantity that speeds up the computation of circuit
-            budgets.  Given by :method:`precompute_for_same_circuits`.
+            budgets.  Given by :meth:`precompute_for_same_circuits`.
 
         Returns
         -------
@@ -302,7 +303,7 @@ class WildcardBudget(_NicelySerializable):
         probs_freqs_precomp : list, optional
             A precomputed list of quantities re-used when calling `update_probs`
             using the same `probs_in`, `freqs`, and `layout`.  Generate by calling
-            :method:`precompute_for_same_probs_freqs`.
+            :meth:`precompute_for_same_probs_freqs`.
 
         return_deriv : bool, optional
             When True, returns the derivative of each updated probability with
@@ -616,7 +617,7 @@ class PrimitiveOpsWildcardBudgetBase(WildcardBudget):
 
         precomp : numpy.ndarray, optional
             A precomputed quantity that speeds up the computation of circuit
-            budgets.  Given by :method:`precompute_for_same_circuits`.
+            budgets.  Given by :meth:`precompute_for_same_circuits`.
 
         Returns
         -------
@@ -832,7 +833,7 @@ def _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min_qvec, circ=None, to
     return qvec, W
 
 
-def update_circuit_probs(probs, freqs, circuit_budget):
+def update_circuit_probs(probs, freqs, circuit_budget, circuit=None):
     qvec = probs
     fvec = freqs
     W = circuit_budget
@@ -844,7 +845,7 @@ def update_circuit_probs(probs, freqs, circuit_budget):
     if initialTVD <= W + tol:  # TVD is already "in-budget" for this circuit - can adjust to fvec exactly
         return fvec
 
-    qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min(qvec), base_tol)
+    qvec, W = _adjust_qvec_to_be_nonnegative_and_unit_sum(qvec, W, min(qvec), circuit, base_tol)
 
     initialTVD = 0.5 * sum(_np.abs(qvec - fvec))  # update current TVD
     if initialTVD <= W + tol:  # TVD is "in-budget" for this circuit due to adjustment; leave as is

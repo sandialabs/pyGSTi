@@ -170,7 +170,7 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
     @classmethod
     def create_from(cls, objective='logl', freq_weighted_chi2=False):
         """
-        Creates common :class:`ObjectiveFunctionBuilder`s from a few arguments.
+        Creates common :class:`ObjectiveFunctionBuilder` from a few arguments.
 
         Parameters
         ----------
@@ -216,6 +216,7 @@ class ObjectiveFunctionBuilder(_NicelySerializable):
         return builder
 
     def __init__(self, cls_to_build, name=None, description=None, regularization=None, penalties=None, **kwargs):
+        super().__init__()
         self.name = name if (name is not None) else cls_to_build.__name__
         self.description = description if (description is not None) else "_objfn"  # "Sum of Chi^2" OR "2*Delta(log(L))"
         self.cls_to_build = cls_to_build
@@ -523,7 +524,7 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -636,8 +637,8 @@ class RawObjectiveFunction(ObjectiveFunction):
         """
         Compute the derivatives of the least-squares vector together with the vector itself.
 
-        This is sometimes more computationally efficient than calling :method:`dlsvec` and
-        :method:`lsvec` separately, as the former call may require computing the latter.
+        This is sometimes more computationally efficient than calling :meth:`dlsvec` and
+        :meth:`lsvec` separately, as the former call may require computing the latter.
 
         Parameters
         ----------
@@ -858,8 +859,8 @@ class ModelDatasetCircuitsStore(object):
         # probabilities (and other results) are stored in arrays - this makes sense
         # because it understands how to make this layout amenable to fast computation.
         if precomp_layout is None:
-            self.layout = model.sim.create_layout(bulk_circuit_list, dataset, self.resource_alloc,
-                                                  array_types, verbosity=verbosity)  # a CircuitProbabilityArrayLayout
+            self.layout = model.sim.create_layout(bulk_circuit_list, dataset, self.resource_alloc, array_types,
+                                                  derivative_dimensions=None, verbosity=verbosity)  # a CircuitProbabilityArrayLayout
         else:
             self.layout = precomp_layout
         self.array_types = array_types
@@ -1128,7 +1129,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -1305,7 +1306,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
     def dlsvec_percircuit(self, paramvec=None):
         """
-        Compute the jacobian of the sqrt(per-circuit) values given by :method:`lsvec_percircuit`.
+        Compute the jacobian of the sqrt(per-circuit) values given by :meth:`lsvec_percircuit`.
 
         This jacobian is primarily useful for interfacing with a least-squares optimizer.
 
@@ -1334,7 +1335,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
 
         When the objective function's layout is distributed, each processor only holds a
         portion of the objective function terms, and this function returns only the
-        sum of these local terms.  See :method:`fn` for the global objective function value.
+        sum of these local terms.  See :meth:`fn` for the global objective function value.
 
 
         Parameters
@@ -1415,7 +1416,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
         """
         Compute an approximate Hessian of this objective function.
 
-        This is typically much less expensive than :method:`hessian` and
+        This is typically much less expensive than :meth:`hessian` and
         does not require that `enable_hessian=True` was set upon initialization.
         It computes an approximation to the Hessian that only utilizes the
         information in the Jacobian. Derivatives are takes with respect to model
@@ -1442,7 +1443,7 @@ class MDCObjectiveFunction(ObjectiveFunction, EvaluatedModelDatasetCircuitsStore
     #    Compute the amount of memory needed to perform evaluations of this objective function.
     #
     #    This number includes both intermediate and final results, and assumes
-    #    that the types of evauations given by :method:`_evaltree_subcalls`
+    #    that the types of evauations given by :meth:`_evaltree_subcalls`
     #    are required.
     #
     #    Parameters
@@ -1758,7 +1759,7 @@ class RawChi2Function(RawObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -1865,7 +1866,7 @@ class RawChi2Function(RawObjectiveFunction):
         """
         Alternate computation of the 2nd derivatives of the terms of this objective function.
 
-        This should give exactly the same results as :method:`hterms`, but may be a little faster.
+        This should give exactly the same results as :meth:`hterms`, but may be a little faster.
 
         Parameters
         ----------
@@ -2013,7 +2014,7 @@ class RawChi2Function(RawObjectiveFunction):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`_weights`.
+            The weights, as computed by :meth:`_weights`.
 
         Returns
         -------
@@ -2038,7 +2039,7 @@ class RawChi2Function(RawObjectiveFunction):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`_weights`.
+            The weights, as computed by :meth:`_weights`.
 
         Returns
         -------
@@ -2434,7 +2435,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`_weights`.
+            The weights, as computed by :meth:`_weights`.
 
         Returns
         -------
@@ -2455,7 +2456,7 @@ class RawFreqWeightedChi2Function(RawChi2Function):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`_weights`.
+            The weights, as computed by :meth:`_weights`.
 
         Returns
         -------
@@ -2616,7 +2617,7 @@ class RawCustomWeightedChi2Function(RawChi2Function):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`_weights`.
+            The weights, as computed by :meth:`_weights`.
 
         Returns
         -------
@@ -2637,7 +2638,7 @@ class RawCustomWeightedChi2Function(RawChi2Function):
             The frequencies
 
         wts : numpy.ndarray
-            The weights, as computed by :method:`_weights`.
+            The weights, as computed by :meth:`_weights`.
 
         Returns
         -------
@@ -2881,7 +2882,7 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
             self.fmin = None
 
     def _intermediates(self, probs, counts, total_counts, freqs):
-        """ Intermediate values used by both terms(...) and dterms(...) """
+        """ Intermediate values used by both `terms(...)` and `dterms(...)` """
         # Quantities depending on data only (not probs): could be computed once and
         # passed in as arguments to this (and other) functions?
         freqs_nozeros = _np.where(counts == 0, 1.0, freqs)
@@ -2985,7 +2986,7 @@ class RawPoissonPicDeltaLogLFunction(RawObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -3239,7 +3240,7 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
             self.regtype = "pfratio"
 
     def _intermediates(self, probs, counts, total_counts, freqs):
-        """ Intermediate values used by both terms(...) and dterms(...) """
+        """ Intermediate values used by both `terms(...)` and `dterms(...)` """
         # Quantities depending on data only (not probs): could be computed once and
         # passed in as arguments to this (and other) functions?
         freqs_nozeros = _np.where(counts == 0, 1.0, freqs)
@@ -3416,7 +3417,7 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -3485,8 +3486,8 @@ class RawDeltaLogLFunction(RawObjectiveFunction):
         """
         Compute the derivatives of the least-squares vector together with the vector itself.
 
-        This is sometimes more computationally efficient than calling :method:`dlsvec` and
-        :method:`lsvec` separately, as the former call may require computing the latter.
+        This is sometimes more computationally efficient than calling :meth:`dlsvec` and
+        :meth:`lsvec` separately, as the former call may require computing the latter.
 
         Parameters
         ----------
@@ -3760,7 +3761,7 @@ class RawMaxLogLFunction(RawObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -3829,8 +3830,8 @@ class RawMaxLogLFunction(RawObjectiveFunction):
         """
         Compute the derivatives of the least-squares vector together with the vector itself.
 
-        This is sometimes more computationally efficient than calling :method:`dlsvec` and
-        :method:`lsvec` separately, as the former call may require computing the latter.
+        This is sometimes more computationally efficient than calling :meth:`dlsvec` and
+        :meth:`lsvec` separately, as the former call may require computing the latter.
 
         Parameters
         ----------
@@ -4560,7 +4561,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         -------
         numpy.ndarray
         """
-        omitted_probs = 1.0 - _np.array([_np.sum(probs[self.layout.indices_for_index(i)])
+        omitted_probs = 1.0 - _np.array([probs[self.layout.indices_for_index(i)].sum()
                                          for i in self.indicesOfCircuitsWithOmittedData])
         return self.raw_objfn.zero_freq_terms(self.total_counts[self.firsts], omitted_probs)
 
@@ -4608,12 +4609,12 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
 
     def _omitted_prob_first_dterms(self, probs):
         """
-        Compute the derivative of the first-terms vector returned by :method:`_omitted_prob_first_terms`.
+        Compute the derivative of the first-terms vector returned by :meth:`_omitted_prob_first_terms`.
 
         This derivative is just with respect to the *probabilities*, not the
         model parameters, as it anticipates a final dot product with the jacobian
         of the computed probabilities with respect to the model parameters (see
-        :method:`_update_dterms_for_omitted_probs`).
+        :meth:`_update_dterms_for_omitted_probs`).
 
         Parameters
         ----------
@@ -4730,7 +4731,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -5055,7 +5056,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         """
         Compute an approximate Hessian of this objective function.
 
-        This is typically much less expensive than :method:`hessian` and
+        This is typically much less expensive than :meth:`hessian` and
         does not require that `enable_hessian=True` was set upon initialization.
         It computes an approximation to the Hessian that only utilizes the
         information in the Jacobian. Derivatives are takes with respect to model
@@ -5777,7 +5778,7 @@ class TimeDependentMDCObjectiveFunction(MDCObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -5916,7 +5917,7 @@ class TimeDependentChi2Function(TimeDependentMDCObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -6084,7 +6085,7 @@ class TimeDependentPoissonPicLogLFunction(TimeDependentMDCObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -6537,7 +6538,7 @@ class LogLWildcardFunction(ObjectiveFunction):
         """
         Compute the least-squares vector of the objective function.
 
-        This is the square-root of the terms-vector returned from :method:`terms`.
+        This is the square-root of the terms-vector returned from :meth:`terms`.
         This vector is the objective function value used by a least-squares
         optimizer when optimizing this objective function.  Note that the existence
         of this quantity requires that the terms be non-negative.  If this is not
@@ -6598,6 +6599,7 @@ class CachedObjectiveFunction(_NicelySerializable):
 
     The cache may only have values on the rank-0 proc (??)
     """
+    collection_name = "pygsti_cached_objective_fns"
 
     @classmethod
     def from_dir(cls, dirname, quick_load=False):
@@ -6623,38 +6625,20 @@ class CachedObjectiveFunction(_NicelySerializable):
         """
         import pygsti.io as _io
         ret = cls.__new__(cls)
+        _NicelySerializable.__init__(ret)
         ret.__dict__.update(_io.load_meta_based_dir(_pathlib.Path(dirname), 'auxfile_types', quick_load=quick_load))
         return ret
 
     @classmethod
-    def from_mongodb(cls, mongodb_collection, doc_id, quick_load=False):
-        """
-        Initialize a new CachedObjectiveFunction object from a Mongo database.
-
-        Parameters
-        ----------
-        mongodb_collection : pymongo.collection.Collection
-            The MongoDB collection to load data from.
-
-        doc_id : str
-            The user-defined identifier of the protocol object to load.
-
-        quick_load : bool, optional
-            Setting this to True skips the loading of components that may take
-            a long time to load.
-
-        Returns
-        -------
-        Protocol
-        """
+    def _create_obj_from_doc_and_mongodb(cls, doc, mongodb, quick_load=False):
         import pygsti.io as _io
         ret = cls.__new__(cls)
-        ret.__dict__.update(_io.read_auxtree_from_mongodb(mongodb_collection, doc_id,
-                                                          'auxfile_types', quick_load=quick_load))
+        _NicelySerializable.__init__(ret, doc.get('_id', None))
+        ret.__dict__.update(_io.read_auxtree_from_mongodb_doc(mongodb, doc, 'auxfile_types', quick_load=quick_load))
         return ret
 
     def __init__(self, objective_function):
-
+        super().__init__()
         self.layout = objective_function.layout.global_layout
         self.model_paramvec = objective_function.model.to_vector().copy()
 
@@ -6715,52 +6699,16 @@ class CachedObjectiveFunction(_NicelySerializable):
         import pygsti.io as _io
         _io.write_obj_to_meta_based_dir(self, dirname, 'auxfile_types')
 
-    def write_to_mongodb(self, mongodb_collection, doc_id=None, session=None, overwrite_existing=False):
-        """
-        Write this CachedObjectiveFunction to a MongoDB database.
-
-        Parameters
-        ----------
-        mongodb_collection : pymongo.collection.Collection
-            The MongoDB collection to write to.
-
-        doc_id : str, optional
-            The user-defined identifier of the Estimate to write.  Can be
-            left as `None` to generate a random identifier.
-
-        session : pymongo.client_session.ClientSession, optional
-            MongoDB session object to use when interacting with the MongoDB
-            database. This can be used to implement transactions
-            among other things.
-
-        overwrite_existing : bool, optional
-            Whether existing documents should be overwritten.  The default of `False` causes
-            a ValueError to be raised if a document with the given `doc_id` already exists.
-            Setting this to `True` mimics the behaviour of a typical filesystem, where writing
-            to a path can be done regardless of whether it already exists.
-
-        Returns
-        -------
-        None
-        """
+    def _add_auxiliary_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name, overwrite_existing):
         import pygsti.io as _io
-        _io.write_obj_to_mongodb_auxtree(self, mongodb_collection, doc_id, 'auxfile_types',
-                                         session=session, overwrite_existing=overwrite_existing)
+        _io.add_obj_auxtree_write_ops_and_update_doc(self, doc, write_ops, mongodb, collection_name,
+                                                     'auxfile_types', overwrite_existing=overwrite_existing)
 
     @classmethod
-    def remove_from_mongodb(cls, mongodb_collection, doc_id, session=None):
-        """
-        Remove a CachedObjectiveFunction from a MongoDB database.
-
-        Returns
-        -------
-        bool
-            `True` if the specified experiment design was removed, `False` if it didn't exist.
-        """
+    def _remove_from_mongodb(cls, mongodb, collection_name, doc_id, session, recursive):
         import pygsti.io as _io
-        delcnt = _io.remove_auxtree_from_mongodb(mongodb_collection, doc_id, 'auxfile_types',
-                                                 session=session)
-        return bool(delcnt is not None and delcnt.deleted_count == 1)
+        _io.remove_auxtree_from_mongodb(mongodb, collection_name, doc_id, 'auxfile_types', session,
+                                        recursive=recursive)
 
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()

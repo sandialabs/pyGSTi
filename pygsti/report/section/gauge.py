@@ -112,7 +112,10 @@ class GaugeInvariantsGatesSection(_Section):
 
     @_Section.figure_factory(4)
     def gram_bar_plot(workspace, switchboard=None, **kwargs):
-        return workspace.GramMatrixBarPlot(switchboard.ds, switchboard.mdl_target, 10, switchboard.fiducials_tup)
+        try:
+            return workspace.GramMatrixBarPlot(switchboard.ds, switchboard.mdl_target, 10, switchboard.fiducials_tup)
+        except KeyError:  # when we don't have LGST data, just ignore plot
+            return workspace.BlankTable()
 
 
 class GaugeInvariantsGermsSection(_Section):

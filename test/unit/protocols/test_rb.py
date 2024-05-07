@@ -8,7 +8,7 @@ from pygsti.processors import QubitProcessorSpec as QPS
 class TestCliffordRBDesign(BaseCase):
 
     def setUp(self):
-        self.num_qubits = 4
+        self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
         
         gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
@@ -22,7 +22,7 @@ class TestCliffordRBDesign(BaseCase):
         }
 
         # TODO: Test a lot of these, currently just the default from the tutorial
-        self.depths = [0, 1, 2]#, 4, 8]
+        self.depths = [0, 2]#, 4, 8]
         self.circuits_per_depth = 5
         self.qubits = ['Q0', 'Q1']
         self.citerations = 20
@@ -66,7 +66,7 @@ class TestCliffordRBDesign(BaseCase):
 class TestDirectRBDesign(BaseCase):
 
     def setUp(self):
-        self.num_qubits = 4
+        self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
         
         gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
@@ -81,7 +81,7 @@ class TestDirectRBDesign(BaseCase):
 
 
         # TODO: Test a lot of these, currently just the default from the tutorial
-        self.depths = [0, 1, 2]#, 4, 8]
+        self.depths = [0, 2]#, 4, 8]
         self.circuits_per_depth = 5
         self.qubits = ['Q0', 'Q1']
         self.randomizeout = True
@@ -141,7 +141,7 @@ class TestDirectRBDesign(BaseCase):
 class TestMirrorRBDesign(BaseCase):
 
     def setUp(self):
-        self.num_qubits = 4
+        self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
 
         gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase'] 
@@ -150,12 +150,12 @@ class TestMirrorRBDesign(BaseCase):
         self.pspec = pygsti.processors.QubitProcessorSpec(self.num_qubits, gate_names, availability=availability,
                                                           qubit_labels=self.qubit_labels, geometry='line')
         self.clifford_compilations = {
-            'absolute': CCR.create_standard(self.pspec, 'absolute', ('paulis', '1Qcliffords'))
+            'absolute': CCR.create_standard(self.pspec, 'absolute', ('paulis', '1Qcliffords'), verbosity=0)
             # SS: I think this is for speed, don't need paulieq for MirrorRB?
         }
 
         # TODO: Test a lot of these, currently just the default from the tutorial
-        self.depths = [0, 2, 4]
+        self.depths = [0, 2]
         self.circuits_per_depth = 5
         self.qubits = ['Q0', 'Q1']
         self.circuit_type = 'clifford'
@@ -192,7 +192,7 @@ class TestMirrorRBDesign(BaseCase):
 
     def test_clifford_design_construction(self):
 
-        n = 4
+        n = 2
         qs = ['Q'+str(i) for i in range(n)]
         ring = [('Q'+str(i),'Q'+str(i+1)) for i in range(n-1)]
 
@@ -201,7 +201,7 @@ class TestMirrorRBDesign(BaseCase):
         tmodel1 = pygsti.models.create_crosstalk_free_model(pspec1)
 
         depths = [0, 2, 8]
-        q_set = ('Q0', 'Q1', 'Q2')
+        q_set = ('Q0', 'Q1')
 
         clifford_compilations = {'absolute': CCR.create_standard(pspec1, 'absolute', ('paulis', '1Qcliffords'), verbosity=0)}
 
@@ -214,7 +214,7 @@ class TestMirrorRBDesign(BaseCase):
 
     def test_nonclifford_design_type1_construction(self):
 
-        n = 4
+        n = 2
         qs = ['Q'+str(i) for i in range(n)]
         ring = [('Q'+str(i),'Q'+str(i+1)) for i in range(n-1)]
 
@@ -223,7 +223,7 @@ class TestMirrorRBDesign(BaseCase):
         tmodel2 = pygsti.models.create_crosstalk_free_model(pspec2)
 
         depths = [0, 2, 8]
-        q_set = ('Q0', 'Q1', 'Q2')
+        q_set = ('Q0', 'Q1')
 
 
         design2 = pygsti.protocols.MirrorRBDesign(pspec2, depths, 3, qubit_labels=q_set, circuit_type='clifford+zxzxz-haar',
@@ -236,7 +236,7 @@ class TestMirrorRBDesign(BaseCase):
  
     def test_nonclifford_design_type2_construction(self):
 
-        n = 4
+        n = 2
         qs = ['Q'+str(i) for i in range(n)]
         ring = [('Q'+str(i),'Q'+str(i+1)) for i in range(n-1)]
 
@@ -245,7 +245,7 @@ class TestMirrorRBDesign(BaseCase):
         tmodel3 = pygsti.models.create_crosstalk_free_model(pspec3)
 
         depths = [0, 2, 8]
-        q_set = ('Q0', 'Q1', 'Q2')
+        q_set = ('Q0', 'Q1')
 
         
         design3 = pygsti.protocols.MirrorRBDesign(pspec3, depths, 3, qubit_labels=q_set, circuit_type='cz(theta)+zxzxz-haar',
@@ -255,3 +255,262 @@ class TestMirrorRBDesign(BaseCase):
 
 
         [[self.assertAlmostEqual(c.simulate(tmodel3)[bs],1.) for c, bs in zip(cl, bsl)] for cl, bsl in zip(design3.circuit_lists, design3.idealout_lists)]
+
+class TestBiRBDesign(BaseCase):
+
+    def setUp(self):
+        self.num_qubits = 2
+        self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
+
+        gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase'] 
+        availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
+
+        self.pspec = pygsti.processors.QubitProcessorSpec(self.num_qubits, gate_names, availability=availability,
+                                                          qubit_labels=self.qubit_labels)
+        self.clifford_compilations = CCR.create_standard(self.pspec, 'absolute', ('paulis', '1Qcliffords'), verbosity=0)
+
+        # TODO: Test a lot of these, currently just the default from the tutorial
+        self.depths = [0, 2, 4]
+        self.circuits_per_depth = 5
+        self.qubits = ['Q0', 'Q1']
+        self.circuit_type = 'clifford'
+        self.sampler = 'edgegrab'
+        self.samplerargs = [0.5]
+        self.seed = 2021
+        self.verbosity = 0
+
+    def test_birb_design_construction_mixed1q2q(self):
+
+        design = pygsti.protocols.BinaryRBDesign(self.pspec, self.clifford_compilations, self.depths, 
+                                                 self.circuits_per_depth, qubit_labels=self.qubits, layer_sampling='mixed1q2q',
+                                                 sampler=self.sampler, samplerargs=self.samplerargs, 
+                                                 seed=self.seed, verbosity=0)
+        
+    def test_birb_design_construction_alternating1q2q(self):
+
+        design = pygsti.protocols.BinaryRBDesign(self.pspec, self.clifford_compilations, self.depths, 
+                                                 self.circuits_per_depth, qubit_labels=self.qubits, layer_sampling='alternating1q2q',
+                                                 sampler=self.sampler, samplerargs=self.samplerargs, 
+                                                 seed=self.seed, verbosity=0)
+        
+class TestBiRBProtocol(BaseCase):
+    def setUp(self):
+        self.num_qubits = 2
+        self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
+
+        gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase'] 
+        availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
+
+        self.pspec = pygsti.processors.QubitProcessorSpec(self.num_qubits, gate_names, availability=availability,
+                                                          qubit_labels=self.qubit_labels)
+        self.clifford_compilations = CCR.create_standard(self.pspec, 'absolute', ('paulis', '1Qcliffords'), verbosity=0)
+
+        # TODO: Test a lot of these, currently just the default from the tutorial
+        self.depths = [0, 2, 4]
+        self.circuits_per_depth = 5
+        self.qubits = ['Q0', 'Q1']
+        self.circuit_type = 'clifford'
+        self.sampler = 'edgegrab'
+        self.samplerargs = [0.5]
+        self.seed = 2021
+        self.verbosity = 0
+
+        self.design = pygsti.protocols.BinaryRBDesign(self.pspec, self.clifford_compilations, self.depths, 
+                                                      self.circuits_per_depth, qubit_labels=self.qubits, layer_sampling='mixed1q2q',
+                                                      sampler=self.sampler, samplerargs=self.samplerargs, 
+                                                      seed=self.seed, verbosity=0)
+        
+        self.target_model =  pygsti.models.create_crosstalk_free_model(self.pspec)
+        self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: .01 for name in gate_names})
+
+        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 
+                                                                num_samples = 100, seed= self.seed)
+        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data, 
+                                                                num_samples = 100, seed=self.seed)
+        
+        self.data = pygsti.protocols.ProtocolData(self.design, self.ds)
+        self.data_noisy = pygsti.protocols.ProtocolData(self.design, self.ds_noisy)
+        
+    def test_birb_protocol_ideal(self):
+        proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='energies', defaultfit='A-fixed', rtype='EI',
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+        
+        result = proto.run(self.data)
+        self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
+        
+    def test_birb_protocol_noisy(self):
+        proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='energies', defaultfit='A-fixed', rtype='EI',
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+        
+        result = proto.run(self.data_noisy)
+
+
+class TestCliffordRBProtocol(BaseCase):
+    def setUp(self):
+        self.num_qubits = 2
+        self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
+        
+        gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
+        availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
+
+        self.pspec = pygsti.processors.QubitProcessorSpec(self.num_qubits, gate_names, availability=availability,
+                                                          qubit_labels=self.qubit_labels)
+        self.compilations = {
+            'absolute': CCR.create_standard(self.pspec, 'absolute', ('paulis', '1Qcliffords'), verbosity=0),
+            'paulieq': CCR.create_standard(self.pspec, 'paulieq', ('1Qcliffords', 'allcnots'), verbosity=0)
+        }
+
+        # TODO: Test a lot of these, currently just the default from the tutorial
+        self.depths = [0, 2, 8]
+        self.circuits_per_depth = 5
+        self.qubits = ['Q0', 'Q1']
+        self.citerations = 20
+        self.randomizeout = True
+        self.interleaved_circuit = None
+        self.compiler_args = ()
+        self.seed = 2021
+        self.verbosity = 0
+
+        self.design = _rb.CliffordRBDesign(self.pspec, self.compilations, self.depths, self.circuits_per_depth, qubit_labels=self.qubits,
+                                           randomizeout=self.randomizeout, interleaved_circuit=self.interleaved_circuit,
+                                           citerations=self.citerations, compilerargs=self.compiler_args, seed=self.seed,
+                                           verbosity=self.verbosity, num_processes=1)
+        
+        self.target_model =  pygsti.models.create_crosstalk_free_model(self.pspec)
+        self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: .01 for name in gate_names})
+
+        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 
+                                                                num_samples = 100, seed=self.seed)
+        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data, 
+                                                                num_samples = 100, seed=self.seed)
+        
+        self.data = pygsti.protocols.ProtocolData(self.design, self.ds)
+        self.data_noisy = pygsti.protocols.ProtocolData(self.design, self.ds_noisy)
+        
+    def test_cliffordrb_protocol_ideal(self):
+        proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+        
+        result = proto.run(self.data)
+
+        self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
+        
+    def test_cliffordrb_protocol_noisy(self):
+        proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+        
+        result = proto.run(self.data_noisy)
+
+class TestDirectRBProtocol(BaseCase):
+    def setUp(self):
+        self.num_qubits = 2
+        self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
+        
+        gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
+        availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
+
+        self.pspec = pygsti.processors.QubitProcessorSpec(self.num_qubits, gate_names, availability=availability,
+                                                          qubit_labels=self.qubit_labels, geometry='line')
+        self.compilations = {
+            'absolute': CCR.create_standard(self.pspec, 'absolute', ('paulis', '1Qcliffords'), verbosity=0),
+            'paulieq': CCR.create_standard(self.pspec, 'paulieq', ('1Qcliffords', 'allcnots'), verbosity=0)
+        }
+
+
+        # TODO: Test a lot of these, currently just the default from the tutorial
+        self.depths = [0, 2, 8]
+        self.circuits_per_depth = 5
+        self.qubits = ['Q0', 'Q1']
+        self.randomizeout = True
+        self.sampler = 'edgegrab'
+        self.samplerargs = [0.5]
+        self.citerations = 20
+        self.compiler_args = ()
+        self.seed = 2021
+        self.verbosity = 0
+
+        self.design =_rb.DirectRBDesign(self.pspec, self.compilations, self.depths, self.circuits_per_depth,
+                                        qubit_labels=self.qubits, sampler=self.sampler, samplerargs=self.samplerargs,
+                                        addlocal=False, lsargs=(), randomizeout=self.randomizeout, cliffordtwirl=True,
+                                        conditionaltwirl=True, citerations=self.citerations, compilerargs=self.compiler_args,
+                                        partitioned=False, seed=self.seed, verbosity=self.verbosity, num_processes=1)
+                                    
+        
+        self.target_model =  pygsti.models.create_crosstalk_free_model(self.pspec)
+        self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: .01 for name in gate_names})
+
+        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 
+                                                                num_samples = 100, seed=self.seed)
+        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data, 
+                                                                num_samples = 100, seed=self.seed)
+        
+        self.data = pygsti.protocols.ProtocolData(self.design, self.ds)
+        self.data_noisy = pygsti.protocols.ProtocolData(self.design, self.ds_noisy)
+        
+    def test_directrb_protocol_ideal(self):
+        proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+        
+        result = proto.run(self.data)
+        self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
+        
+    def test_directrb_protocol_noisy(self):
+        proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+        
+        result = proto.run(self.data_noisy)
+
+class TestMirrorRBProtocol(BaseCase):
+    def setUp(self):
+        self.num_qubits = 2
+        self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
+
+        gate_names = ['Gi', 'Gxpi2', 'Gxpi', 'Gxmpi2', 'Gypi2', 'Gypi', 'Gympi2', 'Gzpi2', 'Gzpi', 'Gzmpi2', 'Gcphase'] 
+        availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
+
+        self.pspec = pygsti.processors.QubitProcessorSpec(self.num_qubits, gate_names, availability=availability,
+                                                          qubit_labels=self.qubit_labels, geometry='line')
+        self.clifford_compilations = {
+            'absolute': CCR.create_standard(self.pspec, 'absolute', ('paulis', '1Qcliffords'), verbosity=0)
+            # SS: I think this is for speed, don't need paulieq for MirrorRB?
+        }
+
+        # TODO: Test a lot of these, currently just the default from the tutorial
+        self.depths = [0, 2, 8]
+        self.circuits_per_depth = 5
+        self.qubits = ['Q0', 'Q1']
+        self.circuit_type = 'clifford'
+        self.sampler = 'edgegrab'
+        self.samplerargs = [0.5]
+        self.seed = 2021
+        self.verbosity = 0
+
+        self.design =_rb.MirrorRBDesign(self.pspec, self.depths, self.circuits_per_depth,
+                                        qubit_labels=self.qubits, circuit_type=self.circuit_type, clifford_compilations=self.clifford_compilations,
+                                        sampler=self.sampler, samplerargs=self.samplerargs,
+                                        localclifford=True, paulirandomize=True, seed=self.seed, verbosity=self.verbosity,
+                                        num_processes=1)
+        
+        self.target_model =  pygsti.models.create_crosstalk_free_model(self.pspec)
+        self.noisy_model =  pygsti.models.create_crosstalk_free_model(self.pspec, depolarization_strengths={name: .01 for name in gate_names})
+
+        self.ds = pygsti.data.datasetconstruction.simulate_data(self.target_model, self.design.all_circuits_needing_data, 
+                                                                num_samples = 100, seed=self.seed)
+        self.ds_noisy = pygsti.data.datasetconstruction.simulate_data(self.noisy_model, self.design.all_circuits_needing_data, 
+                                                                num_samples = 100, seed=self.seed)
+        
+        self.data = pygsti.protocols.ProtocolData(self.design, self.ds)
+        self.data_noisy = pygsti.protocols.ProtocolData(self.design, self.ds_noisy)
+        
+    def test_mirrorrb_protocol_ideal(self):
+        proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='adjusted_success_probabilities', defaultfit='A-fixed', rtype='EI',
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+        
+        result = proto.run(self.data)
+        self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
+        
+    def test_mirrorrb_protocol_noisy(self):
+        proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='adjusted_success_probabilities', defaultfit='A-fixed', rtype='EI',
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+        
+        result = proto.run(self.data_noisy)

@@ -18,6 +18,7 @@ from pygsti import tools as _tools
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.smartcache import smart_cached
+from pygsti.baseobjs import Label
 
 
 def small_eigenvalue_err_rate(sigma, direct_gst_models):
@@ -43,7 +44,8 @@ def small_eigenvalue_err_rate(sigma, direct_gst_models):
     """
     if sigma is None: return _np.nan  # in plot processing, "None" circuits = no plot output = nan values
     mdl_direct = direct_gst_models[sigma]
-    minEigval = min(abs(_np.linalg.eigvals(mdl_direct.operations["GsigmaLbl"])))
+    key = Label('GsigmaLbl') if sigma.line_labels == ('*',) else Label('GsigmaLbl', sigma.line_labels)
+    minEigval = min(abs(_np.linalg.eigvals(mdl_direct.operations[key])))
     # (approximate) per-gate error rate; max averts divide by zero error
     return 1.0 - minEigval**(1.0 / max(len(sigma), 1))
 
@@ -156,7 +158,13 @@ def _compute_sub_mxs(gss, model, sub_mx_creation_fn, dataset=None, sub_mx_creati
                for x in gss.used_xs] for y in gss.used_ys]
     #Note: subMxs[y-index][x-index] is proper usage
     return subMxs
+    
+#define a modified version that is meant for working with CircuitList objects of lists of them.
+#@smart_cached
+def _compute_sub_mxs_circuit_list(circuit_lists, model, sub_mx_creation_fn, dataset=None, sub_mx_creation_fn_extra_arg=None):
+    subMxs = [sub_mx_creation_fn(circuit_list, sub_mx_creation_fn_extra_arg) for circuit_list in circuit_lists]
 
+    return subMxs
 
 @smart_cached
 def dscompare_llr_matrices(gsplaq, dscomparator):
@@ -166,7 +174,7 @@ def dscompare_llr_matrices(gsplaq, dscomparator):
     Parameters
     ----------
     gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+        Obtained via :meth:`CircuitStructure.get_plaquette`, this object
         specifies which matrix indices should be computed and which circuits
         they correspond to.
 
@@ -204,7 +212,7 @@ def drift_neglog10pvalue_matrices(gsplaq, drifttuple):
     Parameters
     ----------
     gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+        Obtained via :meth:`CircuitStructure.get_plaquette`, this object
         specifies which matrix indices should be computed and which circuits
         they correspond to.
 
@@ -242,7 +250,7 @@ def drift_maxtvd_matrices(gsplaq, drifttuple):
     Parameters
     ----------
     gsplaq : CircuitPlaquette
-        Obtained via :method:`CircuitStructure.get_plaquette`, this object
+        Obtained via :meth:`CircuitStructure.get_plaquette`, this object
         specifies which matrix indices should be computed and which circuits
         they correspond to.
 

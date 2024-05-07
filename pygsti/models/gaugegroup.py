@@ -46,12 +46,13 @@ class GaugeGroup(_NicelySerializable):
             A name for this group - used for reporting what type of
             gauge optimization was performed.
         """
+        super().__init__()
         self.name = name
 
     @property
     def num_params(self):
         """
-        Return the number of parameters (degrees of freedom) of this gauge group..
+        Return the number of parameters (degrees of freedom) of this gauge group.
 
         Returns
         -------
@@ -66,7 +67,7 @@ class GaugeGroup(_NicelySerializable):
         Parameters
         ----------
         param_vec : numpy.ndarray
-            A 1D array of length :method:`num_params`.
+            A 1D array of length :meth:`num_params`.
 
         Returns
         -------
@@ -82,7 +83,7 @@ class GaugeGroup(_NicelySerializable):
         Returns
         -------
         numpy.ndarray
-            A 1D array of length :method:`num_params`.
+            A 1D array of length :meth:`num_params`.
         """
         return _np.array([], 'd')
 
@@ -94,7 +95,7 @@ class GaugeGroupElement(_NicelySerializable):
 
     def __init__(self):
         """Creates a new GaugeGroupElement"""
-        pass
+        super().__init__()
 
     @property
     def transform_matrix(self):
@@ -154,7 +155,7 @@ class GaugeGroupElement(_NicelySerializable):
         Parameters
         ----------
         v : numpy.ndarray
-            A 1D array of length :method:`num_params`
+            A 1D array of length :meth:`num_params`
 
         Returns
         -------
@@ -197,6 +198,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
     """
 
     def __init__(self, gauge_group_el):
+        super().__init__()
         self.inverse_element = gauge_group_el
 
     @property
@@ -265,7 +267,7 @@ class InverseGaugeGroupElement(GaugeGroupElement):
         Parameters
         ----------
         v : numpy.ndarray
-            A 1D array of length :method:`num_params`
+            A 1D array of length :meth:`num_params`
 
         Returns
         -------
@@ -358,7 +360,7 @@ class OpGaugeGroup(GaugeGroup):
         Parameters
         ----------
         param_vec : numpy.ndarray
-            A 1D array of length :method:`num_params`.
+            A 1D array of length :meth:`num_params`.
 
         Returns
         -------
@@ -376,7 +378,7 @@ class OpGaugeGroup(GaugeGroup):
         Returns
         -------
         numpy.ndarray
-            A 1D array of length :method:`num_params`.
+            A 1D array of length :meth:`num_params`.
         """
         return self._operation.to_vector()
 
@@ -401,14 +403,14 @@ class OpGaugeGroupWithBasis(OpGaugeGroup):
     def _to_nice_serialization(self):
         state = super()._to_nice_serialization()
         state.update({'state_space_dimension': int(self._operation.state_space.dim),
-                      'basis': self._basis.to_nice_serialization(),
+                      'basis': self._basis if isinstance(self._basis, str) else self._basis.to_nice_serialization(),
                       'evotype': str(self._operation.evotype)
                       })
         return state
 
     @classmethod
     def _from_nice_serialization(cls, state):
-        basis = _Basis.from_nice_serialization(state['basis'])
+        basis = state['basis'] if isinstance(state['basis'], str) else _Basis.from_nice_serialization(state['basis'])
         return cls(_statespace.default_space_for_dim(state['state_space_dimension']), basis, state['evotype'])
 
 
@@ -499,7 +501,7 @@ class OpGaugeGroupElement(GaugeGroupElement):
         Parameters
         ----------
         v : numpy.ndarray
-            A 1D array of length :method:`num_params`
+            A 1D array of length :meth:`num_params`
 
         Returns
         -------
@@ -803,11 +805,11 @@ class SpamGaugeGroup(OpGaugeGroup):
     """
     Gauge transformations which scale the SPAM and non-unital portions of the gates in a gate set.
 
-    A 2-dimensional gauge group spanning transform matrices of the form:
-    [ [ a 0 ... 0]   where a and b are the 2 parameters.  These diagonal
-      [ 0 b ... 0]   transform matrices do not affect the SPAM operations
-      [ . . ... .]   much more than typical near-unital and TP operations, and
-      [ 0 0 ... b] ] so we call this group of transformations the "SPAM gauge".
+    A 2-dimensional gauge group spanning transform matrices of the form ::
+        [ [ a 0 ... 0]   where a and b are the 2 parameters.  These diagonal
+          [ 0 b ... 0]   transform matrices do not affect the SPAM operations
+          [ . . ... .]   much more than typical near-unital and TP operations, and
+          [ 0 0 ... b] ] so we call this group of transformations the "SPAM gauge".
 
     Parameters
     ----------
@@ -957,7 +959,7 @@ class TrivialGaugeGroup(GaugeGroup):
         Parameters
         ----------
         param_vec : numpy.ndarray
-            A 1D array of length :method:`num_params`.
+            A 1D array of length :meth:`num_params`.
 
         Returns
         -------
@@ -974,7 +976,7 @@ class TrivialGaugeGroup(GaugeGroup):
         Returns
         -------
         numpy.ndarray
-            A 1D array of length :method:`num_params`.
+            A 1D array of length :meth:`num_params`.
         """
         return _np.empty(0, 'd')
 
@@ -1065,7 +1067,7 @@ class TrivialGaugeGroupElement(GaugeGroupElement):
         Parameters
         ----------
         v : numpy.ndarray
-            A 1D array of length :method:`num_params`
+            A 1D array of length :meth:`num_params`
 
         Returns
         -------

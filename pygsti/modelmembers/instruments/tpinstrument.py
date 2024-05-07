@@ -32,13 +32,14 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
     trace-preserving map.  The instrument's elements may or may not have all of
     the properties associated by a mathematical quantum instrument.
 
-    If M1,M2,...Mn are the elements of the instrument, then we parameterize
+    If `M1,M2,...Mn` are the elements of the instrument, then we parameterize
+    
     1. MT = (M1+M2+...Mn) as a TPParmeterizedGate
-    2. Di = Mi - MT for i = 1..(n-1) as FullyParameterizedGates
+    2. Di = Mi - MT for `i = 1..(n-1)` as FullyParameterizedGates
 
-    So to recover M1...Mn we compute:
-    Mi = Di + MT for i = 1...(n-1)
-       = -(n-2)*MT-sum(Di) = -(n-2)*MT-[(MT-Mi)-n*MT] for i == (n-1)
+    So to recover `M1...Mn` we compute:
+    Mi = Di + MT for i = `1...(n-1)`
+    = -(n-2)*MT-sum(Di) = -(n-2)*MT-[(MT-Mi)-n*MT] for i == (n-1)
 
     Parameters
     ----------
@@ -69,8 +70,10 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
     # M4 = -(sum(Di)+(4-2=2)*MT) = -(sum(all)+(4-3=1)*MT)
     #n=2 case: (M1-MT) = (MT-M2)-MT = -M2, so M2 = -sum(Di)
 
-    def __init__(self, op_matrices, evotype="default", state_space=None, called_from_reduce=False, items=[]):
+    def __init__(self, op_matrices, evotype="default", state_space=None, called_from_reduce=False, items=None):
 
+        if items is None:
+            items = []
         self._readonly = False  # until init is done
         if len(items) > 0:
             assert(op_matrices is None), "`items` was given when op_matrices != None"
@@ -154,7 +157,7 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)

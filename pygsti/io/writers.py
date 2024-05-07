@@ -29,6 +29,8 @@ from pygsti.modelmembers import operations as _op
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
 
+from pygsti.processors import QubitProcessorSpec, QuditProcessorSpec
+from itertools import product
 
 def write_empty_dataset(filename, circuits,
                         header_string='## Columns = 1 frequency, count total', num_zero_cols=None,
@@ -145,6 +147,9 @@ def write_dataset(filename, dataset, circuits=None,
                 headerString += commentLine + '\n'
             else:
                 headerString += "# " + commentLine + '\n'
+
+    if dataset._dbcoordinates is not None:
+        headerString += '## DatabaseID = %s\n' % str(dataset._dbcoordinates[1])  # omit collection name
 
     if fixed_column_mode == "auto":
         if with_times == "auto":
@@ -473,7 +478,7 @@ def write_empty_protocol_data(dirname, edesign, sparse="auto", clobber_ok=False)
 
     Write to a directory an experimental design (`edesign`) and the dataset
     template files needed to load in a :class:`ProtocolData` object, e.g.
-    using the :function:`read_data_from_dir` function, after the template
+    using the :func:`read_data_from_dir` function, after the template
     files are filled in.
 
     Parameters
@@ -509,17 +514,71 @@ def write_empty_protocol_data(dirname, edesign, sparse="auto", clobber_ok=False)
     dirname = _pathlib.Path(dirname)
     data_dir = dirname / 'data'
     circuits = edesign.all_circuits_needing_data
-    nQubits = "multiple" if edesign.qubit_labels == "multiple" else len(edesign.qubit_labels)
-    if sparse == "auto":
-        sparse = bool(nQubits == "multiple" or nQubits > 3)  # HARDCODED
 
-    if sparse:
-        header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
-        nZeroCols = 0
-    else:
-        fstr = '{0:0%db} count' % nQubits
-        nZeroCols = 2**nQubits
-        header_str = "## Columns = " + ", ".join([fstr.format(i) for i in range(nZeroCols)])
+    try:
+        #Need different behavior based on the following scenarios:
+        #QubitProcessorSpec or QuditProcessorSpec with no value nonstd_povms
+        #QubitProcessorSpec or QuditProcessorSpec with value for nonstd_povms
+        if isinstance(edesign.processor_spec, QubitProcessorSpec) and not edesign.processor_spec.nonstd_povms:
+            #in this case we can use the original code for setting up the header string.
+            nQubits = edesign.processor_spec.num_qubits
+            
+            if sparse == "auto":
+                sparse = bool(nQubits == "multiple" or nQubits > 3)  # HARDCODED
+
+            if sparse:
+                header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
+                nZeroCols = 0
+            else:
+                fstr = '{0:0%db} count' % nQubits
+                nZeroCols = 2**nQubits
+                header_str = "## Columns = " + ", ".join([fstr.format(i) for i in range(nZeroCols)])
+
+        elif isinstance(edesign.processor_spec, QuditProcessorSpec) and not edesign.processor_spec.nonstd_povms:
+            if sparse == "auto":
+                sparse = bool( len(edesign.processor_spec.qudit_labels) > 3 or _np.any(_np.asarray(edesign.processor_spec.qudit_udims)>3))  # HARDCODED
+            if sparse:
+                header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
+                nZeroCols = 0
+            else:
+                #In this case we should loop through the udims for each qudit, since they may be
+                #different for each one.
+                #create an iterator over all of the qudit outcome strings
+                # by taking the cartesian product of a bunch of ranges with
+                # with a size determined by each qudits udim value.
+                qudit_string_iterator = product(*[[str(j) for j in range(i)] for i in edesign.processor_spec.qudit_udims])
+                qudit_strings = ("".join(qudit_string) + " count" for qudit_string in qudit_string_iterator)
+                header_str = "## Columns = " + ", ".join(qudit_strings)
+                nZeroCols = _np.prod(edesign.processor_spec.qudit_udims)
+        #If we do have a nonstd_povm for set for either of these we will assume for now
+        #that the outcome labels are all given by the keys of the dictionary describing
+        #the first POVM (note that means this also won't work for multiple POVMs at present.
+        elif isinstance(edesign.processor_spec, (QuditProcessorSpec, QubitProcessorSpec)) and edesign.processor_spec.nonstd_povms:
+            outcome_lbls= list(list(edesign.processor_spec.nonstd_povms.values())[0].keys())
+            if sparse == "auto":
+                sparse = bool( len(outcome_lbls) > 81)  # HARDCODED (and for no particularly deep reason).
+            if sparse:
+                header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
+                nZeroCols = 0
+            else:
+                outcome_strings = [str(outcome_lbl) + " count" for outcome_lbl in outcome_lbls]
+                header_str = "## Columns = " + ", ".join(outcome_strings)
+                nZeroCols = len(outcome_strings)
+        else:
+            raise ValueError('The experiment design must contain a valid processor_spec attribute.')
+    except AttributeError:
+        # Fall back to old behavior if do not have a valid processor_spec, i.e. not a GSTDesign
+        nQubits = "multiple" if edesign.qubit_labels == "multiple" else len(edesign.qubit_labels)
+        if sparse == "auto":
+            sparse = bool(nQubits == "multiple" or nQubits > 3)  # HARDCODED
+
+        if sparse:
+            header_str = "# Note: on each line, put comma-separated <outcome:count> items, i.e. 00110:23"
+            nZeroCols = 0
+        else:
+            fstr = '{0:0%db} count' % nQubits
+            nZeroCols = 2**nQubits
+            header_str = "## Columns = " + ", ".join([fstr.format(i) for i in range(nZeroCols)])
 
     pth = data_dir / 'dataset.txt'
     if pth.exists() and clobber_ok is False:
@@ -615,7 +674,7 @@ def fill_in_empty_dataset_with_fake_data(dataset_filename, model, num_samples, s
         value as its *start time*.
 
     fixed_column_mode : bool or 'auto', optional
-        How the underlying data set file is written - see :function:`write_dataset`.
+        How the underlying data set file is written - see :func:`write_dataset`.
 
     Returns
     -------

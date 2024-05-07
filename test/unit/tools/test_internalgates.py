@@ -24,5 +24,5 @@ class InternalGatesTester(BaseCase):
         # Checks the u3 unitary generator runs
         u = internalgates.qasm_u3(0., 0., 0., output='unitary')
         sup = internalgates.qasm_u3(0., 0., 0., output='superoperator')
-        sup_u = ot.process_mx_to_unitary(bt.change_basis(sup, 'pp', 'std')) # Backtransform to unitary
+        sup_u = ot.std_process_mx_to_unitary(bt.change_basis(sup, 'pp', 'std')) # Backtransform to unitary
         self.assertArraysAlmostEqual(u, sup_u)

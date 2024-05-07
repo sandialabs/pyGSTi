@@ -263,7 +263,7 @@ def partition_into(n, nbins):
     """
     Iterate over all partitions of integer `n` into `nbins` bins.
 
-    Here, unlike in :function:`partition`, a "partition" is allowed to contain
+    Here, unlike in :func:`partition`, a "partition" is allowed to contain
     zeros.  For example, (4,1,0) is a valid partition of 5 using 3 bins.  This
     function fixes the number of bins and iterates over all possible length-
     `nbins` partitions while allowing zeros.  This is equivalent to iterating
@@ -332,7 +332,7 @@ def incd_product(*args):
 
     Parameters
     ----------
-    *args : iterables
+    `*args` : iterables
         Any number of iterable things that we're taking the product of.
     """
     lists = [list(a) for a in args]  # so we can get new iterators to each argument
@@ -359,6 +359,30 @@ def incd_product(*args):
             yield incr, tuple(t)
             incr = N - 1  # next time try to increment the last index again
     return
+
+
+def lists_to_tuples(obj):
+    """
+    Recursively replaces lists with tuples.
+
+    Can be useful for fixing tuples that were serialized to json or mongodb.
+    Recurses on lists, tuples, and dicts within `obj`.
+
+    Parameters
+    ----------
+    obj : object
+        Object to convert.
+
+    Returns
+    -------
+    object
+    """
+    if isinstance(obj, (list, tuple)):
+        return tuple((lists_to_tuples(el) for el in obj))
+    elif isinstance(obj, dict):
+        return {lists_to_tuples(k): lists_to_tuples(v) for k, v in obj.items()}
+    else:
+        return obj
 
 
 # ------------------------------------------------------------------------------

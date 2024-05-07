@@ -10,9 +10,12 @@ Functions for generating Direct-(LGST, MC2GST, MLGST) models
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+import warnings as _warnings
+_warnings.warn("pygsti.algorithms.directx is deprecated and will be removed in pyGSTi 0.9.13")
 
 from pygsti.algorithms import core as _core
 from pygsti import baseobjs as _baseobjs
+from pygsti.baseobjs import Label
 from pygsti import circuits as _circuits
 from pygsti import objectivefns as _objfns
 from pygsti.modelmembers.operations import FullArbitraryOp as _FullArbitraryOp
@@ -81,7 +84,7 @@ def model_with_lgst_circuit_estimates(
         Defaults to dimension of `target_model`.
 
     verbosity : int, optional
-        Verbosity value to send to run_lgst(...) call.
+        Verbosity value to send to `run_lgst(...)` call.
 
     Returns
     -------
@@ -158,7 +161,7 @@ def direct_lgst_model(circuit_to_estimate, circuit_label, dataset,
         Defaults to dimension of `target_model`.
 
     verbosity : int, optional
-        Verbosity value to send to run_lgst(...) call.
+        Verbosity value to send to `run_lgst(...)` call.
 
     Returns
     -------
@@ -394,7 +397,9 @@ def direct_mc2gst_models(circuits, dataset, prep_fiducials, meas_fiducials,
         for i, sigma in enumerate(circuits):
             printer.show_progress(i, len(circuits), prefix="--- Computing model for string-", suffix='---')
             directLSGSTmodels[sigma] = direct_mc2gst_model(
-                sigma, "GsigmaLbl", dataset, prep_fiducials, meas_fiducials, target_model,
+                sigma, 
+                Label('GsigmaLbl') if sigma.line_labels == ('*',) else Label('GsigmaLbl', sigma.line_labels), 
+                dataset, prep_fiducials, meas_fiducials, target_model,
                 op_label_aliases, svd_truncate_to, min_prob_clip_for_weighting,
                 prob_clip_interval, verbosity)
 
@@ -560,7 +565,9 @@ def direct_mlgst_models(circuits, dataset, prep_fiducials, meas_fiducials, targe
         for i, sigma in enumerate(circuits):
             printer.show_progress(i, len(circuits), prefix="--- Computing model for string ", suffix="---")
             directMLEGSTmodels[sigma] = direct_mlgst_model(
-                sigma, "GsigmaLbl", dataset, prep_fiducials, meas_fiducials, target_model,
+                sigma, 
+                Label('GsigmaLbl') if sigma.line_labels == ('*',) else Label('GsigmaLbl', sigma.line_labels),
+                dataset, prep_fiducials, meas_fiducials, target_model,
                 op_label_aliases, svd_truncate_to, min_prob_clip,
                 prob_clip_interval, verbosity)
 
@@ -697,6 +704,8 @@ def focused_mc2gst_models(circuits, dataset, prep_fiducials, meas_fiducials,
         for i, sigma in enumerate(circuits):
             printer.show_progress(i, len(circuits), prefix="--- Computing model for string", suffix='---')
             focusedLSGSTmodels[sigma] = focused_mc2gst_model(
-                sigma, "GsigmaLbl", dataset, prep_fiducials, meas_fiducials, start_model,
+                sigma, 
+                Label('GsigmaLbl') if sigma.line_labels == ('*',) else Label('GsigmaLbl', sigma.line_labels),
+                dataset, prep_fiducials, meas_fiducials, start_model,
                 op_label_aliases, min_prob_clip_for_weighting, prob_clip_interval, verbosity)
     return focusedLSGSTmodels

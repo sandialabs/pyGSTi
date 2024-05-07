@@ -30,7 +30,7 @@ from pygsti.tools import slicetools as _slct
 
 class ComposedOp(_LinearOperator):
     """
-    An operation that is the composition of a number of map-like factors (possibly other `LinearOperator`s).
+    An operation that is the composition of a number of map-like factors (possibly other `LinearOperator`).
 
     Parameters
     ----------
@@ -71,6 +71,17 @@ class ComposedOp(_LinearOperator):
             "All operations must have the same evolution type (%s expected)!" % evotype
         evotype = _Evotype.cast(evotype)
 
+        rep = self._create_rep_object(evotype, state_space)
+
+        # caches in case terms are used
+        self.terms = {}
+        self.local_term_poly_coeffs = {}
+
+        _LinearOperator.__init__(self, rep, evotype)
+        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
+        if self._rep_type == 'dense': self._update_denserep()  # update dense rep if needed
+
+    def _create_rep_object(self, evotype, state_space):
         #Create representation object
         rep_type_order = ('dense', 'composed') if evotype.prefer_dense_reps else ('composed', 'dense')
         rep = None
@@ -95,14 +106,7 @@ class ComposedOp(_LinearOperator):
 
         if rep is None:
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
-
-        # caches in case terms are used
-        self.terms = {}
-        self.local_term_poly_coeffs = {}
-
-        _LinearOperator.__init__(self, rep, evotype)
-        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
-        if self._rep_type == 'dense': self._update_denserep()  # update dense rep if needed
+        return rep
 
     def _update_denserep(self):
         """Performs additional update for the case when we use a dense underlying representation."""
@@ -116,6 +120,10 @@ class ComposedOp(_LinearOperator):
         self._rep.base.flags.writeable = True
         self._rep.base[:, :] = mx
         self._rep.base.flags.writeable = False
+
+    def _update_submember_state_spaces(self, old_parent_state_space, new_parent_state_space):
+        self._rep = self._create_rep_object(self.evotype, new_parent_state_space)  # update representation
+        super()._update_submember_state_spaces(old_parent_state_space, new_parent_state_space)
 
     #Note: no to_memoized_dict needed, as ModelMember version does all we need.
 
@@ -184,7 +192,7 @@ class ComposedOp(_LinearOperator):
 
         Parameters
         ----------
-        *factors_to_add : LinearOperator
+        `*factors_to_add` : LinearOperator
             One or multiple factor operators to add on at the *end* (evaluated
             last) of this operator.
 
@@ -211,7 +219,7 @@ class ComposedOp(_LinearOperator):
             The index at which to insert `factorops_to_insert`.  The factor at this
             index and those after it are shifted back by `len(factorops_to_insert)`.
 
-        *factors_to_insert : LinearOperator
+        `*factors_to_insert` : LinearOperator
             One or multiple factor operators to insert within this operator.
 
         Returns
@@ -233,7 +241,7 @@ class ComposedOp(_LinearOperator):
 
         Parameters
         ----------
-        *factorop_indices : int
+        `*factorop_indices` : int
             One or multiple factor indices to remove from this operator.
 
         Returns
@@ -457,7 +465,7 @@ class ComposedOp(_LinearOperator):
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         if order not in self.terms:
             self._compute_taylor_order_terms(order, max_polynomial_vars, self.gpindices_as_array())
@@ -509,7 +517,7 @@ class ComposedOp(_LinearOperator):
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
-        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
+        It calls :meth:`taylor_order_terms` internally, so that all the terms at order `order`
         are typically cached for future calls.
 
         The coefficients of these terms are typically polynomials of the operation's
@@ -543,7 +551,7 @@ class ComposedOp(_LinearOperator):
             #                 for i, pi in enumerate(p)]
             factor_lists = [factor_lists_cache[i][pi] for i, pi in enumerate(p)]
             for factors in _itertools.product(*factor_lists):
-                mag = _np.product([factor.magnitude for factor in factors])
+                mag = _np.prod([factor.magnitude for factor in factors])
                 if mag >= min_term_mag:
                     terms.append(_term.compose_terms_with_mag(factors, mag))
         return terms
@@ -585,7 +593,7 @@ class ComposedOp(_LinearOperator):
         #  of an errorgen or operator.
         # In this case, since the taylor expansions are composed (~multiplied),
         # the total term magnitude is just the product of those of the components.
-        return _np.product([f.total_term_magnitude for f in self.factorops])
+        return _np.prod([f.total_term_magnitude for f in self.factorops])
 
     @property
     def total_term_magnitude_deriv(self):
@@ -601,7 +609,7 @@ class ComposedOp(_LinearOperator):
             An array of length self.num_params
         """
         opmags = [f.total_term_magnitude for f in self.factorops]
-        product = _np.product(opmags)
+        product = _np.prod(opmags)
         ret = _np.zeros(self.num_params, 'd')
         for opmag, f, f_local_inds in zip(opmags, self.factorops, self._submember_rpindices):
             #f_local_inds = _modelmember._decompose_gpindices(
@@ -679,7 +687,7 @@ class ComposedOp(_LinearOperator):
             essentially converts the coefficient into a rate that is
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
-            This is the value returned by :method:`error_rates`.
+            This is the value returned by :meth:`error_rates`.
 
         Returns
         -------
@@ -753,7 +761,7 @@ class ComposedOp(_LinearOperator):
 
     def errorgen_coefficient_labels(self):
         """
-        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+        The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
 
         Returns
         -------
@@ -767,7 +775,7 @@ class ComposedOp(_LinearOperator):
         """
         The weighted coefficients of this operation's error generator in terms of "standard" error generators.
 
-        Constructs a 1D array of all the coefficients returned by :method:`errorgen_coefficients`,
+        Constructs a 1D array of all the coefficients returned by :meth:`errorgen_coefficients`,
         weighted so that different error generators can be weighted differently when a
         `errorgen_penalty_factor` is used in an objective function.
 
@@ -783,7 +791,7 @@ class ComposedOp(_LinearOperator):
 
     def errorgen_coefficients_array_deriv_wrt_params(self):
         """
-        The jacobian of :method:`errogen_coefficients_array` with respect to this operation's parameters.
+        The jacobian of :meth:`errogen_coefficients_array` with respect to this operation's parameters.
 
         Returns
         -------
@@ -862,11 +870,11 @@ class ComposedOp(_LinearOperator):
         logscale_nonham : bool, optional
             Whether or not the values in `lindblad_term_dict` for non-hamiltonian
             error generators should be interpreted as error *rates* (of an
-            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
+            "equivalent" depolarizing channel, see :meth:`errorgen_coefficients`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
             the corresponding value given in `lindblad_term_dict`.  This is what is
-            performed by the function :method:`set_error_rates`.
+            performed by the function :meth:`set_error_rates`.
 
         truncate : bool, optional
             Whether to allow adjustment of the errogen coefficients in
@@ -906,7 +914,7 @@ class ComposedOp(_LinearOperator):
 
         Values are set so that the contributions of the resulting channel's
         error rate are given by the values in `lindblad_term_dict`.  See
-        :method:`error_rates` for more details.
+        :meth:`error_rates` for more details.
 
         Parameters
         ----------

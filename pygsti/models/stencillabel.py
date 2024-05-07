@@ -28,7 +28,7 @@ class StencilLabel(object):
     ----------
     local_state_space : StateSpace
         A manually supplied local state space for this label, which is returned by
-        :method:`create_local_state_space` instead of generating a local state space.
+        :meth:`create_local_state_space` instead of generating a local state space.
     """
 
     @classmethod
@@ -109,7 +109,7 @@ class StencilLabel(object):
         the sub-space where they act -- a "local" state space.  A stencil label expands into
         one or more state space label tuples, and this function constructs a *single* local
         state space that is appropriate for any and all of these tuples (i.e. what is returned
-        by :method:`compute_absolute_sslbls`), and that is therefore appropriate for constructing
+        by :meth:`compute_absolute_sslbls`), and that is therefore appropriate for constructing
         the to-be-embedded operation.  Importantly, this function can be called without knowing
         where this stencil label will be placed, that is, it doesn't require a "target labels"
         argument.
@@ -130,7 +130,7 @@ class StencilLabel(object):
             return self._create_local_state_space(entire_state_space)
 
     def _create_local_state_space(self, entire_state_space):
-        """ Stub that derived classes implement - same function as :method:`create_local_state_space` """
+        """ Stub that derived classes implement - same function as :meth:`create_local_state_space` """
         raise NotImplementedError("Derived classes should implement this!")
 
     def _create_local_state_space_for_sslbls(self, sslbls, entire_state_space):
@@ -171,7 +171,7 @@ class StencilLabelTuple(StencilLabel):
         """
         Creates a list of all the state space label tuples this stencil label expands into.
 
-        See :method:`StencilLabel.compute_absolute_sslbls`
+        See :meth:`StencilLabel.compute_absolute_sslbls`
         """
         # Return a *list* of sslbls, since some stencil labels may resolve into multiple absolute sslbls
         if self.sslbls is None:
@@ -208,7 +208,7 @@ class StencilLabelSet(StencilLabel):
         """
         Creates a list of all the state space label tuples this stencil label expands into.
 
-        See :method:`StencilLabel.compute_absolute_sslbls`
+        See :meth:`StencilLabel.compute_absolute_sslbls`
         """
         # return a *list* of sslbls, since some stencil labels may resolve into multiple absolute sslbls
         return [self._resolve_single_sslbls_tuple(sslbls, qubit_graph, state_space, target_lbls)
@@ -254,7 +254,7 @@ class StencilLabelAllCombos(StencilLabel):
         """
         Creates a list of all the state space label tuples this stencil label expands into.
 
-        See :method:`StencilLabel.compute_absolute_sslbls`
+        See :meth:`StencilLabel.compute_absolute_sslbls`
         """
         ret = []
         for chosen_sslbls in _itertools.combinations(self.possible_sslbls, self.num_to_choose):
@@ -318,7 +318,7 @@ class StencilLabelRadiusCombos(StencilLabel):
         """
         Creates a list of all the state space label tuples this stencil label expands into.
 
-        See :method:`StencilLabel.compute_absolute_sslbls`
+        See :meth:`StencilLabel.compute_absolute_sslbls`
         """
         ret = []
         assert (qubit_graph is not None), "A qubit graph is required by StencilLabelRadiusCombos!"

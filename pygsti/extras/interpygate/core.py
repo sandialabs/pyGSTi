@@ -565,7 +565,7 @@ class InterpolatedQuantityFactory(object):
 
         if rank in root_ranks:
             #Only root ranks store data (fn_to_interpolate only needs to return results on root proc)
-            flat_data = _np.empty(len(my_points) * int(_np.product(expected_fn_output_shape)), dtype='d')
+            flat_data = _np.empty(len(my_points) * int(_np.prod(expected_fn_output_shape)), dtype='d')
             data = flat_data.view(); data.shape = (len(my_points),) + expected_fn_output_shape
             if (comm is not None):
                 printer.log("Group %d processing %d points on %d processors." % (color, len(my_points),

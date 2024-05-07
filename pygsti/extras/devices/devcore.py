@@ -10,25 +10,40 @@
 
 import numpy as _np
 
+import warnings
+warnings.warn("The pygsti.devices.devcore module is deprecated. See pygsti.extras.devices.experimentaldevice instead.",
+              DeprecationWarning)
 
+from . import ibmq_algiers      # New system
 from . import ibmq_athens
+from . import ibmq_auckland     # New system
 from . import ibmq_belem
 from . import ibmq_bogota
+from . import ibmq_brisbane     # New system
 from . import ibmq_burlington
+from . import ibmq_cairo        # New system
 from . import ibmq_cambridge
 from . import ibmq_casablanca
 from . import ibmq_essex
 from . import ibmq_guadalupe
+from . import ibmq_hanoi        # New system
+from . import ibmq_kolkata      # New system
+from . import ibmq_lagos         # New system
 from . import ibmq_lima
 from . import ibmq_london
 from . import ibmq_manhattan
 from . import ibmq_melbourne
 from . import ibmq_montreal
+from . import ibmq_mumbai       # New system
+from . import ibmq_nairobi      # New system
+from . import ibmq_nazca        # New system
 from . import ibmq_ourense
+from . import ibmq_perth        # New system
 from . import ibmq_quito
 from . import ibmq_rome
 from . import ibmq_rueschlikon
 from . import ibmq_santiago
+from . import ibmq_sherbrooke   # New system
 from . import ibmq_sydney
 from . import ibmq_tenerife
 from . import ibmq_toronto
@@ -44,7 +59,7 @@ from pygsti.models import oplessmodel as _oplessmodel, modelconstruction as _mco
 from pygsti.modelmembers.povms import povm as _povm
 from pygsti.tools import rbtools as _anl
 from pygsti.tools.legacytools import deprecate as _deprecated_fn
-
+from pygsti.baseobjs.qubitgraph import QubitGraph as _QubitGraph
 
 @_deprecated_fn('basic_device_information')
 def get_device_specs(devname):
@@ -56,25 +71,36 @@ def basic_device_information(devname):
 
 
 def _get_dev_specs(devname):
-
-    if devname == 'ibmq_athens': dev = ibmq_athens
+    if devname == 'ibm_algiers' or devname == 'ibmq_algiers': dev = ibmq_algiers
+    elif devname == 'ibmq_athens': dev = ibmq_athens
+    elif devname == 'ibm_auckland' or devname == 'ibmq_auckland': dev = ibmq_auckland
     elif devname == 'ibmq_belem': dev = ibmq_belem
     elif devname == 'ibmq_bogota': dev = ibmq_bogota
+    elif devname == 'ibm_brisbane' or devname == 'ibmq_brisbane': dev = ibmq_brisbane
     elif devname == 'ibmq_burlington': dev = ibmq_burlington
+    elif devname == 'ibm_cairo' or devname == 'ibmq_cairo': dev = ibmq_cairo
     elif devname == 'ibmq_cambridge': dev = ibmq_cambridge
     elif devname == 'ibmq_casablanca': dev = ibmq_casablanca
     elif devname == 'ibmq_essex': dev = ibmq_essex
     elif devname == 'ibmq_guadalupe': dev = ibmq_guadalupe
+    elif devname == 'ibm_hanoi' or devname == 'ibmq_hanoi': dev = ibmq_hanoi
+    elif devname == 'ibm_kolkata' or devname == 'ibmq_kolkata': dev = ibmq_kolkata
+    elif devname == 'ibm_lagos' or devname == 'ibmq_lagos': dev = ibmq_lagos
     elif devname == 'ibmq_lima': dev = ibmq_lima
     elif devname == 'ibmq_london': dev = ibmq_london
     elif devname == 'ibmq_manhattan': dev = ibmq_manhattan
     elif devname == 'ibmq_melbourne' or devname == 'ibmq_16_melbourne': dev = ibmq_melbourne
     elif devname == 'ibmq_montreal': dev = ibmq_montreal
+    elif devname == 'ibm_mumbai' or devname == 'ibmq_mumbai': dev = ibmq_mumbai
+    elif devname == 'ibm_nairobi' or devname == 'ibmq_nairobi': dev = ibmq_nairobi
+    elif devname == 'ibm_nazco' or devname == 'ibmq_nazco': dev = ibmq_nazca
     elif devname == 'ibmq_ourense': dev = ibmq_ourense
+    elif devname == 'ibm_perth' or devname == 'ibmq_perth': dev = ibmq_perth
     elif devname == 'ibmq_quito': dev = ibmq_quito
     elif devname == 'ibmq_rome': dev = ibmq_rome
     elif devname == 'ibmq_rueschlikon': dev = ibmq_rueschlikon
     elif devname == 'ibmq_santiago': dev = ibmq_santiago
+    elif devname == 'ibm_sherbrooke' or devname == 'ibmq_sherbrooke': dev = ibmq_sherbrooke
     elif devname == 'ibmq_sydney': dev = ibmq_sydney
     elif devname == 'ibmq_tenerife': dev = ibmq_tenerife
     elif devname == 'ibmq_toronto': dev = ibmq_toronto
@@ -155,17 +181,24 @@ def create_processor_spec(device, one_qubit_gates, qubitsubset=None, removeedges
 
     for edge in removeedges: del edgelist[edgelist.index(edge)]
 
-    availability = {two_qubit_gate: edgelist}
-    #print(availability)
-    return _QubitProcessorSpec(total_qubits, gate_names, availability=availability, qubit_labels=qubits)
+    # Replaced availability with a QubitGraph due to a bug(?) in how an availability is propogated
+    # into a QubitProcessorSpec's QubitGraph (whereas the `geometry` input is directly stored as 
+    # the provided QubitGraph).
+    #availability = {two_qubit_gate: edgelist}
+
+    qubit_graph = _QubitGraph(qubits, initial_edges=edgelist)
+
+    return _QubitProcessorSpec(total_qubits, gate_names, geometry=qubit_graph, qubit_labels=qubits)
 
 
-def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native={}, calformat=None,
+def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native=None, calformat=None,
                              model_type='TwirledLayers', idle_name=None):
     """
     calformat: 'ibmq-v2018', 'ibmq-v2019', 'rigetti', 'native'.
     """
 
+    if one_qubit_gates_to_native is None:
+        one_qubit_gates_to_native = {}
     specs = _get_dev_specs(device)
     two_qubit_gate = specs.two_qubit_gate
     if 'Gc0' in one_qubit_gates:
@@ -355,7 +388,7 @@ def create_error_rates_model(caldata, device, one_qubit_gates, one_qubit_gates_t
     return model
 
 
-def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native={},
+def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_gates_to_native=None,
                                     calformat=None, qubits=None):
     """
     todo
@@ -363,6 +396,9 @@ def create_local_depolarizing_model(caldata, device, one_qubit_gates, one_qubit_
     Note: this model is *** NOT *** suitable for optimization: it is not aware that it is a local depolarization
     with non-independent error rates model.
     """
+
+    if one_qubit_gates_to_native is None:
+        one_qubit_gates_to_native = {}
 
     def _get_local_depolarization_channel(rate, num_qubits):
 

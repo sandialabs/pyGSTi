@@ -351,15 +351,18 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         #  columns of flattened_dprod.
         uniqueOpLabels = sorted(list(set(revOpLabelList)))
         for opLabel in uniqueOpLabels:
-            gate = self.model.circuit_layer_operator(opLabel, 'op')
-            op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
-            dop_dopLabel = gate.deriv_wrt_params(op_wrtFilter)
+            #REMOVE gate = self.model.circuit_layer_operator(opLabel, 'op')
+            #REMOVE op_wrtFilter, gpindices = self._process_wrt_filter(wrt_filter, gate)
+            #REMOVE dop_dopLabel = gate.deriv_wrt_params(op_wrtFilter)
+            dop_dopLabel = self._doperation(opLabel, flat=True, wrt_filter=wrt_filter)  # (dim**2, num_deriv_cols)
 
             for (i, gl) in enumerate(revOpLabelList):
                 if gl != opLabel: continue  # loop over locations of opLabel
                 LRproduct = _np.kron(leftProds[i], rightProdsT[N - 1 - i])  # (dim**2, dim**2)
-                _fas(flattened_dprod, [None, gpindices],
-                     _np.dot(LRproduct, dop_dopLabel), add=True)  # (dim**2, n_params[opLabel])
+                flattened_dprod += _np.dot(LRproduct, dop_dopLabel)  # (dim**2, num_deriv_cols)
+                #REMOVE _fas(flattened_dprod, [None, gpindices],
+                #REMOVE      _np.dot(LRproduct, dop_dopLabel), add=True)  # (dim**2, n_params[opLabel])
+
 
         if flat:
             return flattened_dprod
@@ -645,7 +648,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
     num_atoms : int, optional
         The number of atoms (sub-evaluation-trees) to use when creating the layout (i.e. when calling
-        :method:`create_layout`).  This determines how many units the element (circuit outcome
+        :meth:`create_layout`).  This determines how many units the element (circuit outcome
         probability) dimension is divided into, and doesn't have to correclate with the number of
         processors.  When multiple processors are used, if `num_atoms` is less than the number of
         processors then `num_atoms` should divide the number of processors evenly, so that
@@ -1022,7 +1025,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return hProdCache
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
-                      derivative_dimension=None, verbosity=0):
+                      derivative_dimensions=None, verbosity=0):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
@@ -1041,12 +1044,13 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             the layout (evaluation strategy) is constructed.
 
         array_types : tuple, optional
-            A tuple of string-valued array types.  See :method:`ForwardSimulator.create_layout`.
+            A tuple of string-valued array types.  See :meth:`ForwardSimulator.create_layout`.
 
-        derivative_dimension : int, optional
+        derivative_dimensions : int or tuple[int], optional
             Optionally, the parameter-space dimension used when taking first
             and second derivatives with respect to the cirucit outcome probabilities.  This must be
             non-None when `array_types` contains `'ep'` or `'epp'` types.
+            If a tuple, then must be length 1.
 
         verbosity : int or VerbosityPrinter
             Determines how much output to send to stdout.  0 means no output, higher
@@ -1072,7 +1076,13 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         printer = _VerbosityPrinter.create_printer(verbosity, resource_alloc)
         nprocs = resource_alloc.comm_size
         comm = resource_alloc.comm
-        num_params = derivative_dimension if (derivative_dimension is not None) else self.model.num_params
+        if isinstance(derivative_dimensions, int):
+            num_params = derivative_dimensions
+        elif isinstance(derivative_dimensions, tuple):
+            assert len(derivative_dimensions) == 1
+            num_params = derivative_dimensions[0]
+        else:
+            num_params = self.model.num_params
         C = 1.0 / (1024.0**3)
 
         if mem_limit is not None:
@@ -1090,9 +1100,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             na, npp = 1, (1, 1)  # save all processor division for within the (single) atom, for different timestamps
 
         printer.log("MatrixLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
-                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.product((na,) + npp)))
+                    (nprocs, ' x '.join(map(str, (na,) + npp)), _np.prod((na,) + npp)))
         printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
-        assert(_np.product((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
+        assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
         layout = _MatrixCOPALayout(circuits, self.model, dataset, natoms,
                                    na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity)
@@ -1836,7 +1846,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -1877,7 +1887,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         """
         Compute the chi2 jacobian contributions for an entire tree of circuits, allowing for time dependent operations.
 
-        Similar to :method:`bulk_fill_timedep_chi2` but compute the *jacobian*
+        Similar to :meth:`bulk_fill_timedep_chi2` but compute the *jacobian*
         of the summed chi2 contributions for each circuit with respect to the
         model's parameters.
 
@@ -1890,7 +1900,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -1944,9 +1954,9 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             an already-allocated 1D numpy array of length equal to the
             total number of computed elements (i.e. layout.num_elements)
 
-       layout : CircuitOutcomeProbabilityArrayLayout
+        layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see
@@ -1992,7 +2002,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         """
         Compute the ("poisson picture")log-likelihood jacobian contributions for an entire tree of circuits.
 
-        Similar to :method:`bulk_fill_timedep_loglpp` but compute the *jacobian*
+        Similar to :meth:`bulk_fill_timedep_loglpp` but compute the *jacobian*
         of the summed logl (in posison picture) contributions for each circuit
         with respect to the model's parameters.
 
@@ -2005,7 +2015,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
 
         layout : CircuitOutcomeProbabilityArrayLayout
             A layout for `array_to_fill`, describing what circuit outcome each
-            element corresponds to.  Usually given by a prior call to :method:`create_layout`.
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
 
         ds_circuits : list of Circuits
             the circuits to use as they should be queried from `dataset` (see

@@ -238,8 +238,8 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
 
     switchBd.add("eff_ds", (0, 1))
     switchBd.add("modvi_ds", (0, 1))
-    switchBd.add("wildcard_budget", (0, 1))
-    switchBd.add("wildcard_budget_optional", (0, 1))
+    switchBd.add("wildcard_budget", (0, 1, 2))
+    switchBd.add("wildcard_budget_optional", (0, 1, 2))
     switchBd.add("scaled_submxs_dict", (0, 1))
     switchBd.add("mdl_target", (0, 1))
     switchBd.add("params", (0, 1))
@@ -359,14 +359,26 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 switchBd.scaled_submxs_dict[d, i] = NA
 
             wildcard = est.parameters.get("unmodeled_error", None)
-            if isinstance(wildcard, dict):  # assume a serialized budget object
-                wildcard = _wildcardbudget.WildcardBudget.from_nice_serialization(wildcard)
+            if isinstance(wildcard, dict):  # this is either a serialized budget object
+                #or a dictionary of serialized budget objects. Let's check which:
+                #technically the following could get broken by a user naming a gauge-opt
+                #opt suite 'module', I'll think of a better fix for this at some point.
+                if 'module' in wildcard.keys():
+                    wildcard = _wildcardbudget.WildcardBudget.from_nice_serialization(wildcard)
+                else:
+                    wildcard = {lbl:_wildcardbudget.WildcardBudget.from_nice_serialization(budget) for lbl,budget in wildcard.items()}
 
-            switchBd.wildcard_budget_optional[d, i] = wildcard
-            if est.parameters.get("unmodeled_error", None):
-                switchBd.wildcard_budget[d, i] = wildcard
-            else:
-                switchBd.wildcard_budget[d, i] = NA
+            for j, gokey in enumerate(gauge_opt_labels):
+                switchBd.wildcard_budget_optional[d, i, j] = None
+                if wildcard is not None:
+                    if isinstance(wildcard, _wildcardbudget.WildcardBudget):
+                        switchBd.wildcard_budget[d, i, j] = wildcard
+                        switchBd.wildcard_budget_optional[d, i, j] = wildcard
+                    elif isinstance(wildcard, dict):
+                        switchBd.wildcard_budget[d, i, j] = wildcard.get(gokey, NA)
+                        switchBd.wildcard_budget_optional[d, i, j] = wildcard.get(gokey, None)
+                else:
+                    switchBd.wildcard_budget[d, i, j] = NA
 
             switchBd.mdl_target[d, i] = est.models['target']
             switchBd.mdl_gaugeinv[d, i] = est.models[GIRepLbl]
@@ -375,6 +387,8 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                                                                                      est.models['target'])
             except AttributeError:  # Implicit models don't support everything, like set_all_parameterizations
                 switchBd.mdl_gaugeinv_ep[d, i] = None
+            except _np.linalg.LinAlgError:  # Failure to compute a best-case gauge transform can happen w/reduced models
+                switchBd.mdl_gaugeinv_ep[d, i] = None
             except (ValueError, AssertionError):  # if target is badly off, e.g. an imaginary part assertion
                 switchBd.mdl_gaugeinv_ep[d, i] = None
 
@@ -382,7 +396,10 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             switchBd.mdl_target_and_final[d, i, :] = \
                 [[est.models['target'], est.models[l]] if (l in est.models) else NA
                  for l in gauge_opt_labels]
-            switchBd.goparams[d, i, :] = [est.goparameters.get(l, NA) for l in gauge_opt_labels]
+                 #Add some logic to allow for the value of the gaugeoptparams dict to be None
+                 #(so far this only shows up in certain ModelTest scenarios).
+            switchBd.goparams[d, i, :] = [est.goparameters.get(l, NA) if est.goparameters.get(l, NA) is not None
+                                                                    else NA for l in gauge_opt_labels]
 
             for iL, L in enumerate(swLs):  # allow different results to have different Ls
                 if L in loc_Ls:
@@ -1223,7 +1240,13 @@ def construct_standard_report(results, title="auto",
                 #will add an extra flag/plot to the report.
                 wildcard = est.parameters['unmodeled_error']
                 if isinstance(wildcard, dict):  # assume a serialized budget object
-                    wildcard = _wildcardbudget.WildcardBudget.from_nice_serialization(wildcard)
+                    #check if this is a dictionary of serialized budget objects or just one.
+                    #If a dictionary just deserialize the first (this is not a great way to
+                    #do this, circle back to this).
+                    if 'module' in wildcard.keys():
+                        wildcard = _wildcardbudget.WildcardBudget.from_nice_serialization(wildcard)
+                    else:
+                        wildcard = _wildcardbudget.WildcardBudget.from_nice_serialization(list(wildcard.values())[0])
                 if (isinstance(wildcard, PrimitiveOpsSingleScaleWildcardBudget)
                    and wildcard.reference_name == 'diamond distance'):
                     flags.add('DiamondDistanceWildcard')
@@ -1308,7 +1331,8 @@ def construct_standard_report(results, title="auto",
         'est_labels': tuple(est_labels),
         'gauge_opt_labels': tuple(gauge_opt_labels),
         'max_lengths': tuple(Ls),
-        'switchbd_maxlengths': tuple(swLs)
+        'switchbd_maxlengths': tuple(swLs),
+        'show_unmodeled_error': bool('ShowUnmodeledError' in flags)
     }
 
     templates = dict(

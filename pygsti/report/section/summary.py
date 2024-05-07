@@ -50,7 +50,7 @@ class SummarySection(_Section):
 
         return workspace.GatesVsTargetTable(
             switchboard.mdl_final, switchboard.mdl_target, cri,
-            summary_display, wildcardBudget
+            summary_display, None, wildcardBudget
         )
 
     @_Section.figure_factory()

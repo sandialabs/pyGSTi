@@ -13,11 +13,13 @@ Defines the ModelParamsInterposer class and supporting functionality.
 import numpy as _np
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
+
 class ModelParamsInterposer(_NicelySerializable):
     """
     A function class that sits in between an :class:`OpModel`'s parameter vector and those of its operations.
     """
     def __init__(self, num_params, num_op_params):
+        super().__init__()
         self.num_params = num_params
         self.num_op_params = num_op_params
 

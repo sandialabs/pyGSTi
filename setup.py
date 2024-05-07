@@ -47,7 +47,8 @@ extras = {
     'html_reports': ['jinja2', 'MarkupSafe'],
     'notebooks': [
         'ipython',
-        'notebook'
+        'notebook',
+        'jupyter_server'
     ],
     'mongodb': ['pymongo'],
     'msgpack': ['msgpack'],
@@ -58,7 +59,10 @@ extras = {
     ],
     'interpygate': ['csaps'],
     'testing': [
-        'coverage',
+        'pytest',
+        'pytest-xdist',
+        'pytest-cov',
+        'nbval',
         'csaps',
         'cvxopt',
         'cvxpy',
@@ -66,17 +70,18 @@ extras = {
         'matplotlib',
         'mpi4py',
         'msgpack',
-        'nose',
-        'nose-timer',
         'packaging',
         'pandas',
         'psutil',
-        'rednose',
         'zmq',
         'jinja2',
         'seaborn',
         'ply',
-        'qibo<=0.1.7'
+        'qibo<=0.1.7',
+        'cirq-core',
+        'notebook',
+        'ipython',
+        'jupyter_server'
     ]
 }
 
@@ -459,7 +464,7 @@ try:
                 "pygsti/forwardsims/mapforwardsim_calc_densitymx.pyx",
                 "pygsti/evotypes/densitymx/statecreps.cpp",
             ],
-            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            include_dirs=['.', 'pygsti/evotypes', 'pygsti/evotypes/densitymx', np.get_include()],
             language="c++",
             extra_link_args=["-std=c++11"]
         ),
@@ -470,7 +475,7 @@ try:
                 "pygsti/evotypes/statevec/statecreps.cpp",
                 "pygsti/evotypes/basecreps.cpp"
             ],
-            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            include_dirs=['.', 'pygsti/evotypes', 'pygsti/evotypes/statevec', np.get_include()],
             language="c++",
             extra_link_args=["-std=c++11"]
         ),
@@ -481,7 +486,7 @@ try:
                 "pygsti/evotypes/stabilizer/statecreps.cpp",
                 "pygsti/evotypes/basecreps.cpp"
             ],
-            include_dirs=['.', 'pygsti/evotypes', np.get_include()],
+            include_dirs=['.', 'pygsti/evotypes', 'pygsti/evotypes/stabilizer', np.get_include()],
             language="c++",
             extra_link_args=["-std=c++11"]
         ),

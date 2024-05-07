@@ -221,7 +221,7 @@ class SmartCache(object):
 
     def low_overhead_cached_compute(self, fn, arg_vals, kwargs=None):
         """
-        Cached compute with less profiling. See :method:`cached_compute` docstring.
+        Cached compute with less profiling. See :meth:`cached_compute` docstring.
 
         Parameters
         ----------
@@ -550,7 +550,7 @@ def digest(obj, custom_digests=None):
                     md5.update(str(hash(v)).encode('utf-8'))
                 except TypeError:  # as hashException:
                     if isinstance(v, _np.ndarray):
-                        md5.update(v.tostring() + str(v.shape).encode('utf-8'))  # numpy gives us bytes
+                        md5.update(v.tobytes() + str(v.shape).encode('utf-8'))  # numpy gives us bytes
                     elif isinstance(v, (tuple, list)):
                         for el in v: add(md5, el)
                     elif isinstance(v, dict):

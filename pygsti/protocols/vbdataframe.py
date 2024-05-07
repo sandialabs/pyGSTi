@@ -19,7 +19,7 @@ def _calculate_summary_statistic(x, statistic, lower_cutoff=None):
     Utility function that returns statistic(x), or the maximum
     of statistic(x) and lower_cutoff if lower_cutoff is not None.
     """
-    if len(x) == 0 or _np.all(_np.isnan(x)): return _np.NaN
+    if len(x) == 0 or _np.all(_np.isnan(x)): return _np.nan
     if statistic == 'mean': func = _np.nanmean
     elif statistic == 'max' or statistic == 'monotonic_max': func = _np.nanmax
     elif statistic == 'min' or statistic == 'monotonic_min': func = _np.nanmin
@@ -43,7 +43,7 @@ def polarization_to_success_probability(p, n):
 def success_probability_to_polarization(s, n):
     """
     Maps a success probablity s for an n-qubit circuit to
-    the polarization, defined by p = (s - 1/2^n)/(1 - 1/2^n)
+    the polarization, defined by `p = (s - 1/2^n)/(1 - 1/2^n)`
     """
     return (s - 1 / 2**n) / (1 - 1 / 2**n)
 
@@ -57,9 +57,9 @@ def classify_circuit_shape(success_probabilities, total_counts, threshold, signi
     Returns an integer that classifies the input list of success probabilities (SPs) as
     either
 
-    -- "success": all SPs above the specified threshold, specified by the int 2.
-    -- "indeterminate": some SPs are above and some are below the threshold, specified by the int 1.
-    -- "fail": all SPs are below the threshold, specified by the int 0.
+    * "success": all SPs above the specified threshold, specified by the int 2.
+    * "indeterminate": some SPs are above and some are below the threshold, specified by the int 1.
+    * "fail": all SPs are below the threshold, specified by the int 0.
 
     This classification is based on a hypothesis test whereby the null hypothesis is "success"
     or "fail". That is, the set of success probabilities are designated to be "indeterminate"
@@ -355,24 +355,25 @@ class VBDataFrame(object):
         statistics : string, optional
             The statistic on the data to be computed at each value of (x, y). Options are:
 
-            - 'max': the maximum
-            - 'min': the minimum.
-            - 'mean': the mean.
-            - 'monotonic_max': the maximum of all the data with (x, y) values that are that large or larger
-            - 'monotonic_min': the minimum of all the data with (x, y) values that are that small or smaller
+            * 'max': the maximum
+            * 'min': the minimum.
+            * 'mean': the mean.
+            * 'monotonic_max': the maximum of all the data with (x, y) values that are that large or larger
+            * 'monotonic_min': the minimum of all the data with (x, y) values that are that small or smaller
 
-        All these options ignore nan values.
+            All these options ignore nan values.
 
         lower_cutoff : float, optional
             The value to cutoff the statistic at: takes the maximum of the calculated static and this value.
 
         no_data_action: string, optional
             Sets what to do when there is no data, or only NaN data, at an (x, y) value:
-            - If 'discard' then when there is no data, or only NaN data, for an (x,y) value then this (x,y)
+            
+            * If 'discard' then when there is no data, or only NaN data, for an (x,y) value then this (x,y)
               value will not be a key in the returned dictionary
-            - If 'nan' then when there is no data, or only NaN data, for an (x,y) value then this (x,y)
+            * If 'nan' then when there is no data, or only NaN data, for an (x,y) value then this (x,y)
               value will be a key in the returned dictionary and its value will be NaN.
-            - If 'min' then when there is no data, or only NaN data, for an (x,y) value then this (x,y)
+            * If 'min' then when there is no data, or only NaN data, for an (x,y) value then this (x,y)
               value will be a key in the returned dictionary and its value will be the minimal value
               allowed for this statistic, as specified by `lower_cutoff`.
 

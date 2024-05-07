@@ -72,7 +72,7 @@ def prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_p
     # use get_direct_order_terms(order, order_base) w/order_base=0.1(?) instead of taylor_order_terms??
     # below: replace prps with: prs = _np.zeros(len(elabels),complex)  # an array in "bulk" mode
     #  use *= or * instead of .mult( and .scale(
-    #  e.g. res = _np.product([f.coeff for f in factors])
+    #  e.g. res = _np.prod([f.coeff for f in factors])
     #       res *= (pLeft * pRight)
     # - add assert(_np.linalg.norm(_np.imag(prs)) < 1e-6) at end and return _np.real(prs)
 
@@ -227,7 +227,7 @@ def prs_as_polynomials(fwdsim, rholabel, elabels, circuit, polynomial_vindices_p
 
             # #DEBUG!!!
             # db_nfactors = [len(l) for l in factor_lists]
-            # db_totfactors = _np.product(db_nfactors)
+            # db_totfactors = _np.prod(db_nfactors)
             # db_factor_cnt += db_totfactors
             # DEBUG_FCOUNT += db_totfactors
             # db_part_cnt += 1
@@ -347,7 +347,7 @@ def circuit_achieved_and_max_sopm(fwdsim, rholabel, elabels, circuit, repcache, 
 
     ops = [fwdsim.model._circuit_layer_operator(rholabel, 'prep')] + \
         [fwdsim.model._circuit_layer_operator(glbl, 'op') for glbl in circuit]
-    max_sum_of_pathmags = _np.product([op.total_term_magnitude for op in ops])
+    max_sum_of_pathmags = _np.prod([op.total_term_magnitude for op in ops])
     max_sum_of_pathmags = _np.array(
         [max_sum_of_pathmags * fwdsim.model._circuit_layer_operator(elbl, 'povm').total_term_magnitude
          for elbl in elabels], 'd')
@@ -459,7 +459,7 @@ def find_best_pathmagnitude_threshold(fwdsim, rholabel, elabels, circuit, polyno
 
     ops = [fwdsim.model._circuit_layer_operator(rholabel, 'prep')] + \
         [fwdsim.model._circuit_layer_operator(glbl, 'op') for glbl in circuit]
-    max_sum_of_pathmags = _np.product([op.total_term_magnitude for op in ops])
+    max_sum_of_pathmags = _np.prod([op.total_term_magnitude for op in ops])
     max_sum_of_pathmags = _np.array(
         [max_sum_of_pathmags * fwdsim.model._circuit_layer_operator(elbl, 'povm').total_term_magnitude
          for elbl in elabels], 'd')
@@ -838,7 +838,7 @@ def _prs_as_pruned_polys(fwdsim, rholabel, elabels, circuit, repcache, comm=None
 
     ops = [fwdsim.model._circuit_layer_operator(rholabel, 'prep')] + \
         [fwdsim.model._circuit_layer_operator(glbl, 'op') for glbl in circuit]
-    max_sum_of_pathmags = _np.product([op.total_term_magnitude for op in ops])
+    max_sum_of_pathmags = _np.prod([op.total_term_magnitude for op in ops])
     max_sum_of_pathmags = _np.array(
         [max_sum_of_pathmags * fwdsim.model._circuit_layer_operator(elbl, 'povm').total_term_magnitude
          for elbl in elabels], 'd')

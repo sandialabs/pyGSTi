@@ -59,6 +59,8 @@ class StaticCliffordOp(_LinearOperator, _NoErrorGeneratorInterface):
         state_space = _statespace.default_space_for_udim(U.shape[0]) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
 
+        basis = _Basis.cast(basis, state_space.dim)
+
         evotype = _Evotype.cast(evotype)
         rep = evotype.create_clifford_rep(U, symplecticrep, basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
@@ -115,7 +117,7 @@ class StaticCliffordOp(_LinearOperator, _NoErrorGeneratorInterface):
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         #Same as unitary op -- assume this op acts as a single unitary term -- consolidate in FUTURE?
         if order == 0:  # only 0-th order term exists
@@ -202,15 +204,15 @@ class StaticCliffordOp(_LinearOperator, _NoErrorGeneratorInterface):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         U = self.unitary.to_dense() if isinstance(self.unitary, _LinearOperator) else self.unitary  # as in __init__
 
         mm_dict = super().to_memoized_dict(mmg_memo)
-        mm_dict['smatrix'] = self._encodemx(self.smatrix())
-        mm_dict['svector'] = self._encodemx(self.svector())
-        mm_dict['basis'] = self.basis._to_nice_serialization()
+        mm_dict['smatrix'] = self._encodemx(self.smatrix)
+        mm_dict['svector'] = self._encodemx(self.svector)
+        mm_dict['basis'] = self._rep.basis._to_nice_serialization()
         mm_dict['unitary_matrix'] = self._encodemx(U)
         return mm_dict
 
@@ -225,8 +227,8 @@ class StaticCliffordOp(_LinearOperator, _NoErrorGeneratorInterface):
     def _is_similar(self, other, rtol, atol):
         """ Returns True if `other` model member (which it guaranteed to be the same type as self) has
             the same local structure, i.e., not considering parameter values or submembers """
-        smx, svec = self.smatrix(), self.svector()
-        other_smx, other_svec = other.smatrix(), other.svetor()
+        smx, svec = self.smatrix, self.svector
+        other_smx, other_svec = other.smatrix, other.svector
         return (smx.shape == other_smx.shape
                 and svec.shape == other_svec.shape
                 and _np.allclose(smx, other_smx, rtol=rtol, atol=atol)

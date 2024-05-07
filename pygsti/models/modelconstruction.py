@@ -153,22 +153,22 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
         delimited by the colon (:) character, which are composed together to
         create the final gate.  Each part takes on of the allowed forms:
 
-        - I(ssl_0, ...) = identity operation on one or more state space labels
+        * `I(ssl_0, ...)` = identity operation on one or more state space labels
           (ssl_i)
-        - X(theta, ssl) = x-rotation by theta radians of qubit labeled by ssl
-        - Y(theta, ssl) = y-rotation by theta radians of qubit labeled by ssl
-        - Z(theta, ssl) = z-rotation by theta radians of qubit labeled by ssl
-        - CX(theta, ssl0, ssl1) = controlled x-rotation by theta radians.  Acts
+        * X(theta, ssl) = x-rotation by theta radians of qubit labeled by ssl
+        * Y(theta, ssl) = y-rotation by theta radians of qubit labeled by ssl
+        * Z(theta, ssl) = z-rotation by theta radians of qubit labeled by ssl
+        * CX(theta, ssl0, ssl1) = controlled x-rotation by theta radians.  Acts
           on qubit labeled by ssl1 with ssl0 being the control.
-        - CY(theta, ssl0, ssl1) = controlled y-rotation by theta radians.  Acts
+        * CY(theta, ssl0, ssl1) = controlled y-rotation by theta radians.  Acts
           on qubit labeled by ssl1 with ssl0 being the control.
-        - CZ(theta, ssl0, ssl1) = controlled z-rotation by theta radians.  Acts
+        * CZ(theta, ssl0, ssl1) = controlled z-rotation by theta radians.  Acts
           on qubit labeled by ssl1 with ssl0 being the control.
-        - CNOT(ssl0, ssl1) = standard controlled-not gate.  Acts on qubit
+        * CNOT(ssl0, ssl1) = standard controlled-not gate.  Acts on qubit
           labeled by ssl1 with ssl0 being the control.
-        - CPHASE(ssl0, ssl1) = standard controlled-phase gate.  Acts on qubit
+        * CPHASE(ssl0, ssl1) = standard controlled-phase gate.  Acts on qubit
           labeled by ssl1 with ssl0 being the control.
-        - LX(theta, i0, i1) = leakage between states i0 and i1.  Implemented as
+        * LX(theta, i0, i1) = leakage between states i0 and i1.  Implemented as
           an x-rotation between states with integer indices i0 and i1 followed
           by complete decoherence between the states.
 
@@ -240,7 +240,7 @@ def create_operation(op_expr, state_space, basis="pp", parameterization="full", 
         if opName == "I":
             # qubit labels (TODO: what about 'L' labels? -- not sure if they work with this...)
             labels = to_labels(args)
-            stateSpaceUDim = int(_np.product([state_space.label_udimension(l) for l in labels]))
+            stateSpaceUDim = int(_np.prod([state_space.label_udimension(l) for l in labels]))
             # a complex 2x2 mx unitary for the identity in Pauli-product basis
             Uop = _op.StaticUnitaryOp(_np.identity(stateSpaceUDim, 'complex'), 'pp', build_evotype)
 
@@ -489,15 +489,15 @@ def _create_explicit_model_from_expressions(state_space, basis,
         then `effect_labels` must be a list of lists of effect labels, each
         list corresponding to a POVM.  If set to the special string `"standard"`
         then the length-n binary strings are used when the state space consists
-        of n qubits (e.g. `"000"`, `"001"`, ... `"111"` for 3 qubits) and
-        the labels `"0"`, `"1"`, ... `"<dim>"` are used, where `<dim>`
+        of n qubits (e.g. `"000"`, `"001"`, `...` `"111"` for 3 qubits) and
+        the labels `"0"`, `"1"`, `...` `"<dim>"` are used, where `<dim>`
         is the dimension of the state space, in all non-qubit cases.
 
     effect_expressions : list, optional
         A list or list-of-lists of (string) vector expressions for each POVM
         effect vector (see documentation for :meth:`_create_spam_vector`).  Expressions
         correspond to labels in `effect_labels`.  If set to the special string
-        `"standard"`, then the expressions `"0"`, `"1"`, ... `"<dim>"` are used,
+        `"standard"`, then the expressions `"0"`, `"1"`, `...` `"<dim>"` are used,
         where `<dim>` is the dimension of the state space.
 
     povm_labels : list or string, optional
@@ -799,9 +799,12 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                 and processor_spec.nonstd_gate_unitaries[gn].shape == std_gate_unitaries[gn].shape
                 and _np.allclose(processor_spec.nonstd_gate_unitaries[gn], std_gate_unitaries[gn]))):
             stdname = gn  # setting `stdname` != None means we can try to create a StaticStandardOp below
-        else:
+        #if gate_unitary is an integer we'll be creating an n-qubit idle gate and won't associate a standard name to it
+        elif isinstance(gate_unitary, (int, _np.int64)):
+            stdname=None    
+        else:    
             stdname = _itgs.unitary_to_standard_gatename(gate_unitary)  # possibly None
-
+        
         if callable(resolved_avail) or resolved_avail == '*':
             assert (embed_gates), "Cannot create factories with `embed_gates=False` yet!"
             key = _label.Label(gn) if (gn != gn_to_make_emptytup) else _label.Label(())
@@ -933,13 +936,18 @@ def _create_explicit_model(processor_spec, modelnoise, custom_gates=None, evotyp
                 inst_members = {}
                 for k, lst in instrument_spec.items():
                     member = None
-                    for effect_spec, prep_spec in lst:
-                        effect_vec = _spec_to_densevec(effect_spec, is_prep=False)
-                        prep_vec = _spec_to_densevec(prep_spec, is_prep=True)
-                        if member is None:
-                            member = _np.outer(effect_vec, prep_vec)
-                        else:
-                            member += _np.outer(effect_vec, prep_vec)
+                    if len(lst) == 2:
+                        for effect_spec, prep_spec in lst:
+                            effect_vec = _spec_to_densevec(effect_spec, is_prep=False)
+                            prep_vec = _spec_to_densevec(prep_spec, is_prep=True)
+                            if member is None:
+                                member = _np.outer(effect_vec, prep_vec)
+                            else:
+                                member += _np.outer(effect_vec, prep_vec)
+                    else: # elements are key, array of outer product already
+                        # TODO: This appears to be the new standard format. Deprecate outer prod code above?
+                        # But old code could still be useful.
+                        member = lst.copy()
 
                     assert (member is not None), \
                         "You must provide at least one rank-1 specifier for each instrument member!"
@@ -1509,9 +1517,10 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
     Errors can be specified using any combination of the 4 error rate/coeff arguments,
     but each gate name must be provided exclusively to one type of specification.
     Each specification results in a different type of operation, depending on the parameterization:
-        - `depolarization_strengths`    -> DepolarizeOp, StochasticNoiseOp, or exp(LindbladErrorgen)
-        - `stochastic_error_probs`      -> StochasticNoiseOp or exp(LindbladErrorgen)
-        - `lindblad_error_coeffs`       -> exp(LindbladErrorgen)
+    
+    - `depolarization_strengths`    -> DepolarizeOp, StochasticNoiseOp, or exp(LindbladErrorgen)
+    - `stochastic_error_probs`      -> StochasticNoiseOp or exp(LindbladErrorgen)
+    - `lindblad_error_coeffs`       -> exp(LindbladErrorgen)
 
     In addition to the gate names, the special values `"prep"` and `"povm"` may be
     used as keys to specify the error on the state preparation, measurement, respectively.
@@ -1598,7 +1607,7 @@ def create_crosstalk_free_model(processor_spec, custom_gates=None,
         name.  If True, then gates with the same name acting on different
         qudits may have different local noise, and so the
         `operation_bks['gates']` dictionary contains a key for each gate
-         available gate placement.
+        available gate placement.
 
     ensure_composed_gates : bool, optional
         If True then the elements of the `operation_bks['gates']` will always
@@ -1656,7 +1665,7 @@ def _create_crosstalk_free_model(processor_spec, modelnoise, custom_gates=None, 
     """
     Create a n-qudit "crosstalk-free" model.
 
-    Similar to :method:`create_crosstalk_free_model` but the noise is input more generally,
+    Similar to :meth:`create_crosstalk_free_model` but the noise is input more generally,
     as a :class:`ModelNoise` object.  Arguments are the same as this function except that
     `modelnoise` is given instead of several more specific noise-describing arguments.
 
@@ -1716,9 +1725,10 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
     Errors can be specified using any combination of the 4 error rate/coeff arguments,
     but each gate name must be provided exclusively to one type of specification.
     Each specification results in a different type of operation, depending on the parameterization:
-        - `depolarization_strengths`    -> DepolarizeOp, StochasticNoiseOp, or exp(LindbladErrorgen)
-        - `stochastic_error_probs`      -> StochasticNoiseOp or exp(LindbladErrorgen)
-        - `lindblad_error_coeffs`       -> exp(LindbladErrorgen)
+    
+    - `depolarization_strengths`    -> DepolarizeOp, StochasticNoiseOp, or exp(LindbladErrorgen)
+    - `stochastic_error_probs`      -> StochasticNoiseOp or exp(LindbladErrorgen)
+    - `lindblad_error_coeffs`       -> exp(LindbladErrorgen)
 
     In addition to the gate names, the special values `"prep"` and `"povm"` may be
     used as keys to specify the error on the state preparation, measurement, respectively.
@@ -1798,7 +1808,7 @@ def create_cloud_crosstalk_model(processor_spec, custom_gates=None,
         name.  If True, then gates with the same name acting on different
         qudits may have different local noise, and so the
         `operation_bks['cloudnoise']` dictionary contains a key for each gate
-         available gate placement.
+        available gate placement.
 
     independent_spam : bool, optional
         Similar to `indepenent_gates` but for SPAM operations.
@@ -1846,7 +1856,7 @@ def _create_cloud_crosstalk_model(processor_spec, modelnoise, custom_gates=None,
     """
     Create a n-qudit "cloud-crosstalk" model.
 
-    Similar to :method:`create_cloud_crosstalk_model` but the noise is input more generally,
+    Similar to :meth:`create_cloud_crosstalk_model` but the noise is input more generally,
     as a :class:`ModelNoise` object.  Arguments are the same as this function except that
     `modelnoise` is given instead of several more specific noise-describing arguments.
 
@@ -2017,8 +2027,8 @@ def create_cloud_crosstalk_model_from_hops_and_weights(
 
     simulator : ForwardSimulator or {"auto", "matrix", "map"}
         The circuit simulator used to compute any
-        requested probabilities, e.g. from :method:`probs` or
-        :method:`bulk_probs`.  Using `"auto"` selects `"matrix"` when there
+        requested probabilities, e.g. from :meth:`probs` or
+        :meth:`bulk_probs`.  Using `"auto"` selects `"matrix"` when there
         are 2 qudits or less, and otherwise selects `"map"`.
 
     evotype : Evotype or str, optional

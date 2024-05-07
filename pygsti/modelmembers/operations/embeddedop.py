@@ -57,8 +57,13 @@ class EmbeddedOp(_LinearOperator):
             "Embedded operation's state space has a different number of components than the number of target labels!"
 
         evotype = operation_to_embed._evotype
+        rep = self._create_rep_object(evotype, state_space)
 
-        #Create representation
+        _LinearOperator.__init__(self, rep, evotype)
+        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
+        if self._rep_type == 'dense': self._update_denserep()
+
+    def _create_rep_object(self, evotype, state_space):
         #Create representation object
         rep_type_order = ('dense', 'embedded') if evotype.prefer_dense_reps else ('embedded', 'dense')
         rep = None
@@ -82,16 +87,17 @@ class EmbeddedOp(_LinearOperator):
 
         if rep is None:
             raise ValueError("Unable to construct representation with evotype: %s" % str(evotype))
-
-        _LinearOperator.__init__(self, rep, evotype)
-        self.init_gpindices(allocated_to_parent)  # initialize our gpindices based on sub-members
-        if self._rep_type == 'dense': self._update_denserep()
+        return rep
 
     def _update_denserep(self):
         """Performs additional update for the case when we use a dense underlying representation."""
         self._rep.base.flags.writeable = True
         self._rep.base[:, :] = self.to_dense(on_space='minimal')
         self._rep.base.flags.writeable = False
+
+    def _update_submember_state_spaces(self, old_parent_state_space, new_parent_state_space):
+        self._rep = self._create_rep_object(self.evotype, new_parent_state_space)  # update representation
+        # No need to update submembers
 
     def __getstate__(self):
         # Don't pickle 'instancemethod' or parent (see modelmember implementation)
@@ -162,9 +168,9 @@ class EmbeddedOp(_LinearOperator):
 
         # number of basis elements preceding our block's elements
         if on_space == "Hilbert":
-            blockDims = [_np.product(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_udimensions]
+            blockDims = [_np.prod(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_udimensions]
         else:
-            blockDims = [_np.product(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_dimensions]
+            blockDims = [_np.prod(tpb_dims) for tpb_dims in self.state_space.tensor_product_blocks_dimensions]
         offset = sum(blockDims[0:iTensorProdBlk])
 
         return divisors, multipliers, sorted_bili, basisInds_noop, offset
@@ -428,7 +434,7 @@ class EmbeddedOp(_LinearOperator):
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         #Reduce labeldims b/c now working on *state-space* instead of density mx:
         sslbls = self.state_space.copy()
@@ -446,7 +452,7 @@ class EmbeddedOp(_LinearOperator):
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
-        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
+        It calls :meth:`taylor_order_terms` internally, so that all the terms at order `order`
         are typically cached for future calls.
 
         The coefficients of these terms are typically polynomials of the operation's
@@ -567,7 +573,7 @@ class EmbeddedOp(_LinearOperator):
             essentially converts the coefficient into a rate that is
             the contribution this term would have within a depolarizing
             channel where all stochastic generators had this same coefficient.
-            This is the value returned by :method:`error_rates`.
+            This is the value returned by :meth:`error_rates`.
 
         Returns
         -------
@@ -594,7 +600,7 @@ class EmbeddedOp(_LinearOperator):
 
     def errorgen_coefficient_labels(self):
         """
-        The elementary error-generator labels corresponding to the elements of :method:`errorgen_coefficients_array`.
+        The elementary error-generator labels corresponding to the elements of :meth:`errorgen_coefficients_array`.
 
         Returns
         -------
@@ -613,7 +619,7 @@ class EmbeddedOp(_LinearOperator):
         """
         The weighted coefficients of this operation's error generator in terms of "standard" error generators.
 
-        Constructs a 1D array of all the coefficients returned by :method:`errorgen_coefficients`,
+        Constructs a 1D array of all the coefficients returned by :meth:`errorgen_coefficients`,
         weighted so that different error generators can be weighted differently when a
         `errorgen_penalty_factor` is used in an objective function.
 
@@ -627,7 +633,7 @@ class EmbeddedOp(_LinearOperator):
 
     def errorgen_coefficients_array_deriv_wrt_params(self):
         """
-        The jacobian of :method:`errogen_coefficients_array` with respect to this operation's parameters.
+        The jacobian of :meth:`errogen_coefficients_array` with respect to this operation's parameters.
 
         Returns
         -------
@@ -701,11 +707,11 @@ class EmbeddedOp(_LinearOperator):
         logscale_nonham : bool, optional
             Whether or not the values in `lindblad_term_dict` for non-hamiltonian
             error generators should be interpreted as error *rates* (of an
-            "equivalent" depolarizing channel, see :method:`errorgen_coefficients`)
+            "equivalent" depolarizing channel, see :meth:`errorgen_coefficients`)
             instead of raw coefficients.  If True, then the non-hamiltonian
             coefficients are set to `-log(1 - d^2*rate)/d^2`, where `rate` is
             the corresponding value given in `lindblad_term_dict`.  This is what is
-            performed by the function :method:`set_error_rates`.
+            performed by the function :meth:`set_error_rates`.
 
         truncate : bool, optional
             Whether to allow adjustment of the errogen coefficients in
@@ -734,7 +740,7 @@ class EmbeddedOp(_LinearOperator):
 
         Values are set so that the contributions of the resulting channel's
         error rate are given by the values in `lindblad_term_dict`.  See
-        :method:`error_rates` for more details.
+        :meth:`error_rates` for more details.
 
         Parameters
         ----------
@@ -844,7 +850,7 @@ class EmbeddedOp(_LinearOperator):
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)

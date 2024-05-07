@@ -149,7 +149,7 @@ class DenseOperatorInterface(object):
         Return the array used to identify this operation within its range of possible values.
 
         For instance, if the operation is a unitary operation, this returns a
-        unitary matrix regardless of the evolution type.  The related :method:`to_dense`
+        unitary matrix regardless of the evolution type.  The related :meth:`to_dense`
         method, in contrast, returns the dense representation of the operation, which
         varies by evolution type.
 
@@ -364,7 +364,7 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)
@@ -416,12 +416,12 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         #CHECK 1 (to unit test?) REMOVE
         #tmp_std = _bt.change_basis(superop_mx, self._basis, 'std')
         #B = _bt.basis_matrices('std', superop_mx.shape[0])
-        #check_superop = sum([ choi_mx[i,j] * _np.kron(B[i], B[j].T) for i in range(d*d) for j in range(d*d)])
+        #check_superop = sum([ choi_mx[i,j] * _np.kron(B[i], B[j].conjugate()) for i in range(d*d) for j in range(d*d)])
         #assert(_np.allclose(check_superop, tmp_std))
 
-        evals, evecs = _np.linalg.eig(choi_mx)
-        #assert(_np.allclose(evecs @ _np.diag(evals) @ (evecs.conjugate().T), choi_mx))
-        TOL = 1e-7
+        evals, evecs = _np.linalg.eigh(choi_mx)
+        assert(_np.allclose(evecs @ _np.diag(evals) @ (evecs.conjugate().T), choi_mx))
+        TOL = 1e-7  # consider lowering this tolerance as it leads to errors of this order in the Kraus decomp
         if any([ev <= -TOL for ev in evals]):
             raise ValueError("Cannot compute Kraus decomposition of non-positive-definite superoperator!")
         kraus_ops = [evecs[:, i].reshape(d, d) * _np.sqrt(ev) for i, ev in enumerate(evals) if abs(ev) > TOL]
@@ -606,7 +606,7 @@ class DenseUnitaryOperator(DenseOperatorInterface, _KrausOperatorInterface, _Lin
         mm_dict: dict
             A dict representation of this ModelMember ready for serialization
             This must have at least the following fields:
-                module, class, submembers, params, state_space, evotype
+            module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
         mm_dict = super().to_memoized_dict(mmg_memo)

@@ -75,11 +75,11 @@ def _loglikelihood_ratio(n_list_list):
         The log-likehood ratio for this model comparison.
     """
     nListC = _np.sum(n_list_list, axis=0)
-    pListC = nListC / _np.float_(_np.sum(nListC))
+    pListC = nListC / _np.float64(_np.sum(nListC))
     lC = _loglikelihood(pListC, nListC)
     li_list = []
     for nList in n_list_list:
-        pList = _np.array(nList) / _np.float_(_np.sum(nList))
+        pList = _np.array(nList) / _np.float64(_np.sum(nList))
         li_list.append(_loglikelihood(pList, nList))
     lS = _np.sum(li_list)
     return -2 * (lC - lS)
@@ -282,7 +282,7 @@ def _tvd(n_list_list):
     N0 = _np.sum(n_list_list[0])
     N1 = _np.sum(n_list_list[1])
 
-    return 0.5 * _np.sum(_np.abs(n_list_list[0][i] / N0 - n_list_list[1][i] / N1) for i in range(num_outcomes))
+    return 0.5 * sum(_np.abs(n_list_list[0][i] / N0 - n_list_list[1][i] / N1) for i in range(num_outcomes))
 
 
 class DataComparator():
@@ -296,11 +296,11 @@ class DataComparator():
     This object stores the p-values and log-_likelihood ratio values from a consistency comparison between
     two or more data, and provides methods to:
 
-        - Perform a hypothesis test to decide which sequences contain statistically significant variation.
-        - Plot p-value histograms and log-_likelihood ratio box plots.
-        - Extract (1) the "statistically significant total variation distance" for a circuit,
-          (2) various other quantifications of the "amount" of context dependence, and (3)
-          the level of statistical significance at which any context dependence is detected.
+    * Perform a hypothesis test to decide which sequences contain statistically significant variation.
+    * Plot p-value histograms and log-_likelihood ratio box plots.
+    * Extract (1) the "statistically significant total variation distance" for a circuit,
+      (2) various other quantifications of the "amount" of context dependence, and (3)
+      the level of statistical significance at which any context dependence is detected.
 
     Parameters
     ----------
@@ -529,38 +529,33 @@ class DataComparator():
             the details of what the per-circuit comparison is). This can be any string that is an allowed
             value for the `localcorrections` input parameter of the HypothesisTest object. This includes:
 
-                - 'Hochberg'. This implements the Hochberg multi-test compensation technique. This
-                is strictly the best method available in the code, if you wish to control the FWER,
-                and it is the method described in "Probing context-dependent errors in quantum processors",
-                by Rudinger et al.
-
-                - 'Holms'. This implements the Holms multi-test compensation technique. This
-                controls the FWER, and it results in a strictly less powerful test than the Hochberg
-                correction.
-
-                - 'Bonferroni'. This implements the well-known Bonferroni multi-test compensation
-                technique. This controls the FWER, and it results in a strictly less powerful test than
-                the Hochberg correction.
-
-                - 'none'. This implements no multi-test compensation for the per-sequence comparsions,
-                so they are all implemented at a "local" signifincance level that is altered from `significance`
-                only by the (inbuilt) Bonferroni-like correction between the "aggregate" test and the per-sequence
-                tests. This option does *not* control the FWER, and many sequences may be flagged up as context
-                dependent even if none are.
-
-                -'Benjamini-Hochberg'. This implements the Benjamini-Hockberg multi-test compensation
-                technique. This does *not* control the FWER, and instead controls the "False Detection Rate"
-                (FDR); see, for example, https://en.wikipedia.org/wiki/False_discovery_rate. That means that
-                the global significance is maintained for the test of "Is there any context dependence?". I.e.,
-                one or more tests will trigger when there is no context
-                dependence with at most a probability of `significance`. But, if one or more per-sequence tests
-                trigger then we are only guaranteed that (in expectation) no more than a fraction of
-                "local-signifiance" of the circuits that have been flagged up as context dependent actually aren't.
-                Here, "local-significance" is the  significance at which the per-sequence tests are, together,
-                implemented, which is `significance`*(1 - `aggregate_test_weighting`) if the aggregate test doesn't
-                detect context dependence and `significance` if it does (as long as `pass_alpha` is True). This
-                method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
-                quantity.
+            * 'Hochberg'. This implements the Hochberg multi-test compensation technique. This
+              is strictly the best method available in the code, if you wish to control the FWER,
+              and it is the method described in "Probing context-dependent errors in quantum processors",
+              by Rudinger et al.
+            * 'Holms'. This implements the Holms multi-test compensation technique. This
+              controls the FWER, and it results in a strictly less powerful test than the Hochberg
+              correction.
+            * 'Bonferroni'. This implements the well-known Bonferroni multi-test compensation
+              technique. This controls the FWER, and it results in a strictly less powerful test than
+              the Hochberg correction.
+            * 'none'. This implements no multi-test compensation for the per-sequence comparsions,
+              so they are all implemented at a "local" signifincance level that is altered from `significance`
+              only by the (inbuilt) Bonferroni-like correction between the "aggregate" test and the per-sequence
+              tests. This option does *not* control the FWER, and many sequences may be flagged up as context
+              dependent even if none are.
+            * 'Benjamini-Hochberg'. This implements the Benjamini-Hockberg multi-test compensation
+              technique. This does *not* control the FWER, and instead controls the "False Detection Rate"
+              (FDR); see, for example, https://en.wikipedia.org/wiki/False_discovery_rate. That means that
+              the global significance is maintained for the test of "Is there any context dependence?". I.e.,
+              one or more tests will trigger when there is no context dependence with at most a probability of `significance`. 
+              But, if one or more per-sequence tests trigger then we are only guaranteed that (in expectation) no 
+              more than a fraction of "local-signifiance" of the circuits that have been flagged up as context dependent actually aren't.
+              Here, "local-significance" is the  significance at which the per-sequence tests are, together,
+              implemented, which is `significance`*(1 - `aggregate_test_weighting`) if the aggregate test doesn't
+              detect context dependence and `significance` if it does (as long as `pass_alpha` is True). This
+              method is strictly more powerful than the Hochberg correction, but it controls a different, weaker
+              quantity.
 
         aggregate_test_weighting : float in [0,1], optional (default is 0.5)
             The weighting, in a generalized Bonferroni correction, to put on the "aggregate test", that jointly
@@ -581,7 +576,7 @@ class DataComparator():
 
         verbosity : int, optional (default is 1)
             If > 0 then a summary of the results of the tests is printed to screen. Otherwise, the
-            various .get_...() methods need to be queried to obtain the results of the
+            various `.get_...()` methods need to be queried to obtain the results of the
             hypothesis tests.
 
         Returns
@@ -652,9 +647,9 @@ class DataComparator():
             if self.inconsistent_datasets_detected:
                 print("The data are INCONSISTENT at {0:.2f}% significance.".format(self.significance * 100))
                 print("  - Details:")
-                print("    - The aggregate log-_likelihood ratio test is "
+                print("    - The aggregate log-likelihood ratio test is "
                       "significant at {0:.2f} standard deviations.".format(self._aggregate_nsigma))
-                print("    - The aggregate log-_likelihood ratio test "
+                print("    - The aggregate log-likelihood ratio test "
                       "standard deviations signficance threshold is {0:.2f}".format(self._aggregate_nsigma_threshold))
                 print(
                     "    - The number of sequences with data that is "

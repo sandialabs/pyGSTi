@@ -126,10 +126,10 @@ def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, memory_t
     shm : multiprocessing.shared_memory.SharedMemory
         A shared memory object needed to cleanup the shared memory.  If
         a normal array is created, this is `None`.  Provide this to
-        :function:`cleanup_shared_ndarray` to ensure `ar` is deallocated properly.
+        :func:`cleanup_shared_ndarray` to ensure `ar` is deallocated properly.
     """
     hostcomm = resource_alloc.host_comm if shared_mem_is_enabled() else None
-    nelements = _np.product(shape)
+    nelements = _np.prod(shape)
     if hostcomm is None or nelements == 0:  # Note: shared memory must be for size > 0
         # every processor allocates its own memory
         if memory_tracker is not None: memory_tracker.add_tracked_memory(nelements)
@@ -138,7 +138,9 @@ def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, memory_t
     else:
         if memory_tracker: memory_tracker.add_tracked_memory(nelements // hostcomm.size)
         if hostcomm.rank == 0:
-            shm = _shared_memory.SharedMemory(create=True, size=nelements * _np.dtype(dtype).itemsize)
+            #SharedMemory expects the size to be a python integer of the same type used as
+            #system default.
+            shm = _shared_memory.SharedMemory(create=True, size= int(nelements * _np.dtype(dtype).itemsize))
             assert(shm.size >= nelements * _np.dtype(dtype).itemsize)  # Note: not always == (minimum shm.size?)
             hostcomm.bcast(shm.name, root=0)
         else:
@@ -154,7 +156,7 @@ def create_shared_ndarray(resource_alloc, shape, dtype, zero_out=False, memory_t
 
 def cleanup_shared_ndarray(shm):
     """
-    De-allocates a (potentially) shared numpy array, created by :function:`create_shared_ndarray`.
+    De-allocates a (potentially) shared numpy array, created by :func:`create_shared_ndarray`.
 
     Parameters
     ----------

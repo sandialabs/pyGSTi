@@ -1038,7 +1038,7 @@ class FOGIMultiscaleGridDiagram(FOGIDiagram):
         for i in range(nOps):
             for j in range(i, nOps):
                 total_items[i, j] = sum([len(by_qty_items[qty][i, j]) for qty in all_qtys])
-                if total_items[i, j] == 0: totals[i, j] = _np.NaN
+                if total_items[i, j] == 0: totals[i, j] = _np.nan
 
         box_size_mode = "condensed"  # or "inflated"
         if detail_level == 2:
@@ -1201,13 +1201,13 @@ _template = """<html>
 <head>
     <!-- <link rel="stylesheet" href="pygsti_dataviz.css"> -->
     <!-- <script type="text/javascript" src="vis-network.js"></script> -->
-    <!-- <script type="text/javascript" src="jquery-3.2.1.min.js"></script> -->
+    <!-- <script type="text/javascript" src="jquery-3.6.4.min.js"></script> -->
     <script type="text/javascript" src="vis-network.js"></script>
-    <script type="text/javascript" src="jquery-3.2.1.min.js"></script>
+    <script type="text/javascript" src="jquery-3.6.4.min.js"></script>
     <!-- <script type="text/javascript"
                  src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script> -->
-    <!-- <script src="https://code.jquery.com/jquery-3.5.1.min.js"
-                 integrity="sha256-9/aliU8dGd2tb6OSsuzixeV4y/faTqgFtohetphbbj0=" crossorigin="anonymous"></script> -->
+    <!-- <script src="https://code.jquery.com/jquery-3.6.4.min.js"
+                 integrity="sha256-oP6HI9z1XaZNBrJURtCoUT5SUnxFr8s3BzRl+cbzUq8=" crossorigin="anonymous"></script> -->
 
     <style type="text/css">
       body {{

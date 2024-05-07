@@ -11,6 +11,7 @@ The ExpErrorgenOp class and supporting functionality.
 #***************************************************************************************************
 
 import warnings as _warnings
+import math
 
 import numpy as _np
 import scipy.linalg as _spl
@@ -436,7 +437,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             Only present when `return_coeff_polys == True`.
             A list of *compact* polynomial objects, meaning that each element
             is a `(vtape,ctape)` 2-tuple formed by concatenating together the
-            output of :method:`Polynomial.compact`.
+            output of :meth:`Polynomial.compact`.
         """
         if order not in self.terms:
             self._compute_taylor_order_terms(order, max_polynomial_vars)
@@ -492,7 +493,7 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
 
         This function constructs the terms at the given order which have a magnitude (given by
         the absolute value of their coefficient) that is greater than or equal to `min_term_mag`.
-        It calls :method:`taylor_order_terms` internally, so that all the terms at order `order`
+        It calls :meth:`taylor_order_terms` internally, so that all the terms at order `order`
         are typically cached for future calls.
 
         The coefficients of these terms are typically polynomials of the operation's
@@ -702,6 +703,9 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
             else:
                 mx = _mt.safe_dot(mx, U)
             self.set_dense(mx)  # calls _update_rep() and sets dirty flag
+        else:
+            raise ValueError("Invalid transform for this LindbladErrorgen: type %s"
+                             % str(type(s)))
 
     def __str__(self):
         s = "Exponentiated operation map with dim = %d, num params = %d\n" % \
@@ -735,7 +739,7 @@ def _d_exp_series(x, dx):
             commutant = _np.tensordot(x, last_commutant, (1, 0)) - \
                 _np.transpose(_np.tensordot(last_commutant, x, (1, 0)), (0, 3, 1, 2))
 
-        term = 1 / _np.math.factorial(i) * commutant
+        term = 1 / math.factorial(i) * commutant
 
         #Uncomment some/all of this when you suspect an overflow due to x having large norm.
         #print("DB COMMUTANT NORM = ",_np.linalg.norm(commutant)) # sometimes this increases w/iter -> divergence => NaN
@@ -749,7 +753,7 @@ def _d_exp_series(x, dx):
         #    #WARNING: stopping early b/c of NaNs!!! - usually caused by infs
         #    break
 
-        series += term  # 1/_np.math.factorial(i) * commutant
+        series += term  # 1/ math.factorial(i) * commutant
         last_commutant = commutant; i += 1
     return series
 
@@ -784,8 +788,8 @@ def _d2_exp_series(x, dx, d2x):
             commutant2B = _np.einsum("ik,kjabqr->ijabqr", x, last_commutant2) - \
                 _np.einsum("ikabqr,kj->ijabqr", last_commutant2, x)
 
-        term = 1 / _np.math.factorial(i) * commutant
-        term2 = 1 / _np.math.factorial(i) * (commutant2A + commutant2B)
+        term = 1 / math.factorial(i) * commutant
+        term2 = 1 / math.factorial(i) * (commutant2A + commutant2B)
         series += term
         series2 += term2
         last_commutant = commutant

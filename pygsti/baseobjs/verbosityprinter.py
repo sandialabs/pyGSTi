@@ -132,7 +132,7 @@ class VerbosityPrinter(object):
 
     comm : mpi4py.MPI.Comm or ResourceAllocation, optional
         Restricts output if the program is running in parallel  (By default,
-        if the rank is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, ...
+        if the rank is 0, output is sent to screen, and otherwise sent to commfiles `1, 2, ...`
 
     warnings : bool, optional
         Whether or not to print warnings
@@ -191,7 +191,7 @@ class VerbosityPrinter(object):
 
         comm : mpi4py.MPI.Comm or ResourceAllocation, optional
             Restricts output if the program is running in parallel  (By default,
-            if the rank is 0, output is sent to screen, and otherwise sent to commfiles 1, 2, ...
+            if the rank is 0, output is sent to screen, and otherwise sent to `commfiles 1, 2, ...`
 
         warnings : bool, optional
             Whether or not to print warnings
@@ -485,7 +485,7 @@ class VerbosityPrinter(object):
 
     # A wrapper for show_progress that only works if verbosity is above a certain value (Status by default)
     def show_progress(self, iteration, total, bar_length=50, num_decimals=2, fill_char='#',
-                      empty_char='-', prefix='Progress:', suffix='', verbose_messages=[], indent_char='  ', end='\n'):
+                      empty_char='-', prefix='Progress:', suffix='', verbose_messages=None, indent_char='  ', end='\n'):
         """
         Displays a progress message (to be used within a `progress_logging` block).
 
@@ -534,6 +534,8 @@ class VerbosityPrinter(object):
         -------
         None
         """
+        if verbose_messages is None:
+            verbose_messages = []
         indent = indent_char * (self._progressStack[-1] - 1 + self.extra_indents)
         # -1 so no indent at verbosity == 1
 
@@ -580,7 +582,7 @@ class VerbosityPrinter(object):
         Begins recording the output (to memory).
 
         Begins recording (in memory) a list of `(type, verbosityLevel, message)`
-        tuples that is returned by the next call to :method:`stop_recording`.
+        tuples that is returned by the next call to :meth:`stop_recording`.
 
         Returns
         -------
@@ -602,7 +604,7 @@ class VerbosityPrinter(object):
         """
         Stops recording and returns recorded output.
 
-        Stops a "recording" started by :method:`start_recording` and returns the
+        Stops a "recording" started by :meth:`start_recording` and returns the
         list of `(type, verbosityLevel, message)` tuples that have been recorded
         since then.
 

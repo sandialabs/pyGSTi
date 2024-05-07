@@ -18,6 +18,11 @@ import pathlib as _pathlib
 import pickle as _pickle
 import warnings as _warnings
 
+try:
+    from bson.objectid import ObjectId as _ObjectId
+except ImportError:
+    _ObjectId = None
+
 from pygsti.io import readers as _load
 from pygsti.io import writers as _write
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -150,20 +155,27 @@ def load_meta_based_dir(root_dir, auxfile_types_member='auxfile_types',
 
     for key, val in meta.items():
         if key in ignore_meta: continue
+        if key == 'dbcoordinates':  # special case of database coordinates
+            ret['_dbcoordinates'] = (val[0], _ObjectId(val[1]))  # convert back str -> ObjectId
+            continue
         ret[key] = val
 
-    for key, typ in meta[auxfile_types_member].items():
-        if key in ignore_meta: continue  # don't load -> members items in ignore_meta
+    if auxfile_types_member is not None:
+        for key, typ in meta[auxfile_types_member].items():
+            if key in ignore_meta: continue  # don't load -> members items in ignore_meta
 
-        bLoaded, val = _load_auxfile_member(root_dir, key, typ, meta.get(key, None), quick_load)
-        if bLoaded:
-            ret[key] = val
-        elif val is True:  # val is value of whether to set value to None
-            ret[key] = None  # Note: could just have bLoaded be True in this case and val=None
+            bLoaded, val = _load_auxfile_member(root_dir, key, typ, meta.get(key, None), quick_load)
+            if bLoaded:
+                ret[key] = val
+            elif val is True:  # val is value of whether to set value to None
+                ret[key] = None  # Note: could just have bLoaded be True in this case and val=None
 
     if separate_auxfiletypes:
-        del ret[auxfile_types_member]
-        return ret, meta[auxfile_types_member]
+        if auxfile_types_member is not None:
+            del ret[auxfile_types_member]
+            return ret, meta[auxfile_types_member]
+        else:
+            return ret, None
     else:
         return ret
 
@@ -349,12 +361,20 @@ def write_meta_based_dir(root_dir, valuedict, auxfile_types=None, init_meta=None
     for key, val in valuedict.items():
         if key in auxfile_types: continue  # member is serialized to a separate file
         if isinstance(val, _VerbosityPrinter): val = val.verbosity  # HACK!!
+        if key == '_dbcoordinates':  # special case: store _dbcoordinates in 'dbcoordinates' key
+            if val is not None:
+                assert len(val) == 2  # should be a (collection_name, ObjectId) pair
+                meta['dbcoordinates'] = (val[0], str(val[1]))  # convert ObjectId -> str for json storage
+            continue
         meta[key] = val
     #Wait to write meta.json until the end, since
     # aux-types may utilize it too.
 
     for auxnm, typ in auxfile_types.items():
+        if typ in ('none', 'reset'):  # these types aren't written at all
+            continue
         val = valuedict[auxnm]
+
         try:
             auxmeta = _write_auxfile_member(root_dir, auxnm, typ, val)
         except Exception as e:
@@ -413,7 +433,7 @@ def _write_auxfile_member(root_dir, filenm, typ, val):
         if val is None:   # None values don't get written
             pass
         elif cur_typ in ('none', 'reset'):  # explicitly don't get written
-            pass
+            pass  # and really we shouldn't ever get here since we short circuit in auxmember loop
         elif cur_typ == 'text-circuit-list':
             _write.write_circuit_list(pth, val)
         elif cur_typ == 'dir-serialized-object':
@@ -464,7 +484,7 @@ def _obj_to_meta_json(obj, dirname):
     Create a meta.json file within `dirname` that contains (only) the type of `obj` in its 'type' field.
 
     This is used to save an object that contains essentially no other data
-    to a directory, in lieu of :function:`write_obj_to_meta_based_dir`.
+    to a directory, in lieu of :func:`write_obj_to_meta_based_dir`.
 
     Parameters
     ----------
@@ -484,13 +504,14 @@ def _obj_to_meta_json(obj, dirname):
         _json.dump(meta, f)
 
 
-def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attributes=()):
+def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attributes=(),
+                                include_attributes=None, additional_meta=None):
     """
     Write the contents of `obj` to `dirname` using a 'meta.json' file and an auxfile-types dictionary.
 
-    This is similar to :function:`write_meta_based_dir`, except it takes an object (`obj`)
+    This is similar to :func:`write_meta_based_dir`, except it takes an object (`obj`)
     whose `.__dict__`, minus omitted attributes, is used as the dictionary to write and whose
-    auxfile-types comes from another object attribute..
+    auxfile-types comes from another object attribute.
 
     Parameters
     ----------
@@ -500,7 +521,7 @@ def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attribu
     dirname : str
         the directory name
 
-    auxfile_types_member : str
+    auxfile_types_member : str or None
         the name of the attribute within `obj` that holds the dictionary
         mapping of attributes to auxiliary-file types.  Usually this is
         `"auxfile_types"`.
@@ -509,13 +530,36 @@ def write_obj_to_meta_based_dir(obj, dirname, auxfile_types_member, omit_attribu
         List of (string-valued) names of attributes to omit when serializing
         this object.  Usually you should just leave this empty.
 
+    include_attributes : list or tuple or None
+        A list of (string-valued) names of attributs to specifically include
+        when serializing this object.  If `None`, then *all* attributes are
+        included except those specifically omitted via `omit_attributes`.
+        If `include_attributes` is not `None` then `omit_attributes` is
+        ignored.
+
+    additional_meta : dict, optional
+        A dictionary of additional meta-data to be included in the 'meta.json' file
+        (but that isn't an attribute of `obj`).
+
+
     Returns
     -------
     None
     """
     meta = {'type': _full_class_name(obj)}
+    if additional_meta is not None: meta.update(additional_meta)
 
-    if len(omit_attributes) > 0:
+    if include_attributes is not None:  # include_attributes takes precedence over omit_attributes
+        vals = {}
+        auxtypes = {}
+        potential_auxtypes = obj.__dict__[auxfile_types_member].copy() if (auxfile_types_member is not None) else {}
+        for attr_name in include_attributes:
+            if attr_name in obj.__dict__:
+                vals[attr_name] = obj.__dict__[attr_name]
+                if attr_name in potential_auxtypes:
+                    auxtypes[attr_name] = potential_auxtypes[attr_name]
+
+    elif len(omit_attributes) > 0:
         vals = obj.__dict__.copy()
         auxtypes = obj.__dict__[auxfile_types_member].copy()
         for o in omit_attributes:
@@ -567,7 +611,7 @@ def write_dict_to_json_or_pkl_files(d, dirname):
     If the element is json-able, it is JSON-serialized and the ".json"
     extension is used.  If not, pickle is used to serialize the element,
     and the ".pkl" extension is used.  This is the reverse of
-    :function:`_read_json_or_pkl_files_to_dict`.
+    :func:`_read_json_or_pkl_files_to_dict`.
 
     Parameters
     ----------
