@@ -1012,6 +1012,14 @@ def maximum_trace_dist(gate, mx_basis):
 Maximum_trace_dist = _modf.opfn_factory(maximum_trace_dist)
 # init args == (model, op_label)
 
+def leaky_maximum_trace_dist(gate, mx_basis):
+    closestUOpMx = _alg.find_closest_unitary_opmx(gate)
+    _tools.jamiolkowski_iso(closestUOpMx, mx_basis, mx_basis)
+    n_leak = 1
+    return _tools.leaky_jtracedist(gate, closestUOpMx, mx_basis, n_leak)
+
+Leaky_maximum_trace_dist = _modf.opfn_factory(leaky_maximum_trace_dist)
+
 
 def angles_btwn_rotn_axes(model):
     """
@@ -1083,6 +1091,12 @@ def entanglement_fidelity(a, b, mx_basis):
 Entanglement_fidelity = _modf.opsfn_factory(entanglement_fidelity)
 # init args == (model1, model2, op_label)
 
+def leaky_entanglement_fidelity(a, b, mx_basis):
+    n_leak = 1
+    return _tools.leaky_entanglement_fidelity(a, b, mx_basis, n_leak)
+
+Leaky_entanglement_fidelity = _modf.opsfn_factory(leaky_entanglement_fidelity)
+
 
 def entanglement_infidelity(a, b, mx_basis):
     """
@@ -1108,6 +1122,11 @@ def entanglement_infidelity(a, b, mx_basis):
 
 Entanglement_infidelity = _modf.opsfn_factory(entanglement_infidelity)
 # init args == (model1, model2, op_label)
+
+def leaky_entanglement_infidelity(a, b, mx_basis):
+    return 1 - leaky_entanglement_fidelity(a, b, mx_basis)
+
+Leaky_entanglement_infidelity = _modf.opsfn_factory(leaky_entanglement_infidelity)
 
 
 def closest_unitary_fidelity(a, b, mx_basis):  # assume vary model1, model2 fixed
@@ -1199,6 +1218,12 @@ def jtrace_diff(a, b, mx_basis):  # assume vary model1, model2 fixed
 
 Jt_diff = _modf.opsfn_factory(jtrace_diff)
 # init args == (model1, model2, op_label)
+
+def leaky_jtrace_diff(a, b, mx_basis):
+    n_leak = 1
+    return _tools.leaky_jtracedist(a, b, mx_basis, n_leak)
+
+Leaky_Jt_diff = _modf.opsfn_factory(leaky_jtrace_diff)
 
 
 if _CVXPY_AVAILABLE:
@@ -2443,6 +2468,8 @@ def info_of_opfn_by_name(name):
     info = {
         "inf": ("Entanglement|Infidelity",
                 "1.0 - <psi| 1 x Lambda(psi) |psi>"),
+        "la-inf": ("Entanglement|Infidelity (subspace)",
+                   "TO-WRITE"),
         "agi": ("Avg. Gate|Infidelity",
                 "d/(d+1) (entanglement infidelity)"),
         "geni": ('Generator|Infidelity',
@@ -2453,6 +2480,8 @@ def info_of_opfn_by_name(name):
                   "0.5 | Chi(A) - Chi(B) |_tr"),
         "diamond": ("1/2 Diamond|Distance",
                     "0.5 sup | (1 x (A-B))(rho) |_tr"),
+        "la-trace" : ("1/2 Trace|Distance (subspace)",
+                      "TO-WRITE"),
         "nuinf": ("Non-unitary|Ent. Infidelity",
                   "(d^2-1)/d^2 [1 - sqrt( unitarity(A B^-1) )]"),
         "nuagi": ("Non-unitary|Avg. Gate Infidelity",
@@ -2520,6 +2549,9 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     if name == "inf":
         fn = Entanglement_infidelity if b else \
             Circuit_entanglement_infidelity
+    elif name == "la-inf":
+        assert b
+        fn = Leaky_entanglement_infidelity
     elif name == "agi":
         fn = Avg_gate_infidelity if b else \
             Circuit_avg_gate_infidelity
@@ -2529,6 +2561,9 @@ def evaluate_opfn_by_name(name, model, target_model, op_label_or_string,
     elif name == "trace":
         fn = Jt_diff if b else \
             Circuit_jt_diff
+    elif name == "la-trace":
+        assert b
+        fn = Leaky_Jt_diff
     elif name == "diamond":
         fn = HalfDiamondNorm if b else \
             CircuitHalfDiamondNorm
