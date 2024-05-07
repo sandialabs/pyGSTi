@@ -28,10 +28,10 @@ class Torchable(ModelMember):
         """
         Suppose "obj" is an instance of some Torchable subclass. If we compute
 
-            sd = obj.stateless_data()
             vec = obj.to_vector()
             t_param = torch.from_numpy(vec)
-            t = type(obj).torch_base(sd, t_param, grad)
+            sd = obj.stateless_data()
+            t = type(obj).torch_base(sd, t_param)
 
         then t will be a PyTorch Tensor that represents "obj" in a canonical numerical way.
 
