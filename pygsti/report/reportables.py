@@ -1872,6 +1872,14 @@ def errorgen_and_projections(errgen, mx_basis):
             ca_mx[i, j] = Cproj.get(_LEEL('C', (lbl1, lbl2)), 0.0)  # upper triangle == C
             ca_mx[j, i] = Aproj.get(_LEEL('A', (lbl1, lbl2)), 0.0)  # lower triangle == A
     ret['CA projections'] = ca_mx
+
+    #add in a calculation of the contributions to the generator infidelity for H and S.
+    H_gen_infdl = _np.sum(ret['H projections']**2)
+    S_gen_infdl = _np.sum(ret['S projections'])
+    gen_infdl = H_gen_infdl + S_gen_infdl
+    ret['H generator infidelity contribution'] = H_gen_infdl/gen_infdl
+    ret['S generator infidelity contribution'] = S_gen_infdl/gen_infdl
+    
     return ret
 
 

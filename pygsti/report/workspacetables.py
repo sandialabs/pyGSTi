@@ -1375,7 +1375,7 @@ class ErrgenTable(WorkspaceTable):
         If not None, specifies a confidence-region
         used to display error intervals.
 
-    display : tuple of {"errgen","H","S","A"}
+    display : tuple of {"errgen","H","S","CA"}
         Specifes which columns to include: the error generator itself
         and the projections of the generator onto Hamiltoian-type error
         (generators), Stochastic-type errors, and Affine-type errors.
@@ -1405,7 +1405,7 @@ class ErrgenTable(WorkspaceTable):
         model, target_model : Model
             The models to compare
 
-        display : tuple of {"errgen","H","S","A"}
+        display : tuple of {"errgen","H","S","CA"}
             Specifes which columns to include: the error generator itself
             and the projections of the generator onto Hamiltoian-type error
             (generators), Stochastic-type errors, and Active&Correlation-type errors.
@@ -1537,12 +1537,13 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "H":
                     if display_as == "boxes":
-                        T = "Captures %.1f%% of E.G." % (100 * info['H projection power'].value)
+                        T = "Contributes %.2f%% of Generator Infidelity<br>" % (100 * info['H generator infidelity contribution'].value)
+                        T1 = "Captures %.1f%% of E.G. Frobenius Norm" % (100 * info['H projection power'].value)
                         hamProjs, EB = info['H projections'].value_and_errorbar
                         m, M = _get_min_max(hamProjsM, _np.max(_np.abs(hamProjs)))
                         hamdecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, hamProjs, basis, m, M,
-                            box_labels=True, eb_matrix=EB, title=T)
+                            box_labels=True, eb_matrix=EB, title=T+T1)
                         row_data.append(hamdecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -1551,12 +1552,13 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "S":
                     if display_as == "boxes":
-                        T = "Captures %.1f%% of E.G." % (100 * info['S projection power'].value)
+                        T = "Contributes %.2f%% of Generator Infidelity<br>" % (100 * info['S generator infidelity contribution'].value)
+                        T1 = "Captures %.1f%% of E.G. Frobenius Norm" % (100 * info['S projection power'].value)
                         stoProjs, EB = info['S projections'].value_and_errorbar
                         m, M = _get_min_max(stoProjsM, _np.max(_np.abs(stoProjs)))
                         stodecomp_fig = _wp.ProjectionsBoxPlot(
                             self.ws, stoProjs, basis, m, M,
-                            box_labels=True, eb_matrix=EB, title=T)
+                            box_labels=True, eb_matrix=EB, title=T+T1)
                         row_data.append(stodecomp_fig)
                         row_formatters.append('Figure')
                     else:
@@ -1565,7 +1567,7 @@ class ErrgenTable(WorkspaceTable):
 
                 elif disp == "CA":
                     if display_as == "boxes":
-                        T = "Captures %.1f%% of E.G." % (100 * info['CA projection power'].value)
+                        T = "Captures %.1f%% of E.G.<br>Frobenius Norm" % (100 * info['CA projection power'].value)
                         caProjs, EB = info['CA projections'].value_and_errorbar
                         m, M = _get_min_max(caProjsM, _np.max(_np.abs(caProjs)))
                         affdecomp_fig = _wp.ProjectionsBoxPlot(
