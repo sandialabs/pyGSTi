@@ -10,6 +10,9 @@ Utility functions relevant to Lindblad forms and projections
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+
+from __future__ import annotations
+
 from collections import defaultdict
 from collections.abc import Iterable
 import numpy as _np
