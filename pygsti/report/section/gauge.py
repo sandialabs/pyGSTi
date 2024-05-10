@@ -259,7 +259,7 @@ class GaugeVariantsRawSection(_Section):
     def final_model_brief_spam_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.SpamTable(
             switchboard.mdl_target_and_final, ['Target', 'Estimated'], 'boxes',
-            _cri(1, switchboard, confidence_level, ci_brevity), include_hs_vec=False
+            _cri(1, switchboard, confidence_level, ci_brevity), include_hs_vec=True
         )
 
 

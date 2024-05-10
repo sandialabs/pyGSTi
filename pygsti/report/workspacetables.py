@@ -141,7 +141,7 @@ class SpamTable(WorkspaceTable):
         if include_hs_vec:
             model = models[-1]  # only show HSVec for last model
             basisNm = _tools.basis_longname(model.basis)
-            colHeadings.append('Hilbert-Schmidt vector (%s basis)' % basisNm)
+            colHeadings.append('Hilbert-Schmidt vector<br>(%s basis)' % basisNm)
             formatters.append(None)
 
             if confidence_region_info is not None:
@@ -154,17 +154,16 @@ class SpamTable(WorkspaceTable):
             rowData = [lbl]; rowFormatters = ['Rho']
 
             for model in models:
-                rhoMx = _ev(_reportables.Vec_as_stdmx(model, lbl, "prep"))
-                # confidence_region_info) #don't put CIs on matrices for now
+                rhoMx = _ev(_reportables.Vec_as_stdmx(model, lbl, "prep"), confidence_region_info)
                 if display_as == "numbers":
                     rowData.append(rhoMx)
                     rowFormatters.append('Brackets')
                 elif display_as == "boxes":
-                    rhoMx_real = rhoMx.hermitian_to_real()
-                    v = rhoMx_real.value
-                    fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
+                    rhoMx_real = rhoMx.value.real
+                    rhoMx_imag = rhoMx.value.imag
+                    fig = _wp.MatricesPlot(self.ws, [rhoMx_real, rhoMx_imag], colorbar=False,
                                              box_labels=True, prec='compacthp',
-                                             mx_basis=None)  # no basis labels
+                                             subtitles = ['Real', 'Imag'])  # no basis labels
                     rowData.append(fig)
                     rowFormatters.append('Figure')
                 else:
@@ -179,9 +178,26 @@ class SpamTable(WorkspaceTable):
                 rowFormatters.append('Brackets')
 
             if include_hs_vec:
-                rowData.append(models[-1].preps[lbl])
-                rowFormatters.append('Normal')
-
+                hs_vec = models[-1].preps[lbl].to_dense()
+                hs_vec = hs_vec.reshape((len(hs_vec),1))
+                if display_as == "numbers":
+                    rowData.append(hs_vec)
+                    rowFormatters.append('Normal')
+                elif display_as == "boxes":
+                    if models[-1].basis.real: #If a basis only requires real-values coefficients just
+                                              #use a single plot.
+                        fig= _wp.GateMatrixPlot(self.ws, hs_vec, colorbar=False,
+                                                box_labels=True, prec='compacthp',
+                                                mx_basis_y=models[-1].basis)
+                    else:
+                        hs_vec_real = hs_vec.real
+                        hs_vec_imag = hs_vec.imag
+                        fig = _wp.GateMatricesPlot(self.ws, [hs_vec_real, hs_vec_imag], colorbar=False,
+                                                    box_labels=True, prec='compacthp',
+                                                    subtitles = ['Real', 'Imag'], 
+                                                    mx_basis_y=models[-1].basis)
+                    rowData.append(fig)
+                    rowFormatters.append('Figure')
                 if confidence_region_info is not None:
                     intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(lbl)[:, None]
                     if intervalVec.shape[0] == models[-1].dim - 1:
@@ -200,17 +216,16 @@ class SpamTable(WorkspaceTable):
                 rowFormatters = ['Effect']
 
                 for model in models:
-                    EMx = _ev(_reportables.Vec_as_stdmx(model, povmAndELbl, "effect"))
-                    #confidence_region_info) #don't put CIs on matrices for now
+                    EMx = _ev(_reportables.Vec_as_stdmx(model, povmAndELbl, "effect"), confidence_region_info)
                     if display_as == "numbers":
                         rowData.append(EMx)
                         rowFormatters.append('Brackets')
                     elif display_as == "boxes":
-                        EMx_real = EMx.hermitian_to_real()
-                        v = EMx_real.value
-                        fig = _wp.GateMatrixPlot(self.ws, v, colorbar=False,
-                                                 box_labels=True, prec='compacthp',
-                                                 mx_basis=None)  # no basis labels
+                        EMx_real = EMx.value.real
+                        EMx_imag = EMx.value.imag
+                        fig = _wp.MatricesPlot(self.ws, [EMx_real, EMx_imag], colorbar=False,
+                                                box_labels=True, prec='compacthp',
+                                                subtitles = ['Real', 'Imag'])  # no basis labels
                         rowData.append(fig)
                         rowFormatters.append('Figure')
                     else:
@@ -225,13 +240,35 @@ class SpamTable(WorkspaceTable):
                     rowFormatters.append('Brackets')
 
                 if include_hs_vec:
-                    rowData.append(models[-1].povms[povmlbl][lbl])
-                    rowFormatters.append('Normal')
+                    hs_vec = models[-1].povms[povmlbl][lbl].to_dense()
+                    hs_vec = hs_vec.reshape((len(hs_vec),1))
+                    if display_as == 'numbers':
+                        rowData.append(hs_vec)
+                        rowFormatters.append('Normal')
+                    elif display_as == 'boxes':
+
+                        if models[-1].basis.real:#If a basis only requires real-values coefficients just
+                                                #use a single plot.
+                            fig= _wp.GateMatrixPlot(self.ws, hs_vec, colorbar=False,
+                                                    box_labels=True, prec='compacthp',
+                                                    mx_basis_y=models[-1].basis)
+                        else:
+                            hs_vec_real = hs_vec.real
+                            hs_vec_imag = hs_vec.imag
+                            fig = _wp.GateMatricesPlot(self.ws, [hs_vec_real, hs_vec_imag], colorbar=False,
+                                                        box_labels=True, prec='compacthp',
+                                                        subtitles = ['Real', 'Imag'], 
+                                                        mx_basis_y=models[-1].basis)
+                        rowData.append(fig)
+                        rowFormatters.append('Figure')
 
                     if confidence_region_info is not None:
                         intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(povmlbl)[
                             :, None]  # for all povm params
-                        intervalVec = intervalVec[models[-1].povms[povmlbl][lbl].gpindices]  # specific to this effect
+                        offset = models[-1].povms[povmlbl].gpindices.start #need to account for offset in starting index of POVM
+                        effect_indices = models[-1].povms[povmlbl][lbl].gpindices
+                        effect_indices = slice(effect_indices.start-offset, effect_indices.stop-offset)
+                        intervalVec = intervalVec[effect_indices]  # specific to this effect
                         rowData.append(intervalVec); rowFormatters.append('Normal')
 
                 #Note: no dependence on confidence region (yet) when HS vector is not shown...
@@ -441,7 +478,7 @@ class GatesTable(WorkspaceTable):
                 elif display_as == "boxes":
                     fig = _wp.GateMatrixPlot(self.ws, op.to_dense(on_space='HilbertSchmidt'),
                                              colorbar=False,
-                                             mx_basis=basis)
+                                             mx_basis_x=basis, mx_basis_y=basis )
 
                     row_data.append(fig)
                     row_formatters.append('Figure')
@@ -480,7 +517,8 @@ class GatesTable(WorkspaceTable):
                     fig = _wp.GateMatrixPlot(self.ws, intervalMx,
                                              color_min=-maxAbsVal, color_max=maxAbsVal,
                                              colorbar=False,
-                                             mx_basis=basis)
+                                             mx_basis_x=basis,
+                                             mx_basis_y=basis)
                     row_data.append(fig)
                     row_formatters.append('Figure')
                 else:
@@ -634,12 +672,15 @@ class ChoiTable(WorkspaceTable):
 
                 elif disp == "boxplot":
                     for model, (choiMxs, _) in zip(models, qtysList):
-                        choiMx_real = choiMxs[i].hermitian_to_real()
-                        choiMx, EB = choiMx_real.value_and_errorbar
-                        fig = _wp.GateMatrixPlot(self.ws, choiMx,
-                                                 colorbar=False,
-                                                 mx_basis=model.basis,
-                                                 eb_matrix=EB)
+                        choiMx, EB = choiMxs[i].value_and_errorbar
+                        choiMx_real = choiMx.real 
+                        choiMx_imag = choiMx.imag
+                        eb_matrices = [EB.real, EB.imag] if EB is not None else [None, None]
+                        fig = _wp.GateMatricesPlot(self.ws, [choiMx_real, choiMx_imag],
+                                                 colorbar=False, box_labels=True,
+                                                 prec = 'compacthp', subtitles=['Real', 'Imag'],
+                                                 mx_basis_x=model.basis, mx_basis_y=model.basis,
+                                                 eb_matrices=eb_matrices)
                         row_data.append(fig)
                         row_formatters.append('Figure')
 
@@ -1528,7 +1569,8 @@ class ErrgenTable(WorkspaceTable):
                         errgen, EB = info['error generator'].value_and_errorbar
                         m, M = _get_min_max(errgensM, _np.max(_np.abs(errgen)))
                         errgen_fig = _wp.GateMatrixPlot(self.ws, errgen, m, M,
-                                                        basis, eb_matrix=EB)
+                                                        mx_basis_x=basis, mx_basis_y=basis,
+                                                        eb_matrix=EB)
                         row_data.append(errgen_fig)
                         row_formatters.append('Figure')
                     else:
@@ -3284,7 +3326,7 @@ class StandardErrgenTable(WorkspaceTable):
             for lbl in elementary_errorgen_basis.labels[1:]:  # skip identity
                 eeg = _tools.change_basis(eegs[_LEEL(elementary_errorgen_type, (lbl,))], "std", mx_basis)
                 m, M = -_np.max(_np.abs(eeg)), _np.max(_np.abs(eeg))
-                fig = _wp.GateMatrixPlot(self.ws, eeg, m, M, mx_basis, d)
+                fig = _wp.GateMatrixPlot(self.ws, eeg, m, M, mx_basis, mx_basis, d)
                 rowData = [str(lbl), fig]
                 rowFormatters = [None, 'Figure']
                 table.add_row(rowData, rowFormatters)
@@ -3299,7 +3341,7 @@ class StandardErrgenTable(WorkspaceTable):
                 for xlbl in lbls:
                     eeg = _tools.change_basis(eegs[_LEEL(elementary_errorgen_type, (ylbl, xlbl))], "std", mx_basis)
                     m, M = -_np.max(_np.abs(eeg)), _np.max(_np.abs(eeg))
-                    fig = _wp.GateMatrixPlot(self.ws, eeg, m, M, mx_basis, d)
+                    fig = _wp.GateMatrixPlot(self.ws, eeg, m, M, mx_basis, mx_basis, d)
                     rowData.append(fig)
                     rowFormatters.append('Figure')
                 table.add_row(rowData, rowFormatters)
@@ -3684,7 +3726,7 @@ class ExampleTable(WorkspaceTable):
                                 [-1.0, -1 / 5, 1 / 6, 1.0]])
         example_ebmx = _np.abs(example_mx) * 0.05
         example_fig = _wp.GateMatrixPlot(self.ws, example_mx, -1.0, 1.0,
-                                         "pp", eb_matrix=example_ebmx)
+                                         "pp", 'pp', eb_matrix=example_ebmx)
 
         table = _ReportTable(colHeadings, None, col_heading_labels=tooltips)
         table.add_row(("Pi", _np.pi, example_fig), ('Normal', 'Normal', 'Figure'))
