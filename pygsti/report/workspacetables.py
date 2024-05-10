@@ -144,10 +144,6 @@ class SpamTable(WorkspaceTable):
             colHeadings.append('Hilbert-Schmidt vector<br>(%s basis)' % basisNm)
             formatters.append(None)
 
-            if confidence_region_info is not None:
-                colHeadings.append('%g%% C.I. half-width' % confidence_region_info.level)
-                formatters.append('Conversion')
-
         table = _ReportTable(colHeadings, formatters, confidence_region_info=confidence_region_info)
 
         for lbl in rhoLabels:
@@ -161,9 +157,12 @@ class SpamTable(WorkspaceTable):
                 elif display_as == "boxes":
                     rhoMx_real = rhoMx.value.real
                     rhoMx_imag = rhoMx.value.imag
+                    rhoMx_eb_real = rhoMx.errorbar.real if rhoMx.errorbar is not None else None
+                    rhoMx_eb_imag = rhoMx.errorbar.imag if rhoMx.errorbar is not None else None
                     fig = _wp.MatricesPlot(self.ws, [rhoMx_real, rhoMx_imag], colorbar=False,
                                              box_labels=True, prec='compacthp',
-                                             subtitles = ['Real', 'Imag'])  # no basis labels
+                                             subtitles = ['Real', 'Imag'],
+                                             eb_matrices=[rhoMx_eb_real, rhoMx_eb_imag])  # no basis labels
                     rowData.append(fig)
                     rowFormatters.append('Figure')
                 else:
@@ -178,34 +177,43 @@ class SpamTable(WorkspaceTable):
                 rowFormatters.append('Brackets')
 
             if include_hs_vec:
+                #Create a ReportableQty out of the HS vector and its error bars to handle
+                #error bar formatting in report properly.
                 hs_vec = models[-1].preps[lbl].to_dense()
                 hs_vec = hs_vec.reshape((len(hs_vec),1))
+                #get the error bars
+                if confidence_region_info is not None:
+                    intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(lbl)[:, None]
+                    if intervalVec.shape[0] == models[-1].dim - 1:
+                        #TP constrained, so pad with zero top row
+                        intervalVec = _np.concatenate((_np.zeros((1, 1), 'd'), intervalVec), axis=0)
+                else:
+                    intervalVec= None
+                hs_vec = _ReportableQty(hs_vec, errbar=intervalVec)
+                
                 if display_as == "numbers":
                     rowData.append(hs_vec)
                     rowFormatters.append('Normal')
                 elif display_as == "boxes":
                     if models[-1].basis.real: #If a basis only requires real-values coefficients just
                                               #use a single plot.
-                        fig= _wp.GateMatrixPlot(self.ws, hs_vec, colorbar=False,
+                        fig= _wp.GateMatrixPlot(self.ws, hs_vec.value, colorbar=False,
                                                 box_labels=True, prec='compacthp',
-                                                mx_basis_y=models[-1].basis)
+                                                mx_basis_y=models[-1].basis,
+                                                eb_matrix=hs_vec.errorbar)
                     else:
-                        hs_vec_real = hs_vec.real
-                        hs_vec_imag = hs_vec.imag
+                        hs_vec_real = hs_vec.value.real
+                        hs_vec_imag = hs_vec.value.imag
+                        hs_vec_eb_real = hs_vec.errorbar.real if hs_vec.errorbar is not None else None
+                        hs_vec_eb_imag = hs_vec.errorbar.imag if hs_vec.errorbar is not None else None
                         fig = _wp.GateMatricesPlot(self.ws, [hs_vec_real, hs_vec_imag], colorbar=False,
                                                     box_labels=True, prec='compacthp',
                                                     subtitles = ['Real', 'Imag'], 
-                                                    mx_basis_y=models[-1].basis)
+                                                    mx_basis_y=models[-1].basis,
+                                                    eb_matrices=[hs_vec_eb_real, hs_vec_eb_imag])
                     rowData.append(fig)
                     rowFormatters.append('Figure')
-                if confidence_region_info is not None:
-                    intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(lbl)[:, None]
-                    if intervalVec.shape[0] == models[-1].dim - 1:
-                        #TP constrained, so pad with zero top row
-                        intervalVec = _np.concatenate((_np.zeros((1, 1), 'd'), intervalVec), axis=0)
-                    rowData.append(intervalVec); rowFormatters.append('Normal')
-
-            #Note: no dependence on confidence region (yet) when HS vector is not shown...
+                
             table.add_row(rowData, rowFormatters)
 
         for povmlbl in povmLabels:
@@ -217,15 +225,19 @@ class SpamTable(WorkspaceTable):
 
                 for model in models:
                     EMx = _ev(_reportables.Vec_as_stdmx(model, povmAndELbl, "effect"), confidence_region_info)
+                    print(f'{EMx.errorbar=}')
                     if display_as == "numbers":
                         rowData.append(EMx)
                         rowFormatters.append('Brackets')
                     elif display_as == "boxes":
                         EMx_real = EMx.value.real
                         EMx_imag = EMx.value.imag
+                        EMx_eb_real = EMx.errorbar.real if EMx.errorbar is not None else None
+                        EMx_eb_imag = EMx.errorbar.imag if EMx.errorbar is not None else None
                         fig = _wp.MatricesPlot(self.ws, [EMx_real, EMx_imag], colorbar=False,
                                                 box_labels=True, prec='compacthp',
-                                                subtitles = ['Real', 'Imag'])  # no basis labels
+                                                subtitles = ['Real', 'Imag'],
+                                                eb_matrices = [EMx_eb_real, EMx_eb_imag])  # no basis labels
                         rowData.append(fig)
                         rowFormatters.append('Figure')
                     else:
@@ -242,25 +254,6 @@ class SpamTable(WorkspaceTable):
                 if include_hs_vec:
                     hs_vec = models[-1].povms[povmlbl][lbl].to_dense()
                     hs_vec = hs_vec.reshape((len(hs_vec),1))
-                    if display_as == 'numbers':
-                        rowData.append(hs_vec)
-                        rowFormatters.append('Normal')
-                    elif display_as == 'boxes':
-
-                        if models[-1].basis.real:#If a basis only requires real-values coefficients just
-                                                #use a single plot.
-                            fig= _wp.GateMatrixPlot(self.ws, hs_vec, colorbar=False,
-                                                    box_labels=True, prec='compacthp',
-                                                    mx_basis_y=models[-1].basis)
-                        else:
-                            hs_vec_real = hs_vec.real
-                            hs_vec_imag = hs_vec.imag
-                            fig = _wp.GateMatricesPlot(self.ws, [hs_vec_real, hs_vec_imag], colorbar=False,
-                                                        box_labels=True, prec='compacthp',
-                                                        subtitles = ['Real', 'Imag'], 
-                                                        mx_basis_y=models[-1].basis)
-                        rowData.append(fig)
-                        rowFormatters.append('Figure')
 
                     if confidence_region_info is not None:
                         intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(povmlbl)[
@@ -269,9 +262,32 @@ class SpamTable(WorkspaceTable):
                         effect_indices = models[-1].povms[povmlbl][lbl].gpindices
                         effect_indices = slice(effect_indices.start-offset, effect_indices.stop-offset)
                         intervalVec = intervalVec[effect_indices]  # specific to this effect
-                        rowData.append(intervalVec); rowFormatters.append('Normal')
+                    else:
+                        intervalVec = None
+                    hs_vec = _ReportableQty(hs_vec, errbar=intervalVec)
 
-                #Note: no dependence on confidence region (yet) when HS vector is not shown...
+                    if display_as == 'numbers':
+                        rowData.append(hs_vec)
+                        rowFormatters.append('Normal')
+                    elif display_as == 'boxes':
+                        if models[-1].basis.real:#If a basis only requires real-values coefficients just
+                                                #use a single plot.
+                            fig= _wp.GateMatrixPlot(self.ws, hs_vec.value, colorbar=False,
+                                                    box_labels=True, prec='compacthp',
+                                                    mx_basis_y=models[-1].basis,
+                                                    eb_matrix=hs_vec.errorbar)
+                        else:
+                            hs_vec_real = hs_vec.value.real
+                            hs_vec_imag = hs_vec.value.imag
+                            hs_vec_eb_real = hs_vec.errorbar.real if hs_vec.errorbar is not None else None
+                            hs_vec_eb_imag = hs_vec.errorbar.imag if hs_vec.errorbar is not None else None
+                            fig = _wp.GateMatricesPlot(self.ws, [hs_vec_real, hs_vec_imag], colorbar=False,
+                                                        box_labels=True, prec='compacthp',
+                                                        subtitles = ['Real', 'Imag'], 
+                                                        mx_basis_y=models[-1].basis,
+                                                        eb_matrices=[hs_vec_eb_real, hs_vec_eb_imag])
+                        rowData.append(fig)
+                        rowFormatters.append('Figure')
                 table.add_row(rowData, rowFormatters)
 
         table.finish()

@@ -1717,7 +1717,7 @@ def _matrix_color_boxplot(matrix, xlabels=None, ylabels=None,
 def _matrices_color_boxplot(matrices, xlabels=None, ylabels=None,
                           xlabel=None, ylabel=None, box_labels=False,
                           thick_line_interval=None, colorbar=None, colormap=None,
-                          prec=0, scale=1.0, eb_matrix=None, title=None, grid="black",
+                          prec=0, scale=1.0, eb_matrices=None, title=None, grid="black",
                           arrangement='row', subtitles= None):
     """
     Creates a color box plot for visualizing a single matrix.
@@ -1778,6 +1778,10 @@ def _matrices_color_boxplot(matrices, xlabels=None, ylabels=None,
         allows the addition of `:N` where `N` is an integer giving the line
         width.
 
+    eb_matrices : list of numpy arrays, optional
+        List of arrays, of the same size as elements of `op_matrices`, which gives 
+        error bars to be be displayed in the hover info.
+
     arrangement : string or tuple, optional (default 'row')
         Arrangement of the subplots to use in constructing composite
         figure. Supported string options are 'row' and 'col', which will
@@ -1810,11 +1814,14 @@ def _matrices_color_boxplot(matrices, xlabels=None, ylabels=None,
     row_col_indices = list(_product(range(1,num_rows+1), range(1,num_cols+1)))
     fig = make_subplots(rows=num_rows, cols=num_cols, subplot_titles=subtitles)
 
+    if eb_matrices is None:
+        eb_matrices = [None]*len(matrices)
+
     #loop through the matrices and draw the submatrices for each. To minimize
     #code duplication use the function _matrix_color_boxplot to create each of these,
     #but ignore the layout it generates and extract just the trace.
     matrix_plots = [[] for _ in range(num_rows)]
-    for matrix, (row_idx, col_idx) in zip(matrices, row_col_indices):
+    for matrix, (row_idx, col_idx), eb_matrix in zip(matrices, row_col_indices, eb_matrices):
         matrix_plots[row_idx-1].append(_matrix_color_boxplot(matrix, xlabels, ylabels, xlabel, ylabel,
                                             box_labels, thick_line_interval, colorbar, colormap, prec, 
                                             1, eb_matrix, None, grid))
@@ -3138,12 +3145,16 @@ class MatrixPlot(WorkspacePlot):
 
     title : str, optional
         A title for the plot
+
+    eb_matrix : numpy array, optional
+        An array, of the same size as `op_matrix`, which gives error bars to be
+        be displayed in the hover info.
     """
 
     def __init__(self, ws, matrix, color_min=-1.0, color_max=1.0,
                  xlabels=None, ylabels=None, xlabel=None, ylabel=None,
                  box_labels=False, colorbar=None, colormap=None, prec=0,
-                 scale=1.0, grid="black", title= None):
+                 scale=1.0, grid="black", title= None, eb_matrix= None):
         """
         Creates a color box plot of a matrix using the given color map.
 
@@ -3197,21 +3208,28 @@ class MatrixPlot(WorkspacePlot):
         
         title : str, optional
             A title for the plot
+
+        eb_matrix : numpy array, optional
+            An array, of the same size as `op_matrix`, which gives error bars to be
+            be displayed in the hover info.
         """
         super(MatrixPlot, self).__init__(ws, self._create, matrix, color_min, color_max,
                                          xlabels, ylabels, xlabel, ylabel,
-                                         box_labels, colorbar, colormap, prec, scale, grid,title)
+                                         box_labels, colorbar, colormap, prec, scale, grid, title,
+                                         eb_matrix)
 
     def _create(self, matrix, color_min, color_max,
                 xlabels, ylabels, xlabel, ylabel,
-                box_labels, colorbar, colormap, prec, scale, grid,title):
+                box_labels, colorbar, colormap, prec, scale, grid,title,
+                eb_matrix):
 
         if colormap is None:
             colormap = _colormaps.DivergingColormap(vmin=color_min, vmax=color_max)
 
         ret = _matrix_color_boxplot(
             matrix, xlabels, ylabels, xlabel, ylabel,
-            box_labels, None, colorbar, colormap, prec, scale, grid=grid, title=title)
+            box_labels, None, colorbar, colormap, prec, scale, grid=grid, title=title,
+            eb_matrix=eb_matrix)
         return ret
 
 class MatricesPlot(WorkspacePlot):
@@ -3283,6 +3301,10 @@ class MatricesPlot(WorkspacePlot):
         into. When using a tuple to specify a grid that grid is filled rowwise
         from left to right.
 
+    eb_matrices : list of numpy arrays, optional
+        List of arrays, of the same size as elements of `op_matrices`, which gives 
+        error bars to be be displayed in the hover info.
+        
     title : str, optional
         A title for the plot    
 
@@ -3293,7 +3315,8 @@ class MatricesPlot(WorkspacePlot):
     def __init__(self, ws, matrices, color_min=-1.0, color_max=1.0,
                  xlabels=None, ylabels=None, xlabel=None, ylabel=None,
                  box_labels=False, colorbar=None, colormap=None, prec=0,
-                 scale=1.0, grid="black", arrangement='row', title=None, subtitles=None):
+                 scale=1.0, grid="black", arrangement='row', eb_matrices = None, 
+                 title=None, subtitles=None):
         """
         Creates a color box plot of a matrix using the given color map.
 
@@ -3353,6 +3376,10 @@ class MatricesPlot(WorkspacePlot):
             into. When using a tuple to specify a grid that grid is filled rowwise
             from left to right.
 
+        eb_matrices : list of numpy arrays, optional
+            List of arrays, of the same size as elements of `op_matrices`, which gives 
+            error bars to be be displayed in the hover info.
+
         title : str, optional
             A title for the plot
 
@@ -3362,11 +3389,11 @@ class MatricesPlot(WorkspacePlot):
         super(MatricesPlot, self).__init__(ws, self._create, matrices, color_min, color_max,
                                          xlabels, ylabels, xlabel, ylabel,box_labels, 
                                          colorbar, colormap, prec, scale, grid, arrangement,
-                                         title, subtitles)
+                                         eb_matrices, title, subtitles)
 
     def _create(self, matrices, color_min, color_max,
                 xlabels, ylabels, xlabel, ylabel,
-                box_labels, colorbar, colormap, prec, scale, grid, arrangement,
+                box_labels, colorbar, colormap, prec, scale, grid, arrangement, eb_matrices,
                 title, subtitles):
 
         if colormap is None:
@@ -3375,7 +3402,7 @@ class MatricesPlot(WorkspacePlot):
         ret = _matrices_color_boxplot(
             matrices, xlabels, ylabels, xlabel, ylabel,
             box_labels, None, colorbar, colormap, prec, scale, grid=grid, 
-            arrangement=arrangement, title= title, subtitles=subtitles)
+            arrangement=arrangement, eb_matrices=eb_matrices, title= title, subtitles=subtitles)
         return ret
 
 class PolarEigenvaluePlot(WorkspacePlot):
