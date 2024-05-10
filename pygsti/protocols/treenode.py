@@ -134,6 +134,9 @@ class TreeNode(object):
     def __len__(self):
         return len(self._dirs)
 
+    def __iter__(self):
+        return iter(self._dirs)
+
     def items(self):
         """
         An iterator over the `(child_name, child_node)` pairs of this node.
