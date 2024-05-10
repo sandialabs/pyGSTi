@@ -133,7 +133,7 @@ class LindbladErrorgen(_LinearOperator):
         return cls(lindblad_coefficient_blocks, lindblad_basis, mx_basis, evotype, state_space)
 
     @classmethod
-    def from_operation_matrix(cls, op_matrix, parameterization='CPTP', lindblad_basis='PP',
+    def from_operation_matrix(cls, op_matrix, parameterization='CPTPLND', lindblad_basis='PP',
                               mx_basis='pp', truncate=True, evotype="default", state_space=None):
         """
         Creates a Lindblad-parameterized error generator from an operation.

@@ -52,6 +52,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
     """
 
     def __init__(self, member_ops, evotype=None, state_space=None, called_from_reduce=False, items=None):
+        print("initializing instrument!")
         if items is None:
             items = []
         self._readonly = False  # until init is done
@@ -187,6 +188,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         -------
         OrderedDict of Gates
         """
+        print("converting to Ordered Dict!")
         #Create a "simplified" (Model-referencing) set of element gates
         simplified = _collections.OrderedDict()
         if isinstance(prefix, _Label):  # Deal with case when prefix isn't just a string
@@ -249,6 +251,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         numpy array
             a 1D numpy array with length == num_params().
         """
+        print("using to vector!")
         assert(self.gpindices is not None), "Must set an Instrument's .gpindices before calling to_vector"
         v = _np.empty(self.num_params, 'd')
         for operation, factor_local_inds in zip(self.values(), self._submember_rpindices):
@@ -279,6 +282,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         -------
         None
         """
+        print("using from vector!")
         assert(self.gpindices is not None), "Must set an Instrument's .gpindices before calling from_vector"
         for operation, factor_local_inds in zip(self.values(), self._submember_rpindices):
             operation.from_vector(v[factor_local_inds], close, dirty_value)
@@ -298,6 +302,7 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         -------
         None
         """
+        print("transforming inplace!")
         #Note: since each Mi is a linear function of MT and the Di, we can just
         # transform the MT and Di (self.param_ops) and re-init the elements.
         for gate in self.values():
