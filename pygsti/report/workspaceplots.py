@@ -2118,6 +2118,14 @@ class ColorBoxPlot(WorkspacePlot):
         use from the drift detection run (specified by the detectorkey), e.g., per-circuit
         with outcomes averaged or per-circuit per-outcome.
 
+    mdc_store : ModelDatasetCircuitStore, optional (default None)
+        A existing ModelDatasetCircuitStore from which to extract the circuits,
+        dataset and model used for the construction of objective functions in certain
+        family of color box plots. Specifying this when a pre-existing store exists
+        can speed up run time significantly as MDC store creation is expensive.
+        When specified, the values of `circuits`, `dataset` and `model` are ignored,
+        and the values from mdc_store are used in their place.
+
     submatrices : dict, optional
         A dictionary whose keys correspond to other potential plot
         types and whose values are each a list-of-lists of the sub
@@ -2160,7 +2168,6 @@ class ColorBoxPlot(WorkspacePlot):
                  genericdict_threshold=None):
         """
         Create a plot displaying the value of per-circuit quantities.
-        TODO: docstring
 
         Values are shown on a grid of colored boxes, organized according to
         the structure of the circuits (e.g. by germ and "L").
@@ -2228,6 +2235,14 @@ class ColorBoxPlot(WorkspacePlot):
             use from the drift detection run (specified by the detectorkey), e.g., per-circuit
             with outcomes averaged or per-circuit per-outcome.
 
+        mdc_store : ModelDatasetCircuitStore, optional (default None)
+            A existing ModelDatasetCircuitStore from which to extract the circuits,
+            dataset and model used for the construction of objective functions in certain
+            family of color box plots. Specifying this when a pre-existing store exists
+            can speed up run time significantly as MDC store creation is expensive.
+            When specified, the values of `circuits`, `dataset` and `model` are ignored,
+            and the values from mdc_store are used in their place.
+
         submatrices : dict, optional
             A dictionary whose keys correspond to other potential plot
             types and whose values are each a list-of-lists of the sub
@@ -2272,26 +2287,13 @@ class ColorBoxPlot(WorkspacePlot):
                 submatrices, typ, scale, comm, wildcard, colorbar, bgcolor, genericdict, genericdict_threshold):
 
         fig = None
-        addl_hover_info_fns = _collections.OrderedDict()
+        addl_hover_info_fns = dict()
 
         if mdc_store is not None:  # then it overrides
-            assert(circuits is None and dataset is None and model is None)
+            #assert(circuits is None and dataset is None and model is None)
             circuits = mdc_store.circuits
             dataset = mdc_store.dataset
             model = mdc_store.model
-
-        #DEBUG: for checking
-        #def _addl_mx_fn_chk(plaq,x,y):
-        #    gsplaq_ds = plaq.expand_aliases(dataset)
-        #    spamlabels = model.get_spam_labels()
-        #    cntMxs  = _ph.total_count_matrix(   gsplaq_ds, dataset)[None,:,:]
-        #    probMxs = _ph.probability_matrices( plaq, model, spamlabels,
-        #                                    probs_precomp_dict)
-        #    freqMxs = _ph.frequency_matrices(   gsplaq_ds, dataset, spamlabels)
-        #    logLMxs = _tools.two_delta_logl_term( cntMxs, probMxs, freqMxs, 1e-4)
-        #    return logLMxs.sum(axis=0) # sum over spam labels
-
-        # End "Additional sub-matrix" functions
 
         if not isinstance(plottypes, (list, tuple)):
             plottypes = [plottypes]
@@ -2309,7 +2311,7 @@ class ColorBoxPlot(WorkspacePlot):
 
                 if wildcard:
                     objfn.terms()  # objfn used within wildcard objective fn must be pre-evaluated
-                    objfn = _objfns.LogLWildcardFunction(objfn, mdc_store.model.to_vector(), wildcard)
+                    objfn = _objfns.LogLWildcardFunction(objfn, model.to_vector(), wildcard)
                 terms = objfn.terms()  # also assumed to set objfn.probs, objfn.freqs, and objfn.counts
 
                 if isinstance(objfn, (_objfns.PoissonPicDeltaLogLFunction, _objfns.DeltaLogLFunction)):
@@ -2380,14 +2382,6 @@ class ColorBoxPlot(WorkspacePlot):
                 ytitle = "."
                 mx_fn = _mx_fn_dict  # use a *global* function so cache can tell it's the same
                 extra_arg = genericdict
-
-                # if dataset is None: # then set dataset to be first compared dataset (for
-                #                     # extracting # degrees of freedom below)
-                #     if isinstance(dscomparator.dataset_list_or_multidataset,list):
-                #         dataset = dscomparator.dataset_list_or_multidataset[0]
-                #     elif isinstance(dscomparator.dataset_list_or_multidataset,_datasets.MultiDataSet):
-                #         key0 = list(dscomparator.dataset_list_or_multidataset.keys())[0]
-                #         dataset = dscomparator.dataset_list_or_multidataset[key0]
 
             elif ptyp == "driftdetector":
 
@@ -2474,7 +2468,7 @@ class ColorBoxPlot(WorkspacePlot):
                 if isinstance(circuits, _PlaquetteGridCircuitStructure):
                     circuit_struct = circuits
 
-                    addl_hover_info = _collections.OrderedDict()
+                    addl_hover_info = dict()
                     for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
                         if (submatrices is not None) and lbl in submatrices:
                             addl_subMxs = submatrices[lbl]  # ever useful?
@@ -2486,7 +2480,7 @@ class ColorBoxPlot(WorkspacePlot):
                 elif isinstance(circuits, _CircuitList):
                     circuit_struct = [circuits]
 
-                    addl_hover_info = _collections.OrderedDict()
+                    addl_hover_info = dict()
                     for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
                         if (submatrices is not None) and lbl in submatrices:
                             addl_subMxs = submatrices[lbl]  # ever useful?
@@ -2498,7 +2492,7 @@ class ColorBoxPlot(WorkspacePlot):
                 elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
                     circuit_struct = circuits
 
-                    addl_hover_info = _collections.OrderedDict()
+                    addl_hover_info = dict()
                     for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
                         if (submatrices is not None) and lbl in submatrices:
                             addl_subMxs = submatrices[lbl]  # ever useful?
@@ -2510,7 +2504,7 @@ class ColorBoxPlot(WorkspacePlot):
                 #Otherwise fall-back to the old casting behavior and proceed
                 else:
                     circuit_struct = _PlaquetteGridCircuitStructure.cast(circuits)
-                    addl_hover_info = _collections.OrderedDict()
+                    addl_hover_info = dict()
                     for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
                         if (submatrices is not None) and lbl in submatrices:
                             addl_subMxs = submatrices[lbl]  # ever useful?
@@ -2523,7 +2517,7 @@ class ColorBoxPlot(WorkspacePlot):
                 circuit_struct= circuits
                 subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model, mx_fn, dataset, extra_arg)
                 
-                addl_hover_info = _collections.OrderedDict()
+                addl_hover_info = dict()
                 for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
                     if (submatrices is not None) and lbl in submatrices:
                         addl_subMxs = submatrices[lbl]  # ever useful?

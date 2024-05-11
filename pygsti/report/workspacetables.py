@@ -225,7 +225,6 @@ class SpamTable(WorkspaceTable):
 
                 for model in models:
                     EMx = _ev(_reportables.Vec_as_stdmx(model, povmAndELbl, "effect"), confidence_region_info)
-                    print(f'{EMx.errorbar=}')
                     if display_as == "numbers":
                         rowData.append(EMx)
                         rowFormatters.append('Brackets')
