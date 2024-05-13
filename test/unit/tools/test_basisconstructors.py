@@ -40,8 +40,7 @@ class BasisConstructorsTester(BaseCase):
         gm_trMx = np.zeros((N, N), 'complex')
         for i in range(N):
             for j in range(N):
-                gm_trMx[i, j] = np.trace(np.dot(np.conjugate(np.transpose(mxs[i])), mxs[j]))
-                #Note: conjugate transpose not needed since mxs are Hermitian
+                gm_trMx[i, j] = np.vdot(mxs[i], mxs[j])
         self.assertArraysAlmostEqual(gm_trMx, np.identity(N, 'complex'))
 
         #Std Basis
@@ -52,7 +51,7 @@ class BasisConstructorsTester(BaseCase):
         std_trMx = np.zeros((N, N), 'complex')
         for i in range(N):
             for j in range(N):
-                std_trMx[i, j] = np.trace(np.dot(np.conjugate(np.transpose(mxs[i])), mxs[j]))
+                std_trMx[i, j] = np.vdot(mxs[i],mxs[j])
         self.assertArraysAlmostEqual(std_trMx, np.identity(N, 'complex'))
 
         #Pauli-product basis
@@ -71,8 +70,7 @@ class BasisConstructorsTester(BaseCase):
         pp_trMx = np.zeros((N, N), 'complex')
         for i in range(N):
             for j in range(N):
-                pp_trMx[i, j] = np.trace(np.dot(np.conjugate(np.transpose(mxs[i])), mxs[j]))
-                #Note: conjugate transpose not needed since mxs are Hermitian
+                pp_trMx[i, j] = np.vdot(mxs[i], mxs[j])
         self.assertArraysAlmostEqual(pp_trMx, np.identity(N, 'complex'))
 
     def test_basis_misc(self):

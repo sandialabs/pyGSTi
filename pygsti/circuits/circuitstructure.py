@@ -117,9 +117,9 @@ class CircuitPlaquette(_NicelySerializable):
     def __len__(self):
         return len(self.elements)
 
-    def elementvec_to_matrix(self, elementvec, layout, mergeop="sum"):
+    def elementvec_to_array(self, elementvec, layout, mergeop="sum"):
         """
-        Form a matrix of values corresponding to this plaquette from an element vector.
+        Form a array of values corresponding to this plaquette from an element vector.
 
         An element vector holds individual-outcome elements (e.g. the bulk probabilities
         computed by a model).

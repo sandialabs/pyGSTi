@@ -537,8 +537,9 @@ if _CVXPY_AVAILABLE:
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(
                 nearby_model.sim.product(self.circuit), mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
-            Jt = (JBstd - JAstd).T
-            return 0.5 * _np.trace(_np.dot(Jt.real, self.W.real) + _np.dot(Jt.imag, self.W.imag))
+            J = JBstd - JAstd
+            val = 0.5 * (_np.vdot(J.real, self.W.real) + _np.vdot(J.imag, self.W.imag))
+            return val
 
     #def circuit_half_diamond_norm(model_a, model_b, circuit):
     #    A = model_a.sim.product(circuit) # "gate"
@@ -1238,12 +1239,13 @@ if _CVXPY_AVAILABLE:
             -------
             float
             """
-            gl = self.oplabel; mxBasis = nearby_model.basis
-            JAstd = self.d * _tools.fast_jamiolkowski_iso_std(
-                nearby_model.operations[gl].to_dense(on_space='HilbertSchmidt'), mxBasis)
+            mxBasis = nearby_model.basis
+            A = nearby_model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt')
+            JAstd = self.d * _tools.fast_jamiolkowski_iso_std(A, mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
-            Jt = (JBstd - JAstd).T
-            return 0.5 * _np.trace(_np.dot(Jt.real, self.W.real) + _np.dot(Jt.imag, self.W.imag))
+            J = JBstd - JAstd
+            val = 0.5 * (_np.vdot(J.real, self.W.real) + _np.vdot(J.imag, self.W.imag))
+            return val
 
     def half_diamond_norm(a, b, mx_basis):
         """
@@ -2021,11 +2023,13 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
                 noise = first_order_noise(opstr, errOnGate, gl)
                 jac[:, i * nSuperOps + k] = [_np.vdot(errOut.flatten(), noise.flatten()) for errOut in error_superops]
 
-                #DEBUG CHECK
-                check = [_np.trace(_np.dot(
-                    _tools.jamiolkowski_iso(errOut, mxBasis, mxBasis).conj().T,
-                    _tools.jamiolkowski_iso(noise, mxBasis, mxBasis))) * 4  # for 1-qubit...
-                    for errOut in error_superops]
+                # DEBUG CHECK
+                check = []
+                for errOut in error_superops:
+                    arg1 = _tools.jamiolkowski_iso(errOut, mxBasis, mxBasis)
+                    arg2 = _tools.jamiolkowski_iso(noise,  mxBasis, mxBasis)
+                    check.append(_np.vdot(arg1, arg2) * 4)
+
                 assert(_np.allclose(jac[:, i * nSuperOps + k], check))
 
         assert(_np.linalg.norm(jac.imag) < 1e-6), "error generator jacobian should be real!"

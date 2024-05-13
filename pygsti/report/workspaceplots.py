@@ -707,8 +707,6 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     plotly.Figure
     """
     g = circuit_structure
-    xvals = g.used_xs
-    yvals = g.used_ys
 
     if addl_hover_submxs is None:
         addl_hover_submxs = {}
@@ -718,9 +716,12 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     addl_hover_submxs_add = {**addl_sub_dof, **addl_hover_submxs}
 
     if hover_info:
-        hover_info = _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_submxs_add)
-
-    xs = []; ys = []; subdofs =[]; texts = []
+        if isinstance(g, _PlaquetteGridCircuitStructure):
+            hover_info = _create_hover_info_fn(circuit_structure, g.used_xs, g.used_ys, sum_up, addl_hover_submxs_add)
+        elif isinstance(g, _CircuitList) or (isinstance(g, list) and all([isinstance(el, _CircuitList) for el in g])):
+            hover_info = _create_hover_info_fn_circuit_list(circuit_structure, sum_up, addl_hover_submxs_add)
+        
+    xs = []; ys = []; subdofs=[]; texts = []
     gstrs = set()  # to eliminate duplicate strings
     for ix, x in enumerate(g.used_xs):
         for iy, y in enumerate(g.used_ys):
@@ -1841,6 +1842,102 @@ class ColorBoxPlot(WorkspacePlot):
             if (submatrices is not None) and ptyp in submatrices:
                 subMxs = submatrices[ptyp]  # "custom" type -- all mxs precomputed by user
                 subdofs = None
+
+                #some of the branches below rely on circuit_struct being defined, which is previously
+                #wasn't when hitting this condition on the if statement, so add those definitions here.
+                #also need to built the addl_hover_info as well, based on circuit_struct.
+                if isinstance(circuits, _PlaquetteGridCircuitStructure):
+                    circuit_struct = circuits
+
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                                                        
+                        addl_hover_info[lbl] = addl_subMxs
+
+                elif isinstance(circuits, _CircuitList):
+                    circuit_struct = [circuits]
+
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+
+                elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
+                    circuit_struct = circuits
+
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+
+                #Otherwise fall-back to the old casting behavior and proceed
+                else:
+                    circuit_struct = _PlaquetteGridCircuitStructure.cast(circuits)
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+                
+            elif isinstance(circuits, _PlaquetteGridCircuitStructure):
+                circuit_struct= circuits
+                subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model, mx_fn, dataset, extra_arg)
+                max_dof, subdofs = self._ccompute(_ph._compute_sub_dofs, circuit_struct, model, _mx_fn_from_elements_simple, dataset)
+                
+                addl_hover_info = _collections.OrderedDict()
+                for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                    if (submatrices is not None) and lbl in submatrices:
+                        addl_subMxs = submatrices[lbl]  # ever useful?
+                    else:
+                        addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                     addl_mx_fn, dataset, addl_extra_arg)
+                    addl_hover_info[lbl] = addl_subMxs
+                
+            #Add in alternative logic for constructing sub-matrices when we have either a CircuitList or a
+            #list of circuit lists:
+            elif isinstance(circuits, _CircuitList):
+                circuit_struct= [circuits]
+                subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model, mx_fn, dataset, extra_arg)
+                
+                addl_hover_info = _collections.OrderedDict()
+                for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                    if (submatrices is not None) and lbl in submatrices:
+                        addl_subMxs = submatrices[lbl]  # ever useful?
+                    else:
+                        addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                     addl_mx_fn, dataset, addl_extra_arg)
+                    addl_hover_info[lbl] = addl_subMxs
+
+            elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
+                circuit_struct= circuits
+                subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model, mx_fn, dataset, extra_arg)
+                
+                addl_hover_info = _collections.OrderedDict()
+                for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                    if (submatrices is not None) and lbl in submatrices:
+                        addl_subMxs = submatrices[lbl]  # ever useful?
+                    else:
+                        addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                     addl_mx_fn, dataset, addl_extra_arg)
+                    addl_hover_info[lbl] = addl_subMxs
+
+            #Otherwise fall-back to the old casting behavior and proceed
             else:
                 subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model, mx_fn, dataset, extra_arg)
                 max_dof, subdofs = self._ccompute(_ph._compute_sub_dofs, circuit_struct, model, _mx_fn_from_elements_simple, dataset)
@@ -1942,11 +2039,28 @@ class ColorBoxPlot(WorkspacePlot):
 
 #Helper function for ColorBoxPlot matrix computation
 def _mx_fn_from_elements(plaq, x, y, extra):
-    return plaq.elementvec_to_matrix(extra[0], extra[1], mergeop=extra[2])
+    return plaq.elementvec_to_array(extra[0], extra[1], mergeop=extra[2])
 
 def _mx_fn_from_elements_simple(plaq, x, y, extra):
     return plaq.elementvec_to_matrix_simple(extra)
 
+#modified version of the above meant for working with circuit lists
+def _mx_fn_from_elements_circuit_list(circuit_list, extra):
+    #Based on the convention above in the ColorBoxPlot code it looks likelihood
+    #extra[0] is the thing we want to index into, extra[1] is the layout and extra[2]
+    #is something called the merge op, which indicated how to combine the elements of extra[0]
+    #for each circuit in the circuit_list
+    if isinstance(circuit_list, _CircuitList):
+        pass
+    elif isinstance(circuit_list, list) and all([isinstance(el, _CircuitList) for el in circuit_list]):
+        circuit_list = _CircuitList.cast(circuit_list)
+    else:
+        msg = 'Invalid type. _mx_fn_from_elements_circuit_list is only presently implemented for CircuitList'\
+             +'objects and lists of Circuit objects.'
+        raise ValueError(msg)
+
+    return circuit_list.elementvec_to_array(extra[0], extra[1], mergeop=extra[2])
+    
 def _mx_fn_blank(plaq, x, y, unused):
     return _np.nan * _np.zeros((plaq.num_rows, plaq.num_cols), 'd')
 
