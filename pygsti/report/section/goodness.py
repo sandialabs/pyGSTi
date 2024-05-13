@@ -29,14 +29,16 @@ class GoodnessSection(_Section):
     def final_model_fit_progress_table(workspace, switchboard=None, max_lengths=None, comm=None, **kwargs):
         return workspace.FitComparisonTable(
             max_lengths, switchboard.circuits_all, switchboard.mdl_all_modvi,
-            switchboard.modvi_ds, switchboard.objfn_builder_modvi, 'L', comm=comm
+            switchboard.modvi_ds, switchboard.objfn_builder_modvi, 'L', comm=comm,
+            mdc_stores = switchboard.mdc_store_all
         )
 
     @_Section.figure_factory(4)
     def final_model_fit_progress_bar_plot(workspace, switchboard=None, max_lengths=None, comm=None, **kwargs):
         return workspace.FitComparisonBarPlot(
             max_lengths, switchboard.circuits_all, switchboard.mdl_all_modvi,
-            switchboard.modvi_ds, switchboard.objfn_builder_modvi, 'L', comm=comm
+            switchboard.modvi_ds, switchboard.objfn_builder_modvi, 'L', comm=comm,
+            mdc_stores = switchboard.mdc_store_all
         )
 
 

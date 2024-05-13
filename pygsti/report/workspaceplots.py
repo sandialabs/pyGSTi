@@ -2123,8 +2123,11 @@ class ColorBoxPlot(WorkspacePlot):
         dataset and model used for the construction of objective functions in certain
         family of color box plots. Specifying this when a pre-existing store exists
         can speed up run time significantly as MDC store creation is expensive.
-        When specified, the values of `circuits`, `dataset` and `model` are ignored,
-        and the values from mdc_store are used in their place.
+        While the MDC store contains copies of the circuits, dataset and model,
+        the format of these is not guaranteed to be in a format amenable for efficient
+        calculation, and as such the values of `circuits`, `dataset` and `model` 
+        passed in as arguments is only overridden with those from mdc_store 
+        if they are None.
 
     submatrices : dict, optional
         A dictionary whose keys correspond to other potential plot
@@ -2240,8 +2243,11 @@ class ColorBoxPlot(WorkspacePlot):
             dataset and model used for the construction of objective functions in certain
             family of color box plots. Specifying this when a pre-existing store exists
             can speed up run time significantly as MDC store creation is expensive.
-            When specified, the values of `circuits`, `dataset` and `model` are ignored,
-            and the values from mdc_store are used in their place.
+            While the MDC store contains copies of the circuits, dataset and model,
+            the format of these is not guaranteed to be in a format amenable for efficient
+            calculation, and as such the values of `circuits`, `dataset` and `model` 
+            passed in as arguments is only overridden with those from mdc_store 
+            if they are None.
 
         submatrices : dict, optional
             A dictionary whose keys correspond to other potential plot
@@ -2288,12 +2294,11 @@ class ColorBoxPlot(WorkspacePlot):
 
         fig = None
         addl_hover_info_fns = dict()
-
         if mdc_store is not None:  # then it overrides
             #assert(circuits is None and dataset is None and model is None)
-            circuits = mdc_store.circuits
-            dataset = mdc_store.dataset
-            model = mdc_store.model
+            circuits = mdc_store.circuits if circuits is None else circuits
+            dataset = mdc_store.dataset if dataset is None else dataset
+            model = mdc_store.model if model is None else model
 
         if not isinstance(plottypes, (list, tuple)):
             plottypes = [plottypes]
@@ -4133,11 +4138,18 @@ class FitComparisonBarPlot(WorkspacePlot):
         measured in TVD) the probabilities produced by a model before
         comparing with the frequencies in `dataset`.  Currently, this
         functionality is only supported for `objective == "logl"`.
+
+    mdc_stores : list of ModelDatasetCircuitStore, optional (default None)
+        A optional list of precomputed ModelDatasetCircuitStore objects
+        of length equal to the length of `model_by_x` and `circuits_by_x` 
+        (and with internal values for the model, circuits and dataset assumed
+        to be commensurate with the corresponding input values) used to
+        accelerate objective function construction.
     """
 
     def __init__(self, ws, x_names, circuits_by_x, model_by_x, dataset_by_x,
                  objfn_builder="logl", x_label='L', np_by_x=None, scale=1.0,
-                 comm=None, wildcard=None):
+                 comm=None, wildcard=None, mdc_stores=None):
         """
         Creates a bar plot showing the overall (aggregate) goodness of fit
         for one or more model estimates to corresponding data sets.
@@ -4184,14 +4196,21 @@ class FitComparisonBarPlot(WorkspacePlot):
             measured in TVD) the probabilities produced by a model before
             comparing with the frequencies in `dataset`.  Currently, this
             functionality is only supported for `objective == "logl"`.
+
+        mdc_stores : list of ModelDatasetCircuitStore, optional (default None)
+            An optional list of precomputed ModelDatasetCircuitStore objects
+            of length equal to the length of `model_by_x` and `circuits_by_x` 
+            (and with internal values for the model, circuits and dataset assumed
+            to be commensurate with the corresponding input values) used to
+            accelerate objective function construction.
         """
         super(FitComparisonBarPlot, self).__init__(ws, self._create,
                                                    x_names, circuits_by_x, model_by_x, dataset_by_x,
                                                    objfn_builder, x_label, np_by_x, scale,
-                                                   comm, wildcard)
+                                                   comm, wildcard, mdc_stores)
 
     def _create(self, x_names, circuits_by_x, model_by_x, dataset_by_x, objfn_builder, x_label,
-                np_by_x, scale, comm, wildcard):
+                np_by_x, scale, comm, wildcard, mdc_stores):
 
         xs = list(range(len(x_names)))
         xtics = []; ys = []; colors = []; texts = []
@@ -4202,14 +4221,18 @@ class FitComparisonBarPlot(WorkspacePlot):
 
         if isinstance(dataset_by_x, _DataSet):
             dataset_by_x = [dataset_by_x] * len(model_by_x)
+        
+        if mdc_stores is None:
+            mdc_stores = [None]*len(model_by_x)
 
-        for X, mdl, circuits, dataset, Np in zip(x_names, model_by_x, circuits_by_x, dataset_by_x, np_by_x):
+        for X, mdl, circuits, dataset, Np, mdc_store in zip(x_names, model_by_x, circuits_by_x, 
+                                                            dataset_by_x, np_by_x, mdc_stores):
             if circuits is None or mdl is None:
                 Nsig, rating = _np.nan, 5
             else:
                 Nsig, rating, _, _, _, _ = self._ccompute(_ph.rated_n_sigma, dataset, mdl,
                                                           circuits, objfn_builder, Np, wildcard,
-                                                          return_all=True, comm=comm)
+                                                          return_all=True, comm=comm, mdc_store=mdc_store)
                 #Note: don't really need return_all=True, but helps w/caching b/c other fns use it.
 
             if rating == 5: color = "darkgreen"
@@ -4331,11 +4354,18 @@ class FitComparisonBoxPlot(WorkspacePlot):
         measured in TVD) the probabilities produced by a model before
         comparing with the frequencies in `dataset`.  Currently, this
         functionality is only supported for `objective == "logl"`.
+    
+    mdc_stores : list of lists of ModelDatasetCircuitStore, optional (default None)
+        An optional list of lists of precomputed ModelDatasetCircuitStore objects
+        with a structure matching `model_by_y_then_x` and `circuits_by_y_then_x` 
+        (and with internal values for the model, circuits and dataset assumed
+        to be commensurate with the corresponding input values) used to
+        accelerate objective function construction.
     """
 
     def __init__(self, ws, xs, ys, circuits_by_y_then_x, model_by_y_then_x, dataset_by_y_then_x,
                  objfn_builder="logl", x_label=None, y_label=None, scale=1.0, comm=None,
-                 wildcard=None):
+                 wildcard=None, mdc_stores=None):
         """
         Creates a box plot showing the overall (aggregate) goodness of fit
         for one or more model estimates to their respective  data sets.
@@ -4378,14 +4408,21 @@ class FitComparisonBoxPlot(WorkspacePlot):
             measured in TVD) the probabilities produced by a model before
             comparing with the frequencies in `dataset`.  Currently, this
             functionality is only supported for `objective == "logl"`.
+        
+        mdc_stores : list of lists of ModelDatasetCircuitStore, optional (default None)
+            An optional list of lists of precomputed ModelDatasetCircuitStore objects
+            with a structure matching `model_by_y_then_x` and `circuits_by_y_then_x` 
+            (and with internal values for the model, circuits and dataset assumed
+            to be commensurate with the corresponding input values) used to
+            accelerate objective function construction.
         """
         super(FitComparisonBoxPlot, self).__init__(
             ws, self._create, xs, ys, circuits_by_y_then_x, model_by_y_then_x,
             dataset_by_y_then_x, objfn_builder, x_label, y_label, scale, comm,
-            wildcard)
+            wildcard, mdc_stores)
 
     def _create(self, xs, ys, circuits_by_yx, model_by_yx, dataset_by_yx, objfn_builder,
-                x_label, y_label, scale, comm, wildcard):
+                x_label, y_label, scale, comm, wildcard, mdc_stores):
 
         xlabels = list(map(str, xs))
         ylabels = list(map(str, ys))
@@ -4397,12 +4434,16 @@ class FitComparisonBoxPlot(WorkspacePlot):
              [100, (1.0, 1.0, 0)],  # rating=3 yellow
              [500, (1.0, 0.5, 0)],  # rating=2 orange
              [1000, (1.0, 0, 0)]])  # rating=1 red
+        
+        if mdc_stores is None:
+            mdc_stores = [[None for y in ys] for x in xs]
 
         for iY, Y in enumerate(ys):
             for iX, X in enumerate(xs):
                 dataset = dataset_by_yx[iY][iX]
                 mdl = model_by_yx[iY][iX]
                 circuits = circuits_by_yx[iY][iX]
+                mdc_store = mdc_stores[iY][iX]
 
                 if dataset is None or circuits is None or mdl is None:
                     NsigMx[iY][iX] = _np.nan
@@ -4410,7 +4451,7 @@ class FitComparisonBoxPlot(WorkspacePlot):
 
                 Nsig, rating, _, _, _, _ = self._ccompute(
                     _ph.rated_n_sigma, dataset, mdl, circuits, objfn_builder,
-                    None, wildcard, return_all=True, comm=comm)  # self.ws.smartCache,
+                    None, wildcard, return_all=True, comm=comm, mdc_store=mdc_store)  # self.ws.smartCache,
                 NsigMx[iY][iX] = Nsig
 
         return _matrix_color_boxplot(

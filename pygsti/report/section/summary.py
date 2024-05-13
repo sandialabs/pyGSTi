@@ -21,7 +21,7 @@ class SummarySection(_Section):
         return workspace.FitComparisonBarPlot(
             max_lengths, switchboard.circuits_all, switchboard.mdl_all_modvi,
             switchboard.modvi_ds, switchboard.objfn_builder_modvi,
-            'L', comm=comm
+            'L', comm=comm, mdc_stores = switchboard.mdc_store_all
         )
 
     @_Section.figure_factory()
@@ -75,9 +75,11 @@ class SummarySection(_Section):
             circuitsGrid = [[na_to_none(switchboard.circuits_final[i])] * Ne for i in range(Nd)]
             mdlGrid = [[na_to_none(switchboard.mdl_current_modvi[d, i, -1]) for i in est_inds_mt]
                        for d in range(Nd)]
+            mdc_store_grid = [[na_to_none(switchboard.final_mdc_store[d, i]) for i in est_inds_mt]
+                       for d in range(Nd)]
             return workspace.FitComparisonBoxPlot(
                 est_lbls_mt, dataset_labels, circuitsGrid, mdlGrid, dsGrid, grid_objfn_builder,
-                comm=comm
+                comm=comm, mdc_stores=mdc_store_grid
             )
         else:
             dsGrid = [na_to_none(switchboard.modvi_ds[0, i]) for i in est_inds_mt]
@@ -86,7 +88,9 @@ class SummarySection(_Section):
                 mdlGrid = [None for i in est_inds_mt]
             else:
                 mdlGrid = [na_to_none(switchboard.mdl_current_modvi[0, i, -1]) for i in est_inds_mt]
+            mdc_store_grid = [na_to_none(switchboard.final_mdc_store[0, i]) for i in est_inds_mt]
+
             return workspace.FitComparisonBarPlot(
                 est_lbls_mt, circuitsGrid, mdlGrid, dsGrid, grid_objfn_builder, 'Estimate',
-                comm=comm
+                comm=comm, mdc_stores=mdc_store_grid
             )

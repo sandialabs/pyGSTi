@@ -266,7 +266,8 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     switchBd.add("idtresults", (0,))
     
 
-    switchBd.add('current_mdc_store', (0, 1, 3))
+    switchBd.add('current_mdc_store', (0, 1, 3))#mdc stores for this estimate/dataset indexed by L
+    switchBd.add('mdc_store_all', (0,1)) #list of all the mdc stores for this estimate/dataset
     switchBd.add('final_mdc_store', (0, 1))
     switchBd.add('mdl_final_modvi', (0, 1))
 
@@ -332,7 +333,9 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
             
             #add the final mdc store
             switchBd.final_mdc_store[d,i]= est.parameters.get('final_mdc_store', None)
+            switchBd.mdc_store_all[d,i] = est.parameters.get('per_iter_mdc_store', None)
 
+            #TODO: Fix this next block
             switchBd.clifford_compilation[d, i] = est.parameters.get("clifford compilation", 'auto')
             if switchBd.clifford_compilation[d, i] == 'auto':
                 switchBd.clifford_compilation[d, i] = find_std_clifford_compilation(

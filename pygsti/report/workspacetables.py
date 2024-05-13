@@ -32,6 +32,7 @@ from pygsti.modelmembers import states as _state
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LEEL
+from pygsti.data import DataSet as _DataSet
 
 
 class BlankTable(WorkspaceTable):
@@ -2819,8 +2820,9 @@ class FitComparisonTable(WorkspaceTable):
     model_by_x : list of Models
         `Model` corresponding to each X value.
 
-    dataset : DataSet
-        The data set to compare each model against.
+    dataset_by_x : DataSet or list of DataSets
+        The data sets to compare each model against.  If a single
+        :class:`DataSet` is given, then it is used for all comparisons.
 
     objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
         The objective function to use, or one of the given strings
@@ -2844,10 +2846,17 @@ class FitComparisonTable(WorkspaceTable):
         measured in TVD) the probabilities produced by a model before
         comparing with the frequencies in `dataset`.  Currently, this
         functionality is only supported for `objective == "logl"`.
+
+    mdc_stores : list of ModelDatasetCircuitStore, optional (default None)
+        An optional list of precomputed ModelDatasetCircuitStore objects
+        of length equal to the length of `model_by_x` and `circuits_by_x` 
+        (and with internal values for the model, circuits and dataset assumed
+        to be commensurate with the corresponding input values) used to
+        accelerate objective function construction.
     """
 
-    def __init__(self, ws, xs, circuits_by_x, model_by_x, dataset, objfn_builder='logl',
-                 x_label='L', np_by_x=None, comm=None, wildcard=None):
+    def __init__(self, ws, xs, circuits_by_x, model_by_x, dataset_by_x, objfn_builder='logl',
+                 x_label='L', np_by_x=None, comm=None, wildcard=None, mdc_stores=None):
         """
         Create a table showing how the chi^2 or log-likelihood changed with
         successive GST iterations.
@@ -2864,8 +2873,9 @@ class FitComparisonTable(WorkspaceTable):
         model_by_x : list of Models
             `Model` corresponding to each X value.
 
-        dataset : DataSet
-            The data set to compare each model against.
+        dataset_by_x : DataSet or list of DataSets
+            The data sets to compare each model against.  If a single
+            :class:`DataSet` is given, then it is used for all comparisons.
 
         objfn_builder : ObjectiveFunctionBuilder or {"logl", "chi2"}, optional
             The objective function to use, or one of the given strings
@@ -2890,15 +2900,23 @@ class FitComparisonTable(WorkspaceTable):
             comparing with the frequencies in `dataset`.  Currently, this
             functionality is only supported for `objective == "logl"`.
 
+        mdc_stores : list of ModelDatasetCircuitStore, optional (default None)
+            An optional list of precomputed ModelDatasetCircuitStore objects
+            of length equal to the length of `model_by_x` and `circuits_by_x` 
+            (and with internal values for the model, circuits and dataset assumed
+            to be commensurate with the corresponding input values) used to
+            accelerate objective function construction.
+
         Returns
         -------
         ReportTable
         """
         super(FitComparisonTable, self).__init__(ws, self._create, xs, circuits_by_x, model_by_x,
-                                                 dataset, objfn_builder, x_label, np_by_x, comm,
-                                                 wildcard)
+                                                 dataset_by_x, objfn_builder, x_label, np_by_x, comm,
+                                                 wildcard, mdc_stores)
 
-    def _create(self, xs, circuits_by_x, model_by_x, dataset, objfn_builder, x_label, np_by_x, comm, wildcard):
+    def _create(self, xs, circuits_by_x, model_by_x, dataset_by_x, objfn_builder, x_label, np_by_x, comm, wildcard,
+                mdc_stores):
 
         if objfn_builder == "chi2" or (isinstance(objfn_builder, _objfns.ObjectiveFunctionBuilder)
                                        and objfn_builder.cls_to_build == _objfns.Chi2Function):
@@ -2926,7 +2944,13 @@ class FitComparisonTable(WorkspaceTable):
             raise ValueError("Invalid `objfn_builder` argument: %s" % str(objfn_builder))
 
         if np_by_x is None:
-            np_by_x = [mdl.num_modeltest_params for mdl in model_by_x]
+            np_by_x = [mdl.num_modeltest_params if (mdl is not None) else 0 for mdl in model_by_x ]
+
+        if isinstance(dataset_by_x, _DataSet):
+            dataset_by_x = [dataset_by_x] * len(model_by_x)
+        
+        if mdc_stores is None:
+            mdc_stores = [None]*len(model_by_x)
 
         tooltips = ('', 'Difference in logL', 'number of degrees of freedom',
                     'difference between observed logl and expected mean',
@@ -2934,11 +2958,12 @@ class FitComparisonTable(WorkspaceTable):
                     'number of model parameters', '1-5 star rating (like Netflix)')
         table = _ReportTable(colHeadings, None, col_heading_labels=tooltips)
 
-        for X, mdl, circuits, Np in zip(xs, model_by_x, circuits_by_x, np_by_x):
+        for X, mdl, circuits, dataset, Np, mdc_store in zip(xs, model_by_x, circuits_by_x, dataset_by_x,
+                                                            np_by_x, mdc_stores):
             Nsig, rating, fitQty, k, Ns, Np = self._ccompute(
                 _ph.rated_n_sigma, dataset, mdl, circuits,
                 objfn_builder, Np, wildcard, return_all=True,
-                comm=comm)  # self.ws.smartCache derived?
+                comm=comm, mdc_store=mdc_store)  # self.ws.smartCache derived?
             table.add_row((str(X), fitQty, k, fitQty - k, _np.sqrt(2 * k), Nsig, Ns, Np, "<STAR>" * rating),
                           (None, 'Normal', 'Normal', 'Normal', 'Normal', 'Rounded', 'Normal', 'Normal', 'Conversion'))
 
