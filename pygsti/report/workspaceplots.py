@@ -355,7 +355,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
             #place an annotation at the very edge of the plotable area, and then semi-manually shift it over.
             
             if hoverLabels[j][i]: #unpopulated squares should have the empty string as their hover labels, skip those.
-                on_click_annotations.append(go_annotation(x= data.shape[1], y= .5*data.shape[0],
+                on_click_annotations.append(dict(x= data.shape[1], y= .5*data.shape[0],
                                             yanchor= 'middle', xanchor= 'left',
                                             text = hoverLabels[j][i], align= 'left',
                                             bordercolor= 'black', borderwidth= 1,
@@ -363,8 +363,10 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
                                             xshift= 20,
                                             visible= False, font = dict(size=12, family='monospace'),
                                             showarrow=False))
+    #need to add these annotation to the layout here to have them properly work by default with the
+    #button menu. (otherwise you need to toggle the button off and on again before they appear).
     fig.plotlyfig.update_layout(annotations = on_click_annotations)
-     
+
     #create a pair of buttons for toggling on and off the inner grids:
     grid_button = dict(type="buttons",
                         active=1,
