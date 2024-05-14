@@ -50,19 +50,7 @@ jobs:
         # but still compile Cython extensions
         python -m pip install -e .[testing]
         python setup.py build_ext --inplace
-    - name: Run test_packages Ubuntu
-      if: ${{matrix.os == 'ubuntu-latest'}}
-      run: |
-        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages
-    - name: Run test_packages Windows
-      if: ${{matrix.os == 'windows-latest'}}
-      run: |
-        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages
-    - name: Run test_packages MacOS
-      if: ${{matrix.os == 'macos-latest'}}
-
+    - name: Run test_packages
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages

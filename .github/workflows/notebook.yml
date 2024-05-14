@@ -56,18 +56,7 @@ jobs:
         # but still compile Cython extensions
         python -m pip install -e .[testing]
         python setup.py build_ext --inplace
-    - name: Run notebook regression ubuntu
-      if: ${{matrix.os == 'ubuntu-latest'}}
-      run: |
-       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env jupyter_notebooks
-    - name: Run notebook regression windows 
-      if: ${{matrix.os == 'windows-latest'}}
-      run: |
-       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env jupyter_notebooks
-    - name: Run notebook regression MacOS  
-      if: ${{matrix.os == 'macos-latest'}}
+    - name: Run notebook regression
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env jupyter_notebooks
