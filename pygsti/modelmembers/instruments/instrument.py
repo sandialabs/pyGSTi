@@ -51,7 +51,9 @@ class Instrument(_mm.ModelMember, _collections.OrderedDict):
         Initial values.  This should only be used internally in de-serialization.
     """
 
-    def __init__(self, member_ops, evotype=None, state_space=None, called_from_reduce=False, items=[]):
+    def __init__(self, member_ops, evotype=None, state_space=None, called_from_reduce=False, items=None):
+        if items is None:
+            items = []
         self._readonly = False  # until init is done
         if len(items) > 0:
             assert(member_ops is None), "`items` was given when op_matrices != None"

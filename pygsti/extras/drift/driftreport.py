@@ -99,11 +99,13 @@ class PowerSpectraPlot(_ws.WorkspacePlot):
     Plot of time-series data power spectrum
     """
 
-    def __init__(self, ws, results, spectrumlabel={}, detectorkey=None,
+    def __init__(self, ws, results, spectrumlabel=None, detectorkey=None,
                  showlegend=False, scale=1.0):
         """
         todo
         """
+        if spectrumlabel is None:
+            spectrumlabel = {}
         super(PowerSpectraPlot, self).__init__(ws, self._create, results,
                                                spectrumlabel, detectorkey, showlegend, scale)
 

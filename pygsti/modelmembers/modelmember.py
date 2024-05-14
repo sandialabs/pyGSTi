@@ -149,14 +149,20 @@ class ModelMember(ModelChild, _NicelySerializable):
     def state_space(self):
         return self._state_space
 
-    # Need to work on this, since submembers shouldn't necessarily be updated to the same state space -- maybe a
-    # replace_state_space_labels(...) member would be better?
-    #@state_space.setter
-    #def state_space(self, state_space):
-    #    assert(self._state_space.is_compatible_with(state_space), "Cannot change to an incompatible state space!"
-    #    for subm in self.submembers():
-    #        subm.state_space = state_space
-    #    return self._state_space = state_space
+    @state_space.setter
+    def state_space(self, state_space):
+        #assert(self._state_space.is_compatible_with(state_space)), "Cannot change to an incompatible state space!"
+        self._update_submember_state_spaces(self._state_space, state_space)
+        self._state_space = state_space
+
+    def _update_submember_state_spaces(self, old_parent_state_space, new_parent_state_space):
+        """ Subclasses can override this to perform more intelligent updates.
+            This function can also be used to perform any auxiliary tasks, like rebuilding a representation,
+            when the object's state space is updated.
+        """
+        for subm in self.submembers():
+            if subm.state_space == old_parent_state_space:
+                subm.state_space = new_parent_state_space
 
     @property
     def evotype(self):

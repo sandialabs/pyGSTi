@@ -10,7 +10,7 @@
 *.pyd
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
-test/test_packages/gst_checkpoints/*
+*_checkpoints/
 jupyter_notebooks/**/offline
 test/test_packages/offline
 hooks/etc/permissions.yml
@@ -24,7 +24,13 @@ doc/_autosummary
 doc/autoapi
 doc/build
 .venv*
+*.pyc*
 
+# Protocol Checkpointing #
+##########################
+*gst_checkpoints*
+*model_test_checkpoints*
+*standard_gst_checkpoints*
 
 # Test Metadata #
 #################
@@ -40,6 +46,7 @@ jupyter_notebooks/Tutorials/tutorial_files/modeltest_report
 jupyter_notebooks/Tutorials/tutorial_files/gettingStartedReport
 jupyter_notebooks/Examples/example_files/*.pkl
 jupyter_notebooks/Examples/example_files/*.json
+jupyter_notebooks/Examples/example_files/leakage_*
 jupyter_notebooks/Tutorials/tutorial_files/exampleReport
 jupyter_notebooks/Tutorials/tutorial_files/exampleStdReport
 jupyter_notebooks/Tutorials/tutorial_files/exampleMultiEstimateReport

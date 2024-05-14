@@ -19,13 +19,13 @@ jobs:
     strategy:
       fail-fast: false # Finish all tests even if one fails
       matrix:
-        os: [ubuntu-20.04, windows-2019, macos-11]
-        python-version: [3.7, 3.8, 3.9, '3.10']
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: [3.8, 3.9, '3.10', '3.11']
         
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Set up installation environment (Ubuntu or Windows)
-      if: ${{matrix.os == 'ubuntu-20.04' || matrix.os == 'windows-2019'}}
+      if: ${{matrix.os == 'ubuntu-latest' || matrix.os == 'windows-latest'}}
       run: |
         ./.github/ci-scripts/before_install.sh
         #download chp source code
@@ -33,7 +33,7 @@ jobs:
         #compile chp
         gcc -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c 
     - name: Set up installation environment (MacOS)
-      if: ${{matrix.os == 'macos-11'}}
+      if: ${{matrix.os == 'macos-latest'}}
       run: |
         ./.github/ci-scripts/before_install_macos.sh
         #download chp source code
@@ -41,11 +41,11 @@ jobs:
         #compile chp source code
         gcc -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Cache pip packages
-      uses: actions/cache@v2
+      uses: actions/cache@v4
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}-${{ hashFiles('**/*requirements.txt') }}
@@ -57,17 +57,17 @@ jobs:
         python -m pip install -e .[testing]
         python setup.py build_ext --inplace
     - name: Run notebook regression ubuntu
-      if: ${{matrix.os == 'ubuntu-20.04'}}
+      if: ${{matrix.os == 'ubuntu-latest'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env jupyter_notebooks
     - name: Run notebook regression windows 
-      if: ${{matrix.os == 'windows-2019'}}
+      if: ${{matrix.os == 'windows-latest'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env jupyter_notebooks
     - name: Run notebook regression MacOS  
-      if: ${{matrix.os == 'macos-11'}}
+      if: ${{matrix.os == 'macos-latest'}}
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env jupyter_notebooks

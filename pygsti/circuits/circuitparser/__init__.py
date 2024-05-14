@@ -215,7 +215,9 @@ class CircuitParser(object):
     tokens = CircuitLexer.tokens
     mode = "simple"
 
-    def __init__(self, lexer_object=None, lookup={}):
+    def __init__(self, lexer_object=None, lookup=None):
+        if lookup is None:
+            lookup = {}
         if self.mode == "ply":
             from ply import lex, yacc  # these aren't needed for "simple" mode
             self._lookup = lookup

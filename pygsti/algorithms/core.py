@@ -53,7 +53,7 @@ FLOATSIZE = 8  # TODO: better way?
 
 
 def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=None, op_label_aliases=None,
-             guess_model_for_gauge=None, svd_truncate_to=None, verbosity=0):
+             guess_model_for_gauge=None, svd_truncate_to=None, verbosity=0, check=True):
     """
     Performs Linear-inversion Gate Set Tomography on the dataset.
 
@@ -83,7 +83,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
         Dictionary whose keys are operation label "aliases" and whose values are circuits
         corresponding to what that operation label should be expanded into before querying
         the dataset.  Defaults to the empty dictionary (no aliases defined)
-        e.g. op_label_aliases['Gx^3'] = pygsti.obj.Circuit(['Gx','Gx','Gx'])
+        e.g. op_label_aliases['Gx^3'] = pygsti.baseobjs.Circuit(['Gx','Gx','Gx'])
 
     guess_model_for_gauge : Model, optional
         A model used to compute a gauge transformation that is applied to
@@ -101,6 +101,10 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
 
     verbosity : int, optional
         How much detail to send to stdout.
+
+    check : bool, optional
+        Specifies whether we perform computationally expensive assertion checks.
+        Computationally cheap assertions will always be checked.
 
     Returns
     -------
@@ -193,8 +197,8 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                          "or decrease svd_truncate_to" % (rankAB, ABMat_p.shape[0]))
 
     invABMat_p = _np.dot(Pjt, _np.dot(_np.diag(1.0 / s), Pj))  # (trunc,trunc)
-    # check inverse is correct (TODO: comment out later)
-    assert(_np.linalg.norm(_np.linalg.inv(ABMat_p) - invABMat_p) < 1e-8)
+    if check:
+        assert(_np.linalg.norm(_np.linalg.inv(ABMat_p) - invABMat_p) < 1e-8)
     assert(len((_np.isnan(invABMat_p)).nonzero()[0]) == 0)
 
     if svd_truncate_to is None or svd_truncate_to == target_model.dim:  # use target sslbls and basis
@@ -231,10 +235,6 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
             assert(len(X_ps) == 1); X_p = X_ps[0]  # shape (nESpecs, nRhoSpecs)
             lgstModel.operations[opLabel] = _op.FullArbitraryOp(_np.dot(invABMat_p, X_p))  # shape (trunc,trunc)
 
-        #print "DEBUG: X(%s) = \n" % opLabel,X
-        #print "DEBUG: Evals(X) = \n",_np.linalg.eigvals(X)
-        #print "DEBUG: %s = \n" % opLabel,lgstModel[ opLabel ]
-
     #Form POVMs
     for povmLabel in povmLabelsToEstimate:
         povm_effects = []
@@ -247,7 +247,10 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                     circuit = rhostr
                 dsRow_fractions = dataset[circuit].fractions
                 # outcome labels should just be effect labels (no instruments!)
-                EVec[0, i] = dsRow_fractions[(effectLabel,)]
+                # when using a sparse data set format it might not be the case
+                # that all effect labels are present (only ones with non-zero counts are)
+                # so return 0 for the fraction in that case.
+                EVec[0, i] = dsRow_fractions.get((effectLabel,), 0)
             EVec_p = _np.dot(_np.dot(EVec, Vd), Pj)  # truncate Evec => Evec', shape (1,trunc)
             povm_effects.append((effectLabel, _np.transpose(EVec_p)))
         lgstModel.povms[povmLabel] = _povm.UnconstrainedPOVM(povm_effects, evotype='default')
@@ -262,7 +265,10 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                 # try without prepLabel since it will be the default
                 circuit = estr
             dsRow_fractions = dataset[circuit].fractions
-            rhoVec[eoff:eoff + povmLen, 0] = [dsRow_fractions[(ol,)] for ol in target_model.povms[povmLbl]]
+            # when using a sparse data set format it might not be the case
+            # that all effect labels are present (only ones with non-zero counts are)
+            # so return 0 for the fraction in that case.
+            rhoVec[eoff:eoff + povmLen, 0] = [dsRow_fractions.get((ol,),0) for ol in target_model.povms[povmLbl]]
             eoff += povmLen
         rhoVec_p = _np.dot(Pjt, _np.dot(Ud, rhoVec))  # truncate rhoVec => rhoVec', shape (trunc, 1)
         rhoVec_p = _np.dot(invABMat_p, rhoVec_p)
@@ -444,6 +450,10 @@ def _construct_a(effect_fiducials, model):
     dim = model.dim
     A = _np.empty((n, dim))
     # st = _np.empty(dim, 'd')
+    
+    # Remove restrictions on state param types for computation
+    old_default_param = model.preps.default_param
+    model.preps.default_param = "full"
 
     basis_st = _np.zeros((dim, 1), 'd'); eoff = 0
     for k, (estr, povmLbl, povmLen) in enumerate(zip(effect_fiducials, povmLbls, povmLens)):
@@ -459,6 +469,9 @@ def _construct_a(effect_fiducials, model):
             basis_st[i] = 0.0
 
         eoff += povmLen
+    
+    model.preps.default_param = old_default_param
+
     return A
 
 
@@ -467,6 +480,10 @@ def _construct_b(prep_fiducials, model):
     dim = model.dim
     B = _np.empty((dim, n))
     # st = _np.empty(dim, 'd')
+
+    # Remove restrictions on POVM param types for computation
+    old_default_param = model.povms.default_param
+    model.povms.default_param = "full"
 
     #Create POVM of vector units
     basis_Es = []
@@ -484,6 +501,8 @@ def _construct_b(prep_fiducials, model):
         B[:, k] = [probs[("E%d" % i,)] for i in range(dim)]  # CHECK will this work?
 
     del model.povms['M_LGST_tmp_povm']
+    model.povms.default_param = old_default_param
+
     return B
 
 

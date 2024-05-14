@@ -117,9 +117,9 @@ class CircuitPlaquette(_NicelySerializable):
     def __len__(self):
         return len(self.elements)
 
-    def elementvec_to_matrix(self, elementvec, layout, mergeop="sum"):
+    def elementvec_to_array(self, elementvec, layout, mergeop="sum"):
         """
-        Form a matrix of values corresponding to this plaquette from an element vector.
+        Form a array of values corresponding to this plaquette from an element vector.
 
         An element vector holds individual-outcome elements (e.g. the bulk probabilities
         computed by a model).
@@ -670,7 +670,7 @@ class PlaquetteGridCircuitStructure(_CircuitList):
         else:
             op_label_aliases = weights_dict = name = None
 
-        return cls({}, [], [], circuits_or_structure,
+        return cls({}, [], [], '', '', circuits_or_structure,
                    op_label_aliases, weights_dict, name)
 
     def __init__(self, plaquettes, x_values, y_values, xlabel, ylabel, additional_circuits=None, op_label_aliases=None,
