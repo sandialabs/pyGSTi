@@ -285,8 +285,7 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
         plaquette_boundary_lines.append(dict(type="line", xref= 'paper', yref='y', x0=0, y0=y_bnd, x1=1, y1=y_bnd, 
              line={'color':"#616263", 'width':1, 'dash':"solid"}))
 
-    for bnd_line in plaquette_boundary_lines:
-        fig.plotlyfig.add_shape(bnd_line)
+    fig.plotlyfig.update_layout(shapes=plaquette_boundary_lines)
     #Add grid lines between the squares within a plaquette
     #Can use a construction similar to the x/y boundary one to
     #get some reference points, but we need to include the endpoints here.
@@ -331,14 +330,10 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
     plaquette_grid_lines = []
     for y in y_pos_filtered:
         for endpoints in x_endpoints:
-            #fig.plotlyfig.add_shape(type="line", x0=endpoints[0], y0=y, x1=endpoints[1], y1=y, 
-            #                        line={'color':"MediumPurple", 'width':.25, 'dash':"dot"})
             plaquette_grid_lines.append(dict(type="line", x0=endpoints[0], y0=y, x1=endpoints[1], y1=y, 
                                              line={'color':"MediumPurple", 'width':.35, 'dash':"1px"}))
     for x in x_pos_filtered:
         for endpoints in y_endpoints:
-            #fig.plotlyfig.add_shape(type="line", x0=x, y0=endpoints[0], x1=x, y1=endpoints[1], 
-            #                        line={'color':"MediumPurple", 'width':.25, 'dash':"dot"})
             plaquette_grid_lines.append(dict(type="line", x0=x, y0=endpoints[0], x1=x, y1=endpoints[1], 
                                              line={'color':"MediumPurple", 'width':.35, 'dash':"1px"}))
     
@@ -362,11 +357,18 @@ def _nested_color_boxplot(plt_data_list_of_lists, colormap,
                                             clicktoshow= 'onout', xclick=i, yclick=j,
                                             xshift= 20,
                                             visible= False, font = dict(size=12, family='monospace'),
-                                            showarrow=False))
+                                            showarrow=True))
+                on_click_annotations.append(dict(x= i, y= j,
+                                            yanchor= 'middle', xanchor= 'center',
+                                            bordercolor= 'purple', borderwidth= 0,
+                                            clicktoshow= 'onout',
+                                            text='', #border pad value is a complete guess...
+                                            visible= False, font = dict(size=12, family='monospace'),
+                                            showarrow=True, arrowhead=3))
     #need to add these annotation to the layout here to have them properly work by default with the
     #button menu. (otherwise you need to toggle the button off and on again before they appear).
     fig.plotlyfig.update_layout(annotations = on_click_annotations)
-
+    
     #create a pair of buttons for toggling on and off the inner grids:
     grid_button = dict(type="buttons",
                         active=1,
@@ -668,22 +670,18 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
 
         #decide on some absolute distances (in pixels?) between the buttons and the bottom of the printable area.
         y_abs_0= 25
-        y_abs_1= 65
+        y_abs_1= 75
         #vertical plotting area should be (approximately at least) height - tmargin - bmargin
         plottable_height = height - tmargin - bmargin
         new_y_0 = -y_abs_0/plottable_height
         new_y_1 = -y_abs_1/plottable_height
         #Now let's update the updatemenus
-        new_updatemenus = list(pfig.layout.updatemenus)
-        #The first entry is the grid button, the second the hover button, and the third the clickable element button.
-        #the last of these needs an additional vertical shift added.
-        new_updatemenus[0].y = new_y_0
-        new_updatemenus[1].y = new_y_0
-        new_updatemenus[2].y = new_y_1
-
-        #now let's update the updatemenus in the figure.
-        pfig.update_layout(updatemenus = new_updatemenus)
-
+        #updatemenus should be a tuple, but for some reason this looks like
+        #it works...
+        pfig['layout']['updatemenus'][0]['y'] = new_y_0
+        pfig['layout']['updatemenus'][1]['y'] = new_y_0
+        pfig['layout']['updatemenus'][2]['y'] = new_y_1
+        
     else:  # fig is None => use a "No data to display" placeholder figure
         trace = go.Heatmap(z=_np.zeros((10, 10), 'd'),
                            colorscale=[[0, 'white'], [1, 'black']],
