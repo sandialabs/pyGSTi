@@ -77,7 +77,7 @@ class SpamTable(WorkspaceTable):
         grids (fine for small matrices) or as a plot of colored
         boxes (space-conserving and better for large matrices).
 
-    confidence_region_info : ConfidenceRegion, optional
+    confidence_region_info : list of ConfidenceRegion, optional
         If not None, specifies a confidence-region
         used to display error intervals.
 
@@ -87,7 +87,7 @@ class SpamTable(WorkspaceTable):
     """
 
     def __init__(self, ws, models, titles=None,
-                 display_as="boxes", confidence_region_info=None,
+                 display_as="boxes", confidence_region_infos=None,
                  include_hs_vec=True):
         """
         A table of one or more model's SPAM elements.
@@ -107,7 +107,7 @@ class SpamTable(WorkspaceTable):
             grids (fine for small matrices) or as a plot of colored
             boxes (space-conserving and better for large matrices).
 
-        confidence_region_info : ConfidenceRegion, optional
+        confidence_region_infos : list of ConfidenceRegion, optional
             If not None, specifies a confidence-region
             used to display error intervals.
 
@@ -116,15 +116,18 @@ class SpamTable(WorkspaceTable):
             vector representation columns in the table.
         """
         super(SpamTable, self).__init__(ws, self._create, models,
-                                        titles, display_as, confidence_region_info,
+                                        titles, display_as, confidence_region_infos,
                                         include_hs_vec)
 
-    def _create(self, models, titles, display_as, confidence_region_info,
+    def _create(self, models, titles, display_as, confidence_region_infos,
                 include_hs_vec):
 
         if isinstance(models, _models.Model):
             models = [models]
-
+        
+        if confidence_region_infos is None:
+            confidence_region_infos = [None]*len(models)
+        
         rhoLabels = list(models[0].preps.keys())  # use labels of 1st model
         povmLabels = list(models[0].povms.keys())  # use labels of 1st model
 
@@ -140,18 +143,23 @@ class SpamTable(WorkspaceTable):
         formatters = [None] * len(colHeadings)
 
         if include_hs_vec:
-            model = models[-1]  # only show HSVec for last model
-            basisNm = _tools.basis_longname(model.basis)
-            colHeadings.append('Hilbert-Schmidt vector<br>(%s basis)' % basisNm)
-            formatters.append(None)
+            for model, title in zip(models, titles):
+                basisNm = _tools.basis_longname(model.basis)
+                title_string = title if title else ''
+                colHeadings.append(f'{title_string} Hilbert-Schmidt vector<br>({basisNm})')
+                formatters.append(None)
 
-        table = _ReportTable(colHeadings, formatters, confidence_region_info=confidence_region_info)
+        #The confidence_region_info arg of ReportTable is not configured to take a list
+        #for now pass in the last one, as this is only used for identifying whether
+        #non-Markovian error bars are being used (so this is implicitly assuming this is consistent
+        #across the row).
+        table = _ReportTable(colHeadings, formatters, confidence_region_info=confidence_region_infos[-1])
 
         for lbl in rhoLabels:
             rowData = [lbl]; rowFormatters = ['Rho']
 
-            for model in models:
-                rhoMx = _ev(_reportables.Vec_as_stdmx(model, lbl, "prep"), confidence_region_info)
+            for model, cri in zip(models, confidence_region_infos):
+                rhoMx = _ev(_reportables.Vec_as_stdmx(model, lbl, "prep"), cri)
                 if display_as == "numbers":
                     rowData.append(rhoMx)
                     rowFormatters.append('Brackets')
@@ -169,51 +177,52 @@ class SpamTable(WorkspaceTable):
                 else:
                     raise ValueError("Invalid 'display_as' argument: %s" % display_as)
 
-            for model in models:
-                cri = confidence_region_info if confidence_region_info and \
-                    (confidence_region_info.model.frobeniusdist(model) < 1e-6) else None
+            for model, cri in zip(models, confidence_region_infos):
+                if cri is not None:
+                    cri = cri if (cri.model.frobeniusdist(model) < 1e-6) else None #I don't know what this is doing...
                 evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(model, lbl, "prep"),
                             cri)
                 rowData.append(evals)
                 rowFormatters.append('Brackets')
 
             if include_hs_vec:
-                #Create a ReportableQty out of the HS vector and its error bars to handle
-                #error bar formatting in report properly.
-                hs_vec = models[-1].preps[lbl].to_dense()
-                hs_vec = hs_vec.reshape((len(hs_vec),1))
-                #get the error bars
-                if confidence_region_info is not None:
-                    intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(lbl)[:, None]
-                    if intervalVec.shape[0] == models[-1].dim - 1:
-                        #TP constrained, so pad with zero top row
-                        intervalVec = _np.concatenate((_np.zeros((1, 1), 'd'), intervalVec), axis=0)
-                else:
-                    intervalVec= None
-                hs_vec = _ReportableQty(hs_vec, errbar=intervalVec)
-                
-                if display_as == "numbers":
-                    rowData.append(hs_vec)
-                    rowFormatters.append('Normal')
-                elif display_as == "boxes":
-                    if models[-1].basis.real: #If a basis only requires real-values coefficients just
-                                              #use a single plot.
-                        fig= _wp.GateMatrixPlot(self.ws, hs_vec.value, colorbar=False,
-                                                box_labels=True, prec='compacthp',
-                                                mx_basis_y=models[-1].basis,
-                                                eb_matrix=hs_vec.errorbar)
+                for model, cri in zip(models, confidence_region_infos):
+                    #Create a ReportableQty out of the HS vector and its error bars to handle
+                    #error bar formatting in report properly.
+                    hs_vec = model.preps[lbl].to_dense()
+                    hs_vec = hs_vec.reshape((len(hs_vec),1))
+                    #get the error bars
+                    if cri is not None:
+                        intervalVec = cri.retrieve_profile_likelihood_confidence_intervals(lbl)[:, None]
+                        if intervalVec.shape[0] == model.dim - 1:
+                            #TP constrained, so pad with zero top row
+                            intervalVec = _np.concatenate((_np.zeros((1, 1), 'd'), intervalVec), axis=0)
                     else:
-                        hs_vec_real = hs_vec.value.real
-                        hs_vec_imag = hs_vec.value.imag
-                        hs_vec_eb_real = hs_vec.errorbar.real if hs_vec.errorbar is not None else None
-                        hs_vec_eb_imag = hs_vec.errorbar.imag if hs_vec.errorbar is not None else None
-                        fig = _wp.GateMatricesPlot(self.ws, [hs_vec_real, hs_vec_imag], colorbar=False,
+                        intervalVec= None
+                    hs_vec = _ReportableQty(hs_vec, errbar=intervalVec)
+                    
+                    if display_as == "numbers":
+                        rowData.append(hs_vec)
+                        rowFormatters.append('Normal')
+                    elif display_as == "boxes":
+                        if model.basis.real: #If a basis only requires real-values coefficients just
+                                                #use a single plot.
+                            fig= _wp.GateMatrixPlot(self.ws, hs_vec.value, colorbar=False,
                                                     box_labels=True, prec='compacthp',
-                                                    subtitles = ['Real', 'Imag'], 
-                                                    mx_basis_y=models[-1].basis,
-                                                    eb_matrices=[hs_vec_eb_real, hs_vec_eb_imag])
-                    rowData.append(fig)
-                    rowFormatters.append('Figure')
+                                                    mx_basis_y=model.basis,
+                                                    eb_matrix=hs_vec.errorbar)
+                        else:
+                            hs_vec_real = hs_vec.value.real
+                            hs_vec_imag = hs_vec.value.imag
+                            hs_vec_eb_real = hs_vec.errorbar.real if hs_vec.errorbar is not None else None
+                            hs_vec_eb_imag = hs_vec.errorbar.imag if hs_vec.errorbar is not None else None
+                            fig = _wp.GateMatricesPlot(self.ws, [hs_vec_real, hs_vec_imag], colorbar=False,
+                                                        box_labels=True, prec='compacthp',
+                                                        subtitles = ['Real', 'Imag'], 
+                                                        mx_basis_y=model.basis,
+                                                        eb_matrices=[hs_vec_eb_real, hs_vec_eb_imag])
+                        rowData.append(fig)
+                        rowFormatters.append('Figure')
                 
             table.add_row(rowData, rowFormatters)
 
@@ -224,8 +233,8 @@ class SpamTable(WorkspaceTable):
                 rowData = [lbl] if (len(povmLabels) == 1) else [povmAndELbl]
                 rowFormatters = ['Effect']
 
-                for model in models:
-                    EMx = _ev(_reportables.Vec_as_stdmx(model, povmAndELbl, "effect"), confidence_region_info)
+                for model, cri in zip(models, confidence_region_infos):
+                    EMx = _ev(_reportables.Vec_as_stdmx(model, povmAndELbl, "effect"), cri)
                     if display_as == "numbers":
                         rowData.append(EMx)
                         rowFormatters.append('Brackets')
@@ -243,51 +252,51 @@ class SpamTable(WorkspaceTable):
                     else:
                         raise ValueError("Invalid 'display_as' argument: %s" % display_as)  # pragma: no cover
 
-                for model in models:
-                    cri = confidence_region_info if confidence_region_info and \
-                        (confidence_region_info.model.frobeniusdist(model) < 1e-6) else None
+                for model, cri in zip(models, confidence_region_infos):
+                    if cri is not None:
+                        cri = cri if (cri.model.frobeniusdist(model) < 1e-6) else None
                     evals = _ev(_reportables.Vec_as_stdmx_eigenvalues(model, povmAndELbl, "effect"),
                                 cri)
                     rowData.append(evals)
                     rowFormatters.append('Brackets')
 
                 if include_hs_vec:
-                    hs_vec = models[-1].povms[povmlbl][lbl].to_dense()
-                    hs_vec = hs_vec.reshape((len(hs_vec),1))
+                    for model, cri in zip(models, confidence_region_infos):
+                        hs_vec = model.povms[povmlbl][lbl].to_dense()
+                        hs_vec = hs_vec.reshape((len(hs_vec),1))
 
-                    if confidence_region_info is not None:
-                        intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(povmlbl)[
-                            :, None]  # for all povm params
-                        offset = models[-1].povms[povmlbl].gpindices.start #need to account for offset in starting index of POVM
-                        effect_indices = models[-1].povms[povmlbl][lbl].gpindices
-                        effect_indices = slice(effect_indices.start-offset, effect_indices.stop-offset)
-                        intervalVec = intervalVec[effect_indices]  # specific to this effect
-                    else:
-                        intervalVec = None
-                    hs_vec = _ReportableQty(hs_vec, errbar=intervalVec)
-
-                    if display_as == 'numbers':
-                        rowData.append(hs_vec)
-                        rowFormatters.append('Normal')
-                    elif display_as == 'boxes':
-                        if models[-1].basis.real:#If a basis only requires real-values coefficients just
-                                                #use a single plot.
-                            fig= _wp.GateMatrixPlot(self.ws, hs_vec.value, colorbar=False,
-                                                    box_labels=True, prec='compacthp',
-                                                    mx_basis_y=models[-1].basis,
-                                                    eb_matrix=hs_vec.errorbar)
+                        if cri is not None:
+                            intervalVec = cri.retrieve_profile_likelihood_confidence_intervals(povmlbl)[:, None]  # for all povm params
+                            offset = model.povms[povmlbl].gpindices.start #need to account for offset in starting index of POVM
+                            effect_indices = model.povms[povmlbl][lbl].gpindices
+                            effect_indices = slice(effect_indices.start-offset, effect_indices.stop-offset)
+                            intervalVec = intervalVec[effect_indices]  # specific to this effect
                         else:
-                            hs_vec_real = hs_vec.value.real
-                            hs_vec_imag = hs_vec.value.imag
-                            hs_vec_eb_real = hs_vec.errorbar.real if hs_vec.errorbar is not None else None
-                            hs_vec_eb_imag = hs_vec.errorbar.imag if hs_vec.errorbar is not None else None
-                            fig = _wp.GateMatricesPlot(self.ws, [hs_vec_real, hs_vec_imag], colorbar=False,
+                            intervalVec = None
+                        hs_vec = _ReportableQty(hs_vec, errbar=intervalVec)
+
+                        if display_as == 'numbers':
+                            rowData.append(hs_vec)
+                            rowFormatters.append('Normal')
+                        elif display_as == 'boxes':
+                            if model.basis.real:#If a basis only requires real-values coefficients just
+                                                    #use a single plot.
+                                fig= _wp.GateMatrixPlot(self.ws, hs_vec.value, colorbar=False,
                                                         box_labels=True, prec='compacthp',
-                                                        subtitles = ['Real', 'Imag'], 
-                                                        mx_basis_y=models[-1].basis,
-                                                        eb_matrices=[hs_vec_eb_real, hs_vec_eb_imag])
-                        rowData.append(fig)
-                        rowFormatters.append('Figure')
+                                                        mx_basis_y=model.basis,
+                                                        eb_matrix=hs_vec.errorbar)
+                            else:
+                                hs_vec_real = hs_vec.value.real
+                                hs_vec_imag = hs_vec.value.imag
+                                hs_vec_eb_real = hs_vec.errorbar.real if hs_vec.errorbar is not None else None
+                                hs_vec_eb_imag = hs_vec.errorbar.imag if hs_vec.errorbar is not None else None
+                                fig = _wp.GateMatricesPlot(self.ws, [hs_vec_real, hs_vec_imag], colorbar=False,
+                                                            box_labels=True, prec='compacthp',
+                                                            subtitles = ['Real', 'Imag'], 
+                                                            mx_basis_y=model.basis,
+                                                            eb_matrices=[hs_vec_eb_real, hs_vec_eb_imag])
+                            rowData.append(fig)
+                            rowFormatters.append('Figure')
                 table.add_row(rowData, rowFormatters)
 
         table.finish()
@@ -412,7 +421,7 @@ class GatesTable(WorkspaceTable):
     """
 
     def __init__(self, ws, models, titles=None, display_as="boxes",
-                 confidence_region_info=None):
+                 confidence_region_infos=None):
         """
         Create a table showing a model's raw gates.
 
@@ -431,7 +440,7 @@ class GatesTable(WorkspaceTable):
             grids (fine for small matrices) or as a plot of colored
             boxes (space-conserving and better for large matrices).
 
-        confidence_region_info : ConfidenceRegion, optional
+        confidence_region_infos : list of ConfidenceRegion, optional
             If not None, specifies a confidence-region
             used to display error intervals for the *final*
             element of `models`.
@@ -441,12 +450,15 @@ class GatesTable(WorkspaceTable):
         ReportTable
         """
         super(GatesTable, self).__init__(ws, self._create, models, titles,
-                                         display_as, confidence_region_info)
+                                         display_as, confidence_region_infos)
 
-    def _create(self, models, titles, display_as, confidence_region_info):
+    def _create(self, models, titles, display_as, confidence_region_infos):
 
         if isinstance(models, _models.Model):
             models = [models]
+        
+        if confidence_region_infos is None:
+            confidence_region_infos = [None]*len(models)
 
         opLabels = models[0].primitive_op_labels  # use labels of 1st model
         instLabels = list(models[0].instruments.keys())  # requires an explicit model!
@@ -459,15 +471,19 @@ class GatesTable(WorkspaceTable):
         for model, title in zip(models, titles):
             basisLongNm = _tools.basis_longname(model.basis)
             pre = (title + ' ' if title else '')
-            colHeadings.append('%sSuperoperator (%s basis)' % (pre, basisLongNm))
+            colHeadings.append('%sSuperoperator (%s)' % (pre, basisLongNm))
         formatters = [None] * len(colHeadings)
 
-        if confidence_region_info is not None:
+        for cri, title in zip(confidence_region_infos, titles):
             #Only use confidence region for the *final* model.
-            colHeadings.append('%g%% C.I. half-width' % confidence_region_info.level)
-            formatters.append('Conversion')
-
-        table = _ReportTable(colHeadings, formatters, confidence_region_info=confidence_region_info)
+            if cri is not None:
+                colHeadings.append(f'{title} Superoperator<br>{cri.level:3g} C.I. half-width')
+                formatters.append('Conversion')
+        #The confidence_region_info arg of ReportTable is not configured to take a list
+        #for now pass in the last one, as this is only used for identifying whether
+        #non-Markovian error bars are being used (so this is implicitly assuming this is consistent
+        #across the row).
+        table = _ReportTable(colHeadings, formatters, confidence_region_info=confidence_region_infos[-1])
 
         #Create list of labels and gate-like objects, allowing instruments to be included:
         label_op_tups = []
@@ -485,63 +501,79 @@ class GatesTable(WorkspaceTable):
             row_data = [lbl if (comp_lbl is None) else (lbl + '.' + comp_lbl)]
             row_formatters = [None]
 
-            for model, op in zip(models, per_model_ops):
+            for model, op, cri in zip(models, per_model_ops, confidence_region_infos):
                 basis = model.basis
 
+                if cri is not None:
+                    intervalVec = cri.retrieve_profile_likelihood_confidence_intervals(lbl, comp_lbl)[:, None]
+                    if isinstance(op, _op.FullArbitraryOp):
+                        #then we know how to reshape into a matrix
+                        op_dim = model.dim
+                        basis = model.basis
+                        intervalMx = intervalVec.reshape(op_dim, op_dim)
+                    elif isinstance(op, _op.FullTPOp):
+                        #then we know how to reshape into a matrix
+                        op_dim = model.dim
+                        basis = model.basis
+                        intervalMx = _np.concatenate((_np.zeros((1, op_dim), 'd'),
+                                                    intervalVec.reshape(op_dim - 1, op_dim)), axis=0)
+                    else:
+                        # we don't know how best to reshape interval matrix for gate, so
+                        # use derivative
+                        op_dim = model.dim
+                        basis = model.basis
+                        op_deriv = op.deriv_wrt_params()
+                        intervalMx = _np.abs(_np.dot(op_deriv, intervalVec).reshape(op_dim, op_dim))
+                else:
+                    intervalMx = None
+
+                #turn the op matrix into a ReportableQty
+                op_matrix = _ReportableQty(op.to_dense('HilbertSchmidt'), errbar=intervalMx)
+
                 if display_as == "numbers":
-                    row_data.append(op.to_dense('HilbertSchmidt'))
+                    row_data.append(op_matrix)
                     row_formatters.append('Brackets')
                 elif display_as == "boxes":
-                    fig = _wp.GateMatrixPlot(self.ws, op.to_dense(on_space='HilbertSchmidt'),
-                                             colorbar=False,
-                                             mx_basis_x=basis, mx_basis_y=basis )
-
+                    if model.basis.real:
+                        fig = _wp.GateMatrixPlot(self.ws, op_matrix.value,
+                                                colorbar=False,
+                                                mx_basis_x=basis, mx_basis_y=basis,
+                                                box_labels=True, prec='compacthp',
+                                                eb_matrix=op_matrix.errorbar)
+                    else:
+                        op_matrix_real = op_matrix.value.real
+                        op_matrix_imag = op_matrix.value.imag
+                        op_matrix_eb_real = op_matrix.errorbar.real if op_matrix.errorbar is not None else None
+                        op_matrix_eb_imag = op_matrix.errorbar.imag if op_matrix.errorbar is not None else None
+                        fig = _wp.GateMatricesPlot(self.ws, [op_matrix_real, op_matrix_imag], colorbar=False,
+                                                    box_labels=True, prec='compacthp',
+                                                    subtitles = ['Real', 'Imag'], 
+                                                    mx_basis_x=model.basis,
+                                                    mx_basis_y=model.basis,
+                                                    eb_matrices=[op_matrix_eb_real, op_matrix_eb_imag])
                     row_data.append(fig)
                     row_formatters.append('Figure')
                 else:
                     raise ValueError("Invalid 'display_as' argument: %s" % display_as)
+                
+                if cri is not None:
+                    if display_as == "numbers":
+                        row_data.append(intervalMx)
+                        row_formatters.append('Brackets')
 
-            if confidence_region_info is not None:
-                intervalVec = confidence_region_info.retrieve_profile_likelihood_confidence_intervals(
-                    lbl, comp_lbl)[:, None]
-
-                if isinstance(per_model_ops[-1], _op.FullArbitraryOp):
-                    #then we know how to reshape into a matrix
-                    op_dim = models[-1].dim
-                    basis = models[-1].basis
-                    intervalMx = intervalVec.reshape(op_dim, op_dim)
-                elif isinstance(per_model_ops[-1], _op.FullTPOp):
-                    #then we know how to reshape into a matrix
-                    op_dim = models[-1].dim
-                    basis = models[-1].basis
-                    intervalMx = _np.concatenate((_np.zeros((1, op_dim), 'd'),
-                                                  intervalVec.reshape(op_dim - 1, op_dim)), axis=0)
-                else:
-                    # we don't know how best to reshape interval matrix for gate, so
-                    # use derivative
-                    op_dim = models[-1].dim
-                    basis = models[-1].basis
-                    op_deriv = per_model_ops[-1].deriv_wrt_params()
-                    intervalMx = _np.abs(_np.dot(op_deriv, intervalVec).reshape(op_dim, op_dim))
-
-                if display_as == "numbers":
-                    row_data.append(intervalMx)
-                    row_formatters.append('Brackets')
-
-                elif display_as == "boxes":
-                    maxAbsVal = _np.max(_np.abs(intervalMx))
-                    fig = _wp.GateMatrixPlot(self.ws, intervalMx,
-                                             color_min=-maxAbsVal, color_max=maxAbsVal,
-                                             colorbar=False,
-                                             mx_basis_x=basis,
-                                             mx_basis_y=basis)
-                    row_data.append(fig)
-                    row_formatters.append('Figure')
-                else:
-                    assert(False)  # pragma: no cover
+                    elif display_as == "boxes":
+                        maxAbsVal = _np.max(_np.abs(intervalMx))
+                        fig = _wp.GateMatrixPlot(self.ws, intervalMx,
+                                                color_min=-maxAbsVal, color_max=maxAbsVal,
+                                                colorbar=False,
+                                                mx_basis_x=basis,
+                                                mx_basis_y=basis,
+                                                prec='compacthp',
+                                                box_labels=True)
+                        row_data.append(fig)
+                        row_formatters.append('Figure')
 
             table.add_row(row_data, row_formatters)
-
         table.finish()
         return table
 

@@ -252,14 +252,14 @@ class GaugeVariantsRawSection(_Section):
     def final_gates_box_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.GatesTable(
             switchboard.mdl_target_and_final, ['Target', 'Estimated'], 'boxes',
-            _cri(1, switchboard, confidence_level, ci_brevity)
+            _cri_target_and_final(1, switchboard, confidence_level, ci_brevity)
         )
 
     @_Section.figure_factory(4)
     def final_model_brief_spam_table(workspace, switchboard=None, confidence_level=None, ci_brevity=1, **kwargs):
         return workspace.SpamTable(
             switchboard.mdl_target_and_final, ['Target', 'Estimated'], 'boxes',
-            _cri(1, switchboard, confidence_level, ci_brevity), include_hs_vec=True
+            _cri_target_and_final(1, switchboard, confidence_level, ci_brevity), include_hs_vec=True
         )
 
 
@@ -267,6 +267,8 @@ class GaugeVariantsRawSection(_Section):
 def _cri(el, switchboard, confidence_level, ci_brevity):
     return switchboard.cri if confidence_level is not None and ci_brevity <= el else None
 
+def _cri_target_and_final(el, switchboard, confidence_level, ci_brevity):
+    return switchboard.cri_target_and_final if confidence_level is not None and ci_brevity <= el else [None, None]
 
 def _cri_gauge_inv(el, switchboard, confidence_level, ci_brevity):
     return switchboard.cri_gaugeinv if confidence_level is not None and ci_brevity <= el else None

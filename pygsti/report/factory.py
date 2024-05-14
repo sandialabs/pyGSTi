@@ -274,6 +274,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
     if confidence_level is not None:
         switchBd.add("cri", (0, 1, 2))
         switchBd.add("cri_gaugeinv", (0, 1))
+        switchBd.add("cri_target_and_final", (0, 1, 2)) 
 
     for d, dslbl in enumerate(dataset_labels):
         results = results_dict[dslbl]
@@ -435,6 +436,7 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                 for il, l in enumerate(gauge_opt_labels):
                     if l in est.models:
                         switchBd.cri[d, i, il] = None  # default
+                        switchBd.cri_target_and_final[d, i, il] = [None, None] #default
                         crf = _get_viewable_crf(est, lbl, l, printer - 2)
 
                         if crf is not None:
@@ -445,8 +447,13 @@ def _create_master_switchboard(ws, results_dict, confidence_level,
                             region_type = "normal" if misfit_sigma <= nmthreshold \
                                           else "non-markovian"
                             switchBd.cri[d, i, il] = crf.view(confidence_level, region_type)
+                            #Now that we have identifies the gauge-optimization with the CRI
+                            #add this to the switchboard.
+                            switchBd.cri_target_and_final[d,i,il] = [None, crf.view(confidence_level, region_type)]
+                    else: 
+                        switchBd.cri[d, i, il] = NA
+                        switchBd.cri_target_and_final[d, i, il] = NA
 
-                    else: switchBd.cri[d, i, il] = NA
 
                 # "Gauge Invariant Representation" model
                 # If we can't compute CIs for this, ignore SILENTLY, since any
