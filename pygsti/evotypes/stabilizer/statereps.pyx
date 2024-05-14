@@ -129,7 +129,7 @@ cdef class StateRepTensorProduct(StateRep):
     def __cinit__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
         n = sum([sf.nqubits for sf in self.factor_reps])  # total number of qubits
-        np = int(_np.prod([len(sf.pvectors) for sf in self.factor_reps]))
+        np = int(_np.product([len(sf.pvectors) for sf in self.factor_reps]))
         self._cinit_base(_np.zeros((2 * n, 2 * n), _np.int64),
                          _np.zeros((np, 2 * n), _np.int64),
                          _np.ones(np, complex),

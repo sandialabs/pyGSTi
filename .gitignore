@@ -46,7 +46,6 @@ jupyter_notebooks/Tutorials/tutorial_files/modeltest_report
 jupyter_notebooks/Tutorials/tutorial_files/gettingStartedReport
 jupyter_notebooks/Examples/example_files/*.pkl
 jupyter_notebooks/Examples/example_files/*.json
-jupyter_notebooks/Examples/example_files/leakage_*
 jupyter_notebooks/Tutorials/tutorial_files/exampleReport
 jupyter_notebooks/Tutorials/tutorial_files/exampleStdReport
 jupyter_notebooks/Tutorials/tutorial_files/exampleMultiEstimateReport

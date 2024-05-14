@@ -108,6 +108,14 @@ class OpToolsTester(BaseCase):
         decomp = ot.decompose_gate_matrix(largeMx)  # can only handle 1Q mxs
         self.assertFalse(decomp['isValid'])
 
+    def test_hack_sqrt_m(self):
+        expected = np.array([
+            [ 0.55368857+0.46439416j,  0.80696073-0.21242648j],
+            [ 1.21044109-0.31863972j,  1.76412966+0.14575444j]
+        ])
+        sqrt = ot._hack_sqrtm(np.array([[1, 2], [3, 4]]))
+        self.assertArraysAlmostEqual(sqrt, expected)
+
     def test_unitary_to_process_mx(self):
         identity = np.identity(2)
         processMx = ot.unitary_to_std_process_mx(identity)
@@ -379,36 +387,49 @@ class GateOpsTester(BaseCase):
             [-0.35432747-0.27939404j, -0.02266757+0.71502652j, -0.27452307+0.07511567j,  0.35432747+0.27939404j],
             [ 0.71538573+0.j,  0.2680266 +0.36300238j, 0.2680266 -0.36300238j,  0.28461427+0.j]])
 
+    def test_frobenius_distance(self):
+        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.A), 0.0)
+        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), (0.430116263352+0j))
+
+        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.A), 0.0)
+        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.B), (0.185+0j))
+
     def test_jtrace_distance(self):
-        val = ot.jtracedist(self.A_TP, self.A_TP, mx_basis="pp")
-        self.assertAlmostEqual(val, 0.0)
-        val = ot.jtracedist(self.A_TP, self.B_unitary, mx_basis="pp")
-        self.assertGreaterEqual(val, 0.5)
+        self.assertAlmostEqual(ot.jtracedist(self.A, self.A, mx_basis="std"), 0.0)
+        self.assertAlmostEqual(ot.jtracedist(self.A, self.B, mx_basis="std"), 0.26430148)  # OLD: 0.2601 ?
 
     @needs_cvxpy
     def test_diamond_distance(self):
         if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
-        val = ot.diamonddist(self.A_TP, self.A_TP, mx_basis="pp")
-        self.assertAlmostEqual(val, 0.0)
-        val = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp")
-        self.assertGreaterEqual(val, 0.7)
+        self.assertAlmostEqual(ot.diamonddist(self.A, self.A, mx_basis="std"), 0.0)
+        self.assertAlmostEqual(ot.diamonddist(self.A, self.B, mx_basis="std"), 0.614258836298)
+
+    def test_frobenius_norm_equiv(self):
+        from pygsti.tools import matrixtools as mt
+        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), mt.frobeniusnorm(self.A - self.B))
+        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), np.sqrt(mt.frobeniusnorm_squared(self.A - self.B)))
 
     def test_entanglement_fidelity(self):
+        fidelity = ot.entanglement_fidelity(self.A, self.B)
         fidelity_TP_unitary= ot.entanglement_fidelity(self.A_TP, self.B_unitary, is_tp=True, is_unitary=True)
         fidelity_TP_unitary_no_flag= ot.entanglement_fidelity(self.A_TP, self.B_unitary)
         fidelity_TP_unitary_jam= ot.entanglement_fidelity(self.A_TP, self.B_unitary, is_tp=False, is_unitary=False)
         fidelity_TP_unitary_std= ot.entanglement_fidelity(self.A_TP_std, self.B_unitary_std, mx_basis='std')
         
-        expect = 0.4804724656092404
-        self.assertAlmostEqual(fidelity_TP_unitary, expect)
-        self.assertAlmostEqual(fidelity_TP_unitary_no_flag, expect)
-        self.assertAlmostEqual(fidelity_TP_unitary_jam, expect)
-        self.assertAlmostEqual(fidelity_TP_unitary_std, expect)
+        self.assertAlmostEqual(fidelity, 0.42686642003)
+        self.assertAlmostEqual(fidelity_TP_unitary, 0.4804724656092404)
+        self.assertAlmostEqual(fidelity_TP_unitary_no_flag, 0.4804724656092404)
+        self.assertAlmostEqual(fidelity_TP_unitary, fidelity_TP_unitary_jam)
+        self.assertAlmostEqual(fidelity_TP_unitary_std, 0.4804724656092404)
 
     def test_fidelity_upper_bound(self):
-        np.random.seed(0)
-        Q = np.linalg.qr(np.random.randn(4,4) + 1j*np.random.randn(4,4))[0]
-        Q[:, 0] = 0.0  # zero out the first column
-        bad_superoperator = ot.unitary_to_superop(Q)
-        upperBound, _ = ot.fidelity_upper_bound(bad_superoperator)
-        self.assertAlmostEqual(upperBound, 0.75)
+        upperBound = ot.fidelity_upper_bound(self.A)
+        expected = (
+            np.array([[ 0.25]]),
+            np.array([[  1.00000000e+00,  -8.27013523e-16,   8.57305616e-33, 1.95140273e-15],
+                      [ -8.27013523e-16,   1.00000000e+00,   6.28036983e-16, -8.74760501e-31],
+                      [  5.68444574e-33,  -6.28036983e-16,   1.00000000e+00, -2.84689309e-16],
+                      [  1.95140273e-15,  -9.27538795e-31,   2.84689309e-16, 1.00000000e+00]])
+        )
+        self.assertArraysAlmostEqual(upperBound[0], expected[0])
+        self.assertArraysAlmostEqual(upperBound[1], expected[1])

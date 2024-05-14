@@ -598,12 +598,6 @@ div.sidenav div.linkgroup a.active {
     display: block !important;
 }
 
-.defaultcaptiondetail {
-    display: none;
-    font-weight: normal;
-}
-
-
 #status {
     color: #777;
     background:#ccc;

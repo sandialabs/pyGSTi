@@ -358,7 +358,7 @@ def _contract_to_valid_spam(model, verbosity=0):
 
     # ** assumption: only the first vector element of pauli vectors has nonzero trace
     dummyVec = _np.zeros((model.dim, 1), 'd'); dummyVec[0, 0] = 1.0
-    firstElTrace = _np.real(_np.trace(_tools.ppvec_to_stdmx(dummyVec)))  # == sqrt(2)**nQubits
+    firstElTrace = _np.real(_tools.trace(_tools.ppvec_to_stdmx(dummyVec)))  # == sqrt(2)**nQubits
     diff = 0
 
     # rhoVec must be positive semidefinite and trace = 1

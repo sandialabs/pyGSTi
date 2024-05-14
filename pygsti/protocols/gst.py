@@ -595,7 +595,7 @@ class GSTBadFitOptions(_NicelySerializable):
         Actions to take when a GST fit is unsatisfactory. Allowed actions include:
         
         * 'wildcard': Find an admissable wildcard model.
-        * 'wildcard1d': Fits a single parameter wildcard model in which
+        * 'ddist_wildcard': Fits a single parameter wildcard model in which
           the amount of wildcard error added to an operation is proportional
           to the diamond distance between that operation and the target.
         * 'robust': scale data according out "robust statistics v1" algorithm,

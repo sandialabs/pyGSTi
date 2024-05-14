@@ -247,10 +247,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                     circuit = rhostr
                 dsRow_fractions = dataset[circuit].fractions
                 # outcome labels should just be effect labels (no instruments!)
-                # when using a sparse data set format it might not be the case
-                # that all effect labels are present (only ones with non-zero counts are)
-                # so return 0 for the fraction in that case.
-                EVec[0, i] = dsRow_fractions.get((effectLabel,), 0)
+                EVec[0, i] = dsRow_fractions[(effectLabel,)]
             EVec_p = _np.dot(_np.dot(EVec, Vd), Pj)  # truncate Evec => Evec', shape (1,trunc)
             povm_effects.append((effectLabel, _np.transpose(EVec_p)))
         lgstModel.povms[povmLabel] = _povm.UnconstrainedPOVM(povm_effects, evotype='default')
@@ -265,10 +262,7 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                 # try without prepLabel since it will be the default
                 circuit = estr
             dsRow_fractions = dataset[circuit].fractions
-            # when using a sparse data set format it might not be the case
-            # that all effect labels are present (only ones with non-zero counts are)
-            # so return 0 for the fraction in that case.
-            rhoVec[eoff:eoff + povmLen, 0] = [dsRow_fractions.get((ol,),0) for ol in target_model.povms[povmLbl]]
+            rhoVec[eoff:eoff + povmLen, 0] = [dsRow_fractions[(ol,)] for ol in target_model.povms[povmLbl]]
             eoff += povmLen
         rhoVec_p = _np.dot(Pjt, _np.dot(Ud, rhoVec))  # truncate rhoVec => rhoVec', shape (trunc, 1)
         rhoVec_p = _np.dot(invABMat_p, rhoVec_p)

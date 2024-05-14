@@ -547,7 +547,8 @@ class Basis(_NicelySerializable):
         """
         if self.elndim == 2:
             for i, mx in enumerate(self.elements):
-                t = _np.linalg.norm(mx) # == sqrt(tr(mx mx))
+                t = _np.trace(_np.dot(mx, mx))
+                t = _np.real(t)
                 if not _np.isclose(t, 1.0): return False
             return True
         elif self.elndim == 1:

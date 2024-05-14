@@ -70,9 +70,6 @@ jobs:
     needs: [build_wheels, build_sdist]
     runs-on: ubuntu-latest
     if: github.event_name == 'release' && github.event.action == 'published'
-    permissions:
-      # IMPORTANT: this permission is mandatory for trusted publishing
-      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -82,5 +79,7 @@ jobs:
 
       - name: Publish package on PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        # With the use of OIDC, API tokens are no longer needed
-        # See https://docs.pypi.org/trusted-publishers/using-a-publisher/ for more info
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          verbose: true

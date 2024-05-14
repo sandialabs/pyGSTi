@@ -150,7 +150,7 @@ class CPTPState(_DenseState):
             Lmx = _np.linalg.cholesky(density_mx)
 
         #check TP condition: that diagonal els of Lmx squared add to 1.0
-        Lmx_norm = _np.linalg.norm(Lmx)  # = sqrt(tr(Lmx' Lmx))
+        Lmx_norm = _np.trace(_np.dot(Lmx.T.conjugate(), Lmx))  # sum of magnitude^2 of all els
         assert(_np.isclose(Lmx_norm, 1.0)), \
             "Cholesky decomp didn't preserve trace=1!"
 
@@ -180,7 +180,7 @@ class CPTPState(_DenseState):
             for j in range(i):
                 self.Lmx[i, j] = (self.params[i * dmDim + j] + 1j * self.params[j * dmDim + i]) / paramNorm
 
-        Lmx_norm = _np.linalg.norm(self.Lmx)  # = sqrt(tr(Lmx' Lmx))
+        Lmx_norm = _np.trace(_np.dot(self.Lmx.T.conjugate(), self.Lmx))  # sum of magnitude^2 of all els
         assert(_np.isclose(Lmx_norm, 1.0)), "Violated trace=1 condition!"
 
         #The (complex, Hermitian) density matrix is build by
@@ -192,7 +192,7 @@ class CPTPState(_DenseState):
         # write density matrix in given basis: = sum_i alpha_i B_i
         # ASSUME that basis is orthogonal, i.e. Tr(Bi^dag*Bj) = delta_ij
         basis_mxs = _np.rollaxis(self.basis_mxs, 2)  # shape (dmDim, dmDim, len(vec))
-        vec = _np.array([_np.vdot(M, density_mx) for M in basis_mxs])
+        vec = _np.array([_np.trace(_np.dot(M.T.conjugate(), density_mx)) for M in basis_mxs])
 
         #for now, assume Liouville vector should always be real (TODO: add 'real' flag later?)
         assert(_np.linalg.norm(_np.imag(vec)) < IMAG_TOL)

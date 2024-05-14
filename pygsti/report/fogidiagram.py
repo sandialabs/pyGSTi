@@ -1038,7 +1038,7 @@ class FOGIMultiscaleGridDiagram(FOGIDiagram):
         for i in range(nOps):
             for j in range(i, nOps):
                 total_items[i, j] = sum([len(by_qty_items[qty][i, j]) for qty in all_qtys])
-                if total_items[i, j] == 0: totals[i, j] = _np.nan
+                if total_items[i, j] == 0: totals[i, j] = _np.NaN
 
         box_size_mode = "condensed"  # or "inflated"
         if detail_level == 2:

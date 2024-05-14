@@ -108,7 +108,7 @@ cdef class EffectRepTensorProduct(EffectRep):
         cdef _np.ndarray[_np.int64_t, ndim=1, mode='c'] factor_dims = \
             _np.ascontiguousarray(_np.array([fct.state_space.dim for fct in povm_factors], _np.int64))
 
-        cdef INT dim = _np.prod(factor_dims)
+        cdef INT dim = _np.product(factor_dims)
         cdef INT nfactors = len(povm_factors)
         self.povm_factors = povm_factors
         self.effect_labels = effect_labels

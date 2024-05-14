@@ -150,7 +150,7 @@ cdef class StateRepTensorProduct(StateRep):
 
     def __init__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
-        dim = _np.prod([fct.dim for fct in self.factor_reps])
+        dim = _np.product([fct.dim for fct in self.factor_reps])
         self._cinit_base(_np.zeros(dim, complex), state_space, None)  # TODO: compute a tensorprod basis?
         self.reps_have_changed()
 

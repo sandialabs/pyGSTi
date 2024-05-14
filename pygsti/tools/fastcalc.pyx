@@ -50,7 +50,7 @@ def embedded_fast_acton_sparse(embedded_gate_acton_fn,
     cdef np.ndarray[double, ndim=1, mode="c"] slc1 = np.empty(nActionIndices, dtype='d')
     cdef np.ndarray[double, ndim=1, mode="c"] slc2 = np.empty(nActionIndices, dtype='d')
 
-    # nActionIndices = np.prod(numBasisEls_action)
+    # nActionIndices = np.product(numBasisEls_action)
     #for i in range(nAction):
     #    nActionIndices *= numBasisEls_action[i]
 
@@ -274,7 +274,7 @@ def embedded_fast_acton_sparse_complex(embedded_gate_acton_fn,
     cdef np.ndarray[np.complex128_t, ndim=1, mode="c"] slc1 = np.empty(nActionIndices, dtype=np.complex128)
     cdef np.ndarray[np.complex128_t, ndim=1, mode="c"] slc2 = np.empty(nActionIndices, dtype=np.complex128)
 
-    # nActionIndices = np.prod(numBasisEls_action)
+    # nActionIndices = np.product(numBasisEls_action)
     #for i in range(nAction):
     #    nActionIndices *= numBasisEls_action[i]
 

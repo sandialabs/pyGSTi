@@ -4,7 +4,7 @@ import sys
 import numpy as np
 from pygsti.modelpacks import smq1Q_XYI
 from pygsti.baseobjs import QubitSpace, Basis
-from pygsti.modelmembers.operations import StochasticNoiseOp, DepolarizeOp
+from pygsti.modelmembers.operations import StochasticNoiseOp
 from pygsti.circuits import Circuit
 from pygsti.models import create_explicit_model
 from pygsti.modelmembers.operations.composedop import ComposedOp
@@ -78,18 +78,6 @@ class KrausInterfaceTester(BaseCase):
 
         kkdag = [kop @ kop.conjugate().T for kop in op.kraus_operators]
         assert(np.allclose(sum(kkdag), np.identity(2)))
-
-    def test_kraus_ops(self):
-        # test that kraus operators for a depolarization op can recover that depolarization op
-        op = DepolarizeOp(QubitSpace(1), initial_rate=0.1)
-        kraus_ops = op.kraus_operators
-        test = FullArbitraryOp.from_kraus_operators(kraus_ops)
-        assert np.allclose(op.to_dense(), test.to_dense())
-
-        op = FullArbitraryOp(op.to_dense(), 'pp')
-        kraus_ops = op.kraus_operators
-        test = FullArbitraryOp.from_kraus_operators(kraus_ops)
-        assert np.allclose(op.to_dense(), test.to_dense())
 
     def test_stochastic_errorgen_equivalence_single(self):
         #Check that StochasticOp and 'S'-type elementary errorgen give the same op
