@@ -11,6 +11,7 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-13, ubuntu-latest, windows-latest] # TODO: Unpin mac version when cvxopt or Python 3.8 dropped
         python-version: [3.8, 3.9, '3.10', '3.11']

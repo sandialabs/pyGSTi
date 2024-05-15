@@ -16,6 +16,7 @@ on:
 jobs:
   build:
     strategy:
+      # fail-fast: true is OK here
       matrix:
         os: [ubuntu-latest, windows-latest] # No Mac
         python-version: [3.8, '3.11'] # Only extremal Python versions

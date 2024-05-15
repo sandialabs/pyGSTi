@@ -1,5 +1,6 @@
 # This workflow runs a moderate test suite on develop
-# This includes all versions of supported Python, no MacOS, and only unit tests
+# This includes all versions of supported Python, no MacOS, only unit tests,
+# and only tests environments with Cython in them
 
 name: Build and run tests (develop)
 
@@ -11,6 +12,7 @@ on:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest] # No Mac
         python-version: [3.8, 3.9, '3.10', '3.11']
@@ -20,7 +22,7 @@ jobs:
     with:
       os: ${{ matrix.os }}
       python-version: ${{ matrix.python-version }}
-      use-cython: ${{ matrix.use-cython }}
+      use-cython: 'true' # Cython only
       run-unit-tests: 'true'
       run-extra-tests: 'false' # No integration tests
       run-notebook-tests: 'false' # No notebook tests 
