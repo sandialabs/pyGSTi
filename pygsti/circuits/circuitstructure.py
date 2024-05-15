@@ -140,8 +140,7 @@ class CircuitPlaquette(_NicelySerializable):
             Dictates how to combine the `elementvec` components corresponding to a single
             plaquette entry (circuit).  If "sum", the returned array contains summed
             values.  If a format string, e.g. `"%.2f"`, then the so-formatted components
-            are joined together with separating commas, and the resulting array contains
-            string (object-type) entries.
+            are joined, and the resulting array contains string (object-type) entries.
 
         Returns
         -------
@@ -155,7 +154,7 @@ class CircuitPlaquette(_NicelySerializable):
             fmt = mergeop
             ret = _np.nan * _np.ones((self.num_rows, self.num_cols), dtype=_np.object_)
             for (i, j), opstr in self.elements.items():
-                ret[i, j] = ", ".join(["NaN" if _np.isnan(x) else
+                ret[i, j] = "".join(["NaN" if _np.isnan(x) else
                                        (fmt % x) for x in elementvec[layout.indices(opstr)]])
         else:
             raise ValueError("Invalid `mergeop` arg: %s" % str(mergeop))

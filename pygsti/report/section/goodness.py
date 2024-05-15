@@ -21,21 +21,24 @@ class GoodnessSection(_Section):
             switchboard.objfn_builder_modvi, switchboard.circuits_final,
             switchboard.modvi_ds, switchboard.mdl_current_modvi,
             linlg_pcntle=linlog_percentile / 100,
-            typ="scatter", comm=comm, bgcolor=bgcolor
+            typ="scatter", comm=comm, bgcolor=bgcolor,
+            mdc_store = switchboard.final_mdc_store
         )
 
     @_Section.figure_factory(4)
     def final_model_fit_progress_table(workspace, switchboard=None, max_lengths=None, comm=None, **kwargs):
         return workspace.FitComparisonTable(
             max_lengths, switchboard.circuits_all, switchboard.mdl_all_modvi,
-            switchboard.modvi_ds, switchboard.objfn_builder_modvi, 'L', comm=comm
+            switchboard.modvi_ds, switchboard.objfn_builder_modvi, 'L', comm=comm,
+            mdc_stores = switchboard.mdc_store_all
         )
 
     @_Section.figure_factory(4)
     def final_model_fit_progress_bar_plot(workspace, switchboard=None, max_lengths=None, comm=None, **kwargs):
         return workspace.FitComparisonBarPlot(
             max_lengths, switchboard.circuits_all, switchboard.mdl_all_modvi,
-            switchboard.modvi_ds, switchboard.objfn_builder_modvi, 'L', comm=comm
+            switchboard.modvi_ds, switchboard.objfn_builder_modvi, 'L', comm=comm,
+            mdc_stores = switchboard.mdc_store_all
         )
 
 
@@ -48,7 +51,8 @@ class GoodnessColorBoxPlotSection(_Section):
         qty = workspace.ColorBoxPlot(
             switchboard.objfn_builder_modvi, switchboard.circuits_current,
             switchboard.modvi_ds, switchboard.mdl_current_modvi,
-            linlg_pcntle=linlog_percentile / 100, comm=comm, bgcolor=bgcolor
+            linlg_pcntle=linlog_percentile / 100, comm=comm, bgcolor=bgcolor,
+            mdc_store = switchboard.current_mdc_store
         )
         if brevity < 1:
             qty.set_render_options(click_to_display=False, valign='bottom')
@@ -58,7 +62,7 @@ class GoodnessColorBoxPlotSection(_Section):
     def final_model_tvd_colorbox_plot(workspace, switchboard=None, brevity=0, comm=None, bgcolor='white', **kwargs):
         qty = workspace.ColorBoxPlot(
             'tvd', switchboard.circuits_current, switchboard.modvi_ds, switchboard.mdl_current_modvi,
-            comm=comm, bgcolor=bgcolor
+            comm=comm, bgcolor=bgcolor, mdc_store = switchboard.current_mdc_store
         )
         if brevity < 1:
             qty.set_render_options(click_to_display=False, valign='bottom')

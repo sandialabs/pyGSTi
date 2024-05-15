@@ -1351,6 +1351,7 @@ class GateSetTomography(_proto.Protocol):
         if disable_checkpointing:
             seed_model = mdl_start.copy()
             mdl_lsgst_list = []
+            mdc_store_list = []
             starting_idx = 0
         else:
             # Set the checkpoint_path variable if None
@@ -1370,6 +1371,7 @@ class GateSetTomography(_proto.Protocol):
             if checkpoint is None:
                 seed_model = mdl_start.copy()
                 mdl_lsgst_list = []
+                mdc_store_list = []
                 checkpoint = GateSetTomographyCheckpoint()
             elif isinstance(checkpoint, GateSetTomographyCheckpoint):
                 # if the checkpoint's last completed iteration is non-negative
@@ -1387,8 +1389,12 @@ class GateSetTomography(_proto.Protocol):
                 # left set to None. There looks to be some logic for handling this and it looks
                 # like the serialization routines effectively do this already, as the value
                 # of this is lost between writing and reading.
+                mdc_store_list = [None]*len(mdl_lsgst_list) #We don't presently have serialization support for
+                #MDC store objects, so for now we'll skip serializing this and re-initialize previous iterations
+                #to None. Given how this is currently used the only downside to this should be inefficiency
+                #rebuilding the needed MDC stores in the report generation. 
             else:
-                NotImplementedError(
+                raise NotImplementedError(
                     'The only currently valid checkpoint inputs are None and GateSetTomographyCheckpoint.')
 
             # note the last_completed_iter value is initialized to -1 so the below line
@@ -1414,10 +1420,11 @@ class GateSetTomography(_proto.Protocol):
             #then do the final iteration slightly differently since the generator should
             #give three return values.
             if i==len(bulk_circuit_lists)-1:
-                mdl_iter, opt_iter, final_objfn = next(gst_iter_generator)
+                mdl_iter, opt_iter, mdc_store_iter, final_objfn = next(gst_iter_generator)
             else:
-                mdl_iter, opt_iter =  next(gst_iter_generator)
+                mdl_iter, opt_iter, mdc_store_iter =  next(gst_iter_generator)
             mdl_lsgst_list.append(mdl_iter)
+            mdc_store_list.append(mdc_store_iter)
             optima_list.append(opt_iter)
 
             if not disable_checkpointing:
@@ -1430,15 +1437,15 @@ class GateSetTomography(_proto.Protocol):
                     checkpoint.write(f'{checkpoint_path}_iteration_{i}.json')
 
         tnxt = _time.time(); profiler.add_time('GST: total iterative optimization', tref); tref = tnxt
-    
         #set parameters
-        parameters = _collections.OrderedDict()
+        parameters = dict()
         parameters['protocol'] = self  # Estimates can hold sub-Protocols <=> sub-results
         parameters['final_objfn_builder'] = self.objfn_builders.final_builders[-1] \
             if len(self.objfn_builders.final_builders) > 0 else self.objfn_builders.iteration_builders[-1]
         parameters['final_objfn'] = final_objfn  # Final obj. function evaluated at best-fit point (cache too)
         parameters['final_mdc_store'] = final_objfn  # Final obj. function is also a "MDC store"
         parameters['profiler'] = profiler
+        parameters['per_iter_mdc_store'] = mdc_store_list #list of the MDC stores for each iteration.
         # Note: we associate 'final_cache' with the Estimate, which means we assume that *all*
         # of the models in the estimate can use same evaltree, have the same default prep/POVMs, etc.
 

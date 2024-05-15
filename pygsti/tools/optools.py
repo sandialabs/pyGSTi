@@ -680,6 +680,50 @@ def entanglement_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     """
     return 1 - float(entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary))
 
+def generator_infidelity(a, b, mx_basis = 'pp'):
+    """
+    Returns the generator infidelity between a and b, where b is the "target" operation.
+    Generator infidelity is given by the sum of the squared hamiltonian error generator
+    rates plus the sum of the stochastic error generator rates.
+
+    GI = sum_k(H_k**2) + sum_k(S_k)
+
+    Parameters
+    ----------
+    a : numpy.ndarray
+        The first process (transfer) matrix.
+
+    b : numpy.ndarray
+        The second process (transfer) matrix.
+
+    mx_basis : mx_basis : {'std', 'gm', 'pp', 'qt'} or Basis object
+        The basis that `a` and `b` are in. Allowed
+        values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
+        and Qutrit (qt) (or a custom basis object).
+
+    Returns
+    -------
+    float
+    """
+    #stick import here to sidestep circular import problem.
+    from pygsti.modelmembers.operations.lindbladerrorgen import LindbladErrorgen as _LindbladErrorgen
+
+    # Compute error generator
+    errgen_mat = error_generator(a, b, mx_basis, 'logGTi')
+    errgen = _LindbladErrorgen.from_error_generator(errgen_mat, parameterization = 'GLND')
+
+    # Loop through coefficient blocks and index into the
+    #block_data attributes for each to pull out the H and S terms.
+    gen_infid = 0
+    for coeff_block in errgen.coefficient_blocks:
+        if coeff_block._block_type == 'ham': #H terms, get squared
+            gen_infid+= _np.sum(coeff_block.block_data**2)
+        if coeff_block._block_type == 'other_diagonal': #S terms, added directly
+            gen_infid+= _np.sum(coeff_block.block_data)
+        if coeff_block._block_type == 'other': #S terms on diagonal, added directly
+            gen_infid+= _np.sum(_np.diag(coeff_block.block_data))
+
+    return _np.real_if_close(gen_infid)
 
 def gateset_infidelity(model, target_model, itype='EI',
                        weights=None, mx_basis=None, is_tp=None, is_unitary=None):
