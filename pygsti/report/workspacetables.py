@@ -27,6 +27,7 @@ from pygsti import baseobjs as _baseobjs
 from pygsti import tools as _tools
 from pygsti.algorithms import gaugeopt as _gopt
 from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import instruments as _insts
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
 from pygsti.objectivefns import objectivefns as _objfns
@@ -414,7 +415,7 @@ class GatesTable(WorkspaceTable):
         grids (fine for small matrices) or as a plot of colored
         boxes (space-conserving and better for large matrices).
 
-    confidence_region_info : ConfidenceRegion, optional
+    confidence_region_infos : list of ConfidenceRegion, optional
         If not None, specifies a confidence-region
         used to display error intervals for the *final*
         element of `models`.
@@ -461,8 +462,6 @@ class GatesTable(WorkspaceTable):
             confidence_region_infos = [None]*len(models)
 
         opLabels = models[0].primitive_op_labels  # use labels of 1st model
-        instLabels = list(models[0].instruments.keys())  # requires an explicit model!
-        assert(isinstance(models[0], _models.ExplicitOpModel)), "%s only works with explicit models" % str(type(self))
 
         if titles is None:
             titles = [''] * len(models)
@@ -477,7 +476,7 @@ class GatesTable(WorkspaceTable):
         for cri, title in zip(confidence_region_infos, titles):
             #Only use confidence region for the *final* model.
             if cri is not None:
-                colHeadings.append(f'{title} Superoperator<br>{cri.level:3g} C.I. half-width')
+                colHeadings.append(f'{title} Instrument<br>{cri.level:3g} C.I. half-width')
                 formatters.append('Conversion')
         #The confidence_region_info arg of ReportTable is not configured to take a list
         #for now pass in the last one, as this is only used for identifying whether
@@ -491,12 +490,6 @@ class GatesTable(WorkspaceTable):
             # may want to gracefully handle index error here?
             tup_of_ops = tuple([model.operations[gl] for model in models])
             label_op_tups.append((gl, None, tup_of_ops))
-        for il in instLabels:
-            for comp_lbl in models[0].instruments[il].keys():
-                tup_of_ops = tuple([model.instruments[il][comp_lbl] for model in models]
-                                   )  # may want to gracefully handle index error here?
-                label_op_tups.append((il, comp_lbl, tup_of_ops))
-                #need to find the color_min/max
 
         for lbl, comp_lbl, per_model_ops in label_op_tups:
             row_data = [lbl if (comp_lbl is None) else (lbl + '.' + comp_lbl)]
@@ -524,7 +517,7 @@ class GatesTable(WorkspaceTable):
                         op_dim = model.dim
                         basis = model.basis
                         op_deriv = op.deriv_wrt_params()
-                        intervalMx = _np.abs(_np.dot(op_deriv, intervalVec).reshape(op_dim, op_dim))
+                        intervalMx = _np.abs(op_deriv@intervalVec).reshape(op_dim, op_dim)
                 else:
                     intervalMx = None
 
@@ -577,6 +570,181 @@ class GatesTable(WorkspaceTable):
             table.add_row(row_data, row_formatters)
         table.finish()
         return table
+
+class InstrumentsTable(WorkspaceTable):
+    """
+    Create a table showing a model's raw instruments.
+
+    Parameters
+    ----------
+    ws : Workspace
+        The containing (parent) workspace.
+
+    models : Model or list of Models
+        The Model(s) whose gates should be displayed.  If multiple
+        Models are given, they should have the same operation labels.
+
+    titles : list of strings, optional
+        A list of titles corresponding to the models, used to
+        prefix the column(s) for that model. E.g. `"Target"`.
+
+    display_as : {"numbers", "boxes"}, optional
+        How to display the operation matrices, as either numerical
+        grids (fine for small matrices) or as a plot of colored
+        boxes (space-conserving and better for large matrices).
+
+    confidence_region_infos : list of ConfidenceRegion, optional
+        If not None, specifies a confidence-region
+        used to display error intervals for the *final*
+        element of `models`.
+    """
+
+    def __init__(self, ws, models, titles=None, display_as="boxes",
+                 confidence_region_infos=None):
+        """
+        Create a table showing a model's raw gates.
+
+        Parameters
+        ----------
+        models : Model or list of Models
+            The Model(s) whose gates should be displayed.  If multiple
+            Models are given, they should have the same operation labels.
+
+        titles : list of strings, optional
+            A list of titles corresponding to the models, used to
+            prefix the column(s) for that model. E.g. `"Target"`.
+
+        display_as : {"numbers", "boxes"}, optional
+            How to display the operation matrices, as either numerical
+            grids (fine for small matrices) or as a plot of colored
+            boxes (space-conserving and better for large matrices).
+
+        confidence_region_infos : list of ConfidenceRegion, optional
+            If not None, specifies a confidence-region
+            used to display error intervals for the *final*
+            element of `models`.
+
+        Returns
+        -------
+        ReportTable
+        """
+        super(InstrumentsTable, self).__init__(ws, self._create, models, titles,
+                                         display_as, confidence_region_infos)
+
+    def _create(self, models, titles, display_as, confidence_region_infos):
+
+        if isinstance(models, _models.Model):
+            models = [models]
+        
+        if confidence_region_infos is None:
+            confidence_region_infos = [None]*len(models)
+
+        instLabels = models[0].primitive_instrument_labels
+
+        if titles is None:
+            titles = [''] * len(models)
+
+        colHeadings = ['Instrument']
+        for model, title in zip(models, titles):
+            basisLongNm = _tools.basis_longname(model.basis)
+            pre = (title + ' ' if title else '')
+            colHeadings.append('%sSuperoperator (%s)' % (pre, basisLongNm))
+        formatters = [None] * len(colHeadings)
+
+        for cri, title in zip(confidence_region_infos, titles):
+            #Only use confidence region for the *final* model.
+            if cri is not None:
+                colHeadings.append(f'{title} Superoperator<br>{cri.level:3g} C.I. half-width')
+                formatters.append('Conversion')
+        #The confidence_region_info arg of ReportTable is not configured to take a list
+        #for now pass in the last one, as this is only used for identifying whether
+        #non-Markovian error bars are being used (so this is implicitly assuming this is consistent
+        #across the row).
+        table = _ReportTable(colHeadings, formatters, confidence_region_info=confidence_region_infos[-1])
+
+        #Create list of labels and gate-like objects, allowing instruments to be included:
+        label_inst_tups = []
+        for il in instLabels:
+            for comp_lbl in models[0].instruments[il].keys(): #TODO: Better handle case where instruments are different across models
+                tup_of_insts = tuple([model.instruments[il][comp_lbl] for model in models])  # may want to gracefully handle index error here?
+                label_inst_tups.append((il, comp_lbl, tup_of_insts))
+                #need to find the color_min/max
+
+        for lbl, comp_lbl, per_model_insts in label_inst_tups:
+            instAndPLbl = str(lbl) + ":" + comp_lbl  # format for ModelFunction objs
+            row_data = [instAndPLbl]
+            row_formatters = [None]
+
+            for model, title, inst, cri in zip(models, titles, per_model_insts, confidence_region_infos):
+                basis = model.basis
+                if cri is not None:
+                    intervalVec = cri.retrieve_profile_likelihood_confidence_intervals(lbl, comp_lbl)[:, None]
+                    if isinstance(inst, _insts.TPInstrumentOp):
+                        #then we know how to reshape into a matrix
+                        inst_dim = model.dim
+                        basis = model.basis
+                        intervalMx = _np.concatenate((_np.zeros((1, inst_dim), 'd'),
+                                                    intervalVec.reshape(inst_dim - 1, inst_dim)), axis=0)
+                    else:
+                        # we don't know how best to reshape interval matrix for gate, so
+                        # use derivative
+                        inst_dim = model.dim
+                        basis = model.basis
+                        inst_deriv = inst.deriv_wrt_params()
+                        intervalMx = _np.abs(inst_deriv@intervalVec).reshape(inst_dim, inst_dim)
+                else:
+                    intervalMx = None
+
+                #turn the op matrix into a ReportableQty
+                inst_matrix = _ReportableQty(inst.to_dense('HilbertSchmidt'), errbar=intervalMx)
+
+                if display_as == "numbers":
+                    row_data.append(inst_matrix)
+                    row_formatters.append('Brackets')
+                elif display_as == "boxes":
+                    if model.basis.real:
+                        fig = _wp.GateMatrixPlot(self.ws, inst_matrix.value,
+                                                colorbar=False,
+                                                mx_basis_x=basis, mx_basis_y=basis,
+                                                box_labels=True, prec='compacthp',
+                                                eb_matrix=inst_matrix.errorbar)
+                    else:
+                        inst_matrix_real = inst_matrix.value.real
+                        inst_matrix_imag = inst_matrix.value.imag
+                        inst_matrix_eb_real = inst_matrix.errorbar.real if inst_matrix.errorbar is not None else None
+                        inst_matrix_eb_imag = inst_matrix.errorbar.imag if inst_matrix.errorbar is not None else None
+                        fig = _wp.GateMatricesPlot(self.ws, [inst_matrix_real, inst_matrix_imag], colorbar=False,
+                                                    box_labels=True, prec='compacthp',
+                                                    subtitles = ['Real', 'Imag'], 
+                                                    mx_basis_x=model.basis,
+                                                    mx_basis_y=model.basis,
+                                                    eb_matrices=[inst_matrix_eb_real, inst_matrix_eb_imag])
+                    row_data.append(fig)
+                    row_formatters.append('Figure')
+                else:
+                    raise ValueError("Invalid 'display_as' argument: %s" % display_as)
+                
+                if cri is not None:
+                    if display_as == "numbers":
+                        row_data.append(intervalMx)
+                        row_formatters.append('Brackets')
+
+                    elif display_as == "boxes":
+                        maxAbsVal = _np.max(_np.abs(intervalMx))
+                        fig = _wp.GateMatrixPlot(self.ws, intervalMx,
+                                                color_min=-maxAbsVal, color_max=maxAbsVal,
+                                                colorbar=False,
+                                                mx_basis_x=basis,
+                                                mx_basis_y=basis,
+                                                prec='compacthp',
+                                                box_labels=True)
+                        row_data.append(fig)
+                        row_formatters.append('Figure')
+
+            table.add_row(row_data, row_formatters)
+        table.finish()
+        return table
+
 
 
 class ChoiTable(WorkspaceTable):
