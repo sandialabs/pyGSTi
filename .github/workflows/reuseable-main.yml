@@ -35,34 +35,17 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Set up installation environment (Linux and Windows)
-      if: ${{ inputs.os != 'macos-latest' }}
+      if: ${{ inputs.os != 'macos-13' }}
       run: |
         ./.github/ci-scripts/before_install.sh
     - name: Set up installation environment (MacOS)
-      if: ${{ inputs.os == 'macos-latest' }}
+      if: ${{ inputs.os == 'macos-13' }}
       run: |
         ./.github/ci-scripts/before_install_macos.sh
-    - name: Cache conda
-      uses: actions/cache@v3
-      env:
-        # Increase this value to reset cache if other files have not changed
-        CACHE_NUMBER: 0
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
       with:
-        path: ~/conda_pkgs_dir
-        key:
-            ${{ runner.os }}-${{ inputs.python-version}}-conda-${{ env.CACHE_NUMBER }}-cython-${{ inputs.use-cython }}-${{ hashFiles('setup.py') }}-${{ hashFiles('**/*requirements.txt') }}
-    - name: Set up Conda and Python
-      uses: conda-incubator/setup-miniconda@v3
-      with:
-        auto-update-conda: true
-        activate-environment: pygsti
         python-version: ${{ inputs.python-version }}
-        miniconda-version: "latest"
-        use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
-    - name: Install conda packages
-      if: ${{ inputs.use-cython == 'true' }}
-      run: |
-        conda install cvxopt
     - name: Cache pip packages
       uses: actions/cache@v4
       with:
