@@ -85,5 +85,9 @@ jobs:
     - name: Run notebook regression
       if: ${{ inputs.run-notebook-tests == 'true' }}
       run: |
-         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-         python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env jupyter_notebooks
+        # If we are running notebooks, we also need to download and compile CHP
+        curl -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c https://www.scottaaronson.com/chp/chp.c
+        gcc -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c
+
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env jupyter_notebooks
