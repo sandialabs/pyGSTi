@@ -1,12 +1,13 @@
 # This workflow will install Python dependencies, run tests and lint with a variety of Python versions
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: Build and run tests (MacOS only, all Python versions)
+name: Build and run tests (No Cython)
 
 on:
   push:
-    # Mac runners are expensive and oversubscribed. Only run on beta and master
     branches: [ "beta", "master" ]
+  pull_request:
+    branches: [ "**:**" ]
   # Allow running manually from Actions tab
   workflow_dispatch:
 
@@ -19,12 +20,17 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [macos-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: [3.8, 3.9, '3.10', '3.11']
 
     steps:
     - uses: actions/checkout@v4
+    - name: Set up installation environment (Ubuntu or Windows)
+      if: ${{matrix.os == 'ubuntu-latest' || matrix.os == 'windows-latest'}}
+      run: |
+        ./.github/ci-scripts/before_install.sh
     - name: Set up installation environment (MacOS)
+      if: ${{matrix.os == 'macos-latest'}}
       run: |
         ./.github/ci-scripts/before_install_macos.sh
     - name: Set up Python ${{ matrix.python-version }}
@@ -41,19 +47,8 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install wheel
         python -m pip install flake8
-        python -m pip install -e .[testing]
-        python setup.py build_ext --inplace
-    - name: Lint with flake8
-      run: |
-        # Critical errors, exit on failure
-        flake8 . --count --show-source --statistics --config=.flake8-critical
-        # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
-        flake8 . --exit-zero --statistics
+        python -m pip install -e .[testing_no_cython]
     - name: Run unit tests
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
-
-
-
-

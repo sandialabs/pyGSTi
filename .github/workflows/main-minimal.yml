@@ -48,7 +48,6 @@ jobs:
         python -m pip install flake8
         python -m pip install -e .[testing]
         python setup.py build_ext --inplace
-        # python -m pip freeze  # this isn't relevant anymore since pip install builds a wheel separately
     - name: Lint with flake8
       if: ${{matrix.os != 'windows-latest'}}
       run: |
@@ -56,13 +55,7 @@ jobs:
         flake8 . --count --show-source --statistics --config=.flake8-critical
         # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
         flake8 . --exit-zero --statistics
-    - name: Run unit tests ubuntu
-      if: ${{matrix.os == 'ubuntu-latest'}}
-      run: |
-       python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
-       python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
-    - name: Run unit tests windows  
-      if: ${{matrix.os == 'windows-latest'}}
+    - name: Run unit tests
       run: |
        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
        python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
