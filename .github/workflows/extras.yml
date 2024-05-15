@@ -34,6 +34,7 @@ jobs:
       if: ${{matrix.os == 'macos-latest'}}
       run: |
         ./.github/ci-scripts/before_install_macos.sh
+        conda install cvxopt
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v5
       with:

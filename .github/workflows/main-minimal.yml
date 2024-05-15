@@ -29,7 +29,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Set up installation environment (Ubuntu or Windows)
-      if: ${{matrix.os == 'ubuntu-latest' || matrix.os == 'windows-latest'}}
       run: |
         ./.github/ci-scripts/before_install.sh
     - name: Set up Python ${{ matrix.python-version }}
