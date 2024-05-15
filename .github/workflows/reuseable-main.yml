@@ -16,13 +16,30 @@ on:
       use-cython:
         required: true
         type: string
+      run-unit-tests:
+        required: true
+        type: string
+      run-extra-tests:
+        required: true
+        type: string
+      run-notebook-tests:
+        required: true
+        type: string
+
+env:
+  SKIP_DEAP: 1
 
 jobs:
   build-and-test:
     runs-on: ${{ inputs.os }}
     steps:
     - uses: actions/checkout@v4
+    - name: Set up installation environment (Linux and Windows)
+      if: ${{ inputs.os != 'macos-latest' }}
+      run: |
+        ./.github/ci-scripts/before_install.sh
     - name: Set up installation environment (MacOS)
+      if: ${{ inputs.os == 'macos-latest' }}
       run: |
         ./.github/ci-scripts/before_install_macos.sh
     - name: Cache conda
@@ -38,7 +55,7 @@ jobs:
       uses: conda-incubator/setup-miniconda@v3
       with:
         auto-update-conda: true
-        activate-environment: pygsti-cython
+        activate-environment: pygsti
         python-version: ${{ inputs.python-version }}
         miniconda-version: "latest"
         use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
@@ -62,7 +79,7 @@ jobs:
         python -m pip install -e .[testing]
         python setup.py build_ext --inplace
     - name: Install package (No Cython)
-      if: ${{ inputs.use-cython == 'false' }}
+      if: ${{ inputs.use-cython != 'true' }}
       run: |
         python -m pip install -e .[testing_no_cython]
     - name: Lint with flake8 (Linux only)
@@ -73,6 +90,17 @@ jobs:
         # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
         flake8 . --exit-zero --statistics
     - name: Run unit tests
+      if: ${{ inputs.run-unit-tests == 'true' }}
       run: |
         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
         python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
+    - name: Run test_packages
+      if: ${{ inputs.run-extra-tests == 'true' }}
+      run: |
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages
+    - name: Run notebook regression
+      if: ${{ inputs.run-notebook-tests == 'true' }}
+      run: |
+         python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+         python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env jupyter_notebooks

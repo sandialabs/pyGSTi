@@ -1,0 +1,32 @@
+# This workflow runs a full test suite on beta and master
+# This includes all versions of supported Python, all OSes, and all test subsets
+
+name: Build and run tests (beta & master)
+
+on:
+  push:
+    branches: [ "beta", "master" ]
+  workflow_dispatch: # Allow manual running from GitHub
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+        python-version: [3.8, 3.9, '3.10', '3.11']
+        use-cython: ['true', 'false']
+    uses: ./.github/workflows/reuseable-main.yml
+    name: Run pyGSTi tests
+    with:
+      os: ${{ matrix.os }}
+      python-version: ${{ matrix.python-version }}
+      use-cython: ${{ matrix.use-cython }}
+      run-unit-tests: 'true'
+      run-extra-tests: 'true'
+      run-notebook-tests: 'true'
+
+
+
+
+
+
