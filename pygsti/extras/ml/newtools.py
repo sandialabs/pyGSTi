@@ -23,15 +23,6 @@ def ring_adj_matrix(num_qubits: int):
     return adj_matrix
 
 def melbourne_adj_matrix(num_qubits = 14):
-    '''
-    Builds the adjacency matrix for a five-qubit bowtie graph:
-
-    0 - 1
-     \ /
-      2
-     / \
-    3 - 4 
-    '''
     assert(num_qubits == 14), "We only support 5 qubits"
     adj_matrix = _np.zeros((num_qubits, num_qubits))
     adj_matrix[0,1] = 1
@@ -222,7 +213,7 @@ def up_to_weight_k_paulis_from_qubit_graph(k: int, n: int, qubit_graph_laplacian
         laplace_power = _np.linalg.matrix_power(qubit_graph_laplacian, num_hops)
         for i in _np.arange(n):
             laplace_power[i, i] = 0
-        assert (laplace_power == 0).all(axis=1).any() == False, 'Graph must be connected'
+        # assert (laplace_power == 0).all(axis=1).any() == False, 'Graph must be connected'
     
         nodes_within_hops = []
         for i in range(n):

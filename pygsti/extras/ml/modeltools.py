@@ -25,6 +25,7 @@ def extract_success_fail(df):
 
 def create_spec_model(pspec):
     qubit_labels = pspec.qubit_labels
+    num_qubits = len(qubit_labels)
     one_qubit_gate_names = pspec.gate_names[1:]
     availability = pspec.availability
     error_dict = {'gates': {},
@@ -34,7 +35,7 @@ def create_spec_model(pspec):
         error_dict['gates'][Label(i,state_space_labels = (j,))] = 0.01
     for i,j in itertools.product(['Gcnot'],availability['Gcnot']):
         error_dict['gates'][Label('Gcnot',state_space_labels = j)] = 0.01
-    specmodel = TwirledLayersModel(error_dict, num_qubits = 5, state_space_labels = qubit_labels, 
+    specmodel = TwirledLayersModel(error_dict, num_qubits = num_qubits, state_space_labels = qubit_labels, 
                                    idle_name = None)
     
     return specmodel, error_dict

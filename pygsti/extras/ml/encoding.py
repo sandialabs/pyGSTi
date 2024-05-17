@@ -79,7 +79,7 @@ def bowtie_gate_to_index(g, q, pspec)-> int:
 
 def algiers_t_bar_gate_to_index(g, q, pspec)-> int:
     '''
-    Works for Ourense, Belem, etc.
+    Works for algiers, etc.
     '''
     assert(q in g.qubits)
     single_qubit_gates = list(pspec.gate_names)
@@ -107,7 +107,7 @@ def algiers_t_bar_gate_to_index(g, q, pspec)-> int:
 
 def t_bar_gate_to_index(g, q, pspec)-> int:
     '''
-    Works for London, Burlington, Essex, Vigo
+    Works for London, Burlington, Essex, Vigo, Belem
     '''
     assert(q in g.qubits)
     single_qubit_gates = list(pspec.gate_names)
@@ -133,22 +133,26 @@ def t_bar_gate_to_index(g, q, pspec)-> int:
     else:
         raise ValueError('Invalid gate name for this encoding!')
 
-def ring_gate_to_index(g, q, num_qubits):
+def ring_gate_to_index(g, q, pspec):
     assert(q in g.qubits)
-    if g.name == 'Gxpi2':
-        return 0
-    elif g.name == 'Gypi2':
-        return 1
-    elif g.name == 'Gcnot':
+    num_qubits = pspec.num_qubits
+    single_qubit_gates = list(pspec.gate_names)
+    single_qubit_gates.remove('Gcnot')
+    if g.name == 'Gcnot':
         qs = g.qubits
         if q == g.qubits[0] and clockwise_cnot(g, num_qubits):
-            return 2
+            return 0
         if q == g.qubits[1] and clockwise_cnot(g, num_qubits):
-            return 3
+            return 1
         if q == g.qubits[0] and not clockwise_cnot(g, num_qubits):
-            return 4
+            return 2
         if q == g.qubits[1] and not clockwise_cnot(g, num_qubits):
-            return 5
+            return 3
+        else:
+            raise ValueError('Invalid gate name for this encoding!')
+    elif g.name in pspec.gate_names:
+        # We have a single-qubit gate
+        return 4+single_qubit_gates.index(g.name) # we put the single-qubit gates after the CNOT channels.
     else:
         raise ValueError('Invalid gate name for this encoding!')
     
@@ -233,7 +237,7 @@ def good_error(error_index, measured_qubits, num_qubits):
     active_paulis = paulistring[measured_qubits]
     return _np.any((active_paulis == 'X') | (active_paulis == 'Y'))
     
-def z_mask(P, measurement):
+def z_mask(P: _np.array, measurement: _np.array):
     """
     A function that takes in a circuit's permutation matrix and its measurement tensor (i.e., the matrices that tell you where every 
     error vector gets mapped to at the end of the circuit) and creates a mask that masks out
@@ -243,7 +247,6 @@ def z_mask(P, measurement):
     measured_qubits = _np.where(measurement == 1)[0]
     good_errors = _np.vectorize(lambda x: good_error(x, measured_qubits, num_qubits))(P)
     return good_errors.astype(float)
-
         
 def create_input_data(circs:list, fidelities:list, tracked_error_gens: list, 
                       pspec, geometry: str, num_qubits = None, num_channels = None, 
@@ -270,6 +273,7 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
     '''
     num_circs = len(circs)
     num_error_gens = len(tracked_error_gens)
+    
 
     if max_depth is None: max_depth = _np.max([c.depth for c in circs])
     # print(max_depth)
@@ -323,8 +327,8 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
         elif measurement_encoding == 3:
             measurements[i, :] = active_qubits(x_circs[i, :, :, :])
             measurements[i, ::-1] = measurements[i, :] # flip it and reverse it
-            x_zmask[i, 0:c.depth, :] = z_mask(c_indices, measurements[i, :])
-            x_mmask[i, :] = z_mask(tracked_error_indices, measurements[i, :])
+            x_zmask[i, 0:c.depth, :] = z_mask(c_indices, measurements[i, :])  # Update this
+            x_mmask[i, :] = z_mask(tracked_error_indices, measurements[i, :]) # Update this
 
            
     if return_separate:

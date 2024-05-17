@@ -364,8 +364,8 @@ class CircuitErrorVecScreenZErrorsWithMeasurementsBitstrings(CircuitErrorVec):
             A function that maps a single circuit to the prediction for its process fidelity (a single real number).
             """
             circuit, measurement_and_outcome, mask = [_tf.cast(i, _tf.float32) for i in input]
-            
-
+            # total_qubits = measurement_and_outcome.shape[-1]
+            # num_active_qubits = _tf.reduce_sum(measurement_and_outcome[:total_qubits])
             C = circuit[:, 0:self.len_gate_encoding]
             P = _tf.cast(circuit[:, self.len_gate_encoding:self.len_gate_encoding + self.num_tracked_error_gens], _tf.int32)
             S = circuit[:, self.len_gate_encoding + self.num_tracked_error_gens:self.len_gate_encoding + 2 * self.num_tracked_error_gens]
@@ -377,9 +377,9 @@ class CircuitErrorVecScreenZErrorsWithMeasurementsBitstrings(CircuitErrorVec):
             padded_P = _tf.concat([P, self.error_indices], axis = 0)
             padded_S = _tf.concat([S, _tf.ones([1,self.num_tracked_error_gens])], axis = 0)
 
-            return calc_end_of_circ_error(all_evecs, padded_P, padded_S, mask)
+            return calc_end_of_circ_error(all_evecs, padded_P, padded_S, mask) # + 1 / 2**num_active_qubits
         return _tf.map_fn(circuit_to_fidelity, inputs, fn_output_signature=_tf.float32)
-    
+
 class CircuitErrorVecScreenZErrors(CircuitErrorVec):
     def __init__(self, num_qubits: int, num_channels: int, tracked_error_gens: list, layer_snipper, layer_snipper_args: dict,
                  dense_units: list, input_shapes=[None, None]):
