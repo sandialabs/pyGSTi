@@ -11,11 +11,12 @@ Volumetric Benchmarking Protocol objects
 #***************************************************************************************************
 
 import numpy as _np
+import copy as _copy
 
-from pygsti.protocols import protocol as _proto
-from pygsti.models.oplessmodel import SuccessFailModel as _SuccessFailModel
 from pygsti import tools as _tools
 from pygsti.algorithms import randomcircuit as _rc
+from pygsti.protocols import protocol as _proto
+from pygsti.models.oplessmodel import SuccessFailModel as _SuccessFailModel
 
 
 class ByDepthDesign(_proto.CircuitListsDesign):
@@ -66,6 +67,25 @@ class ByDepthDesign(_proto.CircuitListsDesign):
                                 for circuit_list in self.circuit_lists]
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         return ByDepthDesign(self.depths, mapped_circuit_lists, mapped_qubit_labels, remove_duplicates=False)
+
+    def truncate_to_lists(self, list_indices_to_keep):
+        """
+        Truncates this experiment design by only keeping a subset of its circuit lists.
+
+        Parameters
+        ----------
+        list_indices_to_keep : iterable
+            A list of the (integer) list indices to keep.
+
+        Returns
+        -------
+        ByDepthDesign
+            The truncated experiment design.
+        """
+        ret = _copy.deepcopy(self) # Works for derived classes too
+        ret.depths = [self.depths[i] for i in list_indices_to_keep]
+        ret.circuit_lists = [self.circuit_lists[i] for i in list_indices_to_keep]
+        return ret
 
 
 class BenchmarkingDesign(ByDepthDesign):
@@ -133,6 +153,54 @@ class BenchmarkingDesign(ByDepthDesign):
         mapped_qubit_labels = self._mapped_qubit_labels(mapper)
         return BenchmarkingDesign(self.depths, mapped_circuit_lists, list(self.idealout_lists),
                                   mapped_qubit_labels, remove_duplicates=False)
+    
+    def truncate_to_lists(self, list_indices_to_keep):
+        """
+        Truncates this experiment design by only keeping a subset of its circuit lists.
+
+        Parameters
+        ----------
+        list_indices_to_keep : iterable
+            A list of the (integer) list indices to keep.
+
+        Returns
+        -------
+        BenchmarkingDesign
+            The truncated experiment design.
+        """
+        ret = _copy.deepcopy(self) # Works for derived classes too
+        ret.depths = [self.depths[i] for i in list_indices_to_keep]
+        ret.circuit_lists = [self.circuit_lists[i] for i in list_indices_to_keep]
+        ret.idealout_lists = [self.idealout_lists[i] for i in list_indices_to_keep]
+        return ret
+
+    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+        truncated_circuit_lists = []
+        truncated_idealout_lists = []
+        for circuits, idealouts in zip(self.circuit_lists, self.idealout_lists):
+            new_circuits, new_idealouts = zip(*filter(lambda ci: ci[0] in set(circuits_to_keep), zip(circuits, idealouts)))
+            truncated_circuit_lists.append(new_circuits)
+            truncated_idealout_lists.append(new_idealouts)
+
+        self.circuit_lists = truncated_circuit_lists
+        self.idealout_lists = truncated_idealout_lists
+        self.nested = False  # we're not sure whether the truncated lists are nested
+        super()._truncate_to_circuits_inplace(circuits_to_keep)
+
+    def _truncate_to_design_inplace(self, other_design):
+        truncated_circuit_lists = []
+        truncated_idealout_lists = []
+        for circuits, idealouts, other_circuits in zip(self.circuit_lists, self.idealout_lists, other_design.circuit_lists):
+            new_circuits, new_idealouts = zip(*filter(lambda ci: ci[0] in set(other_circuits), zip(circuits, idealouts)))
+            truncated_circuit_lists.append(new_circuits)
+            truncated_idealout_lists.append(new_idealouts)
+
+        self.circuit_lists = truncated_circuit_lists
+        self.idealout_lists = truncated_idealout_lists
+        super()._truncate_to_design_inplace(other_design)
+
+    def _truncate_to_available_data_inplace(self, dataset):
+        self._truncate_to_circuits_inplace(set(dataset.keys()))
 
 
 class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
