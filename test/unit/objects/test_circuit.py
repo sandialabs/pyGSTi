@@ -236,8 +236,10 @@ class CircuitTester(BaseCase):
         c = circuit.Circuit(layer_labels=labels, line_labels=['Q0', 'Q1', 'Q8', 'Q12'],
                             compilable_layer_indices=(1,2))
         self.assertEqual(c.compilable_layer_indices, (1,2))
-
+        
+        c = c.copy(editable=True)
         c.compilable_layer_indices = (1,)  # test setter
+        c.done_editing()
         self.assertEqual(c.compilable_layer_indices, (1,))
         self.assertArraysEqual(c.compilable_by_layer, np.array([False,True,False]))
         
