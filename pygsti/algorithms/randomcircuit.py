@@ -2139,7 +2139,8 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
 
 
 def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_labels=None, randomizeout=False,
-                               citerations=20, compilerargs=None, interleaved_circuit=None, seed=None):
+                               citerations=20, compilerargs=None, interleaved_circuit=None, seed=None,
+                               return_num_native_gates=False):
     """
     Generates a "Clifford randomized benchmarking" (CRB) circuit.
 
@@ -2223,6 +2224,9 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
     seed : int, optional
         A seed to initialize the random number generator used for creating random clifford
         circuits.
+    
+    return_num_native_gates: bool, optional
+        Whether to return the number of native gates in the first `length`+1 compiled Cliffords
 
     Returns
     -------
@@ -2236,6 +2240,10 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
         `qubit_labels`, if `qubit_labels` is not None; the ith element of `pspec.qubit_labels`, otherwise.
         In both cases, the ith element of the tuple corresponds to the error-free outcome for the
         qubit on the ith wire of the output circuit.
+    
+    num_native_gates: int
+        Total number of native gates in the first `length`+1 compiled Cliffords.
+        Only returned when `return_num_native_gates` is True
     """
     if compilerargs is None:
         compilerargs = []
@@ -2255,6 +2263,7 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
 
     # Sample length+1 uniformly random Cliffords (we want a circuit of length+2 Cliffords, in total), compile
     # them, and append them to the current circuit.
+    num_native_gates = 0
     for i in range(0, length + 1):
 
         s, p = _symp.random_clifford(n, rand_state=rand_state)
@@ -2263,6 +2272,8 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
                                          clifford_compilations.get('paulieq', None),
                                          qubit_labels=qubit_labels, iterations=citerations, *compilerargs,
                                          rand_state=rand_state)
+        num_native_gates += circuit.num_gates
+
         # Keeps track of the current composite Clifford
         s_composite, p_composite = _symp.compose_cliffords(s_composite, p_composite, s, p)
         full_circuit.append_circuit_inplace(circuit)
@@ -2306,6 +2317,9 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
     idealout = tuple(idealout)
 
     full_circuit.done_editing()
+
+    if return_num_native_gates:
+        return full_circuit, idealout, num_native_gates
     return full_circuit, idealout
 
 

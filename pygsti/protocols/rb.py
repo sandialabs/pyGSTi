@@ -111,7 +111,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
     """
 
     @classmethod
-    def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
+    def from_existing_circuits(cls, data_by_depth, qubit_labels=None,
                                randomizeout=False, citerations=20, compilerargs=(), interleaved_circuit=None,
                                descriptor='A Clifford RB experiment', add_default_protocol=False):
         """
@@ -123,10 +123,12 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
 
         Parameters
         ----------
-        circuits_and_idealouts_by_depth : dict
-            A dictionary whose keys are integer depths and whose values are lists of `(circuit, ideal_outcome)` 
-            2-tuples giving each RB circuit and its 
-            ideal (correct) outcome.
+        data_by_depth : dict
+            A dictionary whose keys are integer depths and whose values are lists of
+            `(circuit, ideal_outcome, num_native_gates)` tuples giving each RB circuit, its 
+            ideal (correct) outcome, and (optionally) the number of native gates in the compiled Cliffords.
+            If only a 2-tuple is passed, i.e. number of native gates is not included,
+            the :meth:`average_gates_per_clifford()` function will not work.
 
         qubit_labels : list, optional
             If not None, a list of the qubits that the RB circuits are to be sampled for. This should
@@ -183,14 +185,18 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         -------
         CliffordRBDesign
         """
-        depths = sorted(list(circuits_and_idealouts_by_depth.keys()))
-        circuit_lists = [[x[0] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
-        ideal_outs = [[x[1] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
-        circuits_per_depth = [len(circuits_and_idealouts_by_depth[d]) for d in depths]
+        depths = sorted(list(data_by_depth.keys()))
+        circuit_lists = [[x[0] for x in data_by_depth[d]] for d in depths]
+        ideal_outs = [[x[1] for x in data_by_depth[d]] for d in depths]
+        try:
+            num_native_gates = [[x[2] for x in data_by_depth[d]] for d in depths]
+        except KeyError:
+            num_native_gates = None
+        circuits_per_depth = [len(data_by_depth[d]) for d in depths]
         self = cls.__new__(cls)
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                               randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
-                              interleaved_circuit)
+                              interleaved_circuit, num_native_gates=num_native_gates)
         return self
 
     def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
@@ -199,6 +205,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
         ideal_outs = []
+        num_native_gates = []
 
         if seed is None:
             self.seed = _np.random.randint(1, 1e6)  # Pick a random seed
@@ -214,27 +221,31 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
             args_list = [(pspec, clifford_compilations, l)] * circuits_per_depth
             kwargs_list = [dict(qubit_labels=qubit_labels, randomizeout=randomizeout, citerations=citerations,
                                 compilerargs=compilerargs, interleaved_circuit=interleaved_circuit,
-                                seed=lseed + i) for i in range(circuits_per_depth)]
+                                seed=lseed + i, return_num_native_gates=True) for i in range(circuits_per_depth)]
             results = _tools.mptools.starmap_with_kwargs(_rc.create_clifford_rb_circuit, circuits_per_depth,
                                                          num_processes, args_list, kwargs_list)
 
             circuits_at_depth = []
             idealouts_at_depth = []
-            for c, iout in results:
+            num_native_gates_at_depth = []
+            for c, iout, nng in results:
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((''.join(map(str, iout)),))
+                num_native_gates_at_depth.append(nng)
 
             circuit_lists.append(circuits_at_depth)
             ideal_outs.append(idealouts_at_depth)
+            num_native_gates.append(num_native_gates_at_depth)
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                               randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
-                              interleaved_circuit)
+                              interleaved_circuit, num_native_gates=num_native_gates)
 
     def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                          randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
-                         interleaved_circuit):
+                         interleaved_circuit, num_native_gates=None):
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
+        self.num_native_gate_lists = num_native_gates
         self.circuits_per_depth = circuits_per_depth
         self.randomizeout = randomizeout
         self.citerations = citerations
@@ -247,6 +258,70 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
             else:
                 defaultfit = 'full'
             self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
+
+    def average_native_gates_per_clifford_for_circuit(self, list_idx, circ_idx):
+        """The average number of native gates per Clifford for a specific circuit
+
+        Parameters
+        ----------
+        list_idx: int
+            The index of the circuit list (for a given depth)
+
+        circ_idx: int
+            The index of the circuit within the circuit list
+        
+        Returns
+        -------
+        float
+            The average number of native gates per Clifford
+        """
+        if self.num_native_gate_lists is None:
+            raise ValueError("Number of native gates not available, cannot compute average gates per Clifford")
+        num_native_gates = self.num_native_gate_lists[list_idx][circ_idx]
+        num_clifford_gates = self.depths[list_idx] + 1
+        return num_native_gates / num_clifford_gates
+
+    def average_native_gates_per_clifford_for_circuit_list(self, list_idx):
+        """The average number of gates per Clifford for a circuit list
+
+        This essentially gives the average number of native gates per Clifford
+        for a given depth (indexed by list index, not depth).
+
+        Parameters
+        ----------
+        list_idx: int
+            The index of the circuit list (for a given depth)
+
+        circ_idx: int
+            The index of the circuit within the circuit list
+        
+        Returns
+        -------
+        float
+            The average number of native gates per Clifford
+        """
+        if self.num_native_gate_lists is None:
+            raise ValueError("Number of native gates not available, cannot compute average gates per Clifford")
+        num_native_gates = sum(self.num_native_gate_lists[list_idx])
+        num_clifford_gates = len(self.num_native_gate_lists[list_idx]) * (self.depths[list_idx] + 1)
+        return num_native_gates / num_clifford_gates
+
+    def average_native_gates_per_clifford(self):
+        """The average number of native gates per Clifford for all circuits
+
+        Returns
+        -------
+        float
+            The average number of native gates per Clifford
+        """
+        if self.num_native_gate_lists is None:
+            raise ValueError("Number of native gates not available, cannot compute average gates per Clifford")
+        num_native_gates = 0
+        num_clifford_gates = 0
+        for list_idx in range(len(self.depths)):
+            num_native_gates = sum(self.num_native_gate_lists[list_idx])
+            num_clifford_gates = len(self.num_native_gate_lists[list_idx]) * (self.depths[list_idx] + 1)
+        return num_native_gates / num_clifford_gates
 
     def map_qubit_labels(self, mapper):
         """
@@ -272,6 +347,42 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
                                                        self.randomizeout, self.citerations, self.compilerargs,
                                                        self.interleaved_circuit, self.descriptor,
                                                        add_default_protocol=False)
+
+    def _truncate_to_circuits_inplace(self, circuits_to_keep):
+        if self.num_native_gate_lists is not None:
+            truncated_circuit_lists = []
+            truncated_idealout_lists = []
+            truncated_num_native_gate_lists = []
+            for circuits, idealouts, nngs in zip(self.circuit_lists, self.idealout_lists, self.num_native_gate_lists):
+                new_circuits, new_idealouts, new_nngs = zip(*filter(lambda ci: ci[0] in set(circuits_to_keep), zip(circuits, idealouts, nngs)))
+                truncated_circuit_lists.append(new_circuits)
+                truncated_idealout_lists.append(new_idealouts)
+                truncated_num_native_gate_lists.append(new_nngs)
+
+            self.circuit_lists = truncated_circuit_lists
+            self.idealout_lists = truncated_idealout_lists
+            self.num_native_gate_lists = truncated_num_native_gate_lists
+        # TODO: What to do about circuit_per_depth, which may no longer be correct, or even uniform
+        # Should it be a list of ints instead of a single int?
+        super()._truncate_to_circuits_inplace(circuits_to_keep)
+
+    def _truncate_to_design_inplace(self, other_design):
+        if self.num_native_gate_lists is not None:
+            truncated_circuit_lists = []
+            truncated_idealout_lists = []
+            truncated_num_native_gate_lists = []
+            for circuits, idealouts, nngs, other_circuits in zip(self.circuit_lists, self.idealout_lists, self.num_native_gate_lists, other_design.circuit_lists):
+                new_circuits, new_idealouts, new_nngs = zip(*filter(lambda ci: ci[0] in set(other_circuits), zip(circuits, idealouts, nngs)))
+                truncated_circuit_lists.append(new_circuits)
+                truncated_idealout_lists.append(new_idealouts)
+                truncated_num_native_gate_lists.append(new_nngs)
+
+            self.circuit_lists = truncated_circuit_lists
+            self.idealout_lists = truncated_idealout_lists
+            self.num_native_gate_lists = truncated_num_native_gate_lists
+        # TODO: What to do about circuit_per_depth, which may no longer be correct, or even uniform
+        # Should it be a list of ints instead of a single int?
+        super()._truncate_to_design_inplace(other_design)
 
 
 class DirectRBDesign(_vb.BenchmarkingDesign):
