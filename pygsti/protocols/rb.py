@@ -190,7 +190,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         ideal_outs = [[x[1] for x in data_by_depth[d]] for d in depths]
         try:
             num_native_gates = [[x[2] for x in data_by_depth[d]] for d in depths]
-        except KeyError:
+        except IndexError:
             num_native_gates = None
         circuits_per_depth = [len(data_by_depth[d]) for d in depths]
         self = cls.__new__(cls)
@@ -244,8 +244,12 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
     def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                          randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
                          interleaved_circuit, num_native_gates=None):
-        super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.num_native_gate_lists = num_native_gates
+        if self.num_native_gate_lists is not None:
+            # If we have native gate information, pair this with circuit data so that we serialize/truncate properly
+            self.paired_with_circuit_attrs = ["num_native_gate_lists"]
+
+        super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.randomizeout = randomizeout
         self.citerations = citerations
@@ -347,42 +351,6 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
                                                        self.randomizeout, self.citerations, self.compilerargs,
                                                        self.interleaved_circuit, self.descriptor,
                                                        add_default_protocol=False)
-
-    def _truncate_to_circuits_inplace(self, circuits_to_keep):
-        if self.num_native_gate_lists is not None:
-            truncated_circuit_lists = []
-            truncated_idealout_lists = []
-            truncated_num_native_gate_lists = []
-            for circuits, idealouts, nngs in zip(self.circuit_lists, self.idealout_lists, self.num_native_gate_lists):
-                new_circuits, new_idealouts, new_nngs = zip(*filter(lambda ci: ci[0] in set(circuits_to_keep), zip(circuits, idealouts, nngs)))
-                truncated_circuit_lists.append(new_circuits)
-                truncated_idealout_lists.append(new_idealouts)
-                truncated_num_native_gate_lists.append(new_nngs)
-
-            self.circuit_lists = truncated_circuit_lists
-            self.idealout_lists = truncated_idealout_lists
-            self.num_native_gate_lists = truncated_num_native_gate_lists
-        # TODO: What to do about circuit_per_depth, which may no longer be correct, or even uniform
-        # Should it be a list of ints instead of a single int?
-        super()._truncate_to_circuits_inplace(circuits_to_keep)
-
-    def _truncate_to_design_inplace(self, other_design):
-        if self.num_native_gate_lists is not None:
-            truncated_circuit_lists = []
-            truncated_idealout_lists = []
-            truncated_num_native_gate_lists = []
-            for circuits, idealouts, nngs, other_circuits in zip(self.circuit_lists, self.idealout_lists, self.num_native_gate_lists, other_design.circuit_lists):
-                new_circuits, new_idealouts, new_nngs = zip(*filter(lambda ci: ci[0] in set(other_circuits), zip(circuits, idealouts, nngs)))
-                truncated_circuit_lists.append(new_circuits)
-                truncated_idealout_lists.append(new_idealouts)
-                truncated_num_native_gate_lists.append(new_nngs)
-
-            self.circuit_lists = truncated_circuit_lists
-            self.idealout_lists = truncated_idealout_lists
-            self.num_native_gate_lists = truncated_num_native_gate_lists
-        # TODO: What to do about circuit_per_depth, which may no longer be correct, or even uniform
-        # Should it be a list of ints instead of a single int?
-        super()._truncate_to_design_inplace(other_design)
 
 
 class DirectRBDesign(_vb.BenchmarkingDesign):
@@ -1081,6 +1049,9 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
     def _init_foundation(self, depths, circuit_lists, measurements, signs, circuits_per_depth, qubit_labels, layer_sampling,
                          sampler, samplerargs,  addlocal, lsargs, descriptor,
                          add_default_protocol):
+        # Pair these attributes with circuit data so that we serialize/truncate properly
+        self.paired_with_circuit_attrs = ["measurements", "signs"]
+
         super().__init__(depths, circuit_lists, signs, qubit_labels, remove_duplicates=False)
         self.measurements = measurements
         self.signs = signs
@@ -1097,10 +1068,6 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
 
         defaultfit = 'A-fixed'
         self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
-            
-        self.auxfile_types['signs'] = 'json' # Makes sure that signs and measurements are saved seperately
-        self.auxfile_types['measurements'] = 'json'
-
 
 class RandomizedBenchmarking(_vb.SummaryStatistics):
     """

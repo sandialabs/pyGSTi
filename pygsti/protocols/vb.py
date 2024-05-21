@@ -118,12 +118,27 @@ class BenchmarkingDesign(ByDepthDesign):
         Whether to remove duplicates when automatically creating
         all the circuits that need data.
     """
+    
+    paired_with_circuit_attrs = None
+    """List of attributes which are paired up with circuit lists
+
+    These will be saved as external files during serialization,
+    and are truncated when circuit lists are truncated.
+    """
 
     def __init__(self, depths, circuit_lists, ideal_outs, qubit_labels=None, remove_duplicates=False):
         assert(len(depths) == len(ideal_outs))
         super().__init__(depths, circuit_lists, qubit_labels, remove_duplicates)
+        
         self.idealout_lists = ideal_outs
-        self.auxfile_types['idealout_lists'] = 'json'
+
+        if self.paired_with_circuit_attrs is None:
+            self.paired_with_circuit_attrs = ['idealout_lists']
+        else:
+            self.paired_with_circuit_attrs.insert(0, 'idealout_lists')
+        
+        for paired_attr in self.paired_with_circuit_attrs:
+            self.auxfile_types[paired_attr] = 'json'
 
     def _mapped_circuits_and_idealouts_by_depth(self, mapper):
         """ Used in derived classes """
@@ -171,32 +186,44 @@ class BenchmarkingDesign(ByDepthDesign):
         ret = _copy.deepcopy(self) # Works for derived classes too
         ret.depths = [self.depths[i] for i in list_indices_to_keep]
         ret.circuit_lists = [self.circuit_lists[i] for i in list_indices_to_keep]
-        ret.idealout_lists = [self.idealout_lists[i] for i in list_indices_to_keep]
+        for paired_attr in self.paired_with_circuit_attrs:
+            val = getattr(self, paired_attr)
+            new_val = [val[i] for i in list_indices_to_keep]
+            setattr(ret, paired_attr, new_val)
         return ret
 
     def _truncate_to_circuits_inplace(self, circuits_to_keep):
         truncated_circuit_lists = []
-        truncated_idealout_lists = []
-        for circuits, idealouts in zip(self.circuit_lists, self.idealout_lists):
-            new_circuits, new_idealouts = zip(*filter(lambda ci: ci[0] in set(circuits_to_keep), zip(circuits, idealouts)))
-            truncated_circuit_lists.append(new_circuits)
-            truncated_idealout_lists.append(new_idealouts)
+        paired_attr_lists_list = [getattr(self, paired_attr) for paired_attr in self.paired_with_circuit_attrs]
+        truncated_paired_attr_lists_list = [[] for _ in range(len(self.paired_with_circuit_attrs))]
+        for list_idx, circuits in enumerate(self.circuit_lists):
+            paired_attrs = [pal[list_idx] for pal in paired_attr_lists_list]
+            # Do the same filtering as CircuitList.truncate, but drag along any paired attributes
+            new_data = list(zip(*filter(lambda ci: ci[0] in set(circuits_to_keep), zip(circuits, *paired_attrs))))
+            truncated_circuit_lists.append(new_data[0])
+            for i, attr_data in enumerate(new_data[1:]):
+                truncated_paired_attr_lists_list[i].append(attr_data)
 
         self.circuit_lists = truncated_circuit_lists
-        self.idealout_lists = truncated_idealout_lists
-        self.nested = False  # we're not sure whether the truncated lists are nested
+        for paired_attr, paired_attr_lists in zip(self.paired_with_circuit_attrs, truncated_paired_attr_lists_list):
+            setattr(self, paired_attr, paired_attr_lists)
         super()._truncate_to_circuits_inplace(circuits_to_keep)
 
     def _truncate_to_design_inplace(self, other_design):
         truncated_circuit_lists = []
-        truncated_idealout_lists = []
-        for circuits, idealouts, other_circuits in zip(self.circuit_lists, self.idealout_lists, other_design.circuit_lists):
-            new_circuits, new_idealouts = zip(*filter(lambda ci: ci[0] in set(other_circuits), zip(circuits, idealouts)))
-            truncated_circuit_lists.append(new_circuits)
-            truncated_idealout_lists.append(new_idealouts)
+        paired_attr_lists_list = [getattr(self, paired_attr) for paired_attr in self.paired_with_circuit_attrs]
+        truncated_paired_attr_lists_list = [[] for _ in range(len(self.paired_with_circuit_attrs))]
+        for list_idx, circuits in enumerate(self.circuit_lists):
+            paired_attrs = [pal[list_idx] for pal in paired_attr_lists_list]
+            # Do the same filtering as CircuitList.truncate, but drag along any paired attributes
+            new_data = list(zip(*filter(lambda ci: ci[0] in set(other_design.circuit_lists[list_idx]), zip(circuits, *paired_attrs))))
+            truncated_circuit_lists.append(new_data[0])
+            for i, attr_data in enumerate(new_data[1:]):
+                truncated_paired_attr_lists_list[i].append(attr_data)
 
         self.circuit_lists = truncated_circuit_lists
-        self.idealout_lists = truncated_idealout_lists
+        for paired_attr, paired_attr_lists in zip(self.paired_with_circuit_attrs, truncated_paired_attr_lists_list):
+            setattr(self, paired_attr, paired_attr_lists)
         super()._truncate_to_design_inplace(other_design)
 
     def _truncate_to_available_data_inplace(self, dataset):
