@@ -13,7 +13,7 @@ except ImportError:
 class Torchable(ModelMember):
 
     Tensor = Tensor
-    torch_handle = torch
+    torch_handle = torch_handle
 
     def stateless_data(self) -> Tuple:
         """
