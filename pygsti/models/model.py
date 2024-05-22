@@ -685,14 +685,14 @@ class OpModel(Model):
                 #object is known to be consistent with _paramvec
 
             # Call from_vector on elements of the cache
-            if self._call_fromvector_on_cache:
-                for opcache in self._opcaches.values():
-                    for obj in opcache.values():
-                        obj.from_vector(ops_paramvec[obj.gpindices], dirty_value=False)
+            #if self._call_fromvector_on_cache:
+                #for opcache in self._opcaches.values():
+                    #for obj in opcache.values():
+                        #obj.from_vector(ops_paramvec[obj.gpindices], dirty_value=False)
 
             self.dirty = False
             self._paramvec[:] = self._ops_paramvec_to_model_paramvec(ops_paramvec)
-            #self._reinit_opcaches()  # this shouldn't be necessary
+            self._reinit_opcaches()  # this shouldn't be necessary
 
         if OpModel._pcheck: self._check_paramvec()
 
@@ -1096,11 +1096,12 @@ class OpModel(Model):
             obj.from_vector(w[obj.gpindices], close, dirty_value=False)
             # dirty_value=False => obj.dirty = False b/c object is known to be consistent with _paramvec
 
-        # Call from_vector on elements of the cache
-        if self._call_fromvector_on_cache:
-            for opcache in self._opcaches.values():
-                for obj in opcache.values():
-                    obj.from_vector(w[obj.gpindices], close, dirty_value=False)
+        # Call from_vector on elements of the cache (TODO: fix)
+        #if self._call_fromvector_on_cache:
+            #for opcache in self._opcaches.values():
+                #for obj in opcache.values():
+                    #obj.from_vector(w[obj.gpindices], close, dirty_value=False)
+        self._reinit_opcaches() 
 
         if OpModel._pcheck: self._check_paramvec()
 

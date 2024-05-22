@@ -45,7 +45,6 @@ class TPInstrumentOp(_DenseOperator):
     """
 
     def __init__(self, param_ops, index, basis=None):
-        print("initializing TPInstrument!")
         self.index = index
         self.num_instrument_elements = len(param_ops)
         _DenseOperator.__init__(self, _np.identity(param_ops[0].dim, 'd'), basis, param_ops[0].evotype,
@@ -90,7 +89,6 @@ class TPInstrumentOp(_DenseOperator):
             module, class, submembers, params, state_space, evotype
             Additional fields may be added by derived classes.
         """
-        print("using to memoized dict!")
         mm_dict = super().to_memoized_dict(mmg_memo)
 
         mm_dict['instrument_member_index'] = self.index
@@ -100,7 +98,6 @@ class TPInstrumentOp(_DenseOperator):
 
     @classmethod
     def _from_memoized_dict(cls, mm_dict, serial_memo):
-        print("using from memoized dict!")
         index = mm_dict['instrument_member_index']
         nEls = mm_dict['number_of_instrument_elements']
         dependents = [0, index + 1] if index < nEls - 1 \
@@ -122,7 +119,6 @@ class TPInstrumentOp(_DenseOperator):
         Mi = Di + MT for i = 1...(n-1)
            = -(n-2)*MT-sum(Di) = -(n-2)*MT-[(MT-Mi)-n*MT] for i == (n-1)
         """
-        print("constructing ptr matrix!")
         nEls = self.num_instrument_elements
         self._ptr.flags.writeable = True
         if self.index < nEls - 1:
@@ -159,7 +155,6 @@ class TPInstrumentOp(_DenseOperator):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-        print("using deriv_wrt_params!")
         Np = self.num_params
         derivMx = _np.zeros((self.dim**2, Np), 'd')
         Nels = self.num_instrument_elements
@@ -220,7 +215,6 @@ class TPInstrumentOp(_DenseOperator):
             The operation parameters as a 1D array with length num_params().
         """
 
-        print("using to_vector!")
         v = _np.empty(self.num_params, 'd')
         for param_op, local_inds in zip(self.submembers(), self._submember_rpindices):
             v[local_inds] = param_op.to_vector()
@@ -250,7 +244,6 @@ class TPInstrumentOp(_DenseOperator):
         -------
         None
         """
-        print("using from vector!")
         for param_op, local_inds in zip(self.submembers(), self._submember_rpindices):
             param_op.from_vector(v[local_inds], close, dirty_value)
 

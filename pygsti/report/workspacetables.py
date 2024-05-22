@@ -1430,6 +1430,8 @@ class ErrgenTable(WorkspaceTable):
         - "logG-logT" : errgen = log(gate) - log(target_op)
         - "logTiG" : errgen = log( dot(inv(target_op), gate) )
         - "logTiG" : errgen = log( dot(gate, inv(target_op)) )
+
+        G= exp(L) T -> G T^-1 = exp(L) -> L= log(G T^-1) -> 'logGTi'
     """
 
     def __init__(self, ws, model, target_model, confidence_region_info=None,
@@ -1464,6 +1466,8 @@ class ErrgenTable(WorkspaceTable):
             - "logG-logT" : errgen = log(gate) - log(target_op)
             - "logTiG" : errgen = log( dot(inv(target_op), gate) )
             - "logGTi" : errgen = log( dot(gate, inv(target_op)) )
+
+            G= exp(L) T -> G T^-1 = exp(L) -> L= log(G T^-1) -> 'logGTi'
 
         Returns
         -------
@@ -1677,6 +1681,8 @@ class GaugeRobustErrgenTable(WorkspaceTable):
             - "logG-logT" : errgen = log(gate) - log(target_op)
             - "logTiG" : errgen = log( dot(inv(target_op), gate) )
             - "logTiG" : errgen = log( dot(gate, inv(target_op)) )
+
+            G= exp(L) T -> G T^-1 = exp(L) -> L= log(G T^-1) -> 'logGTi'
 
         Returns
         -------

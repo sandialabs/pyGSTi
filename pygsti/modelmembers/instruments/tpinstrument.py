@@ -238,7 +238,6 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
         -------
         OrderedDict of Gates
         """
-        print("converting to OrderedDict!")
         # Create "simplified" elements, which infer their parent and
         # gpindices from the set of "param-gates" they're constructed with.
         if isinstance(prefix, _Label):  # Deal with case when prefix isn't just a string

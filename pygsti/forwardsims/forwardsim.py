@@ -609,7 +609,7 @@ class ForwardSimulator(_NicelySerializable):
 
     def _bulk_fill_dprobs_block(self, array_to_fill, dest_param_slice, layout, param_slice):
 
-        #If _compute_circuit_outcome_probability_derivatives is implemented, use it!
+        #If _compute_circuit_outcome_probability_derivatives is implemented, use it! (TODO: redo this)
         resource_alloc = layout.resource_alloc()
         try:
             for element_indices, circuit, outcomes in layout.iter_unique_circuits():
@@ -632,16 +632,22 @@ class ForwardSimulator(_NicelySerializable):
 
         probs = _np.empty(len(layout), 'd')
         self._bulk_fill_probs_block(probs, layout)
+        #print(probs)
 
         probs2 = _np.empty(len(layout), 'd')
         orig_vec = self.model.to_vector().copy()
         for i in range(self.model.num_params):
+            #print(i)
             if i in iParamToFinal:
                 iFinal = iParamToFinal[i]
                 vec = orig_vec.copy(); vec[i] += eps
                 self.model.from_vector(vec, close=True)
                 self._bulk_fill_probs_block(probs2, layout)
+                #print(probs2)
                 array_to_fill[:, iFinal] = (probs2 - probs) / eps
+                #print(array_to_fill[:, iFinal])
+                #print((probs2 - probs) / eps)
+        #print(array_to_fill[0])
         self.model.from_vector(orig_vec, close=True)
 
     def bulk_fill_hprobs(self, array_to_fill, layout,
