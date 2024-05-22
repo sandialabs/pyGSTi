@@ -200,8 +200,8 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         return self
 
     def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
-                 interleaved_circuit=None, citerations=20, compilerargs=(), descriptor='A Clifford RB experiment',
-                 add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
+                 interleaved_circuit=None, citerations=20, compilerargs=(), exact_compilation_key=None,
+                 descriptor='A Clifford RB experiment', add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
         ideal_outs = []
@@ -221,7 +221,8 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
             args_list = [(pspec, clifford_compilations, l)] * circuits_per_depth
             kwargs_list = [dict(qubit_labels=qubit_labels, randomizeout=randomizeout, citerations=citerations,
                                 compilerargs=compilerargs, interleaved_circuit=interleaved_circuit,
-                                seed=lseed + i, return_num_native_gates=True) for i in range(circuits_per_depth)]
+                                seed=lseed + i, return_num_native_gates=True, exact_compilation_key=exact_compilation_key)
+                                for i in range(circuits_per_depth)]
             results = _tools.mptools.starmap_with_kwargs(_rc.create_clifford_rb_circuit, circuits_per_depth,
                                                          num_processes, args_list, kwargs_list)
 
@@ -243,7 +244,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
 
     def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                          randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
-                         interleaved_circuit, num_native_gates=None):
+                         interleaved_circuit, num_native_gates=None, exact_compilation_key=None):
         self.num_native_gate_lists = num_native_gates
         if self.num_native_gate_lists is not None:
             # If we have native gate information, pair this with circuit data so that we serialize/truncate properly
@@ -256,6 +257,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         self.compilerargs = compilerargs
         self.descriptor = descriptor
         self.interleaved_circuit = interleaved_circuit
+        self.exact_compilation_key = exact_compilation_key
         if add_default_protocol:
             if randomizeout:
                 defaultfit = 'A-fixed'

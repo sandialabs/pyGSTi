@@ -2140,7 +2140,7 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
 
 def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_labels=None, randomizeout=False,
                                citerations=20, compilerargs=None, interleaved_circuit=None, seed=None,
-                               return_num_native_gates=False):
+                               return_num_native_gates=False, exact_compilation_key=None):
     """
     Generates a "Clifford randomized benchmarking" (CRB) circuit.
 
@@ -2166,9 +2166,10 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
         the gates in `pspec`, and will respect the connectivity encoded by `pspec`.
 
     clifford_compilations : dict
-        A dictionary with the potential keys `'absolute'` and `'paulieq'` and corresponding
+        A dictionary with at least the potential keys `'absolute'` and `'paulieq'` and corresponding
         :class:`CompilationRules` values.  These compilation rules specify how to compile the
-        "native" gates of `pspec` into Clifford gates.
+        "native" gates of `pspec` into Clifford gates. Additional :class:`CompilationRules` can be
+        provided, particularly for use with `exact_compilation_key`.
 
     length : int
         The "CRB length" of the circuit -- an integer >= 0 --  which is the number of Cliffords in the
@@ -2227,6 +2228,15 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
     
     return_num_native_gates: bool, optional
         Whether to return the number of native gates in the first `length`+1 compiled Cliffords
+    
+    exact_compilation_key: str, optional
+        The key into `clifford_compilations` to use for exact deterministic complation of Cliffords.
+        The underlying :class:`CompilationRules` object must provide compilations for all possible
+        n-qubit Cliffords that will be generated. This also requires the pspec is able to generate the
+        symplectic representations for all n-qubit Cliffords in :meth:`compute_clifford_symplectic_reps`.
+        This is currently generally intended for use out-of-the-box with 1-qubit Clifford RB;
+        however, larger number of qubits can be used so long as the user specifies the processor spec and
+        compilation rules properly.
 
     Returns
     -------
@@ -2253,6 +2263,11 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
     # The number of qubits the circuit is over.
     n = len(qubits)
 
+    if exact_compilation_key is not None:
+        # Precompute some of the symplectic reps if we are doing exact compilation
+        srep_cache = _symp.compute_internal_gate_symplectic_representations()
+        srep_cache.update(pspec.compute_clifford_symplectic_reps())
+
     rand_state = _np.random.RandomState(seed)  # OK if seed is None
 
     # Initialize the identity circuit rep.
@@ -2264,14 +2279,36 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
     # Sample length+1 uniformly random Cliffords (we want a circuit of length+2 Cliffords, in total), compile
     # them, and append them to the current circuit.
     num_native_gates = 0
-    for i in range(0, length + 1):
-
-        s, p = _symp.random_clifford(n, rand_state=rand_state)
-        circuit = _cmpl.compile_clifford(s, p, pspec,
-                                         clifford_compilations.get('absolute', None),
-                                         clifford_compilations.get('paulieq', None),
-                                         qubit_labels=qubit_labels, iterations=citerations, *compilerargs,
-                                         rand_state=rand_state)
+    for _ in range(0, length + 1):
+        if exact_compilation_key is not None:
+            # Deterministic compilation based on a provided clifford compilation
+            assert exact_compilation_key in clifford_compilations, \
+                    f"{exact_compilation_key} not provided in `clifford_compilations`"
+            
+            # Pick clifford
+            cidx = rand_state.randint(24**n)
+            lbl = _lbl.Label(f'C{cidx}', qubits)
+            
+            # Try to do deterministic compilation
+            try:
+                circuit = clifford_compilations[exact_compilation_key].retrieve_compilation_of(lbl)
+            except AssertionError:
+                raise ValueError(
+                    f"Failed to compile n-qubit Clifford 'C{cidx}'. Ensure this is provided in the " + \
+                    "compilation rules, or use a compilation algorithm to synthesize it by not " + \
+                    "specifying `exact_compilation_key`."
+                )
+        
+            # compute the symplectic rep of the chosen clifford
+            s, p = _symp.symplectic_rep_of_clifford_circuit(circuit, srep_cache)
+        else:
+            # Random compilation
+            s, p = _symp.random_clifford(n, rand_state=rand_state)
+            circuit = _cmpl.compile_clifford(s, p, pspec,
+                                            clifford_compilations.get('absolute', None),
+                                            clifford_compilations.get('paulieq', None),
+                                            qubit_labels=qubit_labels, iterations=citerations, *compilerargs,
+                                            rand_state=rand_state)
         num_native_gates += circuit.num_gates
 
         # Keeps track of the current composite Clifford
