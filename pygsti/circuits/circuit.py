@@ -20,6 +20,7 @@ from pygsti.baseobjs.label import Label as _Label, CircuitLabel as _CircuitLabel
 from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
+from pygsti.tools.legacytools import deprecate as _deprecate_fn
 
 
 #Internally:
@@ -4242,7 +4243,8 @@ class Circuit(object):
                                                               str(num_IMs_used + qubit_conversion[q]))
 
         return openqasm
-
+    
+    @_deprecate_fn('Model.probabilites or Model.sim.probs')
     def simulate(self, model, return_all_outcomes=False):
         """
         Compute the outcome probabilities of this Circuit using `model` as a model for the gates.
