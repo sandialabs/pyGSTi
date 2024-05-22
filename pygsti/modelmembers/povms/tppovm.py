@@ -15,6 +15,7 @@ from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
 from pygsti.modelmembers.povms.fulleffect import FullPOVMEffect as _FullPOVMEffect
 from typing import Tuple
+import warnings
 
 
 class TPPOVM(_BasePOVM, _Torchable):
@@ -40,6 +41,23 @@ class TPPOVM(_BasePOVM, _Torchable):
         The state space for this POVM.  If `None`, the space is inferred
         from the first effect vector.  If `len(effects) == 0` in this case,
         an error is raised.
+
+    Notes
+    -----
+    Just like TPState, we're restricted to the Pauli-product or Gell-Mann basis.
+    
+    We inherit from BasePOVM, which inherits from POVM, which inherits from OrderedDict.
+
+    A TPPOVM "p" has an attribute p.complement_label that's set during construction.
+    This label is such that e = p[p.complement_label] is a ComplementPOVMEffect, with
+    an associated FullState object given in e.identity. If v = e.identity.to_vector(),
+    then e's vector representation is
+    
+            v - sum(all non-complement effects in p).
+    
+    Under typical conditions v will be proportional to the first standard basis vector,
+    and, in fact, if v is length "d," then we'll have v[0] == d ** 0.25. However, 
+    neither of these conditions is strictly required by the API.
     """
 
     def __init__(self, effects, evotype=None, state_space=None, called_from_reduce=False):
@@ -76,18 +94,30 @@ class TPPOVM(_BasePOVM, _Torchable):
         vec = _np.concatenate(effect_vecs)
         return vec
 
-    def stateless_data(self) -> Tuple[int, int]:
-        dim1 = len(self)
-        dim2 = self.dim
-        return (dim1, dim2)
+    def stateless_data(self) -> Tuple[int, _np.ndarray]:
+        num_effects = len(self)
+        complement_effect = self[self.complement_label]
+        identity = complement_effect.identity.to_vector()
+        return (num_effects, identity)
 
     @staticmethod
-    def torch_base(sd: Tuple[int, int], t_param: _Torchable.Tensor) -> _Torchable.Tensor:
+    def torch_base(sd: Tuple[int, _np.ndarray], t_param: _Torchable.Tensor) -> _Torchable.Tensor:
         torch = _Torchable.torch_handle
-        num_effects, dim = sd
-        first_basis_vec = torch.zeros(size=(1, dim), dtype=torch.double)
-        first_basis_vec[0,0] = dim ** 0.25
+        num_effects, identity = sd
+        dim = identity.size
+
+        first_basis_vec = _np.zeros(dim)
+        first_basis_vec[0] = dim ** 0.25
+        TOL = 1e-15 * _np.sqrt(dim)
+        if _np.linalg.norm(first_basis_vec - identity) > TOL:
+            # Don't error out. The documentation for the class
+            # clearly indicates that the meaning of "identity"
+            # can be nonstandard.
+            warnings.warn('Unexpected normalization!') 
+
+        identity = identity.reshape((1, -1)) # make into a row vector
+        t_identity = torch.from_numpy(identity)
         t_param_mat = t_param.reshape((num_effects - 1, dim))
-        t_func = first_basis_vec - t_param_mat.sum(axis=0, keepdim=True)
+        t_func = t_identity - t_param_mat.sum(axis=0, keepdim=True)
         t = torch.row_stack((t_param_mat, t_func))
         return t

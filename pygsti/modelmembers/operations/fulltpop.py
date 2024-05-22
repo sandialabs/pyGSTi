@@ -55,11 +55,9 @@ class FullTPOp(_DenseOperator, _Torchable):
     """
 
     def __init__(self, m, basis=None, evotype="default", state_space=None):
-        #LinearOperator.__init__(self, LinearOperator.convert_to_matrix(m))
         mx = _LinearOperator.convert_to_matrix(m)
         assert(_np.isrealobj(mx)), "FullTPOp must have *real* values!"
-        if not (_np.isclose(mx[0, 0], 1.0)
-                and _np.allclose(mx[0, 1:], 0.0)):
+        if not (_np.isclose(mx[0, 0], 1.0) and _np.allclose(mx[0, 1:], 0.0)):
             raise ValueError("Cannot create FullTPOp: "
                              "invalid form for 1st row!")
         _DenseOperator.__init__(self, mx, basis, evotype, state_space)

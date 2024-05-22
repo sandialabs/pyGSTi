@@ -59,15 +59,14 @@ class TPState(_DenseState, _Torchable):
     # alpha = 1/sqrt(d) = 1/(len(vec)**0.25).
     def __init__(self, vec, basis=None, evotype="default", state_space=None):
         vector = _State._to_vector(vec)
-        if basis is not None:
-            if not isinstance(basis, _Basis):
-                basis = _Basis.cast(basis, len(vector))  # don't perform this cast if we're given a basis
-            firstEl = basis.elsize**-0.25  # not dim, as the dimension of the vector space may be less
-            if not _np.isclose(vector[0], firstEl):
-                raise ValueError("Cannot create TPState: first element must equal %g!" % firstEl)
-        # if basis is None, don't check first element (hackfor de-serialization, so we don't need to store basis)
-
+        if basis is None:
+            dim = vector.size
+            basis = 'pp' if int(2**_np.log2(dim)) == dim else 'gm'
         _DenseState.__init__(self, vector, basis, evotype, state_space)
+        basis = self._basis              # <-- __init__ ensures that self._basis is a Basis object.
+        firstEl = basis.elsize ** -0.25  # <-- not dim, as the dimension of the vector space may be less
+        if not _np.isclose(vector[0], firstEl):
+            raise ValueError("Cannot create TPState: first element must equal %g!" % firstEl)
         assert(isinstance(self.columnvec, _ProtectedArray))
         self._paramlbls = _np.array(["VecElement %d" % i for i in range(1, self.dim)], dtype=object)
 
