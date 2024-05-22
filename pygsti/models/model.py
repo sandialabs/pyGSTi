@@ -1522,15 +1522,12 @@ class OpModel(Model):
 
         Parameters
         ----------
-        circuit : Circuit
-            The circuit to expand, using necessary details regarding the expansion from this model, including:
+        model : Model
+            The model used to provide necessary details regarding the expansion, including:
 
             - default SPAM layers
             - definitions of instrument-containing layers
             - expansions of individual instruments and POVMs
-
-        observed_outcomes : iterable, optional (default None)
-            If specified an iterable over the subset of outcomes empirically observed for this circuit.
 
         Returns
         -------
@@ -1539,77 +1536,10 @@ class OpModel(Model):
             values are tuples of the outcome labels corresponding to this circuit,
             one per POVM effect held in the key.
         """
-        expanded_circuit_outcomes = self.bulk_expand_instruments_and_separate_povm([circuit], [observed_outcomes])
-        return expanded_circuit_outcomes[0]
-    
-    def bulk_expand_instruments_and_separate_povm(self, circuits, observed_outcomes_list=None, split_circuits = None, 
-                                                  completed_circuits = None):
-        """
-        Creates a list of dictionaries mapping from :class:`SeparatePOVMCircuit` 
-        objects from expanding the instruments of this circuit.
-
-        Each key of the returned dictionary replaces the instruments in this circuit with a selection
-        of their members.  (The size of the resulting dictionary is the product of the sizes of
-        each instrument appearing in this circuit when `observed_outcomes is None`).  Keys are stored
-        as :class:`SeparatePOVMCircuit` objects so it's easy to keep track of which POVM outcomes (effects)
-        correspond to observed data.  This function is, for the most part, used internally to process
-        a circuit before computing its outcome probabilities.
-
-        This function works similarly to expand_instruments_and_separate_povm, except it operates on
-        an entire list of circuits at once, and provides additional kwargs to accelerate computation.
-
-        Parameters
-        ----------
-        circuit : Circuit
-            The circuit to expand, using necessary details regarding the expansion from this model, including:
-
-            - default SPAM layers
-            - definitions of instrument-containing layers
-            - expansions of individual instruments and POVMs
-
-        observed_outcomes_list : list of iterables, optional (default None)
-            If specified a list of iterables over the subset of outcomes empirically observed for each circuit.
-        
-        split_circuits : list of tuples, optional (default None)
-            If specified, this is a list of tuples for each circuit corresponding to the splitting of
-            the circuit into the prep label, spam-free circuit, and povm label. This is the same format
-            produced by the :meth:split_circuit(s) method, and so this option can allow for accelerating this
-            method when that has previously been run. When using this kwarg only one of this or 
-            the `complete_circuits` kwargs should be used.
-
-        completed_circuits : list of Circuits, optional (default None)
-            If specified, this is a list of compeleted circuits with prep and povm labels included.
-            This is the format produced by the :meth:complete_circuit(s) method, and this can
-            be used to accelerate this method call when that has been previously run. Should not
-            be used in conjunction with `split_circuits`.
-
-        Returns
-        -------
-        list of OrderedDicts
-            A list of dictionaries whose keys are :class:`SeparatePOVMCircuit` objects and whose
-            values are tuples of the outcome labels corresponding to each circuit,
-            one per POVM effect held in the key.
-        """
-
-        assert(not (completed_circuits is not None and split_circuits is not None)), "Inclusion of non-trivial values"\
-              +" for both `complete_circuits` and `split_circuits` is not supported. Please use only one of these two arguments."
-
-        if split_circuits is not None:
-            povm_lbls = [split_ckt[2] for split_ckt in split_circuits]
-            circuits_without_povm = [(split_ckt[0],) + split_ckt[1] for split_ckt in split_circuits]
-        elif completed_circuits is not None:
-            povm_lbls = [comp_ckt[-1] for comp_ckt in completed_circuits]
-            circuits_without_povm = [comp_ckt[:-1] for comp_ckt in completed_circuits]
-        else:
-            completed_circuits = self.complete_circuits(circuits)
-            povm_lbls = [comp_ckt[-1] for comp_ckt in completed_circuits]
-            circuits_without_povm = [comp_ckt[:-1] for comp_ckt in completed_circuits]
-        
-        if observed_outcomes_list is None:
-            observed_outcomes_list = [None]*len(circuits)
-
-
-        expanded_circuit_outcomes_list = [_collections.OrderedDict() for _ in range(len(circuits))]
+        complete_circuit = self.complete_circuit(circuit)
+        expanded_circuit_outcomes = _collections.OrderedDict()
+        povm_lbl = complete_circuit[-1]  # "complete" circuits always end with a POVM label
+        circuit_without_povm = complete_circuit[0:len(complete_circuit) - 1]
 
         def create_tree(lst):
             subs = _collections.OrderedDict()
@@ -1660,31 +1590,24 @@ class OpModel(Model):
                 outcomes = tuple((running_outcomes + (elabel,) for elabel in elabels))
                 expanded_circuit_outcomes[_SeparatePOVMCircuit(circuit, povm_lbl, elabels)] = outcomes
 
-        has_instruments = self._has_instruments()
-        unique_povm_labels = set(povm_lbls)
-        effect_label_dict = {povm_lbl: self._effect_labels_for_povm(povm_lbl) for povm_lbl in unique_povm_labels}
+        ootree = create_tree(observed_outcomes) if observed_outcomes is not None else None  # tree of observed outcomes
+        # e.g. [('0','00'), ('0','01'), ('1','10')] ==> {'0': {'00': {}, '01': {}}, '1': {'10': {}}}
 
-        for povm_lbl, circuit_without_povm, expanded_circuit_outcomes, observed_outcomes in zip(povm_lbls, circuits_without_povm, 
-                                                                                                expanded_circuit_outcomes_list, 
-                                                                                                observed_outcomes_list):
-            ootree = create_tree(observed_outcomes) if observed_outcomes is not None else None  # tree of observed outcomes
-            # e.g. [('0','00'), ('0','01'), ('1','10')] ==> {'0': {'00': {}, '01': {}}, '1': {'10': {}}}
-
-            if has_instruments:
-                add_expanded_circuit_outcomes(circuit_without_povm, (), ootree, start=0)
+        if self._has_instruments():
+            add_expanded_circuit_outcomes(circuit_without_povm, (), ootree, start=0)
+        else:
+            # It may be helpful to cache the set of elabels for a POVM (maybe within the model?) because
+            # currently the call to _effect_labels_for_povm may be a bottleneck.  It's needed, even when we have
+            # observed outcomes, because there may be some observed outcomes that aren't modeled (e.g. leakage states)
+            if observed_outcomes is None:
+                elabels = self._effect_labels_for_povm(povm_lbl)
             else:
-                # It may be helpful to cache the set of elabels for a POVM (maybe within the model?) because
-                # currently the call to _effect_labels_for_povm may be a bottleneck.  It's needed, even when we have
-                # observed outcomes, because there may be some observed outcomes that aren't modeled (e.g. leakage states)
-                if observed_outcomes is None:
-                    elabels = effect_label_dict[povm_lbl]
-                else:
-                    possible_lbls = set(effect_label_dict[povm_lbl])
-                    elabels = tuple([oo for oo in ootree.keys() if oo in possible_lbls])
-                outcomes = tuple(((elabel,) for elabel in elabels))
-                expanded_circuit_outcomes[_SeparatePOVMCircuit(circuit_without_povm, povm_lbl, elabels)] = outcomes
+                possible_lbls = set(self._effect_labels_for_povm(povm_lbl))
+                elabels = tuple([oo for oo in ootree.keys() if oo in possible_lbls])
+            outcomes = tuple(((elabel,) for elabel in elabels))
+            expanded_circuit_outcomes[_SeparatePOVMCircuit(circuit_without_povm, povm_lbl, elabels)] = outcomes
 
-        return expanded_circuit_outcomes_list
+        return expanded_circuit_outcomes
 
     def complete_circuits(self, circuits, prep_lbl_to_prepend=None, povm_lbl_to_append=None, return_split = False):
         """

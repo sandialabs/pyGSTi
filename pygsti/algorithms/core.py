@@ -878,30 +878,19 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
     #The ModelDatasetCircuitsStore
     printer.log('Precomputing CircuitOutcomeProbabilityArray layouts for each iteration.', 2)
     precomp_layouts = []
-
     #pre-compute a dictionary caching completed circuits for layout construction performance.
-    unique_circuits = list({ckt for circuit_list in circuit_lists for ckt in circuit_list})
-    if isinstance(mdl.sim, (_fwdsims.MatrixForwardSimulator, _fwdsims.MapForwardSimulator)):
-        precomp_layout_circuit_cache = mdl.sim.create_copa_layout_circuit_cache(unique_circuits, mdl, dataset=dataset)
+    unique_circuits = {ckt for circuit_list in circuit_lists for ckt in circuit_list}
+    print(f'{len(unique_circuits)=}')
+    if isinstance(mdl.sim, _fwdsims.MatrixForwardSimulator):
+        precomp_layout_circuit_cache = _layouts.matrixlayout.create_matrix_copa_layout_circuit_cache(unique_circuits, mdl)
     else:
         precomp_layout_circuit_cache = None
-
+    #print(completed_circuit_cache)
     for i, circuit_list in enumerate(circuit_lists):
         printer.log(f'Layout for iteration {i}', 2)
         precomp_layouts.append(mdl.sim.create_layout(circuit_list, dataset, resource_alloc, array_types, verbosity= printer - 1,
-                                                    layout_creation_circuit_cache = precomp_layout_circuit_cache))
-        
-    #precompute a cache of possible outcome counts for each circuits to accelerate MDC store creation
-    if isinstance(mdl, _models.model.OpModel):
-        if precomp_layout_circuit_cache is not None: #then grab the split circuits from there.
-            expanded_circuit_outcome_list = mdl.bulk_expand_instruments_and_separate_povm(unique_circuits, 
-                                                                                          completed_circuits= precomp_layout_circuit_cache['completed_circuits'].values())
-        else:
-            expanded_circuit_outcome_list = mdl.bulk_expand_instruments_and_separate_povm(unique_circuits)        
-        outcome_count_by_circuit_cache = {ckt: len(outcome_tup) for ckt,outcome_tup in zip(unique_circuits, expanded_circuit_outcome_list)}
-    else:
-        outcome_count_by_circuit_cache = {ckt: mdl.compute_num_outcomes(ckt) for ckt in unique_circuits}
-
+                                                     layout_creation_circuit_cache = precomp_layout_circuit_cache))
+    
     with printer.progress_logging(1):
         for i in range(starting_index, len(circuit_lists)):
             circuitsToEstimate = circuit_lists[i]
