@@ -64,6 +64,20 @@ def gram_matrix(m, adjoint=False):
     return out
 
 
+def is_normal(m, tol=1e-9):
+    """
+    Test whether m is a normal operator, in the sense that it commutes with its adjoint.
+    """
+    if m.shape[0] != m.shape[1]:
+        return False
+    prefix_char, _, _ = _spl.blas.find_best_blas_type(dtype=m.dtype)
+    herk = BLAS_FUNCS["herk"][prefix_char]
+    trans = 2 if _np.iscomplexobj(m) else 1
+    mdagm = herk(  1.0, m, trans=trans )
+    mmdag = herk( -1.0, m, trans=0, c=mdagm, overwrite_c=True )
+    return _np.all(_np.abs(mmdag) <= tol)
+
+
 def is_hermitian(mx, tol=1e-9):
     """
     Test whether mx is a hermitian matrix.
@@ -134,8 +148,7 @@ def is_valid_density_mx(mx, tol=1e-9):
     bool
         True if mx is a valid density matrix, otherwise False.
     """
-    # is_pos_def includes a check that the matrix is Hermitian.
-    return abs(_np.trace(mx) - 1.0) < tol and is_pos_def(mx, tol)
+    return abs(_np.trace(mx) - 1.0) < tol and is_hermitian(mx, tol) and is_pos_def(mx, tol)
 
 
 def nullspace(m, tol=1e-7):
@@ -192,6 +205,7 @@ def nullspace_qr(m, tol=1e-7):
     return q[:, rank:]
 
 
+#TODO: remove the orthogonalize argument (requires changing functions that call this one)
 def nice_nullspace(m, tol=1e-7, orthogonalize=False):
     """
     Computes the nullspace of a matrix, and tries to return a "nice" basis for it.
@@ -214,19 +228,21 @@ def nice_nullspace(m, tol=1e-7, orthogonalize=False):
     -------
     An matrix of shape (M,K) whose columns contain nullspace basis vectors.
     """
-    nullsp = nullspace(m, tol)
-    dim_ker = nullsp.shape[1]
-    if dim_ker == 0:
-        return nullsp  # empty 0-by-N array
-    _, _, p = _spl.qr(nullsp.T.conj(), mode='raw', pivoting=True)
-    ret = nullsp @ (nullsp.T[:, p[:dim_ker]]).conj()
-    # ^ That's equivalent to, but faster than:
-    #     nullsp_projector = nullsp @ nullsp.T.conj()
-    #     _, _, p = _spl.qr(nullsp_projector mode='raw', pivoting=True)
-    #     ret = nullsp_projector[:, p[:dim_ker]]
 
-    if orthogonalize:
-        ret, _ = _spl.qr(ret, mode='economic')
+    #
+    # nullsp = nullspace(m, tol)
+    # dim_ker = nullsp.shape[1]
+    # _, _, p = _spl.qr(nullsp.T.conj(), mode='raw', pivoting=True)
+    # ret = nullsp @ (nullsp.T[:, p[dim_ker]]).conj()
+    #
+    ## ^ Equivalent to, but faster than the following
+    ##
+    ##     nullsp_projector = nullsp @ nullsp.T.conj()
+    ##     ret = nullsp_projector[:, p[:dim_ker]]
+    ##
+    #
+
+    ret = nullspace(m, tol)
     for j in range(ret.shape[1]):  # normalize columns so largest element is +1.0
         imax = _np.argmax(_np.abs(ret[:, j]))
         if abs(ret[imax, j]) > 1e-6:
@@ -235,7 +251,7 @@ def nice_nullspace(m, tol=1e-7, orthogonalize=False):
     return ret
 
 
-def normalize_columns(m, return_norms=False, ord=None):
+def normalize_columns(m, return_norms=False, norm_ord=None):
     """
     Normalizes the columns of a matrix.
 
@@ -248,7 +264,7 @@ def normalize_columns(m, return_norms=False, ord=None):
         If `True`, also return a 1D array containing the norms
         of the columns (before they were normalized).
 
-    ord : int or list of ints, optional
+    norm_ord : int or list of ints, optional
         The order of the norm.  See :func:`numpy.linalg.norm`.  An
         array of orders can be given to specify the norm on a per-column
         basis.
@@ -262,13 +278,13 @@ def normalize_columns(m, return_norms=False, ord=None):
         Only returned when `return_norms=True`, a 1-dimensional array
         of the pre-normalization norm of each column.
     """
-    norms = column_norms(m, ord)
+    norms = column_norms(m, norm_ord)
     norms[norms == 0.0] = 1.0  # avoid division of zero-column by zero
     normalized_m = scale_columns(m, 1 / norms)
     return (normalized_m, norms) if return_norms else normalized_m
 
 
-def column_norms(m, ord=None):
+def column_norms(m, norm_ord=None):
     """
     Compute the norms of the columns of a matrix.
 
@@ -288,14 +304,14 @@ def column_norms(m, ord=None):
         A 1-dimensional array of the column norms (length is number of columns of `m`).
     """
     if _sps.issparse(m):
-        ord_list = ord if isinstance(ord, (list, _np.ndarray)) else [ord] * m.shape[1]
+        ord_list = norm_ord if isinstance(norm_ord, (list, _np.ndarray)) else [norm_ord] * m.shape[1]
         assert(len(ord_list) == m.shape[1])
         norms = _np.array([_np.linalg.norm(m[:, j].toarray(), ord=o) for j, o in enumerate(ord_list)])
-    elif isinstance(ord, (list, _np.ndarray)):
-        assert(len(ord) == m.shape[1])
-        norms = _np.array([_np.linalg.norm(m[:, j], ord=o) for j, o in enumerate(ord)])
+    elif isinstance(norm_ord, (list, _np.ndarray)):
+        assert(len(norm_ord) == m.shape[1])
+        norms = _np.array([_np.linalg.norm(m[:, j], ord=o) for j, o in enumerate(norm_ord)])
     else:
-        norms = _np.linalg.norm(m, axis=0, ord=ord)
+        norms = _np.linalg.norm(m, axis=0, ord=norm_ord)
 
     return norms
 
@@ -417,8 +433,6 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
         if initial_independent_cols is None:
             proj_m = m.copy()
         else:
-            # We assume initial_independent_cols is full column-rank.
-            # This lets us use unpivoted QR instead of pivoted QR or SVD.
             assert initial_independent_cols.shape[0] == m.shape[0]
             q = _spl.qr(initial_independent_cols, mode='econ')[0]
             # proj_m = (I - qq')m
@@ -642,6 +656,7 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     return s
 
 
+#TODO: revert changes in the function below.
 def unitary_superoperator_matrix_log(m, mx_basis):
     """
     Construct the logarithm of superoperator matrix `m`.
@@ -671,11 +686,16 @@ def unitary_superoperator_matrix_log(m, mx_basis):
     from . import lindbladtools as _lt  # (would create circular imports if at top)
     from . import optools as _ot  # (would create circular imports if at top)
 
+    # Riley question: what assumptions do we have for the input m? The call to eigvals
+    # below is intended for fully-general matrices. I imagine we (typically) have structure
+    # that makes it preferable to call some other function (li)
     M_std = change_basis(m, mx_basis, "std")
     evals = _np.linalg.eigvals(M_std)
-    assert(_np.allclose(_np.abs(evals), 1.0))  # simple but technically incomplete check for a unitary superop
-    # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
-
+    assert(_np.allclose(_np.abs(evals), 1.0))
+    # ^ simple but technically incomplete check for a unitary superop
+    #   (e.g. could be anti-unitary: diag(1, -1, -1, -1))
+    
+    # ^ Riley question: 
     U = _ot.std_process_mx_to_unitary(M_std)
     H = _spl.logm(U) / -1j  # U = exp(-iH)
     logM_std = _lt.create_elementary_errorgen('H', H)  # rho --> -i[H, rho]
@@ -1422,6 +1442,35 @@ def _findx(a, inds, always_copy=False):
 
         a_inds = a_inds.squeeze(axis=tuple(squeeze))
         return a_inds
+
+
+# TODO: reevaluate the need for this function. It seems like we could just in-line @
+# and let operator overloading and implementations of __matmul__ and __rmatmul__
+# handle it.
+def safe_dot(a, b):
+    """
+    Performs dot(a,b) correctly when neither, either, or both arguments are sparse matrices.
+
+    Parameters
+    ----------
+    a : numpy.ndarray or scipy.sparse matrix.
+        First matrix.
+
+    b : numpy.ndarray or scipy.sparse matrix.
+        Second matrix.
+
+    Returns
+    -------
+    numpy.ndarray or scipy.sparse matrix
+    """
+    if _sps.issparse(a):
+        return a.dot(b)  # sparseMx.dot works for both sparse and dense args
+    elif _sps.issparse(b):
+        # to return a sparse mx even when a is dense (asymmetric behavior):
+        # --> return _sps.csr_matrix(a).dot(b) # numpyMx.dot can't handle sparse argument
+        return _np.dot(a, b.toarray())
+    else:
+        return _np.dot(a, b)
 
 
 def safe_norm(a, part=None):
