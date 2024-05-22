@@ -32,6 +32,7 @@ from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.tools import slicetools as _slct
 from pygsti.tools import matrixtools as _mt
+from pygsti.circuits import Circuit as _Circuit, SeparatePOVMCircuit as _SeparatePOVMCircuit
 
 MEMLIMIT_FOR_NONGAUGE_PARAMS = None
 
@@ -1234,7 +1235,6 @@ class OpModel(Model):
         if len(circuit) == 0 or not self._is_primitive_prep_layer_lbl(circuit[0]):
             prep_lbl_to_prepend = self._default_primitive_prep_layer_lbl()
             if prep_lbl_to_prepend is None:
-                #raise ValueError(f"Missing state prep in {circuit.str} and there's no default!")
                 raise ValueError("Missing state prep in %s and there's no default!" % circuit.str)
 
         if len(circuit) == 0 or not self._is_primitive_povm_layer_lbl(circuit[-1]):
@@ -1242,19 +1242,113 @@ class OpModel(Model):
             povm_lbl_to_append = self._default_primitive_povm_layer_lbl(sslbls)
 
             if povm_lbl_to_append is None:
-                #raise ValueError(f"Missing POVM in {circuit.str} and there's no default!")
                 raise ValueError("Missing POVM in %s and there's no default!" % circuit.str)
 
         if prep_lbl_to_prepend or povm_lbl_to_append:
-            #SLOW way:
-            #circuit = circuit.copy(editable=True)
-            #if prep_lbl_to_prepend: circuit.insert_layer_inplace(prep_lbl_to_prepend, 0)
-            #if povm_lbl_to_append: circuit.insert_layer_inplace(povm_lbl_to_append, len(circuit))
-            #circuit.done_editing()
             if prep_lbl_to_prepend: circuit = (prep_lbl_to_prepend,) + circuit
             if povm_lbl_to_append: circuit = circuit + (povm_lbl_to_append,)
 
         return circuit
+    
+    def expand_instruments_and_separate_povm(self, circuit, observed_outcomes=None):
+        """
+        Creates a dictionary of :class:`SeparatePOVMCircuit` objects from expanding the instruments of this circuit.
+
+        Each key of the returned dictionary replaces the instruments in this circuit with a selection
+        of their members.  (The size of the resulting dictionary is the product of the sizes of
+        each instrument appearing in this circuit when `observed_outcomes is None`).  Keys are stored
+        as :class:`SeparatePOVMCircuit` objects so it's easy to keep track of which POVM outcomes (effects)
+        correspond to observed data.  This function is, for the most part, used internally to process
+        a circuit before computing its outcome probabilities.
+
+        Parameters
+        ----------
+        model : Model
+            The model used to provide necessary details regarding the expansion, including:
+
+            - default SPAM layers
+            - definitions of instrument-containing layers
+            - expansions of individual instruments and POVMs
+
+        Returns
+        -------
+        OrderedDict
+            A dict whose keys are :class:`SeparatePOVMCircuit` objects and whose
+            values are tuples of the outcome labels corresponding to this circuit,
+            one per POVM effect held in the key.
+        """
+        complete_circuit = self.complete_circuit(circuit)
+        expanded_circuit_outcomes = _collections.OrderedDict()
+        povm_lbl = complete_circuit[-1]  # "complete" circuits always end with a POVM label
+        circuit_without_povm = complete_circuit[0:len(complete_circuit) - 1]
+
+        def create_tree(lst):
+            subs = _collections.OrderedDict()
+            for el in lst:
+                if len(el) > 0:
+                    if el[0] not in subs: subs[el[0]] = []
+                    subs[el[0]].append(el[1:])
+            return _collections.OrderedDict([(k, create_tree(sub_lst)) for k, sub_lst in subs.items()])
+
+        def add_expanded_circuit_outcomes(circuit, running_outcomes, ootree, start):
+            """
+            """
+            cir = circuit if start == 0 else circuit[start:]  # for performance, avoid uneeded slicing
+            for k, layer_label in enumerate(cir, start=start):
+                components = layer_label.components
+                #instrument_inds = _np.nonzero([model._is_primitive_instrument_layer_lbl(component)
+                #                               for component in components])[0]  # SLOWER than statement below
+                instrument_inds = _np.array([i for i, component in enumerate(components)
+                                             if self._is_primitive_instrument_layer_lbl(component)])
+                if instrument_inds.size > 0:
+                    # This layer contains at least one instrument => recurse with instrument(s) replaced with
+                    #  all combinations of their members.
+                    component_lookup = {i: comp for i, comp in enumerate(components)}
+                    instrument_members = [self._member_labels_for_instrument(components[i])
+                                          for i in instrument_inds]  # also components of outcome labels
+                    for selected_instrmt_members in _itertools.product(*instrument_members):
+                        expanded_layer_lbl = component_lookup.copy()
+                        expanded_layer_lbl.update({i: components[i] + "_" + sel
+                                                   for i, sel in zip(instrument_inds, selected_instrmt_members)})
+                        expanded_layer_lbl = _Label([expanded_layer_lbl[i] for i in range(len(components))])
+
+                        if ootree is not None:
+                            new_ootree = ootree
+                            for sel in selected_instrmt_members:
+                                new_ootree = new_ootree.get(sel, {})
+                            if len(new_ootree) == 0: continue  # no observed outcomes along this outcome-tree path
+                        else:
+                            new_ootree = None
+
+                        add_expanded_circuit_outcomes(circuit[0:k] + _Circuit((expanded_layer_lbl,)) + circuit[k + 1:],
+                                                      running_outcomes + selected_instrmt_members, new_ootree, k + 1)
+                    break
+
+            else:  # no more instruments to process: `cir` contains no instruments => add an expanded circuit
+                assert(circuit not in expanded_circuit_outcomes)  # shouldn't be possible to generate duplicates...
+                elabels = self._effect_labels_for_povm(povm_lbl) if (observed_outcomes is None) \
+                    else tuple(ootree.keys())
+                outcomes = tuple((running_outcomes + (elabel,) for elabel in elabels))
+                expanded_circuit_outcomes[_SeparatePOVMCircuit(circuit, povm_lbl, elabels)] = outcomes
+
+        ootree = create_tree(observed_outcomes) if observed_outcomes is not None else None  # tree of observed outcomes
+        # e.g. [('0','00'), ('0','01'), ('1','10')] ==> {'0': {'00': {}, '01': {}}, '1': {'10': {}}}
+
+        if self._has_instruments():
+            add_expanded_circuit_outcomes(circuit_without_povm, (), ootree, start=0)
+        else:
+            # It may be helpful to cache the set of elabels for a POVM (maybe within the model?) because
+            # currently the call to _effect_labels_for_povm may be a bottleneck.  It's needed, even when we have
+            # observed outcomes, because there may be some observed outcomes that aren't modeled (e.g. leakage states)
+            if observed_outcomes is None:
+                elabels = self._effect_labels_for_povm(povm_lbl)
+            else:
+                possible_lbls = set(self._effect_labels_for_povm(povm_lbl))
+                elabels = tuple([oo for oo in ootree.keys() if oo in possible_lbls])
+            outcomes = tuple(((elabel,) for elabel in elabels))
+            expanded_circuit_outcomes[_SeparatePOVMCircuit(circuit_without_povm, povm_lbl, elabels)] = outcomes
+
+        return expanded_circuit_outcomes
 
     # ---- Operation container interface ----
     # These functions allow oracle access to whether a label of a given type

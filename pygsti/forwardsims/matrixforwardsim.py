@@ -1025,7 +1025,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         return hProdCache
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
-                      derivative_dimensions=None, verbosity=0):
+                      derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache= None):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
@@ -1056,6 +1056,10 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
             Determines how much output to send to stdout.  0 means no output, higher
             integers mean more output.
 
+        layout_creation_circuit_cache : dict, optional (default None)
+            A precomputed dictionary serving as a cache for completed
+            circuits. I.e. circuits with prep labels and POVM labels appended.
+            
         Returns
         -------
         MatrixCOPALayout
@@ -1105,7 +1109,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
         layout = _MatrixCOPALayout(circuits, self.model, dataset, natoms,
-                                   na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity)
+                                   na, npp, param_dimensions, param_blk_sizes, resource_alloc, verbosity, 
+                                   layout_creation_circuit_cache=layout_creation_circuit_cache)
 
         if mem_limit is not None:
             loc_nparams1 = num_params / npp[0] if len(npp) > 0 else 0

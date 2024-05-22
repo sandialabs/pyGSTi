@@ -33,6 +33,8 @@ from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
 from pygsti.optimize.customlm import Optimizer as _Optimizer
+from pygsti import forwardsims as _fwdsims
+from pygsti import layouts as _layouts
 
 _dummy_profiler = _DummyProfiler()
 
@@ -888,9 +890,18 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
     #The ModelDatasetCircuitsStore
     printer.log('Precomputing CircuitOutcomeProbabilityArray layouts for each iteration.', 2)
     precomp_layouts = []
+    #pre-compute a dictionary caching completed circuits for layout construction performance.
+    unique_circuits = {ckt for circuit_list in circuit_lists for ckt in circuit_list}
+    print(f'{len(unique_circuits)=}')
+    if isinstance(mdl.sim, _fwdsims.MatrixForwardSimulator):
+        precomp_layout_circuit_cache = _layouts.matrixlayout.create_matrix_copa_layout_circuit_cache(unique_circuits, mdl)
+    else:
+        precomp_layout_circuit_cache = None
+    #print(completed_circuit_cache)
     for i, circuit_list in enumerate(circuit_lists):
         printer.log(f'Layout for iteration {i}', 2)
-        precomp_layouts.append(mdl.sim.create_layout(circuit_list, dataset, resource_alloc, array_types, verbosity= printer - 1))
+        precomp_layouts.append(mdl.sim.create_layout(circuit_list, dataset, resource_alloc, array_types, verbosity= printer - 1,
+                                                     layout_creation_circuit_cache = precomp_layout_circuit_cache))
     
     with printer.progress_logging(1):
         for i in range(starting_index, len(circuit_lists)):

@@ -4412,7 +4412,6 @@ class Circuit(object):
 
         return expanded_circuit_outcomes
 
-
 class CompressedCircuit(object):
     """
     A "compressed" Circuit that requires less disk space.
