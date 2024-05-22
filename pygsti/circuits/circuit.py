@@ -515,13 +515,38 @@ class Circuit(object):
         if self._static:
             self._hashable_tup = self.tup #if static precompute and cache the hashable circuit tuple.
             self._hash = hash(self._hashable_tup)
+            self._str = stringrep
+        else:
+            self._str = None # can be None (lazy generation)
             #only meant to be used in settings where we're explicitly checking for self._static.
         #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
         self._name = name  # can be None
-        self._str = stringrep if self._static else None  # can be None (lazy generation)
-        self._times = None  # for FUTURE expansion
+        #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
-        self._alignmarks = ()  # layer indices *before* which there is an alignment mark
+
+    #specialized codepath for copying
+    def _copy_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
+                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None):
+        self._labels = labels
+        self._line_labels = tuple(line_labels)
+        self._occurrence_id = occurrence
+        self._compilable_layer_indices_tup = compilable_layer_indices_tup # always a tuple, but can be empty.
+        self._static = not editable
+        if self._static:
+            self._hashable_tup = hashable_tup #if static we have already precomputed and cached the hashable circuit tuple.
+            self._hash = precomp_hash #Same as previous comment. Only meant to be used in settings where we're explicitly checking for self._static.
+            self._str = stringrep
+            
+        else:
+            self._str = None # can be None (lazy generation)
+            
+        #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
+        self._name = name  # can be None
+        #self._times = None  # for FUTURE expansion
+        self.auxinfo = {}  # for FUTURE expansion / user metadata
+
+        return self
+    
 
     def to_label(self, nreps=1):
         """
@@ -748,7 +773,7 @@ class Circuit(object):
                             " mode in order to hash it.  You should call"
                             " circuit.done_editing() beforehand."))
             self.done_editing()
-        return self._hash#hash(self._hashable_tup)
+        return self._hash
 
     def __len__(self):
         return len(self._labels)
@@ -930,8 +955,8 @@ class Circuit(object):
         int
         """
         return len(self._line_labels)
-
-    def copy(self, editable="auto"):
+    
+    def copy(self, editable='auto'):
         """
         Returns a copy of the circuit.
 
@@ -945,26 +970,27 @@ class Circuit(object):
         -------
         Circuit
         """
-        if editable == "auto": editable = not self._static
-        return Circuit(self.layertup, self.line_labels, None, editable, self._str, check=False,
-                       occurrence=self.occurrence)
-    
-    def alt_copy(self, editable='auto'):
-
+        
         if editable == "auto": 
             editable = not self._static
+
+        #inline new circuit creation.
+        ret = Circuit.__new__(Circuit)
+
         if editable:
             if self._static:
-                labels = list(self._labels)
+                return ret._copy_init(list(self._labels), self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup)
             else:
-                labels = self._labels
-        else:
+                return ret._copy_init(self._labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup)
+        else: #create static copy
             if self._static:
-                labels = self._labels
+                #if presently static leverage precomputed hashable_tup and hash. 
+                #These values are only used by _copy_init if the circuit being 
+                #created is static, and are ignored otherwise.
+                return ret._copy_init(self._labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup, self._hashable_tup, self._hash)
             else:
-                labels = tuple(self._labels)
-        
-        return Circuit._fastinit(labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup)
+                hashable_tup = self.tup
+                return ret._copy_init(tuple(self._labels), self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup, hashable_tup, hash(hashable_tup))
 
     def clear(self):
         """
