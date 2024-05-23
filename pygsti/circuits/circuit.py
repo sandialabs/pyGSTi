@@ -21,6 +21,7 @@ from pygsti.baseobjs import outcomelabeldict as _ld, _compatibility as _compat
 from pygsti.tools import internalgates as _itgs
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.legacytools import deprecate as _deprecate_fn
+from copy import deepcopy
 
 
 #Internally:
@@ -485,11 +486,12 @@ class Circuit(object):
             #Even when the circuit is not editable we will cache the editable
             #version of the circuit's labels to expidite the creation of
             #editable copies.
-            self._cached_editable_labels = [_label_to_nested_lists_of_simple_labels(layer_lbl)
+            cached_editable_labels = [_label_to_nested_lists_of_simple_labels(layer_lbl)
                       for layer_lbl in layer_labels]
         else:
             labels = [_label_to_nested_lists_of_simple_labels(layer_lbl)
                       for layer_lbl in layer_labels]
+            cached_editable_labels = labels
 
         # check that all the compilable layer indices are valid
         if compilable_layer_indices is not None:
@@ -501,18 +503,20 @@ class Circuit(object):
             compilable_layer_indices_tup = ()
 
         #Set *all* class attributes (separated so can call bare_init separately for fast internal creation)
-        self._bare_init(labels, my_line_labels, editable, name, stringrep, occurrence, compilable_layer_indices_tup)
+        self._bare_init(labels, my_line_labels, editable, name, stringrep, occurrence, compilable_layer_indices_tup,
+                        cached_editable_labels)
 
 
     @classmethod
     def _fastinit(cls, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
-                  compilable_layer_indices_tup=()):
+                  compilable_layer_indices_tup=(), cached_editable_labels=None):
         ret = cls.__new__(cls)
-        ret._bare_init(labels, line_labels, editable, name, stringrep, occurrence, compilable_layer_indices_tup)
+        ret._bare_init(labels, line_labels, editable, name, stringrep, occurrence, compilable_layer_indices_tup,
+                       cached_editable_labels)
         return ret
 
     def _bare_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
-                   compilable_layer_indices_tup=()):
+                   compilable_layer_indices_tup=(), cached_editable_labels=None):
         self._labels = labels
         self._line_labels = tuple(line_labels)
         self._occurrence_id = occurrence
@@ -525,6 +529,7 @@ class Circuit(object):
         else:
             self._str = None # can be None (lazy generation)
             #only meant to be used in settings where we're explicitly checking for self._static.
+        self._cached_editable_labels = cached_editable_labels
         #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
@@ -532,7 +537,7 @@ class Circuit(object):
 
     #specialized codepath for copying
     def _copy_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
-                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None):
+                compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None, cached_editable_labels=None):
         self._labels = labels
         self._line_labels = tuple(line_labels)
         self._occurrence_id = occurrence
@@ -542,7 +547,7 @@ class Circuit(object):
             self._hashable_tup = hashable_tup #if static we have already precomputed and cached the hashable circuit tuple.
             self._hash = precomp_hash #Same as previous comment. Only meant to be used in settings where we're explicitly checking for self._static.
             self._str = stringrep
-            
+            self._cached_editable_labels = cached_editable_labels
         else:
             self._str = None # can be None (lazy generation)
             
@@ -795,7 +800,10 @@ class Circuit(object):
     def __radd__(self, x):
         if not isinstance(x, Circuit):
             assert(all([isinstance(l, _Label) for l in x])), "Only Circuits and Label-tuples can be added to Circuits!"
-            return Circuit._fastinit(x + self.layertup, self._line_labels, editable=False)
+            updated_cached_editable_labels =  [_label_to_nested_lists_of_simple_labels(layer_lbl) for layer_lbl in x] \
+                                            + self._cached_editable_labels
+            return Circuit._fastinit(x + self.layertup, self._line_labels, editable=False, 
+                                     cached_editable_labels=updated_cached_editable_labels)
         return x.__add__(self)
 
     def __add__(self, x):
@@ -818,7 +826,12 @@ class Circuit(object):
 
         if not isinstance(x, Circuit):
             assert(all([isinstance(l, _Label) for l in x])), "Only Circuits and Label-tuples can be added to Circuits!"
-            return Circuit._fastinit(self.layertup + x, self._line_labels, editable=False)
+            updated_cached_editable_labels = self._cached_editable_labels + [_label_to_nested_lists_of_simple_labels(layer_lbl)
+                                                                          for layer_lbl in x]
+            #need to update the _cached_editable_labels property to account for added labels.
+            return Circuit._fastinit(self.layertup + x, self._line_labels, editable=False, 
+                                    cached_editable_labels=updated_cached_editable_labels)
+ 
         
         #Add special line label handling to deal with the special global idle circuits (which have no line labels
         # associated with them typically).
@@ -875,9 +888,10 @@ class Circuit(object):
 
         if s is not None:
             s += _op_seq_str_suffix(new_line_labels, occurrence_id=None)  # don't maintain occurrence_id
-
-        return Circuit._fastinit(self.layertup + x.layertup, new_line_labels, editable=False, name='',
-                                 stringrep=s, occurrence=None)
+        ret = Circuit._fastinit(self.layertup + x.layertup, new_line_labels, editable=False, name='',
+                                 stringrep=s, occurrence=None,
+                                 cached_editable_labels=self._cached_editable_labels + x._cached_editable_labels)
+        return ret
 
     def repeat(self, ntimes, expand="default"):
         """
@@ -988,18 +1002,18 @@ class Circuit(object):
             if self._static:
                 #need to have the labels of the editable copy in the nested list of simple label
                 #format expected, so use the version which was cached when this circuit was made static.
-                return ret._copy_init(self._cached_editable_labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup)
+                return ret._copy_init(deepcopy(self._cached_editable_labels), self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup)
             else:
-                return ret._copy_init(self._labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup)
+                return ret._copy_init(deepcopy(self._labels), self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup)
         else: #create static copy
             if self._static:
                 #if presently static leverage precomputed hashable_tup and hash. 
                 #These values are only used by _copy_init if the circuit being 
                 #created is static, and are ignored otherwise.
-                return ret._copy_init(self._labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup, self._hashable_tup, self._hash)
+                return ret._copy_init(self._labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup, self._hashable_tup, self._hash, deepcopy(self._cached_editable_labels))
             else:
                 hashable_tup = self.tup
-                return ret._copy_init(tuple([_Label(layer_lbl) for layer_lbl in self._labels]), self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup, hashable_tup, hash(hashable_tup))
+                return ret._copy_init(tuple([_Label(layer_lbl) for layer_lbl in self._labels]), self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup, hashable_tup, hash(hashable_tup), deepcopy(self._labels))
 
     def clear(self):
         """
@@ -1053,11 +1067,15 @@ class Circuit(object):
         """ Get the components of the `ilayer`-th layer as a list/tuple. """
         #(works for static and non-static Circuits)
         if self._static:
-            if self._labels[ilayer].is_simple(): return [self._labels[ilayer]]
-            else: return self._labels[ilayer].components
+            if self._labels[ilayer].is_simple(): 
+                return [self._labels[ilayer]]
+            else: 
+                return self._labels[ilayer].components
         else:
-            return self._labels[ilayer] if isinstance(self._labels[ilayer], list) \
-                else [self._labels[ilayer]]
+            if isinstance(self._labels[ilayer], list):
+                return self._labels[ilayer] 
+            else:
+                return [self._labels[ilayer]]
 
     def _remove_layer_component(self, ilayer, indx):
         """ Removes the `indx`-th component from the `ilayer`-th layer """
@@ -1145,14 +1163,15 @@ class Circuit(object):
             assert(layers is not None)
             if nonint_layers is False: return self.layertup[layers]
             if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
-                return Circuit._fastinit(self._labels[layers], self._line_labels, not self._static)
+                return Circuit._fastinit(self._labels[layers], self._line_labels, not self._static,
+                                        cached_editable_labels=self._cached_editable_labels[layers])
 
         layers = self._proc_layers_arg(layers)
         lines = self._proc_lines_arg(lines)
         if len(layers) == 0 or len(lines) == 0:
-            return Circuit._fastinit(() if self._static else [],
-                                     tuple(lines) if self._static else lines,
-                                     not self._static) if nonint_layers else None  # zero-area region
+            return Circuit._fastinit(() if self._static else [], lines,
+                                     not self._static, 
+                                     cached_editable_labels=[]) if nonint_layers else None  # zero-area region
 
         ret = []
         if self._static:
@@ -1180,8 +1199,8 @@ class Circuit(object):
             if not strict: lines = "auto"  # since we may have included lbls on other lines
             # don't worry about string rep for now...
             
-            return Circuit._fastinit(tuple(ret) if self._static else ret, tuple(lines) if self._static else lines,
-                                    not self._static)
+            return Circuit._fastinit(tuple(ret) if self._static else ret, lines,
+                                    not self._static, cached_editable_labels=ret)
         else:
             return _Label(ret[0])
 
@@ -1485,6 +1504,7 @@ class Circuit(object):
         lbls = tuple(map(to_label, lbls))
         numLayersToInsert = len(lbls)
         self.insert_idling_layers_inplace(layer_to_insert_before, numLayersToInsert, lines)  # make space
+        print(f'{lbls=}')
         self.set_labels(lbls, slice(layer_to_insert_before, layer_to_insert_before + numLayersToInsert), lines)
         #Note: set_labels expects lbls to be a list/tuple of Label-like items b/c it's given a layer *slice*
 
@@ -1898,7 +1918,9 @@ class Circuit(object):
             if len(lbl.components) == 0:  # special case of an empty-layer label,
                 serial_lbls.append(lbl)  # which we serialize as an atomic object
             serial_lbls.extend(list(lbl.components) * lbl.reps)
-        return Circuit._fastinit(tuple(serial_lbls), self._line_labels, editable=False, occurrence=self.occurrence)
+        return Circuit._fastinit(tuple(serial_lbls), self._line_labels, editable=False, 
+                                 occurrence=self._occurrence_id, 
+                                 cached_editable_labels=serial_lbls)
 
     def parallelize(self, can_break_labels=True, adjacent_only=False):
         """
@@ -1982,9 +2004,14 @@ class Circuit(object):
                 else:
                     for k in lbl.sslbls: first_free[k] = pos + 1
 
+        #need the editable version of these as well to update _cached_editable_labels
+        updated_cached_editable_labels = parallel_lbls
         # Convert elements of `parallel_lbls` into Labels (needed b/c we use _fastinit below)
         parallel_lbls = [_Label(lbl_list) if len(lbl_list) != 1 else lbl_list[0] for lbl_list in parallel_lbls]
-        return Circuit._fastinit(tuple(parallel_lbls), self._line_labels, editable=False, occurrence=self._occurrence_id)
+        #need the editable version of these as well to update _cached_editable_labels
+        return Circuit._fastinit(tuple(parallel_lbls), self._line_labels, editable=False, 
+                                 occurrence=self._occurrence_id, 
+                                 cached_editable_labels=updated_cached_editable_labels)
 
     def expand_subcircuits_inplace(self):
         """
@@ -2005,17 +2032,28 @@ class Circuit(object):
             circuits_to_expand = []
             layers_to_add = 0
 
-            for l in self._layer_components(i):  # loop over labels in this layer
-                if isinstance(l, _CircuitLabel):
+            #inline _layer_components call.
+            if isinstance(self._labels[i], list):
+                for l in self._labels[i]:  # loop over labels in this layer
+                    if isinstance(l, _CircuitLabel):
+                        circuits_to_expand.append(l)
+                        layers_to_add = max(layers_to_add, l.depth - 1)
+            else:
+                if  isinstance(self._labels[i], _CircuitLabel):
                     circuits_to_expand.append(l)
                     layers_to_add = max(layers_to_add, l.depth - 1)
+            #for l in self._layer_components(i):  # loop over labels in this layer
+            #    if isinstance(l, _CircuitLabel):
+            #        circuits_to_expand.append(l)
+            #        layers_to_add = max(layers_to_add, l.depth - 1)
 
-            if layers_to_add > 0:
-                self.insert_idling_layers_inplace(i + 1, layers_to_add)
-            for subc in circuits_to_expand:
-                self.clear_labels(slice(i, i + subc.depth), subc.sslbls)  # remove the CircuitLabel
-                self.set_labels(subc.components * subc.reps, slice(i, i + subc.depth),
-                                subc.sslbls)  # dump in the contents
+            if circuits_to_expand:
+                if layers_to_add > 0:
+                    self.insert_idling_layers_inplace(i + 1, layers_to_add)
+                for subc in circuits_to_expand:
+                    self.clear_labels(slice(i, i + subc.depth), subc.sslbls)  # remove the CircuitLabel
+                    self.set_labels(subc.components * subc.reps, slice(i, i + subc.depth),
+                                    subc.sslbls)  # dump in the contents
 
     def expand_subcircuits(self):
         """
@@ -2362,6 +2400,7 @@ class Circuit(object):
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
         del self[j]
+        print(self)
         self.insert_labels_into_layers_inplace(circuit, j)
 
     def replace_layer_with_circuit(self, circuit, j):
@@ -2524,9 +2563,13 @@ class Circuit(object):
         if not self._static:
             #Could to this in both cases, but is slow for large static circuits
             cpy = self.copy(editable=False)  # convert our layers to Labels
+            updated_cached_editable_labels = [_label_to_nested_lists_of_simple_labels(new_layer) if lbl == old_layer else editable_lbl
+                                            for lbl, editable_lbl in zip(cpy._labels, cpy._cached_editable_layers)]
             return Circuit._fastinit(tuple([new_layer if lbl == old_layer else lbl
                                             for lbl in cpy._labels]), self._line_labels, editable=False,
-                                     occurrence=self._occurrence_id, compilable_layer_indices_tup=self._compilable_layer_indices_tup)
+                                     occurrence=self._occurrence_id, 
+                                     compilable_layer_indices_tup=self._compilable_layer_indices_tup,
+                                     cached_editable_labels=updated_cached_editable_labels)
         else:  # static case: so self._labels is a tuple of Labels
             return Circuit(tuple([new_layer if lbl == old_layer else lbl
                                   for lbl in self._labels]), self._line_labels, editable=False,
@@ -2557,7 +2600,9 @@ class Circuit(object):
             while label in layers:
                 i = layers.index(label)
                 layers = layers[:i] + c._labels + layers[i + 1:]
-        return Circuit._fastinit(layers, self._line_labels, editable=False, occurrence=self._occurrence_id)
+        updated_cached_editable_labels = [_label_to_nested_lists_of_simple_labels(layer_lbl) for layer_lbl in layers]
+        return Circuit._fastinit(layers, self._line_labels, editable=False, occurrence=self._occurrence_id,
+                                 cached_editable_labels=updated_cached_editable_labels)
 
 
     def change_gate_library(self, compilation, allowed_filter=None, allow_unchanged_gates=False, depth_compression=True,
@@ -2721,7 +2766,7 @@ class Circuit(object):
         def mapper_func(line_label): return mapper[line_label] \
             if isinstance(mapper, dict) else mapper
 
-        self.line_labels = tuple((mapper_func(l) for l in self._line_labels))
+        self._line_labels = tuple((mapper_func(l) for l in self.line_labels))
 
         def map_sslbls(obj):  # obj is either a simple label or a list
             if isinstance(obj, _Label):
@@ -2732,6 +2777,7 @@ class Circuit(object):
                 newobj = [map_sslbls(sub) for sub in obj]
             return newobj
         self._labels = map_sslbls(self._labels)
+        self._cached_editable_labels = self._labels
 
     def map_state_space_labels(self, mapper):
         """
