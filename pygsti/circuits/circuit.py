@@ -482,11 +482,6 @@ class Circuit(object):
             if layer_labels_objs is None:
                 layer_labels_objs = tuple(map(to_label, layer_labels))
             labels = layer_labels_objs
-            #Even when the circuit is not editable we will cache the editable
-            #version of the circuit's labels to expidite the creation of
-            #editable copies.
-            self._cached_editable_labels = [_label_to_nested_lists_of_simple_labels(layer_lbl)
-                      for layer_lbl in layer_labels]
         else:
             labels = [_label_to_nested_lists_of_simple_labels(layer_lbl)
                       for layer_lbl in layer_labels]
@@ -986,9 +981,7 @@ class Circuit(object):
 
         if editable:
             if self._static:
-                #need to have the labels of the editable copy in the nested list of simple label
-                #format expected, so use the version which was cached when this circuit was made static.
-                return ret._copy_init(self._cached_editable_labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup)
+                return ret._copy_init(list(self._labels), self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup)
             else:
                 return ret._copy_init(self._labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup)
         else: #create static copy
@@ -999,7 +992,7 @@ class Circuit(object):
                 return ret._copy_init(self._labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup, self._hashable_tup, self._hash)
             else:
                 hashable_tup = self.tup
-                return ret._copy_init(tuple([_Label(layer_lbl) for layer_lbl in self._labels]), self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup, hashable_tup, hash(hashable_tup))
+                return ret._copy_init(tuple(self._labels), self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup, hashable_tup, hash(hashable_tup))
 
     def clear(self):
         """
@@ -4316,11 +4309,7 @@ class Circuit(object):
         """
         if not self._static:
             self._static = True
-            #cache the nested lists form of _labels from when this was editable
-            #to speed creation of editable copies.
-            self._cached_editable_labels = self._labels
             self._labels = tuple([_Label(layer_lbl) for layer_lbl in self._labels])
-            
         self._hashable_tup = self.tup
         self._hash = hash(self._hashable_tup)
 
