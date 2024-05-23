@@ -219,8 +219,8 @@ class FogiTester(BaseCase):
         nprefix = mdl.num_params - nfogi  # reparameterization *prefixes* FOGI params with "unused" params
 
         self.assertEqual(nprefix, 0)  # because include_spam=True above
-        self.assertArraysAlmostEqual(mdl.fogi_errorgen_components_array(include_fogv=False, normalized_elem_gens=True),
-                                     mdl.to_vector()[nprefix:])
+        temp = mdl.fogi_errorgen_components_array(include_fogv=False, normalized_elem_gens=True)
+        self.assertArraysAlmostEqual(temp, mdl.to_vector()[nprefix:])
 
         v = mdl.to_vector()  # just test this works
 

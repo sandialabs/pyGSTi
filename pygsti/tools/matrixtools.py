@@ -206,7 +206,6 @@ def nullspace_qr(m, tol=1e-7):
     return q[:, rank:]
 
 
-#TODO: remove the orthogonalize argument (requires changing functions that call this one)
 def nice_nullspace(m, tol=1e-7, orthogonalize=False):
     """
     Computes the nullspace of a matrix, and tries to return a "nice" basis for it.
@@ -229,21 +228,19 @@ def nice_nullspace(m, tol=1e-7, orthogonalize=False):
     -------
     An matrix of shape (M,K) whose columns contain nullspace basis vectors.
     """
+    nullsp = nullspace(m, tol)
+    dim_ker = nullsp.shape[1]
+    if dim_ker == 0:
+        return nullsp  # empty 0-by-N array
+    _, _, p = _spl.qr(nullsp.T.conj(), mode='raw', pivoting=True)
+    ret = nullsp @ (nullsp.T[:, p[:dim_ker]]).conj()
+    # ^ That's equivalent to, but faster than:
+    #     nullsp_projector = nullsp @ nullsp.T.conj()
+    #     _, _, p = _spl.qr(nullsp_projector mode='raw', pivoting=True)
+    #     ret = nullsp_projector[:, p[:dim_ker]]
 
-    #
-    # nullsp = nullspace(m, tol)
-    # dim_ker = nullsp.shape[1]
-    # _, _, p = _spl.qr(nullsp.T.conj(), mode='raw', pivoting=True)
-    # ret = nullsp @ (nullsp.T[:, p[dim_ker]]).conj()
-    #
-    ## ^ Equivalent to, but faster than the following
-    ##
-    ##     nullsp_projector = nullsp @ nullsp.T.conj()
-    ##     ret = nullsp_projector[:, p[:dim_ker]]
-    ##
-    #
-
-    ret = nullspace(m, tol)
+    if orthogonalize:
+        ret, _ = _spl.qr(ret, mode='economic')
     for j in range(ret.shape[1]):  # normalize columns so largest element is +1.0
         imax = _np.argmax(_np.abs(ret[:, j]))
         if abs(ret[imax, j]) > 1e-6:
