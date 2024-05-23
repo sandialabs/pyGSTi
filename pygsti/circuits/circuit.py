@@ -651,34 +651,35 @@ class Circuit(object):
         -------
         tuple
         """
+        comp_lbl_flag = ('__CMPLBL__',) if self._compilable_layer_indices_tup else ()
         if self._static:
             if self._occurrence_id is None:
                 if self._line_labels in (('*',), ()):  # No line labels
-                    return self._labels + ('__CMPLBL__',) + self._compilable_layer_indices_tup
+                    return self._labels + comp_lbl_flag + self._compilable_layer_indices_tup
                 else:
-                    return self._labels + ('@',) + self._line_labels + ('__CMPLBL__',) + self._compilable_layer_indices_tup
+                    return self._labels + ('@',) + self._line_labels + comp_lbl_flag + self._compilable_layer_indices_tup
             else: 
                 if self._line_labels in (('*',), ()):
                     return self._labels + ('@',) + ('@', self._occurrence_id) \
-                            + ('__CMPLBL__',) + self._compilable_layer_indices_tup
+                            + comp_lbl_flag + self._compilable_layer_indices_tup
                 else:
                     return self._labels + ('@',) + self._line_labels + ('@', self._occurrence_id) \
-                            + ('__CMPLBL__',) + self._compilable_layer_indices_tup
+                            + comp_lbl_flag + self._compilable_layer_indices_tup
                 # Note: we *always* need line labels (even if they're empty) when using occurrence id
 
         else:
             if self._occurrence_id is None:
                 if self._line_labels in (('*',), ()):  # No line labels
-                    return self.layertup + ('__CMPLBL__',) + self._compilable_layer_indices_tup
+                    return self.layertup + comp_lbl_flag + self._compilable_layer_indices_tup
                 else:
-                    return self.layertup + ('@',) + self._line_labels + ('__CMPLBL__',) + self._compilable_layer_indices_tup
+                    return self.layertup + ('@',) + self._line_labels + comp_lbl_flag + self._compilable_layer_indices_tup
             else: 
                 if self._line_labels in (('*',), ()):
                     return self.layertup + ('@',) + ('@', self._occurrence_id) \
-                            + ('__CMPLBL__',) + self._compilable_layer_indices_tup
+                            + comp_lbl_flag + self._compilable_layer_indices_tup
                 else:
                     return self.layertup + ('@',) + self._line_labels + ('@', self._occurrence_id) \
-                            + ('__CMPLBL__',) + self._compilable_layer_indices_tup
+                            + comp_lbl_flag + self._compilable_layer_indices_tup
                 # Note: we *always* need line labels (even if they're empty) when using occurrence id
 
     @property
