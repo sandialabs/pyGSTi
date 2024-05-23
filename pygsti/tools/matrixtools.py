@@ -251,7 +251,7 @@ def nice_nullspace(m, tol=1e-7, orthogonalize=False):
     return ret
 
 
-def normalize_columns(m, return_norms=False, norm_ord=None):
+def normalize_columns(m, return_norms=False, ord=None):
     """
     Normalizes the columns of a matrix.
 
@@ -264,7 +264,7 @@ def normalize_columns(m, return_norms=False, norm_ord=None):
         If `True`, also return a 1D array containing the norms
         of the columns (before they were normalized).
 
-    norm_ord : int or list of ints, optional
+    ord : int or list of ints, optional
         The order of the norm.  See :func:`numpy.linalg.norm`.  An
         array of orders can be given to specify the norm on a per-column
         basis.
@@ -278,13 +278,13 @@ def normalize_columns(m, return_norms=False, norm_ord=None):
         Only returned when `return_norms=True`, a 1-dimensional array
         of the pre-normalization norm of each column.
     """
-    norms = column_norms(m, norm_ord)
+    norms = column_norms(m, ord)
     norms[norms == 0.0] = 1.0  # avoid division of zero-column by zero
     normalized_m = scale_columns(m, 1 / norms)
     return (normalized_m, norms) if return_norms else normalized_m
 
 
-def column_norms(m, norm_ord=None):
+def column_norms(m, ord=None):
     """
     Compute the norms of the columns of a matrix.
 
@@ -304,14 +304,14 @@ def column_norms(m, norm_ord=None):
         A 1-dimensional array of the column norms (length is number of columns of `m`).
     """
     if _sps.issparse(m):
-        ord_list = norm_ord if isinstance(norm_ord, (list, _np.ndarray)) else [norm_ord] * m.shape[1]
+        ord_list = ord if isinstance(ord, (list, _np.ndarray)) else [ord] * m.shape[1]
         assert(len(ord_list) == m.shape[1])
         norms = _np.array([_np.linalg.norm(m[:, j].toarray(), ord=o) for j, o in enumerate(ord_list)])
-    elif isinstance(norm_ord, (list, _np.ndarray)):
-        assert(len(norm_ord) == m.shape[1])
-        norms = _np.array([_np.linalg.norm(m[:, j], ord=o) for j, o in enumerate(norm_ord)])
+    elif isinstance(ord, (list, _np.ndarray)):
+        assert(len(ord) == m.shape[1])
+        norms = _np.array([_np.linalg.norm(m[:, j], ord=o) for j, o in enumerate(ord)])
     else:
-        norms = _np.linalg.norm(m, axis=0, ord=norm_ord)
+        norms = _np.linalg.norm(m, axis=0, ord=ord)
 
     return norms
 
