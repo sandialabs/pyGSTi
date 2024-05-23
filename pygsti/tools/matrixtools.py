@@ -417,6 +417,8 @@ def independent_columns(m, initial_independent_cols=None, tol=1e-7):
         if initial_independent_cols is None:
             proj_m = m.copy()
         else:
+            # We assume initial_independent_cols is full column-rank.
+            # This lets us use unpivoted QR instead of pivoted QR or SVD.
             assert initial_independent_cols.shape[0] == m.shape[0]
             q = _spl.qr(initial_independent_cols, mode='econ')[0]
             # proj_m = (I - qq')m
@@ -900,9 +902,6 @@ def real_matrix_log(m, action_if_imaginary="raise", tol=1e-8):
 
 
 ## ------------------------ Erik : Matrix tools that Tim has moved here -----------
-from scipy.linalg import sqrtm as _sqrtm
-import itertools as _ittls
-
 
 def column_basis_vector(i, dim):
     """
