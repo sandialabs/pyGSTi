@@ -64,20 +64,6 @@ def gram_matrix(m, adjoint=False):
     return out
 
 
-def is_normal(m, tol=1e-9):
-    """
-    Test whether m is a normal operator, in the sense that it commutes with its adjoint.
-    """
-    if m.shape[0] != m.shape[1]:
-        return False
-    prefix_char, _, _ = _spl.blas.find_best_blas_type(dtype=m.dtype)
-    herk = BLAS_FUNCS["herk"][prefix_char]
-    trans = 2 if _np.iscomplexobj(m) else 1
-    mdagm = herk(  1.0, m, trans=trans )
-    mmdag = herk( -1.0, m, trans=0, c=mdagm, overwrite_c=True )
-    return _np.all(_np.abs(mmdag) <= tol)
-
-
 def is_hermitian(mx, tol=1e-9):
     """
     Test whether mx is a hermitian matrix.
