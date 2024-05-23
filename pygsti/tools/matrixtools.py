@@ -148,7 +148,8 @@ def is_valid_density_mx(mx, tol=1e-9):
     bool
         True if mx is a valid density matrix, otherwise False.
     """
-    return abs(_np.trace(mx) - 1.0) < tol and is_hermitian(mx, tol) and is_pos_def(mx, tol)
+    # is_pos_def includes a check that the matrix is Hermitian.
+    return abs(_np.trace(mx) - 1.0) < tol and is_pos_def(mx, tol)
 
 
 def nullspace(m, tol=1e-7):
@@ -656,7 +657,6 @@ def mx_to_string_complex(m, real_width=9, im_width=9, prec=4):
     return s
 
 
-#TODO: revert changes in the function below.
 def unitary_superoperator_matrix_log(m, mx_basis):
     """
     Construct the logarithm of superoperator matrix `m`.
@@ -686,16 +686,11 @@ def unitary_superoperator_matrix_log(m, mx_basis):
     from . import lindbladtools as _lt  # (would create circular imports if at top)
     from . import optools as _ot  # (would create circular imports if at top)
 
-    # Riley question: what assumptions do we have for the input m? The call to eigvals
-    # below is intended for fully-general matrices. I imagine we (typically) have structure
-    # that makes it preferable to call some other function (li)
     M_std = change_basis(m, mx_basis, "std")
     evals = _np.linalg.eigvals(M_std)
-    assert(_np.allclose(_np.abs(evals), 1.0))
-    # ^ simple but technically incomplete check for a unitary superop
-    #   (e.g. could be anti-unitary: diag(1, -1, -1, -1))
-    
-    # ^ Riley question: 
+    assert(_np.allclose(_np.abs(evals), 1.0))  # simple but technically incomplete check for a unitary superop
+    # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
+
     U = _ot.std_process_mx_to_unitary(M_std)
     H = _spl.logm(U) / -1j  # U = exp(-iH)
     logM_std = _lt.create_elementary_errorgen('H', H)  # rho --> -i[H, rho]
