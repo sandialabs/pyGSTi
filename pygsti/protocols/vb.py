@@ -200,9 +200,14 @@ class BenchmarkingDesign(ByDepthDesign):
             paired_attrs = [pal[list_idx] for pal in paired_attr_lists_list]
             # Do the same filtering as CircuitList.truncate, but drag along any paired attributes
             new_data = list(zip(*filter(lambda ci: ci[0] in set(circuits_to_keep), zip(circuits, *paired_attrs))))
-            truncated_circuit_lists.append(new_data[0])
-            for i, attr_data in enumerate(new_data[1:]):
-                truncated_paired_attr_lists_list[i].append(attr_data)
+            if len(new_data):
+                truncated_circuit_lists.append(new_data[0])
+                for i, attr_data in enumerate(new_data[1:]):
+                    truncated_paired_attr_lists_list[i].append(attr_data)
+            else:
+                # If we have truncated all circuits, append empty lists
+                truncated_circuit_lists.append([])
+                truncated_paired_attr_lists_list.append([[] for _ in range(len(self.paired_with_circuit_attrs))])
 
         self.circuit_lists = truncated_circuit_lists
         for paired_attr, paired_attr_lists in zip(self.paired_with_circuit_attrs, truncated_paired_attr_lists_list):
@@ -217,9 +222,14 @@ class BenchmarkingDesign(ByDepthDesign):
             paired_attrs = [pal[list_idx] for pal in paired_attr_lists_list]
             # Do the same filtering as CircuitList.truncate, but drag along any paired attributes
             new_data = list(zip(*filter(lambda ci: ci[0] in set(other_design.circuit_lists[list_idx]), zip(circuits, *paired_attrs))))
-            truncated_circuit_lists.append(new_data[0])
-            for i, attr_data in enumerate(new_data[1:]):
-                truncated_paired_attr_lists_list[i].append(attr_data)
+            if len(new_data):
+                truncated_circuit_lists.append(new_data[0])
+                for i, attr_data in enumerate(new_data[1:]):
+                    truncated_paired_attr_lists_list[i].append(attr_data)
+            else:
+                # If we have truncated all circuits, append empty lists
+                truncated_circuit_lists.append([])
+                truncated_paired_attr_lists_list.append([[] for _ in range(len(self.paired_with_circuit_attrs))])
 
         self.circuit_lists = truncated_circuit_lists
         for paired_attr, paired_attr_lists in zip(self.paired_with_circuit_attrs, truncated_paired_attr_lists_list):

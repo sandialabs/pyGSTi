@@ -1,5 +1,7 @@
 from ..util import BaseCase
 
+import numpy as _np
+
 import pygsti
 from pygsti.protocols import rb as _rb
 from pygsti.processors import CliffordCompilationRules as CCR
@@ -11,7 +13,7 @@ class TestCliffordRBDesign(BaseCase):
         self.num_qubits = 2
         self.qubit_labels = ['Q'+str(i) for i in range(self.num_qubits)]
         
-        gate_names = ['Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
+        gate_names = ['Gi', 'Gxpi2', 'Gxmpi2', 'Gypi2', 'Gympi2', 'Gcphase']
         availability = {'Gcphase':[('Q'+str(i),'Q'+str((i+1) % self.num_qubits)) for i in range(self.num_qubits)]}
 
         self.pspec = pygsti.processors.QubitProcessorSpec(self.num_qubits, gate_names, availability=availability,
@@ -21,7 +23,16 @@ class TestCliffordRBDesign(BaseCase):
             'paulieq': CCR.create_standard(self.pspec, 'paulieq', ('1Qcliffords', 'allcnots'), verbosity=0)
         }
 
+        gate_names_1Q = gate_names[:-1]
+        self.qubit_labels1Q = ['Q0']
+        self.pspec1Q = pygsti.processors.QubitProcessorSpec(1, gate_names_1Q, qubit_labels=self.qubit_labels1Q)
+        self.compilations1Q = {
+            'absolute': CCR.create_standard(self.pspec1Q, 'absolute', ('paulis', '1Qcliffords'), verbosity=0),
+            'paulieq': CCR.create_standard(self.pspec1Q, 'paulieq', ('1Qcliffords', 'allcnots'), verbosity=0)
+        }
+
         # TODO: Test a lot of these, currently just the default from the tutorial
+        # Probably as pytest mark parameterize for randomizeout, compilerargs?
         self.depths = [0, 2]#, 4, 8]
         self.circuits_per_depth = 5
         self.qubits = ['Q0', 'Q1']
@@ -61,7 +72,37 @@ class TestCliffordRBDesign(BaseCase):
 
         [[self.assertAlmostEqual(c.simulate(tmodel)[bs],1.) for c, bs in zip(cl, bsl)] for cl, bsl in zip(mp_design.circuit_lists, mp_design.idealout_lists)]
 
+    def test_deterministic_compilation(self):        
+        # TODO: Figure out good test for this. Full circuit is a synthetic idle, we need to somehow check the non-inverted
+        # Clifford is the same as the random case?
+        abs_design = _rb.CliffordRBDesign(
+            self.pspec1Q, self.compilations1Q, self.depths, self.circuits_per_depth, qubit_labels=self.qubit_labels1Q,
+            randomizeout=self.randomizeout, interleaved_circuit=self.interleaved_circuit,
+            citerations=self.citerations, compilerargs=self.compiler_args, seed=self.seed,
+            verbosity=self.verbosity, exact_compilation_key='absolute')
+        
+        peq_design = _rb.CliffordRBDesign(
+            self.pspec1Q, self.compilations1Q, self.depths, self.circuits_per_depth, qubit_labels=self.qubit_labels1Q,
+            randomizeout=self.randomizeout, interleaved_circuit=self.interleaved_circuit,
+            citerations=self.citerations, compilerargs=self.compiler_args, seed=self.seed,
+            verbosity=self.verbosity, exact_compilation_key='paulieq')
 
+        # Testing a non-standard (but unrealistic) compilation
+        rule_dict = {f'C{i}': (_np.eye(2), pygsti.circuits.Circuit([], (0,))) for i in range(24)}
+        compilations = self.compilations1Q.copy()
+        compilations["idle"] = pygsti.processors.CompilationRules(rule_dict)
+        idle_design = _rb.CliffordRBDesign(
+            self.pspec1Q, compilations, self.depths, self.circuits_per_depth, qubit_labels=self.qubit_labels1Q,
+            randomizeout=False, interleaved_circuit=self.interleaved_circuit,
+            citerations=self.citerations, compilerargs=self.compiler_args, seed=self.seed,
+            verbosity=self.verbosity, exact_compilation_key='idle')
+
+        # All circuits should be the empty circuit (since we've turned off randomizeout)
+        for clist in idle_design.circuit_lists:
+            self.assertTrue(set(clist) == set([pygsti.circuits.Circuit([], self.qubit_labels1Q)]))
+
+        # Also a handy place to test native gate counts since it should be 0
+        self.assertTrue(idle_design.average_native_gates_per_clifford() == 0)
 
 class TestDirectRBDesign(BaseCase):
 

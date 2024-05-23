@@ -203,6 +203,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
                  interleaved_circuit=None, citerations=20, compilerargs=(), exact_compilation_key=None,
                  descriptor='A Clifford RB experiment', add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
+        assert len(qubit_labels) == len(pspec.qubit_labels), "Must provide qubit labels that match number of qubits in pspec"
         circuit_lists = []
         ideal_outs = []
         num_native_gates = []
