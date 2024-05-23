@@ -10,3 +10,10 @@
 
 from .core import PhysicalProcess, InterpolatedDenseOp, InterpolatedOpFactory
 from .process_tomography import vec, unvec, run_process_tomography
+
+# Note from Riley on May 22, 2024:
+#
+#   I wanted to remove the implementations of vec and unvec and just in-line equivalent 
+#   code in the few places they were used. However, the fact that they're included in this
+#   __init__.py file suggests that they might be used outside of pyGSTi itself.
+#

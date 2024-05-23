@@ -30,7 +30,7 @@ def vec(matrix):
     """
     matrix = _np.array(matrix)
     if matrix.shape == (len(matrix), len(matrix)):
-        return _np.array([_np.concatenate(_np.array(matrix).T)]).T
+        return matrix.reshape((-1, 1), order='F')
     else:
         raise ValueError('The input matrix must be square.')
 
@@ -50,9 +50,9 @@ def unvec(vectorized):
 
     """
     vectorized = _np.array(vectorized)
-    length = int(_np.sqrt(max(vectorized.shape)))
-    if len(vectorized) == length ** 2:
-        return _np.reshape(vectorized, [length, length]).T
+    dim = int(_np.sqrt(max(vectorized.shape)))
+    if len(vectorized) == dim ** 2:
+        return vectorized.reshape((dim, dim), order='F')
     else:
         raise ValueError(
             'The input vector length must be a perfect square, but this input has length %d.' % len(vectorized))

@@ -547,7 +547,8 @@ class FirstOrderGaugeInvariantStore(object):
         else:
             raise ValueError("Invalid intrinsic_or_relational value: `%s`" % str(intrinsic_or_relational))
 
-        space = _mt.remove_dependent_cols(space)
+        col_indices = _mt.independent_columns(space)
+        space = space[:, col_indices]
         return space
 
     @classmethod

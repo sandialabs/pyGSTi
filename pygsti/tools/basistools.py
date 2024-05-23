@@ -199,7 +199,7 @@ def change_basis(mx, from_basis, to_basis):
     if _mt.safe_norm(ret, 'imag') > 1e-8:
         raise ValueError("Array has non-zero imaginary part (%g) after basis change (%s to %s)!\n%s" %
                          (_mt.safe_norm(ret, 'imag'), from_basis, to_basis, ret))
-    return _mt.safe_real(ret)
+    return ret.real
 
 #def transform_matrix(from_basis, to_basis, dim_or_block_dims=None, sparse=False):
 #    '''
@@ -507,6 +507,7 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     """
     if not isinstance(basis, _basis.Basis):
         basis = _basis.BuiltinBasis(basis, len(v))
+    v = v.ravel()
     ret = _np.zeros(basis.elshape, 'complex')
     for i, mx in enumerate(basis.elements):
         if keep_complex:
