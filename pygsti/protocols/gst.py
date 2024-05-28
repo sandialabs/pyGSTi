@@ -639,10 +639,8 @@ class GSTBadFitOptions(_NicelySerializable):
 
     wildcard_methods: tuple, optional
         A list of the methods to use to optimize the wildcard error vector.  Default is `("neldermead",)`.
-        Options include `"neldermead"`, `"barrier"`, `"cvxopt"`, `"cvxopt_smoothed"`, `"cvxopt_small"`,
-        and `"cvxpy_noagg"`.  So many methods exist because different convex solvers behave differently
-        (unfortunately).  Leave as the default as a safe option, but `"barrier"` is pretty reliable and much
-        faster than `"neldermead"`, and is a good option so long as it runs.
+        Options include `"neldermead"`, `"barrier"`, and `"cvxpy_noagg"`.  Leave as the default as a safe option,
+        but `"barrier"` is pretty reliable and much faster than `"neldermead"`, and is a good option so long as it runs.
 
     wildcard_inadmissable_action: {"print", "raise"}, optional
         What to do when an inadmissable wildcard error vector is found.  The default just prints this
@@ -2647,17 +2645,6 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
             elif method_name == "barrier":
                 _opt.optimize_wildcard_budget_barrier(budget, L1weights, mdc_objfn, two_dlogl_threshold,
                                                       redbox_threshold, printer, **method_options)
-            elif method_name == "cvxopt":
-                _opt.optimize_wildcard_budget_cvxopt(budget, L1weights, mdc_objfn, two_dlogl_threshold,
-                                                     redbox_threshold, printer, **method_options)
-            elif method_name == "cvxopt_smoothed":
-                _opt.optimize_wildcard_budget_cvxopt_smoothed(budget, L1weights, mdc_objfn,
-                                                              two_dlogl_threshold, redbox_threshold,
-                                                              printer, **method_options)
-            elif method_name == "cvxopt_small":
-                _opt.optimize_wildcard_budget_cvxopt_zeroreg(budget, L1weights, mdc_objfn,
-                                                             two_dlogl_threshold, redbox_threshold, printer,
-                                                             **method_options)
             elif method_name == "cvxpy_noagg":
                 _opt.optimize_wildcard_budget_percircuit_only_cvxpy(budget, L1weights, mdc_objfn,
                                                                     redbox_threshold, printer,
