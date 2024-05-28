@@ -380,9 +380,9 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
 
     def sum_up_mx(mx):
         """ Sum up `mx` in a NAN-ignoring way """
-        flat_mx = mx.flatten()
-        if any([_np.isnan(x) for x in flat_mx]):
-            if all([_np.isnan(x) for x in flat_mx]):
+        flat_mx = mx.ravel()
+        if _np.any(_np.isnan(flat_mx)):
+            if _np.all(_np.isnan(flat_mx)):
                 return _np.nan
             # replace NaNs with zeros for purpose of summing (when there's at least one non-NaN)
             return sum(_np.nan_to_num(flat_mx))
@@ -2567,7 +2567,7 @@ class PolarEigenvaluePlot(WorkspacePlot):
             color = colors[i] if (colors is not None) else "black"
             trace = go.Scatterpolar(
                 r=list(_np.absolute(evals).flat),
-                theta=list(_np.angle(evals).flatten() * (180.0 / _np.pi)),
+                theta=list(_np.angle(evals).ravel() * (180.0 / _np.pi)),
                 mode='markers',
                 marker=dict(
                     color=color,

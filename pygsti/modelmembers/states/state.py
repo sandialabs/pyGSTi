@@ -573,4 +573,4 @@ class State(_modelmember.ModelMember):
                 vector = _np.array(v, typ)[:, None]  # make into a 2-D column vec
 
         assert(len(vector.shape) == 2 and vector.shape[1] == 1)
-        return vector.flatten()  # HACK for convention change -> (N,) instead of (N,1)
+        return vector.ravel()  # HACK for convention change -> (N,) instead of (N,1)
