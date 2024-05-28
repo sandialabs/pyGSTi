@@ -2651,6 +2651,8 @@ def _compute_wildcard_budget(objfn_cache, mdc_objfn, parameters, badfit_options,
                                                                     **method_options)
             elif method_name == "none":
                 pass
+            elif method_name in ("cvxopt", "cvxopt_smoothed", "cvxopt_small"):
+                raise ValueError(f"Support for {method_name} was removed in pyGSTi release 0.9.13.")
             else:
                 raise ValueError("Invalid wildcard method name: %s" % method_name)
 
