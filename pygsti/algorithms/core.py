@@ -878,9 +878,9 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
     #The ModelDatasetCircuitsStore
     printer.log('Precomputing CircuitOutcomeProbabilityArray layouts for each iteration.', 2)
     precomp_layouts = []
+
     #pre-compute a dictionary caching completed circuits for layout construction performance.
     unique_circuits = {ckt for circuit_list in circuit_lists for ckt in circuit_list}
-    print(f'{len(unique_circuits)=}')
     if isinstance(mdl.sim, _fwdsims.MatrixForwardSimulator):
         precomp_layout_circuit_cache = _layouts.matrixlayout.create_matrix_copa_layout_circuit_cache(unique_circuits, mdl)
     else:
