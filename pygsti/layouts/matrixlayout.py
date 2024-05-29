@@ -312,7 +312,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
             expanded_and_separated_circuits_cache = None
         
         if completed_circuit_cache is None:
-            unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
+            unique_complete_circuits, split_unique_circuits = model.complete_circuits(unique_circuits, return_split=True)
         else:
             unique_complete_circuits = []
             for c in unique_circuits:
@@ -321,13 +321,13 @@ class MatrixCOPALayout(_DistributableCOPALayout):
                     unique_complete_circuits.append(comp_ckt)
                 else:
                     unique_complete_circuits.append(model.complete_circuit(c))
+
         #Note: "unique" means a unique circuit *before* circuit-completion, so there could be duplicate
         # "unique circuits" after completion, e.g. "rho0Gx" and "Gx" could both complete to "rho0GxMdefault_0".
 
         circuits_by_unique_nospam_circuits = _collections.OrderedDict()
         if completed_circuit_cache is None:
-            for i, c in enumerate(unique_complete_circuits):
-                _, nospam_c, _ = model.split_circuit(c)
+            for i, (_, nospam_c, _) in enumerate(split_unique_circuits):
                 if nospam_c in circuits_by_unique_nospam_circuits:
                     circuits_by_unique_nospam_circuits[nospam_c].append(i)
                 else:
@@ -343,14 +343,13 @@ class MatrixCOPALayout(_DistributableCOPALayout):
                     circuits_by_unique_nospam_circuits[nospam_c] = [i]
 
         unique_nospam_circuits = list(circuits_by_unique_nospam_circuits.keys())
-
+        
         # Split circuits into groups that will make good subtrees (all procs do this)
         max_sub_tree_size = None  # removed from being an argument (unused)
         if (num_sub_trees is not None and num_sub_trees > 1) or max_sub_tree_size is not None:
             circuit_tree = _EvalTree.create(unique_nospam_circuits)
             groups, helpful_scratch = circuit_tree.find_splitting(len(unique_nospam_circuits),
                                                                   max_sub_tree_size, num_sub_trees, verbosity - 1)
-            #print("%d circuits => tree of size %d" % (len(unique_nospam_circuits), len(circuit_tree)))
         else:
             groups = [set(range(len(unique_nospam_circuits)))]
             helpful_scratch = [set()]
