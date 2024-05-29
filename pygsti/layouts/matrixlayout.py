@@ -68,7 +68,8 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
     """
 
     def __init__(self, unique_complete_circuits, unique_nospam_circuits, circuits_by_unique_nospam_circuits,
-                 ds_circuits, group, helpful_scratch, model, dataset=None, expanded_and_separated_circuit_cache=None):
+                 ds_circuits, group, helpful_scratch, model, dataset=None, expanded_and_separated_circuit_cache=None,
+                 double_expanded_nospam_circuits_cache = None):
 
         #Note: group gives unique_nospam_circuits indices, which circuits_by_unique_nospam_circuits
         # turns into "unique complete circuit" indices, which the layout via it's to_unique can map
@@ -119,20 +120,34 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
         expanded_nospam_circuits = _collections.OrderedDict(
             [(i, cir) for i, cir in enumerate(expanded_nospam_circuit_outcomes.keys())])
 
+        #print(f'{expanded_nospam_circuits=}')
+
         # add suggested scratch to the "final" elements as far as the tree creation is concerned
         # - this allows these scratch element to help balance the tree.
-        expanded_nospam_circuit_outcomes_plus_scratch = expanded_nospam_circuit_outcomes.copy()
-        add_expanded_circuits(helpful_scratch, expanded_nospam_circuit_outcomes_plus_scratch)
-        expanded_nospam_circuits_plus_scratch = _collections.OrderedDict(
-            [(i, cir) for i, cir in enumerate(expanded_nospam_circuit_outcomes_plus_scratch.keys())])
+        if helpful_scratch:
+            expanded_nospam_circuit_outcomes_plus_scratch = expanded_nospam_circuit_outcomes.copy()
+            add_expanded_circuits(helpful_scratch, expanded_nospam_circuit_outcomes_plus_scratch)
+            expanded_nospam_circuits_plus_scratch = _collections.OrderedDict(
+                [(i, cir) for i, cir in enumerate(expanded_nospam_circuit_outcomes_plus_scratch.keys())])
+        else:
+            expanded_nospam_circuits_plus_scratch = expanded_nospam_circuits.copy()
 
         double_expanded_nospam_circuits_plus_scratch = _collections.OrderedDict()
-        for i, cir in expanded_nospam_circuits_plus_scratch.items():
-            cir = cir.copy(editable=True)
-            cir.expand_subcircuits()  # expand sub-circuits for a more efficient tree
-            cir.done_editing()
-            double_expanded_nospam_circuits_plus_scratch[i] = cir
+        if double_expanded_nospam_circuits_cache is not None:
+            for i, cir in expanded_nospam_circuits_plus_scratch.items():
+                # expand sub-circuits for a more efficient tree
+                double_expanded_ckt = double_expanded_nospam_circuits_cache.get(cir, None)
+                if double_expanded_ckt is None: #Fall back to standard behavior and do expansion.
+                    double_expanded_nospam_circuits_plus_scratch[i] = cir.expand_subcircuits()
+                else:
+                    double_expanded_nospam_circuits_plus_scratch[i] = double_expanded_ckt
+        else:
+            for i, cir in expanded_nospam_circuits_plus_scratch.items():
+                # expand sub-circuits for a more efficient tree
+                double_expanded_nospam_circuits_plus_scratch[i] = cir.expand_subcircuits()
 
+        #print(f'{double_expanded_nospam_circuits_plus_scratch=}')
+        #print(f'{double_expanded_nospam_circuits_plus_scratch == expanded_nospam_circuits}')
         self.tree = _EvalTree.create(double_expanded_nospam_circuits_plus_scratch)
         #print("Atom tree: %d circuits => tree of size %d" % (len(expanded_nospam_circuits), len(self.tree)))
 
@@ -306,10 +321,12 @@ class MatrixCOPALayout(_DistributableCOPALayout):
             completed_circuit_cache = layout_creation_circuit_cache.get('completed_circuits', None)
             split_circuit_cache = layout_creation_circuit_cache.get('split_circuits', None)
             expanded_and_separated_circuits_cache = layout_creation_circuit_cache.get('expanded_and_separated_circuits', None)
+            expanded_subcircuits_no_spam_cache = layout_creation_circuit_cache.get('expanded_subcircuits_no_spam', None)
         else:
             completed_circuit_cache = None
             split_circuit_cache = None
             expanded_and_separated_circuits_cache = None
+            expanded_subcircuits_no_spam_cache = None
         
         if completed_circuit_cache is None:
             unique_complete_circuits, split_unique_circuits = model.complete_circuits(unique_circuits, return_split=True)
@@ -360,7 +377,8 @@ class MatrixCOPALayout(_DistributableCOPALayout):
             return _MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
                                          circuits_by_unique_nospam_circuits, ds_circuits,
                                          group, helpful_scratch_group, model, dataset,
-                                         expanded_and_separated_circuits_cache)
+                                         expanded_and_separated_circuits_cache,
+                                         expanded_subcircuits_no_spam_cache)
 
         super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,
                          _create_atom, list(zip(groups, helpful_scratch)), num_tree_processors,
@@ -373,10 +391,10 @@ def create_matrix_copa_layout_circuit_cache(circuits, model, dataset=None):
     used in matrix layout creation.
     """
     cache = dict()
-    completed_circuits = {ckt: model.complete_circuit(ckt) for ckt in circuits}
-    cache['completed_circuits'] = completed_circuits
-    split_circuits = {ckt: model.split_circuit(ckt) for ckt in completed_circuits.values()}
-    cache['split_circuits'] = split_circuits
+    completed_circuits, split_circuits = model.complete_circuits(circuits, return_split=True)
+
+    cache['completed_circuits'] = {ckt: comp_ckt for ckt, comp_ckt in zip(circuits, completed_circuits)}
+    cache['split_circuits'] = {ckt: split_ckt for ckt, split_ckt in zip(cache['completed_circuits'].values(), split_circuits)}
 
     expanded_circuit_cache = dict()
     #There is some potential aliasing that happens in the init that I am not
@@ -388,10 +406,18 @@ def create_matrix_copa_layout_circuit_cache(circuits, model, dataset=None):
                 expanded_circuit_cache[ckt] = model.expand_instruments_and_separate_povm(ckt, ds_row.unique_outcomes)
     else:
         expanded_circuit_cache = {ckt: model.expand_instruments_and_separate_povm(ckt, None) 
-                                  for ckt in completed_circuits.values()}
+                                  for ckt in cache['completed_circuits'].values()}
 
     cache['expanded_and_separated_circuits'] = expanded_circuit_cache
-    
+
+    expanded_subcircuits_no_spam_cache = dict()
+    for expc_outcomes in cache['expanded_and_separated_circuits'].values():
+        for sep_povm_c, _ in expc_outcomes.items():  # for each expanded cir from unique_i-th circuit
+            exp_nospam_c = sep_povm_c.circuit_without_povm[1:] 
+            expanded_subcircuits_no_spam_cache[exp_nospam_c] = exp_nospam_c.expand_subcircuits()
+
+    cache['expanded_subcircuits_no_spam'] = expanded_subcircuits_no_spam_cache
+
     return cache
 
 
