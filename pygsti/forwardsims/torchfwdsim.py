@@ -17,29 +17,13 @@ if TYPE_CHECKING:
     from pygsti.models.explicitmodel import ExplicitOpModel
     from pygsti.circuits.circuit import SeparatePOVMCircuit
     from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout
-
-from pygsti.modelmembers.torchable import Torchable
-from collections import OrderedDict
-import warnings as warnings
+    import torch
 
 import numpy as np
-try:
-    import torch
-    TORCH_ENABLED = True
-except ImportError:
-    TORCH_ENABLED = False
-
+import warnings as warnings
+from collections import OrderedDict
+from pygsti.modelmembers.torchable import Torchable
 from pygsti.forwardsims.forwardsim import ForwardSimulator
-
-
-"""Efficiency ideas
- * Compute the jacobian in blocks of rows at a time (iterating over the blocks in parallel). Ideally pytorch
-   would recognize how the computations decompose, but we should check to make sure it does.
-
- * Recycle some of the work in setting up the Jacobian function.
-    Calling circuit.expand_instruments_and_separate_povm(model, outcomes) inside the StatelessModel constructor
-    might be expensive. It only need to happen once during an iteration of GST.
-"""
 
 
 class StatelessCircuit:
@@ -137,7 +121,8 @@ class StatelessModel:
         torch_cache = dict()
         for i, fp_val in enumerate(free_params.values()):
 
-            if grad: fp_val.requires_grad_(True)
+            if grad:
+                fp_val.requires_grad_(True)
             metadata = self.param_metadata[i]
 
             fp_label = metadata[0]
@@ -175,24 +160,26 @@ class StatelessModel:
 
 class TorchForwardSimulator(ForwardSimulator):
 
+    ENABLED = Torchable.torch_handle is not None
+
     """
     A forward simulator that leverages automatic differentiation in PyTorch.
     """
     def __init__(self, model : Optional[ExplicitOpModel] = None):
-        if not TORCH_ENABLED:
+        if not self.ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
         self.model = model
         super(ForwardSimulator, self).__init__(model)
 
     @staticmethod
-    def separate_state(model: ExplicitOpModel, layout, grad=False):
+    def separate_state(model: ExplicitOpModel, layout, grad=False) -> Tuple[StatelessModel, dict]:
         slm = StatelessModel(model, layout)
         free_params = slm.get_free_parameters(model)
         torch_cache = slm.get_torch_cache(free_params, grad)
         return slm, torch_cache
 
     @staticmethod
-    def _check_copa_layout(layout: CircuitOutcomeProbabilityArrayLayout):
+    def _check_copa_layout(layout: CircuitOutcomeProbabilityArrayLayout) -> int:
         # I need to verify some assumptions on what layout.iter_unique_circuits()
         # returns. Looking at the implementation of that function, the assumptions
         # can be framed in terms of the "layout._element_indicies" OrderedDict.
@@ -209,7 +196,7 @@ class TorchForwardSimulator(ForwardSimulator):
             v_prev = v
         return v_prev.stop
 
-    def _bulk_fill_probs(self, array_to_fill, layout, stripped_abstractions: Optional[tuple] = None):
+    def _bulk_fill_probs(self, array_to_fill, layout, stripped_abstractions: Optional[tuple] = None) -> None:
         if stripped_abstractions is None:
             slm, torch_cache = TorchForwardSimulator.separate_state(self.model, layout)
         else:
@@ -218,9 +205,9 @@ class TorchForwardSimulator(ForwardSimulator):
         layout_len = TorchForwardSimulator._check_copa_layout(layout)
         probs = slm.circuit_probs(torch_cache)
         array_to_fill[:layout_len] = probs.cpu().detach().numpy().flatten()
-        pass
+        return
 
-    def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill):
+    def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill) -> None:
         slm = StatelessModel(self.model, layout)
         free_params = slm.get_free_parameters(self.model)
         torch_cache = slm.get_torch_cache(free_params, grad=False)

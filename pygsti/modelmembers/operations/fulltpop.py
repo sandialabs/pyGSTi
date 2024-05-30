@@ -10,13 +10,17 @@ The FullTPOp class and supporting functionality.
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
-import numpy as _np
+from __future__ import annotations
+from typing import Tuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
 
+import numpy as _np
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
 from pygsti.modelmembers.operations.linearop import LinearOperator as _LinearOperator
 from pygsti.baseobjs.protectedarray import ProtectedArray as _ProtectedArray
 from pygsti.modelmembers.torchable import Torchable as _Torchable
-from typing import Tuple
+
 
 
 
@@ -160,7 +164,7 @@ class FullTPOp(_DenseOperator, _Torchable):
         return (self.dim,)
 
     @staticmethod
-    def torch_base(sd: Tuple[int], t_param: _Torchable.Tensor) -> _Torchable.Tensor:
+    def torch_base(sd: Tuple[int], t_param: _torch.Tensor) -> _torch.Tensor:
         torch = _Torchable.torch_handle
         dim = sd[0]
         t_const = torch.zeros(size=(1, dim), dtype=torch.double)

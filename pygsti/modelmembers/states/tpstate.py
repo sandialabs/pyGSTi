@@ -11,15 +11,18 @@ The TPState class and supporting functionality.
 #***************************************************************************************************
 
 
-import numpy as _np
+from __future__ import annotations
+from typing import Tuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch
 
+import numpy as _np
 from pygsti.baseobjs import Basis as _Basis
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.modelmembers.states.densestate import DenseState as _DenseState
 from pygsti.modelmembers.states.state import State as _State
 from pygsti.baseobjs.protectedarray import ProtectedArray as _ProtectedArray
-from typing import Tuple
 
 
 class TPState(_DenseState, _Torchable):
@@ -163,7 +166,7 @@ class TPState(_DenseState, _Torchable):
         return (self.dim,)
 
     @staticmethod
-    def torch_base(sd: Tuple[int], t_param: _Torchable.Tensor) -> _Torchable.Tensor:
+    def torch_base(sd: Tuple[int], t_param: torch.Tensor) -> torch.Tensor:
         torch = _Torchable.torch_handle
         dim = sd[0]
         t_const = (dim ** -0.25) * torch.ones(1, dtype=torch.double) 

@@ -10,11 +10,15 @@ Defines the TPPOVM class
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import Tuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
+
 import numpy as _np
 from pygsti.modelmembers.torchable import Torchable as _Torchable
 from pygsti.modelmembers.povms.basepovm import _BasePOVM
 from pygsti.modelmembers.povms.fulleffect import FullPOVMEffect as _FullPOVMEffect
-from typing import Tuple
 import warnings
 
 
@@ -101,7 +105,7 @@ class TPPOVM(_BasePOVM, _Torchable):
         return (num_effects, identity)
 
     @staticmethod
-    def torch_base(sd: Tuple[int, _np.ndarray], t_param: _Torchable.Tensor) -> _Torchable.Tensor:
+    def torch_base(sd: Tuple[int, _np.ndarray], t_param: _torch.Tensor) -> _torch.Tensor:
         torch = _Torchable.torch_handle
         num_effects, identity = sd
         dim = identity.size

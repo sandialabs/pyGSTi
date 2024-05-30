@@ -1,19 +1,22 @@
-from pygsti.modelmembers.modelmember import ModelMember
-from typing import TypeVar, Tuple
+from __future__ import annotations
+from typing import Tuple, TYPE_CHECKING
+if TYPE_CHECKING:
+    import torch as _torch
 
-try:
-    import torch
-    torch_handle = torch
-    Tensor = torch.Tensor
-except ImportError:
-    torch_handle = None
-    Tensor = TypeVar('Tensor')  # we'll access this for type annotations elsewhere.
+from pygsti.modelmembers.modelmember import ModelMember
 
 
 class Torchable(ModelMember):
 
-    Tensor = Tensor
-    torch_handle = torch_handle
+    # Try to import torch. If we succeed, save a handle to it for later use. If we fail, then 
+    # set a flag indicating as much so we don't have to write try-except statements for torch
+    # imports in other files.
+    try:
+        import torch
+        torch_handle = torch
+    except ImportError:
+        torch_handle = None
+
 
     def stateless_data(self) -> Tuple:
         """
@@ -24,7 +27,7 @@ class Torchable(ModelMember):
         raise NotImplementedError()   
 
     @staticmethod
-    def torch_base(sd : Tuple, t_param : Tensor) -> Tensor:
+    def torch_base(sd : Tuple, t_param : _torch.Tensor) -> _torch.Tensor:
         """
         Suppose "obj" is an instance of some Torchable subclass. If we compute
 
