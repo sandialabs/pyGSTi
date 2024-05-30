@@ -102,7 +102,9 @@ class TestCliffordRBDesign(BaseCase):
             self.assertTrue(set(clist) == set([pygsti.circuits.Circuit([], self.qubit_labels1Q)]))
 
         # Also a handy place to test native gate counts since it should be 0
-        self.assertTrue(idle_design.average_native_gates_per_clifford() == 0)
+        avg_gate_counts = idle_design.average_native_gates_per_clifford()
+        for v in avg_gate_counts.values():
+            self.assertTrue(v == 0)
 
 class TestDirectRBDesign(BaseCase):
 

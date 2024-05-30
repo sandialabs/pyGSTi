@@ -10,6 +10,7 @@ RB Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from collections import defaultdict
 import numpy as _np
 
 from pygsti.protocols import protocol as _proto
@@ -189,14 +190,14 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         circuit_lists = [[x[0] for x in data_by_depth[d]] for d in depths]
         ideal_outs = [[x[1] for x in data_by_depth[d]] for d in depths]
         try:
-            num_native_gates = [[x[2] for x in data_by_depth[d]] for d in depths]
+            native_gate_counts = [[x[2] for x in data_by_depth[d]] for d in depths]
         except IndexError:
-            num_native_gates = None
+            native_gate_counts = None
         circuits_per_depth = [len(data_by_depth[d]) for d in depths]
         self = cls.__new__(cls)
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                               randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
-                              interleaved_circuit, num_native_gates=num_native_gates)
+                              interleaved_circuit, native_gate_counts=native_gate_counts)
         return self
 
     def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
@@ -206,7 +207,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         assert len(qubit_labels) == len(pspec.qubit_labels), "Must provide qubit labels that match number of qubits in pspec"
         circuit_lists = []
         ideal_outs = []
-        num_native_gates = []
+        native_gate_counts = []
 
         if seed is None:
             self.seed = _np.random.randint(1, 1e6)  # Pick a random seed
@@ -222,34 +223,34 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
             args_list = [(pspec, clifford_compilations, l)] * circuits_per_depth
             kwargs_list = [dict(qubit_labels=qubit_labels, randomizeout=randomizeout, citerations=citerations,
                                 compilerargs=compilerargs, interleaved_circuit=interleaved_circuit,
-                                seed=lseed + i, return_num_native_gates=True, exact_compilation_key=exact_compilation_key)
+                                seed=lseed + i, return_native_gate_counts=True, exact_compilation_key=exact_compilation_key)
                                 for i in range(circuits_per_depth)]
             results = _tools.mptools.starmap_with_kwargs(_rc.create_clifford_rb_circuit, circuits_per_depth,
                                                          num_processes, args_list, kwargs_list)
 
             circuits_at_depth = []
             idealouts_at_depth = []
-            num_native_gates_at_depth = []
+            native_gate_counts_at_depth = []
             for c, iout, nng in results:
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((''.join(map(str, iout)),))
-                num_native_gates_at_depth.append(nng)
+                native_gate_counts_at_depth.append(nng)
 
             circuit_lists.append(circuits_at_depth)
             ideal_outs.append(idealouts_at_depth)
-            num_native_gates.append(num_native_gates_at_depth)
+            native_gate_counts.append(native_gate_counts_at_depth)
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                               randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
-                              interleaved_circuit, num_native_gates=num_native_gates)
+                              interleaved_circuit, native_gate_counts=native_gate_counts)
 
     def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                          randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
-                         interleaved_circuit, num_native_gates=None, exact_compilation_key=None):
-        self.num_native_gate_lists = num_native_gates
-        if self.num_native_gate_lists is not None:
+                         interleaved_circuit, native_gate_counts=None, exact_compilation_key=None):
+        self.native_gate_count_lists = native_gate_counts
+        if self.native_gate_count_lists is not None:
             # If we have native gate information, pair this with circuit data so that we serialize/truncate properly
-            self.paired_with_circuit_attrs = ["num_native_gate_lists"]
+            self.paired_with_circuit_attrs = ["native_gate_count_lists"]
 
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
@@ -279,14 +280,19 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         
         Returns
         -------
-        float
-            The average number of native gates per Clifford
+        avg_gate_counts: dict
+            The average number of native gates, native 2Q gates, and native size
+            per Clifford as values with respective label keys
         """
-        if self.num_native_gate_lists is None:
-            raise ValueError("Number of native gates not available, cannot compute average gates per Clifford")
-        num_native_gates = self.num_native_gate_lists[list_idx][circ_idx]
+        if self.native_gate_counts_lists is None:
+            raise ValueError("Native gate counts not available, cannot compute average gates per Clifford")
+        
         num_clifford_gates = self.depths[list_idx] + 1
-        return num_native_gates / num_clifford_gates
+        avg_gate_counts = {}
+        for key, native_gate_count in self.native_gate_count_lists[list_idx][circ_idx].items():
+            avg_gate_counts[key.replace('native', 'avg_native_per_clifford')] = native_gate_count / num_clifford_gates
+        
+        return avg_gate_counts
 
     def average_native_gates_per_clifford_for_circuit_list(self, list_idx):
         """The average number of gates per Clifford for a circuit list
@@ -307,11 +313,20 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         float
             The average number of native gates per Clifford
         """
-        if self.num_native_gate_lists is None:
-            raise ValueError("Number of native gates not available, cannot compute average gates per Clifford")
-        num_native_gates = sum(self.num_native_gate_lists[list_idx])
-        num_clifford_gates = len(self.num_native_gate_lists[list_idx]) * (self.depths[list_idx] + 1)
-        return num_native_gates / num_clifford_gates
+        if self.native_gate_count_lists is None:
+            raise ValueError("Native gate counts not available, cannot compute average gates per Clifford")
+        
+        gate_counts = defaultdict(int)
+        for native_gate_counts in self.native_gate_count_lists[list_idx]:
+            for k, v in native_gate_counts.items():
+                gate_counts[k] += v
+        
+        num_clifford_gates = len(self.native_gate_count_lists[list_idx]) * (self.depths[list_idx] + 1)
+        avg_gate_counts = {}
+        for key, total_native_gate_counts in gate_counts.items():
+            avg_gate_counts[key.replace('native', 'avg_native_per_clifford')] = total_native_gate_counts / num_clifford_gates
+        
+        return avg_gate_counts
 
     def average_native_gates_per_clifford(self):
         """The average number of native gates per Clifford for all circuits
@@ -321,14 +336,22 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         float
             The average number of native gates per Clifford
         """
-        if self.num_native_gate_lists is None:
+        if self.native_gate_count_lists is None:
             raise ValueError("Number of native gates not available, cannot compute average gates per Clifford")
-        num_native_gates = 0
+        
+        gate_counts = defaultdict(int)
         num_clifford_gates = 0
         for list_idx in range(len(self.depths)):
-            num_native_gates = sum(self.num_native_gate_lists[list_idx])
-            num_clifford_gates = len(self.num_native_gate_lists[list_idx]) * (self.depths[list_idx] + 1)
-        return num_native_gates / num_clifford_gates
+            for native_gate_counts in self.native_gate_count_lists[list_idx]:
+                for k, v in native_gate_counts.items():
+                    gate_counts[k] += v
+            num_clifford_gates += len(self.native_gate_count_lists[list_idx]) * (self.depths[list_idx] + 1)
+            
+        avg_gate_counts = {}
+        for key, total_native_gate_counts in gate_counts.items():
+            avg_gate_counts[key.replace('native', 'avg_native_per_clifford')] = total_native_gate_counts / num_clifford_gates
+
+        return avg_gate_counts
 
     def map_qubit_labels(self, mapper):
         """
