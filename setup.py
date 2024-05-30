@@ -82,7 +82,8 @@ extras = {
         'cirq-core',
         'notebook',
         'ipython',
-        'jupyter_server'
+        'jupyter_server',
+        'torch'
     ]
 }
 
