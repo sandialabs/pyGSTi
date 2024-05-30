@@ -120,19 +120,16 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
         add_expanded_circuits(group, expanded_nospam_circuit_outcomes)
         expanded_nospam_circuits = {i:cir for i, cir in enumerate(expanded_nospam_circuit_outcomes.keys())}
 
-        #print(f'{expanded_nospam_circuits=}')
-
         # add suggested scratch to the "final" elements as far as the tree creation is concerned
         # - this allows these scratch element to help balance the tree.
         if helpful_scratch:
             expanded_nospam_circuit_outcomes_plus_scratch = expanded_nospam_circuit_outcomes.copy()
             add_expanded_circuits(helpful_scratch, expanded_nospam_circuit_outcomes_plus_scratch)
-            expanded_nospam_circuits_plus_scratch = _collections.OrderedDict(
-                [(i, cir) for i, cir in enumerate(expanded_nospam_circuit_outcomes_plus_scratch.keys())])
+            expanded_nospam_circuits_plus_scratch = {i:cir for i, cir in enumerate(expanded_nospam_circuit_outcomes_plus_scratch.keys())}
         else:
             expanded_nospam_circuits_plus_scratch = expanded_nospam_circuits.copy()
 
-        double_expanded_nospam_circuits_plus_scratch = _collections.OrderedDict()
+        double_expanded_nospam_circuits_plus_scratch = dict()
         if double_expanded_nospam_circuits_cache is not None:
             for i, cir in expanded_nospam_circuits_plus_scratch.items():
                 # expand sub-circuits for a more efficient tree
@@ -146,8 +143,6 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
                 # expand sub-circuits for a more efficient tree
                 double_expanded_nospam_circuits_plus_scratch[i] = cir.expand_subcircuits()
 
-        #print(f'{double_expanded_nospam_circuits_plus_scratch=}')
-        #print(f'{double_expanded_nospam_circuits_plus_scratch == expanded_nospam_circuits}')
         self.tree = _EvalTree.create(double_expanded_nospam_circuits_plus_scratch)
         #print("Atom tree: %d circuits => tree of size %d" % (len(expanded_nospam_circuits), len(self.tree)))
 
