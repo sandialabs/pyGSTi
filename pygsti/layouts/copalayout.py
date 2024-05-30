@@ -205,8 +205,8 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         assert(len(indices) == self._size), \
             "Inconsistency: %d distinct indices but max index + 1 is %d!" % (len(indices), self._size)
 
-        self._outcomes = dict() #_collections.OrderedDict()
-        self._element_indices = dict() #_collections.OrderedDict()
+        self._outcomes = dict()
+        self._element_indices = dict()
         sort_idx_func = lambda x: x[0]
         for i_unique, tuples in elindex_outcome_tuples.items():
             sorted_tuples = sorted(tuples, key=sort_idx_func)  # sort by element index

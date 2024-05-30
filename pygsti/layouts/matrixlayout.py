@@ -93,15 +93,13 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
                         prep_lbl = sep_povm_c.circuit_without_povm[0]
                         exp_nospam_c = sep_povm_c.circuit_without_povm[1:]  # sep_povm_c *always* has prep lbl
                         spam_tuples = [(prep_lbl, elabel) for elabel in sep_povm_c.full_effect_labels]
-                        outcome_by_spamtuple = _collections.OrderedDict([(st, outcome)
-                                                                         for st, outcome in zip(spam_tuples, outcomes)])
+                        outcome_by_spamtuple = {st:outcome for st, outcome in zip(spam_tuples, outcomes)}
 
                         #Now add these outcomes to `expanded_nospam_circuit_outcomes` - note that multiple "unique_i"'s
                         # may exist for the same expanded & without-spam circuit (exp_nospam_c) and so we need to
                         # keep track of a list of unique_i indices for each circut and spam tuple below.
                         if exp_nospam_c not in _expanded_nospam_circuit_outcomes:
-                            _expanded_nospam_circuit_outcomes[exp_nospam_c] = _collections.OrderedDict(
-                                [(st, (outcome, [unique_i])) for st, outcome in zip(spam_tuples, outcomes)])
+                            _expanded_nospam_circuit_outcomes[exp_nospam_c] = {st:(outcome, [unique_i]) for st, outcome in zip(spam_tuples, outcomes)}
                         else:
                             for st, outcome in outcome_by_spamtuple.items():
                                 if st in _expanded_nospam_circuit_outcomes[exp_nospam_c]:
@@ -115,24 +113,20 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
 
         # keys = expanded circuits w/out SPAM layers; values = spamtuple => (outcome, unique_is) dictionary that
         # keeps track of which "unique" circuit indices having each spamtuple / outcome.
-        expanded_nospam_circuit_outcomes = _collections.OrderedDict()
+        expanded_nospam_circuit_outcomes = dict()
         add_expanded_circuits(group, expanded_nospam_circuit_outcomes)
-        expanded_nospam_circuits = _collections.OrderedDict(
-            [(i, cir) for i, cir in enumerate(expanded_nospam_circuit_outcomes.keys())])
-
-        #print(f'{expanded_nospam_circuits=}')
+        expanded_nospam_circuits = {i:cir for i, cir in enumerate(expanded_nospam_circuit_outcomes.keys())}
 
         # add suggested scratch to the "final" elements as far as the tree creation is concerned
         # - this allows these scratch element to help balance the tree.
         if helpful_scratch:
             expanded_nospam_circuit_outcomes_plus_scratch = expanded_nospam_circuit_outcomes.copy()
             add_expanded_circuits(helpful_scratch, expanded_nospam_circuit_outcomes_plus_scratch)
-            expanded_nospam_circuits_plus_scratch = _collections.OrderedDict(
-                [(i, cir) for i, cir in enumerate(expanded_nospam_circuit_outcomes_plus_scratch.keys())])
+            expanded_nospam_circuits_plus_scratch = {i:cir for i, cir in enumerate(expanded_nospam_circuit_outcomes_plus_scratch.keys())}
         else:
             expanded_nospam_circuits_plus_scratch = expanded_nospam_circuits.copy()
 
-        double_expanded_nospam_circuits_plus_scratch = _collections.OrderedDict()
+        double_expanded_nospam_circuits_plus_scratch = dict()
         if double_expanded_nospam_circuits_cache is not None:
             for i, cir in expanded_nospam_circuits_plus_scratch.items():
                 # expand sub-circuits for a more efficient tree
@@ -146,8 +140,6 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
                 # expand sub-circuits for a more efficient tree
                 double_expanded_nospam_circuits_plus_scratch[i] = cir.expand_subcircuits()
 
-        #print(f'{double_expanded_nospam_circuits_plus_scratch=}')
-        #print(f'{double_expanded_nospam_circuits_plus_scratch == expanded_nospam_circuits}')
         self.tree = _EvalTree.create(double_expanded_nospam_circuits_plus_scratch)
         #print("Atom tree: %d circuits => tree of size %d" % (len(expanded_nospam_circuits), len(self.tree)))
 
@@ -158,7 +150,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
         # quantity plus a spam-tuple. We order the final indices so that all the outcomes corresponding to a
         # given spam-tuple are contiguous.
 
-        tree_indices_by_spamtuple = _collections.OrderedDict()  # "tree" indices index expanded_nospam_circuits
+        tree_indices_by_spamtuple = dict()  # "tree" indices index expanded_nospam_circuits
         for i, c in expanded_nospam_circuits.items():
             for spam_tuple in expanded_nospam_circuit_outcomes[c].keys():
                 if spam_tuple not in tree_indices_by_spamtuple: tree_indices_by_spamtuple[spam_tuple] = []
@@ -167,7 +159,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
         #Assign element indices, starting at `offset`
         # now that we know how many of each spamtuple there are, assign final element indices.
         local_offset = 0
-        self.indices_by_spamtuple = _collections.OrderedDict()  # values are (element_indices, tree_indices) tuples.
+        self.indices_by_spamtuple = dict()  # values are (element_indices, tree_indices) tuples.
         for spam_tuple, tree_indices in tree_indices_by_spamtuple.items():
             self.indices_by_spamtuple[spam_tuple] = (slice(local_offset, local_offset + len(tree_indices)),
                                                      _slct.list_to_slice(tree_indices, array_ok=True))
@@ -177,8 +169,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
         element_slice = None  # slice(offset, offset + local_offset)  # *global* (of parent layout) element-index slice
         num_elements = local_offset
 
-        elindex_outcome_tuples = _collections.OrderedDict([
-            (unique_i, list()) for unique_i in range(len(unique_complete_circuits))])
+        elindex_outcome_tuples = {unique_i: list() for unique_i in range(len(unique_complete_circuits))}
 
         for spam_tuple, (element_indices, tree_indices) in self.indices_by_spamtuple.items():
             for elindex, tree_index in zip(_slct.indices(element_indices), _slct.to_array(tree_indices)):
