@@ -4661,12 +4661,35 @@ class SeparatePOVMCircuit(object):
     """
     def __init__(self, circuit_without_povm, povm_label, effect_labels):
         self.circuit_without_povm = circuit_without_povm
-        self.povm_label = povm_label
-        self.effect_labels = effect_labels
+        self._povm_label = povm_label
+        self._effect_labels = effect_labels
+        self._full_effect_labels = tuple([(self.povm_label + "_" + el) for el in self._effect_labels])
 
     @property
     def full_effect_labels(self):
-        return [(self.povm_label + "_" + el) for el in self.effect_labels]
+        return self._full_effect_labels
+    
+    @property 
+    def effect_labels(self):
+        return self._effect_labels
+    
+    @property 
+    def povm_label(self):
+        return self._povm_label
+
+    @effect_labels.setter
+    def effect_labels(self, value):
+        self._effect_labels = value
+        self._full_effect_labels = tuple([(self._povm_label + "_" + el) for el in value])
+
+    @povm_label.setter
+    def povm_label(self, value):
+        self._povm_label = value
+        self._full_effect_labels = tuple([(value + "_" + el) for el in self._effect_labels])
+    
+    @full_effect_labels.setter
+    def full_effect_labels(self, value):
+        self._full_effect_labels = value
 
     def __len__(self):
         return len(self.circuit_without_povm)  # don't count POVM in length, so slicing works as expected
@@ -4681,4 +4704,3 @@ class SeparatePOVMCircuit(object):
         return "SeparatePOVM(" + self.circuit_without_povm.str + "," \
             + str(self.povm_label) + "," + str(self.effect_labels) + ")"
 
-    #LATER: add a method for getting the "POVM_effect" labels?
