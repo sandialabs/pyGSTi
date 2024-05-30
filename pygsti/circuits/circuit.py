@@ -2067,7 +2067,7 @@ class Circuit(object):
                 subcircs = subcirc_tup[1:]
                 #want a different notion of depth than that of CircuitLabel, since that depth
                 #is calculated recursively, and we're handling the recursion manually.
-                length_components = [len(l.components) for l in subcircs]
+                length_components = [len(l.components)*l.reps for l in subcircs]
                 layers_to_add = max(0, *[comp_len - 1 for comp_len in length_components])
                 if layers_to_add:
                     self.insert_idling_layers_inplace(layer_idx + 1, layers_to_add)
