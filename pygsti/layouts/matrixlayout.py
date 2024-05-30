@@ -396,18 +396,22 @@ def create_matrix_copa_layout_circuit_cache(circuits, model, dataset=None):
     cache['completed_circuits'] = {ckt: comp_ckt for ckt, comp_ckt in zip(circuits, completed_circuits)}
     cache['split_circuits'] = {ckt: split_ckt for ckt, split_ckt in zip(cache['completed_circuits'].values(), split_circuits)}
 
-    expanded_circuit_cache = dict()
     #There is some potential aliasing that happens in the init that I am not
     #doing here, but I think 90+% of the time this ought to be fine.
     if dataset is not None:
+        unique_outcomes_list = []
         for ckt in completed_circuits.values():
             ds_row = dataset.get(ckt, None)
-            if ds_row is not None:
-                expanded_circuit_cache[ckt] = model.expand_instruments_and_separate_povm(ckt, ds_row.unique_outcomes)
+            unique_outcomes_list.append(ds_row.unique_outcomes if ds_row is not None else None)
     else:
-        expanded_circuit_cache = {ckt: model.expand_instruments_and_separate_povm(ckt, None) 
-                                  for ckt in cache['completed_circuits'].values()}
+        unique_outcomes_list = [None]*len(circuits)
 
+    expanded_circuit_outcome_list = model.bulk_expand_instruments_and_separate_povm(circuits, 
+                                                                                    observed_outcomes_list = unique_outcomes_list, 
+                                                                                    split_circuits = split_circuits)
+    
+    expanded_circuit_cache = {ckt: expanded_ckt for ckt,expanded_ckt in zip(cache['completed_circuits'].values(), expanded_circuit_outcome_list)}
+                
     cache['expanded_and_separated_circuits'] = expanded_circuit_cache
 
     expanded_subcircuits_no_spam_cache = dict()
