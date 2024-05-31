@@ -39,12 +39,8 @@ except ImportError:
 
 class StatelessCircuit:
     """
-    Helper data structure useful for simulating a specific quantum circuit (including prep,
+    Helper data structure for specifying a quantum circuit (consisting of prep,
     applying a sequence of gates, and applying a POVM to the output of the last gate).
-    
-    The forward simulation can only be done when we have access to a dict that maps
-    pyGSTi Labels to certain PyTorch Tensors. Construction of that dict is managed by the
-    StatelessModel class, defined below.
     """
 
     def __init__(self, spc: SeparatePOVMCircuit):
@@ -52,16 +48,9 @@ class StatelessCircuit:
         self.op_labels  = spc.circuit_without_povm[1:]
         self.povm_label = spc.povm_label
         self.outcome_probs_dim = len(spc.effect_labels)
+        # ^ This definition of outcome_probs_dim will need to be changed if/when
+        #   we extend any Instrument class to be Torchable.
         return
-    
-    def outcome_probs(self, torch_bases: Dict[Label, torch.Tensor]) ->  torch.Tensor:
-        superket = torch_bases[self.prep_label]
-        superops = [torch_bases[ol] for ol in self.op_labels]
-        povm_mat = torch_bases[self.povm_label]
-        for superop in superops:
-            superket = superop @ superket
-        probs = povm_mat @ superket
-        return probs
 
 
 class StatelessModel:
@@ -161,7 +150,7 @@ class StatelessModel:
     def get_torch_bases(self, free_params: Tuple[torch.Tensor], grad: bool) -> Dict[Label, torch.Tensor]:
         """
         Take data of the kind produced by get_free_params and format it in the way required by
-        StatelessCircuit.outcome_probs.
+        circuit_probs_from_torch_bases.
         """
         assert len(free_params) == len(self.param_metadata)
          # ^ A sanity check that we're being called with the correct number of arguments.
@@ -185,7 +174,12 @@ class StatelessModel:
         """
         probs = []
         for c in self.circuits:
-            circuit_probs = c.outcome_probs(torch_bases)
+            superket = torch_bases[c.prep_label]
+            superops = [torch_bases[ol] for ol in c.op_labels]
+            povm_mat = torch_bases[c.povm_label]
+            for superop in superops:
+                superket = superop @ superket
+            circuit_probs = povm_mat @ superket
             probs.append(circuit_probs)
         probs = torch.concat(probs)
         return probs
