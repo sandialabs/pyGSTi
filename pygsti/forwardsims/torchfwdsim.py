@@ -245,7 +245,19 @@ class TorchForwardSimulator(ForwardSimulator):
             self._bulk_fill_probs(pr_array_to_fill, layout, splitm)
 
         argnums = tuple(range(len(slm.param_metadata)))
-        J_func = torch.func.jacfwd(slm.circuit_probs_from_free_params, argnums=argnums)
+        if slm.default_to_reverse_ad:
+            # Then slm.circuit_probs_from_free_params will automatically construct the
+            # torch_base dict to support reverse-mode AD.
+            J_func = torch.func.jacrev(slm.circuit_probs_from_free_params, argnums=argnums)
+        else:
+            # Then slm.circuit_probs_from_free_params will automatically skip the extra
+            # steps needed for torch_base to support reverse-mode AD.
+            J_func = torch.func.jacfwd(slm.circuit_probs_from_free_params, argnums=argnums)
+        # ^ Note that this _bulk_fill_dprobs function doesn't accept parameters that
+        #   could be used to override the default behavior of the StatelessModel. If we
+        #   have a need to override the default in the future then we'd need to override
+        #   the ForwardSimulator function(s) that call self._bulk_fill_dprobs(...).
+        
         J_val = J_func(*free_params)
         J_val = torch.column_stack(J_val)
         array_to_fill[:] = J_val.cpu().detach().numpy()
