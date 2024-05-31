@@ -131,16 +131,13 @@ class StatelessModel:
         Therefore for purposes of computing Jacobians this should be set to False.
         """
         torch_bases = dict()
-        for i, fp_val in enumerate(free_params):
-
+        for i, val in enumerate(free_params):
             if grad:
-                fp_val.requires_grad_(True)
-            metadata = self.param_metadata[i]
+                val.requires_grad_(True)
 
-            fp_label = metadata[0]
-            fp_type  = metadata[1]
-            param_t = fp_type.torch_base(metadata[2], fp_val)
-            torch_bases[fp_label] = param_t
+            label, type_handle, stateless_data = self.param_metadata[i]
+            param_t = type_handle.torch_base(stateless_data, val)
+            torch_bases[label] = param_t
         
         return torch_bases
 
