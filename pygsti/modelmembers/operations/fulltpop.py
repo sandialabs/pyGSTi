@@ -14,6 +14,10 @@ from __future__ import annotations
 from typing import Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
 
 import numpy as _np
 from pygsti.modelmembers.operations.denseop import DenseOperator as _DenseOperator
@@ -165,12 +169,11 @@ class FullTPOp(_DenseOperator, _Torchable):
 
     @staticmethod
     def torch_base(sd: Tuple[int], t_param: _torch.Tensor) -> _torch.Tensor:
-        torch = _Torchable.torch_handle
         dim = sd[0]
-        t_const = torch.zeros(size=(1, dim), dtype=torch.double)
+        t_const = _torch.zeros(size=(1, dim), dtype=_torch.double)
         t_const[0,0] = 1.0
         t_param_mat = t_param.reshape((dim - 1, dim))
-        t = torch.row_stack((t_const, t_param_mat))
+        t = _torch.row_stack((t_const, t_param_mat))
         return t
 
 

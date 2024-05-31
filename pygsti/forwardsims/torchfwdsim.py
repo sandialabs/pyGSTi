@@ -11,7 +11,7 @@ Defines the TorchForwardSimulator class
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import Tuple, Optional, Dict, TYPE_CHECKING
+from typing import Tuple, Optional, Dict, TYPE_CHECKING, TypeAlias
 if TYPE_CHECKING:
     from pygsti.baseobjs.label import Label
     from pygsti.models.explicitmodel import ExplicitOpModel
@@ -21,10 +21,15 @@ if TYPE_CHECKING:
 
 import numpy as np
 import warnings as warnings
-from collections import OrderedDict
 from pygsti.modelmembers.torchable import Torchable
 from pygsti.forwardsims.forwardsim import ForwardSimulator
 
+try:
+    import torch
+    TORCH_ENABLED = True
+except ImportError:
+    TORCH_ENABLED = False
+    pass
 
 class StatelessCircuit:
     """
@@ -37,7 +42,13 @@ class StatelessCircuit:
 
     def __init__(self, spc: SeparatePOVMCircuit):
         self.prep_label = spc.circuit_without_povm[0]
-        self.op_labels  = spc.circuit_without_povm[1:]
+        if len(spc.circuit_without_povm) > 1:
+            self.op_labels  = spc.circuit_without_povm[1:]
+        else:
+            # Importing this at the top of the file would create a circular
+            # dependency.
+            from pygsti.circuits.circuit import Circuit
+            self.op_labels = Circuit(tuple())
         self.povm_label = spc.povm_label
         return
 
@@ -59,10 +70,10 @@ class StatelessModel:
     def __init__(self, model: ExplicitOpModel, layout):
         circuits = []
         for _, circuit, outcomes in layout.iter_unique_circuits():
-            expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(model, outcomes)
-            if len(expanded_circuit_outcomes) > 1:
+            expanded_circuits = circuit.expand_instruments_and_separate_povm(model, outcomes)
+            if len(expanded_circuits) > 1:
                 raise NotImplementedError("I don't know what to do with this.")
-            spc = list(expanded_circuit_outcomes.keys())[0]
+            spc = next(iter(expanded_circuits))
             c = StatelessCircuit(spc)
             circuits.append(c)
         self.circuits = circuits
@@ -73,23 +84,25 @@ class StatelessModel:
             param_type = type(obj)
             param_data = (lbl, param_type) + (obj.stateless_data(),)
             self.param_metadata.append(param_data)
-        self.num_params = len(self.param_metadata)
+        self.num_parameterized = len(self.param_metadata)
         return
     
-    def get_free_parameters(self, model: ExplicitOpModel):
+    def extract_free_parameters(self, model: ExplicitOpModel) -> Tuple[torch.Tensor]:
         """
-        Return an ordered dict that maps pyGSTi Labels to PyTorch Tensors.
-        The Labels correspond to parameterized objects in "model".
-        The Tensors correspond to the current values of an object's parameters.
+        Return a dict mapping pyGSTi Labels to PyTorch Tensors.
+
+            The Labels correspond to parameterized objects in "model".
+            The Tensors correspond to the current values of an object's parameters.
+        
         For the purposes of forward simulation, we intend that the following 
         equivalence holds:
         
             model == (self, [dict returned by this function]).
             
         That said, the values in this function's returned dict need to be
-        formatted by get_torch_cache BEFORE being used in forward simulation.
+        formatted by get_torch_bases BEFORE being used in forward simulation.
         """
-        free_params = OrderedDict()
+        free_params = []
         for i, (lbl, obj) in enumerate(model._iter_parameterized_objs()):
             gpind = obj.gpindices_as_array()
             vec = obj.to_vector()
@@ -103,23 +116,22 @@ class StatelessModel:
             assert self.param_metadata[i][0] == lbl
             # ^ If this check fails then it invalidates our assumptions about how
             #   we're using OrderedDict objects.
-            free_params[lbl] = vec
-        return free_params
+            free_params.append(vec)
+        return tuple(free_params)
 
-    def get_torch_cache(self, free_params: OrderedDict[Label, torch.Tensor], grad: bool):
+    def get_torch_bases(self, free_params: Tuple[torch.Tensor], grad: bool) -> Dict[Label, torch.Tensor]:
         """
-        Returns a dict mapping pyGSTi Labels to PyTorch tensors. The dict makes it easy
-        to simulate a stateful model implied by (self, free_params). It is obtained by
-        applying invertible transformations --- defined in various ModelMember subclasses
-        --- on the tensors stored in free_params.
+        Returns a dict that circuit_probs(...) needs for forward simulation.
 
+        Notes
+        -----
         If ``grad`` is True, then the values in the returned dict are preparred for use
         in PyTorch's backpropogation functionality. If we want to compute a Jacobian of
         circuit outcome probabilities then such functionality is actually NOT needed.
         Therefore for purposes of computing Jacobians this should be set to False.
         """
-        torch_cache = dict()
-        for i, fp_val in enumerate(free_params.values()):
+        torch_bases = dict()
+        for i, fp_val in enumerate(free_params):
 
             if grad:
                 fp_val.requires_grad_(True)
@@ -128,16 +140,16 @@ class StatelessModel:
             fp_label = metadata[0]
             fp_type  = metadata[1]
             param_t = fp_type.torch_base(metadata[2], fp_val)
-            torch_cache[fp_label] = param_t
+            torch_bases[fp_label] = param_t
         
-        return torch_cache
+        return torch_bases
 
-    def circuit_probs(self, torch_cache: Dict[Label, torch.Tensor]):
+    def circuit_probs(self, torch_bases: Dict[Label, torch.Tensor]) -> torch.Tensor:
         probs = []
         for c in self.circuits:
-            superket = torch_cache[c.prep_label]
-            superops = [torch_cache[ol] for ol in c.op_labels]
-            povm_mat = torch_cache[c.povm_label]
+            superket = torch_bases[c.prep_label]
+            superops = [torch_bases[ol] for ol in c.op_labels]
+            povm_mat = torch_bases[c.povm_label]
             for superop in superops:
                 superket = superop @ superket
             circuit_probs = povm_mat @ superket
@@ -145,22 +157,25 @@ class StatelessModel:
         probs = torch.concat(probs)
         return probs
     
-    def jac_friendly_circuit_probs(self, *free_params: Tuple[torch.Tensor]):
+    def jac_friendly_circuit_probs(self, *free_params: Tuple[torch.Tensor]) -> torch.Tensor:
         """
         This function combines parameter reformatting and forward simulation.
         It's needed so that we can use PyTorch to compute the Jacobian of
         the map from a model's free parameters to circuit outcome probabilities.
         """
-        assert len(free_params) == len(self.param_metadata) == self.num_params
-        free_params = {self.param_metadata[i][0] : free_params[i] for i in range(self.num_params)}
-        torch_cache = self.get_torch_cache(free_params, grad=False)
-        probs = self.circuit_probs(torch_cache)
+        assert len(free_params) == len(self.param_metadata) == self.num_parameterized
+        torch_bases = self.get_torch_bases(free_params, grad=False)
+        probs = self.circuit_probs(torch_bases)
         return probs
+
+
+if TYPE_CHECKING:
+    SplitModel: TypeAlias = Tuple[StatelessModel, Dict[Label, torch.Tensor]]
 
 
 class TorchForwardSimulator(ForwardSimulator):
 
-    ENABLED = Torchable.torch_handle is not None
+    ENABLED = TORCH_ENABLED
 
     """
     A forward simulator that leverages automatic differentiation in PyTorch.
@@ -172,19 +187,19 @@ class TorchForwardSimulator(ForwardSimulator):
         super(ForwardSimulator, self).__init__(model)
 
     @staticmethod
-    def separate_state(model: ExplicitOpModel, layout, grad=False) -> Tuple[StatelessModel, dict]:
+    def get_split_model(model: ExplicitOpModel, layout, grad=False) -> SplitModel:
         slm = StatelessModel(model, layout)
-        free_params = slm.get_free_parameters(model)
-        torch_cache = slm.get_torch_cache(free_params, grad)
-        return slm, torch_cache
+        free_params = slm.extract_free_parameters(model)
+        torch_bases = slm.get_torch_bases(free_params, grad)
+        return slm, torch_bases
 
     @staticmethod
     def _check_copa_layout(layout: CircuitOutcomeProbabilityArrayLayout) -> int:
         # I need to verify some assumptions on what layout.iter_unique_circuits()
         # returns. Looking at the implementation of that function, the assumptions
-        # can be framed in terms of the "layout._element_indicies" OrderedDict.
+        # can be framed in terms of the "layout._element_indicies" dict.
         eind = layout._element_indices
-        assert isinstance(eind, OrderedDict)
+        assert isinstance(eind, dict)
         items = iter(eind.items())
         k_prev, v_prev = next(items)
         assert k_prev == 0
@@ -196,28 +211,29 @@ class TorchForwardSimulator(ForwardSimulator):
             v_prev = v
         return v_prev.stop
 
-    def _bulk_fill_probs(self, array_to_fill, layout, stripped_abstractions: Optional[tuple] = None) -> None:
-        if stripped_abstractions is None:
-            slm, torch_cache = TorchForwardSimulator.separate_state(self.model, layout)
+    def _bulk_fill_probs(self, array_to_fill, layout, splitm: Optional[SplitModel] = None) -> None:
+        if splitm is None:
+            slm, torch_bases = TorchForwardSimulator.get_split_model(self.model, layout)
         else:
-            slm, torch_cache = stripped_abstractions
+            slm, torch_bases = splitm
 
         layout_len = TorchForwardSimulator._check_copa_layout(layout)
-        probs = slm.circuit_probs(torch_cache)
+        probs = slm.circuit_probs(torch_bases)
         array_to_fill[:layout_len] = probs.cpu().detach().numpy().flatten()
         return
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill) -> None:
         slm = StatelessModel(self.model, layout)
-        free_params = slm.get_free_parameters(self.model)
-        torch_cache = slm.get_torch_cache(free_params, grad=False)
+        free_params = slm.extract_free_parameters(self.model)
+    
         if pr_array_to_fill is not None:
-            self._bulk_fill_probs(pr_array_to_fill, layout, (slm, torch_cache))
+            torch_bases = slm.get_torch_bases(free_params, grad=False)
+            splitm = (slm, torch_bases)
+            self._bulk_fill_probs(pr_array_to_fill, layout, splitm)
 
-        argnums = tuple(range(slm.num_params))
+        argnums = tuple(range(slm.num_parameterized))
         J_func = torch.func.jacfwd(slm.jac_friendly_circuit_probs, argnums=argnums)
-        free_param_tup = tuple(free_params.values())
-        J_val = J_func(*free_param_tup)
+        J_val = J_func(*free_params)
         J_val = torch.column_stack(J_val)
         J_np = J_val.cpu().detach().numpy()
         array_to_fill[:] = J_np

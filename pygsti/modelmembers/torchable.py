@@ -8,16 +8,6 @@ from pygsti.modelmembers.modelmember import ModelMember
 
 class Torchable(ModelMember):
 
-    # Try to import torch. If we succeed, save a handle to it for later use. If we fail, then 
-    # set a flag indicating as much so we don't have to write try-except statements for torch
-    # imports in other files.
-    try:
-        import torch
-        torch_handle = torch
-    except ImportError:
-        torch_handle = None
-
-
     def stateless_data(self) -> Tuple:
         """
         Return this ModelMember's data that is considered constant for purposes of model fitting.

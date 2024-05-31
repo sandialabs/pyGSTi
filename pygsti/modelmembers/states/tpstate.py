@@ -14,7 +14,11 @@ The TPState class and supporting functionality.
 from __future__ import annotations
 from typing import Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
-    import torch
+    import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
 
 import numpy as _np
 from pygsti.baseobjs import Basis as _Basis
@@ -166,11 +170,10 @@ class TPState(_DenseState, _Torchable):
         return (self.dim,)
 
     @staticmethod
-    def torch_base(sd: Tuple[int], t_param: torch.Tensor) -> torch.Tensor:
-        torch = _Torchable.torch_handle
+    def torch_base(sd: Tuple[int], t_param: _torch.Tensor) -> _torch.Tensor:
         dim = sd[0]
-        t_const = (dim ** -0.25) * torch.ones(1, dtype=torch.double) 
-        t = torch.concat((t_const, t_param)) 
+        t_const = (dim ** -0.25) * _torch.ones(1, dtype=_torch.double) 
+        t = _torch.concat((t_const, t_param)) 
         return t
 
     def deriv_wrt_params(self, wrt_filter=None):

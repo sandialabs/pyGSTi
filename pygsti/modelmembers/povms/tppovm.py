@@ -14,6 +14,10 @@ from __future__ import annotations
 from typing import Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     import torch as _torch
+try:
+    import torch as _torch
+except ImportError:
+    pass
 
 import numpy as _np
 from pygsti.modelmembers.torchable import Torchable as _Torchable
@@ -106,7 +110,6 @@ class TPPOVM(_BasePOVM, _Torchable):
 
     @staticmethod
     def torch_base(sd: Tuple[int, _np.ndarray], t_param: _torch.Tensor) -> _torch.Tensor:
-        torch = _Torchable.torch_handle
         num_effects, identity = sd
         dim = identity.size
 
@@ -120,8 +123,8 @@ class TPPOVM(_BasePOVM, _Torchable):
             warnings.warn('Unexpected normalization!') 
 
         identity = identity.reshape((1, -1)) # make into a row vector
-        t_identity = torch.from_numpy(identity)
+        t_identity = _torch.from_numpy(identity)
         t_param_mat = t_param.reshape((num_effects - 1, dim))
         t_func = t_identity - t_param_mat.sum(axis=0, keepdim=True)
-        t = torch.row_stack((t_param_mat, t_func))
+        t = _torch.row_stack((t_param_mat, t_func))
         return t
