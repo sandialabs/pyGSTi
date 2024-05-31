@@ -237,6 +237,9 @@ class TorchForwardSimulator(ForwardSimulator):
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill) -> None:
         slm = StatelessModel(self.model, layout)
+        # ^ TODO: figure out how to safely recycle StatelessModel objects from one
+        #   call to another. The current implementation is wasteful if we need to 
+        #   compute many jacobians without structural changes to layout or self.model.
         free_params = slm.get_free_params(self.model)
     
         if pr_array_to_fill is not None:
