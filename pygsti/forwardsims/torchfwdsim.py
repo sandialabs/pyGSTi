@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from pygsti.layouts.copalayout import CircuitOutcomeProbabilityArrayLayout
     import torch
 
-import numpy as np
 import warnings as warnings
 from pygsti.modelmembers.torchable import Torchable
 from pygsti.forwardsims.forwardsim import ForwardSimulator
@@ -103,20 +102,22 @@ class StatelessModel:
         formatted by get_torch_bases BEFORE being used in forward simulation.
         """
         free_params = []
+        prev_idx = 0
         for i, (lbl, obj) in enumerate(model._iter_parameterized_objs()):
             gpind = obj.gpindices_as_array()
             vec = obj.to_vector()
+            vec_size = vec.size
             vec = torch.from_numpy(vec)
-            assert int(gpind.size) == int(np.prod(vec.shape))
-            # ^ a sanity check that we're interpreting the results of obj.to_vector()
-            #   correctly. Future implementations might need us to also keep track of
-            #   the "gpind" variable. Right now we get around NOT using that variable
-            #   by using an OrderedDict and by iterating over parameterized objects in
-            #   the same way that "model"s does.
+            assert gpind[0] == prev_idx and gpind[-1] == prev_idx + vec_size - 1
+            # ^ We should have gpind = (prev_idx, prev_idx + 1, ..., prev_idx + vec.size - 1).
+            #   That assert checks a cheap necessary condition that this holds.
+            prev_idx += vec_size
             assert self.param_metadata[i][0] == lbl
-            # ^ If this check fails then it invalidates our assumptions about how
-            #   we're using OrderedDict objects.
+            # ^ This function's output inevitably gets passed to StatelessModel.get_torch_bases.
+            #   That function assumes that the keys we're seeing here are the same (and in the
+            #   same order!) as those seen when we constructed this StatelessModel.
             free_params.append(vec)
+    
         return tuple(free_params)
 
     def get_torch_bases(self, free_params: Tuple[torch.Tensor], grad: bool) -> Dict[Label, torch.Tensor]:
@@ -216,7 +217,7 @@ class TorchForwardSimulator(ForwardSimulator):
 
         layout_len = TorchForwardSimulator._check_copa_layout(layout)
         probs = slm.circuit_probs(torch_bases)
-        array_to_fill[:layout_len] = probs.cpu().detach().numpy().flatten()
+        array_to_fill[:layout_len] = probs.cpu().detach().numpy().ravel()
         return
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill) -> None:
@@ -232,6 +233,5 @@ class TorchForwardSimulator(ForwardSimulator):
         J_func = torch.func.jacfwd(slm.jac_friendly_circuit_probs, argnums=argnums)
         J_val = J_func(*free_params)
         J_val = torch.column_stack(J_val)
-        J_np = J_val.cpu().detach().numpy()
-        array_to_fill[:] = J_np
+        array_to_fill[:] = J_val.cpu().detach().numpy()
         return
