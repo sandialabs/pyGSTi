@@ -11,7 +11,7 @@ Defines the TorchForwardSimulator class
 #***************************************************************************************************
 
 from __future__ import annotations
-from typing import Tuple, Optional, Dict, TYPE_CHECKING, TypeAlias
+from typing import Tuple, Optional, Dict, TYPE_CHECKING
 if TYPE_CHECKING:
     from pygsti.baseobjs.label import Label
     from pygsti.models.explicitmodel import ExplicitOpModel
@@ -44,21 +44,29 @@ class StatelessCircuit:
         if len(spc.circuit_without_povm) > 1:
             self.op_labels  = spc.circuit_without_povm[1:]
         else:
-            # Importing this at the top of the file would create a circular
-            # dependency.
+            # Importing this at the top of the file would create a circular dependency.
             from pygsti.circuits.circuit import Circuit
             self.op_labels = Circuit(tuple())
         self.povm_label = spc.povm_label
         return
+    
+    def outcome_probs(self, torch_bases: Dict[Label, torch.Tensor]) ->  torch.Tensor:
+        superket = torch_bases[self.prep_label]
+        superops = [torch_bases[ol] for ol in self.op_labels]
+        povm_mat = torch_bases[self.povm_label]
+        for superop in superops:
+            superket = superop @ superket
+        probs = povm_mat @ superket
+        return probs
 
 
 class StatelessModel:
     """
-    A container for the information in an ExplicitOpModel that's "stateless"
-    in the sense of object-oriented programming.
+    Instances of this class contain the information of an ExplicitOpModel that's "stateless"
+    in the sense of object-oriented programming:
     
-        Currently, that information is just specifications of the model's
-        circuits, and model parameter metadata.
+        * A list of StatelessCircuits
+        * Metadata for parameterized ModelMembers
 
     StatelessModels have functions to (1) extract stateful data from an
     ExplicitOpModel, (2) reformat that data into particular PyTorch
@@ -66,7 +74,7 @@ class StatelessModel:
     is also a function that combines (2) and (3).
     """
 
-    def __init__(self, model: ExplicitOpModel, layout):
+    def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout):
         circuits = []
         for _, circuit, outcomes in layout.iter_unique_circuits():
             expanded_circuits = circuit.expand_instruments_and_separate_povm(model, outcomes)
@@ -77,16 +85,31 @@ class StatelessModel:
             circuits.append(c)
         self.circuits = circuits
 
+        # We need to verify assumptions on what layout.iter_unique_circuits() returns.
+        # Looking at the implementation of that function, the assumptions can be
+        # framed in terms of the "layout._element_indicies" dict.
+        eind = layout._element_indices
+        assert isinstance(eind, dict)
+        items = iter(eind.items())
+        k_prev, v_prev = next(items)
+        assert k_prev == 0
+        assert v_prev.start == 0
+        for k, v in items:
+            assert k == k_prev + 1
+            assert v.start == v_prev.stop
+            k_prev = k
+            v_prev = v
+        self.outcome_probs_dim = v_prev.stop
+
         self.param_metadata = []
         for lbl, obj in model._iter_parameterized_objs():
             assert isinstance(obj, Torchable)
             param_type = type(obj)
             param_data = (lbl, param_type) + (obj.stateless_data(),)
             self.param_metadata.append(param_data)
-        self.num_parameterized = len(self.param_metadata)
         return
     
-    def extract_free_parameters(self, model: ExplicitOpModel) -> Tuple[torch.Tensor]:
+    def get_free_parameters(self, model: ExplicitOpModel) -> Tuple[torch.Tensor]:
         """
         Return a dict mapping pyGSTi Labels to PyTorch Tensors.
 
@@ -113,9 +136,9 @@ class StatelessModel:
             #   That assert checks a cheap necessary condition that this holds.
             prev_idx += vec_size
             assert self.param_metadata[i][0] == lbl
-            # ^ This function's output inevitably gets passed to StatelessModel.get_torch_bases.
-            #   That function assumes that the keys we're seeing here are the same (and in the
-            #   same order!) as those seen when we constructed this StatelessModel.
+            # ^ This function's output inevitably gets passed to get_torch_bases(...), which
+            #   assumes that the keys we're seeing here are the same (and in the same order!)
+            #   as those seen when we constructed this StatelessModel.
             free_params.append(vec)
     
         return tuple(free_params)
@@ -131,6 +154,8 @@ class StatelessModel:
         circuit outcome probabilities then such functionality is actually NOT needed.
         Therefore for purposes of computing Jacobians this should be set to False.
         """
+        assert len(free_params) == len(self.param_metadata)
+         # ^ A sanity check that we're being called with the correct number of arguments.
         torch_bases = dict()
         for i, val in enumerate(free_params):
             if grad:
@@ -142,95 +167,61 @@ class StatelessModel:
         
         return torch_bases
 
-    def circuit_probs(self, torch_bases: Dict[Label, torch.Tensor]) -> torch.Tensor:
+    def circuit_probs_from_torch_bases(self, torch_bases: Dict[Label, torch.Tensor]) -> torch.Tensor:
         probs = []
         for c in self.circuits:
-            superket = torch_bases[c.prep_label]
-            superops = [torch_bases[ol] for ol in c.op_labels]
-            povm_mat = torch_bases[c.povm_label]
-            for superop in superops:
-                superket = superop @ superket
-            circuit_probs = povm_mat @ superket
+            circuit_probs = c.outcome_probs(torch_bases)
             probs.append(circuit_probs)
         probs = torch.concat(probs)
         return probs
     
-    def jac_friendly_circuit_probs(self, *free_params: Tuple[torch.Tensor]) -> torch.Tensor:
+    def circuit_probs_from_free_params(self, *free_params: Tuple[torch.Tensor]) -> torch.Tensor:
         """
         This function combines parameter reformatting and forward simulation.
         It's needed so that we can use PyTorch to compute the Jacobian of
         the map from a model's free parameters to circuit outcome probabilities.
         """
-        assert len(free_params) == len(self.param_metadata) == self.num_parameterized
         torch_bases = self.get_torch_bases(free_params, grad=False)
-        probs = self.circuit_probs(torch_bases)
+        probs = self.circuit_probs_from_torch_bases(torch_bases)
         return probs
 
 
-if TYPE_CHECKING:
-    SplitModel: TypeAlias = Tuple[StatelessModel, Dict[Label, torch.Tensor]]
-
-
 class TorchForwardSimulator(ForwardSimulator):
-
-    ENABLED = TORCH_ENABLED
-
     """
     A forward simulator that leverages automatic differentiation in PyTorch.
     """
+
+    ENABLED = TORCH_ENABLED
+
     def __init__(self, model : Optional[ExplicitOpModel] = None):
         if not self.ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
         self.model = model
         super(ForwardSimulator, self).__init__(model)
 
-    @staticmethod
-    def get_split_model(model: ExplicitOpModel, layout, grad=False) -> SplitModel:
-        slm = StatelessModel(model, layout)
-        free_params = slm.extract_free_parameters(model)
-        torch_bases = slm.get_torch_bases(free_params, grad)
-        return slm, torch_bases
-
-    @staticmethod
-    def _check_copa_layout(layout: CircuitOutcomeProbabilityArrayLayout) -> int:
-        # I need to verify some assumptions on what layout.iter_unique_circuits()
-        # returns. Looking at the implementation of that function, the assumptions
-        # can be framed in terms of the "layout._element_indicies" dict.
-        eind = layout._element_indices
-        assert isinstance(eind, dict)
-        items = iter(eind.items())
-        k_prev, v_prev = next(items)
-        assert k_prev == 0
-        assert v_prev.start == 0
-        for k, v in items:
-            assert k == k_prev + 1
-            assert v.start == v_prev.stop
-            k_prev = k
-            v_prev = v
-        return v_prev.stop
-
-    def _bulk_fill_probs(self, array_to_fill, layout, splitm: Optional[SplitModel] = None) -> None:
-        if splitm is None:
-            slm, torch_bases = TorchForwardSimulator.get_split_model(self.model, layout)
+    def _bulk_fill_probs(self, array_to_fill, layout, split_model = None) -> None:
+        if split_model is None:
+            slm = StatelessModel(self.model, layout)
+            free_params = slm.get_free_parameters(self.model)
+            torch_bases = slm.get_torch_bases(free_params, grad=False)
         else:
-            slm, torch_bases = splitm
+            slm, torch_bases = split_model
 
-        layout_len = TorchForwardSimulator._check_copa_layout(layout)
-        probs = slm.circuit_probs(torch_bases)
-        array_to_fill[:layout_len] = probs.cpu().detach().numpy().ravel()
+        probs = slm.circuit_probs_from_torch_bases(torch_bases)
+        array_to_fill[:slm.outcome_probs_dim] = probs.cpu().detach().numpy().ravel()
         return
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill) -> None:
         slm = StatelessModel(self.model, layout)
-        free_params = slm.extract_free_parameters(self.model)
+        free_params = slm.get_free_parameters(self.model)
     
         if pr_array_to_fill is not None:
             torch_bases = slm.get_torch_bases(free_params, grad=False)
             splitm = (slm, torch_bases)
             self._bulk_fill_probs(pr_array_to_fill, layout, splitm)
 
-        argnums = tuple(range(slm.num_parameterized))
-        J_func = torch.func.jacfwd(slm.jac_friendly_circuit_probs, argnums=argnums)
+        argnums = tuple(range(len(slm.param_metadata)))
+        J_func = torch.func.jacfwd(slm.circuit_probs_from_free_params, argnums=argnums)
         J_val = J_func(*free_params)
         J_val = torch.column_stack(J_val)
         array_to_fill[:] = J_val.cpu().detach().numpy()
