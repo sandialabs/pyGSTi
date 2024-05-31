@@ -49,12 +49,7 @@ class StatelessCircuit:
 
     def __init__(self, spc: SeparatePOVMCircuit):
         self.prep_label = spc.circuit_without_povm[0]
-        if len(spc.circuit_without_povm) > 1:
-            self.op_labels  = spc.circuit_without_povm[1:]
-        else:
-            # Importing this at the top of the file would create a circular dependency.
-            from pygsti.circuits.circuit import Circuit
-            self.op_labels = Circuit(tuple())
+        self.op_labels  = spc.circuit_without_povm[1:]
         self.povm_label = spc.povm_label
         self.outcome_probs_dim = len(spc.effect_labels)
         return
@@ -260,7 +255,7 @@ class TorchForwardSimulator(ForwardSimulator):
         #   could be used to override the default behavior of the StatelessModel. If we
         #   have a need to override the default in the future then we'd need to override
         #   the ForwardSimulator function(s) that call self._bulk_fill_dprobs(...).
-        
+
         J_val = J_func(*free_params)
         J_val = torch.column_stack(J_val)
         array_to_fill[:] = J_val.cpu().detach().numpy()
