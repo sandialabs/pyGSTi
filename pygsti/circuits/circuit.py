@@ -499,7 +499,8 @@ class Circuit(object):
             compilable_layer_indices_tup = ()
 
         #Set *all* class attributes (separated so can call bare_init separately for fast internal creation)
-        self._bare_init(labels, my_line_labels, editable, name, stringrep, occurrence, compilable_layer_indices_tup)
+        self._bare_init(labels, my_line_labels, editable, name, stringrep, 
+                        occurrence, compilable_layer_indices_tup)
 
 
     @classmethod
@@ -656,7 +657,8 @@ class Circuit(object):
                 if self._line_labels in (('*',), ()):  # No line labels
                     return self._labels + comp_lbl_flag + self._compilable_layer_indices_tup
                 else:
-                    return self._labels + ('@',) + self._line_labels + comp_lbl_flag + self._compilable_layer_indices_tup
+                    return self._labels + ('@',) + self._line_labels + comp_lbl_flag \
+                        + self._compilable_layer_indices_tup
             else: 
                 if self._line_labels in (('*',), ()):
                     return self._labels + ('@',) + ('@', self._occurrence_id) \
@@ -671,7 +673,8 @@ class Circuit(object):
                 if self._line_labels in (('*',), ()):  # No line labels
                     return self.layertup + comp_lbl_flag + self._compilable_layer_indices_tup
                 else:
-                    return self.layertup + ('@',) + self._line_labels + comp_lbl_flag + self._compilable_layer_indices_tup
+                    return self.layertup + ('@',) + self._line_labels + comp_lbl_flag\
+                          + self._compilable_layer_indices_tup
             else: 
                 if self._line_labels in (('*',), ()):
                     return self.layertup + ('@',) + ('@', self._occurrence_id) \
@@ -842,7 +845,8 @@ class Circuit(object):
 
         if not isinstance(x, Circuit):
             assert(all([isinstance(l, _Label) for l in x])), "Only Circuits and Label-tuples can be added to Circuits!"
-            new_line_labels = set(sum([l.sslbls for l in x if l.sslbls is not None], self._line_labels)) #trick for concatenating multiple tuples
+            new_line_labels = set(sum([l.sslbls for l in x if l.sslbls is not None], 
+                                      self._line_labels)) #trick for concatenating multiple tuples
             #new_line_labels.update(self._line_labels)
             new_line_labels = sorted(list(new_line_labels))
             return Circuit._fastinit(self.layertup + x, new_line_labels, editable=False)
@@ -928,7 +932,8 @@ class Circuit(object):
         assert(isinstance(x, tuple) and isinstance(y, tuple)), 'Only tuples of labels are currently supported by `sandwich` method.'
         combined_sandwich_labels = x + y
         assert(all([isinstance(l, _Label) for l in combined_sandwich_labels])), "Only Circuits and Label-tuples can be added to Circuits!"
-        new_line_labels = set(sum([l.sslbls for l in combined_sandwich_labels if l.sslbls is not None], self._line_labels)) #trick for concatenating multiple tuples
+        new_line_labels = set(sum([l.sslbls for l in combined_sandwich_labels if l.sslbls is not None], 
+                                  self._line_labels)) #trick for concatenating multiple tuples
         new_line_labels = sorted(list(new_line_labels))
         return Circuit._fastinit(x + self.layertup + y, new_line_labels, editable=False)
 
@@ -1041,21 +1046,32 @@ class Circuit(object):
             if self._static:
                 #static and editable circuits have different conventions for _labels.
                 editable_labels =[[lbl] if lbl._is_simple else list(lbl.components) for lbl in self._labels]
-                return ret._copy_init(editable_labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup)
+                return ret._copy_init(editable_labels, self._line_labels, editable, 
+                                      self._name, self._str, self._occurrence_id, 
+                                      self._compilable_layer_indices_tup)
             else:
                 #copy the editable labels (avoiding shallow copy issues)
                 editable_labels = [sublist.copy() for sublist in self._labels]
-                return ret._copy_init(editable_labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup)
+                return ret._copy_init(editable_labels, self._line_labels, editable, 
+                                      self._name, self._str, self._occurrence_id, 
+                                      self._compilable_layer_indices_tup)
         else: #create static copy
             if self._static:
                 #if presently static leverage precomputed hashable_tup and hash. 
                 #These values are only used by _copy_init if the circuit being 
                 #created is static, and are ignored otherwise.
-                return ret._copy_init(self._labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup, self._hashable_tup, self._hash)
+                return ret._copy_init(self._labels, self._line_labels, editable, 
+                                      self._name, self._str, self._occurrence_id, 
+                                      self._compilable_layer_indices_tup, 
+                                      self._hashable_tup, self._hash)
             else:
-                static_labels = tuple([layer_lbl if isinstance(layer_lbl, _Label) else _Label(layer_lbl) for layer_lbl in self._labels])
+                static_labels = tuple([layer_lbl if isinstance(layer_lbl, _Label) else _Label(layer_lbl) 
+                                       for layer_lbl in self._labels])
                 hashable_tup = self._tup_copy(static_labels)
-                return ret._copy_init(static_labels, self._line_labels, editable, self._name, self._str, self._occurrence_id, self._compilable_layer_indices_tup, hashable_tup, hash(hashable_tup))
+                return ret._copy_init(static_labels, self._line_labels, 
+                                      editable, self._name, self._str, self._occurrence_id, 
+                                      self._compilable_layer_indices_tup, 
+                                      hashable_tup, hash(hashable_tup))
 
     def clear(self):
         """
@@ -1236,8 +1252,9 @@ class Circuit(object):
             if not strict: lines = "auto"  # since we may have included lbls on other lines
             # don't worry about string rep for now...
             
-            return Circuit._fastinit(tuple(ret) if self._static else ret, tuple(lines) if self._static else lines,
-                                    not self._static)
+            return Circuit._fastinit(tuple(ret) if self._static else ret, 
+                                     tuple(lines) if self._static else lines,
+                                     not self._static)
         else:
             return _Label(ret[0])
 
@@ -2054,22 +2071,41 @@ class Circuit(object):
         None
         """
         assert(not self._static), "Cannot edit a read-only circuit!"
-
-        #Iterate in reverse so we don't have to deal with
-        # added layers.
-        for i in reversed(range(len(self._labels))):
-            circuits_to_expand = [l for l in self._labels[i] if isinstance(l, _CircuitLabel)]
-            #only calculate number of layers to add if we have found a CircuitLabel
-            if circuits_to_expand:
-                layers_to_add = max(0, *[l.depth - 1 for l in circuits_to_expand])
-
+        
+        #_subcircuits_to_expand returns list of tuples
+        #with the circuits to expand. The first entry of each tuple
+        #is the index of the layer, with the rest of the entries the 
+        #CircuitLabels to expand. And these indices are given in descending
+        #order.
+        subcircs_to_expand = self._subcircuits_to_expand()
+        while subcircs_to_expand:
+            for subcirc_tup in subcircs_to_expand:
+                layer_idx = subcirc_tup[0]
+                subcircs = subcirc_tup[1:]
+                #want a different notion of depth than that of CircuitLabel, since that depth
+                #is calculated recursively, and we're handling the recursion manually.
+                length_components = [len(l.components)*l.reps for l in subcircs]
+                layers_to_add = max(0, *[comp_len - 1 for comp_len in length_components])
                 if layers_to_add:
-                    self.insert_idling_layers_inplace(i + 1, layers_to_add)
-                for subc in circuits_to_expand:
-                    self.clear_labels(slice(i, i + subc.depth), subc.sslbls)  # remove the CircuitLabel
-                    self.set_labels(subc.components * subc.reps, slice(i, i + subc.depth),
-                                    subc.sslbls)  # dump in the contents
+                    self.insert_idling_layers_inplace(layer_idx + 1, layers_to_add)
+                for depth, subc in zip(length_components, subcircs):
+                    self.clear_labels(slice(layer_idx, layer_idx + depth), subc.sslbls)  # remove the CircuitLabel
+                    self.set_labels(subc.components * subc.reps, slice(layer_idx, layer_idx + depth), subc.sslbls)  # dump in the contents
+            #loop back through the circuit and see if we need to take another pass.
+            subcircs_to_expand = self._subcircuits_to_expand()                
 
+    def _subcircuits_to_expand(self):
+        #Return this as a list of sparse list of tuples, giving only the layers which
+        #contain CircuitLabels to be expanded. The first entry of the tuple will be the
+        #original layer index, and the will be ordered in descending value to perform
+        #expansion in reverse.
+        subckts_to_expand = []
+        for i in reversed(range(len(self._labels))):
+            subckts_to_expand_for_layer = [l for l in self._labels[i] if isinstance(l, _CircuitLabel)]
+            if subckts_to_expand_for_layer:
+                subckts_to_expand.append(tuple([i]+subckts_to_expand_for_layer))
+        return subckts_to_expand
+        
     def expand_subcircuits(self):
         """
         Returns a new circuit with :class:`CircuitLabel` labels expanded.
@@ -2579,11 +2615,13 @@ class Circuit(object):
             cpy = self.copy(editable=False)  # convert our layers to Labels
             return Circuit._fastinit(tuple([new_layer if lbl == old_layer else lbl
                                             for lbl in cpy._labels]), self._line_labels, editable=False,
-                                     occurrence=self._occurrence_id, compilable_layer_indices_tup=self._compilable_layer_indices_tup)
+                                     occurrence=self._occurrence_id, 
+                                     compilable_layer_indices_tup=self._compilable_layer_indices_tup)
         else:  # static case: so self._labels is a tuple of Labels
             return Circuit(tuple([new_layer if lbl == old_layer else lbl
                                   for lbl in self._labels]), self._line_labels, editable=False,
-                           occurrence=self._occurrence_id, compilable_layer_indices=self._compilable_layer_indices_tup)
+                           occurrence=self._occurrence_id, 
+                           compilable_layer_indices=self._compilable_layer_indices_tup)
 
     def replace_layers_with_aliases(self, alias_dict):
         """
@@ -3867,7 +3905,8 @@ class Circuit(object):
                             #append the default.
                             circuit_layers.append(_Label(()))
                         else:
-                            circuit_layers.append(_Label(global_idle_replacement_label, tuple(sorted([qubit_conversion[qubit] for qubit in all_cirq_qubits]))))
+                            circuit_layers.append(_Label(global_idle_replacement_label, 
+                                                         tuple(sorted([qubit_conversion[qubit] for qubit in all_cirq_qubits]))))
                     elif isinstance(global_idle_replacement_label, _Label):
                         circuit_layers.append(global_idle_replacement_label)   
                 else:
@@ -3902,7 +3941,8 @@ class Circuit(object):
                             #append the default.
                             circuit_layers.append(_Label(()))
                         else:
-                            circuit_layers.append(_Label(global_idle_replacement_label, tuple(sorted([qubit_conversion[qubit] for qubit in all_cirq_qubits]))))
+                            circuit_layers.append(_Label(global_idle_replacement_label, 
+                                                         tuple(sorted([qubit_conversion[qubit] for qubit in all_cirq_qubits]))))
                     elif isinstance(global_idle_replacement_label, _Label):
                         circuit_layers.append(global_idle_replacement_label)
                 #check whether any of the elements are implied idles, and if so use flag
