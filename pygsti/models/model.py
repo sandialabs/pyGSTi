@@ -1141,10 +1141,45 @@ class OpModel(Model):
 
         Returns
         -------
-        tuple
+        tuple corresponding to the possible outcomes for circuit.
         """
-        outcomes = circuit.expand_instruments_and_separate_povm(self)  # dict w/keys=sep-povm-circuits, vals=outcomes
+        outcomes = self.expand_instruments_and_separate_povm(circuit)  # dict w/keys=sep-povm-circuits, vals=outcomes
         return tuple(_itertools.chain(*outcomes.values()))  # concatenate outputs from all sep-povm-circuits
+    
+    def bulk_circuit_outcomes(self, circuits, split_circuits=None, completed_circuits=None):
+        """
+        Get all the possible outcome labels produced by simulating each of the circuits
+        in this list of circuits.
+
+        Parameters
+        ----------
+        circuits : list of Circuits
+            list of Circuits to get outcomes of.
+        
+        split_circuits : list of tuples, optional (default None)
+            If specified, this is a list of tuples for each circuit corresponding to the splitting of
+            the circuit into the prep label, spam-free circuit, and povm label. This is the same format
+            produced by the :meth:split_circuit(s) method, and so this option can allow for accelerating this
+            method when that has previously been run. When using this kwarg only one of this or 
+            the `complete_circuits` kwargs should be used.
+
+        completed_circuits : list of Circuits, optional (default None)
+            If specified, this is a list of compeleted circuits with prep and povm labels included.
+            This is the format produced by the :meth:complete_circuit(s) method, and this can
+            be used to accelerate this method call when that has been previously run. Should not
+            be used in conjunction with `split_circuits`.
+
+        Returns
+        -------
+        list of tuples corresponding to the possible outcomes for each circuit.
+        """
+
+        # list of dict w/keys=sep-povm-circuits, vals=outcomes
+        outcomes_list = self.bulk_expand_instruments_and_separate_povm(circuits, 
+                                                                       split_circuits=split_circuits,
+                                                                       completed_circuits=completed_circuits)  
+        
+        return [tuple(_itertools.chain(*outcomes.values())) for outcomes in outcomes_list]  # concatenate outputs from all sep-povm-circuits
 
     def split_circuit(self, circuit, erroron=('prep', 'povm'), split_prep=True, split_povm=True):
         """
@@ -1516,7 +1551,7 @@ class OpModel(Model):
             method when that has previously been run. When using this kwarg only one of this or 
             the `complete_circuits` kwargs should be used.
 
-        complete_circuits : list of Circuits, optional (default None)
+        completed_circuits : list of Circuits, optional (default None)
             If specified, this is a list of compeleted circuits with prep and povm labels included.
             This is the format produced by the :meth:complete_circuit(s) method, and this can
             be used to accelerate this method call when that has been previously run. Should not
@@ -1524,9 +1559,9 @@ class OpModel(Model):
 
         Returns
         -------
-        OrderedDict
-            A dict whose keys are :class:`SeparatePOVMCircuit` objects and whose
-            values are tuples of the outcome labels corresponding to this circuit,
+        list of OrderedDicts
+            A list of dictionaries whose keys are :class:`SeparatePOVMCircuit` objects and whose
+            values are tuples of the outcome labels corresponding to each circuit,
             one per POVM effect held in the key.
         """
 
