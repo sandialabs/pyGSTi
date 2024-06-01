@@ -71,7 +71,7 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
     """
 
     def __init__(self, unique_complete_circuits, unique_nospam_circuits, circuits_by_unique_nospam_circuits,
-                 ds_circuits, group, helpful_scratch, model, dataset=None, expanded_and_separated_circuit_cache=None,
+                 ds_circuits, group, helpful_scratch, model, unique_circuits, dataset=None, expanded_and_separated_circuit_cache=None,
                  double_expanded_nospam_circuits_cache = None):
 
         #Note: group gives unique_nospam_circuits indices, which circuits_by_unique_nospam_circuits
@@ -87,11 +87,13 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
                         expc_outcomes = model.expand_instruments_and_separate_povm(unique_complete_circuits[unique_i], observed_outcomes)
                         #Note: unique_complete_circuits may have duplicates (they're only unique *pre*-completion)
                     else:
-                        expc_outcomes = expanded_and_separated_circuit_cache.get(unique_complete_circuits[unique_i], None)
+                        #the cache is indexed into using the (potentially) incomplete circuits
+                        expc_outcomes = expanded_and_separated_circuit_cache.get(unique_circuits[unique_i], None)
                         if expc_outcomes is None: #fall back on original non-cache behavior.
                             observed_outcomes = None if (dataset is None) else dataset[ds_circuits[unique_i]].unique_outcomes
                             expc_outcomes = model.expand_instruments_and_separate_povm(unique_complete_circuits[unique_i], observed_outcomes)
-
+                            #and add this new value to the cache.
+                            expanded_and_separated_circuit_cache[unique_circuits[unique_i]] = expc_outcomes 
                     for sep_povm_c, outcomes in expc_outcomes.items():  # for each expanded cir from unique_i-th circuit
                         prep_lbl = sep_povm_c.circuit_without_povm[0]
                         exp_nospam_c = sep_povm_c.circuit_without_povm[1:]  # sep_povm_c *always* has prep lbl
@@ -312,23 +314,23 @@ class MatrixCOPALayout(_DistributableCOPALayout):
 
         #extract subcaches from layout_creation_circuit_cache:
         if layout_creation_circuit_cache is not None:
-            completed_circuit_cache = layout_creation_circuit_cache.get('completed_circuits', None)
-            split_circuit_cache = layout_creation_circuit_cache.get('split_circuits', None)
-            expanded_and_separated_circuits_cache = layout_creation_circuit_cache.get('expanded_and_separated_circuits', None)
-            expanded_subcircuits_no_spam_cache = layout_creation_circuit_cache.get('expanded_subcircuits_no_spam', None)
+            self.completed_circuit_cache = layout_creation_circuit_cache.get('completed_circuits', None)
+            self.split_circuit_cache = layout_creation_circuit_cache.get('split_circuits', None)
+            self.expanded_and_separated_circuits_cache = layout_creation_circuit_cache.get('expanded_and_separated_circuits', None)
+            self.expanded_subcircuits_no_spam_cache = layout_creation_circuit_cache.get('expanded_subcircuits_no_spam', None)
         else:
-            completed_circuit_cache = None
-            split_circuit_cache = None
-            expanded_and_separated_circuits_cache = None
-            expanded_subcircuits_no_spam_cache = None
+            self.completed_circuit_cache = None
+            self.split_circuit_cache = None
+            self.expanded_and_separated_circuits_cache = None
+            self.expanded_subcircuits_no_spam_cache = None
         
-        if completed_circuit_cache is None:
-            unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
+        if self.completed_circuit_cache is None:
+            unique_complete_circuits, split_unique_circuits = model.complete_circuits(unique_circuits, return_split=True)
         else:
             unique_complete_circuits = []
             for c in unique_circuits:
-                comp_ckt = completed_circuit_cache.get(c, None)
-                if completed_circuit_cache is not None:
+                comp_ckt = self.completed_circuit_cache.get(c, None)
+                if comp_ckt is not None:
                     unique_complete_circuits.append(comp_ckt)
                 else:
                     unique_complete_circuits.append(model.complete_circuit(c))
@@ -336,18 +338,24 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         # "unique circuits" after completion, e.g. "rho0Gx" and "Gx" could both complete to "rho0GxMdefault_0".
 
         circuits_by_unique_nospam_circuits = _collections.OrderedDict()
-        if completed_circuit_cache is None:
-            for i, c in enumerate(unique_complete_circuits):
-                _, nospam_c, _ = model.split_circuit(c)
+        if self.completed_circuit_cache is None:
+            for i, (_, nospam_c, _) in enumerate(split_unique_circuits):
                 if nospam_c in circuits_by_unique_nospam_circuits:
                     circuits_by_unique_nospam_circuits[nospam_c].append(i)
                 else:
                     circuits_by_unique_nospam_circuits[nospam_c] = [i]
+            #also create the split circuit cache at this point for future use.
+            self.split_circuit_cache = {unique_ckt:split_ckt for unique_ckt, split_ckt in zip(unique_circuits, split_unique_circuits)}
+
         else:
-            for i, c in enumerate(unique_complete_circuits):
-                _, nospam_c, _ = split_circuit_cache.get(c, None)
+            for i, (c_unique_complete, c_unique) in enumerate(zip(unique_complete_circuits, unique_circuits)):
+                split_ckt_tup = self.split_circuit_cache.get(c_unique, None)
+                nospam_c= split_ckt_tup[1] 
                 if nospam_c is None:
-                    _, nospam_c, _ = model.split_circuit(c)
+                    split_ckt_tup = model.split_circuit(c_unique_complete)
+                    nospam_c= split_ckt_tup[1]
+                    #also add this missing circuit to the cache for future use.
+                    self.split_circuit_cache[c_unique] = split_ckt_tup
                 if nospam_c in circuits_by_unique_nospam_circuits:
                     circuits_by_unique_nospam_circuits[nospam_c].append(i)
                 else:
@@ -370,9 +378,10 @@ class MatrixCOPALayout(_DistributableCOPALayout):
             group, helpful_scratch_group = args
             return _MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
                                          circuits_by_unique_nospam_circuits, ds_circuits,
-                                         group, helpful_scratch_group, model, dataset,
-                                         expanded_and_separated_circuits_cache,
-                                         expanded_subcircuits_no_spam_cache)
+                                         group, helpful_scratch_group, model, 
+                                         unique_circuits, dataset,
+                                         self.expanded_and_separated_circuits_cache,
+                                         self.expanded_subcircuits_no_spam_cache)
 
         super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,
                          _create_atom, list(zip(groups, helpful_scratch)), num_tree_processors,
@@ -388,7 +397,7 @@ def create_matrix_copa_layout_circuit_cache(circuits, model, dataset=None):
     completed_circuits, split_circuits = model.complete_circuits(circuits, return_split=True)
 
     cache['completed_circuits'] = {ckt: comp_ckt for ckt, comp_ckt in zip(circuits, completed_circuits)}
-    cache['split_circuits'] = {ckt: split_ckt for ckt, split_ckt in zip(cache['completed_circuits'].values(), split_circuits)}
+    cache['split_circuits'] = {ckt: split_ckt for ckt, split_ckt in zip(circuits, split_circuits)}
 
     #There is some potential aliasing that happens in the init that I am not
     #doing here, but I think 90+% of the time this ought to be fine.
@@ -404,7 +413,7 @@ def create_matrix_copa_layout_circuit_cache(circuits, model, dataset=None):
                                                                                     observed_outcomes_list = unique_outcomes_list, 
                                                                                     split_circuits = split_circuits)
     
-    expanded_circuit_cache = {ckt: expanded_ckt for ckt,expanded_ckt in zip(cache['completed_circuits'].values(), expanded_circuit_outcome_list)}
+    expanded_circuit_cache = {ckt: expanded_ckt for ckt,expanded_ckt in zip(circuits, expanded_circuit_outcome_list)}
                 
     cache['expanded_and_separated_circuits'] = expanded_circuit_cache
 

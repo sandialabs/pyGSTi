@@ -1647,7 +1647,7 @@ class OpModel(Model):
             method when that has previously been run. When using this kwarg only one of this or 
             the `complete_circuits` kwargs should be used.
 
-        complete_circuits : list of Circuits, optional (default None)
+        completed_circuits : list of Circuits, optional (default None)
             If specified, this is a list of compeleted circuits with prep and povm labels included.
             This is the format produced by the :meth:complete_circuit(s) method, and this can
             be used to accelerate this method call when that has been previously run. Should not
@@ -1655,9 +1655,9 @@ class OpModel(Model):
 
         Returns
         -------
-        OrderedDict
-            A dict whose keys are :class:`SeparatePOVMCircuit` objects and whose
-            values are tuples of the outcome labels corresponding to this circuit,
+        list of OrderedDicts
+            A list of dictionaries whose keys are :class:`SeparatePOVMCircuit` objects and whose
+            values are tuples of the outcome labels corresponding to each circuit,
             one per POVM effect held in the key.
         """
 
