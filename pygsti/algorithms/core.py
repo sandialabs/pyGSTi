@@ -888,8 +888,11 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
 
     for i, circuit_list in enumerate(circuit_lists):
         printer.log(f'Layout for iteration {i}', 2)
-        precomp_layouts.append(mdl.sim.create_layout(circuit_list, dataset, resource_alloc, array_types, verbosity= printer - 1,
-                                                     layout_creation_circuit_cache = precomp_layout_circuit_cache))
+        if isinstance(mdl.sim, _fwdsims.MatrixForwardSimulator):
+            precomp_layouts.append(mdl.sim.create_layout(circuit_list, dataset, resource_alloc, array_types, verbosity= printer - 1,
+                                                        layout_creation_circuit_cache = precomp_layout_circuit_cache))
+        else:
+            precomp_layouts.append(mdl.sim.create_layout(circuit_list, dataset, resource_alloc, array_types, verbosity= printer - 1))
     
     #precompute a cache of possible outcome counts for each circuits to accelerate MDC store creation
     if isinstance(mdl, _models.model.OpModel):
