@@ -842,7 +842,7 @@ class ModelDatasetCircuitsStore(object):
     point.
     """
     def __init__(self, model, dataset, circuits=None, resource_alloc=None, array_types=(),
-                 precomp_layout=None, outcome_count_by_circuit=None, verbosity=0):
+                 precomp_layout=None, verbosity=0, outcome_count_by_circuit=None):
         self.dataset = dataset
         self.model = model
         self.resource_alloc = _ResourceAllocation.cast(resource_alloc)
@@ -938,19 +938,33 @@ class ModelDatasetCircuitsStore(object):
         """
         if self.firsts is None or force:
             # FUTURE: add any tracked memory? self.resource_alloc.add_tracked_memory(...)
-            self.firsts = []; self.indicesOfCircuitsWithOmittedData = []
+            self.firsts = [] 
+            self.indicesOfCircuitsWithOmittedData = []
 
-            #bulk compute the number of outcomes.
-            if isinstance(self.model, _OpModel):
-                bulk_outcomes_list = self.model.bulk_circuit_outcomes(self.circuits, split_circuits=self.split_circuits)
-                num_outcomes_list = [len(outcome_tup) for outcome_tup in bulk_outcomes_list]
+            if self.outcome_count_by_circuit_cache is None:
+                #bulk compute the number of outcomes.
+                if isinstance(self.model, _OpModel) and self.split_circuits is not None:
+                    bulk_outcomes_list = self.model.bulk_circuit_outcomes(self.circuits, split_circuits=self.split_circuits)
+                    num_outcomes_list = [len(outcome_tup) for outcome_tup in bulk_outcomes_list]
+                else:
+                    num_outcomes_list = [self.model.compute_num_outcomes(c) for c in self.circuits]
             else:
-                num_outcomes_list = [self.model.compute_num_outcomes(c) for c in self.circuits]
+                num_outcomes_list = []
+                for ckt in self.circuits:
+                    num_outcomes = self.outcome_count_by_circuit_cache.get(ckt, None)
+                    if num_outcomes is None:
+                        num_outcomes = self.model.compute_num_outcomes(ckt)
+                        #also add this to the cache, just in case it is later needed.
+                        self.outcome_count_by_circuit_cache[ckt] = num_outcomes
+                    num_outcomes_list.append(num_outcomes)
 
             for i in range(len(self.circuits)):
-                indices = _slct.to_array(self.layout.indices_for_index(i))
-                lklen = _slct.length(self.layout.indices_for_index(i))
-                if 0 < lklen < num_outcomes_list[i]:
+                indices = self.layout.indices_for_index(i)
+                #The return types of indices_for_index are either ndarrays
+                #or slices.
+                if isinstance(indices, slice): 
+                    indices = _slct.indices(indices)
+                if 0 < len(indices) < num_outcomes_list[i]:
                     self.firsts.append(indices[0])
                     self.indicesOfCircuitsWithOmittedData.append(i)
             if self.firsts:

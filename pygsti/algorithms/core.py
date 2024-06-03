@@ -895,7 +895,7 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
     if isinstance(mdl, _models.model.OpModel):
         if precomp_layout_circuit_cache is not None: #then grab the split circuits from there.
             expanded_circuit_outcome_list = mdl.bulk_expand_instruments_and_separate_povm(unique_circuits, 
-                                                                                        split_circuits = precomp_layout_circuit_cache['split_circuits'])
+                                                                                        split_circuits = precomp_layout_circuit_cache['split_circuits'].values())
             outcome_count_by_circuit_cache = {ckt: len(outcome_tup) for ckt,outcome_tup in zip(unique_circuits, expanded_circuit_outcome_list)}
         else:
             expanded_circuit_outcome_list = mdl.bulk_expand_instruments_and_separate_povm(unique_circuits)    

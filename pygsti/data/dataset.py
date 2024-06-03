@@ -563,6 +563,7 @@ class _DataSetRow(object):
         else: tslc = slice(None)
 
         oli_tslc = self.oli[tslc]
+        rep_tslc = self.reps[tslc]
         nOutcomes = len(self.dataset.olIndex)
         nIndices = len(oli_tslc)
         
@@ -576,7 +577,7 @@ class _DataSetRow(object):
                 for ol, i in self.dataset.olIndex.items():
                     inds = oli_tslc[oli_tslc == i]
                     if len(inds) > 0 or all_outcomes:
-                        cntDict.setitem_unsafe(ol, float(sum(self.reps[tslc][inds])))
+                        cntDict.setitem_unsafe(ol, float(sum(rep_tslc[inds])))
         else:
             if self.reps is None:
                 for ol_index in oli_tslc:
