@@ -876,9 +876,9 @@ class ModelDatasetCircuitsStore(object):
             #self.circuits
             self.split_circuit_cache = self.layout.split_circuit_cache
             self.split_circuits = [self.split_circuit_cache[ckt] for ckt in self.circuits]
-
         #currently only implemented for matrix, will eventually add map support.
         else:
+            self.split_circuits = None
             self.split_circuit_cache = None
 
         #set the value of the circuit outcome count cache (can be None)
