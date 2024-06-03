@@ -679,16 +679,10 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
         if _np.linalg.norm(mdc_store.model.to_vector() - v_cmp) > 1e-6:
             raise ValueError("MPI ERROR: *different* MC2GST start models"
                              " given to different processors!")                   # pragma: no cover
-
-    #MEM from ..baseobjs.profiler import Profiler
-    #MEM debug_prof = Profiler(comm)
-    #MEM debug_prof.print_memory("run_gst_fit1", True)
-
+        
     if objective_function_builder is not None:
         objective_function_builder = _objfns.ObjectiveFunctionBuilder.cast(objective_function_builder)
-        #MEM debug_prof.print_memory("run_gst_fit2", True)
         objective = objective_function_builder.build_from_store(mdc_store, printer)  # (objective is *also* a store)
-        #MEM debug_prof.print_memory("run_gst_fit3", True)
     else:
         assert(isinstance(mdc_store, _objfns.ObjectiveFunction)), \
             "When `objective_function_builder` is None, `mdc_store` must be an objective fn!"
@@ -707,14 +701,8 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
 
     printer.log("Completed in %.1fs" % (_time.time() - tStart), 1)
 
-    #if target_model is not None:
-    #  target_vec = target_model.to_vector()
-    #  targetErrVec = _objective_func(target_vec)
-    #  return minErrVec, soln_gs, targetErrVec
     profiler.add_time("do_mc2gst: total time", tStart)
-    #TODO: evTree.permute_computation_to_original(minErrVec) #Doesn't work b/c minErrVec is flattened
-    # but maybe best to just remove minErrVec from return value since this isn't very useful
-    # anyway?
+
     return opt_result, objective
 
 
@@ -907,7 +895,7 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
     if isinstance(mdl, _models.model.OpModel):
         if precomp_layout_circuit_cache is not None: #then grab the split circuits from there.
             expanded_circuit_outcome_list = mdl.bulk_expand_instruments_and_separate_povm(unique_circuits, 
-                                                                                        split_circuits = precomp_layout_circuit_cache['split_circuits'])
+                                                                                        split_circuits = precomp_layout_circuit_cache['split_circuits'].values())
             outcome_count_by_circuit_cache = {ckt: len(outcome_tup) for ckt,outcome_tup in zip(unique_circuits, expanded_circuit_outcome_list)}
         else:
             expanded_circuit_outcome_list = mdl.bulk_expand_instruments_and_separate_povm(unique_circuits)    
