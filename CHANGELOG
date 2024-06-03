@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [0.9.12.3] - 2024-06-03
+
+### Added
+* Deterministic Clifford compilation and native gate count statistics for `CliffordRBDesign` (#314, #315, #443)
+
+
+### Fixed
+* Truncation bugfix in `BenchmarkingDesign` objects with "paired" lists to `circuit_list` attribute (#408, #443)
+* Fixes and efficiency improvements for various linear algebra calls (#432)
+* `densitymx_slow` evotype hotfix (#438, #439)
+
+
 ## [0.9.12.2] - 2024-04-16
 
 ### Added
