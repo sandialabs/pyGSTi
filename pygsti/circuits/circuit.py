@@ -96,7 +96,7 @@ def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_ret
     """ Convert lbl into nested lists of *simple* labels """
     if not isinstance(lbl, _Label):  # if not a Label, make into a label,
         lbl = _Label(lbl)  # e.g. a string or list/tuple of labels, etc.
-    if lbl._is_simple:  # a *simple* label - the elements of our lists
+    if lbl.is_simple:  # a *simple* label - the elements of our lists
         if lbl.sslbls is None and default_sslbls is not None:
             lbl = _Label(lbl.name, default_sslbls)
         return [lbl] if always_return_list else lbl
@@ -120,7 +120,7 @@ def _accumulate_explicit_sslbls(obj):
     """
     ret = set()
     if isinstance(obj, _Label):
-        if not obj._is_simple:
+        if not obj.is_simple:
             for lbl in obj.components:
                 ret.update(_accumulate_explicit_sslbls(lbl))
         else:  # a simple label
@@ -510,6 +510,7 @@ class Circuit(object):
         ret._bare_init(labels, line_labels, editable, name, stringrep, occurrence, compilable_layer_indices_tup)
         return ret
 
+    #Note: If editing _bare_init one should also check _copy_init in case changes must be propagated.
     def _bare_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
                    compilable_layer_indices_tup=()):
         self._labels = labels
@@ -523,12 +524,11 @@ class Circuit(object):
             self._str = stringrep
         else:
             self._str = None # can be None (lazy generation)
-            #only meant to be used in settings where we're explicitly checking for self._static.
-        #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
 
+    #Note: If editing _copy_init one should also check _bare_init in case changes must be propagated.
     #specialized codepath for copying
     def _copy_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
                 compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None):
@@ -541,11 +541,8 @@ class Circuit(object):
             self._hashable_tup = hashable_tup #if static we have already precomputed and cached the hashable circuit tuple.
             self._hash = precomp_hash #Same as previous comment. Only meant to be used in settings where we're explicitly checking for self._static.
             self._str = stringrep
-            
         else:
             self._str = None # can be None (lazy generation)
-            
-        #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
@@ -652,37 +649,22 @@ class Circuit(object):
         tuple
         """
         comp_lbl_flag = ('__CMPLBL__',) if self._compilable_layer_indices_tup else ()
-        if self._static:
-            if self._occurrence_id is None:
-                if self._line_labels in (('*',), ()):  # No line labels
-                    return self._labels + comp_lbl_flag + self._compilable_layer_indices_tup
-                else:
-                    return self._labels + ('@',) + self._line_labels + comp_lbl_flag \
-                        + self._compilable_layer_indices_tup
-            else: 
-                if self._line_labels in (('*',), ()):
-                    return self._labels + ('@',) + ('@', self._occurrence_id) \
-                            + comp_lbl_flag + self._compilable_layer_indices_tup
-                else:
-                    return self._labels + ('@',) + self._line_labels + ('@', self._occurrence_id) \
-                            + comp_lbl_flag + self._compilable_layer_indices_tup
-                # Note: we *always* need line labels (even if they're empty) when using occurrence id
+        layertup = self._labels if self._static else self.layertup
 
-        else:
-            if self._occurrence_id is None:
-                if self._line_labels in (('*',), ()):  # No line labels
-                    return self.layertup + comp_lbl_flag + self._compilable_layer_indices_tup
-                else:
-                    return self.layertup + ('@',) + self._line_labels + comp_lbl_flag\
-                          + self._compilable_layer_indices_tup
-            else: 
-                if self._line_labels in (('*',), ()):
-                    return self.layertup + ('@',) + ('@', self._occurrence_id) \
-                            + comp_lbl_flag + self._compilable_layer_indices_tup
-                else:
-                    return self.layertup + ('@',) + self._line_labels + ('@', self._occurrence_id) \
-                            + comp_lbl_flag + self._compilable_layer_indices_tup
-                # Note: we *always* need line labels (even if they're empty) when using occurrence id
+        if self._occurrence_id is None:
+            if self._line_labels in (('*',), ()):  # No line labels
+                return layertup + comp_lbl_flag + self._compilable_layer_indices_tup
+            else:
+                return layertup + ('@',) + self._line_labels + comp_lbl_flag\
+                        + self._compilable_layer_indices_tup
+        else: 
+            if self._line_labels in (('*',), ()):
+                return layertup + ('@',) + ('@', self._occurrence_id) \
+                        + comp_lbl_flag + self._compilable_layer_indices_tup
+            else:
+                return layertup + ('@',) + self._line_labels + ('@', self._occurrence_id) \
+                        + comp_lbl_flag + self._compilable_layer_indices_tup
+            # Note: we *always* need line labels (even if they're empty) when using occurrence id
 
     def _tup_copy(self, labels):
         """
@@ -980,7 +962,7 @@ class Circuit(object):
                 return False
             else:
                 if self._static and x._static:
-                    return self._hashable_tup == x._hashable_tup
+                    return self._hash == x._hash
                 else:
                     return self.tup == x.tup
         elif x is None: 
@@ -1045,7 +1027,7 @@ class Circuit(object):
         if editable:
             if self._static:
                 #static and editable circuits have different conventions for _labels.
-                editable_labels =[[lbl] if lbl._is_simple else list(lbl.components) for lbl in self._labels]
+                editable_labels =[[lbl] if lbl.is_simple else list(lbl.components) for lbl in self._labels]
                 return ret._copy_init(editable_labels, self._line_labels, editable, 
                                       self._name, self._str, self._occurrence_id, 
                                       self._compilable_layer_indices_tup)
@@ -1125,7 +1107,7 @@ class Circuit(object):
         """ Get the components of the `ilayer`-th layer as a list/tuple. """
         #(works for static and non-static Circuits)
         if self._static:
-            if self._labels[ilayer]._is_simple: return [self._labels[ilayer]]
+            if self._labels[ilayer].is_simple: return [self._labels[ilayer]]
             else: return self._labels[ilayer].components
         else:
             return self._labels[ilayer] if isinstance(self._labels[ilayer], list) \
@@ -1857,7 +1839,7 @@ class Circuit(object):
                     raise ValueError(("Cannot remove a block that is straddled by "
                                       "%s when `delete_straddlers` == False!") % _Label(l))
             self._labels[i] = new_layer
-        self.line_labels = tuple([x for x in self._line_labels if x not in lines])
+        self._line_labels = tuple([x for x in self._line_labels if x not in lines])
 
     def __getitem__(self, key):
         layers, lines = self._proc_key_arg(key)
@@ -2403,7 +2385,7 @@ class Circuit(object):
 
         #Add circuit's labels into this circuit
         self.insert_labels_as_lines_inplace(circuit._labels, line_labels=circuit.line_labels)
-        self.line_labels = new_line_labels  # essentially just reorders labels if needed
+        self._line_labels = new_line_labels  # essentially just reorders labels if needed
 
     def tensor_circuit(self, circuit, line_order=None):
         """
@@ -2780,7 +2762,7 @@ class Circuit(object):
 
         def map_names(obj):  # obj is either a simple label or a list
             if isinstance(obj, _Label):
-                if obj._is_simple:  # *simple* label
+                if obj.is_simple:  # *simple* label
                     new_name = mapper_func(obj.name)
                     newobj = _Label(new_name, obj.sslbls) \
                         if (new_name is not None) else obj
@@ -3422,7 +3404,7 @@ class Circuit(object):
         #TODO HERE -update from here down b/c of sub-circuit blocks
         if self._static:
             def size(lbl):  # obj a Label, perhaps compound
-                if lbl._is_simple:  # a simple label
+                if lbl.is_simple:  # a simple label
                     return len(lbl.sslbls) if (lbl.sslbls is not None) else len(self._line_labels)
                 else:
                     return sum([size(sublbl) for sublbl in lbl.components])
@@ -3477,7 +3459,7 @@ class Circuit(object):
         """
         if self._static:
             def cnt(lbl):  # obj a Label, perhaps compound
-                if lbl._is_simple:  # a simple label
+                if lbl.is_simple:  # a simple label
                     return 1 if (lbl.sslbls is not None) and (len(lbl.sslbls) == nq) else 0
                 else:
                     return sum([cnt(sublbl) for sublbl in lbl.components])
@@ -3505,7 +3487,7 @@ class Circuit(object):
         """
         if self._static:
             def cnt(lbl):  # obj a Label, perhaps compound
-                if lbl._is_simple:  # a simple label
+                if lbl.is_simple:  # a simple label
                     return 1 if (lbl.sslbls is not None) and (len(lbl.sslbls) >= 2) else 0
                 else:
                     return sum([cnt(sublbl) for sublbl in lbl.components])
@@ -3528,7 +3510,7 @@ class Circuit(object):
             for layercomp in self._layer_components(ilayer):
                 if isinstance(layercomp, _Label):
                     comp_label = layercomp
-                    if layercomp._is_simple:
+                    if layercomp.is_simple:
                         comp_sslbls = layercomp.sslbls
                     else:
                         #We can't intelligently flatten compound labels that occur within a layer-label yet...

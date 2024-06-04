@@ -405,7 +405,7 @@ class ErrorRatesModel(SuccessFailModel):
                 return [g_inds[self._alias_dict.get(_Label(lbl.name, lbl.sslbls), _Label(lbl.name, lbl.sslbls))]]
             else:
                 indices = []
-                assert(not lbl.is_simple()), "Cannot find error rate for label: %s" % str(lbl)
+                assert(not lbl.is_simple), "Cannot find error rate for label: %s" % str(lbl)
                 for component in lbl:
                     indices.extend(indices_for_label(component))
                 return indices
