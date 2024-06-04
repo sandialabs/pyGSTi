@@ -17,6 +17,25 @@ import numpy as _np
 from pygsti.objectivefns.wildcardbudget import update_circuit_probs as _update_circuit_probs
 from pygsti.optimize.optimize import minimize as _minimize
 
+"""Developer notes
+
+Removed functions
+-----------------
+
+    This file used to have three algorithms for optimizing wildcard budgets that relied on
+    CVXOPT's nonlinear optimization interface. In June 2024 we investigated whether these
+    algorithms could be re-implemented to rely only on CVXPY's modeling capabilities. We
+    came to the conclusion that while that may have been possible, it would have involved
+    an inordinate amount of work, and that for the sake of maintainability it was better to
+    remove these CVXOPT-based algorithms from pyGSTi altogether.
+
+    Here's a hash for one of the last commits on pyGSTi's develop branch that had these
+    algorithms: 723cd24aec3b90d28b0fcd9b31145b920c256acf.
+
+    See https://github.com/sandialabs/pyGSTi/pull/444 for more information.
+
+"""
+
 
 def optimize_wildcard_budget_neldermead(budget, L1weights, wildcard_objfn, two_dlogl_threshold,
                                         redbox_threshold, printer, smart_init=True, max_outer_iters=10,
