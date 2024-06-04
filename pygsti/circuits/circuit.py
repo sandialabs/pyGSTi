@@ -510,6 +510,7 @@ class Circuit(object):
         ret._bare_init(labels, line_labels, editable, name, stringrep, occurrence, compilable_layer_indices_tup)
         return ret
 
+    #Note: If editing _bare_init one should also check _copy_init in case changes must be propagated.
     def _bare_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
                    compilable_layer_indices_tup=()):
         self._labels = labels
@@ -523,12 +524,11 @@ class Circuit(object):
             self._str = stringrep
         else:
             self._str = None # can be None (lazy generation)
-            #only meant to be used in settings where we're explicitly checking for self._static.
-        #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
 
+    #Note: If editing _copy_init one should also check _bare_init in case changes must be propagated.
     #specialized codepath for copying
     def _copy_init(self, labels, line_labels, editable, name='', stringrep=None, occurrence=None,
                 compilable_layer_indices_tup=(), hashable_tup=None, precomp_hash=None):
@@ -541,11 +541,8 @@ class Circuit(object):
             self._hashable_tup = hashable_tup #if static we have already precomputed and cached the hashable circuit tuple.
             self._hash = precomp_hash #Same as previous comment. Only meant to be used in settings where we're explicitly checking for self._static.
             self._str = stringrep
-            
         else:
             self._str = None # can be None (lazy generation)
-            
-        #self._reps = reps # repetitions: default=1, which remains unless we initialize from a CircuitLabel...
         self._name = name  # can be None
         #self._times = None  # for FUTURE expansion
         self.auxinfo = {}  # for FUTURE expansion / user metadata
@@ -652,37 +649,22 @@ class Circuit(object):
         tuple
         """
         comp_lbl_flag = ('__CMPLBL__',) if self._compilable_layer_indices_tup else ()
-        if self._static:
-            if self._occurrence_id is None:
-                if self._line_labels in (('*',), ()):  # No line labels
-                    return self._labels + comp_lbl_flag + self._compilable_layer_indices_tup
-                else:
-                    return self._labels + ('@',) + self._line_labels + comp_lbl_flag \
-                        + self._compilable_layer_indices_tup
-            else: 
-                if self._line_labels in (('*',), ()):
-                    return self._labels + ('@',) + ('@', self._occurrence_id) \
-                            + comp_lbl_flag + self._compilable_layer_indices_tup
-                else:
-                    return self._labels + ('@',) + self._line_labels + ('@', self._occurrence_id) \
-                            + comp_lbl_flag + self._compilable_layer_indices_tup
-                # Note: we *always* need line labels (even if they're empty) when using occurrence id
+        layertup = self._labels if self._static else self.layertup
 
-        else:
-            if self._occurrence_id is None:
-                if self._line_labels in (('*',), ()):  # No line labels
-                    return self.layertup + comp_lbl_flag + self._compilable_layer_indices_tup
-                else:
-                    return self.layertup + ('@',) + self._line_labels + comp_lbl_flag\
-                          + self._compilable_layer_indices_tup
-            else: 
-                if self._line_labels in (('*',), ()):
-                    return self.layertup + ('@',) + ('@', self._occurrence_id) \
-                            + comp_lbl_flag + self._compilable_layer_indices_tup
-                else:
-                    return self.layertup + ('@',) + self._line_labels + ('@', self._occurrence_id) \
-                            + comp_lbl_flag + self._compilable_layer_indices_tup
-                # Note: we *always* need line labels (even if they're empty) when using occurrence id
+        if self._occurrence_id is None:
+            if self._line_labels in (('*',), ()):  # No line labels
+                return layertup + comp_lbl_flag + self._compilable_layer_indices_tup
+            else:
+                return layertup + ('@',) + self._line_labels + comp_lbl_flag\
+                        + self._compilable_layer_indices_tup
+        else: 
+            if self._line_labels in (('*',), ()):
+                return layertup + ('@',) + ('@', self._occurrence_id) \
+                        + comp_lbl_flag + self._compilable_layer_indices_tup
+            else:
+                return layertup + ('@',) + self._line_labels + ('@', self._occurrence_id) \
+                        + comp_lbl_flag + self._compilable_layer_indices_tup
+            # Note: we *always* need line labels (even if they're empty) when using occurrence id
 
     def _tup_copy(self, labels):
         """
@@ -980,7 +962,7 @@ class Circuit(object):
                 return False
             else:
                 if self._static and x._static:
-                    return self._hashable_tup == x._hashable_tup
+                    return self._hash == x._hash
                 else:
                     return self.tup == x.tup
         elif x is None: 
@@ -1857,7 +1839,7 @@ class Circuit(object):
                     raise ValueError(("Cannot remove a block that is straddled by "
                                       "%s when `delete_straddlers` == False!") % _Label(l))
             self._labels[i] = new_layer
-        self.line_labels = tuple([x for x in self._line_labels if x not in lines])
+        self._line_labels = tuple([x for x in self._line_labels if x not in lines])
 
     def __getitem__(self, key):
         layers, lines = self._proc_key_arg(key)
@@ -2403,7 +2385,7 @@ class Circuit(object):
 
         #Add circuit's labels into this circuit
         self.insert_labels_as_lines_inplace(circuit._labels, line_labels=circuit.line_labels)
-        self.line_labels = new_line_labels  # essentially just reorders labels if needed
+        self._line_labels = new_line_labels  # essentially just reorders labels if needed
 
     def tensor_circuit(self, circuit, line_order=None):
         """

@@ -1183,33 +1183,10 @@ class OpModel(Model):
         ops_only_circuit : Circuit
         povm_label : Label or None
         """
-        if split_prep:
-            if len(circuit) > 0 and self._is_primitive_prep_layer_lbl(circuit[0]):
-                prep_lbl = circuit[0]
-                circuit = circuit[1:]
-            elif self._default_primitive_prep_layer_lbl() is not None:
-                prep_lbl = self._default_primitive_prep_layer_lbl()
-            else:
-                if 'prep' in erroron and self._has_primitive_preps():
-                    raise ValueError("Cannot resolve state prep in %s" % circuit)
-                else: prep_lbl = None
-        else:
-            prep_lbl = None
 
-        if split_povm:
-            if len(circuit) > 0 and self._is_primitive_povm_layer_lbl(circuit[-1]):
-                povm_lbl = circuit[-1]
-                circuit = circuit[:-1]
-            elif self._default_primitive_povm_layer_lbl(circuit.line_labels) is not None:
-                povm_lbl = self._default_primitive_povm_layer_lbl(circuit.line_labels)
-            else:
-                if 'povm' in erroron and self._has_primitive_povms():
-                    raise ValueError("Cannot resolve POVM in %s" % str(circuit))
-                else: povm_lbl = None
-        else:
-            povm_lbl = None
-
-        return prep_lbl, circuit, povm_lbl
+        split_circuit = self.split_circuits([circuit], erroron, split_prep, split_povm)
+        return split_circuit[0]
+    
     
     def split_circuits(self, circuits, erroron=('prep', 'povm'), split_prep=True, split_povm=True):
         """
@@ -1251,29 +1228,30 @@ class OpModel(Model):
         povm_label : Label or None
         """
 
-        #get the tuple of povm labels to avoid having to access through dict
-        #many times.
-        primitive_prep_labels_tup = self.primitive_prep_labels
-        primitive_povm_labels_tup = self.primitive_povm_labels
-        primitive_prep_labels_set = set(primitive_prep_labels_tup)
-        primitive_povm_labels_set = set(primitive_povm_labels_tup)
-
         #precompute unique default povm labels.
         unique_sslbls = set([ckt._line_labels for ckt in circuits])
         default_povm_labels = {sslbls:self._default_primitive_povm_layer_lbl(sslbls) for sslbls in unique_sslbls}
         
         if split_prep and split_povm: #can avoid some duplicated effort in this case.
+            #get the tuple of prep and povm labels to avoid having to access through dict
+            #many times.
+            primitive_prep_labels_tup = self.primitive_prep_labels
+            primitive_povm_labels_tup = self.primitive_povm_labels
+            primitive_prep_labels_set = set(primitive_prep_labels_tup)
+            primitive_povm_labels_set = set(primitive_povm_labels_tup)
+
             split_circuits = []
             for ckt in circuits:
                 if len(ckt) > 0 and ckt[0] in primitive_prep_labels_set:
                     prep_lbl = ckt[0]
                     circuit = ckt[1:]
-                elif primitive_prep_labels_tup:
+                elif len(primitive_prep_labels_tup)==1:
                     prep_lbl = primitive_prep_labels_tup[0]
                     circuit = None
                 else:
                     if 'prep' in erroron and self._has_primitive_preps():
-                        raise ValueError("Cannot resolve state prep in %s" % circuit)
+                        msg = f"Cannot resolve state prep in {ckt}. There are likely multiple preps in this model."
+                        raise ValueError(msg)
                     else: 
                         prep_lbl = None
                         circuit = None
@@ -1285,12 +1263,18 @@ class OpModel(Model):
                     povm_lbl = default_povm_labels[ckt._line_labels]
                 else:
                     if 'povm' in erroron and self._has_primitive_povms():
-                        raise ValueError("Cannot resolve POVM in %s" % str(circuit))
+                        msg = f"Cannot resolve POVM in {ckt}."
+                        raise ValueError(msg)
                     else: 
                         povm_lbl = None
                 split_circuits.append((prep_lbl, circuit, povm_lbl))
 
         elif split_prep:
+            #get the tuple of prep labels to avoid having to access through dict
+            #many times.
+            primitive_prep_labels_tup = self.primitive_prep_labels
+            primitive_prep_labels_set = set(primitive_prep_labels_tup)
+
             split_circuits = []
             for ckt in circuits:
                 if len(ckt) > 0 and ckt[0] in primitive_prep_labels_set:
@@ -1308,6 +1292,11 @@ class OpModel(Model):
                 split_circuits.append((prep_lbl, circuit, None))
 
         elif split_povm:
+            #get the tuple of povm labels to avoid having to access through dict
+            #many times.
+            primitive_povm_labels_tup = self.primitive_povm_labels
+            primitive_povm_labels_set = set(primitive_povm_labels_tup)
+
             split_circuits = []
             for ckt in circuits:
                 if len(ckt) > 0 and ckt[-1] in primitive_povm_labels_set:
@@ -1358,24 +1347,8 @@ class OpModel(Model):
             Possibly the same object as `circuit`, if no additions are needed.
         """
 
-        if len(circuit) == 0 or not self._is_primitive_prep_layer_lbl(circuit[0]):
-            prep_lbl_to_prepend = self._default_primitive_prep_layer_lbl()
-            if prep_lbl_to_prepend is None:
-                raise ValueError(f"Missing state prep in {circuit.str} and there's no default!")
-
-        if len(circuit) == 0 or not self._is_primitive_povm_layer_lbl(circuit[-1]):
-            sslbls = circuit.line_labels if circuit.line_labels != ("*",) else None
-            povm_lbl_to_append = self._default_primitive_povm_layer_lbl(sslbls)
-
-            if povm_lbl_to_append is None:
-                raise ValueError(f"Missing POVM in {circuit.str} and there's no default!")
-                
-        if prep_lbl_to_prepend: 
-            circuit = (prep_lbl_to_prepend,) + circuit
-        if povm_lbl_to_append: 
-            circuit = circuit + (povm_lbl_to_append,)
-
-        return circuit
+        comp_circuit = self.complete_circuits([circuit], prep_lbl_to_prepend, povm_lbl_to_append, False)
+        return comp_circuit[0]
 
     def complete_circuits(self, circuits, prep_lbl_to_prepend=None, povm_lbl_to_append=None, return_split = False):
         """
@@ -1441,7 +1414,7 @@ class OpModel(Model):
             else:
                 current_prep_lbl_to_prepend = ()
 
-            if len(ckt) == 0 or not ckt[-1] in primitive_povm_labels:
+            if len(ckt) == 0 or (not ckt[-1] in primitive_povm_labels and not ckt[-1].name in primitive_povm_labels):
                 current_povm_lbl_to_append = (povm_lbl_to_append,) if povm_lbl_to_append is not None else default_povm_labels[ckt._line_labels]
                 if current_povm_lbl_to_append[0] is None: #if still None we have no default and raise an error.
                     raise ValueError(f"Missing POVM in {ckt.str} and there's no default!")
