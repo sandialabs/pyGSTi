@@ -199,7 +199,8 @@ class LabelTup(Label, tuple):
     """
 
     #flag used in certain Circuit subroutines
-    _is_simple= True
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    is_simple= True
 
     @classmethod
     def init(cls, name, state_space_labels):
@@ -420,16 +421,6 @@ class LabelTup(Label, tuple):
         """
         return LabelTup.init(newname, self.sslbls) if (self.name == oldname) else self
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return True
-
     __hash__ = tuple.__hash__  # this is why we derive from tuple - using the
     # native tuple.__hash__ directly == speed boost
 
@@ -444,7 +435,8 @@ class LabelTupWithTime(Label, tuple):
     """
 
     #flag used in certain Circuit subroutines
-    _is_simple= True
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    is_simple= True
 
     @classmethod
     def init(cls, name, state_space_labels, time=0.0):
@@ -671,16 +663,6 @@ class LabelTupWithTime(Label, tuple):
         """
         return LabelTupWithTime(newname, self.sslbls) if (self.name == oldname) else self
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return True
-
     __hash__ = tuple.__hash__  # this is why we derive from tuple - using the
     # native tuple.__hash__ directly == speed boost
 
@@ -697,7 +679,8 @@ class LabelStr(Label, str):
     """
 
     #flag used in certain Circuit subroutines
-    _is_simple= True
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    is_simple= True
 
     @classmethod
     def init(cls, name, time=0.0):
@@ -857,16 +840,6 @@ class LabelStr(Label, str):
         """
         return LabelStr(newname) if (self.name == oldname) else self
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return True
-
     __hash__ = str.__hash__  # this is why we derive from tuple - using the
     # native tuple.__hash__ directly == speed boost
 
@@ -879,7 +852,8 @@ class LabelTupTup(Label, tuple):
     """
 
     #flag used in certain Circuit subroutines
-    _is_simple= False
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    is_simple= False
 
     @classmethod
     def init(cls, tup_of_tups):
@@ -1087,16 +1061,6 @@ class LabelTupTup(Label, tuple):
         """
         return LabelTupTup(tuple((x.replace_name(oldname, newname) for x in self)))
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return False
-
     @property
     def depth(self):
         """
@@ -1143,7 +1107,8 @@ class LabelTupTupWithTime(Label, tuple):
     """
 
     #flag used in certain Circuit subroutines
-    _is_simple= False
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    is_simple= False
 
     @classmethod
     def init(cls, tup_of_tups, time=None):
@@ -1353,16 +1318,6 @@ class LabelTupTupWithTime(Label, tuple):
         """
         return LabelTupTupWithTime(tuple((x.replace_name(oldname, newname) for x in self)))
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return False
-
     @property
     def depth(self):
         """
@@ -1413,7 +1368,8 @@ class CircuitLabel(Label, tuple):
     """
 
     #flag used in certain Circuit subroutines
-    _is_simple= True
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    is_simple= True
 
     def __new__(cls, name, tup_of_layers, state_space_labels, reps=1, time=None):
         # Note: may need default args for all but 1st for pickling!
@@ -1647,16 +1603,6 @@ class CircuitLabel(Label, tuple):
                             self.sslbls,
                             self[2])
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return True  # still true - even though can have components!
-
     @property
     def depth(self):
         """
@@ -1694,7 +1640,8 @@ class LabelTupWithArgs(Label, tuple):
     """
 
     #flag used in certain Circuit subroutines
-    _is_simple= True
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    is_simple= True
 
     @classmethod
     def init(cls, name, state_space_labels, time=0.0, args=()):
@@ -1948,16 +1895,6 @@ class LabelTupWithArgs(Label, tuple):
         """
         return LabelTupWithArgs(newname, self.sslbls, self.time, self.args) if (self.name == oldname) else self
 
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return True
-
     __hash__ = tuple.__hash__  # this is why we derive from tuple - using the
     # native tuple.__hash__ directly == speed boost
 
@@ -1971,7 +1908,8 @@ class LabelTupTupWithArgs(Label, tuple):
     """
 
     #flag used in certain Circuit subroutines
-    _is_simple= False
+    #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
+    is_simple= False
 
     @classmethod
     def init(cls, tup_of_tups, time=None, args=()):
@@ -2199,16 +2137,6 @@ class LabelTupTupWithArgs(Label, tuple):
         """
         return LabelTupTupWithArgs(tuple((x.replace_name(oldname, newname) for x in self.components)),
                                    self.time, self.args)
-
-    def is_simple(self):
-        """
-        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-
-        Returns
-        -------
-        bool
-        """
-        return False
 
     @property
     def depth(self):
