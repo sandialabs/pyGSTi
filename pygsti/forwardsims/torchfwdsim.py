@@ -102,7 +102,7 @@ class StatelessModel:
 
         self.param_metadata = []
         for lbl, obj in model._iter_parameterized_objs():
-            assert isinstance(obj, Torchable)
+            assert isinstance(obj, Torchable), f"{type(obj)} does not subclass {Torchable}."
             param_type = type(obj)
             param_data = (lbl, param_type) + (obj.stateless_data(),)
             self.param_metadata.append(param_data)
@@ -147,17 +147,22 @@ class StatelessModel:
         self.default_to_reverse_ad = self.outcome_probs_dim < self.params_dim
         return tuple(free_params)
 
-    def get_torch_bases(self, free_params: Tuple[torch.Tensor], grad: bool) -> Dict[Label, torch.Tensor]:
+    def get_torch_bases(self, free_params: Tuple[torch.Tensor]) -> Dict[Label, torch.Tensor]:
         """
         Take data of the kind produced by get_free_params and format it in the way required by
         circuit_probs_from_torch_bases.
+
+        Note
+        ----
+        If you want to use the returned dict to build a PyTorch Tensor that supports the 
+        .backward() method, then you need to make sure that fp.requires_grad is True for all
+        fp in free_params. This can be done by calling fp._requires_grad(True) before calling
+        this function.
         """
         assert len(free_params) == len(self.param_metadata)
          # ^ A sanity check that we're being called with the correct number of arguments.
         torch_bases = dict()
         for i, val in enumerate(free_params):
-            if grad:
-                val.requires_grad_(True)
 
             label, type_handle, stateless_data = self.param_metadata[i]
             param_t = type_handle.torch_base(stateless_data, val)
@@ -184,17 +189,20 @@ class StatelessModel:
         probs = torch.concat(probs)
         return probs
     
-    def circuit_probs_from_free_params(self, *free_params: Tuple[torch.Tensor], require_reverse_ad=False) -> torch.Tensor:
+    def circuit_probs_from_free_params(self, *free_params: Tuple[torch.Tensor], enable_backward=False) -> torch.Tensor:
         """
         This is the basic function we expose to pytorch for automatic differentiation. It returns the circuit
         outcome probabilities resulting when the states of ModelMembers associated with this StatelessModel
-        are set according to data in free_params. 
+        are set based on free_params. 
 
-        If (require_reverse_ad or self.default_to_reverse_ad) == True, then the returned Tensor can be used
-        in pytorch's reverse-mode automatic differentiation.
+        If you want to call PyTorch's .backward() on the returned Tensor (or a function of that Tensor), then
+        you should set enable_backward=True. Keep the default value of enable_backward=False in all other
+        situations, including when using PyTorch's jacrev function.
         """
-        enable_backprop = require_reverse_ad or self.default_to_reverse_ad
-        torch_bases = self.get_torch_bases(free_params, grad=enable_backprop)
+        if enable_backward:
+            for fp in free_params:
+                fp._requires_grad(True)
+        torch_bases = self.get_torch_bases(free_params)
         probs = self.circuit_probs_from_torch_bases(torch_bases)
         return probs
 
@@ -216,7 +224,7 @@ class TorchForwardSimulator(ForwardSimulator):
         if split_model is None:
             slm = StatelessModel(self.model, layout)
             free_params = slm.get_free_params(self.model)
-            torch_bases = slm.get_torch_bases(free_params, grad=False)
+            torch_bases = slm.get_torch_bases(free_params)
         else:
             slm, torch_bases = split_model
 
@@ -232,7 +240,7 @@ class TorchForwardSimulator(ForwardSimulator):
         free_params = slm.get_free_params(self.model)
     
         if pr_array_to_fill is not None:
-            torch_bases = slm.get_torch_bases(free_params, grad=False)
+            torch_bases = slm.get_torch_bases(free_params)
             splitm = (slm, torch_bases)
             self._bulk_fill_probs(pr_array_to_fill, layout, splitm)
 
