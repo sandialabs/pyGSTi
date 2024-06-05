@@ -378,6 +378,15 @@ class ForwardSimulator(_NicelySerializable):
                 derivative_dimensions = tuple()
         return _CircuitOutcomeProbabilityArrayLayout.create_from(circuits, self.model, dataset, derivative_dimensions,
                                                                  resource_alloc=resource_alloc)
+    
+    @staticmethod
+    def create_copa_layout_circuit_cache(circuits, model, dataset=None):
+        """
+        Helper function for pre-computing/pre-processing circuits structures
+        used in matrix layout creation.
+        """
+        msg = "Not currently implemented for this forward simulator class."
+        raise NotImplementedError(msg)
 
     def bulk_probs(self, circuits, clip_to=None, resource_alloc=None, smartc=None):
         """

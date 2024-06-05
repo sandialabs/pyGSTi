@@ -312,6 +312,41 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 printer.log("   Esimated memory required = %.1fGB" % (mem_estimate * GB))
 
         return layout
+    
+    @staticmethod
+    def create_copa_layout_circuit_cache(circuits, model, dataset=None):
+        """
+        Helper function for pre-computing/pre-processing circuits structures
+        used in matrix layout creation.
+        """
+        cache = dict()
+        completed_circuits = model.complete_circuits(circuits)
+
+        cache['completed_circuits'] = {ckt: comp_ckt for ckt, comp_ckt in zip(circuits, completed_circuits)}
+
+        split_circuits = model.split_circuits(completed_circuits, split_prep=False)    
+        cache['split_circuits'] = {ckt: split_ckt for ckt, split_ckt in zip(circuits, split_circuits)}
+        
+
+        if dataset is not None:
+            outcomes_list = []
+            for ckt in circuits:
+                ds_row = dataset[ckt]
+                outcomes_list.append(ds_row.outcomes if ds_row is not None else None)
+                #slightly different than matrix, for some reason outcomes is used in this class
+                #and unique_outcomes is used in matrix.
+        else:
+            outcomes_list = [None]*len(circuits)
+
+        expanded_circuit_outcome_list = model.bulk_expand_instruments_and_separate_povm(circuits, 
+                                                                                        observed_outcomes_list = outcomes_list, 
+                                                                                        completed_circuits= completed_circuits)
+        
+        expanded_circuit_cache = {ckt: expanded_ckt for ckt,expanded_ckt in zip(completed_circuits, expanded_circuit_outcome_list)}                
+        cache['expanded_and_separated_circuits'] = expanded_circuit_cache
+
+        return cache
+
 
     def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller

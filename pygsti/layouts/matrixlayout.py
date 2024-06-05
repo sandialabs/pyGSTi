@@ -388,45 +388,6 @@ class MatrixCOPALayout(_DistributableCOPALayout):
                          _create_atom, list(zip(groups, helpful_scratch)), num_tree_processors,
                          num_param_dimension_processors, param_dimensions,
                          param_dimension_blk_sizes, resource_alloc, verbosity)
-        
-def create_matrix_copa_layout_circuit_cache(circuits, model, dataset=None):
-    """
-    Helper function for pre-computing/pre-processing circuits structures
-    used in matrix layout creation.
-    """
-    cache = dict()
-    completed_circuits, split_circuits = model.complete_circuits(circuits, return_split=True)
-
-    cache['completed_circuits'] = {ckt: comp_ckt for ckt, comp_ckt in zip(circuits, completed_circuits)}
-    cache['split_circuits'] = {ckt: split_ckt for ckt, split_ckt in zip(circuits, split_circuits)}
-
-    #There is some potential aliasing that happens in the init that I am not
-    #doing here, but I think 90+% of the time this ought to be fine.
-    if dataset is not None:
-        unique_outcomes_list = []
-        for ckt in circuits:
-            ds_row = dataset[ckt]
-            unique_outcomes_list.append(ds_row.unique_outcomes if ds_row is not None else None)
-    else:
-        unique_outcomes_list = [None]*len(circuits)
-
-    expanded_circuit_outcome_list = model.bulk_expand_instruments_and_separate_povm(circuits, 
-                                                                                    observed_outcomes_list = unique_outcomes_list, 
-                                                                                    split_circuits = split_circuits)
-    
-    expanded_circuit_cache = {ckt: expanded_ckt for ckt,expanded_ckt in zip(circuits, expanded_circuit_outcome_list)}
-                
-    cache['expanded_and_separated_circuits'] = expanded_circuit_cache
-
-    expanded_subcircuits_no_spam_cache = dict()
-    for expc_outcomes in cache['expanded_and_separated_circuits'].values():
-        for sep_povm_c, _ in expc_outcomes.items():  # for each expanded cir from unique_i-th circuit
-            exp_nospam_c = sep_povm_c.circuit_without_povm[1:] 
-            expanded_subcircuits_no_spam_cache[exp_nospam_c] = exp_nospam_c.expand_subcircuits()
-
-    cache['expanded_subcircuits_no_spam'] = expanded_subcircuits_no_spam_cache
-
-    return cache
 
 
 
