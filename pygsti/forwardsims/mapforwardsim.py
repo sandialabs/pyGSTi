@@ -49,7 +49,7 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
     # If this is done, then MapForwardSimulator wouldn't need to separately subclass DistributableForwardSimulator
 
     def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
-        expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
+        expanded_circuit_outcomes = self.model.expand_instruments_and_separate_povm(circuit, outcomes)
         outcome_to_index = {outc: i for i, outc in enumerate(outcomes)}
         for spc, spc_outcomes in expanded_circuit_outcomes.items():  # spc is a SeparatePOVMCircuit
             # Note: `spc.circuit_without_povm` *always* begins with a prep label.
@@ -193,7 +193,7 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                                    self._processor_grid, self._pblk_sizes)
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
-                      derivative_dimensions=None, verbosity=0):
+                      derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
@@ -223,6 +223,11 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         verbosity : int or VerbosityPrinter
             Determines how much output to send to stdout.  0 means no output, higher
             integers mean more output.
+        
+        A precomputed dictionary serving as a cache for completed
+            circuits. I.e. circuits with prep labels and POVM labels appended.
+            Along with other useful pre-computed circuit structures used in layout
+            creation.
 
         Returns
         -------
@@ -265,7 +270,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
         layout = _MapCOPALayout(circuits, self.model, dataset, self._max_cache_size, natoms, na, npp,
-                                param_dimensions, param_blk_sizes, resource_alloc, verbosity)
+                                param_dimensions, param_blk_sizes, resource_alloc, verbosity, 
+                                layout_creation_circuit_cache= layout_creation_circuit_cache)
 
         if mem_limit is not None:
             loc_nparams1 = num_params / npp[0] if len(npp) > 0 else 0
@@ -306,6 +312,41 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 printer.log("   Esimated memory required = %.1fGB" % (mem_estimate * GB))
 
         return layout
+    
+    @staticmethod
+    def create_copa_layout_circuit_cache(circuits, model, dataset=None):
+        """
+        Helper function for pre-computing/pre-processing circuits structures
+        used in matrix layout creation.
+        """
+        cache = dict()
+        completed_circuits = model.complete_circuits(circuits)
+
+        cache['completed_circuits'] = {ckt: comp_ckt for ckt, comp_ckt in zip(circuits, completed_circuits)}
+
+        split_circuits = model.split_circuits(completed_circuits, split_prep=False)    
+        cache['split_circuits'] = {ckt: split_ckt for ckt, split_ckt in zip(circuits, split_circuits)}
+        
+
+        if dataset is not None:
+            outcomes_list = []
+            for ckt in circuits:
+                ds_row = dataset[ckt]
+                outcomes_list.append(ds_row.outcomes if ds_row is not None else None)
+                #slightly different than matrix, for some reason outcomes is used in this class
+                #and unique_outcomes is used in matrix.
+        else:
+            outcomes_list = [None]*len(circuits)
+
+        expanded_circuit_outcome_list = model.bulk_expand_instruments_and_separate_povm(circuits, 
+                                                                                        observed_outcomes_list = outcomes_list, 
+                                                                                        completed_circuits= completed_circuits)
+        
+        expanded_circuit_cache = {ckt: expanded_ckt for ckt,expanded_ckt in zip(completed_circuits, expanded_circuit_outcome_list)}                
+        cache['expanded_and_separated_circuits'] = expanded_circuit_cache
+
+        return cache
+
 
     def _bulk_fill_probs_atom(self, array_to_fill, layout_atom, resource_alloc):
         # Note: *don't* set dest_indices arg = layout.element_slice, as this is already done by caller

@@ -26,7 +26,8 @@ def length(s):
     -------
     int
     """
-    if not isinstance(s, slice): return len(s)
+    if not isinstance(s, slice): 
+        return len(s)
     if s.start is None or s.stop is None:
         return 0
     if s.step is None:
@@ -191,7 +192,8 @@ def indices(s, n=None):
     elif s.start < 0:
         assert(n is not None), "Must supply `n` to obtain indices of a slice with negative start point!"
         start = n + s.start
-    else: start = s.start
+    else: 
+        start = s.start
 
     if s.stop is None:
         assert(n is not None), "Must supply `n` to obtain indices of a slice with unspecified stop point!"
@@ -199,12 +201,56 @@ def indices(s, n=None):
     elif s.stop < 0:
         assert(n is not None), "Must supply `n` to obtain indices of a slice with negative stop point!"
         stop = n + s.stop
-    else: stop = s.stop
+    else: 
+        stop = s.stop
 
     if s.step is None:
         return list(range(start, stop))
-    return list(range(start, stop, s.step))
+    else:
+        return list(range(start, stop, s.step))
+    
+def indices_as_array(s, n=None):
+    """
+    Returns a numpy array of the indices specified by slice `s`.
 
+    Parameters
+    ----------
+    s : slice
+        The slice to operate upon.
+
+    n : int, optional
+        The number of elements in the array being indexed,
+        used for computing *negative* start/stop points.
+
+    Returns
+    -------
+    numpy ndarray array of integers
+    """
+    if s.start is None and s.stop is None:
+        return []
+
+    if s.start is None:
+        start = 0
+    elif s.start < 0:
+        assert(n is not None), "Must supply `n` to obtain indices of a slice with negative start point!"
+        start = n + s.start
+    else: 
+        start = s.start
+
+    if s.stop is None:
+        assert(n is not None), "Must supply `n` to obtain indices of a slice with unspecified stop point!"
+        stop = n
+    elif s.stop < 0:
+        assert(n is not None), "Must supply `n` to obtain indices of a slice with negative stop point!"
+        stop = n + s.stop
+    else: 
+        stop = s.stop
+
+    if s.step is None:
+        return _np.arange(start, stop, dtype=_np.int64)
+    else:
+        return _np.arange(start, stop, s.step, dtype=_np.int64)
+    
 
 def list_to_slice(lst, array_ok=False, require_contiguous=True):
     """
@@ -240,17 +286,23 @@ def list_to_slice(lst, array_ok=False, require_contiguous=True):
                 else:
                     raise ValueError("Slice must be contiguous!")
         return lst
-    if lst is None or len(lst) == 0: return slice(0, 0)
+    if lst is None or len(lst) == 0: 
+        return slice(0, 0)
     start = lst[0]
 
-    if len(lst) == 1: return slice(start, start + 1)
-    step = lst[1] - lst[0]; stop = start + step * len(lst)
+    if len(lst) == 1: 
+        return slice(start, start + 1)
+    step = lst[1] - lst[0]
+    stop = start + step * len(lst)
 
     if list(lst) == list(range(start, stop, step)):
         if require_contiguous and step != 1:
-            if array_ok: return _np.array(lst, _np.int64)
-            else: raise ValueError("Slice must be contiguous (or array_ok must be True)!")
-        if step == 1: step = None
+            if array_ok: 
+                return _np.array(lst, _np.int64)
+            else: 
+                raise ValueError("Slice must be contiguous (or array_ok must be True)!")
+        if step == 1: 
+            step = None
         return slice(start, stop, step)
     elif array_ok:
         return _np.array(lst, _np.int64)
@@ -272,7 +324,7 @@ def to_array(slc_or_list_like):
     numpy.ndarray
     """
     if isinstance(slc_or_list_like, slice):
-        return _np.array(indices(slc_or_list_like), _np.int64)
+        return indices_as_array(slc_or_list_like)
     else:
         return _np.array(slc_or_list_like, _np.int64)
 
