@@ -1347,7 +1347,7 @@ class OpModel(Model):
                     else: 
                         povm_lbl = None
                         circuit = ckt
-            split_circuits.append((None, circuit, povm_lbl))
+                split_circuits.append((None, circuit, povm_lbl))
         
         else:
             split_circuits = [(None, ckt, None) for ckt in circuits]
