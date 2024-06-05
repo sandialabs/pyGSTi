@@ -403,8 +403,8 @@ def create_matrix_copa_layout_circuit_cache(circuits, model, dataset=None):
     #doing here, but I think 90+% of the time this ought to be fine.
     if dataset is not None:
         unique_outcomes_list = []
-        for ckt in completed_circuits.values():
-            ds_row = dataset.get(ckt, None)
+        for ckt in circuits:
+            ds_row = dataset[ckt]
             unique_outcomes_list.append(ds_row.unique_outcomes if ds_row is not None else None)
     else:
         unique_outcomes_list = [None]*len(circuits)

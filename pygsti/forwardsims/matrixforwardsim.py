@@ -1061,6 +1061,8 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         layout_creation_circuit_cache : dict, optional (default None)
             A precomputed dictionary serving as a cache for completed
             circuits. I.e. circuits with prep labels and POVM labels appended.
+            Along with other useful pre-computed circuit structures used in layout
+            creation.
             
         Returns
         -------

@@ -53,17 +53,18 @@ class _MapCOPALayoutAtom(_DistributableAtom):
     def __init__(self, unique_complete_circuits, ds_circuits, group, model,
                  dataset, max_cache_size, expanded_complete_circuit_cache = None):
 
-        expanded_circuit_info_by_unique = dict()
-        expanded_circuit_set = dict() # only use SeparatePOVMCircuit keys as ordered set
-
-        if expanded_complete_circuit_cache is None:
-            expanded_complete_circuit_cache = dict()
+        expanded_circuit_info_by_unique = _collections.OrderedDict()
+        expanded_circuit_set = _collections.OrderedDict()  # only use SeparatePOVMCircuit keys as ordered set
 
         for i in group:
-            d = expanded_complete_circuit_cache.get(unique_complete_circuits[i], None)
-            if d is None:
-                unique_observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].unique_outcomes
-                d = model.expand_instruments_and_separate_povm(unique_complete_circuits[i], unique_observed_outcomes)
+            if expanded_complete_circuit_cache is None:
+                observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
+                d = model.expand_instruments_and_separate_povm(unique_complete_circuits[i], observed_outcomes)
+            else:
+                d = expanded_complete_circuit_cache.get(unique_complete_circuits[i], None)
+                if d is None:
+                    observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
+                    d = model.expand_instruments_and_separate_povm(unique_complete_circuits[i], observed_outcomes)
             expanded_circuit_info_by_unique[i] = d  # a dict of SeparatePOVMCircuits => tuples of outcome labels
             expanded_circuit_set.update(d)
             
@@ -219,11 +220,14 @@ class MapCOPALayout(_DistributableCOPALayout):
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
 
         #extract subcaches from layout_creation_circuit_cache:
-        if layout_creation_circuit_cache is None:
-            layout_creation_circuit_cache = dict()
-        self.completed_circuit_cache = layout_creation_circuit_cache.get('completed_circuits', None)
-        self.split_circuit_cache = layout_creation_circuit_cache.get('split_circuits', None)
-        self.expanded_and_separated_circuits_cache = layout_creation_circuit_cache.get('expanded_and_separated_circuits', None)
+        if layout_creation_circuit_cache is not None:
+            self.completed_circuit_cache = layout_creation_circuit_cache.get('completed_circuits', None)
+            self.split_circuit_cache = layout_creation_circuit_cache.get('split_circuits', None)
+            self.expanded_and_separated_circuits_cache = layout_creation_circuit_cache.get('expanded_and_separated_circuits', None)
+        else:
+            self.completed_circuit_cache = None
+            self.split_circuit_cache = None
+            self.expanded_and_separated_circuits_cache = None
         
         if self.completed_circuit_cache is None:
             unique_complete_circuits = model.complete_circuits(unique_circuits)
@@ -273,3 +277,37 @@ class MapCOPALayout(_DistributableCOPALayout):
         for atom in self.atoms:
             for expanded_circuit_i, unique_i in atom.unique_indices_by_expcircuit.items():
                 atom.orig_indices_by_expcircuit[expanded_circuit_i] = unique_to_orig[unique_i]
+
+
+def create_map_copa_layout_circuit_cache(circuits, model, dataset=None):
+    """
+    Helper function for pre-computing/pre-processing circuits structures
+    used in matrix layout creation.
+    """
+    cache = dict()
+    completed_circuits = model.complete_circuits(circuits)
+
+    cache['completed_circuits'] = {ckt: comp_ckt for ckt, comp_ckt in zip(circuits, completed_circuits)}
+
+    split_circuits = model.split_circuits(completed_circuits, split_prep=False)    
+    cache['split_circuits'] = {ckt: split_ckt for ckt, split_ckt in zip(circuits, split_circuits)}
+    
+
+    if dataset is not None:
+        outcomes_list = []
+        for ckt in circuits:
+            ds_row = dataset[ckt]
+            outcomes_list.append(ds_row.outcomes if ds_row is not None else None)
+            #slightly different than matrix, for some reason outcomes is used in this class
+            #and unique_outcomes is used in matrix.
+    else:
+        outcomes_list = [None]*len(circuits)
+
+    expanded_circuit_outcome_list = model.bulk_expand_instruments_and_separate_povm(circuits, 
+                                                                                    observed_outcomes_list = outcomes_list, 
+                                                                                    completed_circuits= completed_circuits)
+    
+    expanded_circuit_cache = {ckt: expanded_ckt for ckt,expanded_ckt in zip(completed_circuits, expanded_circuit_outcome_list)}                
+    cache['expanded_and_separated_circuits'] = expanded_circuit_cache
+
+    return cache

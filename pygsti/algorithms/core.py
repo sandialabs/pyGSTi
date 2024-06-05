@@ -880,15 +880,17 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
     precomp_layouts = []
 
     #pre-compute a dictionary caching completed circuits for layout construction performance.
-    unique_circuits = {ckt for circuit_list in circuit_lists for ckt in circuit_list}
+    unique_circuits = list({ckt for circuit_list in circuit_lists for ckt in circuit_list})
     if isinstance(mdl.sim, _fwdsims.MatrixForwardSimulator):
-        precomp_layout_circuit_cache = _layouts.matrixlayout.create_matrix_copa_layout_circuit_cache(unique_circuits, mdl)
+        precomp_layout_circuit_cache = _layouts.matrixlayout.create_matrix_copa_layout_circuit_cache(unique_circuits, mdl, dataset=dataset)
+    elif isinstance(mdl.sim, _fwdsims.MapForwardSimulator):
+        precomp_layout_circuit_cache = _layouts.maplayout.create_map_copa_layout_circuit_cache(unique_circuits, mdl, dataset=dataset)
     else:
         precomp_layout_circuit_cache = None
 
     for i, circuit_list in enumerate(circuit_lists):
         printer.log(f'Layout for iteration {i}', 2)
-        if isinstance(mdl.sim, _fwdsims.MatrixForwardSimulator):
+        if isinstance(mdl.sim, (_fwdsims.MatrixForwardSimulator, _fwdsims.MapForwardSimulator)):
             precomp_layouts.append(mdl.sim.create_layout(circuit_list, dataset, resource_alloc, array_types, verbosity= printer - 1,
                                                         layout_creation_circuit_cache = precomp_layout_circuit_cache))
         else:
@@ -898,7 +900,7 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
     if isinstance(mdl, _models.model.OpModel):
         if precomp_layout_circuit_cache is not None: #then grab the split circuits from there.
             expanded_circuit_outcome_list = mdl.bulk_expand_instruments_and_separate_povm(unique_circuits, 
-                                                                                        split_circuits = precomp_layout_circuit_cache['split_circuits'].values())
+                                                                                          completed_circuits= precomp_layout_circuit_cache['completed_circuits'].values())
             outcome_count_by_circuit_cache = {ckt: len(outcome_tup) for ckt,outcome_tup in zip(unique_circuits, expanded_circuit_outcome_list)}
         else:
             expanded_circuit_outcome_list = mdl.bulk_expand_instruments_and_separate_povm(unique_circuits)    
