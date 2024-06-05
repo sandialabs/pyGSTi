@@ -1589,7 +1589,7 @@ class Circuit(object):
             i = len(self._line_labels)
         else:
             i = self._line_labels.index(insert_before)
-        self.line_labels = self._line_labels[0:i] + tuple(line_labels) + self._line_labels[i:]
+        self._line_labels = self._line_labels[0:i] + tuple(line_labels) + self._line_labels[i:]
 
     def _append_idling_lines(self, line_labels):
         """
