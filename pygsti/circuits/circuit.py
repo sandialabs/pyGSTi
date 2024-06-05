@@ -1193,28 +1193,25 @@ class Circuit(object):
             Note that the returned circuit doesn't retain any original
             metadata, such as the compilable layer indices or occurence id.
         """
-        nonint_layers = not isinstance(layers, int)
 
         #Shortcut for common case when lines == None and when we're only taking a layer slice/index
         if lines is None and layers is not None:
             if self._static:
-                if not nonint_layers:
+                if isinstance(layers, int):
                     return self._labels[layers]
                 if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
                     #can speed this up a measurably by manually computing the new hashable tuple value and hash
-                    if not self._line_labels in (('*',), ()):
-                        new_hashable_tup = self._labels[layers] + ('@',) + self._line_labels
-                    else:
-                        new_hashable_tup = self._labels[layers]
+                    new_hashable_tup = self._labels[layers] + ('@',) + self._line_labels
                     ret = Circuit.__new__(Circuit)
-                    return ret._copy_init(self._labels[layers], self._line_labels, not self._static, hashable_tup= new_hashable_tup, precomp_hash=hash(new_hashable_tup))
+                    return ret._copy_init(self._labels[layers], self._line_labels, not self._static, 
+                                          hashable_tup= new_hashable_tup, 
+                                          precomp_hash=hash(new_hashable_tup))
             else:
-                if not nonint_layers:
+                if isinstance(layers, int):
                     return self.layertup[layers]
                 if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
                     return Circuit._fastinit(self._labels[layers], self._line_labels, not self._static)
         #otherwise assert both are not None:
-
 
         layers = self._proc_layers_arg(layers)
         lines = self._proc_lines_arg(lines)
@@ -1248,7 +1245,7 @@ class Circuit(object):
                     ret_layer.append(l)
             ret.append(_Label(ret_layer) if len(ret_layer) != 1 else ret_layer[0])  # Labels b/c we use _fastinit
 
-        if nonint_layers:
+        if not isinstance(layers, int):
             if not strict: lines = "auto"  # since we may have included lbls on other lines
             # don't worry about string rep for now...
             
