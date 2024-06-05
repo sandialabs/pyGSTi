@@ -1095,13 +1095,12 @@ class Circuit(object):
     def _proc_key_arg(self, key):
         """ Pre-process the key argument used by many methods """
         if isinstance(key, tuple):
-            if len(key) != 2: return IndexError("Index must be of the form <layerIndex>,<lineIndex>")
-            layers = key[0]
-            lines = key[1]
+            if len(key) != 2: 
+                return IndexError("Index must be of the form <layerIndex>,<lineIndex>")
+            else:
+                return key[0], key[1]
         else:
-            layers = key
-            lines = None
-        return layers, lines
+            return key, None
 
     def _layer_components(self, ilayer):
         """ Get the components of the `ilayer`-th layer as a list/tuple. """
@@ -1191,22 +1190,38 @@ class Circuit(object):
             `layers` is a single integer and as a `Circuit` otherwise.
             Note: if you want a `Circuit` when only selecting one layer,
             set `layers` to a slice or tuple containing just a single index.
+            Note that the returned circuit doesn't retain any original
+            metadata, such as the compilable layer indices or occurence id.
         """
-        nonint_layers = not isinstance(layers, int)
 
         #Shortcut for common case when lines == None and when we're only taking a layer slice/index
-        if lines is None:
-            assert(layers is not None)
-            if nonint_layers is False: return self.layertup[layers]
-            if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
-                return Circuit._fastinit(self._labels[layers], self._line_labels, not self._static)
+        if lines is None and layers is not None:
+            if self._static:
+                if isinstance(layers, int):
+                    return self._labels[layers]
+                if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
+                    #can speed this up a measurably by manually computing the new hashable tuple value and hash
+                    new_hashable_tup = self._labels[layers] + ('@',) + self._line_labels
+                    ret = Circuit.__new__(Circuit)
+                    return ret._copy_init(self._labels[layers], self._line_labels, not self._static, 
+                                          hashable_tup= new_hashable_tup, 
+                                          precomp_hash=hash(new_hashable_tup))
+            else:
+                if isinstance(layers, int):
+                    return self.layertup[layers]
+                if isinstance(layers, slice) and strict is True:  # if strict=False, then need to recompute line labels
+                    return Circuit._fastinit(self._labels[layers], self._line_labels, not self._static)
+        #otherwise assert both are not None:
 
         layers = self._proc_layers_arg(layers)
         lines = self._proc_lines_arg(lines)
         if len(layers) == 0 or len(lines) == 0:
-            return Circuit._fastinit(() if self._static else [],
-                                     tuple(lines) if self._static else lines,
-                                     not self._static) if nonint_layers else None  # zero-area region
+            if self._static:
+                return Circuit._fastinit((), tuple(lines), False)  # zero-area region
+            else:
+                return Circuit._fastinit(() if self._static else [],
+                                        tuple(lines) if self._static else lines,
+                                        not self._static)  # zero-area region
 
         ret = []
         if self._static:
@@ -1230,7 +1245,7 @@ class Circuit(object):
                     ret_layer.append(l)
             ret.append(_Label(ret_layer) if len(ret_layer) != 1 else ret_layer[0])  # Labels b/c we use _fastinit
 
-        if nonint_layers:
+        if not isinstance(layers, int):
             if not strict: lines = "auto"  # since we may have included lbls on other lines
             # don't worry about string rep for now...
             
