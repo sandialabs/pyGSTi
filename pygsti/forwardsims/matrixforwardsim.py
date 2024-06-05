@@ -590,7 +590,7 @@ class SimpleMatrixForwardSimulator(_ForwardSimulator):
         use_scaling = False  # Hardcoded for now
         assert(time is None), "MatrixForwardSimulator cannot be used to simulate time-dependent circuits"
 
-        expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
+        expanded_circuit_outcomes = self.model.expand_instruments_and_separate_povm(circuit, outcomes)
         outcome_to_index = {outc: i for i, outc in enumerate(outcomes)}
         for spc, spc_outcomes in expanded_circuit_outcomes.items():  # spc is a SeparatePOVMCircuit
             indices = [outcome_to_index[o] for o in spc_outcomes]

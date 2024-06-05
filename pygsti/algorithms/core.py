@@ -402,7 +402,7 @@ def _construct_ab(prep_fiducials, effect_fiducials, model, dataset, op_label_ali
         for j, rhostr in enumerate(prep_fiducials):
             opLabelString = rhostr + estr  # LEXICOGRAPHICAL VS MATRIX ORDER
             dsStr = opLabelString.replace_layers_with_aliases(op_label_aliases)
-            expd_circuit_outcomes = opLabelString.expand_instruments_and_separate_povm(model)
+            expd_circuit_outcomes = model.expand_instruments_and_separate_povm(opLabelString)
             assert(len(expd_circuit_outcomes) == 1), "No instruments are allowed in LGST fiducials!"
             unique_key = next(iter(expd_circuit_outcomes.keys()))
             outcomes = expd_circuit_outcomes[unique_key]
@@ -431,7 +431,7 @@ def _construct_x_matrix(prep_fiducials, effect_fiducials, model, op_label_tuple,
         for j, rhostr in enumerate(prep_fiducials):
             opLabelString = rhostr + _circuits.Circuit(op_label_tuple, line_labels=rhostr.line_labels) + estr
             dsStr = opLabelString.replace_layers_with_aliases(op_label_aliases)
-            expd_circuit_outcomes = opLabelString.expand_instruments_and_separate_povm(model)
+            expd_circuit_outcomes = model.expand_instruments_and_separate_povm(opLabelString)
             dsRow_fractions = dataset[dsStr].fractions
             assert(len(expd_circuit_outcomes) == nVariants)
 

@@ -49,7 +49,7 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
     # If this is done, then MapForwardSimulator wouldn't need to separately subclass DistributableForwardSimulator
 
     def _compute_circuit_outcome_probabilities(self, array_to_fill, circuit, outcomes, resource_alloc, time=None):
-        expanded_circuit_outcomes = circuit.expand_instruments_and_separate_povm(self.model, outcomes)
+        expanded_circuit_outcomes = self.model.expand_instruments_and_separate_povm(circuit, outcomes)
         outcome_to_index = {outc: i for i, outc in enumerate(outcomes)}
         for spc, spc_outcomes in expanded_circuit_outcomes.items():  # spc is a SeparatePOVMCircuit
             # Note: `spc.circuit_without_povm` *always* begins with a prep label.
