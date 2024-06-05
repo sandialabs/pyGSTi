@@ -830,7 +830,7 @@ class Circuit(object):
             new_line_labels = set(sum([l.sslbls for l in x if l.sslbls is not None], 
                                       self._line_labels)) #trick for concatenating multiple tuples
             #new_line_labels.update(self._line_labels)
-            new_line_labels = sorted(list(new_line_labels))
+            new_line_labels = sorted(new_line_labels)
             return Circuit._fastinit(self.layertup + x, new_line_labels, editable=False)
         
         #Add special line label handling to deal with the special global idle circuits (which have no line labels
@@ -882,7 +882,7 @@ class Circuit(object):
         #unpack all of the different sets of labels and make sure there are no duplicates
         combined_labels_unpacked = {el for tup in combined_labels for el in tup}
         try:
-            new_line_labels = tuple(sorted(list(combined_labels_unpacked)))
+            new_line_labels = tuple(sorted(combined_labels_unpacked))
         except TypeError:
             new_line_labels = tuple(combined_labels_unpacked)
 
@@ -916,7 +916,7 @@ class Circuit(object):
         assert(all([isinstance(l, _Label) for l in combined_sandwich_labels])), "Only Circuits and Label-tuples can be added to Circuits!"
         new_line_labels = set(sum([l.sslbls for l in combined_sandwich_labels if l.sslbls is not None], 
                                   self._line_labels)) #trick for concatenating multiple tuples
-        new_line_labels = sorted(list(new_line_labels))
+        new_line_labels = tuple(sorted(new_line_labels))
         return Circuit._fastinit(x + self.layertup + y, new_line_labels, editable=False)
 
     def repeat(self, ntimes, expand="default"):
@@ -1804,7 +1804,7 @@ class Circuit(object):
         #Shift compilable layer indices as needed
         if self._compilable_layer_indices_tup:
             deleted_indices = set(layers)
-            new_inds = list(filter(lambda x: x not in deleted_indices, self._compilable_layer_indices_tup))
+            new_inds =  [x for x in self._compilable_layer_indices_tup if x not in deleted_indices]
             for deleted_i in reversed(sorted(deleted_indices)):
                 new_inds = [i if (i < deleted_i) else (i - 1) for i in new_inds]  # Note i never == deleted_i (filtered)
             self._compilable_layer_indices_tup = tuple(new_inds)
@@ -2889,10 +2889,9 @@ class Circuit(object):
             True if the line is idling. False otherwise.
         """
         if self._static:
-            layers = list(filter(lambda x: x not in idle_layer_labels, self._labels)) \
-                if idle_layer_labels else self._labels
+            layers = [x for x in self._labels if x not in idle_layer_labels] if idle_layer_labels else self._labels
             all_sslbls = None if any([layer.sslbls is None for layer in layers]) \
-                else set(_itertools.chain(*[layer.sslbls for layer in layers]))
+                else set([sslbl for layer in layers for sslbl in layer.sslbls])
         else:
             all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels, idle_layer_labels)  # None or a set
 
@@ -2917,10 +2916,9 @@ class Circuit(object):
         tuple
         """
         if self._static:
-            layers = list(filter(lambda x: x not in idle_layer_labels, self._labels)) \
-                if idle_layer_labels else self._labels
+            layers = [x for x in self._labels if x not in idle_layer_labels] if idle_layer_labels else self._labels
             all_sslbls = None if any([layer.sslbls is None for layer in layers]) \
-                else set(_itertools.chain(*[layer.sslbls for layer in layers]))
+                else set([sslbl for layer in layers for sslbl in layer.sslbls])
         else:
             all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels, idle_layer_labels)  # None or a set
 
@@ -2952,10 +2950,9 @@ class Circuit(object):
             assert(all([to_label(x).sslbls is None for x in idle_layer_labels])), "Idle layer labels must be *global*"
 
         if self._static:
-            layers = list(filter(lambda x: x not in idle_layer_labels, self._labels)) \
-                if idle_layer_labels else self._labels
+            layers = [x for x in self._labels if x not in idle_layer_labels] if idle_layer_labels else self._labels
             all_sslbls = None if any([layer.sslbls is None for layer in layers]) \
-                else set(_itertools.chain(*[layer.sslbls for layer in layers]))
+                else set([sslbl for layer in layers for sslbl in layer.sslbls])
         else:
             all_sslbls = _sslbls_of_nested_lists_of_simple_labels(self._labels, idle_layer_labels)  # None or a set
 
