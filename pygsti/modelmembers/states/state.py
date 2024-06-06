@@ -350,11 +350,10 @@ class State(_modelmember.ModelMember):
         float
         """
         vec = self.to_dense(on_space='minimal')
-        if inv_transform is None:
-            return _ot.residuals(vec, other_spam_vec.to_dense(on_space='minimal'))
-        else:
-            return _ot.residuals(_np.dot(inv_transform, vec),
-                                 other_spam_vec.to_dense(on_space='minimal'))
+        if inv_transform is not None:
+            vec = inv_transform @ vec
+        return (vec - other_spam_vec.to_dense(on_space='minimal')).ravel()
+
 
     def transform_inplace(self, s):
         """

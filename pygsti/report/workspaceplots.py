@@ -2588,7 +2588,7 @@ class PolarEigenvaluePlot(WorkspacePlot):
                 amp_evals = evals**amp
                 trace = go.Scatterpolar(
                     r=list(_np.absolute(amp_evals).flat),
-                    theta=list(_np.angle(amp_evals).flatten() * (180.0 / _np.pi)),
+                    theta=list(_np.angle(amp_evals).ravel() * (180.0 / _np.pi)),
                     showlegend=False,
                     mode='markers',
                     marker=dict(
@@ -2899,15 +2899,16 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
 
     def _create(self, evals, errbars, scale):
 
+        flat_errbars = errbars.ravel()
         HOVER_PREC = 7
         xs = list(range(evals.size))
-        ys = []; colors = []; texts = []
-        for i, ev in enumerate(evals.flatten()):
+        ys, colors, texts = [], [], []
+        for i, ev in enumerate(evals.ravel()):
             ys.append(abs(ev.real))
             colors.append('rgb(200,200,200)' if ev.real > 0 else 'red')
             if errbars is not None:
                 texts.append("%g +/- %g" % (round(ev.real, HOVER_PREC),
-                                            round(errbars.flatten()[i].real, HOVER_PREC)))
+                                            round(flat_errbars[i].real, HOVER_PREC)))
             else:
                 texts.append("%g" % round(ev.real, HOVER_PREC))
 
@@ -3033,13 +3034,13 @@ class GramMatrixBarPlot(WorkspacePlot):
 
         xs = list(range(svals.size))
         trace1 = go.Bar(
-            x=xs, y=list(svals.flatten()),
+            x=xs, y=list(svals.flat),
             marker=dict(color="blue"),
             hoverinfo='y',
             name="from Data"
         )
         trace2 = go.Bar(
-            x=xs, y=list(target_svals.flatten()),
+            x=xs, y=list(target_svals.flat),
             marker=dict(color="black"),
             hoverinfo='y',
             name="from Target"
