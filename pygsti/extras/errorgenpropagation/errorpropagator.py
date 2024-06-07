@@ -44,7 +44,7 @@ def ErrorPropagator(circ,errorModel,MultiGateDict={},BCHOrder=1,BCHLayerwise=Fal
     if not ErrorLayerDef:
         errorLayers=buildErrorlayers(circ,errorModel,len(circ.line_labels))
     else:
-        errorLayers=[[errorModel]]*circ.depth
+        errorLayers=[[errorModel]]*circ.depth #this doesn't work
 
     num_error_layers=len(errorLayers)
     fully_propagated_layers=[]
@@ -209,7 +209,7 @@ def buildErrorlayers(circ,errorDict,qubits):
                     paulis.append(p2)     
                 errorLayer.append(propagatableerrorgen(errType,paulis,gErrorDict[errs]))
         ErrorGens.append([errorLayer])
-        print(ErrorGens)
+        
     return ErrorGens
 
 
