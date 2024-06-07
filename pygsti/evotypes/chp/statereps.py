@@ -40,16 +40,6 @@ class StateRep(_basereps.StateRep):
     def num_qubits(self):
         return self.state_space.num_qubits
 
-    #REMOVE
-    #def chp_ops(self, seed_or_state=None):
-    #    return self.base_chp_ops
-
-    #REMOVE
-    #def chp_str(self, seed_or_state=None):
-    #    op_str = '\n'.join(self.chp_ops(seed_or_state=seed_or_state))
-    #    if len(op_str) > 0: op_str += '\n'
-    #    return op_str
-
     def copy(self):
         return StateRep(self.chp_ops, self.state_space)
 

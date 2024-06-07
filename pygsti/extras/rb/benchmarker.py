@@ -506,10 +506,6 @@ class Benchmarker(object):
 
         self.multids['success-fail'] = sfmultids
 
-    # def get_all_data(self):
-
-    #     for circ
-
     def summary_data(self, datatype, specindex, qubits=None):
 
         spec = self._specs[specindex]
@@ -521,10 +517,6 @@ class Benchmarker(object):
         assert(qubits in structure), "Invalid choice of qubits for this spec!"
 
         return self.pass_summary_data[specindex][qubits][datatype]
-
-    #def getauxillary_data(self, datatype, specindex, qubits=None):
-
-    #def get_predicted_summary_data(self, prediction, datatype, specindex, qubits=None):
 
     def create_summary_data(self, predictions=None, verbosity=2, auxtypes=None):
         """

@@ -511,21 +511,6 @@ class FASTPolynomial(object):
     def __rmul__(self, x):
         return self.__mul__(x)
 
-    #Punt for now??
-    #def __imul__(self, x):
-    #    if isinstance(x, Polynomial):
-    #        newcoeffs = {}
-    #        for k1, v1 in self.items():
-    #            for k2, v2 in x.items():
-    #                k = tuple(sorted(k1 + k2))
-    #                if k in newcoeffs: newcoeffs[k] += v1 * v2
-    #                else: newcoeffs[k] = v1 * v2
-    #        self.clear()
-    #        self.update(newcoeffs)
-    #    else:
-    #        self.scale(x)
-    #    return self
-
     def __pow__(self, n):
         ret = FASTPolynomial({(): 1.0}, self.max_num_vars)  # max_order updated by mults below
         cur = self

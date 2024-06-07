@@ -167,40 +167,6 @@ class _BasePOVM(_POVM):
                    for lbl, subm_serial_id in zip(mm_dict['effect_labels'], mm_dict['submembers'])}
         return cls(effects, mm_dict['evotype'], state_space)  # Note: __init__ call signature of derived classes
 
-    #def _reset_member_gpindices(self):
-    #    """
-    #    Sets gpindices for all non-complement items.  Assumes all non-complement
-    #    vectors have *independent* parameters (for now).
-    #    """
-    #    Np = 0
-    #    for k, effect in self.items():
-    #        if k == self.complement_label: continue
-    #        N = effect.num_params
-    #        pslc = slice(Np, Np + N)
-    #        if effect.gpindices != pslc:
-    #            effect.set_gpindices(pslc, self)
-    #        Np += N
-    #    self.Np = Np
-    #
-    #def _rebuild_complement(self, identity_for_complement=None):
-    #    """ Rebuild complement vector (in case other vectors have changed) """
-    #
-    #    if self.complement_label is not None and self.complement_label in self:
-    #        non_comp_effects = [v for k, v in self.items()
-    #                            if k != self.complement_label]
-    #
-    #        if identity_for_complement is None:
-    #            identity_for_complement = self[self.complement_label].identity
-    #
-    #        complement_effect = _ComplementPOVMEffect(
-    #            identity_for_complement, non_comp_effects)
-    #        complement_effect.set_gpindices(slice(0, self.Np), self)  # all parameters
-    #
-    #        #Assign new complement effect without calling our __setitem__
-    #        old_ro = self._readonly; self._readonly = False
-    #        _POVM.__setitem__(self, self.complement_label, complement_effect)
-    #        self._readonly = old_ro
-
     def __setitem__(self, key, value):
         if not self._readonly:  # when readonly == False, we're initializing
             return super(_BasePOVM, self).__setitem__(key, value)

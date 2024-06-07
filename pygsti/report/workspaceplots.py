@@ -1703,19 +1703,6 @@ class ColorBoxPlot(WorkspacePlot):
             dataset = mdc_store.dataset
             model = mdc_store.model
 
-        #DEBUG: for checking
-        #def _addl_mx_fn_chk(plaq,x,y):
-        #    gsplaq_ds = plaq.expand_aliases(dataset)
-        #    spamlabels = model.get_spam_labels()
-        #    cntMxs  = _ph.total_count_matrix(   gsplaq_ds, dataset)[None,:,:]
-        #    probMxs = _ph.probability_matrices( plaq, model, spamlabels,
-        #                                    probs_precomp_dict)
-        #    freqMxs = _ph.frequency_matrices(   gsplaq_ds, dataset, spamlabels)
-        #    logLMxs = _tools.two_delta_logl_term( cntMxs, probMxs, freqMxs, 1e-4)
-        #    return logLMxs.sum(axis=0) # sum over spam labels
-
-        # End "Additional sub-matrix" functions
-
         if not isinstance(plottypes, (list, tuple)):
             plottypes = [plottypes]
 
