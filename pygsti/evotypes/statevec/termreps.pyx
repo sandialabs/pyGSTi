@@ -112,13 +112,6 @@ cdef class TermRep(_basereps_cython.TermRep):
                          self.pre_state, self.post_state, self.pre_effect, self.post_effect,
                          self.pre_ops, self.post_ops)
 
-    #Not needed - and this implementation is quite right as it will need to change
-    # the ordering of the pre/post ops also.
-    #def conjugate(self):
-    #    return TermRep(self.coeff.copy(), self.magnitude, self.logmagnitude,
-    #                     self.post_state, self.pre_state, self.post_effect, self.pre_effect,
-    #                     self.post_ops, self.pre_ops)
-
 
 #Note: to use direct term reps (numerical coeffs) we'll need to update
 # what the members are called and add methods as was done for TermRep.

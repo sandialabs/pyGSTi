@@ -33,25 +33,11 @@ class POVMRep(_basereps.POVMRep):
 
 
 class ComputationalPOVMRep(POVMRep):
+
     def __init__(self, nqubits, qubit_filter):
         self.nqubits = nqubits
         self.qubit_filter = qubit_filter
         super(ComputationalPOVMRep, self).__init__()
-
-    #REMOVE
-    #def sample_outcome(self, state, rand_state):
-    #    chp_ops = state.chp_ops
-    #
-    #    povm_qubits = _np.array(range(self.nqubits))
-    #    for iqubit in povm_qubits:
-    #        if self.qubit_filter is None or iqubit in self.qubit_filter:
-    #            chp_ops.append(f'm {iqubit}')
-    #
-    #    # TODO: Make sure this handles intermediate measurements
-    #    outcomes, _ = self._run_chp_ops(chp_ops)
-    #    outcome = ''.join(outcomes)
-    #    outcome_label = _OutcomeLabelDict.to_outcome(outcome)
-    #    return outcome_label
 
     def probabilities(self, state, rand_state, effect_labels):
         qibo_circuit = state.qibo_circuit

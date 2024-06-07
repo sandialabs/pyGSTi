@@ -66,13 +66,6 @@ class QiboEvotypeTester(BaseCase):
         probs = mdl_qibo.probabilities(self.test_circuit)
         self.check_probs(probs, self.probs_densitymx, delta=1e-6)  # tight check (should be ~exact)
 
-    #Note: for FUTURE work - this doesn't work for map fwdsim like the densitymx version below
-    # because the qibo effect reps (needed for explicit models) only work for densitymx mode.  These
-    # 'matrix' simulator runs but really shouldn't (I think it uses the qibo std-basis matrices?) and
-    # gets bogus results, and we should probably at least make sure this errors appropriately.
-    #def test_qibo_stdmodel_statevec(self):
-    #    pass
-
     @unittest.skipIf(_qibo is None, "qibo package not installed so cannot test")
     def test_qibo_stdmodel_densitymx(self):
         evo_qibo.densitymx_mode = True

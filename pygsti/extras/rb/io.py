@@ -22,8 +22,6 @@ from pygsti.circuits import circuit as _cir
 from pygsti.data import multidataset as _mds
 
 
-#def load_benchmarking_data(basedir):
-
 def load_benchmarker(directory, load_datasets=True, verbosity=1):
     """
 

@@ -2564,33 +2564,6 @@ class Circuit(object):
                 layers = layers[:i] + c._labels + layers[i + 1:]
         return Circuit._fastinit(layers, self.line_labels, editable=False, occurrence=self.occurrence)
 
-    #def replace_identity(self, identity, convert_identity_gates = True): # THIS module only
-    #    """
-    #    Changes the *name* of the idle/identity gate in the circuit. This replaces
-    #    the name of the identity element in the circuit by setting self.identity = identity.
-    #    If `convert_identity_gates` is True, this also changes the names of all the gates that
-    #    had the old self.identity name.
-    #
-    #    Parameters
-    #    ----------
-    #    identity : string
-    #        The new name for the identity gate.
-    #
-    #    convert_identity_gates : bool, optional
-    #        If True, all gates that had the old identity name are converted to the new identity
-    #        name. Otherwise, they keep the old name, and the circuit nolonger considers them to
-    #        be identity gates.
-    #
-    #    Returns
-    #    -------
-    #    None
-    #    """
-    #    if convert_identity_gates:
-    #        self.replace_gatename(self.identity, identity)
-    #
-    #    self._tup_dirty = self._str_dirty = True
-    #    self.identity = identity
-
     def change_gate_library(self, compilation, allowed_filter=None, allow_unchanged_gates=False, depth_compression=True,
                             one_q_gate_relations=None):
         """
@@ -3489,41 +3462,6 @@ class Circuit(object):
                     return sum([cnt(sub) for sub in obj])
 
         return sum([cnt(layer_lbl) for layer_lbl in self._labels])
-
-    # UNUSED
-    #def predicted_error_probability(self, gate_error_probabilities):
-    #    """
-    #    Predicts the probability that one or more errors occur in the circuit
-    #    if the gates have the error probabilities specified by in the input
-    #    dictionary. Given correct error rates for the gates and stochastic errors,
-    #    this is predictive of the probability of an error in the circuit. But note
-    #    that that is generally *not* the same as the probability that the circuit
-    #    implemented is incorrect (e.g., stochastic errors can cancel).
-    #
-    #    Parameters
-    #    ----------
-    #    gate_error_probabilities : dict
-    #        A dictionary where the keys are the labels that appear in the circuit, and
-    #        the value is the error probability for that gate.
-    #
-    #    Returns
-    #    -------
-    #    float
-    #        The probability that there is one or more errors in the circuit.
-    #    """
-    #    f = 1.
-    #    depth = self.num_layers
-    #    for i in range(0,self.num_lines):
-    #        for j in range(0,depth):
-    #            gatelbl = self.line_items[i][j]
-    #
-    #            # So that we don't include multi-qubit gates more than once.
-    #            if gatelbl.qubits is None:
-    #                if i == 0:
-    #                    f = f*(1-gate_error_probabilities[gatelbl])
-    #            elif gatelbl.qubits[0] == self.line_labels[i]:
-    #                f = f*(1-gate_error_probabilities[gatelbl])
-    #    return 1 - f
 
     def _togrid(self, identity_name):
         """ return a list-of-lists rep? """
