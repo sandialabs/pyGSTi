@@ -50,7 +50,7 @@ class propagatableerrorgen(ElementaryErrorgenLabel):
     displays the errorgens as strings
     '''
     def __str__(self):
-        return self.errorgen_type + "(" + ",".join(map(str, self.basis_element_labels)) + ")" + ": " + self.error_rate
+        return self.errorgen_type + "(" + ",".join(map(str, self.basis_element_labels)) + ")" + ": " + str(self.error_rate)
     
 
     def __repr__(self):
@@ -94,7 +94,7 @@ class propagatableerrorgen(ElementaryErrorgenLabel):
         def Weight(pauli):
             weight=0
             for char in pauli:
-                if char is 'I':
+                if char == 'I':
                     continue
                 else:
                     weight+=1
@@ -133,10 +133,11 @@ class propagatableerrorgen(ElementaryErrorgenLabel):
             temp = slayer(temp)
             weightmod=weightmod*temp.sign
             new_basis_labels.append(stimPauli_2_pyGSTiPauli(temp))
-
         if self.errorgen_type in 'HCA':
             self.error_rate=self.error_rate*weightmod
         self.basis_element_labels =tuple(new_basis_labels)
+
+
 
     '''
     returns the strings representing the pauli labels in the pygsti representation of paulis as stim PauliStrings

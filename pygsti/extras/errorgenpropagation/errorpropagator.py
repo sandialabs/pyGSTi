@@ -46,6 +46,7 @@ def ErrorPropagator(circ,errorModel,MultiGateDict={},BCHOrder=1,BCHLayerwise=Fal
     else:
         errorLayers=[[errorModel]]*circ.depth #this doesn't work
 
+
     num_error_layers=len(errorLayers)
     fully_propagated_layers=[]
     for _ in range(0,num_error_layers-1):
@@ -54,6 +55,7 @@ def ErrorPropagator(circ,errorModel,MultiGateDict={},BCHOrder=1,BCHLayerwise=Fal
         for err_order in err_layer:
             for errorGenerator in err_order:
                 errorGenerator.propagate_error_gen_inplace_tableau(layer)
+
         if BCHLayerwise and not NonMarkovian:
             following_layer = errorLayers.pop(0)
             new_errors=BCH_Handler(err_layer,following_layer,BCHOrder)
