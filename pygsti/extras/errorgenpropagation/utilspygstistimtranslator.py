@@ -1,4 +1,5 @@
 import stim
+from numpy import conjugate
 
 
 
@@ -61,4 +62,5 @@ warning: stim ofter stores a pauli phase in the string (i.e +1,-1,+i,-i) this is
 in this function, if the weight is needed please store paulistring::weight prior to applying this function
 '''
 def stimPauli_2_pyGSTiPauli(pauliString):
+    pauliString=conjugate(pauliString.sign)*pauliString
     return str(pauliString)[1:].replace('_',"I")

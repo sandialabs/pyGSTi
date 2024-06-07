@@ -375,6 +375,8 @@ def standard_gatenames_stim_conversions():
     A dictionary converting the gates with standard names to stim tableus for these gates. Currently is only capable of converting
     clifford gates, no capability for T gates
 
+    TODO: Add all standard clifford gate names in
+
     Returns
     -------
     A dict mapping string to tableu
