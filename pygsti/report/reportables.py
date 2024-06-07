@@ -1313,7 +1313,7 @@ def eigenvalue_unitarity(a, b):
     Lambda = _np.dot(a, _np.linalg.inv(b))
     d2 = Lambda.shape[0]
     lmb = _np.linalg.eigvals(Lambda)
-    return float(_np.real(_np.vdot(lmb, lmb)) - 1.0) / (d2 - 1.0)
+    return float(_np.real(_np.linalg.norm(lmb)**2) - 1.0) / (d2 - 1.0)
 
 
 def nonunitary_entanglement_infidelity(a, b, mx_basis):
@@ -2160,9 +2160,10 @@ def general_decomposition(model_a, model_b):
             if gl == gl_other or abs(rotnAngle) < 1e-4 or abs(rotnAngle_other) < 1e-4:
                 decomp[str(gl) + "," + str(gl_other) + " axis angle"] = 10000.0  # sentinel for irrelevant angle
 
-            real_dot = _np.clip(
-                _np.real(_np.vdot(decomp[str(gl) + ' axis'], decomp[str(gl_other) + ' axis'])),
-            -1.0, 1.0)
+            real_dot = _np.real(_np.dot(
+                decomp[str(gl) + ' axis'].ravel(), decomp[str(gl_other) + ' axis'].ravel()
+            ))  # Riley question: should this be vdot instead of dot?
+            real_dot = _np.clip(real_dot, -1.0, 1.0)
             angle = _np.arccos(real_dot) / _np.pi
             decomp[str(gl) + "," + str(gl_other) + " axis angle"] = angle
 
