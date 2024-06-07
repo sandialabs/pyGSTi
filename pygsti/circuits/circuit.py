@@ -3731,6 +3731,59 @@ class Circuit(object):
         f.write("\\end{document}")
         f.close()
 
+
+    def convert_to_stim_tableau_layers(self,gate_name_conversions=None):
+        """
+        Converts this circuit to a list of stim tableau layers
+
+        Parameters
+        ----------
+        gate_name_conversions : Dict
+            A map from pygsti gatenames to standard stim tableaus. If set to None a standard set of gate names is used
+
+        Returns
+        -------
+        A layer by layer list of stim tabluaes    
+        """
+        try:
+            import stim
+        except ImportError:
+            raise ImportError("Stim is required for this operation, and it does not appear to be installed.")
+        if gate_name_conversions is None:
+            gate_name_conversions = _itgs.standard_gatenames_stim_conversions()
+
+        qubits=len(self.line_labels)
+        stim_layers=[]
+        for j in range(self.depth):
+            layer = self.layer(j)
+            stim_layer=stim.Tableau(qubits)
+            for sub_lbl in layer:
+                temp = gate_name_conversions[sub_lbl.name]    
+                stim_layer.append(temp,sub_lbl.qubits)
+            stim_layers.append(stim_layer)
+        return stim_layers
+    
+    def convert_to_stim_tableau(self,gate_name_conversions=None):
+        """
+        Converts this circuit to a stim tableu
+
+        Parameters
+        ----------
+        gate_name_conversions : Dict
+            A map from pygsti gatenames to standard stim tableaus. If set to None a standard set of gate names is used
+
+        Returns
+        -------
+        A single stim tableu representing the entire circuit 
+        """
+        layers=self.convert_to_stim_tableau_layers(gate_name_conversions)
+        tableu=layers.pop(0)
+        for layer in layers:
+            tableu=tableu*layer
+        return tableu
+        
+    
+
     def convert_to_cirq(self,
                         qubit_conversion,
                         wait_duration=None,
