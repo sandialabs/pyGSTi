@@ -261,9 +261,12 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
                 #print("DB: Rank %d: running itr=%d" % (comm.Get_rank(), itr))
 
                 printer.show_progress(loc_itr - 1, nLocIters, prefix='--- Finding amped-polys for idle: ')
-                prepFid = _Circuit((), line_labels=idle_str.line_labels)
+                
                 for i, el in enumerate(prep):
-                    prepFid = prepFid + _onqubit(el, qubit_filter[i])
+                    if i==0:
+                        prepFid = _onqubit(el, qubit_filter[i])
+                    else:
+                        prepFid = prepFid + _onqubit(el, qubit_filter[i])
 
                 for meas in _itertools.product(*([single_q_meas_fiducials] * nQubits)):
 
@@ -278,9 +281,11 @@ def _find_amped_polynomials_for_syntheticidle(qubit_filter, idle_str, model, sin
                         # if all are not the same or all are not different, skip
                         if not (all(cmp) or not any(cmp)): continue
 
-                    measFid = _Circuit((), line_labels=idle_str.line_labels)
                     for i, el in enumerate(meas):
-                        measFid = measFid + _onqubit(el, qubit_filter[i])
+                        if i==0:
+                            measFid = _onqubit(el, qubit_filter[i])
+                        else:
+                            measFid = measFid + _onqubit(el, qubit_filter[i])
 
                     gatename_fidpair_list = [(prep[i], meas[i]) for i in range(nQubits)]
                     if gatename_fidpair_list in selected_gatename_fidpair_lists:
@@ -673,9 +678,11 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
         #        prep[ qubit_filter.index(core_ql) ] = prep_core[i]
         #    prep = tuple(prep)
 
-        prepFid = _Circuit(())
         for i, el in enumerate(prep):
-            prepFid = prepFid + _onqubit(el, qubit_filter[i])
+            if i==0:
+                prepFid = _onqubit(el, qubit_filter[i])
+            else:
+                prepFid = prepFid + _onqubit(el, qubit_filter[i])
 
         #OLD: back when we tried iterating over *all* core fiducial pairs
         # (now we think/know this is unnecessary - the "true idle" fidpairs suffice)
@@ -687,9 +694,11 @@ def _find_amped_polynomials_for_clifford_syntheticidle(qubit_filter, core_filter
         #        #    meas[ qubit_filter.index(core_ql) ] = meas_core[i]
         #        meas = tuple(meas)
 
-        measFid = _Circuit(())
         for i, el in enumerate(meas):
-            measFid = measFid + _onqubit(el, qubit_filter[i])
+            if i==0:
+                measFid = _onqubit(el, qubit_filter[i])
+            else:
+                measFid = measFid + _onqubit(el, qubit_filter[i])
 
         #print("PREPMEAS = ",prepFid,measFid)
 
@@ -891,9 +900,11 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
                     prep[qubit_filter.index(core_ql)] = prep_core[i]
                 prep = tuple(prep)
 
-            prepFid = _Circuit(())
             for i, el in enumerate(prep):
-                prepFid = prepFid + _onqubit(el, qubit_filter[i])
+                if i==0:
+                    prepFid = _onqubit(el, qubit_filter[i])
+                else:
+                    prepFid = prepFid + _onqubit(el, qubit_filter[i])
 
             #for meas in _itertools.product(*([single_q_fiducials]*nQubits) ):
             #for meas_core in _itertools.product(*([single_q_fiducials]*nCore) ):
@@ -908,9 +919,11 @@ def _get_fidpairs_needed_to_access_amped_polynomials(qubit_filter, core_filter, 
                         meas[qubit_filter.index(core_ql)] = meas_core[i]
                     meas = tuple(meas)
 
-                measFid = _Circuit(())
                 for i, el in enumerate(meas):
-                    measFid = measFid + _onqubit(el, qubit_filter[i])
+                    if i==0:
+                        measFid = _onqubit(el, qubit_filter[i])
+                    else:
+                        measFid = measFid + _onqubit(el, qubit_filter[i])
                 #print("CONSIDER: ",prep,"-",meas)
 
                 opstr = prepFid + germ_power_str + measFid  # should be a Circuit
@@ -1324,7 +1337,7 @@ def _get_candidates_for_core(model, core_qubits, candidate_counts, seed_start):
     return candidate_germs
 
 
-@_deprecated_fn("Use pygsti.circuits.create_standard_cloudnoise_circuits(...).")
+@_deprecated_fn("Use pygsti.circuits.create_cloudnoise_circuits(...).")
 def _create_xycnot_cloudnoise_circuits(num_qubits, max_lengths, geometry, cnot_edges, max_idle_weight=1, maxhops=0,
                                        extra_weight_1_hops=0, extra_gate_weight=0, parameterization="H+S",
                                        verbosity=0, cache=None, idle_only=False,

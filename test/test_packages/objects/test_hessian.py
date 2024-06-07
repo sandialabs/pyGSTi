@@ -6,8 +6,8 @@ from pygsti.forwardsims.mapforwardsim import MapForwardSimulator
 
 import pygsti
 from pygsti import protocols as proto
-from pygsti.modelpacks.legacy import std1Q_XY as stdxy
-from pygsti.modelpacks.legacy import std1Q_XYI as stdxyi
+from pygsti.modelpacks import smq1Q_XY
+from pygsti.modelpacks import smq1Q_XYI
 from pygsti.baseobjs import Label as L
 from pygsti.report import modelfunction as gsf
 from ..testutils import BaseTestCase, compare_files
@@ -18,27 +18,34 @@ class TestHessianMethods(BaseTestCase):
     def setUp(self):
         super(TestHessianMethods, self).setUp()
 
-        self.model = pygsti.io.load_model(compare_files + "/analysis.model")
-        self.ds = pygsti.data.DataSet(file_to_load_from=compare_files + "/analysis.dataset")
+        self.model = smq1Q_XY.target_model()
+        self.model = self.model.depolarize(spam_noise = .01, op_noise = .001)
+        self.model = self.model.rotate(max_rotate=.005, seed=1234)
 
-
-        fiducials = stdxyi.fiducials
-        germs = stdxyi.germs
+        prep_fiducials = smq1Q_XY.prep_fiducials()
+        meas_fiducials = smq1Q_XY.meas_fiducials()
+        germs = smq1Q_XY.germs()
         op_labels = list(self.model.operations.keys()) # also == std.gates
-        self.maxLengthList = [1,2]
-        self.gss = pygsti.circuits.make_lsgst_structs(op_labels, fiducials, fiducials, germs, self.maxLengthList)
+        self.maxLengthList = [1]
+        #circuits for XY model.
+        self.gss = pygsti.circuits.make_lsgst_structs(op_labels, prep_fiducials[0:4], 
+                                                          meas_fiducials[0:3], smq1Q_XY.germs(), self.maxLengthList)
+
+        self.edesign =  proto.CircuitListsDesign([pygsti.circuits.CircuitList(circuit_struct) for circuit_struct in self.gss])
+
+        self.ds = pygsti.data.simulate_data(self.model, self.edesign.all_circuits_needing_data, 1000, seed = 1234)
 
 
     def test_parameter_counting(self):
         #XY Model: SPAM=True
-        n = stdxy.target_model().num_params
+        n = smq1Q_XY.target_model().num_params
         self.assertEqual(n,44) # 2*16 + 3*4 = 44
 
-        n = stdxy.target_model().num_nongauge_params
+        n = smq1Q_XY.target_model().num_nongauge_params
         self.assertEqual(n,28) # full 16 gauge params
 
         #XY Model: SPAM=False
-        tst = stdxy.target_model()
+        tst = smq1Q_XY.target_model()
         del tst.preps['rho0']
         del tst.povms['Mdefault']
         n = tst.num_params
@@ -49,14 +56,14 @@ class TestHessianMethods(BaseTestCase):
 
 
         #XYI Model: SPAM=True
-        n = stdxyi.target_model().num_params
+        n = smq1Q_XYI.target_model().num_params
         self.assertEqual(n,60) # 3*16 + 3*4 = 60
 
-        n = stdxyi.target_model().num_nongauge_params
+        n = smq1Q_XYI.target_model().num_nongauge_params
         self.assertEqual(n,44) # full 16 gauge params: SPAM gate + 3 others
 
         #XYI Model: SPAM=False
-        tst = stdxyi.target_model()
+        tst = smq1Q_XYI.target_model()
         del tst.preps['rho0']
         del tst.povms['Mdefault']
         n = tst.num_params
@@ -66,7 +73,7 @@ class TestHessianMethods(BaseTestCase):
         self.assertEqual(n,34) # gates are all unital & TP => only 14 gauge params (2 casimirs)
 
         #XYI Model: SP0=False
-        tst = stdxyi.target_model()
+        tst = smq1Q_XYI.target_model()
         tst.preps['rho0'] = pygsti.modelmembers.states.TPState(tst.preps['rho0'])
         n = tst.num_params
         self.assertEqual(n,59) # 3*16 + 2*4 + 3 = 59
@@ -75,9 +82,9 @@ class TestHessianMethods(BaseTestCase):
         self.assertEqual(n,44) # 15 gauge params (minus one b/c can't change rho?)
 
         #XYI Model: G0=SP0=False
-        tst.operations['Gi'] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gi'])
-        tst.operations['Gx'] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gx'])
-        tst.operations['Gy'] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gy'])
+        tst.operations[L(())] = pygsti.modelmembers.operations.FullTPOp(tst.operations[L(())])
+        tst.operations['Gxpi2',0] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gxpi2',0])
+        tst.operations['Gypi2',0] = pygsti.modelmembers.operations.FullTPOp(tst.operations['Gypi2',0])
         n = tst.num_params
         self.assertEqual(n,47) # 3*12 + 2*4 + 3 = 47
 
@@ -88,36 +95,27 @@ class TestHessianMethods(BaseTestCase):
         chi2Hessian = pygsti.chi2_hessian(self.model, self.ds)
 
         proj_non_gauge = self.model.compute_nongauge_projector()
-        projectedHessian = np.dot(proj_non_gauge,
-                                  np.dot(chi2Hessian, proj_non_gauge))
+        projectedHessian = proj_non_gauge@chi2Hessian@proj_non_gauge
 
-        print(self.model.num_params)
-        print(proj_non_gauge.shape)
-        self.assertEqual( projectedHessian.shape, (60,60) )
-        #print("Evals = ")
-        #print("\n".join( [ "%d: %g" % (i,ev) for i,ev in enumerate(np.linalg.eigvals(projectedHessian))] ))
-        self.assertEqual( np.linalg.matrix_rank(proj_non_gauge), 44)
-        self.assertEqual( np.linalg.matrix_rank(projectedHessian), 44)
+        self.assertEqual( projectedHessian.shape, (44,44) )
+        self.assertEqual( np.linalg.matrix_rank(proj_non_gauge), 28)
+        self.assertEqual( np.linalg.matrix_rank(projectedHessian), 28)
 
         eigvals = np.sort(abs(np.linalg.eigvals(projectedHessian)))
 
         print("eigvals = ",eigvals)
 
-        eigvals_chk = np.array([2.51663034e-10, 2.51663034e-10, 6.81452335e-10, 7.72039792e-10,
-                                8.76915081e-10, 8.76915081e-10, 1.31455011e-09, 3.03808236e-09,
-                                3.03808236e-09, 3.13457752e-09, 3.21805358e-09, 3.21805358e-09,
-                                4.78549720e-09, 7.83389490e-09, 1.82493106e-08, 1.82493106e-08,
-                                9.23087831e+05, 1.05783101e+06, 1.16457705e+06, 1.39492929e+06,
-                                1.84015484e+06, 2.10613947e+06, 2.37963392e+06, 2.47192689e+06,
-                                2.64566761e+06, 2.68722871e+06, 2.82383377e+06, 2.86584033e+06,
-                                2.94590436e+06, 2.96180212e+06, 3.08322015e+06, 3.29389050e+06,
-                                3.66581786e+06, 3.76266448e+06, 3.81921738e+06, 3.86624688e+06,
-                                3.89045873e+06, 4.72831630e+06, 4.96416855e+06, 6.53286834e+06,
-                                1.01424911e+07, 1.11347312e+07, 1.26152967e+07, 1.30081040e+07,
-                                1.36647082e+07, 1.49293583e+07, 1.58234599e+07, 1.80999182e+07,
-                                2.09155048e+07, 2.17444267e+07, 2.46870311e+07, 2.64427393e+07,
-                                2.72410297e+07, 3.34988002e+07, 3.45005948e+07, 3.69040745e+07,
-                                5.08647137e+07, 9.43153151e+07, 1.36088308e+08, 6.30304807e+08])
+        eigvals_chk = np.array([ 5.45537035e-13, 5.45537035e-13, 1.47513013e-12, 1.47513013e-12,
+                                 1.57813273e-12, 4.87695508e-12, 1.22061302e-11, 3.75982961e-11,
+                                 5.49796401e-11, 5.62019047e-11, 5.62019047e-11, 7.06418308e-11,
+                                 1.44881858e-10, 1.48934891e-10, 1.48934891e-10, 2.06194475e-10,
+                                 1.91727543e+01, 2.26401298e+02, 5.23331036e+02, 1.16447879e+03,
+                                 1.45737904e+03, 1.93375238e+03, 2.02017169e+03, 3.55570313e+03,
+                                 3.95986905e+03, 5.52173250e+03, 8.20436174e+03, 9.93573257e+03,
+                                 1.36092721e+04, 1.87334336e+04, 2.07723720e+04, 2.17070806e+04,
+                                 2.72168569e+04, 3.31886655e+04, 3.72430633e+04, 4.64233389e+04,
+                                 6.35672652e+04, 8.61196820e+04, 1.08248150e+05, 1.65647618e+05,
+                                 5.72597674e+05, 9.44823397e+05, 1.45785061e+06, 6.85705713e+06])
 
         TOL = 1e-7
         for val,chk in zip(eigvals,eigvals_chk):
@@ -128,16 +126,14 @@ class TestHessianMethods(BaseTestCase):
 
     def test_confidenceRegion(self):
 
-        edesign = proto.CircuitListsDesign([pygsti.circuits.CircuitList(circuit_struct)
-                                            for circuit_struct in self.gss])
-        data = proto.ProtocolData(edesign, self.ds)
+        data = proto.ProtocolData(self.edesign, self.ds)
         res = proto.ModelEstimateResults(data, proto.StandardGST(modes="full TP"))
 
         #Add estimate for hessian-based CI --------------------------------------------------
         builder = pygsti.objectivefns.PoissonPicDeltaLogLFunction.builder()
         res.add_estimate(
             proto.estimate.Estimate.create_gst_estimate(
-                res, stdxyi.target_model(), stdxyi.target_model(),
+                res, smq1Q_XY.target_model(), smq1Q_XY.target_model(),
                 [self.model] * len(self.maxLengthList), parameters={'final_objfn_builder': builder}),
             estimate_key="default"
         )
@@ -181,7 +177,7 @@ class TestHessianMethods(BaseTestCase):
         #Add estimate for linresponse-based CI --------------------------------------------------
         res.add_estimate(
             proto.estimate.Estimate.create_gst_estimate(
-                res, stdxyi.target_model(), stdxyi.target_model(),
+                res, smq1Q_XY.target_model(), smq1Q_XY.target_model(),
                 [self.model]*len(self.maxLengthList), parameters={'final_objfn_builder': builder}),
             estimate_key="linresponse"
         )
@@ -215,7 +211,7 @@ class TestHessianMethods(BaseTestCase):
         
         res.add_estimate(
             proto.estimate.Estimate.create_gst_estimate(
-                res, stdxyi.target_model(), stdxyi.target_model(),
+                res, smq1Q_XY.target_model(), smq1Q_XY.target_model(),
                 [self.model]*len(self.maxLengthList), parameters={'final_objfn_builder': FooBar()}),
             estimate_key="foo"
         )
@@ -225,8 +221,6 @@ class TestHessianMethods(BaseTestCase):
         with self.assertRaises(ValueError): # bad objective
             est.create_confidence_region_factory('final iteration estimate', 'final').compute_hessian()
 
-
-
         # Now test each of the views we created above ------------------------------------------------
         for ci_cur in (ci_std, ci_noproj, ci_opt, ci_intrinsic, ci_linresponse):
 
@@ -235,7 +229,7 @@ class TestHessianMethods(BaseTestCase):
 
             #linear response CI doesn't support profile likelihood intervals
             if ci_cur is not ci_linresponse: # (profile likelihoods not implemented in this case)
-                ar_of_intervals_Gx = ci_cur.retrieve_profile_likelihood_confidence_intervals(L("Gx"))
+                ar_of_intervals_Gx = ci_cur.retrieve_profile_likelihood_confidence_intervals(L("Gxpi2", 0))
                 ar_of_intervals_rho0 = ci_cur.retrieve_profile_likelihood_confidence_intervals(L("rho0"))
                 ar_of_intervals_M0 = ci_cur.retrieve_profile_likelihood_confidence_intervals(L("Mdefault"))
                 ar_of_intervals = ci_cur.retrieve_profile_likelihood_confidence_intervals()
@@ -265,7 +259,7 @@ class TestHessianMethods(BaseTestCase):
 
             for fnOfOp in fns:
                 FnClass = gsf.opfn_factory(fnOfOp)
-                FnObj = FnClass(self.model, 'Gx')
+                FnObj = FnClass(self.model, L('Gxpi2',0))
                 if fnOfOp is fnOfGate_3D:
                     with self.assertRaises(ValueError):
                         df = ci_cur.compute_confidence_interval(FnObj, verbosity=0)
@@ -339,13 +333,13 @@ class TestHessianMethods(BaseTestCase):
 
 
             def fnOfGateSet_float(mdl):
-                return float( mdl.operations['Gx'][0,0] )
+                return float( mdl.operations['Gxpi2',0][0,0] )
             def fnOfGateSet_0D(mdl):
-                return np.array( mdl.operations['Gx'][0,0]  )
+                return np.array( mdl.operations['Gxpi2',0][0,0]  )
             def fnOfGateSet_1D(mdl):
-                return np.array( mdl.operations['Gx'][0,:] )
+                return np.array( mdl.operations['Gxpi2',0][0,:] )
             def fnOfGateSet_2D(mdl):
-                return np.array( mdl.operations['Gx'] )
+                return np.array( mdl.operations['Gxpi2',0] )
             def fnOfGateSet_3D(mdl):
                 return np.zeros( (2,2,2), 'd') #just to test for error
 
@@ -363,14 +357,13 @@ class TestHessianMethods(BaseTestCase):
         #TODO: assert values of df & f0 ??
 
     def test_pickle_ConfidenceRegion(self):
-        edesign = proto.CircuitListsDesign([pygsti.circuits.CircuitList(circuit_struct)
-                                            for circuit_struct in self.gss])
-        data = proto.ProtocolData(edesign, self.ds)
+
+        data = proto.ProtocolData(self.edesign, self.ds)
         res = proto.ModelEstimateResults(data, proto.StandardGST(modes="full TP"))
 
         res.add_estimate(
             proto.estimate.Estimate.create_gst_estimate(
-                res, stdxyi.target_model(), stdxyi.target_model(),
+                res, smq1Q_XY.target_model(), smq1Q_XY.target_model(),
                 [self.model]*len(self.maxLengthList), parameters={'objective': 'logl'}),
             estimate_key="default"
         )
