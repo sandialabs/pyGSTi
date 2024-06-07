@@ -76,6 +76,7 @@ extras = {
         'zmq',
         'jinja2',
         'seaborn',
+        'scipy<=0.13.0', # Testing for CI
         'ply',
         'qibo<=0.1.7',
         'cirq-core',
