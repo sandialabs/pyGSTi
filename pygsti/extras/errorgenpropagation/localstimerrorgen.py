@@ -5,8 +5,7 @@ from numpy import array,kron
 from pygsti.tools import change_basis
 from pygsti.tools.lindbladtools import create_elementary_errorgen
 
-class localstimerrorgen(ElementaryErrorgenLabel):
-
+class LocalStimErrorgenLabel(ElementaryErrorgenLabel):
 
     '''
     Initiates the errorgen object
@@ -92,5 +91,5 @@ class localstimerrorgen(ElementaryErrorgenLabel):
             temp=temp*temp.sign
             new_basis_labels.append(temp)
         
-        return (localstimerrorgen(self.errorgen_type,new_basis_labels),weightmod*weight)
+        return (LocalStimErrorgenLabel(self.errorgen_type,new_basis_labels),weightmod*weight)
 

@@ -72,7 +72,7 @@ class LFHLindbladErrorgen(_LindbladErrorgen):
         #We'll make the keys of the dictionary the index in h_means that the deviation corresponds to.
 
         self.dev_dict = h_devs
-        self.devs= _np.fromiter(h_devs.values())
+        self.devs= _np.fromiter(h_devs.values(), dtype = _np.double)
         
         #set the random number generator used for sampling from a normal distribution.
         if rng is not None:

@@ -1,24 +1,42 @@
 import stim
-from localstimerrorgen import *
+from pygsti.extras.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from numpy import abs,zeros, complex128
 from numpy.linalg import multi_dot
 from scipy.linalg import expm
 from pygsti.tools.internalgates import standard_gatenames_stim_conversions
-from utilserrorgenpropagation import *
+from pygsti.extras.errorgenpropagation.utilserrorgenpropagation import commute_errors
+
+class ErrorGeneratorPropagator:
+
+    def __init__(self, model, multi_gate_dict=None, bch_order=1,
+                 bch_layerwise=False, nonmarkovian=False, multi_gate=False, 
+                 error_layer_def=False):
+        self.model = model
+        self.bch_order = bch_order
+        self.bch_layerwise = bch_layerwise    
+
+    def propagate_errorgen_bch(circuit, bch_order, bch_layerwise):
+        pass
+
+    def propagate_errorgen_nonmarkovian(circuit, multi_gate_dict):
+        pass
+
+    
 
 
-def ErrorPropagator(circ,errorModel,MultiGateDict=None,BCHOrder=1,BCHLayerwise=False,NonMarkovian=False,MultiGate=False,ErrorLayerDef=False):
-    if MultiGate and MultiGateDict is None:
-        MultiGateDict=dict()
+def ErrorPropagator(circ,errorModel,multi_gate_dict=None,bch_order=1,bch_layerwise=False,
+                    nonmarkovian=False,multi_gate=False,error_layer_def=False):
+    if multi_gate and multi_gate_dict is None:
+        multi_gate_dict=dict()
     stim_dict=standard_gatenames_stim_conversions()
-    if MultiGate:
-        for key in MultiGateDict:
-            stim_dict[key]=stim_dict[MultiGateDict[key]]
+    if multi_gate:
+        for key in multi_gate_dict:
+            stim_dict[key]=stim_dict[multi_gate_dict[key]]
     stim_layers=circ.convert_to_stim_tableau_layers(gate_name_conversions=stim_dict)
     stim_layers.pop(0)  #Immediatly toss the first layer because it is not important,
 
     propagation_layers=[]
-    if not BCHLayerwise or NonMarkovian:
+    if not bch_layerwise or nonmarkovian:
         while len(stim_layers) != 0:
             top_layer=stim_layers.pop(0)
             for layer in stim_layers:
@@ -27,7 +45,7 @@ def ErrorPropagator(circ,errorModel,MultiGateDict=None,BCHOrder=1,BCHLayerwise=F
     else:
         propagation_layers = stim_layers
 
-    if not ErrorLayerDef:
+    if not error_layer_def:
         errorLayers=buildErrorlayers(circ,errorModel,len(circ.line_labels))
     else:
         errorLayers=[[errorModel]]*circ.depth #this doesn't work
@@ -45,15 +63,15 @@ def ErrorPropagator(circ,errorModel,MultiGateDict=None,BCHOrder=1,BCHLayerwise=F
                 propagated_error_gen=key.propagate_error_gen_tableau(layer,err_order[key])
                 new_error_dict[propagated_error_gen[0]]=propagated_error_gen[1]
             new_error_layer.append(new_error_dict)
-        if BCHLayerwise and not NonMarkovian:
+        if bch_layerwise and not nonmarkovian:
             following_layer = errorLayers.pop(0)
-            new_errors=BCH_Handler(err_layer,following_layer,BCHOrder)
+            new_errors=BCH_Handler(err_layer,following_layer,bch_order)
             errorLayers.insert(new_errors,0)
         else:
             fully_propagated_layers.append(new_error_layer)
 
     fully_propagated_layers.append(errorLayers.pop(0))
-    if BCHLayerwise and not NonMarkovian:
+    if bch_layerwise and not nonmarkovian:
         final_error=dict()
         for order in errorLayers[0]:
             for error in order:
@@ -63,9 +81,9 @@ def ErrorPropagator(circ,errorModel,MultiGateDict=None,BCHOrder=1,BCHLayerwise=F
                     final_error[error]=order[error]
         return final_error
     
-    elif not BCHLayerwise and not NonMarkovian:
+    elif not bch_layerwise and not nonmarkovian:
         simplified_EOC_errors=dict()
-        if BCHOrder == 1:
+        if bch_order == 1:
             for layer in fully_propagated_layers:
                 for order in layer:
                     for error in order:
@@ -106,7 +124,7 @@ def buildErrorlayers(circ,errorDict,qubits):
                         if ind !=0:
                             p2=p2[:el] + errs[2][ind-1] +p2[(el+1):]
                     paulis.append(stim.PauliString(p2))     
-                errorLayer[localstimerrorgen(errType,paulis)]=gErrorDict[errs]
+                errorLayer[_LSE(errType,paulis)]=gErrorDict[errs]
         ErrorGens.append([errorLayer])
     return ErrorGens
 '''
@@ -115,12 +133,12 @@ Inputs:
 _______
 err_layer (list of dictionaries)
 following_layer (list of dictionaries)
-BCHOrder:
+bch_order:
 
 '''
-def BCH_Handler(err_layer,following_layer,BCHOrder):         
+def BCH_Handler(err_layer,following_layer,bch_order):         
     new_errors=[]
-    for curr_order in range(0,BCHOrder):
+    for curr_order in range(0,bch_order):
         working_order=dict()
         #add first order terms into new layer
         if curr_order == 0:
