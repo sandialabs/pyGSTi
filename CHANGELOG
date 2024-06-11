@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## [0.9.12.3] - 2024-06-03
+## [0.9.12.3] - 2024-06-11
 
 ### Added
 * Deterministic Clifford compilation and native gate count statistics for `CliffordRBDesign` (#314, #315, #443)
