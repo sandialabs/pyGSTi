@@ -58,7 +58,7 @@ class ParserTester(StdInputBase, IOBase):
         for s, expected in string_tests:
             result, line_labels, occurrence_id, compilable_indices = self.std.parse_circuit_raw(s, lookup=lkup)
             self.assertEqual(line_labels, None)
-            self.assertEqual(compilable_indices, None)
+            self.assertEqual(compilable_indices, ())
             circuit_result = Circuit(result, line_labels="auto", expand_subcircuits=True)
             #use "auto" line labels since none are parsed.
             self.assertEqual(circuit_result.tup, expected)

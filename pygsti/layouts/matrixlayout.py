@@ -290,49 +290,28 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         unique_circuits, to_unique = self._compute_unique_circuits(circuits)
         aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
-        unique_complete_circuits = [model.complete_circuit(c) for c in unique_circuits]
+        unique_complete_circuits, split_unique_circuits = model.complete_circuits(unique_circuits, return_split=True)
         #Note: "unique" means a unique circuit *before* circuit-completion, so there could be duplicate
         # "unique circuits" after completion, e.g. "rho0Gx" and "Gx" could both complete to "rho0GxMdefault_0".
 
         circuits_by_unique_nospam_circuits = _collections.OrderedDict()
-        for i, c in enumerate(unique_complete_circuits):
-            _, nospam_c, _ = model.split_circuit(c)
+        for i, (_, nospam_c, _) in enumerate(split_unique_circuits):
             if nospam_c in circuits_by_unique_nospam_circuits:
                 circuits_by_unique_nospam_circuits[nospam_c].append(i)
             else:
                 circuits_by_unique_nospam_circuits[nospam_c] = [i]
         unique_nospam_circuits = list(circuits_by_unique_nospam_circuits.keys())
-
+        
         # Split circuits into groups that will make good subtrees (all procs do this)
         max_sub_tree_size = None  # removed from being an argument (unused)
         if (num_sub_trees is not None and num_sub_trees > 1) or max_sub_tree_size is not None:
             circuit_tree = _EvalTree.create(unique_nospam_circuits)
             groups, helpful_scratch = circuit_tree.find_splitting(len(unique_nospam_circuits),
                                                                   max_sub_tree_size, num_sub_trees, verbosity - 1)
-            #print("%d circuits => tree of size %d" % (len(unique_nospam_circuits), len(circuit_tree)))
         else:
             groups = [set(range(len(unique_nospam_circuits)))]
             helpful_scratch = [set()]
         # (elements of `groups` contain indices into `unique_nospam_circuits`)
-
-        # Divide `groups` into num_tree_processors roughly equal sets (each containing
-        # potentially multiple groups)
-        #my_group_indices, group_owners, grp_subcomm = self._distribute(num_tree_processors, len(groups),
-        #                                                                resource_alloc, verbosity)
-        #my_group_indices = set(my_group_indices)
-
-        #my_atoms = []
-        #elindex_outcome_tuples = _collections.OrderedDict([
-        #    (orig_i, list()) for orig_i in range(len(unique_circuits))])
-        #
-        #offset = 0
-        #for i, (group, helpful_scratch_group) in enumerate(zip(groups, helpful_scratch)):
-        #    if i not in my_group_indices: continue
-        #    my_atoms.append(_MatrixCOPALayoutAtom(unique_complete_circuits, unique_nospam_circuits,
-        #                                       circuits_by_unique_nospam_circuits, ds_circuits,
-        #                                       group, helpful_scratch_group, model, dataset, offset,
-        #                                       elindex_outcome_tuples))
-        #    offset += my_atoms[-1].num_elements
 
         def _create_atom(args):
             group, helpful_scratch_group = args

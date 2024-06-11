@@ -1521,11 +1521,11 @@ class ExplicitOpModel(_mdl.OpModel):
             return U_extracted
 
         def add_availability(opkey, op):
-            if opkey == _Label(()) or opkey.is_simple():
+            if opkey == _Label(()) or opkey.is_simple:
                 if opkey == _Label(()):  # special case: turn empty tuple labels into "{idle}" gate in processor spec
                     gn = "{idle}"
                     sslbls = None
-                elif opkey.is_simple():
+                elif opkey.is_simple:
                     gn = opkey.name
                     sslbls = opkey.sslbls
                     #if sslbls is not None:
