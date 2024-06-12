@@ -225,7 +225,7 @@ def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis):
     N2 = opMxInStdBasis.shape[0]; N = int(_np.sqrt(N2))
     assert(N * N == N2)  # make sure N2 is a perfect square
     Jmx = opMxInStdBasis.reshape((N, N, N, N))
-    Jmx = _np.swapaxes(Jmx, 1, 2).flatten()
+    Jmx = _np.swapaxes(Jmx, 1, 2).ravel()
     Jmx = Jmx.reshape((N2, N2))
 
     # This construction results in a Jmx with trace == dim(H) = sqrt(gateMxInPauliBasis.shape[0])
@@ -261,7 +261,7 @@ def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
     N2 = choi_mx.shape[0]; N = int(_np.sqrt(N2))
     assert(N * N == N2)  # make sure N2 is a perfect square
     opMxInStdBasis = choi_mx.reshape((N, N, N, N)) * N
-    opMxInStdBasis = _np.swapaxes(opMxInStdBasis, 1, 2).flatten()
+    opMxInStdBasis = _np.swapaxes(opMxInStdBasis, 1, 2).ravel()
     opMxInStdBasis = opMxInStdBasis.reshape((N2, N2))
     op_mx_basis = _bt.create_basis_for_matrix(opMxInStdBasis, op_mx_basis)
 

@@ -88,7 +88,7 @@ class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
 
         for zvals in _itertools.product(*([(0, 1)] * nqubits)):
             testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
-            if _np.allclose(testvec, vec.flatten()):
+            if _np.allclose(testvec, vec.ravel()):
                 return cls(zvals, basis, evotype, state_space)
         raise ValueError(("Given `vec` is not a z-basis product state - "
                           "cannot construct ComputationalBasisState"))
@@ -128,7 +128,7 @@ class ComputationalBasisState(_State, _NoErrorGeneratorInterface):
         v = (_np.array([1, 0], 'd'), _np.array([0, 1], 'd'))  # (v0,v1)
         for zvals in _itertools.product(*([(0, 1)] * nqubits)):
             testvec = _functools.reduce(_np.kron, [v[i] for i in zvals])
-            if _np.allclose(testvec, purevec.flatten()):
+            if _np.allclose(testvec, purevec.ravel()):
                 return cls(zvals, basis, evotype, state_space)
         raise ValueError(("Given `purevec` must be a z-basis product state - "
                           "cannot construct ComputationalBasisState"))

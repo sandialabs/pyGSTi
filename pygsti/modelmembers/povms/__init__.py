@@ -125,8 +125,8 @@ def create_from_dmvecs(superket_vectors, povm_type, basis='pp', evotype='default
                 EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
                 povm = ComposedPOVM(EffectiveExpErrorgen(errorgen), base_povm, mx_basis=basis)
             elif typ in ('computational', 'static pure', 'full pure'):
-                # RESHAPE NOTE: .flatten() added to line below (to convert pure *col* vec -> 1D) to fix unit tests
-                pure_vectors = {k: _ot.dmvec_to_state(_bt.change_basis(superket, basis, 'std')).flatten()
+                # RESHAPE NOTE: .ravel() added to line below (to convert pure *col* vec -> 1D) to fix unit tests
+                pure_vectors = {k: _ot.dmvec_to_state(_bt.change_basis(superket, basis, 'std')).ravel()
                                 for k, superket in superket_vectors.items()}
                 povm = create_from_pure_vectors(pure_vectors, typ, basis, evotype, state_space)
             else:
@@ -164,7 +164,7 @@ def create_effect_from_pure_vector(pure_vector, effect_type, basis='pp', evotype
                 superket = _bt.change_basis(_ot.state_to_dmvec(pure_vector), 'std', basis)
                 ef = create_effect_from_dmvec(superket, typ, basis, evotype, state_space)
             elif typ == 'static clifford':
-                ef = ComputationalBasisPOVMEffect.from_pure_vector(pure_vector.flatten())
+                ef = ComputationalBasisPOVMEffect.from_pure_vector(pure_vector.ravel())
             elif _ot.is_valid_lindblad_paramtype(typ):
                 from ..operations import LindbladErrorgen as _LindbladErrorgen, ExpErrorgenOp as _ExpErrorgenOp
                 from ..operations import IdentityPlusErrorgenOp as _IdentityPlusErrorgenOp

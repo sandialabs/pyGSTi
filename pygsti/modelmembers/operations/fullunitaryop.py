@@ -98,7 +98,8 @@ class FullUnitaryOp(_DenseUnitaryOperator):
         numpy array
             The operation parameters as a 1D array with length num_params().
         """
-        return _np.concatenate((self._ptr.real.flatten(), self._ptr.imag.flatten()), axis=0)
+        # _np.concatenate will make a copy for us, so use ravel instead of flatten.
+        return _np.concatenate((self._ptr.real.ravel(), self._ptr.imag.ravel()), axis=0)
 
     def from_vector(self, v, close=False, dirty_value=True):
         """

@@ -1235,9 +1235,11 @@ class StabilityAnalyzer(object):
 
                     # If we're not testing a single spectrum we need to flatten the >1D array.
                     if len(_np.shape(spectra)) > 1:
+                        # Use flatten (rather than ravel) to ensure a copy is made.
                         powerlist = spectra[indices].flatten()
                     # If we're testing a single spectrum, we can just copy the 1D array.
-                    else: powerlist = spectra[indices].copy()
+                    else:
+                        powerlist = spectra[indices].copy()
 
                     # The indices that will go with the elements in the flattened spectra.
                     powerindices = [tup for tup in _itertools.product(*iterBenjHoch)]

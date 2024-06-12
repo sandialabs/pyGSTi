@@ -103,7 +103,7 @@ def _eformat(f, prec):
 
 
 def _num_non_nan(array):
-    ixs = _np.where(_np.isnan(_np.array(array).flatten()) == False)[0]  # noqa: E712
+    ixs = _np.where(_np.isnan(_np.array(array).ravel()) == False)[0]  # noqa: E712
     return int(len(ixs))
 
 
@@ -147,7 +147,7 @@ def _compute_num_boxes_dof(sub_mxs, sum_up, element_dof):
 
         # Gets all the non-NaN boxes, flattens the resulting
         # array, and does the sum.
-        n_boxes = _np.sum(~_np.isnan(sub_mxs).flatten())
+        n_boxes = _np.sum(~_np.isnan(sub_mxs).ravel())
 
     return n_boxes, dof_per_box
 

@@ -540,7 +540,7 @@ def plotly_to_matplotlib(pygsti_fig, save_to=None, fontsize=12, prec='compacthp'
                 axes.bar(x, y, barWidth, color=color)
             else:
                 axes.bar(x, y, barWidth, color=color,
-                         yerr=yerr.flatten().real)
+                         yerr=yerr.ravel().real)
 
             if xtickvals is not None:
                 xtics = _np.array(xtickvals) + 0.5  # _np.arange(plt_data.shape[1])+0.5

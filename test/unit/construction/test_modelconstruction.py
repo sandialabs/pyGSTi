@@ -43,8 +43,8 @@ class ModelConstructionTester(BaseCase):
         mdl1Q = smq1Q_XYI.target_model()
         mdlE0, mdlE1 = mdl1Q.povms['Mdefault']['0'].to_dense(), mdl1Q.povms['Mdefault']['1'].to_dense()
         ss1Q = pygsti.baseobjs.statespace.QubitSpace(1)
-        E0 = mc.create_spam_vector(0, ss1Q, 'pp').flatten()
-        E1 = mc.create_spam_vector(1, ss1Q, 'pp').flatten()
+        E0 = mc.create_spam_vector(0, ss1Q, 'pp').ravel()
+        E1 = mc.create_spam_vector(1, ss1Q, 'pp').ravel()
 
         self.assertArraysAlmostEqual(mdlE0, E0)
         self.assertArraysAlmostEqual(mdlE1, E1)
@@ -60,9 +60,10 @@ class ModelConstructionTester(BaseCase):
         for i in range(2**nQubits):
             bin_i = '{{0:0{}b}}'.format(nQubits).format(i)  # first .format creates format str, e.g. '{0:04b}'
             print("Testing state %d (%s)" % (i, bin_i))
-            created = mc.create_spam_vector(i, ssNQ, 'pp').flatten()
+            created = mc.create_spam_vector(i, ssNQ, 'pp').ravel()
             krond = multikron([E[digit] for digit in bin_i])
-            v = np.zeros(2**nQubits, complex); v[i] = 1.0
+            v = np.zeros(2**nQubits, complex)
+            v[i] = 1.0
             alt_created = st.create_from_pure_vector(v, 'static', 'pp', 'default', state_space=ssNQ).to_dense()
             self.assertArraysAlmostEqual(created, krond)
             self.assertArraysAlmostEqual(created, alt_created)

@@ -93,6 +93,7 @@ class FullArbitraryOp(_DenseOperator):
         numpy array
             The operation parameters as a 1D array with length num_params().
         """
+        # Use flatten (rather than ravel) to ensure a copy is made.
         return self._ptr.flatten()
 
     def from_vector(self, v, close=False, dirty_value=True):

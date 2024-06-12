@@ -691,13 +691,13 @@ class ConfidenceRegionFactory(_NicelySerializable):
             sub_crf.project_hessian('none')
             crfv = sub_crf.view(level)
 
-            operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).flatten()
+            operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).ravel()
                                             for gl in model.operations])
             return _np.sqrt(_np.sum(operationCIs**2))
 
         #Run Minimization Algorithm
         startM = _np.zeros((self.nNonGaugeParams, self.nGaugeParams), 'd')
-        x0 = startM.flatten()
+        x0 = startM.ravel()
         print_obj_func = _opt.create_objfn_printer(_objective_func)
         minSol = _opt.minimize(_objective_func, x0,
                                method=method, maxiter=maxiter,
@@ -727,7 +727,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
                                           self.circuit_list_lbl, projected_hessian, 0.0)
         sub_crf.project_hessian('none')
         crfv = sub_crf.view(level)
-        operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).flatten()
+        operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).ravel()
                                         for gl in model.operations])
         op_intrinsic_err = _np.sqrt(_np.mean(operationCIs**2))
 
@@ -738,7 +738,7 @@ class ConfidenceRegionFactory(_NicelySerializable):
                                           self.circuit_list_lbl, projected_hessian, 0.0)
         sub_crf.project_hessian('none')
         crfv = sub_crf.view(level)
-        spamCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(sl).flatten()
+        spamCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(sl).ravel()
                                    for sl in _itertools.chain(iter(model.preps),
                                                               iter(model.povms))])
         spam_intrinsic_err = _np.sqrt(_np.mean(spamCIs**2))
@@ -755,9 +755,9 @@ class ConfidenceRegionFactory(_NicelySerializable):
             sub_crf.project_hessian('none')
             crfv = sub_crf.view(level)
 
-            operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).flatten()
+            operationCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(gl).ravel()
                                             for gl in model.operations])
-            spamCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(sl).flatten()
+            spamCIs = _np.concatenate([crfv.retrieve_profile_likelihood_confidence_intervals(sl).ravel()
                                        for sl in _itertools.chain(iter(model.preps),
                                                                   iter(model.povms))])
             op_err = _np.sqrt(_np.mean(operationCIs**2))
