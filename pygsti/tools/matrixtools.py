@@ -682,11 +682,6 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
     assert(_np.linalg.norm(m.imag) < 1e-8), "Argument `m` must be a *real* matrix!"
     mx_shape = m.shape
 
-    #
-    #   Riley note: I'd like to remove all commented-out code in this function.
-    #   @Corey or @Stefan -- you okay with that?
-    #
-
     def _objective(flat_logm):
         logM = flat_logm.reshape(mx_shape)
         testM = _spl.expm(logM)
