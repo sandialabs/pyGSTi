@@ -241,15 +241,6 @@ class InterpolatedOpFactory(_OpFactory):
         return InterpolatedDenseOp(target_op, self.base_interpolator, self.aux_interpolator, self.to_vector(),
                                    _np.array(args), self._argument_indices)
 
-    #def write(self, dirname):
-    #    dirname = _pathlib.Path(dirname)
-    #    with open(str(dirname / "targetop.pkl"), 'wb') as f:
-    #        _pickle.dump(self.target_op, f)
-    #    _np.save(dirname / "paramvec.np", self._paramvec_with_time)
-    #    self.base_interpolator.write(dirname / "base.interp")
-    #    if self.aux_interpolator is not None:
-    #        self.aux_interptolator.write(dirname / "aux.interp")
-
     @property
     def num_params(self):
         return len(self._paramvec)
@@ -266,24 +257,6 @@ class InterpolatedOpFactory(_OpFactory):
 
 
 class InterpolatedDenseOp(_DenseOperator):
-
-    #@classmethod
-    #def from_dir(cls, dirname):
-    #    dirname = _pathlib.Path(dirname)
-    #    with open(str(dirname / "targetop.pkl"), 'rb') as f:
-    #        target_op = _pickle.load(f)
-    #    pt = _np.load(dirname / "paramvec.np")
-    #    base_interp = InterpolatedQuantity.from_file(dirname / "base.interp")
-    #    aux_interp = InterpolatedQuantity.from_file(dirname / "aux.interp") \
-    #        if (dirname / "aux.interp").exists() else None
-    #
-    #    if base_interp.times is not None:
-    #        tm = pt[-1]
-    #        pt = pt[0:-1]
-    #    else:
-    #        tm = None
-    #
-    #    return cls(target_op, base_interp, aux_interp, pt, tm)
 
     @classmethod
     def create_by_interpolating_physical_process(cls, target_op, physical_process, parameter_ranges=None,
@@ -390,15 +363,6 @@ class InterpolatedDenseOp(_DenseOperator):
 
         # initialize object
         self.from_vector(self._paramvec)
-
-    #def write(self, dirname):
-    #    dirname = _pathlib.Path(dirname)
-    #    with open(str(dirname / "targetop.pkl"), 'wb') as f:
-    #        _pickle.dump(self.target_op, f)
-    #    _np.save(dirname / "paramvec.np", self._paramvec_with_time)
-    #    self.base_interpolator.write(dirname / "base.interp")
-    #    if self.aux_interpolator is not None:
-    #        self.aux_interptolator.write(dirname / "aux.interp")
 
     @property
     def num_params(self):

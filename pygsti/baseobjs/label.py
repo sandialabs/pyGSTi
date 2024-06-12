@@ -250,10 +250,6 @@ class LabelTup(Label, tuple):
         return tuple.__new__(cls, tup)
 
     __new__ = tuple.__new__
-    #def __new__(cls, tup, time=0.0):
-    #    ret = tuple.__new__(cls, tup)  # creates a LabelTup object using tuple's __new__
-    #    ret.time = time
-    #    return ret
 
     @property
     def time(self):
@@ -353,19 +349,6 @@ class LabelTup(Label, tuple):
         else:  # assume mapper is callable
             mapped_sslbls = [mapper(sslbl) for sslbl in self.sslbls]
         return Label(self.name, mapped_sslbls)
-
-    #OLD
-    #def __iter__(self):
-    #    return self.tup.__iter__()
-
-    #OLD
-    #def __iter__(self):
-    #    """ Iterate over the name + state space labels """
-    #    # Note: tuple(.) uses __iter__ to construct tuple rep.
-    #    yield self.name
-    #    if self.sslbls is not None:
-    #        for ssl in self.sslbls:
-    #            yield ssl
 
     def __str__(self):
         """
@@ -616,19 +599,6 @@ class LabelTupWithTime(Label, tuple):
         else:  # assume mapper is callable
             mapped_sslbls = [mapper(sslbl) for sslbl in self.sslbls]
         return Label(self.name, mapped_sslbls)
-
-    #OLD
-    #def __iter__(self):
-    #    return self.tup.__iter__()
-
-    #OLD
-    #def __iter__(self):
-    #    """ Iterate over the name + state space labels """
-    #    # Note: tuple(.) uses __iter__ to construct tuple rep.
-    #    yield self.name
-    #    if self.sslbls is not None:
-    #        for ssl in self.sslbls:
-    #            yield ssl
 
     def __str__(self):
         """

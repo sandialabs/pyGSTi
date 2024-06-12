@@ -79,11 +79,6 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
             return None
         return self._label_indices[label]
 
-    #@property
-    #def sslbls(self):
-    #    """ The support of this errorgen space, e.g., the qubits where its elements may be nontrivial """
-    #    return self.sslbls
-
     def create_subbasis(self, must_overlap_with_these_sslbls):
         """
         Create a sub-basis of this basis by including only the elements
@@ -490,11 +485,6 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             raise ValueError("Invalid elementary errorgen type: %s" % str(eetype))
 
         return base + indices[elemgen_label]
-
-    #@property
-    #def sslbls(self):
-    #    """ The support of this errorgen space, e.g., the qubits where its elements may be nontrivial """
-    #    return self.sslbls
 
     def create_subbasis(self, must_overlap_with_these_sslbls, retain_max_weights=True):
         """
