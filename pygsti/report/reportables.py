@@ -121,7 +121,8 @@ def spam_dotprods(rho_vecs, povms):
         for povm in povms:
             for EVec in povm.values():
                 ret[i, j] = _np.vdot(EVec.to_dense(on_space='HilbertSchmidt'),
-                                     rhoVec.to_dense(on_space='HilbertSchmidt')); j += 1
+                                     rhoVec.to_dense(on_space='HilbertSchmidt'))
+                j += 1
                 # to_dense() gives a 1D array, so no need to transpose EVec
     return ret
 
@@ -2020,7 +2021,7 @@ def robust_log_gti_and_projections(model_a, model_b, synthetic_idle_circuits):
         for i, gl in enumerate(opLabels):
             for k, errOnGate in enumerate(error_superops):
                 noise = first_order_noise(opstr, errOnGate, gl)
-                jac[:, i * nSuperOps + k] = [_np.vdot(errOut.ravel(), noise.ravel()) for errOut in error_superops]
+                jac[:, i * nSuperOps + k] = [_np.vdot(errOut, noise) for errOut in error_superops]
 
                 # DEBUG CHECK
                 check = []
@@ -2160,9 +2161,10 @@ def general_decomposition(model_a, model_b):
             if gl == gl_other or abs(rotnAngle) < 1e-4 or abs(rotnAngle_other) < 1e-4:
                 decomp[str(gl) + "," + str(gl_other) + " axis angle"] = 10000.0  # sentinel for irrelevant angle
 
-            real_dot = _np.real(_np.dot(
-                decomp[str(gl) + ' axis'].ravel(), decomp[str(gl_other) + ' axis'].ravel()
-            ))  # Riley question: should this be vdot instead of dot?
+            arg1 = decomp[str(gl) + ' axis']
+            arg2 = decomp[str(gl_other) + ' axis']
+            # ^ assert not (_np.iscomplexobj(arg1) or _np.iscomplexobj(arg2) or arg1.ndim > 1 or arg2.ndim > 1)
+            real_dot = arg1 @ arg2
             real_dot = _np.clip(real_dot, -1.0, 1.0)
             angle = _np.arccos(real_dot) / _np.pi
             decomp[str(gl) + "," + str(gl_other) + " axis angle"] = angle

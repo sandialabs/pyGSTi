@@ -2566,7 +2566,7 @@ class PolarEigenvaluePlot(WorkspacePlot):
         for i, evals in enumerate(evals_list):
             color = colors[i] if (colors is not None) else "black"
             trace = go.Scatterpolar(
-                r=list(_np.absolute(evals).flat),
+                r=list(_np.absolute(evals).ravel()),
                 theta=list(_np.angle(evals).ravel() * (180.0 / _np.pi)),
                 mode='markers',
                 marker=dict(
@@ -2587,7 +2587,7 @@ class PolarEigenvaluePlot(WorkspacePlot):
             if amp is not None:
                 amp_evals = evals**amp
                 trace = go.Scatterpolar(
-                    r=list(_np.absolute(amp_evals).flat),
+                    r=list(_np.absolute(amp_evals).ravel()),
                     theta=list(_np.angle(amp_evals).ravel() * (180.0 / _np.pi)),
                     showlegend=False,
                     mode='markers',
@@ -2898,8 +2898,8 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
                                                     errbars, scale)
 
     def _create(self, evals, errbars, scale):
-
-        flat_errbars = errbars.ravel()
+        if errbars is not None:
+            flat_errbars = errbars.ravel()
         HOVER_PREC = 7
         xs = list(range(evals.size))
         ys, colors, texts = [], [], []
@@ -3034,13 +3034,13 @@ class GramMatrixBarPlot(WorkspacePlot):
 
         xs = list(range(svals.size))
         trace1 = go.Bar(
-            x=xs, y=list(svals.flat),
+            x=xs, y=list(svals.ravel()),
             marker=dict(color="blue"),
             hoverinfo='y',
             name="from Data"
         )
         trace2 = go.Bar(
-            x=xs, y=list(target_svals.flat),
+            x=xs, y=list(target_svals.ravel()),
             marker=dict(color="black"),
             hoverinfo='y',
             name="from Target"
@@ -3051,7 +3051,8 @@ class GramMatrixBarPlot(WorkspacePlot):
             ymax = max(_np.max(svals), _np.max(target_svals))
             ymin = max(ymin, 1e-8)  # prevent lower y-limit from being riduculously small
         else:
-            ymin = 0.1; ymax = 1.0  # just pick some values for empty plot
+            ymin = 0.1
+            ymax = 1.0  # just pick some values for empty plot
 
         data = [trace1, trace2]
         layout = go.Layout(
