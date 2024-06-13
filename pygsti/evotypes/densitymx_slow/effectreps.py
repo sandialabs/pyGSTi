@@ -13,12 +13,13 @@ POVM effect representation classes for the `densitymx_slow` evolution type.
 import numpy as _np
 
 # import functools as _functools
-from .. import basereps as _basereps
 from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 from ...tools import matrixtools as _mt
 
 
-class EffectRep(_basereps.EffectRep):
+class EffectRep:
+    """Any representation of an "effect" in the sense of a POVM."""
+
     def __init__(self, state_space):
         self.state_space = _StateSpace.cast(state_space)
 
@@ -27,6 +28,10 @@ class EffectRep(_basereps.EffectRep):
 
 
 class EffectRepConjugatedState(EffectRep):
+    """
+    A real superket representation of an "effect" in the sense of a POVM.
+    Internally uses a StateRepDense object to hold the real superket.
+    """
 
     def __init__(self, state_rep):
         self.state_rep = state_rep

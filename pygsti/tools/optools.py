@@ -23,6 +23,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jam
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
+from pygsti.baseobjs import basis as _pgb
 from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as _LocalElementaryErrorgenLabel
@@ -509,8 +510,8 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     
     #if the tp flag isn't set we'll calculate whether it is true here
     if is_tp is None:
-        def is_tp_fn(x): return _np.isclose(x[0, 0], 1.0) and all(
-        [_np.isclose(x[0, i], 0) for i in range(1,d2)])
+        def is_tp_fn(x):
+            return _np.isclose(x[0, 0], 1.0) and _np.allclose(x[0, 1:d2], 0)
         
         is_tp= (is_tp_fn(a) and is_tp_fn(b))
    
@@ -534,6 +535,159 @@ def entanglement_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     JA = _jam.jamiolkowski_iso(a, mx_basis, mx_basis)
     JB = _jam.jamiolkowski_iso(b, mx_basis, mx_basis)
     return fidelity(JA, JB)
+
+
+def lift_and_act_on_maxmixed_state(op_a, op_b, mx_basis, n_leak=0):
+    # Note: this function is only really useful for gates on a single system (qubit, qutrit, qudit);
+    # not tensor products of such systems.
+    dim = int(_np.sqrt(op_a.shape[0]))
+    assert op_a.shape == (dim**2, dim**2)
+    assert op_b.shape == (dim**2, dim**2)
+
+    # op_a and op_b act on the smallest real-linear space "S" that contains density matrices 
+    # for a dim-level system.
+    #
+    # We care about op_a and op_b only up to their action on the subspace
+    #    U = {rho in S : <i|rho|i> = 0 for all i >= dim - n_leak }.
+    #
+    # It's easier to talk about this subspace (and related subspaces) if op_a and op_b are in
+    # the standard basis. So the first thing we do is convert to that basis.
+    std_basis = _pgb.BuiltinBasis('std', dim**2)
+    op_a = _mt.change_basis(op_a, mx_basis, std_basis)
+    op_b = _mt.change_basis(op_b, mx_basis, std_basis)
+   
+    # Our next step is to construct lifted operators "lift_op_a" and "lift_op_b" that act on the
+    # tensor product space S2 = (S \otimes S) according to the identities
+    #
+    #   lift_op_a( sigma \otimes rho ) = op_a(sigma) \otimes rho
+    #   lift_op_b( sigma \otimes rho ) = op_b(sigma) \otimes rho
+    #
+    # for all sigma, rho in S. The way we do this implicitly fixes a basis for S2 as the
+    # tensor product basis (std_basis \otimes std_basis). We'll make that explicit later on.
+    idle_gate = _np.eye(dim**2, dtype=_np.complex128)
+    lift_op_a = _np.kron(op_a, idle_gate)
+    lift_op_b = _np.kron(op_b, idle_gate)
+
+    # Now we'll compare these lifted operators by how they act on specific state in S2.
+    # That state is rho_mm = |psi><psi|, where
+    #
+    #   |psi> = (|00> + |11> + ... + |dim - n_leak - 1>) / sqrt(dim - n_leak).
+    #
+    # The "mm" in "rho_mm" stands for "maximally mixed."
+    temp = _np.eye(dim, dtype=_np.complex128)
+    if n_leak > 0:
+        temp[-n_leak:,-n_leak:] = 0.0
+    temp /= _np.sqrt(dim - n_leak)
+    psi = _bt.stdmx_to_stdvec(temp).ravel()
+    rho_mm = _np.outer(psi, psi)
+
+    # Of course, lift_op_a and lift_op_b only act on states in their superket representations.
+    # We need the superket representation of rho_mm in terms of the tensor product basis for S2.
+    #
+    # Luckily, pyGSTi has a class for generating bases for a tensor-product space given
+    # bases for the constituent spaces appearing in the tensor product.
+    ten_basis = _pgb.TensorProdBasis((std_basis, std_basis))
+    rho_mm_superket = _bt.stdmx_to_vec(rho_mm, ten_basis).ravel()
+
+    temp1 = lift_op_a @ rho_mm_superket
+    temp2 = lift_op_b @ rho_mm_superket
+
+    return temp1, temp2, ten_basis
+
+
+def leaky_entanglement_fidelity(op_a, op_b, mx_basis, n_leak=0):
+    temp1, temp2, _ = lift_and_act_on_maxmixed_state(op_a, op_b, mx_basis, n_leak)
+    ent_fid = _np.real(temp1.conj() @ temp2)
+    return ent_fid
+
+
+def leaky_jtracedist(op_a, op_b, mx_basis, n_leak=0):
+    temp1, temp2, ten_basis = lift_and_act_on_maxmixed_state(op_a, op_b, mx_basis, n_leak)
+    temp1_std = _bt.vec_to_stdmx(temp1, ten_basis, keep_complex=True)
+    temp2_std = _bt.vec_to_stdmx(temp2, ten_basis, keep_complex=True)
+    j_dist = tracedist(temp1_std, temp2_std)
+    return j_dist
+
+
+def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis):
+    """
+    Let "H" denote n^2 dimensional Hilbert-Schdmit space, and let "U" denote the d^2
+    dimensional subspace of H spanned by vectors whose Hermitian matrix representations
+    are zero outside the leading d-by-d submatrix.
+
+    This function returns a column-unitary matrix "B" where P = B B^{\dagger} is the
+    orthogonal projector from H to U with respect to current_basis. We return B rather
+    than P only because it's simpler to get P from B than it is to get B from P.
+    
+    See below for this function's original use-case.
+    
+    Raison d'etre
+    -------------
+    Suppose we canonically measure the distance between two process matrices (M1, M2) by
+
+        D(M1, M2; H) = max || (M1 - M2) v ||
+                            v is in H,                   (Eq. 1)
+                            tr(v) = 1,
+                            v is positive
+
+    for some norm || * ||.  Suppose also that we want an analog of this distance when
+    (M1, M2) are restricted to the linear subspace U consisting of all vectors in H
+    whose matrix representations are zero outside of their leading d-by-d submatrix.
+
+    One natural way to do this is via the function D(M1, M2; U) -- i.e., just replace
+    H in (Eq. 1) with the subspace U. Using P to denote the orthogonal projector onto U,
+    we claim that we can evaluate this function via the identity
+
+        D(M1, M2; U) = D(M1 P, M2 P; H).                (Eq. 2)
+
+    To see why this is the case, consider a positive vector v and its projection u = P v.
+    Since a vector is called positive whenever its Hermitian matrix representation is positive
+    semidefinite (PSD), we need to show that u is positive. This can be seen by considering
+    block 2-by-2 partitions of the matrix representations of (u,v), where the leading block
+    is d-by-d:
+
+        mat(v) = [x11,  x12]         and      mat(u) = [x11,  0]
+                 [x21,  x22]                           [  0,  0].
+    
+    In particular, u is positive if and only if x11 is PSD, and x11 must be PSD for v
+    to be positive. Furthermore, positivity of v requires that x22 is PSD, which implies
+
+        0 <= tr(u) = tr(x11) <= tr(v).
+    
+    Given this, it is easy to establish (Eq 2.) by considering how the following pair 
+    of problems have the same optimal objective function value
+
+        max || (M1 - M2) P v ||         and        max || (M1 - M2) P v || 
+            mat(v) = [x11, x12]                         mat(v) = [x11, x12]
+                     [x21, x22]                                  [x21, x22]
+            mat(v) is PSD                               x11 is PSD
+            tr(x11) + tr(x22) = 1                       tr(x11) <= 1.
+
+    In fact, this can be taken a little further! The whole argument goes through unchanged
+    if, instead of starting with the objective function || (M1 - M2) v ||, we started with
+    f((M1 - M2) v) and f satisfied the property that f(c v) >= f(v) whenever c is a scalar
+    greater than or equal to one.
+
+    Interesting idea:
+        Set M2 = 0.
+        Use || (I - P) M1 P || as a metric for leakage.
+        Use || P M1 (I - P) || as a metric for seepage
+    """
+    assert d <= n
+    current_basis = _pgb.Basis.cast(current_basis, dim=n**2)
+    std_to_current = current_basis.create_transform_matrix('std')
+    if d == n:
+        return std_to_current
+    # we have to select a proper subset of columns in current_basis
+    std_basis = _pgb.BuiltinBasis(name='std', dim_or_statespace=n**2)
+    label2ind = {ell: idx for idx,ell in enumerate(std_basis.labels)}
+    basis_ind = []
+    for i in range(d):
+        for j in range(d):
+            basis_ind.append(label2ind[f"({i},{j})"])
+    basis_ind = _np.array(basis_ind)
+    submatrix_basis_vectors = std_to_current[:, basis_ind]
+    return submatrix_basis_vectors
 
 
 def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
@@ -588,7 +742,7 @@ def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     d = int(round(_np.sqrt(a.shape[0])))
     PF = entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
     AGF = (d * PF + 1) / (1 + d)
-    return float(AGF)
+    return AGF
 
 
 def average_gate_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
@@ -678,7 +832,7 @@ def entanglement_infidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
     EI : float
         The EI of a to b.
     """
-    return 1 - float(entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary))
+    return 1 - entanglement_fidelity(a, b, mx_basis, is_tp, is_unitary)
 
 
 def gateset_infidelity(model, target_model, itype='EI',
