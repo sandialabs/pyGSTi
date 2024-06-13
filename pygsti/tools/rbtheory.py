@@ -218,7 +218,8 @@ def rb_gauge(model, target_model, weights=None, mx_basis=None, eigenvector_weigh
         vec_l_operator = vec_l_operator.real
 
     vec_l_operator[abs(vec_l_operator) < 10**(-15)] = 0.
-    l_operator = _mtls.unvec(vec_l_operator)
+    dim = int(_np.sqrt(vec_l_operator.size))
+    l_operator = vec_l_operator.reshape((dim, dim), order='F')
 
     return l_operator
 
@@ -791,7 +792,7 @@ def gate_dependence_of_errormaps(model, target_model, norm='diamond', mx_basis=N
                                             mx_basis=mx_basis))
         elif norm == '1to1':
             gate_dif = error_gs.operations[gate] - error_gs.operations['Gavg']
-            delta.append(_optls.norm1to1(gate_dif, num_samples=1000, mx_basis=mx_basis, return_list=False))
+            delta.append(_optls.norm1to1(gate_dif, num_samples=1000, mx_basis=mx_basis))
         else:
             raise ValueError("Only diamond or 1to1 norm available.")
 

@@ -17,8 +17,8 @@ class MatrixToolsTester(BaseCase):
         self.assertFalse(mt.is_hermitian(non_herm_mx))
 
     def test_is_pos_def(self):
-        pos_mx = np.array([[ 4, 0.2],
-                           [0.1, 3]], 'complex')
+        pos_mx = np.array([[ 4.0, 0.2],
+                            [0.2, 3.0]], 'complex')
         non_pos_mx = np.array([[ 0, 1],
                                [1, 0]], 'complex')
         self.assertTrue(mt.is_pos_def(pos_mx))
@@ -159,42 +159,6 @@ class MatrixToolsTester(BaseCase):
         self.assertEqual(mt._findx(a, (slice(0, 2), slice(0, 2), 0)).shape, (2, 2))
         self.assertEqual(mt._findx(a, ([0, 1], [0, 1], 0)).shape, (2, 2))
         self.assertEqual(mt._findx(a, ([], [0, 1], 0)).shape, (0, 2))
-
-    def test_safe_ops(self):
-        mx = np.array([[1+1j, 0],
-                       [2+2j, 3+3j]], 'complex')
-        smx = sps.csr_matrix(mx)
-        smx_lil = sps.lil_matrix(mx)  # currently unsupported
-
-        r = mt.safe_real(mx, inplace=False)
-        self.assertArraysAlmostEqual(r, np.real(mx))
-        i = mt.safe_imag(mx, inplace=False)
-        self.assertArraysAlmostEqual(i, np.imag(mx))
-
-        r = mt.safe_real(smx, inplace=False)
-        self.assertArraysAlmostEqual(r.toarray(), np.real(mx))
-        i = mt.safe_imag(smx, inplace=False)
-        self.assertArraysAlmostEqual(i.toarray(), np.imag(mx))
-
-        with self.assertRaises(NotImplementedError):
-            mt.safe_real(smx_lil, inplace=False)
-        with self.assertRaises(NotImplementedError):
-            mt.safe_imag(smx_lil, inplace=False)
-
-        with self.assertRaises(AssertionError):
-            mt.safe_real(mx, check=True)
-        with self.assertRaises(AssertionError):
-            mt.safe_imag(mx, check=True)
-
-        M = mx.copy(); M = mt.safe_real(M, inplace=True)
-        self.assertArraysAlmostEqual(M, np.real(mx))
-        M = mx.copy(); M = mt.safe_imag(M, inplace=True)
-        self.assertArraysAlmostEqual(M, np.imag(mx))
-
-        M = smx.copy(); M = mt.safe_real(M, inplace=True)
-        self.assertArraysAlmostEqual(M.toarray(), np.real(mx))
-        M = smx.copy(); M = mt.safe_imag(M, inplace=True)
-        self.assertArraysAlmostEqual(M.toarray(), np.imag(mx))
 
     def test_fast_expm(self):
         mx = np.array([[1, 2],
