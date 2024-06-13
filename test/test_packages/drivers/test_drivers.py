@@ -14,9 +14,9 @@ class DriversTestCase(BaseTestCase):
         self.model = std.target_model()
 
         self.germs = std.germs(lite=True)
-        self.prep_fiducials = std.prep_fiducials()
-        self.meas_fiducials = std.meas_fiducials()
-        self.maxLens = [1,2,4]
+        self.prep_fiducials = std.prep_fiducials()[0:4]
+        self.meas_fiducials = std.meas_fiducials()[0:3]
+        self.maxLens = [1,2]
         self.op_labels = list(self.model.operations.keys())
 
         self.lsgstStrings = pygsti.circuits.create_lsgst_circuit_lists(
@@ -38,7 +38,7 @@ class TestDriversMethods(DriversTestCase):
             self.model, self.prep_fiducials, self.meas_fiducials, self.germs, self.maxLens)
 
         lens = [ len(strct) for strct in fullStructs ]
-        self.assertEqual(lens, [56, 96, 177])
+        self.assertEqual(lens, [19, 33])
 
         #Global FPR
         fidPairs = pygsti.alg.find_sufficient_fiducial_pairs(
@@ -61,7 +61,8 @@ class TestDriversMethods(DriversTestCase):
             fid_pairs=fidPairs)
 
         result = pygsti.run_long_sequence_gst_base(ds, self.model, gfprStructs, verbosity=0,
-                                                   disable_checkpointing = True)
+                                                   disable_checkpointing = True,
+                                                   advanced_options= {'max_iterations':3})
         pygsti.report.construct_standard_report(result, title ="GFPR report", verbosity=0).write_html(temp_files + "/full_report_GFPR")
 
         #Per-germ FPR
@@ -86,7 +87,8 @@ class TestDriversMethods(DriversTestCase):
             fid_pairs=fidPairsDict)
 
         result = pygsti.run_long_sequence_gst_base(ds, self.model, pfprStructs, verbosity=0,
-                                                   disable_checkpointing = True)
+                                                   disable_checkpointing = True,
+                                                   advanced_options= {'max_iterations':3})
         pygsti.report.construct_standard_report(result, title="PFPR report", verbosity=0).write_html(temp_files + "/full_report_PFPR")
 
     def test_longSequenceGST_randomReduction(self):
@@ -116,7 +118,8 @@ class TestDriversMethods(DriversTestCase):
         maxLens = self.maxLens
         result = self.runSilent(pygsti.run_long_sequence_gst,
                                 ds, target_model, self.prep_fiducials, self.meas_fiducials,
-                                self.germs, maxLens, disable_checkpointing=True)
+                                self.germs, maxLens, disable_checkpointing=True, 
+                                advanced_options= {'max_iterations':3})
 
         #create a report...
         pygsti.report.construct_standard_report(result, title="CPTP Gates report", verbosity=0).write_html(temp_files + "/full_report_CPTPGates")
@@ -131,7 +134,7 @@ class TestDriversMethods(DriversTestCase):
         maxLens = self.maxLens
         result = self.runSilent(pygsti.run_long_sequence_gst,
                                 ds, target_model, self.prep_fiducials, self.meas_fiducials,
-                                self.germs, maxLens, disable_checkpointing=True)
+                                self.germs, maxLens, disable_checkpointing=True, advanced_options= {'max_iterations':3})
 
         #create a report...
         pygsti.report.construct_standard_report(result, title="SGates report", verbosity=0).write_html(temp_files + "/full_report_SGates")
@@ -153,7 +156,7 @@ class TestDriversMethods(DriversTestCase):
         maxLens = self.maxLens
         result = self.runSilent(pygsti.run_long_sequence_gst,
                                 ds, target_model, self.prep_fiducials, self.meas_fiducials,
-                                self.germs, maxLens, disable_checkpointing=True)
+                                self.germs, maxLens, disable_checkpointing=True, advanced_options= {'max_iterations':3})
 
         #create a report...
         pygsti.report.construct_standard_report(result, title="GLND report", verbosity=0).write_html( temp_files + "/full_report_GLND")
@@ -168,7 +171,7 @@ class TestDriversMethods(DriversTestCase):
         maxLens = self.maxLens
         result = self.runSilent(pygsti.run_long_sequence_gst,
                                 ds, target_model, self.prep_fiducials, self.meas_fiducials,
-                                self.germs, maxLens, disable_checkpointing=True)
+                                self.germs, maxLens, disable_checkpointing=True, advanced_options= {'max_iterations':3})
 
         #create a report...
         pygsti.report.construct_standard_report(result, title= "HpS report", verbosity=0).write_html(temp_files + "/full_report_HplusSGates")
@@ -180,7 +183,7 @@ class TestDriversMethods(DriversTestCase):
         maxLens = self.maxLens
         result = self.runSilent(pygsti.run_long_sequence_gst,
                                 ds, self.model.copy(), self.prep_fiducials, self.meas_fiducials,
-                                self.germs, maxLens, advanced_options={'bad_fit_threshold': -100},
+                                self.germs, maxLens, advanced_options={'bad_fit_threshold': -100, 'max_iterations':3},
                                 disable_checkpointing=True)
 
         pygsti.report.construct_standard_report(result, title="badfit report", verbosity=0).write_html(temp_files + "/full_report_badfit")
@@ -197,7 +200,7 @@ class TestDriversMethods(DriversTestCase):
                                 self.germs, maxLens, modes=['CPTPLND','Test','Target'],
                                 models_to_test = {"Test": mdl_guess},
                                 comm=None, mem_limit=None, verbosity=0,
-                                disable_checkpointing=True)
+                                disable_checkpointing=True, advanced_options= {'max_iterations':3})
         pygsti.report.construct_standard_report(result, title= "Std Practice Test Report", verbosity=2).write_html(temp_files + "/full_report_stdpractice")
 
     def test_bootstrap(self):
@@ -233,7 +236,8 @@ class TestDriversMethods(DriversTestCase):
         #Test GateSetTomographyCheckpoint:
         #First run from scratch:
         result_gst = pygsti.run_long_sequence_gst_base(ds, target_model.copy(), fullStructs, verbosity=0, 
-                                                   checkpoint_path= temp_files + '/checkpoint_testing/GateSetTomography')
+                                                   checkpoint_path= temp_files + '/checkpoint_testing/GateSetTomography',
+                                                   advanced_options= {'max_iterations':3})
                                                    
         #double check that we can read in this checkpoint object correctly:
         gst_checkpoint = pygsti.protocols.GateSetTomographyCheckpoint.read(temp_files + '/checkpoint_testing/GateSetTomography_iteration_0.json')
@@ -241,7 +245,8 @@ class TestDriversMethods(DriversTestCase):
         #run GST using this checkpoint
         result_gst_warmstart = pygsti.run_long_sequence_gst_base(ds, target_model.copy(), fullStructs, verbosity=0,
                                                                  checkpoint = gst_checkpoint,
-                                                                 checkpoint_path= temp_files + '/checkpoint_testing/GateSetTomography')
+                                                                 checkpoint_path= temp_files + '/checkpoint_testing/GateSetTomography',
+                                                                 advanced_options= {'max_iterations':3})
         
         diff = norm(result_gst.estimates['GateSetTomography'].models['final iteration estimate'].to_vector()-
                          result_gst_warmstart.estimates['GateSetTomography'].models['final iteration estimate'].to_vector())
@@ -291,7 +296,8 @@ class TestDriversMethods(DriversTestCase):
                                                         self.germs, maxLens, modes=['full TP','CPTPLND','Test','Target'],
                                                         models_to_test = {"Test": mdl_guess},
                                                         comm=None, mem_limit=None, verbosity=0,
-                                                        checkpoint_path= temp_files + '/checkpoint_testing/StandardGST')
+                                                        checkpoint_path= temp_files + '/checkpoint_testing/StandardGST',
+                                                        advanced_options= {'max_iterations':3})
                                                    
         #double check that we can read in this checkpoint object correctly:
         standardgst_checkpoint = pygsti.protocols.StandardGSTCheckpoint.read(temp_files + '/checkpoint_testing/StandardGST_CPTPLND_iteration_1.json')
@@ -302,7 +308,8 @@ class TestDriversMethods(DriversTestCase):
                                                                   models_to_test = {"Test": mdl_guess},
                                                                   comm=None, mem_limit=None, verbosity=0,
                                                                   checkpoint = standardgst_checkpoint,
-                                                                  checkpoint_path= temp_files + '/checkpoint_testing/StandardGST')
+                                                                  checkpoint_path= temp_files + '/checkpoint_testing/StandardGST',
+                                                                  advanced_options= {'max_iterations':3})
 
         #Assert that this gives the same result as before:
         #diff = norm(result_standardgst.estimates['CPTPLND'].models['final iteration estimate'].to_vector()- 

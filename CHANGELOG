@@ -1,5 +1,35 @@
 # CHANGELOG
 
+## [0.9.12.3] - 2024-06-11
+
+### Added
+* Deterministic Clifford compilation and native gate count statistics for `CliffordRBDesign` (#314, #315, #443)
+
+
+### Fixed
+* Truncation bugfix in `BenchmarkingDesign` objects with "paired" lists to `circuit_list` attribute (#408, #443)
+* Fixes and efficiency improvements for various linear algebra calls (#432)
+* `densitymx_slow` evotype hotfix (#438, #439)
+
+
+## [0.9.12.2] - 2024-04-16
+
+### Added
+* Updated Cirq parsing capabilities (#411)
+* Added ability for reports to use CircuitListDesigns and results without gauge optimizations (#412, #415)
+* Indicator that figure/title headings can be clicked for expanded details (#416)
+
+
+### Fixed
+* Several tutorial updates and fixes (#282, #317, #421)
+* Fixed fiducial selection with wrong qubit labels (#396, #418)
+* Casting operators to dense matrices to avoid type errors in `pygsti.tools.optools` (#406, #414)
+* LGST fitting with sparse dataset (#420)
+
+
+### Changed
+* Increased the speed of unit/integration tests in GitHub Actions (#380, #403)
+
 ## [0.9.12.1] - 2024-02-07
 
 ### Added

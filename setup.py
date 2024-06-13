@@ -35,6 +35,7 @@ The primary goals of the pyGSTi project are to:
 
 # Extra requirements
 extras = {
+    'pytorch' : ['torch'],
     'diamond_norm': [
         'cvxopt',
         'cvxpy'
@@ -76,12 +77,14 @@ extras = {
         'zmq',
         'jinja2',
         'seaborn',
+        'scipy',
         'ply',
         'qibo<=0.1.7',
         'cirq-core',
         'notebook',
         'ipython',
-        'jupyter_server'
+        'jupyter_server',
+        'torch'
     ]
 }
 
@@ -91,6 +94,9 @@ extras['complete'] = list({pkg for req in extras.values() for pkg in req})
 # Add `no_mpi' target, identical to `complete' target but without mpi4py,
 # which is unavailable in some common environments.
 extras['no_mpi'] = [e for e in extras['complete'] if e != 'mpi4py']
+
+# Add testing_no_cython target, identical to `testing` but no cython
+extras['testing_no_cython'] = [e for e in extras['testing'] if e != 'cython']
 
 
 # Configure setuptools_scm to build the post-release version number
@@ -131,7 +137,8 @@ def setup_with_extensions(extensions=None):
         cmdclass={'build_ext': build_ext_compiler_check},
         description='A python implementation of Gate Set Tomography',
         long_description=descriptionTxt,
-        author='Erik Nielsen, Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
+        author='Erik Nielsen, Stefan Seritan, Corey Ostrove, Riley Murray, Jordan Hines, ' +\
+            'Kenneth Rudinger, Timothy Proctor, John Gamble, Robin Blume-Kohout',
         author_email='pygsti@sandia.gov',
         packages=[
             'pygsti',

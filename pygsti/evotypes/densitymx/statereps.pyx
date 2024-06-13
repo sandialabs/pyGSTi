@@ -163,7 +163,7 @@ cdef class StateRepTensorProduct(StateRep):
 
     def __cinit__(self, factor_state_reps, state_space):
         self.factor_reps = factor_state_reps
-        dim = _np.product([fct.dim for fct in self.factor_reps])
+        dim = _np.prod([fct.dim for fct in self.factor_reps])
         self._cinit_base(_np.zeros(dim, 'd'), state_space)
         self.reps_have_changed()
 

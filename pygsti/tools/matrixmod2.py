@@ -468,7 +468,7 @@ def fix_top(a):
     found_B = False
     for ind in range(t):
         aa, P = permute_top(a, ind)
-        B = _np.round_(aa[1:, 1:])
+        B = _np.round(aa[1:, 1:])
 
         if det_mod2(B) == 0:
             continue

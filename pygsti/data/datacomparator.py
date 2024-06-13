@@ -75,11 +75,11 @@ def _loglikelihood_ratio(n_list_list):
         The log-likehood ratio for this model comparison.
     """
     nListC = _np.sum(n_list_list, axis=0)
-    pListC = nListC / _np.float_(_np.sum(nListC))
+    pListC = nListC / _np.float64(_np.sum(nListC))
     lC = _loglikelihood(pListC, nListC)
     li_list = []
     for nList in n_list_list:
-        pList = _np.array(nList) / _np.float_(_np.sum(nList))
+        pList = _np.array(nList) / _np.float64(_np.sum(nList))
         li_list.append(_loglikelihood(pList, nList))
     lS = _np.sum(li_list)
     return -2 * (lC - lS)

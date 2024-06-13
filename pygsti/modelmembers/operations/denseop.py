@@ -416,11 +416,11 @@ class DenseOperator(DenseOperatorInterface, _KrausOperatorInterface, _LinearOper
         #CHECK 1 (to unit test?) REMOVE
         #tmp_std = _bt.change_basis(superop_mx, self._basis, 'std')
         #B = _bt.basis_matrices('std', superop_mx.shape[0])
-        #check_superop = sum([ choi_mx[i,j] * _np.kron(B[i], B[j].T) for i in range(d*d) for j in range(d*d)])
+        #check_superop = sum([ choi_mx[i,j] * _np.kron(B[i], B[j].conjugate()) for i in range(d*d) for j in range(d*d)])
         #assert(_np.allclose(check_superop, tmp_std))
 
-        evals, evecs = _np.linalg.eig(choi_mx)
-        #assert(_np.allclose(evecs @ _np.diag(evals) @ (evecs.conjugate().T), choi_mx))
+        evals, evecs = _np.linalg.eigh(choi_mx)
+        assert(_np.allclose(evecs @ _np.diag(evals) @ (evecs.conjugate().T), choi_mx))
         TOL = 1e-7  # consider lowering this tolerance as it leads to errors of this order in the Kraus decomp
         if any([ev <= -TOL for ev in evals]):
             raise ValueError("Cannot compute Kraus decomposition of non-positive-definite superoperator!")

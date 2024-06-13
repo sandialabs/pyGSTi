@@ -379,54 +379,39 @@ class GateOpsTester(BaseCase):
             [-0.35432747-0.27939404j, -0.02266757+0.71502652j, -0.27452307+0.07511567j,  0.35432747+0.27939404j],
             [ 0.71538573+0.j,  0.2680266 +0.36300238j, 0.2680266 -0.36300238j,  0.28461427+0.j]])
 
-    def test_frobenius_distance(self):
-        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.A), 0.0)
-        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), 0.6204836823)
-
-        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.A), 0.0)
-        self.assertAlmostEqual(ot.frobeniusdist_squared(self.A, self.B), 0.385)
-
     def test_jtrace_distance(self):
-        self.assertAlmostEqual(ot.jtracedist(self.A, self.A, mx_basis="std"), 0.0)
-        self.assertAlmostEqual(ot.jtracedist(self.A, self.B, mx_basis="std"), 0.26430148)  # OLD: 0.2601 ?
+        val = ot.jtracedist(self.A_TP, self.A_TP, mx_basis="pp")
+        self.assertAlmostEqual(val, 0.0)
+        val = ot.jtracedist(self.A_TP, self.B_unitary, mx_basis="pp")
+        self.assertGreaterEqual(val, 0.5)
 
     @needs_cvxpy
     def test_diamond_distance(self):
         if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
-        self.assertAlmostEqual(ot.diamonddist(self.A, self.A, mx_basis="std"), 0.0)
-        self.assertAlmostEqual(ot.diamonddist(self.A, self.B, mx_basis="std"), 0.614258836298)
-
-    def test_frobenius_norm_equiv(self):
-        from pygsti.tools import matrixtools as mt
-        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), mt.frobeniusnorm(self.A - self.B))
-        self.assertAlmostEqual(ot.frobeniusdist(self.A, self.B), np.sqrt(mt.frobeniusnorm_squared(self.A - self.B)))
+        val = ot.diamonddist(self.A_TP, self.A_TP, mx_basis="pp")
+        self.assertAlmostEqual(val, 0.0)
+        val = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp")
+        self.assertGreaterEqual(val, 0.7)
 
     def test_entanglement_fidelity(self):
-        # fidelity = ot.entanglement_fidelity(self.A, self.B, mx_basis='std')
         fidelity_TP_unitary= ot.entanglement_fidelity(self.A_TP, self.B_unitary, is_tp=True, is_unitary=True)
         fidelity_TP_unitary_no_flag= ot.entanglement_fidelity(self.A_TP, self.B_unitary)
         fidelity_TP_unitary_jam= ot.entanglement_fidelity(self.A_TP, self.B_unitary, is_tp=False, is_unitary=False)
         fidelity_TP_unitary_std= ot.entanglement_fidelity(self.A_TP_std, self.B_unitary_std, mx_basis='std')
         
-        self.assertAlmostEqual(fidelity_TP_unitary, 0.4804724656092404)
-        self.assertAlmostEqual(fidelity_TP_unitary_no_flag, 0.4804724656092404)
-        self.assertAlmostEqual(fidelity_TP_unitary, fidelity_TP_unitary_jam)
-        self.assertAlmostEqual(fidelity_TP_unitary_std, 0.4804724656092404)
-        pass
-
-    def test_leaky_entanglement_fidelity(self):
-        fidelity_TP_unitary= ot.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
-        fidelity_TP_unitary_no_flag= ot.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
-        fidelity_TP_unitary_jam= ot.leaky_entanglement_fidelity(self.A_TP, self.B_unitary, 'pp')
-        fidelity_TP_unitary_std= ot.leaky_entanglement_fidelity(self.A_TP_std, self.B_unitary_std, mx_basis='std')
-
-        self.assertAlmostEqual(fidelity_TP_unitary, 0.4804724656092404)
-        self.assertAlmostEqual(fidelity_TP_unitary_no_flag, 0.4804724656092404)
-        self.assertAlmostEqual(fidelity_TP_unitary, fidelity_TP_unitary_jam)
-        self.assertAlmostEqual(fidelity_TP_unitary_std, 0.4804724656092404)
-        pass
+        expect = 0.4804724656092404
+        self.assertAlmostEqual(fidelity_TP_unitary, expect)
+        self.assertAlmostEqual(fidelity_TP_unitary_no_flag, expect)
+        self.assertAlmostEqual(fidelity_TP_unitary_jam, expect)
+        self.assertAlmostEqual(fidelity_TP_unitary_std, expect)
 
     def test_fidelity_upper_bound(self):
+        np.random.seed(0)
+        Q = np.linalg.qr(np.random.randn(4,4) + 1j*np.random.randn(4,4))[0]
+        Q[:, 0] = 0.0  # zero out the first column
+        bad_superoperator = ot.unitary_to_superop(Q)
+        upperBound, _ = ot.fidelity_upper_bound(bad_superoperator)
+        self.assertAlmostEqual(upperBound, 0.75)
         np.random.seed(0)
         Q = np.linalg.qr(np.random.randn(4,4) + 1j*np.random.randn(4,4))[0]
         Q[:, 0] = 0.0  # zero out the first column

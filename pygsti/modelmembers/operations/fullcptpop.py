@@ -93,7 +93,7 @@ class FullCPTPOp(_KrausOperatorInterface, _LinearOperator):
             Lmx = _np.linalg.cholesky(choi_mx)
 
         #check TP condition: that diagonal els of Lmx squared add to 1.0
-        Lmx_norm = _np.trace(_np.dot(Lmx.T.conjugate(), Lmx))  # sum of magnitude^2 of all els
+        Lmx_norm = _np.linalg.norm(Lmx)  # = sqrt(tr(Lmx' Lmx))
         assert(_np.isclose(Lmx_norm, 1.0)), "Cholesky decomp didn't preserve trace=1!"
 
         self.params = _np.empty(dim**2, 'd')

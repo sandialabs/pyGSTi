@@ -264,6 +264,22 @@ class TestGateSetTomography(BaseProtocolData):
                 assert isinstance(model, MapForwardSimulatorWrapper)
         pass
 
+    
+    def test_write_and_read_to_dir(self):
+        #integration test to at least confirm we are writing and reading
+        #to and from the directory serializations.
+        proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"), 'stdgaugeopt', name="testGST")
+        proto.write('../../test_packages/temp_test_files/test_GateSetTomography_serialization')
+        #then read this back in
+        proto_read = gst.GateSetTomography.from_dir('../../test_packages/temp_test_files/test_GateSetTomography_serialization')
+
+        #spot check some of the values of the protocol objects
+        assert all([elem1==elem2 for elem1, elem2 in 
+                    zip(proto_read.initial_model.model.to_vector(), 
+                        proto.initial_model.model.to_vector())])
+        assert proto_read.gaugeopt_suite.gaugeopt_suite_names == proto.gaugeopt_suite.gaugeopt_suite_names
+        assert proto_read.name == proto.name
+        assert proto_read.badfit_options.actions == proto.badfit_options.actions
 
 class LinearGateSetTomographyTester(BaseProtocolData, BaseCase):
     """
@@ -285,6 +301,21 @@ class LinearGateSetTomographyTester(BaseProtocolData, BaseCase):
         twoDLogL = two_delta_logl(mdl_result, self.gst_data.dataset, self.gst_design.circuit_lists[0])
         self.assertLessEqual(twoDLogL, 1.0)  # should be near 0 for perfect data
 
+    def test_write_and_read_to_dir(self):
+        #integration test to at least confirm we are writing and reading
+        #to and from the directory serializations.
+        proto = gst.LinearGateSetTomography(self.mdl_target.copy(), 'stdgaugeopt', name="testGST")
+        proto.write('../../test_packages/temp_test_files/test_LinearGateSetTomography_serialization')
+        #then read this back in
+        proto_read = gst.LinearGateSetTomography.from_dir('../../test_packages/temp_test_files/test_LinearGateSetTomography_serialization')
+
+        #spot check some of the values of the protocol objects
+        assert all([elem1==elem2 for elem1, elem2 in 
+                    zip(proto_read.target_model.to_vector(), 
+                        proto.target_model.to_vector())])
+        assert proto_read.gaugeopt_suite.gaugeopt_suite_names == proto.gaugeopt_suite.gaugeopt_suite_names
+        assert proto_read.name == proto.name
+        assert proto_read.badfit_options.actions == proto.badfit_options.actions
 
 class TestStandardGST(BaseProtocolData):
     """
@@ -326,6 +357,21 @@ class TestStandardGST(BaseProtocolData):
             for model in estimate.models.values():
                 assert isinstance(model, MapForwardSimulatorWrapper)
         pass
+
+    def test_write_and_read_to_dir(self):
+        #integration test to at least confirm we are writing and reading
+        #to and from the directory serializations.
+        proto = gst.StandardGST(modes=["full TP","CPTPLND","Target"])
+        proto.write('../../test_packages/temp_test_files/test_StandardGateSetTomography_serialization')
+        #then read this back in
+        proto_read = gst.StandardGST.from_dir('../../test_packages/temp_test_files/test_StandardGateSetTomography_serialization')
+
+        #spot check some of the values of the protocol objects
+        assert proto_read.gaugeopt_suite.gaugeopt_suite_names == proto.gaugeopt_suite.gaugeopt_suite_names
+        assert proto_read.name == proto.name
+        assert proto_read.modes == proto.modes
+        assert proto_read.badfit_options.actions == proto.badfit_options.actions
+    
 
 
 #Unit tests are currently performed in objects/test_results.py - TODO: move these tests here

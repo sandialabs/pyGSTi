@@ -31,29 +31,6 @@ except ImportError:
 EXPM_DEFAULT_TOL = 2**-53  # Scipy default
 
 
-def trace(m):
-    """
-    The trace of a matrix, sum_i m[i,i].
-
-    Once upon a time, a memory leak in some version of numpy can cause repeated calls to numpy's
-    trace function to eat up all available system memory, and this function
-    was created as a wrapper to bypass that problem. The implementation has since been 
-    restored to use numpy's trace function, following resolution of the memory leak:
-    https://github.com/numpy/numpy/issues/3326.
-
-    Parameters
-    ----------
-    m : numpy array
-        the matrix (any object that can be double-indexed)
-
-    Returns
-    -------
-    element type of m
-        The trace of m.
-    """
-    return _np.trace(m)
-
-
 def is_hermitian(mx, tol=1e-9):
     """
     Test whether mx is a hermitian matrix.
@@ -117,47 +94,7 @@ def is_valid_density_mx(mx, tol=1e-9):
     bool
         True if mx is a valid density matrix, otherwise False.
     """
-    return is_hermitian(mx, tol) and is_pos_def(mx, tol) and abs(trace(mx) - 1.0) < tol
-
-
-def frobeniusnorm(ar):
-    """
-    Compute the frobenius norm of an array (or matrix),
-
-    sqrt( sum( each_element_of_a^2 ) )
-
-    Parameters
-    ----------
-    ar : numpy array
-        What to compute the frobenius norm of.  Note that ar can be any shape
-        or number of dimenions.
-
-    Returns
-    -------
-    float or complex
-        depending on the element type of ar.
-    """
-    return _np.linalg.norm(ar.reshape((-1,)))
-
-
-def frobeniusnorm_squared(ar):
-    """
-    Compute the squared frobenius norm of an array (or matrix),
-
-    sum( each_element_of_a^2 ) )
-
-    Parameters
-    ----------
-    ar : numpy array
-        What to compute the squared frobenius norm of.  Note that ar can be any
-        shape or number of dimenions.
-
-    Returns
-    -------
-    float or complex
-        depending on the element type of ar.
-    """
-    return _np.linalg.norm(ar.reshape((-1,)))**2
+    return is_hermitian(mx, tol) and is_pos_def(mx, tol) and abs(_np.trace(mx) - 1.0) < tol
 
 
 def nullspace(m, tol=1e-7):
