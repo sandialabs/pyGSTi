@@ -3405,6 +3405,30 @@ class Circuit(object):
         """
         return self.num_nq_gates(2)
 
+    @property
+    def num_gates(self):
+        """
+        The number of gates in the circuit.
+
+        Returns
+        -------
+        int
+        """
+        if self._static:
+            def cnt(lbl):  # obj a Label, perhaps compound
+                if lbl.is_simple():  # a simple label
+                    return 1 if (lbl.sslbls is not None) else 0
+                else:
+                    return sum([cnt(sublbl) for sublbl in lbl.components])
+        else:
+            def cnt(obj):  # obj is either a simple label or a list
+                if isinstance(obj, _Label):  # all Labels are simple labels
+                    return 1 if (obj.sslbls is not None) else 0
+                else:
+                    return sum([cnt(sub) for sub in obj])
+
+        return sum([cnt(layer_lbl) for layer_lbl in self._labels])
+
     def num_nq_gates(self, nq):
         """
         The number of `nq`-qubit gates in the circuit.
