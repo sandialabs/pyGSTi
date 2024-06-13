@@ -35,6 +35,7 @@ The primary goals of the pyGSTi project are to:
 
 # Extra requirements
 extras = {
+    'pytorch' : ['torch'],
     'diamond_norm': [
         'cvxopt',
         'cvxpy'
@@ -76,12 +77,14 @@ extras = {
         'zmq',
         'jinja2',
         'seaborn',
+        'scipy',
         'ply',
         'qibo<=0.1.7',
         'cirq-core',
         'notebook',
         'ipython',
-        'jupyter_server'
+        'jupyter_server',
+        'torch'
     ]
 }
 
