@@ -159,6 +159,17 @@ class StatelessModel:
         fp in free_params. This can be done by calling fp._requires_grad(True) before calling
         this function.
         """
+        # The closest analog to this function in tgst is the first couple lines in 
+        # tgst.gst.MachineModel.circuit_outcome_probs(...).
+        # Those lines just assign values a-la new_machine.params[i][:] = fp[:].
+        #
+        #   The variables new_machine.params[i] are just references to Tensors
+        #   that are attached to tgst.abstractions objects (Gate, Measurement, State).
+        #
+        #   Calling abstr.rep_array for a given abstraction performs a computation on
+        #   its attached Tensor, and that computation is roughly analogous to 
+        #   torchable.torch_base(...).
+        #
         assert len(free_params) == len(self.param_metadata)
          # ^ A sanity check that we're being called with the correct number of arguments.
         torch_bases = dict()
@@ -248,8 +259,10 @@ class TorchForwardSimulator(ForwardSimulator):
         if slm.default_to_reverse_ad:
             # Then slm.circuit_probs_from_free_params will automatically construct the
             # torch_base dict to support reverse-mode AD.
+            print('USING REVERSE-MODE AD')
             J_func = torch.func.jacrev(slm.circuit_probs_from_free_params, argnums=argnums)
         else:
+            print('USING FORWARD-MODE AD')
             # Then slm.circuit_probs_from_free_params will automatically skip the extra
             # steps needed for torch_base to support reverse-mode AD.
             J_func = torch.func.jacfwd(slm.circuit_probs_from_free_params, argnums=argnums)
@@ -258,7 +271,13 @@ class TorchForwardSimulator(ForwardSimulator):
         #   have a need to override the default in the future then we'd need to override
         #   the ForwardSimulator function(s) that call self._bulk_fill_dprobs(...).
 
+        import time
+        print('Calling J_func at current free_params')
+        tic = time.time()
         J_val = J_func(*free_params)
+        toc = time.time()
+        print()
+        print(f'Done! --> {toc - tic} seconds elapsed')
         J_val = torch.column_stack(J_val)
         array_to_fill[:] = J_val.cpu().detach().numpy()
         return
