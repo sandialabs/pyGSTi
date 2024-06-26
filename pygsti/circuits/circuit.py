@@ -4250,6 +4250,9 @@ class Circuit(object):
             # Include a delay instruction
             openqasm += 'opaque delay(t) q;\n\n'
 
+        # Add a template for ECR commands that we will replace/remove later
+        openqasm += "ECRPLACEHOLDER"
+
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
         # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
         openqasm += 'creg cr[{0}];\n'.format(str(num_qubits + num_IMs))
@@ -4349,6 +4352,13 @@ class Circuit(object):
             # openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), str(qubit_conversion[q]))
             openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]),
                                                               str(num_IMs_used + qubit_conversion[q]))
+        
+        # Replace ECR placeholder
+        ecr_replace_str = ""
+        if 'ecr' in openqasm:
+            ecr_replace_str = "gate rzx(param0) q0,q1 { h q1; cx q0,q1; rz(param0) q1; cx q0,q1; h q1; }\n"
+            ecr_replace_str += "gate ecr q0,q1 { rzx(pi/4) q0,q1; x q0; rzx(-pi/4) q0,q1; }\n\n"
+        openqasm = openqasm.replace("ECRPLACEHOLDER", ecr_replace_str)
 
         return openqasm
 
