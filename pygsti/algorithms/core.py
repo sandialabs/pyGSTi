@@ -247,7 +247,10 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                     circuit = rhostr
                 dsRow_fractions = dataset[circuit].fractions
                 # outcome labels should just be effect labels (no instruments!)
-                EVec[0, i] = dsRow_fractions[(effectLabel,)]
+                # when using a sparse data set format it might not be the case
+                # that all effect labels are present (only ones with non-zero counts are)
+                # so return 0 for the fraction in that case.
+                EVec[0, i] = dsRow_fractions.get((effectLabel,), 0)
             EVec_p = _np.dot(_np.dot(EVec, Vd), Pj)  # truncate Evec => Evec', shape (1,trunc)
             povm_effects.append((effectLabel, _np.transpose(EVec_p)))
         lgstModel.povms[povmLabel] = _povm.UnconstrainedPOVM(povm_effects, evotype='default')
@@ -262,7 +265,10 @@ def run_lgst(dataset, prep_fiducials, effect_fiducials, target_model, op_labels=
                 # try without prepLabel since it will be the default
                 circuit = estr
             dsRow_fractions = dataset[circuit].fractions
-            rhoVec[eoff:eoff + povmLen, 0] = [dsRow_fractions[(ol,)] for ol in target_model.povms[povmLbl]]
+            # when using a sparse data set format it might not be the case
+            # that all effect labels are present (only ones with non-zero counts are)
+            # so return 0 for the fraction in that case.
+            rhoVec[eoff:eoff + povmLen, 0] = [dsRow_fractions.get((ol,),0) for ol in target_model.povms[povmLbl]]
             eoff += povmLen
         rhoVec_p = _np.dot(Pjt, _np.dot(Ud, rhoVec))  # truncate rhoVec => rhoVec', shape (trunc, 1)
         rhoVec_p = _np.dot(invABMat_p, rhoVec_p)
@@ -444,6 +450,10 @@ def _construct_a(effect_fiducials, model):
     dim = model.dim
     A = _np.empty((n, dim))
     # st = _np.empty(dim, 'd')
+    
+    # Remove restrictions on state param types for computation
+    old_default_param = model.preps.default_param
+    model.preps.default_param = "full"
 
     basis_st = _np.zeros((dim, 1), 'd'); eoff = 0
     for k, (estr, povmLbl, povmLen) in enumerate(zip(effect_fiducials, povmLbls, povmLens)):
@@ -459,6 +469,9 @@ def _construct_a(effect_fiducials, model):
             basis_st[i] = 0.0
 
         eoff += povmLen
+    
+    model.preps.default_param = old_default_param
+
     return A
 
 
@@ -467,6 +480,10 @@ def _construct_b(prep_fiducials, model):
     dim = model.dim
     B = _np.empty((dim, n))
     # st = _np.empty(dim, 'd')
+
+    # Remove restrictions on POVM param types for computation
+    old_default_param = model.povms.default_param
+    model.povms.default_param = "full"
 
     #Create POVM of vector units
     basis_Es = []
@@ -484,6 +501,8 @@ def _construct_b(prep_fiducials, model):
         B[:, k] = [probs[("E%d" % i,)] for i in range(dim)]  # CHECK will this work?
 
     del model.povms['M_LGST_tmp_povm']
+    model.povms.default_param = old_default_param
+
     return B
 
 

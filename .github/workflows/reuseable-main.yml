@@ -1,0 +1,93 @@
+# This is the core workflow for running pyGSTi linting and unit tests
+# This is used by other workflows to call this on a variety of OS/Python/environment options
+# By doing it this way, we can quickly call different matrix jobs on different branches
+
+name: Core pyGSTi build and run tests
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+      python-version:
+        required: true
+        type: string
+      use-cython:
+        required: true
+        type: string
+      run-unit-tests:
+        required: true
+        type: string
+      run-extra-tests:
+        required: true
+        type: string
+      run-notebook-tests:
+        required: true
+        type: string
+
+env:
+  SKIP_DEAP: 1
+
+jobs:
+  build-and-test:
+    runs-on: ${{ inputs.os }}
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up installation environment (Linux and Windows)
+      if: ${{ inputs.os != 'macos-13' }}
+      run: |
+        ./.github/ci-scripts/before_install.sh
+    - name: Set up installation environment (MacOS)
+      if: ${{ inputs.os == 'macos-13' }}
+      run: |
+        ./.github/ci-scripts/before_install_macos.sh
+    - name: Set up Python ${{ inputs.python-version }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+    - name: Cache pip packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}-${{ hashFiles('**/*requirements.txt') }}
+    - name: Install pip packages
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install wheel
+        python -m pip install flake8
+    - name: Install package (Cython)
+      if: ${{ inputs.use-cython == 'true' }}
+      run: |
+        python -m pip install -e .[testing]
+        python setup.py build_ext --inplace
+    - name: Install package (No Cython)
+      if: ${{ inputs.use-cython != 'true' }}
+      run: |
+        python -m pip install -e .[testing_no_cython]
+    - name: Lint with flake8 (Linux only)
+      if: ${{ inputs.os == 'ubuntu-latest'}}
+      run: |
+        # Critical errors, exit on failure
+        flake8 . --count --show-source --statistics --config=.flake8-critical
+        # Standard PEP8, allowed to fail since exit-zero treats all errors as warnings
+        flake8 . --exit-zero --statistics
+    - name: Run unit tests
+      if: ${{ inputs.run-unit-tests == 'true' }}
+      run: |
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        python -m pytest -n auto --dist loadscope --cov=pygsti test/unit
+    - name: Run test_packages
+      if: ${{ inputs.run-extra-tests == 'true' }}
+      run: |
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        python -m pytest -v -n auto --dist loadscope --ignore=test/test_packages/mpi --ignore=test/test_packages/notebooks test/test_packages
+    - name: Run notebook regression
+      if: ${{ inputs.run-notebook-tests == 'true' }}
+      run: |
+        # If we are running notebooks, we also need to download and compile CHP
+        curl -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c https://www.scottaaronson.com/chp/chp.c
+        gcc -o ./jupyter_notebooks/Tutorials/algorithms/advanced/chp ./jupyter_notebooks/Tutorials/algorithms/advanced/chp.c
+
+        python -Ic "import pygsti; print(pygsti.__version__); print(pygsti.__path__)"
+        python -m pytest -n auto --nbval-lax --dist loadscope --nbval-current-env jupyter_notebooks

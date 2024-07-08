@@ -799,7 +799,7 @@ class DepolarizationNoise(OpNoise):
 
         # LindbladErrorgen with "depol" or "diagonal" param
         basis_size = state_space.dim  # e.g. 4 for a single qubit
-        basis = _BuiltinBasis('pp', basis_size)
+        basis = _BuiltinBasis('PP', basis_size)
         rate_per_pauli = self.depolarization_rate / (basis_size - 1)
         errdict = {('S', bl): rate_per_pauli for bl in basis.labels[1:]}
         return _op.LindbladErrorgen.from_elementary_errorgens(
@@ -896,7 +896,7 @@ class StochasticNoise(OpNoise):
             raise ValueError("Stochastic noise parameterization must be one of %s" % str(allowed_values))
 
         basis_size = state_space.dim  # e.g. 4 for a single qubit
-        basis = _BuiltinBasis('pp', basis_size)
+        basis = _BuiltinBasis('PP', basis_size)
         errdict = {('S', bl): rate for bl, rate in zip(basis.labels[1:], sto_rates)}
         return _op.LindbladErrorgen.from_elementary_errorgens(
             errdict, "S", basis, mx_basis='pp',

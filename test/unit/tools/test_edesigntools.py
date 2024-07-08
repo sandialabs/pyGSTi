@@ -12,7 +12,7 @@ from ..util import BaseCase
 class ExperimentDesignTimeEstimationTester(BaseCase):
 
     def test_time_estimation(self):
-        edesign = smq2Q_XYICNOT.create_gst_experiment_design(256)
+        edesign = smq2Q_XYICNOT.create_gst_experiment_design(8)
         
         # Dummy test: No time
         time0 = et.calculate_edesign_estimated_runtime(

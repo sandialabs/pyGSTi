@@ -1,5 +1,56 @@
 # CHANGELOG
 
+## [0.9.12.3] - 2024-06-11
+
+### Added
+* Deterministic Clifford compilation and native gate count statistics for `CliffordRBDesign` (#314, #315, #443)
+
+
+### Fixed
+* Truncation bugfix in `BenchmarkingDesign` objects with "paired" lists to `circuit_list` attribute (#408, #443)
+* Fixes and efficiency improvements for various linear algebra calls (#432)
+* `densitymx_slow` evotype hotfix (#438, #439)
+
+
+## [0.9.12.2] - 2024-04-16
+
+### Added
+* Updated Cirq parsing capabilities (#411)
+* Added ability for reports to use CircuitListDesigns and results without gauge optimizations (#412, #415)
+* Indicator that figure/title headings can be clicked for expanded details (#416)
+
+
+### Fixed
+* Several tutorial updates and fixes (#282, #317, #421)
+* Fixed fiducial selection with wrong qubit labels (#396, #418)
+* Casting operators to dense matrices to avoid type errors in `pygsti.tools.optools` (#406, #414)
+* LGST fitting with sparse dataset (#420)
+
+
+### Changed
+* Increased the speed of unit/integration tests in GitHub Actions (#380, #403)
+
+## [0.9.12.1] - 2024-02-07
+
+### Added
+* Warnings for JupyterLab incompatibility (#328)
+* Warning for modifying static DataSets (#340)
+* Keyword argument to change ForwardSim types at Protocol runtime (#358)
+* Flag to drop new `delay` instructions in QASM2 circuit output (#377)
+* Warning for non-TP gauge transformations on CPTPLND-parameterized objects (#378)
+* Code owner assignments (#384)
+* A new AffineShiftOp modelmember (#386)
+
+### Fixed
+* Several tutorial updates and fixes (#247, #395)
+* LGST fitting with various model parameterizations (#366)
+* Deprecated convolve import in scipy 1.12 (#391, #392)
+
+### Changed
+* Stricter enforcement of line labels when using "*" in circuits (#373)
+* Reimplementation of ProtectedArray (#386)
+* GitHub runner updates for faster runs on development branches (#388)
+
 ## [0.9.12] - 2023-11-28
 
 ### Added

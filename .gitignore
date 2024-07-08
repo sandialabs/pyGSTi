@@ -47,6 +47,7 @@ jupyter_notebooks/Tutorials/tutorial_files/modeltest_report
 jupyter_notebooks/Tutorials/tutorial_files/gettingStartedReport
 jupyter_notebooks/Examples/example_files/*.pkl
 jupyter_notebooks/Examples/example_files/*.json
+jupyter_notebooks/Examples/example_files/leakage_*
 jupyter_notebooks/Tutorials/tutorial_files/exampleReport
 jupyter_notebooks/Tutorials/tutorial_files/exampleStdReport
 jupyter_notebooks/Tutorials/tutorial_files/exampleMultiEstimateReport
@@ -57,6 +58,7 @@ jupyter_notebooks/Tutorials/tutorial_files/*.ipynb
 jupyter_notebooks/Tutorials/tutorial_files/tempTest
 jupyter_notebooks/Tutorials/tutorial_files/*checkpoints
 jupyter_notebooks/Tutorials/objects/advanced/test_ibmq*
+jupyter_notebooks/Tutorials/tutorial_files/test_mirror_benchmark
 
 
 

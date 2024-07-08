@@ -23,13 +23,14 @@ from pygsti.objectivefns.objectivefns import ModelDatasetCircuitsStore as _Model
 from pygsti.report import colormaps as _colormaps
 from pygsti.report import plothelpers as _ph
 from pygsti.report.figure import ReportFigure
-from pygsti.report.workspace import WorkspacePlot
+from pygsti.report.workspace import WorkspacePlot, NotApplicable
 from pygsti import algorithms as _alg
 from pygsti import baseobjs as _baseobjs
 from pygsti.objectivefns import objectivefns as _objfns
 from pygsti.circuits.circuit import Circuit as _Circuit
 from pygsti.circuits.circuitstructure import PlaquetteGridCircuitStructure as _PlaquetteGridCircuitStructure, \
     GermFiducialPairPlaquette as _GermFiducialPairPlaquette
+from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.data import DataSet as _DataSet
 
 #Plotly v3 changes heirarchy of graph objects
@@ -529,6 +530,40 @@ def _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_su
                 txt += "<br>%s: %s" % (lbl, str(addl_subMxs[iy][ix][iiy][iix]))
             return txt
     return hover_label_fn
+    
+def _create_hover_info_fn_circuit_list(circuit_structure, sum_up, addl_hover_submxs):
+    
+    if sum_up:
+        pass
+    else:
+        if isinstance(circuit_structure, _CircuitList):
+            def hover_label_fn(val, i):
+                """ Standard hover labels """
+                #Note: in this case, we need to "flip" the iiy index because
+                # the matrices being plotted are flipped within _summable_color_boxplot(...)
+                if _np.isnan(val): return ""
+                ckt = circuit_structure[i].copy(editable=True)
+                ckt.factorize_repetitions_inplace()
+                txt = ckt.layerstr # note: *row* index = iiy
+                txt += ("<br>value: %g" % val)
+                for lbl, addl_subMxs in addl_hover_submxs.items():
+                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[i]))
+                return txt
+
+        elif isinstance(circuit_structure, list) and all([isinstance(el, _CircuitList) for el in circuit_structure]):
+            def hover_label_fn(val, i, j):
+                """ Standard hover labels """
+                #Note: in this case, we need to "flip" the iiy index because
+                # the matrices being plotted are flipped within _summable_color_boxplot(...)
+                if _np.isnan(val): return ""
+                ckt = circuit_structure[i][j].copy(editable=True)
+                ckt.factorize_repetitions_inplace()
+                txt = ckt.layerstr # note: *row* index = iiy
+                txt += ("<br>value: %g" % val)
+                for lbl, addl_subMxs in addl_hover_submxs.items():
+                    txt += "<br>%s: %s" % (lbl, str(addl_subMxs[i][j]))
+                return txt
+    return hover_label_fn
 
 
 def _circuit_color_boxplot(circuit_structure, sub_mxs, colormap,
@@ -662,42 +697,78 @@ def _circuit_color_scatterplot(circuit_structure, sub_mxs, colormap,
     plotly.Figure
     """
     g = circuit_structure
-    xvals = g.used_xs
-    yvals = g.used_ys
 
     if addl_hover_submxs is None:
         addl_hover_submxs = {}
 
     if hover_info:
-        hover_info = _create_hover_info_fn(circuit_structure, xvals, yvals, sum_up, addl_hover_submxs)
-
+        if isinstance(g, _PlaquetteGridCircuitStructure):
+            hover_info = _create_hover_info_fn(circuit_structure, g.used_xs, g.used_ys, sum_up, addl_hover_submxs)
+        elif isinstance(g, _CircuitList) or (isinstance(g, list) and all([isinstance(el, _CircuitList) for el in g])):
+            hover_info = _create_hover_info_fn_circuit_list(circuit_structure, sum_up, addl_hover_submxs)
+        
     xs = []; ys = []; texts = []
     gstrs = set()  # to eliminate duplicate strings
-    for ix, x in enumerate(g.used_xs):
-        for iy, y in enumerate(g.used_ys):
-            plaq = g.plaquette(x, y, empty_if_missing=True)
-            if sum_up:
-                if plaq.base not in gstrs:
-                    tot = sum([sub_mxs[iy][ix][iiy][iix] for iiy, iix, _ in plaq])
-                    xs.append(len(plaq.base))  # x-coord is len of *base* string
-                    ys.append(tot)
-                    gstrs.add(plaq.base)
-                    if hover_info:
-                        if callable(hover_info):
-                            texts.append(hover_info(tot, iy, ix))
-                        else:
-                            texts.append(str(tot))
+    
+    if isinstance(g, _PlaquetteGridCircuitStructure):
+        for ix, x in enumerate(g.used_xs):
+            for iy, y in enumerate(g.used_ys):
+                plaq = g.plaquette(x, y, empty_if_missing=True)
+                if sum_up:
+                    if plaq.base not in gstrs:
+                        tot = sum([sub_mxs[iy][ix][iiy][iix] for iiy, iix, _ in plaq])
+                        xs.append(len(plaq.base))  # x-coord is len of *base* string
+                        ys.append(tot)
+                        gstrs.add(plaq.base)
+                        if hover_info:
+                            if callable(hover_info):
+                                texts.append(hover_info(tot, iy, ix))
+                            else:
+                                texts.append(str(tot))
+                else:
+                    for iiy, iix, opstr in plaq:
+                        if opstr in gstrs: continue  # skip duplicates
+                        xs.append(len(opstr))
+                        ys.append(sub_mxs[iy][ix][iiy][iix])
+                        gstrs.add(opstr)
+                        if hover_info:
+                            if callable(hover_info):
+                                texts.append(hover_info(sub_mxs[iy][ix][iiy][iix], iy, ix, iiy, iix))
+                            else:
+                                texts.append(str(sub_mxs[iy][ix][iiy][iix]))
+    elif isinstance(g, _CircuitList):
+        for i, ckt in enumerate(g):
+            if ckt in gstrs:
+                continue
             else:
-                for iiy, iix, opstr in plaq:
-                    if opstr in gstrs: continue  # skip duplicates
-                    xs.append(len(opstr))
-                    ys.append(sub_mxs[iy][ix][iiy][iix])
-                    gstrs.add(opstr)
+                if sum_up:
+                    pass
+                    #TODO: Implement sum_up behavior mirroring that above.
+                gstrs.add(ckt)
+                ys.append(sub_mxs[i])
+                xs.append(len(ckt))
+                if hover_info:
+                    if callable(hover_info):
+                        texts.append(hover_info(sub_mxs[i], i))
+                    else:
+                        texts.append(str(sub_mxs[i]))
+    elif isinstance(g, list) and all([isinstance(el, _CircuitList) for el in g]):
+        for i, circuit_list in enumerate(g):
+            for j, ckt in enumerate(circuit_list):
+                if ckt in gstrs:
+                    continue
+                else:
+                    if sum_up:
+                        pass
+                        #TODO: Implement sum_up behavior mirroring that above.
+                    gstrs.add(ckt)
+                    ys.append(sub_mxs[i][j])
+                    xs.append(len(ckt))
                     if hover_info:
                         if callable(hover_info):
-                            texts.append(hover_info(sub_mxs[iy][ix][iiy][iix], iy, ix, iiy, iix))
+                            texts.append(hover_info(sub_mxs[i][j], i, j))
                         else:
-                            texts.append(str(sub_mxs[iy][ix][iiy][iix]))
+                            texts.append(str(sub_mxs[i][j]))
 
     #This GL version works, but behaves badly, sometimes failing to render...
     #trace = go.Scattergl(x=xs, y=ys, mode="markers",
@@ -768,17 +839,42 @@ def _circuit_color_histogram(circuit_structure, sub_mxs, colormap,
     plotly.Figure
     """
     g = circuit_structure
-
+        
+    #For all of the fanciness below, this all essentially looks like it just produces
+    #a flattened list of all of the contents of sub_mxs, so we can still do that with the
+    #submx structures we get from using CircuitList objects.
     ys = []  # artificially add minval so
     gstrs = set()  # to eliminate duplicate strings
-    for ix, x in enumerate(g.used_xs):
-        for iy, y in enumerate(g.used_ys):
-            plaq = g.plaquette(x, y, empty_if_missing=True)
-            #TODO: if sum_up then need to sum before appending...
-            for iiy, iix, opstr in plaq:
-                if opstr in gstrs: continue  # skip duplicates
-                ys.append(sub_mxs[iy][ix][iiy][iix])
-                gstrs.add(opstr)
+    
+    if isinstance(g, _PlaquetteGridCircuitStructure):
+        for ix, x in enumerate(g.used_xs):
+            for iy, y in enumerate(g.used_ys):
+                plaq = g.plaquette(x, y, empty_if_missing=True)
+                #TODO: if sum_up then need to sum before appending...
+                for iiy, iix, opstr in plaq:
+                    if opstr in gstrs: continue  # skip duplicates
+                    ys.append(sub_mxs[iy][ix][iiy][iix])
+                    gstrs.add(opstr)
+    
+    elif isinstance(g, _CircuitList):
+        for i, ckt in enumerate(g):
+            if ckt in gstrs:
+                continue
+            else:
+                gstrs.add(ckt)
+                ys.append(sub_mxs[i])
+    
+    elif isinstance(g, list) and all([isinstance(el, _CircuitList) for el in g]):
+        for i, circuit_list in enumerate(g):
+            for j, ckt in enumerate(circuit_list):
+                if ckt in gstrs:
+                    continue
+                else:
+                    gstrs.add(ckt)
+                    ys.append(sub_mxs[i][j])
+    else:
+        raise ValueError('Can only handle PlaquetteGridCircuitStructure, CircuitList or lists of CircuitList objects at present.')
+    
     if len(ys) == 0: ys = [0]  # case of no data - dummy so max works below
 
     minval = 0
@@ -1641,7 +1737,6 @@ class ColorBoxPlot(WorkspacePlot):
 
                 if isinstance(objfn, (_objfns.PoissonPicDeltaLogLFunction, _objfns.DeltaLogLFunction)):
                     terms *= 2.0  # show 2 * deltaLogL values, not just deltaLogL
-
                 if isinstance(objfn, _objfns.TVDFunction):
                     colormapType = "blueseq"
                 else:
@@ -1649,16 +1744,34 @@ class ColorBoxPlot(WorkspacePlot):
                     linlog_color = "red"
 
                 ytitle = objfn.description  # "chi<sup>2</sup>" OR "2 log(L ratio)"
-
-                mx_fn = _mx_fn_from_elements  # use a *global* function so cache can tell it's the same
+                
+                if isinstance(circuits, _PlaquetteGridCircuitStructure):
+                    mx_fn = _mx_fn_from_elements  # use a *global* function so cache can tell it's the same
+                elif isinstance(circuits, _CircuitList):
+                    mx_fn = _mx_fn_from_elements_circuit_list
+                elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
+                    mx_fn = _mx_fn_from_elements_circuit_list
+                
                 extra_arg = (terms, objfn.layout, "sum")
-
-                # (function, extra_arg) tuples
-                addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes, objfn.layout)
-                addl_hover_info_fns['p'] = (_mx_fn_from_elements, (objfn.probs, objfn.layout, "%.5g"))
-                addl_hover_info_fns['f'] = (_mx_fn_from_elements, (objfn.freqs, objfn.layout, "%.5g"))
-                addl_hover_info_fns['counts'] = (_mx_fn_from_elements, (objfn.counts, objfn.layout, "%d"))
-
+                
+                if isinstance(circuits, _PlaquetteGridCircuitStructure):
+                    # (function, extra_arg) tuples
+                    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes, objfn.layout)
+                    addl_hover_info_fns['p'] = (_mx_fn_from_elements, (objfn.probs, objfn.layout, "%.5g"))
+                    addl_hover_info_fns['f'] = (_mx_fn_from_elements, (objfn.freqs, objfn.layout, "%.5g"))
+                    addl_hover_info_fns['counts'] = (_mx_fn_from_elements, (objfn.counts, objfn.layout, "%d"))
+                elif isinstance(circuits, _CircuitList):
+                     # (function, extra_arg) tuples
+                    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes_circuit_list, objfn.layout)
+                    addl_hover_info_fns['p'] = (_mx_fn_from_elements_circuit_list, (objfn.probs, objfn.layout, "%.5g"))
+                    addl_hover_info_fns['f'] = (_mx_fn_from_elements_circuit_list, (objfn.freqs, objfn.layout, "%.5g"))
+                    addl_hover_info_fns['counts'] = (_mx_fn_from_elements_circuit_list, (objfn.counts, objfn.layout, "%d"))
+                elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
+                    addl_hover_info_fns['outcomes'] = (_addl_mx_fn_outcomes_circuit_list, objfn.layout)
+                    addl_hover_info_fns['p'] = (_mx_fn_from_elements_circuit_list, (objfn.probs, objfn.layout, "%.5g"))
+                    addl_hover_info_fns['f'] = (_mx_fn_from_elements_circuit_list, (objfn.freqs, objfn.layout, "%.5g"))
+                    addl_hover_info_fns['counts'] = (_mx_fn_from_elements_circuit_list, (objfn.counts, objfn.layout, "%d"))
+                
             elif ptyp == "blank":
                 colormapType = "trivial"
                 ytitle = ""
@@ -1777,23 +1890,116 @@ class ColorBoxPlot(WorkspacePlot):
                 colormapType = submatrices.get(ptyp + ".colormap", "seq")
             else:
                 raise ValueError("Invalid plot type: %s" % ptyp)
-
-            circuit_struct = _PlaquetteGridCircuitStructure.cast(circuits)  # , dataset?
-
+            
             #TODO: propagate mdc_store down into compute_sub_mxs?
             if (submatrices is not None) and ptyp in submatrices:
                 subMxs = submatrices[ptyp]  # "custom" type -- all mxs precomputed by user
-            else:
-                subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model, mx_fn, dataset, extra_arg)
 
-            addl_hover_info = _collections.OrderedDict()
-            for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
-                if (submatrices is not None) and lbl in submatrices:
-                    addl_subMxs = submatrices[lbl]  # ever useful?
+                #some of the branches below rely on circuit_struct being defined, which is previously
+                #wasn't when hitting this condition on the if statement, so add those definitions here.
+                #also need to built the addl_hover_info as well, based on circuit_struct.
+                if isinstance(circuits, _PlaquetteGridCircuitStructure):
+                    circuit_struct = circuits
+
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+
+                elif isinstance(circuits, _CircuitList):
+                    circuit_struct = [circuits]
+
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+
+                elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
+                    circuit_struct = circuits
+
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+
+                #Otherwise fall-back to the old casting behavior and proceed
                 else:
-                    addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
-                                                 addl_mx_fn, dataset, addl_extra_arg)
-                addl_hover_info[lbl] = addl_subMxs
+                    circuit_struct = _PlaquetteGridCircuitStructure.cast(circuits)
+                    addl_hover_info = _collections.OrderedDict()
+                    for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                        if (submatrices is not None) and lbl in submatrices:
+                            addl_subMxs = submatrices[lbl]  # ever useful?
+                        else:
+                            addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                        addl_mx_fn, dataset, addl_extra_arg)
+                        addl_hover_info[lbl] = addl_subMxs
+                
+            elif isinstance(circuits, _PlaquetteGridCircuitStructure):
+                circuit_struct= circuits
+                subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model, mx_fn, dataset, extra_arg)
+                
+                addl_hover_info = _collections.OrderedDict()
+                for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                    if (submatrices is not None) and lbl in submatrices:
+                        addl_subMxs = submatrices[lbl]  # ever useful?
+                    else:
+                        addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                     addl_mx_fn, dataset, addl_extra_arg)
+                    addl_hover_info[lbl] = addl_subMxs
+                
+            #Add in alternative logic for constructing sub-matrices when we have either a CircuitList or a
+            #list of circuit lists:
+            elif isinstance(circuits, _CircuitList):
+                circuit_struct= [circuits]
+                subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model, mx_fn, dataset, extra_arg)
+                
+                addl_hover_info = _collections.OrderedDict()
+                for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                    if (submatrices is not None) and lbl in submatrices:
+                        addl_subMxs = submatrices[lbl]  # ever useful?
+                    else:
+                        addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                     addl_mx_fn, dataset, addl_extra_arg)
+                    addl_hover_info[lbl] = addl_subMxs
+
+            elif isinstance(circuits, list) and all([isinstance(el, _CircuitList) for el in circuits]):
+                circuit_struct= circuits
+                subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model, mx_fn, dataset, extra_arg)
+                
+                addl_hover_info = _collections.OrderedDict()
+                for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                    if (submatrices is not None) and lbl in submatrices:
+                        addl_subMxs = submatrices[lbl]  # ever useful?
+                    else:
+                        addl_subMxs = self._ccompute(_ph._compute_sub_mxs_circuit_list, circuit_struct, model,
+                                                     addl_mx_fn, dataset, addl_extra_arg)
+                    addl_hover_info[lbl] = addl_subMxs
+
+            #Otherwise fall-back to the old casting behavior and proceed
+            else:
+                circuit_struct = _PlaquetteGridCircuitStructure.cast(circuits) # , dataset?
+                subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model, mx_fn, dataset, extra_arg)
+                
+                addl_hover_info = _collections.OrderedDict()
+                for lbl, (addl_mx_fn, addl_extra_arg) in addl_hover_info_fns.items():
+                    if (submatrices is not None) and lbl in submatrices:
+                        addl_subMxs = submatrices[lbl]  # ever useful?
+                    else:
+                        addl_subMxs = self._ccompute(_ph._compute_sub_mxs, circuit_struct, model,
+                                                     addl_mx_fn, dataset, addl_extra_arg)
+                    addl_hover_info[lbl] = addl_subMxs
 
             if colormapType == "linlog":
                 if dataset is None:
@@ -1827,9 +2033,17 @@ class ColorBoxPlot(WorkspacePlot):
 
             elif colormapType in ("seq", "revseq", "blueseq", "redseq"):
                 if len(subMxs) > 0:
-                    max_abs = max([_np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
-                                   for ix in range(len(circuit_struct.used_xs))
-                                   for iy in range(len(circuit_struct.used_ys))])
+                    if isinstance(circuit_struct, _PlaquetteGridCircuitStructure):
+                        max_abs = max([_np.max(_np.abs(_np.nan_to_num(subMxs[iy][ix])))
+                                       for ix in range(len(circuit_struct.used_xs))
+                                       for iy in range(len(circuit_struct.used_ys))])
+                    #circuit_struct logic above should mean that we always have at least a length 1 list of
+                    #CircuitList objects if not a plaquette circuit structure by this point.
+                    elif isinstance(circuit_struct, list) and all([isinstance(el, _CircuitList) for el in circuit_struct]):
+                        max_abs = max([_np.max(_np.abs(_np.nan_to_num(subMxs[i][j])))
+                                       for i, ckt_list in enumerate(circuit_struct) 
+                                       for j in range(len(ckt_list))])
+                    
                 else: max_abs = 0
                 if max_abs == 0: max_abs = 1e-6  # pick a nonzero value if all entries are zero or nan
                 if colormapType == "seq": color = "whiteToBlack"
@@ -1841,7 +2055,15 @@ class ColorBoxPlot(WorkspacePlot):
             else: assert(False), "Internal logic error"  # pragma: no cover
 
             if typ == "boxes":
-                newfig = _circuit_color_boxplot(circuit_struct, subMxs, colormap,
+                if not isinstance(circuit_struct, _PlaquetteGridCircuitStructure):
+                    #if not a plaquette structure then maybe try returning a NotApplicable object
+                    #for the figure?
+                    return NotApplicable(self.ws)
+                else:
+                    #I am expecting this cast won't do anything at the moment, but
+                    #maybe down the line it will.
+                    circuit_struct= _PlaquetteGridCircuitStructure.cast(circuits)
+                    newfig = _circuit_color_boxplot(circuit_struct, subMxs, colormap,
                                                 colorbar, box_labels, prec,
                                                 hover_info, sum_up, invert,
                                                 scale, bgcolor, addl_hover_info)
@@ -1897,9 +2119,25 @@ class ColorBoxPlot(WorkspacePlot):
 
 #Helper function for ColorBoxPlot matrix computation
 def _mx_fn_from_elements(plaq, x, y, extra):
-    return plaq.elementvec_to_matrix(extra[0], extra[1], mergeop=extra[2])
+    return plaq.elementvec_to_array(extra[0], extra[1], mergeop=extra[2])
 
+#modified version of the above meant for working with circuit lists
+def _mx_fn_from_elements_circuit_list(circuit_list, extra):
+    #Based on the convention above in the ColorBoxPlot code it looks likelihood
+    #extra[0] is the thing we want to index into, extra[1] is the layout and extra[2]
+    #is something called the merge op, which indicated how to combine the elements of extra[0]
+    #for each circuit in the circuit_list
+    if isinstance(circuit_list, _CircuitList):
+        pass
+    elif isinstance(circuit_list, list) and all([isinstance(el, _CircuitList) for el in circuit_list]):
+        circuit_list = _CircuitList.cast(circuit_list)
+    else:
+        msg = 'Invalid type. _mx_fn_from_elements_circuit_list is only presently implemented for CircuitList'\
+             +'objects and lists of Circuit objects.'
+        raise ValueError(msg)
 
+    return circuit_list.elementvec_to_array(extra[0], extra[1], mergeop=extra[2])
+    
 def _mx_fn_blank(plaq, x, y, unused):
     return _np.nan * _np.zeros((plaq.num_rows, plaq.num_cols), 'd')
 
@@ -1957,6 +2195,15 @@ def _addl_mx_fn_outcomes(plaq, x, y, layout):
     for i, j, opstr in plaq:
         slmx[i, j] = ", ".join([_outcome_to_str(ol) for ol in layout.outcomes(opstr)])
     return slmx
+
+#modified version of the above function meant to work for CircuitList objects
+def _addl_mx_fn_outcomes_circuit_list(circuit_list, layout):
+    slmx = _np.empty(len(circuit_list), dtype=_np.object_)
+    for i,ckt in enumerate(circuit_list):
+        slmx[i] = ", ".join([_outcome_to_str(ol) for ol in layout.outcomes(ckt)])
+    return slmx
+    
+    
 
 
 class GateMatrixPlot(WorkspacePlot):
