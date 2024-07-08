@@ -602,6 +602,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_argmap['Gczr'] = lambda gatearg: ['crz(' + str(gatearg[0]) + ')']
         std_gatenames_to_argmap['Gu3'] = lambda gatearg: ['u3(' + str(gatearg[0]) + ', '
                                                           + str(gatearg[1]) + ', ' + str(gatearg[2]) + ')']
+        std_gatenames_to_argmap['Gdelay'] = lambda gatearg: ['delay(' + str(gatearg[0]) + ')']
 
     elif version == 'x-sx-rz':
         std_gatenames_to_qasm = {}
@@ -656,6 +657,7 @@ def standard_gatenames_openqasm_conversions(version='u3'):
         std_gatenames_to_argmap['Gu3'] = lambda gatearg: ['rz(' + str(gatearg[2]) + ')', 'sx',
                                                           'rz(' + str(float(gatearg[0]) + _np.pi) + ')', 'sx',
                                                           'rz(' + str(float(gatearg[1]) + _np.pi) + ')']
+        std_gatenames_to_argmap['Gdelay'] = lambda gatearg: ['delay(' + str(gatearg[0]) + ')']
     else:
         raise ValueError("Unknown version!")
 
