@@ -13,16 +13,20 @@ class localstimerrorgen(ElementaryErrorgenLabel):
     Inputs:
     ______
     errorgen_type: characture can be set to 'H' Hamiltonian, 'S' Stochastic, 'C' Correlated or 'A' active following the conventions
-    of the taxonomy of small markovian errorgens paper
+    of the taxonomy of small markovian errorgens paper.  In addition, a new "error generator" 'Z'  null is added in order for there 
+    to be a zero divisor in the set. Thus, N[\rho]=0.  Additionally, a multplicative identity 'I' is added.  These exist to make 
+    sure the error generators remain closed under multiplication, commutation, under the influence of measurement with post selection,
+    and exponential expansion. Notably, the two non error generators do not have any pauli labels.
 
     basis_element_labels 
 
     Outputs:
     Null
     '''
-    def __init__(self,errorgen_type: str ,basis_element_labels: list):
+    def __init__(self,errorgen_type: str ,basis_element_labels: list, label=None):
         self.errorgen_type=str(errorgen_type)
         self.basis_element_labels=tuple(basis_element_labels) 
+        self.label=label
 
     '''
     hashes the error gen object
@@ -51,12 +55,32 @@ class localstimerrorgen(ElementaryErrorgenLabel):
     displays the errorgens as strings
     '''
     def __str__(self):
-        return self.errorgen_type + "(" + ",".join(map(str, self.basis_element_labels)) + ")"
+        if self.label is None:
+            return self.errorgen_type + "(" + ",".join(map(str, self.basis_element_labels)) + ")"
+        else:
+            return self.errorgen_type +" "+str(self.label)+" "+ "(" + ",".join(map(str, self.basis_element_labels)) + ")"
+
     
 
     def __repr__(self):
-        return str((self.errorgen_type, self.basis_element_labels))
+        if self.label is None:
+            return str((self.errorgen_type, self.basis_element_labels))
+        else:
+            return str((self.errorgen_type, self.label, self.basis_element_labels))
     
+
+    def reduce_label(self,labels):
+        paulis=[]
+        for el in self.basis_element_labels:
+            paulis.append(stimPauli_2_pyGSTiPauli(el))
+        new_labels=[]
+        for pauli in paulis:
+            for idx in labels:
+                pauli=pauli[:idx]+'I'+pauli[(idx+1):]
+            new_labels.append(stim.PauliString(pauli))
+        return localstimerrorgen(self.errorgen_type,tuple(new_labels))
+        
+
     '''
     Returns the errorbasis matrix for the associated errorgenerator mulitplied by its error rate
 
@@ -84,6 +108,8 @@ class localstimerrorgen(ElementaryErrorgenLabel):
             return weight*change_basis(create_elementary_errorgen(self.errorgen_type,paulis[0],paulis[1]),'std',matrix_basis)  
         
     def propagate_error_gen_tableau(self, slayer,weight):
+        if self.errorgen_type =='Z' or self.errorgen_type=='I':
+            return (self,weight)
         new_basis_labels = []
         weightmod = 1
         for pauli in self.basis_element_labels:
@@ -91,6 +117,9 @@ class localstimerrorgen(ElementaryErrorgenLabel):
             weightmod=weightmod*temp.sign
             temp=temp*temp.sign
             new_basis_labels.append(temp)
+        if self.errorgen_type =='S':
+            weightmod=1.0
+
         
         return (localstimerrorgen(self.errorgen_type,new_basis_labels),weightmod*weight)
 

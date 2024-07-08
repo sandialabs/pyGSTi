@@ -1,10 +1,74 @@
 import stim
-from localstimerrorgen import *
+from pygsti.extras.errorgenpropagation.localstimerrorgen import *
 from numpy import abs,zeros, complex128
 from numpy.linalg import multi_dot
 from scipy.linalg import expm
 from pygsti.tools.internalgates import standard_gatenames_stim_conversions
-from utilserrorgenpropagation import *
+from pygsti.extras.errorgenpropagation.utilserrorgenpropagation import *
+import copy as _copy
+
+def ErrorPropagatorAnalytic(circ,errorModel,ErrorLayerDef=False,startingErrors=None):
+    stim_layers=circ.convert_to_stim_tableau_layers()
+    
+    if startingErrors is None:
+        stim_layers.pop(0)
+
+    propagation_layers=[]
+    while len(stim_layers)>0:
+        top_layer=stim_layers.pop(0)
+        for layer in stim_layers:
+            top_layer = layer*top_layer
+        propagation_layers.append(top_layer)
+    
+    if not ErrorLayerDef:
+        errorLayers=buildErrorlayers(circ,errorModel,len(circ.line_labels))
+    else:
+        errorLayers=[[_copy.deepcopy(eg) for eg in errorModel] for i in range(circ.depth)]
+    
+    if not startingErrors is None:
+        errorLayers.insert(0,startingErrors)
+    
+    fully_propagated_layers=[]
+    for (idx,layer) in enumerate(errorLayers):
+        new_error_dict=dict()
+        if idx <len(errorLayers)-1:
+
+            for error in layer:    
+                propagated_error_gen=error.propagate_error_gen_tableau(propagation_layers[idx],1.)
+                new_error_dict[error]=propagated_error_gen   
+        else:
+            for error in layer:
+                new_error_dict[error]=(error,1)
+        fully_propagated_layers.append(new_error_dict)
+
+    #print(len(fully_propagated_layers))
+    return fully_propagated_layers
+    
+def InverseErrorMap(errorMap):
+    InvertedMap=dict()
+    for layer_no,layer in enumerate(errorMap):
+        for key in layer:
+            if layer[key][0] in InvertedMap:
+                errgen=_copy.copy(key)
+                errgen.label=layer_no
+                InvertedMap[layer[key][0]].append(tuple([errgen,layer[key][1]**(-1)]))
+            else:
+                errgen=_copy.copy(key)
+                errgen.label=layer_no
+                InvertedMap[layer[key][0]]=[tuple([errgen,layer[key][1]**(-1)])]
+    return InvertedMap
+
+def InvertedNumericMap(errorMap,errorValues):
+    numeric_map=dict()
+    for layer_no,layer in enumerate(errorMap):
+        for key in layer:
+            if layer[key][0] in numeric_map and key in errorValues[layer_no]:
+                numeric_map[layer[key][0]]+=errorValues[layer_no][key]*layer[key][1]**(-1)
+            elif key in errorValues[layer_no]:
+                numeric_map[layer[key][0]]=errorValues[layer_no][key]*layer[key][1]**(-1)
+            else:
+                continue
+    return numeric_map
 
 
 def ErrorPropagator(circ,errorModel,MultiGateDict=None,BCHOrder=1,BCHLayerwise=False,NonMarkovian=False,MultiGate=False,ErrorLayerDef=False):
@@ -30,7 +94,7 @@ def ErrorPropagator(circ,errorModel,MultiGateDict=None,BCHOrder=1,BCHLayerwise=F
     if not ErrorLayerDef:
         errorLayers=buildErrorlayers(circ,errorModel,len(circ.line_labels))
     else:
-        errorLayers=[[errorModel]]*circ.depth #this doesn't work
+        errorLayers=[[[_copy.deepcopy(eg) for eg in errorModel]] for i in range(circ.depth)]
 
     num_error_layers=len(errorLayers)
     
@@ -170,3 +234,23 @@ def nm_propagators(corr, Elist,qubits):
 def averaged_evolution(corr, Elist,qubits):
     Kms = nm_propagators(corr, Elist,qubits)
     return multi_dot([expm(Km) for Km in Kms])
+
+def error_stitcher(first_error,second_error):
+    link_dict=second_error.pop(0)
+    new_errors=[]
+    for layer in first_error:
+        #print(len(layer))
+        new_layer=dict()
+        for key in layer:
+            if layer[key][0] in link_dict:
+                new_error=link_dict[layer[key][0]]
+                new_layer[key]=(new_error[0],new_error[1]*layer[key][1])
+            elif layer[key][0].errorgen_type =='Z':
+                new_layer[key]=layer[key]
+            else:
+                continue
+            
+        new_errors.append(new_layer)
+    for layer in second_error:
+        new_errors.append(layer)
+    return new_errors
