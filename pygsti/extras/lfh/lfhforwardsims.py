@@ -22,7 +22,7 @@ from pygsti.forwardsims import SimpleMapForwardSimulator as _SimpleMapForwardSim
 from pygsti.forwardsims import MatrixForwardSimulator as _MatrixForwardSimulator
 from pygsti.evotypes import Evotype as _Evotype
 from pygsti.extras.lfh.lfherrorgen import LFHLindbladErrorgen as _LFHLindbladErrorgen
-
+import pygsti.tools.slicetools as _slct
 
 
 from pygsti.forwardsims import ForwardSimulator as _ForwardSimulator
@@ -422,8 +422,8 @@ class LFHIntegratingForwardSimulator(_ForwardSimulator):
         if self.model is not None:
             self.helper_sim = _MatrixForwardSimulator(model=self.model)
     
-    def create_layout(self, bulk_circuit_list, dataset, resource_alloc,
-                      array_types, verbosity=1):
+    def create_layout(self, bulk_circuit_list, dataset=None, resource_alloc=None,
+                      array_types=(), verbosity=1):
         
         if self.helper_sim is None:
             self.add_helper_sim()
@@ -561,7 +561,7 @@ class LFHSigmaForwardSimulator(_ForwardSimulator):
                     if isinstance(subop, _ExpErrorgenOp):
                         if isinstance(subop.errorgen, _LFHLindbladErrorgen):
                             dev_values.extend(subop.errorgen.devs)
-                            mean_values.extend(subop.errorgen.means)
+                            mean_values.extend([subop.errorgen.means[i] for i in subop.errorgen.dev_dict.keys()])
                             num_deviances += len(subop.errorgen.devs)
 
         #Now construct the set of points and weights:
@@ -635,7 +635,8 @@ class LFHSigmaForwardSimulator(_ForwardSimulator):
                 for subop in op.factorops:
                     if isinstance(subop, _ExpErrorgenOp):
                         if isinstance(subop.errorgen, _LFHLindbladErrorgen):
-                            hamiltonian_model_indices.extend(list(range(op.gpindices.start, op.gpindices.start+ len(subop.errorgen.means)))) 
+                            hamiltonian_model_indices.extend([op.gpindices.start+i for i in subop.errorgen.dev_dict.keys()])
+                            #hamiltonian_model_indices.extend(list(range(op.gpindices.start, op.gpindices.start+ len(subop.errorgen.means)))) 
         
         orig_vec = self.model.to_vector()
         
@@ -764,8 +765,8 @@ class LFHSigmaForwardSimulator(_ForwardSimulator):
         if self.model is not None:
             self.helper_sim = _MatrixForwardSimulator(model=self.model)
     
-    def create_layout(self, bulk_circuit_list, dataset, resource_alloc,
-                      array_types, verbosity=1):
+    def create_layout(self, bulk_circuit_list, dataset=None, resource_alloc=None,
+                      array_types=(), verbosity=1):
         
         if self.helper_sim is None:
             self.add_helper_sim()
@@ -787,7 +788,8 @@ class LFHSigmaForwardSimulator(_ForwardSimulator):
                 for subop in op.factorops:
                     if isinstance(subop, _ExpErrorgenOp):
                         if isinstance(subop.errorgen, _LFHLindbladErrorgen):
-                            hamiltonian_model_indices.extend(list(range(op.gpindices.start, op.gpindices.start+ len(subop.errorgen.means)))) 
+                            hamiltonian_model_indices.extend([op.gpindices.start+i for i in subop.errorgen.dev_dict.keys()])
+                            #hamiltonian_model_indices.extend(list(range(op.gpindices.start, op.gpindices.start+ len(subop.errorgen.means)))) 
         
         orig_vec = self.model.to_vector()
         
@@ -827,9 +829,7 @@ class LFHSigmaForwardSimulator(_ForwardSimulator):
         array_to_fill[:]= averaged_array
         #return averaged_array
         
-        
     #Next I need a version of bulk_fill_dprobs:
-        
     def bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill=None):
 
         eps = 1e-7  # hardcoded?
@@ -859,3 +859,67 @@ class LFHSigmaForwardSimulator(_ForwardSimulator):
         
         #print('dprobs: ', array_to_fill)
         #return dprobs
+
+    #add a version of bulk_fill_hprobs    
+
+    def bulk_fill_hprobs(self, array_to_fill, layout,
+                    pr_array_to_fill=None, deriv1_array_to_fill=None, 
+                    deriv2_array_to_fill=None):
+        """
+        Compute the outcome probability-Hessians for an entire list of circuits.
+
+        Similar to `bulk_fill_probs(...)`, but fills a 3D array with
+        the Hessians for each circuit outcome probability.
+
+        Parameters
+        ----------
+        array_to_fill : numpy ndarray
+            an already-allocated numpy array of shape `(len(layout),M1,M2)` where
+            `M1` and `M2` are the number of selected model parameters (by `wrt_filter1`
+            and `wrt_filter2`).
+
+        layout : CircuitOutcomeProbabilityArrayLayout
+            A layout for `array_to_fill`, describing what circuit outcome each
+            element corresponds to.  Usually given by a prior call to :meth:`create_layout`.
+
+        pr_mx_to_fill : numpy array, optional
+            when not None, an already-allocated length-`len(layout)` numpy array that is
+            filled with probabilities, just as in :meth:`bulk_fill_probs`.
+
+        deriv1_array_to_fill : numpy array, optional
+            when not None, an already-allocated numpy array of shape `(len(layout),M1)`
+            that is filled with probability derivatives, similar to
+            :meth:`bulk_fill_dprobs` (see `array_to_fill` for a definition of `M1`).
+
+        deriv2_array_to_fill : numpy array, optional
+            when not None, an already-allocated numpy array of shape `(len(layout),M2)`
+            that is filled with probability derivatives, similar to
+            :meth:`bulk_fill_dprobs` (see `array_to_fill` for a definition of `M2`).
+
+        Returns
+        -------
+        None
+        """
+
+        if pr_array_to_fill is not None:
+            self.bulk_fill_probs(pr_array_to_fill, layout)
+        if deriv1_array_to_fill is not None:
+            self.bulk_fill_dprobs(deriv1_array_to_fill, layout)
+            dprobs = deriv1_array_to_fill.copy()
+        if deriv2_array_to_fill is not None:
+            deriv2_array_to_fill[:, :] = deriv1_array_to_fill[:, :]
+
+        eps = 1e-4  # hardcoded?
+        dprobs = _np.empty((len(layout), self.model.num_params), 'd')
+        self.bulk_fill_dprobs(dprobs, layout)
+
+        dprobs2 = _np.empty((len(layout), self.model.num_params), 'd')
+
+        orig_vec = self.model.to_vector().copy()
+        for i in range(self.model.num_params):
+            vec = orig_vec.copy() 
+            vec[i] += eps
+            self.model.from_vector(vec, close=True)
+            self.bulk_fill_dprobs(dprobs2, layout)
+            array_to_fill[:, i, :] = (dprobs2 - dprobs) / eps
+        self.model.from_vector(orig_vec, close=True)
