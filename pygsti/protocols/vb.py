@@ -952,6 +952,93 @@ class SummaryStatisticsResults(_proto.ProtocolResults):
             stats[k] = v
         return stats
 
+###These functions will go into whatever protocol/summary stats classes are made for CB
+###Possibly add into ByDepthSummaryStatistics
+def avg_energy_sign_mod(cd, measurement, sign, tbs, measured_qs, toggled_qs):
+    energy = 0
+    total = sum(cd.values())
+    for i,count in cd.items():
+        if len(i)>1:
+            #is this right tbs
+            if len(toggled_qs)>0:
+                #print(i)
+                mcm_results = [0 if b=='p0' else 1 for b in i[:-1]]
+                counted_mcm_results = [1 if q in toggled_qs else 0 for q in measured_qs]*(len(mcm_results)//len(measured_qs))
+                mcm_tbs = [0 if tbs[j]=='0' else 1 for j in range(len(mcm_results))]
+                #print(mcm_tbs, counted_mcm_results)
+                mcm_adjusted_results = np.dot(np.logical_xor(mcm_results, mcm_tbs), counted_mcm_results)
+                this_sign = (-1)**(mcm_adjusted_results%2)
+                #print(tbs, mcm_results, mcm_tbs, mcm_adjusted_results, this_sign)
+            else:
+                this_sign=1
+        else:
+            this_sign=1
+        #there's no need to use odd depths
+        #but if you do, and you're toggling the MCM Pauli, you need to change the final measured Pauli
+        # if len(i)%2==0 and measurement[0] == 'Z':
+        #     measurement[0]='I'
+        #     #this_sign*=-1
+        # if measurement[0]=='I' and len(i)%2==0:
+        #     measurement[0]='Z'
+
+        out_eng = outcome_energy(i[-1],measurement,sign, tbs[-len(measurement):])*this_sign
+        energy += count * out_eng    
+    return energy / total
+
+def compute_eigenvalue_decays(data_by_pauli, cs_by_pauli, signs_by_pauli, tbs_by_pauli):
+    energies_by_pauli = {}
+    circuit_energies_by_pauli = {}
+    for pauli, ds_by_d in data_by_pauli.items():
+        circuits = cs_by_pauli[pauli]
+        signs = signs_by_pauli[pauli]
+        tbs = tbs_by_pauli[pauli]
+        energies = []
+        #transform into z type Pauli
+        meas_pauli = [p if p in ['I', 'Z'] else 'Z' for p in pauli]
+        circuit_energies_by_pauli[pauli] = []
+        avg_energies = []
+        for clist, signlist, ds in zip(circuits, signs, ds_by_d):
+            circuit_energies = []
+            
+            for c, sign in zip(clist,signlist):
+                dsrow = ds[c]
+                cd = ignore_mcm_results(dsrow.to_dict())
+                energy = avg_energy(cd, meas_pauli, sign)
+                circuit_energies.append(energy)
+            avg_energies.append(np.mean(circuit_energies))
+            circuit_energies_by_pauli[pauli].append(circuit_energies)
+        energies_by_pauli[pauli] = avg_energies
+            
+    return energies_by_pauli, circuit_energies_by_pauli
+
+def compute_off_diag_decays(data_by_pauli, cs_by_pauli, signs_by_pauli, tbs_by_pauli):
+    #compute pauli measurement results, use MCM results
+    energies_by_pauli = {}
+    circuit_energies_by_pauli = {}
+    for pauli, ds_by_d in data_by_pauli.items():
+        circuits = cs_by_pauli[pauli]
+        signs = signs_by_pauli[pauli]
+        energies = []
+        #transform into z type Pauli
+        circuit_energies_by_pauli[pauli] = []
+        meas_pauli = [p if p in ['I', 'Z'] else 'Z' for p in pauli]
+        avg_energies = []
+        for clist, signlist, ds in zip(circuits, signs, ds_by_d):
+            circuit_energies = []
+            
+            for c, sign in zip(clist,signlist):
+                meas_pauli = [p if p in ['I', 'Z'] else 'Z' for p in pauli]
+                dsrow = ds[c]
+                cd = ignore_mcm_results(dsrow.to_dict())
+                energy = avg_energy_sign_mod(dsrow.to_dict(), meas_pauli, sign)
+                circuit_energies.append(energy)
+            avg_energies.append(np.mean(circuit_energies))
+            circuit_energies_by_pauli[pauli].append(circuit_energies)
+        energies_by_pauli[pauli] = avg_energies
+    return energies_by_pauli, circuit_energies_by_pauli
+
+
+
 
 #BDB = ByDepthBenchmark
 #VBGrid = VolumetricBenchmarkGrid

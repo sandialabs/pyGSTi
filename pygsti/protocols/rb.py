@@ -990,6 +990,7 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
         self.auxfile_types['signs'] = 'json' # Makes sure that signs and measurements are saved seperately
         self.auxfile_types['measurements'] = 'json'
 
+#TODO:MCMCBDesign class
 
 class RandomizedBenchmarking(_vb.SummaryStatistics):
     """
