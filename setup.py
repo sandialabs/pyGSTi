@@ -60,6 +60,10 @@ extras = {
     ],
     'interpygate': ['csaps'],
     'serialization': ['bson'],
+    'ibmq': [
+        'qiskit>1',
+        'qiskit-ibm-runtime>=0.17.1',
+    ],
     'testing': [
         'pytest',
         'pytest-xdist',

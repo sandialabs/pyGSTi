@@ -27,9 +27,8 @@ class IBMQExperimentTester():
                                    disable_checkpointing=True)
 
         chkpt = 'test_ibmq_init_checkpoint'
-        shutil.rmtree(chkpt, ignore_errors=True)
         exp2 = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
-                                   checkpoint_path=chkpt)
+                                   checkpoint_path=chkpt, checkpoint_override=True)
         
         assert exp2.pygsti_circuit_batches == exp1.pygsti_circuit_batches
 
@@ -38,13 +37,12 @@ class IBMQExperimentTester():
     
     def test_transpile(self):
         chkpt = 'test_ibmq_transpile_checkpoint'
-        shutil.rmtree(chkpt, ignore_errors=True)
         exp1 = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
-                                   checkpoint_path=chkpt)
+                                   checkpoint_path=chkpt, checkpoint_override=True)
         exp1.transpile()
 
         # Test checkpoint load
-        exp2 = ibmq.IBMQExperiment.from_dir(chkpt, regen_qiskit_circs=True)
+        exp2 = ibmq.IBMQExperiment.from_dir(chkpt, regen_circs=True)
         assert exp2.qiskit_circuit_batches == exp1.qiskit_circuit_batches
 
         # Test restart
@@ -53,33 +51,22 @@ class IBMQExperimentTester():
         exp2.transpile()
         assert exp2.qiskit_circuit_batches == exp1.qiskit_circuit_batches
 
-    @pytest.mark.parametrize('backend_version', ['v1', 'v2'])
-    def test_submit(self, backend_version):
+    def test_submit(self):
         chkpt = 'test_ibmq_submit_checkpoint'
-        shutil.rmtree(chkpt, ignore_errors=True)
         exp1 = ibmq.IBMQExperiment(self.edesign, self.pspec, circuits_per_batch=5, num_shots=1024, seed=20231201,
-                                   checkpoint_path=chkpt)
+                                   checkpoint_path=chkpt, checkpoint_override=True)
         exp1.transpile()
 
-        if backend_version == 'v1':
-            from qiskit.providers.fake_provider import FakeBogota, FakeProvider
-            backend = FakeBogota()
-            provider = FakeProvider()
-        elif backend_version == 'v2':
-            from qiskit.providers.fake_provider import FakeBogotaV2, FakeProviderForBackendV2
-            backend = FakeBogotaV2()
-            provider = FakeProviderForBackendV2()
-        else:
-            raise RuntimeError("Unknown backend version for testing")
+        from qiskit_ibm_runtime.fake_provider import FakeBogotaV2
+        backend = FakeBogotaV2()
         
-        exp1.submit(backend, stop=3, max_attempts=1)
         # Submit first 3 jobs
+        exp1.submit(backend, stop=3, max_attempts=1)
         assert len(exp1.qjobs) == 3
 
-        # Load from checkpoint
-        exp2 = ibmq.IBMQExperiment.from_dir(chkpt, regen_qiskit_circs=True, regen_runtime_jobs=True, provider=provider)
-        exp2.submit(max_attempts=1)
-        assert len(exp2.qjobs) == len(exp2.qasm_circuit_batches)
+        # Submit rest of jobs
+        exp1.submit(backend, max_attempts=1)
+        assert len(exp1.qjobs) == len(exp1.qasm_circuit_batches)
 
 
 

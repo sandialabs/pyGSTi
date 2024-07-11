@@ -10,99 +10,50 @@
 
 import json as _json
 import numpy as _np
+import os as _os
 import pathlib as _pathlib
 import pickle as _pickle
 import time as _time
 import warnings as _warnings
 
+# Try to load Qiskit
 try: import qiskit as _qiskit
 except: _qiskit = None
+
+# Try to load IBM Runtime
+try: 
+    from qiskit_ibm_runtime import SamplerV2 as _Sampler
+    from qiskit_ibm_runtime import Session as _Session
+    from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
+except: _Sampler = None
+
+# Most recent version of QisKit that this has been tested on:
+#qiskit.__version__ = '1.1.1'
+#qiskit_ibm_runtime.__version__ = '0.25.0'
+# Note that qiskit<1.0 is going EOL in August 2024,
+# and v1 backends are also being deprecated (we now support only v2)
+# Also qiskit-ibm-provider is ALSO being deprecated,
+# so I'm only supporting runtime here
 
 try:
     from bson import json_util as _json_util
 except ImportError:
     _json_util = None
 
-from ... import data as _data, io as _io
-from ...protocols import ProtocolData as _ProtocolData, HasProcessorSpec as _HasPSpec
-from ...protocols.protocol import _TreeNode
-
-# Most recent version of QisKit that this has been tested on:
-#qiskit.__qiskit_version__ = {
-#    'qiskit-terra': '0.25.3',
-#    'qiskit': '0.44.3',
-#    'qiskit-aer': None,
-#    'qiskit-ignis': None,
-#    'qiskit-ibmq-provider': '0.20.2',
-#    'qiskit-nature': None,
-#    'qiskit-finance': None,
-#    'qiskit-optimization': None,
-#    'qiskit-machine-learning': None
-#}
-#qiskit_ibm_provider.__version__ = '0.7.2'
+from pygsti import data as _data, io as _io
+from pygsti.protocols import ProtocolData as _ProtocolData, HasProcessorSpec as _HasPSpec
+from pygsti.protocols.protocol import _TreeNode
 
 
 class IBMQExperiment(_TreeNode, _HasPSpec):
     """
     A object that converts pyGSTi ExperimentDesigns into jobs to be submitted to IBM Q, submits these
     jobs to IBM Q and receives the results.
-
-    Parameters
-    ----------
-    edesign: ExperimentDesign
-        The ExperimentDesign to be run on IBM Q. This can be a combined experiment design (e.g., a GST
-        design combined with an RB design).
-
-    pspec: QubitProcessorSpec
-        A QubitProcessorSpec that represents the IBM Q device being used. This can be created using the
-        extras.devices.create_processor_spec(). The ProcessorSpecs qubit ordering *must* correspond
-        to that of the IBM device (which will be the case if you create it using that function).
-        I.e., pspecs qubits should be labelled Q0 through Qn-1 and the labelling of the qubits
-        should agree with IBM's labelling.
-
-    remove_duplicates: bool, optional
-        If true, each distinct circuit in `edesign` is run only once. If false, if a circuit is
-        repeated multiple times in `edesign` it is run multiple times.
-
-    randomized_order: bool, optional
-        Whether or not to randomize the order of the circuits in `edesign` before turning them
-        into jobs to be submitted to IBM Q.
-
-    circuits_per_batch: int, optional
-        The circuits in edesign are divded into batches, each containing at most this many
-        circuits. The default value of 75 is (or was) the maximal value allowed on the public
-        IBM Q devices.
-
-    num_shots: int, optional
-        The number of samples from / repeats of each circuit.
-    
-    seed: int, optional
-        Seed for RNG during order randomization of circuits.
-
-    checkpoint_path: str, optional
-        A string for the path to use for writing intermediate checkpoint
-        files to disk. Defaults to `ibmqexperiment_checkpoint`, but can also be
-        the desired {dirname} for an eventual `write({dirname})` call, i.e. the
-        serialized IBMQExperiment checkpoint after a successful `retrieve_results()`
-        is equivalent to the serialized IBMQExperiment after `write()`.
-
-    disable_checkpointing : bool, optional (default False)
-        When set to True checkpoint objects will not be constructed and written
-        to disk during the course of this protocol. It is strongly recommended
-        that this be kept set to False without good reason to disable the checkpoints.
-
-    Returns
-    -------
-    IBMQExperiment
-        An object containing jobs to be submitted to IBM Q created by `.transpile()`,
-        which can then be submitted using the methods `.submit()` and whose results
-        can be grabbed from IBM Q using the method `.retrieve_results()`.
-
     """
 
     @classmethod
-    def from_dir(cls, dirname, regen_qiskit_circs=False, regen_runtime_jobs=False, provider=None,
-                 new_checkpoint_path=None):
+    def from_dir(cls, dirname, regen_circs=False, regen_jobs=False,
+                 service=None, new_checkpoint_path=None):
         """
         Initialize a new IBMQExperiment object from `dirname`.
 
@@ -111,19 +62,19 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         dirname : str
             The directory name.
         
-        regen_qiskit_circs: bool, optional
+        regen_circs: bool, optional
             Whether to recreate the Qiskit circuits from the transpiled
             OpenQASM strings. Defaults to False. You should set this to True
             if you would like to call submit().
         
-        regen_runtime_jobs: bool, optional
+        regen_jobs: bool, optional
             Whether to recreate the RuntimeJobs from IBMQ based on the job ides.
             Defaults to False. You should set this to True if you would like to
             call monitor() or retrieve_results().
-
-        provider: IBMProvider
-            Provider used to retrieve RuntimeJobs from IBMQ based on job_ids
-            (if lazy_qiskit_load is False)
+        
+        service: QiskitRuntimeService
+            Service used to retrieve RuntimeJobs from IBMQ based on job_ids
+            (if regen_runtime_jobs is True).
         
         new_checkpoint_path: str, optional
             A string for the path to use for writing intermediate checkpoint
@@ -145,13 +96,15 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             exp_dir = p / 'ibmqexperiment'
             attributes_from_meta = _io.load_meta_based_dir(exp_dir)
 
-            ret = cls(edesign, None)
+            # Don't override checkpoint during this construction
+            ret = cls(edesign, None, disable_checkpointing=True)
             ret.__dict__.update(attributes_from_meta)
             ret.edesign = edesign
         except KeyError:
             _warnings.warn("Failed to load ibmqexperiment, falling back to old serialization format logic")
 
-            ret = cls(edesign, None)
+            # Don't override checkpoint during this construction
+            ret = cls(edesign, None, disable_checkpointing=True)
             with open(p / 'ibmqexperiment/meta.json', 'r') as f:
                 from_json = _json.load(f)
             ret.__dict__.update(from_json)
@@ -182,18 +135,20 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
         # Regenerate Qiskit circuits
         ret.qiskit_circuit_batches = []
-        if regen_qiskit_circs:
+        if regen_circs:
+            assert _qiskit is not None, "Could not import qiskit, needed for regen_circs=True"
             for batch_strs in ret.qasm_circuit_batches:
                 batch = [_qiskit.QuantumCircuit.from_qasm_str(bs) for bs in batch_strs]
                 ret.qiskit_circuit_batches.append(batch)
         
         # Regenerate Qiskit RuntimeJobs
         ret.qjobs = []
-        if regen_runtime_jobs:
-            if provider is None:
-                _warnings.warn("No provider specified, cannot retrieve IBM jobs")
+        if regen_jobs:
+            assert _Sampler is not None, "Could not import qiskit-ibm-runtime, needed for regen_jobs=True"
+            if service is None:
+                _warnings.warn("No service specified, cannot retrieve IBM jobs")
             else:
-                ret._retrieve_jobs(provider)
+                ret._retrieve_jobs(service=service)
         
         # Update checkpoint path if requested
         if new_checkpoint_path is not None:
@@ -204,7 +159,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         return ret
 
     def __init__(self, edesign, pspec, remove_duplicates=True, randomized_order=True, circuits_per_batch=75,
-                 num_shots=1024, seed=None, checkpoint_path=None, disable_checkpointing=False):
+                 num_shots=1024, seed=None, checkpoint_path=None, disable_checkpointing=False, checkpoint_override=False):
         _TreeNode.__init__(self, {}, {})
 
         self.auxfile_types = {}
@@ -248,9 +203,15 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             # Fall back to pickles if we do not have bson to deal with datetime.datetime
             self.auxfile_types['submit_time_calibration_data'] = 'pickle'
             self.auxfile_types['batch_results'] = 'pickle'
-        
+
         if not self.disable_checkpointing:
-            self.write(self.checkpoint_path)
+            chkpath = _pathlib.Path(self.checkpoint_path)
+            if chkpath.exists() and not checkpoint_override:
+                raise RuntimeError(f"Checkpoint {self.checkpoint_path} already exists. Either "
+                    + "specify a different checkpoint_path, set checkpoint_override=True to clobber the current checkpoint,"
+                    + " or turn checkpointing off via disable_checkpointing=True (not recommended)."
+                    )
+            self.write(chkpath)
         
     def monitor(self):
         """
@@ -366,12 +327,16 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         -------
         None
         """
+        assert _qiskit is not None, "Could not import qiskit, needed for submit()"
+        assert _Sampler is not None, "Could not import qiskit-ibm-runtime, needed for submit()"
+
         assert len(self.qiskit_circuit_batches) == len(self.pygsti_circuit_batches), \
             "Transpilation missing! Either run .transpile() first, or if loading from file, " + \
             "use the regen_qiskit_circs=True option in from_dir()."
         
         #Get the backend version
         backend_version = ibmq_backend.version
+        assert backend_version == 2, "IBMQExperiment no longer supports v1 backends due to their deprecation by IBM"
         
         total_waits = 0
         self.qjobs = [] if self.qjobs is None else self.qjobs
@@ -401,6 +366,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 try:
                     #If submitting to a real device, get calibration data
                     try:
+                        # TODO: I think Noah ran into issues here
                         if not ibmq_backend.simulator:
                             backend_properties = ibmq_backend.properties()
                             self.submit_time_calibration_data.append(backend_properties.to_dict())
@@ -409,13 +375,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                         # Possible this is a fake backend, append empty submit data
                         self.submit_time_calibration_data.append({})
                     
-                    if backend_version == 1:
-                        # If using qiskit-ibmq-provider API, assemble into Qobj first
-                        qobj = _qiskit.compiler.assemble(batch, shots=self.num_shots)
-                        self.qjobs.append(ibmq_backend.run(qobj))
-                    else:
-                        # Newer qiskit-ibm-provider can take list of Qiskit circuits directly
-                        self.qjobs.append(ibmq_backend.run(batch, shots = self.num_shots))
+                    # Newer qiskit-ibm-provider can take list of Qiskit circuits directly
+                    self.qjobs.append(ibmq_backend.run(batch, shots = self.num_shots))
                         
                     status = self.qjobs[-1].status()
                     initializing = True
@@ -560,7 +521,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         exp_dir.mkdir(parents=True, exist_ok=True)
         _io.metadir.write_obj_to_meta_based_dir(self, exp_dir, 'auxfile_types')
 
-    def _retrieve_jobs(self, provider):
+    def _retrieve_jobs(self, service):
         """Retrieves RuntimeJobs from IBMQ based on job_ids.
 
         Parameters
@@ -570,4 +531,4 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         """
         for i, jid in enumerate(self.job_ids):
             print(f"Loading job {i+1}/{len(self.job_ids)}...")
-            self.qjobs.append(provider.backend.retrieve_job(jid))
+            self.qjobs.append(service.job(jid))
