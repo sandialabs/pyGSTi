@@ -5,6 +5,38 @@ from itertools import product
 import matplotlib.pyplot as plt
 #non-relative imports for now
 from pygsti.extras.idletomography import idtcore
+import collections as _collections
+import itertools as _itertools
+import time as _time
+import warnings as _warnings
+import more_itertools as _mi
+from itertools import product, permutations
+from pygsti.baseobjs import basisconstructors
+import numpy as _np
+from pygsti.baseobjs import Basis
+
+# Commutator Helper Functions
+def commute(mat1, mat2):
+    return mat1 @ mat2 + mat2 @ mat1
+
+
+def anti_commute(mat1, mat2):
+    return mat1 @ mat2 - mat2 @ mat1
+
+# Hamiltonian Error Generator
+def hamiltonian_error_generator(initial_state, indexed_pauli, identity):
+    return 1 * (
+        -1j * indexed_pauli @ initial_state @ identity
+        + 1j * identity @ initial_state @ indexed_pauli
+    )
+
+# Stochastic Error Generator
+def stochastic_error_generator(initial_state, indexed_pauli, identity):
+    return 1 * (
+        indexed_pauli @ initial_state @ indexed_pauli
+        - identity @ initial_state @ identity
+    )
+
 
 def coverage_edge_exists(error_gen_type, pauli_index, prep_string, meas_string):
     # print(f"{error_gen_type}")
@@ -25,9 +57,38 @@ def coverage_edge_exists(error_gen_type, pauli_index, prep_string, meas_string):
                 return True
     return False
 
+def alt_coverage_edge_exists(error_gen_type, pauli_index, prep_string, meas_string):
+    if error_gen_type == "h":
+        h = hamiltonian_error_generator(prep_string.to_unitary_matrix(endian="little"), pauli_index.to_unitary_matrix(endian="little"), ident.to_unitary_matrix(endian="little"))
+        if _np.any(h):
+            h_string = stim.PauliString.from_unitary_matrix(h/2)
+            print(f"{h_string}")
+            print(f"{h_string}, {pauli_index}, {meas_string}")
+            print(f"{pauli_index.pauli_indices()}")
+            error_gen_indices = pauli_index.pauli_indices()
+            # if h_string == meas_string or h_string == -meas_string:
+            print(f"{prep_string}")
+            print(f"{stim.PauliString.after(meas_string,h_string.to_tableau(), targets=[i for i in range(len(meas_string))])}")
+            second_matrix = stim.PauliString.after(meas_string,h_string.to_tableau(), targets=[i for i in range(len(meas_string))]).to_unitary_matrix(endian="little")
+            t = _np.trace(prep_string.to_unitary_matrix(endian="little") @ second_matrix)
+            print(t)
+            if _np.absolute(t) > .0001:
+                print()
+                print(f"{prep_string}, {stim.PauliString.after(meas_string,h_string.to_tableau(), targets=[i for i in range(len(meas_string))])}, {h_string}, {pauli_index}, {meas_string}")
+                print()
+                #quit()
+                return True
+    elif error_gen_type == "s":
+        return False
+        s = stochastic_error_generator(prep_string.to_unitary_matrix(endian="little"), pauli_index.to_unitary_matrix(endian="little"), ident.to_unitary_matrix(endian="little"))
+        if _np.any(s):
+            s_string = stim.PauliString.from_unitary_matrix(s/2)
+            # if s_string == meas_string or s_string == -meas_string:
+            if stim.PauliString.commutes(s_string, meas_string):
+                return True
+    return False
 
-
-num_qubits = 3
+num_qubits = 2
 max_weight = 1
 
 HS_index_iterator = stim.PauliString.iter_all(num_qubits,min_weight=1, max_weight=max_weight)
@@ -40,12 +101,31 @@ measure_string_attributes = list([p for p in measure_string_iterator])
 prep_string_attributes = measure_string_attributes
 prep_meas_pairs = list(product(prep_string_attributes,measure_string_attributes))
 
+
+
+# print(prep_meas_pairs)
+
+ident = stim.PauliString(num_qubits)
+# prep = prep_meas_pairs[0][0]
+# index = pauli_node_attributes[1]
+# meas = prep_meas_pairs[0][1]
+# print(ident, prep, meas, index)
+# h = hamiltonian_error_generator(prep.to_unitary_matrix(endian="little"), index.to_unitary_matrix(endian="little"), ident.to_unitary_matrix(endian="little"))
+# print(h)
+# print(stim.PauliString.from_unitary_matrix(h/2))
+# m = meas.to_unitary_matrix(endian="little")
+# print(commute(m,h))
+# quit()
+
 test_graph = nx.Graph()
 # test_graph.add_nodes_from(enumerate(pauli_node_attributes), pauli_string = pauli_node_attributes, bipartite=1)
 for (i,j) in prep_meas_pairs:
     test_graph.add_node(len(test_graph.nodes)+1, prep_string = i, meas_string = j, bipartite = 0)
 
-for j in "hs":
+error_gen_classes = "h"
+#error_gen_classes = "hs"
+
+for j in error_gen_classes:
     for i in range(len(pauli_node_attributes)):
         test_graph.add_node(len(test_graph.nodes)+1, error_gen_class = j, pauli_index = pauli_node_attributes[i], bipartite=1)
 
@@ -57,28 +137,29 @@ bipartite_identifier = nx.get_node_attributes(test_graph, "bipartite")
 bipartite_pairs = [(k1,k2) for k1 in bipartite_identifier.keys() if bipartite_identifier[k1] ==0 for k2 in bipartite_identifier.keys() if bipartite_identifier[k2] == 1]
 
 for pair in bipartite_pairs:
-    if coverage_edge_exists(test_graph.nodes[pair[1]]["error_gen_class"], test_graph.nodes[pair[1]]["pauli_index"], test_graph.nodes[pair[0]]["prep_string"], test_graph.nodes[pair[0]]["meas_string"]):
+    if alt_coverage_edge_exists(test_graph.nodes[pair[1]]["error_gen_class"], test_graph.nodes[pair[1]]["pauli_index"], test_graph.nodes[pair[0]]["prep_string"], test_graph.nodes[pair[0]]["meas_string"]):
         test_graph.add_edge(pair[0], pair[1])
+
 
 # print(list(test_graph.nodes[n] for n in test_graph.nodes))
 # print(list(edge for edge in test_graph.edges if edge[1]==87))
 # quit()
 # print(test_graph.nodes[88])
 labels = {n: "" for n in test_graph.nodes}
-# pos = {n: (0,0) for n in test_graph.nodes}
-# x_pos_err = 0
-# x_pos_exp = 0
+pos = {n: (0,0) for n in test_graph.nodes}
+x_pos_err = 0
+x_pos_exp = 0
 # save_me = [2]
 for n in test_graph.nodes:
     if test_graph.nodes[n].get("pauli_index"):
         labels[n] = str(test_graph.nodes[n].get("error_gen_class")) + "_" + str(test_graph.nodes[n].get("pauli_index"))
-#         pos[n] = (x_pos_err, 3)
-#         x_pos_err += 1
+        pos[n] = (x_pos_err, 1)
+        x_pos_err += 7000
 #         save_me.append(n)
     else:
         labels[n] = str(test_graph.nodes[n]["prep_string"]) + " / " + str(test_graph.nodes[n]["meas_string"])
-#         pos[n] = (x_pos_exp, 0)
-#         x_pos_exp += 1
+        pos[n] = (x_pos_exp, 0)
+        x_pos_exp += 1000
 
 # hxy_subgraph = nx.subgraph(test_graph, save_me)
 
@@ -99,14 +180,14 @@ for n in test_graph.nodes:
 
 
 
-# # nx.draw(test_graph, nx.kamada_kawai_layout(test_graph))
-# plt.figure(figsize=(10,5))
-# nx.draw_networkx_nodes(test_graph, pos, node_size = 500, margins=0.01)
-# nx.draw_networkx_edges(test_graph, pos)
-# nx.draw_networkx_labels(test_graph, pos, labels=labels, font_size=5)
+# nx.draw(test_graph, nx.kamada_kawai_layout(test_graph))
+plt.figure(figsize=(11,8.5))
+nx.draw_networkx_nodes(test_graph, pos, node_size = 15)
+nx.draw_networkx_edges(test_graph, pos)
+nx.draw_networkx_labels(test_graph, pos, labels=labels, font_size=2)
 
 
-# plt.savefig("dum_graf.png")
+plt.savefig("dum_graf.pdf")
 m = pe.ConcreteModel()
 m.covering_nodes = [n for n in test_graph.nodes if test_graph.nodes[n]["bipartite"] == 0]
 m.error_generator_nodes = [n for n in test_graph.nodes if test_graph.nodes[n]["bipartite"] == 1]
@@ -158,6 +239,22 @@ opt = pe.SolverFactory("gurobi")
 opt.solve(m, tee=True)
 # m.pprint()
 print(f"{pe.value(m.obj)}")
+import re
+info_streams = []
+exp_egen_pairs = []
 for v in m.component_data_objects(ctype=pe.Var):
     if "exp" in v.name and pe.value(v) >= .001:
         print(v.name, pe.value(v))
+    if "inf" in v.name and pe.value(v) >= .001:
+        print(v.name)
+        nums = re.findall(r"\d+", v.name)
+        info_streams.append((int(nums[0]), int(nums[1])))
+        
+for info_stream in info_streams:
+    egen_class = test_graph.nodes[info_stream[1]]["error_gen_class"] + str(test_graph.nodes[info_stream[1]]["pauli_index"])[1:]
+    prep_string = test_graph.nodes[info_stream[0]]["prep_string"]
+    meas_string = test_graph.nodes[info_stream[0]]["meas_string"]
+    exp_egen_pairs.append(((prep_string,meas_string),egen_class))
+
+for pair in exp_egen_pairs:
+    print("(" + str(pair[0][0])[1:] + "," + str(pair[0][1])[1:] + ") -----> " + pair[1])
