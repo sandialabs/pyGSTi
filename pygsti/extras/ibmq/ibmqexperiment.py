@@ -105,7 +105,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
             # Don't override checkpoint during this construction
             ret = cls(edesign, None, disable_checkpointing=True)
-            with open(p / 'ibmqexperiment/meta.json', 'r') as f:
+            with open(p / 'ibmqexperiment' / 'meta.json', 'r') as f:
                 from_json = _json.load(f)
             ret.__dict__.update(from_json)
 
@@ -119,7 +119,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             }
 
             for key, (attr, def_val) in key_attr_map.items():
-                with open(p / f'ibmqexperiment/{key}.pkl', 'rb') as f:
+                with open(p / f'ibmqexperiment' / '{key}.pkl', 'rb') as f:
                     try:
                         setattr(ret, attr, _pickle.load(f))
                     except:
@@ -142,6 +142,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 ret.qiskit_circuit_batches.append(batch)
         
         # Regenerate Qiskit RuntimeJobs
+        ret.qiskit_isa_circuit_batches = [] # TODO: How to regenerate? Maybe this should be what is saved?
         ret.qjobs = []
         if regen_jobs:
             assert _Sampler is not None, "Could not import qiskit-ibm-runtime, needed for regen_jobs=True"
@@ -160,7 +161,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
     def __init__(self, edesign, pspec, remove_duplicates=True, randomized_order=True, circuits_per_batch=75,
                  num_shots=1024, seed=None, checkpoint_path=None, disable_checkpointing=False, checkpoint_override=False):
-        _TreeNode.__init__(self, {}, {})
+        _TreeNode.__init__(self, None, None)
 
         self.auxfile_types = {}
         _HasPSpec.__init__(self, pspec)
@@ -175,9 +176,10 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         self.disable_checkpointing = disable_checkpointing
         # Populated with transpiling to IBMQ with .transpile()
         self.pygsti_circuit_batches = []
-        self.qasm_circuit_batches = []
+        self.qasm_circuit_batches = [] # TODO: To be deprecated with direct qiskit support?
         self.qiskit_circuit_batches = []
         # Populated when submitting to IBM Q with .submit()
+        self.qiskit_isa_circuit_batches = []
         self.qjobs = []
         self.job_ids = []
         self.submit_time_calibration_data = []
@@ -192,8 +194,9 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         self.auxfile_types['data'] = 'reset'
         # self.processor_spec is handled by _HasPSpec base class
         self.auxfile_types['pygsti_circuit_batches'] = 'list:text-circuit-list'
-        self.auxfile_types['qasm_circuit_batches'] = 'list:json'
+        self.auxfile_types['qasm_circuit_batches'] = 'list:json' # TODO: To be deprecated with direct qiskit support?
         self.auxfile_types['qiskit_circuit_batches'] = 'none'
+        self.auxfile_types['qiskit_isa_circuit_batches'] = 'none'
         self.auxfile_types['qjobs'] = 'none'
         self.auxfile_types['job_ids'] = 'json'
         if _json_util is not None:
@@ -280,7 +283,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
             for i, circ in enumerate(self.pygsti_circuit_batches[exp_idx]):
                 ordered_target_indices = [self.processor_spec.qubit_labels.index(q) for q in circ.line_labels]
-                counts_data = partial_trace(ordered_target_indices, reverse_dict_key_bits(batch_result.get_counts(i)))
+                counts_data = partial_trace(ordered_target_indices, reverse_dict_key_bits(batch_result[i].data.meas.get_counts()))
                 ds.add_count_dict(circ, counts_data)
 
         self.data = _ProtocolData(self.edesign, ds)
@@ -288,8 +291,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         if not self.disable_checkpointing:
             self.data.write(self.checkpoint_path, edesign_already_written=True)
 
-    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True,
-               wait_time=5, max_attempts=10):
+    def submit(self, ibmq_backend, start=None, stop=None, ibm_opt_level=0,
+               ignore_job_limit=True, wait_time=5, max_attempts=10):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
         used to create this object.
@@ -310,6 +313,10 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             Batch index to stop submission (exclusive). Defaults to None,
             which will submit as many jobs as possible given the backend's
             maximum job limit.
+        
+        ibm_opt_level: int, optional
+            An optimization level to give to Qiskit's `generate_preset_pass_manager`.
+            Defaults to 0, which is no optimization.
 
         ignore_job_limit: bool, optional
             If True, then stop is set to submit all remaining jobs. This is set
@@ -336,7 +343,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         
         #Get the backend version
         backend_version = ibmq_backend.version
-        assert backend_version == 2, "IBMQExperiment no longer supports v1 backends due to their deprecation by IBM"
+        assert backend_version >= 2, "IBMQExperiment no longer supports v1 backends due to their deprecation by IBM"
         
         total_waits = 0
         self.qjobs = [] if self.qjobs is None else self.qjobs
@@ -355,6 +362,10 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
             stop = min(start + allowed_jobs, stop)
         
+        pm = _pass_manager(backend=ibmq_backend, optimization_level=ibm_opt_level)
+        ibmq_session = _Session(backend = ibmq_backend)
+        sampler = _Sampler(session=ibmq_session)
+        
         for batch_idx, batch in enumerate(self.qiskit_circuit_batches):
             if batch_idx < start or batch_idx >= stop:
                 continue
@@ -366,17 +377,19 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 try:
                     #If submitting to a real device, get calibration data
                     try:
-                        # TODO: I think Noah ran into issues here
-                        if not ibmq_backend.simulator:
-                            backend_properties = ibmq_backend.properties()
-                            self.submit_time_calibration_data.append(backend_properties.to_dict())
+                        backend_properties = ibmq_backend.properties()
+                        self.submit_time_calibration_data.append(backend_properties.to_dict())
                     except AttributeError:
-                        # We can't get the properties or check if simulator
-                        # Possible this is a fake backend, append empty submit data
+                        # We can't get the properties
+                        # Likely this is a fake backend/simulator, append empty submit data
                         self.submit_time_calibration_data.append({})
                     
-                    # Newer qiskit-ibm-provider can take list of Qiskit circuits directly
-                    self.qjobs.append(ibmq_backend.run(batch, shots = self.num_shots))
+                    # Run pass manager
+                    isa_circs = pm.run(batch)
+                    self.qiskit_isa_circuit_batches.append(isa_circs)
+
+                    # Submit job
+                    self.qjobs.append(sampler.run(batch, shots = self.num_shots))
                         
                     status = self.qjobs[-1].status()
                     initializing = True
@@ -404,7 +417,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                         print(f'  - Failed to get queue position for batch {batch_idx + 1}')
                     submit_status = True
 
-                except Exception as ex:
+                except Exception as ex: # TODO: Revamp this
                     template = "An exception of type {0} occurred. Arguments:\n{1!r}"
                     message = template.format(type(ex).__name__, ex.args)
                     print(message)

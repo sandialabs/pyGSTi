@@ -1,9 +1,3 @@
-import pytest
-import shutil
-
-try: import qiskit
-except: qiskit = None
-
 import pygsti
 from pygsti.extras.devices.experimentaldevice import ExperimentalDevice
 from pygsti.extras import ibmq
@@ -67,9 +61,4 @@ class IBMQExperimentTester():
         # Submit rest of jobs
         exp1.submit(backend, max_attempts=1)
         assert len(exp1.qjobs) == len(exp1.qasm_circuit_batches)
-
-
-
-
-
 
