@@ -8,6 +8,7 @@
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from datetime import datetime as _datetime
 import json as _json
 import numpy as _np
 import os as _os
@@ -17,13 +18,17 @@ import time as _time
 import warnings as _warnings
 
 # Try to load Qiskit
-try: import qiskit as _qiskit
-except: _qiskit = None
+try:
+    import qiskit as _qiskit
+    from qiskit.providers import JobStatus as _JobStatus
+except:
+    _qiskit = None
 
 # Try to load IBM Runtime
 try: 
     from qiskit_ibm_runtime import SamplerV2 as _Sampler
     from qiskit_ibm_runtime import Session as _Session
+    from qiskit_ibm_runtime import RuntimeJobV2 as _RuntimeJobV2
     from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager as _pass_manager
 except: _Sampler = None
 
@@ -52,8 +57,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
     """
 
     @classmethod
-    def from_dir(cls, dirname, regen_circs=False, regen_jobs=False,
-                 service=None, new_checkpoint_path=None):
+    def from_dir(cls, dirname, regen_circs=False, ibmq_backend=None,
+                 regen_jobs=False, service=None, new_checkpoint_path=None):
         """
         Initialize a new IBMQExperiment object from `dirname`.
 
@@ -67,6 +72,9 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             OpenQASM strings. Defaults to False. You should set this to True
             if you would like to call submit().
         
+        ibmq_backend:
+            IBMQ backend to use for transpilation (if regen_circs is True)
+        
         regen_jobs: bool, optional
             Whether to recreate the RuntimeJobs from IBMQ based on the job ides.
             Defaults to False. You should set this to True if you would like to
@@ -74,7 +82,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         
         service: QiskitRuntimeService
             Service used to retrieve RuntimeJobs from IBMQ based on job_ids
-            (if regen_runtime_jobs is True).
+            (if regen_jobs is True).
         
         new_checkpoint_path: str, optional
             A string for the path to use for writing intermediate checkpoint
@@ -134,22 +142,18 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             pass
 
         # Regenerate Qiskit circuits
-        ret.qiskit_circuit_batches = []
+        ret.qiskit_isa_circuit_batches = []
         if regen_circs:
             assert _qiskit is not None, "Could not import qiskit, needed for regen_circs=True"
-            for batch_strs in ret.qasm_circuit_batches:
-                batch = [_qiskit.QuantumCircuit.from_qasm_str(bs) for bs in batch_strs]
-                ret.qiskit_circuit_batches.append(batch)
+            assert ibmq_backend is not None, "No backend specified, could not transpile circuits"
+            ret.transpile(ibmq_backend)
         
         # Regenerate Qiskit RuntimeJobs
-        ret.qiskit_isa_circuit_batches = [] # TODO: How to regenerate? Maybe this should be what is saved?
         ret.qjobs = []
         if regen_jobs:
             assert _Sampler is not None, "Could not import qiskit-ibm-runtime, needed for regen_jobs=True"
-            if service is None:
-                _warnings.warn("No service specified, cannot retrieve IBM jobs")
-            else:
-                ret._retrieve_jobs(service=service)
+            assert service is not None, "No service specified, cannot retrieve IBM jobs"
+            ret._retrieve_jobs(service=service)
         
         # Update checkpoint path if requested
         if new_checkpoint_path is not None:
@@ -175,11 +179,11 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         self.checkpoint_path = str(checkpoint_path) if checkpoint_path is not None else 'ibmqexperiment_checkpoint'
         self.disable_checkpointing = disable_checkpointing
         # Populated with transpiling to IBMQ with .transpile()
+        self.qasm_convert_kwargs = {}
+        self.qiskit_pass_kwargs = {}
         self.pygsti_circuit_batches = []
-        self.qasm_circuit_batches = [] # TODO: To be deprecated with direct qiskit support?
-        self.qiskit_circuit_batches = []
-        # Populated when submitting to IBM Q with .submit()
         self.qiskit_isa_circuit_batches = []
+        # Populated when submitting to IBM Q with .submit()
         self.qjobs = []
         self.job_ids = []
         self.submit_time_calibration_data = []
@@ -194,8 +198,6 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         self.auxfile_types['data'] = 'reset'
         # self.processor_spec is handled by _HasPSpec base class
         self.auxfile_types['pygsti_circuit_batches'] = 'list:text-circuit-list'
-        self.auxfile_types['qasm_circuit_batches'] = 'list:json' # TODO: To be deprecated with direct qiskit support?
-        self.auxfile_types['qiskit_circuit_batches'] = 'none'
         self.auxfile_types['qiskit_isa_circuit_batches'] = 'none'
         self.auxfile_types['qjobs'] = 'none'
         self.auxfile_types['job_ids'] = 'json'
@@ -220,21 +222,26 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         """
         Queries IBM Q for the status of the jobs.
         """
+        assert _qiskit is not None, "Could not import qiskit, needed for monitor()"
         assert len(self.qjobs) == len(self.job_ids), \
             "Mismatch between jobs and job ids! If loading from file, use the regen_jobs=True option in from_dir()."
         
         for counter, qjob in enumerate(self.qjobs):
             status = qjob.status()
             print(f"Batch {counter + 1}: {status}")
-            if status.name == 'QUEUED':
-                info = qjob.queue_info()
-                if info is not None:
-                    print(f'  - Queue position is {info.position}')
-                else:
+            if status in [_JobStatus.QUEUED, 'QUEUED']:
+                try:
+                    print(f'  - Queue position is {qjob.queue_position(True)}')
+                except Exception:
                     print('  - Unable to retrieve queue position')
+                    if isinstance(self.qjobs[-1], _RuntimeJobV2):
+                            print('    (because queue position not available in RuntimeJobV2)')
+                            metrics = qjob.metrics()
+                            start_time = _datetime.fromisoformat(metrics["estimated_start_time"])
+                            print(f'  - Estimated start time: {start_time.astimezone()} (local timezone)')
 
         # Print unsubmitted for any entries in qobj but not qjob
-        for counter in range(len(self.qjobs), len(self.qiskit_circuit_batches)):
+        for counter in range(len(self.qjobs), len(self.qiskit_isa_circuit_batches)):
             print(f"Batch {counter + 1}: NOT SUBMITTED")
     
     def retrieve_results(self):
@@ -291,8 +298,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         if not self.disable_checkpointing:
             self.data.write(self.checkpoint_path, edesign_already_written=True)
 
-    def submit(self, ibmq_backend, start=None, stop=None, ibm_opt_level=0,
-               ignore_job_limit=True, wait_time=5, max_attempts=10):
+    def submit(self, ibmq_backend, start=None, stop=None, ignore_job_limit=True, wait_time=5, max_attempts=10):
         """
         Submits the jobs to IBM Q, that implements the experiment specified by the ExperimentDesign
         used to create this object.
@@ -313,10 +319,6 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             Batch index to stop submission (exclusive). Defaults to None,
             which will submit as many jobs as possible given the backend's
             maximum job limit.
-        
-        ibm_opt_level: int, optional
-            An optimization level to give to Qiskit's `generate_preset_pass_manager`.
-            Defaults to 0, which is no optimization.
 
         ignore_job_limit: bool, optional
             If True, then stop is set to submit all remaining jobs. This is set
@@ -337,7 +339,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         assert _qiskit is not None, "Could not import qiskit, needed for submit()"
         assert _Sampler is not None, "Could not import qiskit-ibm-runtime, needed for submit()"
 
-        assert len(self.qiskit_circuit_batches) == len(self.pygsti_circuit_batches), \
+        assert len(self.qiskit_isa_circuit_batches) == len(self.pygsti_circuit_batches), \
             "Transpilation missing! Either run .transpile() first, or if loading from file, " + \
             "use the regen_qiskit_circs=True option in from_dir()."
         
@@ -353,7 +355,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         if start is None:
             start = len(self.qjobs)
 
-        stop = len(self.qiskit_circuit_batches) if stop is None else min(stop, len(self.qiskit_circuit_batches))
+        stop = len(self.qiskit_isa_circuit_batches) if stop is None else min(stop, len(self.qiskit_isa_circuit_batches))
         if not ignore_job_limit:
             job_limit = ibmq_backend.job_limit()
             allowed_jobs = job_limit.maximum_jobs - job_limit.active_jobs
@@ -362,11 +364,10 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
             stop = min(start + allowed_jobs, stop)
         
-        pm = _pass_manager(backend=ibmq_backend, optimization_level=ibm_opt_level)
         ibmq_session = _Session(backend = ibmq_backend)
         sampler = _Sampler(session=ibmq_session)
         
-        for batch_idx, batch in enumerate(self.qiskit_circuit_batches):
+        for batch_idx, batch in enumerate(self.qiskit_isa_circuit_batches):
             if batch_idx < start or batch_idx >= stop:
                 continue
 
@@ -383,10 +384,6 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                         # We can't get the properties
                         # Likely this is a fake backend/simulator, append empty submit data
                         self.submit_time_calibration_data.append({})
-                    
-                    # Run pass manager
-                    isa_circs = pm.run(batch)
-                    self.qiskit_isa_circuit_batches.append(isa_circs)
 
                     # Submit job
                     self.qjobs.append(sampler.run(batch, shots = self.num_shots))
@@ -394,8 +391,8 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                     status = self.qjobs[-1].status()
                     initializing = True
                     initializing_steps = 0
-                    while initializing:
-                        if status.name == 'INITIALIZING' or status.name == 'VALIDATING':
+                    while initializing and initializing_steps < max_attempts:
+                        if status in [_JobStatus.INITIALIZING, "INITIALIZING", _JobStatus.VALIDATING, "VALIDATING"]:
                             status = self.qjobs[-1].status()
                             print(f'  - {status} (query {initializing_steps})')
                             _time.sleep(wait_time)
@@ -407,17 +404,24 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                         job_id = self.qjobs[-1].job_id()
                         print(f'  - Job ID is {job_id}')
                         self.job_ids.append(job_id)
-                    except:
+                    except Exception:
+                        
                         print('  - Failed to get job_id.')
                         self.job_ids.append(None)
                     
                     try:
-                        print(f'  - Queue position is {self.qjobs[-1].queue_info().position}')
+                        print(f'  - Queue position is {self.qjobs[-1].queue_position()}')
                     except:
                         print(f'  - Failed to get queue position for batch {batch_idx + 1}')
+                        if isinstance(self.qjobs[-1], _RuntimeJobV2):
+                            print('    (because queue position not available in RuntimeJobV2)')
+                            metrics = self.qjobs[-1].metrics()
+                            start_time = _datetime.fromisoformat(metrics["estimated_start_time"])
+                            print(f'  - Estimated start time: {start_time.astimezone()} (local timezone)')
+                            
                     submit_status = True
 
-                except Exception as ex: # TODO: Revamp this
+                except Exception as ex:
                     template = "An exception of type {0} occurred. Arguments:\n{1!r}"
                     message = template.format(type(ex).__name__, ex.args)
                     print(message)
@@ -442,14 +446,50 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             if submit_status is False:
                 raise RuntimeError("Ran out of max attempts and job was still not submitted successfully")
 
-    def transpile(self):
+    def transpile(self, ibmq_backend, qiskit_pass_kwargs=None, qasm_convert_kwargs=None):
         """Transpile pyGSTi circuits into Qiskit circuits for submission to IBMQ.
+
+        Parameters
+        ----------
+        ibmq_backend:
+            IBM backend to use during Qiskit transpilation
+        
+        opt_level: int, optional
+            Optimization level for Qiskit `generate_preset_pass_manager`.
+        
+        qiskit_pass_kwargs: dict, optional
+            Additional kwargs to pass in to `generate_preset_pass_manager`.
+            If not defined, the default is {'seed_transpiler': self.seed, 'optimization_level': 0}
+            Note that "optimization_level" is a required argument to the pass manager.
+        
+        qasm_convert_kwargs: dict, optional
+            Additional kwargs to pass in to `Circuit.convert_to_openqasm`.
+            If not defined, the default is {'num_qubits': self.processor_spec.num_qubits,
+            'standard_gates_version': 'x-sx-rz'}
         """
         circuits = self.edesign.all_circuits_needing_data.copy()
         num_batches = int(_np.ceil(len(circuits) / self.circuits_per_batch))
+
+        if qiskit_pass_kwargs is None:
+            qiskit_pass_kwargs = {}
+        for k,v in qiskit_pass_kwargs.items():
+            if k in self.qiskit_pass_kwargs:
+                _warnings.warn(f"Overriding option {k} of qiskit_pass_kwargs")
+            self.qiskit_pass_kwargs[k] = v
+        self.qiskit_pass_kwargs['seed_transpiler'] = self.qiskit_pass_kwargs.get('seed_transpiler', self.seed)
+        self.qiskit_pass_kwargs['optimization_level'] = self.qiskit_pass_kwargs.get('optimization_level', 0)
         
+        if qasm_convert_kwargs is None:
+            qasm_convert_kwargs = {}
+        for k,v in qasm_convert_kwargs.items():
+            if k in self.qasm_convert_kwargs:
+                _warnings.warn(f"Overriding option {k} of qasm_convert_kwargs")
+            self.qasm_convert_kwargs[k] = v
+        self.qasm_convert_kwargs['num_qubits'] = self.qasm_convert_kwargs.get('num_qubits', self.processor_spec.num_qubits)
+        self.qasm_convert_kwargs['standard_gates_version'] = self.qasm_convert_kwargs.get('standard_gates_version', 'x-sx-rz')
+
         if not len(self.pygsti_circuit_batches):
-            rand_state = _np.random.RandomState(self.seed)
+            rand_state = _np.random.RandomState(self.seed) # TODO: Should this be a different seed as transpiler?
 
             if self.randomized_order:
                 if self.remove_duplicates:
@@ -466,23 +506,23 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             if not self.disable_checkpointing:
                 self._write_checkpoint()
 
-        if len(self.qiskit_circuit_batches):
-            print(f'Already completed transpilation of {len(self.qiskit_circuit_batches)}/{num_batches} circuit batches')
+        if len(self.qiskit_isa_circuit_batches):
+            print(f'Already completed transpilation of {len(self.qiskit_isa_circuit_batches)}/{num_batches} circuit batches')
 
-        for batch_idx in range(len(self.qiskit_circuit_batches), num_batches):
+        pm = _pass_manager(backend=ibmq_backend, **self.qiskit_pass_kwargs)
+
+        for batch_idx in range(len(self.qiskit_isa_circuit_batches), num_batches):
             print(f"Transpiling circuit batch {batch_idx+1}/{num_batches}")
             batch = []
-            batch_strs = []
             for circ in self.pygsti_circuit_batches[batch_idx]:
-                pygsti_openqasm_circ = circ.convert_to_openqasm(num_qubits=self.processor_spec.num_qubits,
-                                                                standard_gates_version='x-sx-rz')
-                batch_strs.append(pygsti_openqasm_circ)
-
+                # TODO: Replace this with direct to qiskit
+                pygsti_openqasm_circ = circ.convert_to_openqasm(**self.qasm_convert_kwargs)
                 qiskit_qc = _qiskit.QuantumCircuit.from_qasm_str(pygsti_openqasm_circ)
                 batch.append(qiskit_qc)
             
-            self.qasm_circuit_batches.append(batch_strs)
-            self.qiskit_circuit_batches.append(batch)
+            # Run pass manager on batch
+            isa_circs = pm.run(batch)
+            self.qiskit_isa_circuit_batches.append(isa_circs)
             
             if not self.disable_checkpointing:
                 self._write_checkpoint()
