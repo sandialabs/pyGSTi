@@ -198,16 +198,15 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         self.auxfile_types['data'] = 'reset'
         # self.processor_spec is handled by _HasPSpec base class
         self.auxfile_types['pygsti_circuit_batches'] = 'list:text-circuit-list'
-        self.auxfile_types['qiskit_isa_circuit_batches'] = 'none'
+        self.auxfile_types['qiskit_isa_circuit_batches'] = 'none' # TODO: Fix this
         self.auxfile_types['qjobs'] = 'none'
         self.auxfile_types['job_ids'] = 'json'
+        self.auxfile_types['batch_results'] = 'pickle' # TODO: Fix this
         if _json_util is not None:
             self.auxfile_types['submit_time_calibration_data'] = 'list:json'
-            self.auxfile_types['batch_results'] = 'list:json'
         else:
             # Fall back to pickles if we do not have bson to deal with datetime.datetime
             self.auxfile_types['submit_time_calibration_data'] = 'pickle'
-            self.auxfile_types['batch_results'] = 'pickle'
 
         if not self.disable_checkpointing:
             chkpath = _pathlib.Path(self.checkpoint_path)
@@ -275,7 +274,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             return output_dict
 
         if len(self.batch_results):
-            print(f'Already retrieved results of {len(self.batch_results)}/{len(self.qiskit_circuit_batches)} circuit batches')
+            print(f'Already retrieved results of {len(self.batch_results)}/{len(self.qiskit_isa_circuit_batches)} circuit batches')
 
         #get results from backend jobs and add to dict
         ds = _data.DataSet()
@@ -283,14 +282,14 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             qjob = self.qjobs[exp_idx]
             print(f"Querying IBMQ for results objects for batch {exp_idx + 1}...")
             batch_result = qjob.result()
-            self.batch_results.append(batch_result.to_dict())
+            self.batch_results.append(batch_result)
 
             if not self.disable_checkpointing:
                 self._write_checkpoint()
 
             for i, circ in enumerate(self.pygsti_circuit_batches[exp_idx]):
                 ordered_target_indices = [self.processor_spec.qubit_labels.index(q) for q in circ.line_labels]
-                counts_data = partial_trace(ordered_target_indices, reverse_dict_key_bits(batch_result[i].data.meas.get_counts()))
+                counts_data = partial_trace(ordered_target_indices, reverse_dict_key_bits(batch_result[i].data.cr.get_counts()))
                 ds.add_count_dict(circ, counts_data)
 
         self.data = _ProtocolData(self.edesign, ds)
