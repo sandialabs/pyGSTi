@@ -14,6 +14,8 @@ import functools as _functools
 import itertools as _itertools
 
 import numpy as _np
+import scipy.linalg as _spl
+import scipy.optimize as _spo
 
 from .complementeffect import ComplementPOVMEffect
 from .composedeffect import ComposedPOVMEffect
@@ -334,6 +336,8 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
         The converted POVM vector, usually a distinct
         object from the object passed as input.
     """
+
+    ##TEST CONVERSION BETWEEN LINBLAD TYPES
     to_types = to_type if isinstance(to_type, (tuple, list)) else (to_type,)  # HACK to support multiple to_type values
     error_msgs = {}
 
@@ -375,14 +379,49 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
                                           for lbl, vec in povm.items()]
                         else:
                             raise RuntimeError('Evotype must be compatible with Hilbert ops to use pure effects')
-                    except Exception:  # try static mixed states next:
-                        base_items = [(lbl, convert_effect(vec, 'static', basis, idl.get(lbl, None), flatten_structure))
-                                      for lbl, vec in povm.items()]
+                    except RuntimeError:  # try static mixed states next:
+                        #if idl.get(lbl,None) is not None:
+                        base_items = []
+                        for lbl, vec in povm.items():
+                            ideal_effect = idl.get(lbl,None)
+                            if ideal_effect is not None:
+                                base_items.append((lbl, convert_effect(ideal_effect, 'static', basis, ideal_effect, flatten_structure)))
+                            else:
+                                base_items.append((lbl, convert_effect(vec, 'static', basis, idl.get(lbl, None), flatten_structure)))
                     base_povm = UnconstrainedPOVM(base_items, povm.evotype, povm.state_space)
 
                 proj_basis = 'PP' if povm.state_space.is_entirely_qubits else basis
                 errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, lndtype, proj_basis,
                                                                   basis, truncate=True, evotype=povm.evotype)
+            
+                #Need to set errorgen so exp(errorgen)|st> == |state>
+                base_dense_effects = []
+                for item in base_items:
+                    dense_effect = item[1].to_dense()
+                    base_dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+
+                dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
+
+                dense_effects = []
+                for effect in povm.values():
+                    dense_effect = effect.to_dense()
+                    dense_effects.append(dense_effect.reshape((1,len(dense_effect))))
+
+                dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
+                dense_povm = _np.concatenate(dense_effects, axis=0)
+                
+                def _objfn(v):
+                    errorgen.from_vector(v)
+                    return _np.linalg.norm(dense_povm - dense_ideal_povm @ _spl.expm(errorgen.to_dense()))
+                
+                #def callback(x): print("callbk: ",_np.linalg.norm(x),_objfn(x))  # REMOVE
+                soln = _spo.minimize(_objfn, _np.zeros(errorgen.num_params, 'd'), method="Nelder-Mead", options={},
+                                        tol=1e-12)  # , callback=callback)
+                #print("DEBUG: opt done: ",soln.success, soln.fun, soln.x)  # REMOVE
+                if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
+                    raise ValueError("Failed to find an errorgen such that exp(errorgen)|ideal> = |state>")
+                errorgen.from_vector(soln.x)
+                
                 EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
                 return ComposedPOVM(EffectiveExpErrorgen(errorgen), base_povm, mx_basis=basis)
 

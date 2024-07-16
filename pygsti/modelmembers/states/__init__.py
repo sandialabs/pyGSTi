@@ -266,8 +266,8 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                         errorgen.from_vector(v)
                         return _np.linalg.norm(_spl.expm(errorgen.to_dense()) @ dense_st - dense_state)
                     #def callback(x): print("callbk: ",_np.linalg.norm(x),_objfn(x))  # REMOVE
-                    soln = _spo.minimize(_objfn, _np.zeros(errorgen.num_params, 'd'), method="CG", options={},
-                                         tol=1e-8)  # , callback=callback)
+                    soln = _spo.minimize(_objfn, _np.zeros(errorgen.num_params, 'd'), method="Nelder-Mead", options={},
+                                         tol=1e-12)  # , callback=callback)
                     #print("DEBUG: opt done: ",soln.success, soln.fun, soln.x)  # REMOVE
                     if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
                         raise ValueError("Failed to find an errorgen such that exp(errorgen)|ideal> = |state>")
