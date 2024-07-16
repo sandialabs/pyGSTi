@@ -92,6 +92,7 @@ def _get_auxfile_ext(typ):
     elif typ == 'pickle': ext = '.pkl'
     elif typ == 'none': ext = '.NA'
     elif typ == 'reset': ext = '.NA'
+    elif typ == 'qpy': ext = '.qpy'
     else:
         #DEPRECATED formats! REMOVE LATER
         if typ == 'text-circuit-lists': ext = '.txt'
@@ -320,6 +321,14 @@ def _load_auxfile_member(root_dir, filenm, typ, metadata, quick_load):
         elif typ == 'pickle':
             with open(str(pth), 'rb') as f:
                 val = _pickle.load(f)
+        elif typ == 'qpy':
+            try:
+                import qiskit as _qiskit
+
+                with open(str(pth), 'rb') as f:
+                    val = _qiskit.qpy.load(f)
+            except Exception as e:
+                raise RuntimeError("QPY serialization format requested but failed") from e
         else:
             raise ValueError("Invalid aux-file type: %s" % typ)
 
@@ -475,6 +484,15 @@ def _write_auxfile_member(root_dir, filenm, typ, val):
         elif typ == 'pickle':
             with open(str(pth), 'wb') as f:
                 _pickle.dump(val, f)
+        elif typ == 'qpy':
+            try:
+                import qiskit as _qiskit
+
+                with open(str(pth), 'wb') as f:
+                    _qiskit.qpy.dump(val, f)
+            except Exception as e:
+                raise RuntimeError("QPY serialization format requested but failed") from e
+
         else:
             raise ValueError("Invalid aux-file type: %s" % typ)
 
