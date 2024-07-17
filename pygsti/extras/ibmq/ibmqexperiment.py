@@ -9,12 +9,15 @@
 #***************************************************************************************************
 
 from datetime import datetime as _datetime
+from functools import partial as _partial
 import json as _json
 import numpy as _np
 import os as _os
+from pathos import multiprocessing as _mp
 import pathlib as _pathlib
 import pickle as _pickle
 import time as _time
+import tqdm as _tqdm
 import warnings as _warnings
 
 # Try to load Qiskit
@@ -48,6 +51,19 @@ except ImportError:
 from pygsti import data as _data, io as _io
 from pygsti.protocols import ProtocolData as _ProtocolData, HasProcessorSpec as _HasPSpec
 from pygsti.protocols.protocol import _TreeNode
+
+
+# Needs to be defined first for multiprocessing reasons
+def _transpile_batch(circs, pass_manager, qasm_convert_kwargs):
+    batch = []
+    for circ in circs:
+        # TODO: Replace this with direct to qiskit
+        pygsti_openqasm_circ = circ.convert_to_openqasm(**qasm_convert_kwargs)
+        qiskit_qc = _qiskit.QuantumCircuit.from_qasm_str(pygsti_openqasm_circ)
+        batch.append(qiskit_qc)
+    
+    # Run pass manager on batch
+    return pass_manager.run(batch)
 
 
 class IBMQExperiment(_TreeNode, _HasPSpec):
@@ -432,7 +448,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             if submit_status is False:
                 raise RuntimeError("Ran out of max attempts and job was still not submitted successfully")
 
-    def transpile(self, ibmq_backend, qiskit_pass_kwargs=None, qasm_convert_kwargs=None):
+    def transpile(self, ibmq_backend, qiskit_pass_kwargs=None, qasm_convert_kwargs=None, num_workers=1):
         """Transpile pyGSTi circuits into Qiskit circuits for submission to IBMQ.
 
         Parameters
@@ -453,6 +469,9 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
             Additional kwargs to pass in to `Circuit.convert_to_openqasm`.
             If not defined, the default is {'num_qubits': self.processor_spec.num_qubits,
             'standard_gates_version': 'x-sx-rz'}
+        
+        num_workers: int, optional
+            Number of workers to use for parallel (by batch) transpilation
         """
         circuits = self.edesign.all_circuits_needing_data.copy()
         num_batches = int(_np.ceil(len(circuits) / self.circuits_per_batch))
@@ -491,22 +510,22 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
 
         pm = _pass_manager(backend=ibmq_backend, **qiskit_pass_kwargs)
 
-        # TODO: In parallel and with tqdm
-        for batch_idx in range(len(self.qiskit_isa_circuit_batches), num_batches):
-            print(f"Transpiling circuit batch {batch_idx+1}/{num_batches}")
-            batch = []
-            for circ in self.pygsti_circuit_batches[batch_idx]:
-                # TODO: Replace this with direct to qiskit
-                pygsti_openqasm_circ = circ.convert_to_openqasm(**qasm_convert_kwargs)
-                qiskit_qc = _qiskit.QuantumCircuit.from_qasm_str(pygsti_openqasm_circ)
-                batch.append(qiskit_qc)
-            
-            # Run pass manager on batch
-            isa_circs = pm.run(batch)
-            self.qiskit_isa_circuit_batches.append(isa_circs)
-            
-            if not self.disable_checkpointing:
-                self._write_checkpoint()
+        # Set up parallel tasks
+        tasks = [self.pygsti_circuit_batches[i] for i in range(len(self.qiskit_isa_circuit_batches), num_batches)]
+
+        # We want to use transpile_batch and it's the same pm/convert kwargs, so create a new function with partially applied kwargs
+        # This function now only takes circs as an argument (which are our task elements above)
+        task_fn = _partial(_transpile_batch, pass_manager=pm, qasm_convert_kwargs=qasm_convert_kwargs)
+
+        # Run in parallel (p.imap) with progress bars (tqdm)
+        with _mp.Pool(num_workers) as p:
+            isa_circuits = list(_tqdm.tqdm(p.imap(task_fn, tasks), total=len(tasks)))
+        
+        # Save all of our circuits
+        self.qiskit_isa_circuit_batches.extend(isa_circuits)
+
+        if not self.disable_checkpointing:
+            self._write_checkpoint()
 
     def write(self, dirname=None):
         """
@@ -566,3 +585,5 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         for i, jid in enumerate(self.job_ids):
             print(f"Loading job {i+1}/{len(self.job_ids)}...")
             self.qjobs.append(service.job(jid))
+
+
