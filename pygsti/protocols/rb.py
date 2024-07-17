@@ -1641,7 +1641,7 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
     the subset of RandomizedBenchmarking's arguments relevant for CRB.
     """
 
-    def __init__(self, defaultfit='full', asymptote='std', seed=(0.8, 0.95), 
+    def __init__(self, defaultfit='full', asymptote='std', rtype='EI', seed=(0.8, 0.95), 
                  bootstrap_samples=200, depths='all', square_mean_root=False, name=None):
         """
         Initialize an RB protocol for analyzing RB data.
@@ -1660,6 +1660,11 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
             value used when 'A' is fixed. If left as 'std', then 'A' defaults to 1/2^n if
             `datatype` is `success_probabilities` and to 1/4^n if `datatype` is
             `adjusted_success_probabilities`.
+
+        rtype : 'EI' or 'AGI', optional
+            The RB error rate definition convention. 'EI' results in RB error rates that are associated
+            with the entanglement infidelity, which is the error probability with stochastic Pauli errors.
+            'AGI' results in RB error rates that are associated with the average gate infidelity.
 
         seed : list, optional
             Seeds for the fit of B and p (A is seeded to the asymptote defined by `asympote`).
@@ -1680,7 +1685,7 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
         self.depths = depths
         self.bootstrap_samples = bootstrap_samples
         self.asymptote = asymptote
-        self.rtype = 'AGI'
+        self.rtype = rtype
         self.datatype = 'success_probabilities'
         self.defaultfit = defaultfit
         self.square_mean_root = square_mean_root #undocumented
@@ -1718,10 +1723,13 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
 
         nqubits = len(design.qubit_labels)
         #let the dimension depend on the value of rtype.
-        if self.rtype == 'AGI':
-            dim = 2**nqubits
+        dim = 2**nqubits
+        if self.rtype == 'EI':
+            dim_prefactor = (dim**2 -1)/(dim**2)
+        elif self.rtype == 'AGI':
+            dim_prefactor = (dim -1)/dim
         else:
-            raise ValueError('Only AGI type IRB numbers are currently implemented.')
+            raise ValueError('Only EI and AGI type IRB numbers are currently implemented.')
 
         irb_numbers = dict()
         irb_bounds = dict()
@@ -1729,10 +1737,15 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
         for fit_key in crb_results.fits.keys():
             p_crb = crb_results.fits[fit_key].estimates['p']
             p_icrb = icrb_results.fits[fit_key].estimates['p']
-            irb_numbers[fit_key] = ((dim-1)/dim)*(1-(p_icrb/p_crb))
+            irb_numbers[fit_key] = dim_prefactor*(1-(p_icrb/p_crb))
             #Magesan paper gives the bounds as the minimum of two quantities.
-            possible_bound_1 = ((dim-1)/dim) * (abs(p_crb - (p_icrb/p_crb)) + (1 - p_crb))
+            possible_bound_1 = dim_prefactor * (abs(p_crb - (p_icrb/p_crb)) + (1 - p_crb))
             possible_bound_2 = (2*(dim**2-1)*(1-p_crb))/(p_crb*dim**2) + (4*_np.sqrt(1-p_crb)*_np.sqrt(dim**2 - 1))/p_crb
+            #The value of the possible_bound_2 coming directly from the Magesan paper should be in units of AGI.
+            #So if we want EI use the standard dimensional conversion factor.
+            if self.rtype == 'EI':
+                possible_bound_2 = ((dim + 1)/dim)*possible_bound_2
+                
             irb_bounds[fit_key] = min(possible_bound_1, possible_bound_2)
         
         children = {'crb': _proto.ProtocolResultsDir(data['crb'], crb_results),
