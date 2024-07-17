@@ -10,7 +10,6 @@ import collections as _collections
 import itertools as _itertools
 import time as _time
 import warnings as _warnings
-import more_itertools as _mi
 from itertools import product, permutations
 from pygsti.baseobjs import basisconstructors
 import numpy as _np
@@ -44,6 +43,33 @@ def stochastic_error_generator(initial_state, indexed_pauli, identity):
     )
 
 
+# Pauli-correlation Error Generator
+def pauli_correlation_error_generator(
+    initial_state,
+    pauli_index_1,
+    pauli_index_2,
+):
+    return 2 * (
+        pauli_index_1 @ initial_state @ pauli_index_2
+        + pauli_index_2 @ initial_state @ pauli_index_1
+        - 0.5 * commute(commute(pauli_index_1, pauli_index_2), initial_state)
+    )
+
+
+# Anti-symmetric Error Generator
+def anti_symmetric_error_generator(initial_state, pauli_index_1, pauli_index_2):
+    return 2j * (
+        pauli_index_1 @ initial_state @ pauli_index_2
+        - pauli_index_2 @ initial_state @ pauli_index_1
+        + 0.5
+        * commute(
+            anti_commute(pauli_index_1, pauli_index_2),
+            initial_state,
+        )
+    )
+
+
+
 def coverage_edge_exists(error_gen_type, pauli_index, prep_string, meas_string):
     # print(f"{error_gen_type}")
     # print(f"{pauli_index}")
@@ -73,51 +99,136 @@ def alt_coverage_edge_exists(error_gen_type, pauli_index, prep_string, meas_stri
         )
         t = 0
         for string in prep_string_iterator:
-            h = hamiltonian_error_generator(
+            error_gen = hamiltonian_error_generator(
                 string.to_unitary_matrix(endian="little"),
                 pauli_index.to_unitary_matrix(endian="little"),
                 ident.to_unitary_matrix(endian="little"),
             )
             # want approx non-zero rather than strict
-            if _np.any(h):
-                h_string = stim.PauliString.from_unitary_matrix(h / 2)
-                second_matrix = meas_string * h_string
+            if _np.any(error_gen):
+                error_gen_string = stim.PauliString.from_unitary_matrix(error_gen / (_np.linalg.norm(error_gen)/2))
+                second_matrix = meas_string * error_gen_string
                 # what is the correct coefficient here?
                 # t += (1 / 2**num_qubits) * _np.trace(
                 t += _np.trace(second_matrix.to_unitary_matrix(endian="little"))
                 # print(t)
                 if _np.absolute(t) > 0.0001:
-                    print()
-                    print(
-                        f"prep string: {string}, other thing: {stim.PauliString.after(meas_string,h_string.to_tableau(), targets=[i for i in range(len(meas_string))])}, h_ string? {h_string}, pauli index: {pauli_index}, measure string: {meas_string}, coef: {t}"
-                    )
-                    print()
+                    # print()
+                    # print(
+                    #     f"prep string: {string}, other thing: {stim.PauliString.after(meas_string,error_gen_string.to_tableau(), targets=[i for i in range(len(meas_string))])}, h_ string? {error_gen_string}, pauli index: {pauli_index}, measure string: {meas_string}, coef: {t}"
+                    # )
+                    # print()
                     # quit()
                     return True
     elif error_gen_type == "s":
-        return False
-        s = stochastic_error_generator(
-            prep_string.to_unitary_matrix(endian="little"),
-            pauli_index.to_unitary_matrix(endian="little"),
-            ident.to_unitary_matrix(endian="little"),
+        num_qubits = len(prep_string)
+        stim_prep = str(prep_string).strip("+-")
+        prep_string_iterator = stim.PauliString.iter_all(
+            num_qubits=num_qubits, allowed_paulis=stim_prep
         )
-        if _np.any(s):
-            s_string = stim.PauliString.from_unitary_matrix(s / 2)
-            # if s_string == meas_string or s_string == -meas_string:
-            if stim.PauliString.commutes(s_string, meas_string):
-                return True
+        t = 0
+        for string in prep_string_iterator:
+            error_gen = stochastic_error_generator(
+                string.to_unitary_matrix(endian="little"),
+                pauli_index.to_unitary_matrix(endian="little"),
+                ident.to_unitary_matrix(endian="little"),
+            )
+            # want approx non-zero rather than strict
+            if _np.any(error_gen):
+                error_gen_string = stim.PauliString.from_unitary_matrix(error_gen / (_np.linalg.norm(error_gen)/2))
+                second_matrix = meas_string * error_gen_string
+                # what is the correct coefficient here?
+                # t += (1 / 2**num_qubits) * _np.trace(
+                t += _np.trace(second_matrix.to_unitary_matrix(endian="little"))
+                # print(t)
+                if _np.absolute(t) > 0.0001:
+                    # print()
+                    # print(
+                    #     f"prep string: {string}, other thing: {stim.PauliString.after(meas_string,error_gen_string.to_tableau(), targets=[i for i in range(len(meas_string))])}, h_ string? {error_gen_string}, pauli index: {pauli_index}, measure string: {meas_string}, coef: {t}"
+                    # )
+                    # print()
+                    # quit()
+                    return True
+    elif error_gen_type == "c":
+        pauli_index_1 = pauli_index[0]
+        pauli_index_2 = pauli_index[1]
+        num_qubits = len(prep_string)
+        stim_prep = str(prep_string).strip("+-")
+        prep_string_iterator = stim.PauliString.iter_all(
+            num_qubits=num_qubits, allowed_paulis=stim_prep
+        )
+        t = 0
+        for string in prep_string_iterator:
+            error_gen = pauli_correlation_error_generator(
+                string.to_unitary_matrix(endian="little"),
+                pauli_index_1.to_unitary_matrix(endian="little"),
+                pauli_index_2.to_unitary_matrix(endian="little"),
+            )
+            # want approx non-zero rather than strict
+            if _np.any(error_gen):
+                # print(error_gen)
+                # print(_np.linalg.norm(error_gen))
+                error_gen_string = stim.PauliString.from_unitary_matrix(error_gen / (_np.linalg.norm(error_gen)/2))
+                second_matrix = meas_string * error_gen_string
+                # what is the correct coefficient here?
+                # t += (1 / 2**num_qubits) * _np.trace(
+                t += _np.trace(second_matrix.to_unitary_matrix(endian="little"))
+                # print(t)
+                if _np.absolute(t) > 0.0001:
+                    # print()
+                    # print(
+                    #     f"prep string: {string}, other thing: {stim.PauliString.after(meas_string,error_gen_string.to_tableau(), targets=[i for i in range(len(meas_string))])}, h_ string? {error_gen_string}, pauli index: {pauli_index}, measure string: {meas_string}, coef: {t}"
+                    # )
+                    # print()
+                    # quit()
+                    return True
+                
+    elif error_gen_type == "a":
+        pauli_index_1 = pauli_index[0]
+        pauli_index_2 = pauli_index[1]
+        num_qubits = len(prep_string)
+        stim_prep = str(prep_string).strip("+-")
+        prep_string_iterator = stim.PauliString.iter_all(
+            num_qubits=num_qubits, allowed_paulis=stim_prep
+        )
+        t = 0
+        for string in prep_string_iterator:
+            error_gen = anti_symmetric_error_generator(
+                string.to_unitary_matrix(endian="little"),
+                pauli_index_1.to_unitary_matrix(endian="little"),
+                pauli_index_2.to_unitary_matrix(endian="little"),
+            )
+            # want approx non-zero rather than strict
+            if _np.any(error_gen):
+                # print(error_gen)
+                error_gen_string = stim.PauliString.from_unitary_matrix(error_gen / (_np.linalg.norm(error_gen)/2))
+                second_matrix = meas_string * error_gen_string
+                # what is the correct coefficient here?
+                # t += (1 / 2**num_qubits) * _np.trace(
+                t += _np.trace(second_matrix.to_unitary_matrix(endian="little"))
+                # print(t)
+                if _np.absolute(t) > 0.0001:
+                    # print()
+                    # print(
+                    #     f"prep string: {string}, other thing: {stim.PauliString.after(meas_string,error_gen_string.to_tableau(), targets=[i for i in range(len(meas_string))])}, h_ string? {error_gen_string}, pauli index: {pauli_index}, measure string: {meas_string}, coef: {t}"
+                    # )
+                    # print()
+                    # quit()
+                    return True
     return False
 
 
-num_qubits = 3
-max_weight = 2
+
+
+num_qubits = 2
+max_weight = 1
 
 HS_index_iterator = stim.PauliString.iter_all(
     num_qubits, min_weight=1, max_weight=max_weight
 )
 
 pauli_node_attributes = list([p for p in HS_index_iterator])
-#   + [-p for p in iterator_huzzah])
+ca_pauli_node_attributes = list(_itertools.combinations(pauli_node_attributes,2))
 
 measure_string_iterator = stim.PauliString.iter_all(num_qubits, min_weight=num_qubits)
 measure_string_attributes = list([p for p in measure_string_iterator])
@@ -146,15 +257,25 @@ for i, j in prep_meas_pairs:
         len(test_graph.nodes) + 1, prep_string=i, meas_string=j, bipartite=0
     )
 
-error_gen_classes = "h"
-# error_gen_classes = "hs"
+#error_gen_classes = "h"
+hs_error_gen_classes = "hs"
+ca_error_gen_classes = "ca"
 
-for j in error_gen_classes:
+for j in hs_error_gen_classes:
     for i in range(len(pauli_node_attributes)):
         test_graph.add_node(
             len(test_graph.nodes) + 1,
             error_gen_class=j,
             pauli_index=pauli_node_attributes[i],
+            bipartite=1,
+        )
+
+for j in ca_error_gen_classes:
+    for i in range(len(ca_pauli_node_attributes)):
+        test_graph.add_node(
+            len(test_graph.nodes) + 1,
+            error_gen_class=j,
+            pauli_index=ca_pauli_node_attributes[i],
             bipartite=1,
         )
 
@@ -226,13 +347,25 @@ for n in test_graph.nodes:
 
 
 # nx.draw(test_graph, nx.kamada_kawai_layout(test_graph))
-plt.figure(figsize=(11, 8.5))
-nx.draw_networkx_nodes(test_graph, pos, node_size=15)
-nx.draw_networkx_edges(test_graph, pos)
-nx.draw_networkx_labels(test_graph, pos, labels=labels, font_size=2)
+# plt.figure(figsize=(11, 8.5))
+# nx.draw_networkx_nodes(test_graph, pos, node_size=15)
+# nx.draw_networkx_edges(test_graph, pos)
+# nx.draw_networkx_labels(test_graph, pos, labels=labels, font_size=2)
+# plt.savefig("dum_graf.pdf")
+# quit()
+
+with open("two_qubit_weight_two_test.txt", "w") as f:
+    for k,v,d in test_graph.edges.data():
+        f.write("\n")
+        f.write("Experiment " + str(test_graph.nodes[k]["prep_string"]) + " / " + str(test_graph.nodes[k]["meas_string"]) + " is sensitive to the error generator " + str(test_graph.nodes[v].get("error_gen_class")).capitalize() + "[" + str(test_graph.nodes[v].get("pauli_index"))[1:] + "]")
+        f.write("\n")
+
+quit()
 
 
-plt.savefig("dum_graf.pdf")
+
+
+
 m = pe.ConcreteModel()
 m.covering_nodes = [
     n for n in test_graph.nodes if test_graph.nodes[n]["bipartite"] == 0
