@@ -1287,7 +1287,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
     """
 
     def __init__(self, datatype='success_probabilities', defaultfit='full', asymptote='std', rtype='EI',
-                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None):
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None):
         """
         Initialize an RB protocol for analyzing RB data.
 
@@ -1350,7 +1350,6 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
         self.rtype = rtype
         self.datatype = datatype
         self.defaultfit = defaultfit
-        self.square_mean_root = square_mean_root #undocumented
         if self.datatype == 'energies':
             self.energies = True
         else:
@@ -1409,10 +1408,7 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             adj_sps = []
             for depth in depths:
                 percircuitdata = circuitdata_per_depth[depth]
-                if self.square_mean_root:
-                    adj_sps.append(_np.nanmean(_np.sqrt(percircuitdata))**2)
-                else:
-                    adj_sps.append(_np.nanmean(percircuitdata))  # average [adjusted] success probabilities or energies
+                adj_sps.append(_np.nanmean(percircuitdata))  # average [adjusted] success probabilities or energies
 
             # Don't think this needs changed
             full_fit_results, fixed_asym_fit_results = _rbfit.std_least_squares_fit(
@@ -1642,7 +1638,7 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
     """
 
     def __init__(self, defaultfit='full', asymptote='std', rtype='EI', seed=(0.8, 0.95), 
-                 bootstrap_samples=200, depths='all', square_mean_root=False, name=None):
+                 bootstrap_samples=200, depths='all', name=None):
         """
         Initialize an RB protocol for analyzing RB data.
 
@@ -1688,7 +1684,6 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
         self.rtype = rtype
         self.datatype = 'success_probabilities'
         self.defaultfit = defaultfit
-        self.square_mean_root = square_mean_root #undocumented
 
     def run(self, data, memlimit=None, comm=None):
         """
@@ -1715,7 +1710,7 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
         #initialize a RandomizedBenchmarking protocol to use as a helper
         #for performing analysis on the two subexperiments.
         rb_protocol = RandomizedBenchmarking('success_probabilities', self.defaultfit, self.asymptote, self.rtype,
-                                             self.seed, self.bootstrap_samples, self.depths, self.square_mean_root, name=None)
+                                             self.seed, self.bootstrap_samples, self.depths, name=None)
 
         #run the RB protocol on both subdesigns.
         crb_results = rb_protocol.run(data['crb'])

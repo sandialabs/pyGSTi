@@ -376,14 +376,14 @@ class TestBiRBProtocol(BaseCase):
         
     def test_birb_protocol_ideal(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='energies', defaultfit='A-fixed', rtype='EI',
-                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
         
         result = proto.run(self.data)
         self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
         
     def test_birb_protocol_noisy(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='energies', defaultfit='A-fixed', rtype='EI',
-                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
         
         result = proto.run(self.data_noisy)
 
@@ -432,7 +432,7 @@ class TestCliffordRBProtocol(BaseCase):
         
     def test_cliffordrb_protocol_ideal(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
-                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
         
         result = proto.run(self.data)
 
@@ -440,7 +440,7 @@ class TestCliffordRBProtocol(BaseCase):
         
     def test_cliffordrb_protocol_noisy(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
-                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
         
         result = proto.run(self.data_noisy)
 
@@ -492,14 +492,14 @@ class TestDirectRBProtocol(BaseCase):
         
     def test_directrb_protocol_ideal(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
-                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
         
         result = proto.run(self.data)
         self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
         
     def test_directrb_protocol_noisy(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
-                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
         
         result = proto.run(self.data_noisy)
 
@@ -547,13 +547,13 @@ class TestMirrorRBProtocol(BaseCase):
         
     def test_mirrorrb_protocol_ideal(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='adjusted_success_probabilities', defaultfit='A-fixed', rtype='EI',
-                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
         
         result = proto.run(self.data)
         self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
         
     def test_mirrorrb_protocol_noisy(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='adjusted_success_probabilities', defaultfit='A-fixed', rtype='EI',
-                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None)
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None)
         
         result = proto.run(self.data_noisy)
