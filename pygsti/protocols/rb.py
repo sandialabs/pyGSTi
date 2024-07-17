@@ -1745,7 +1745,6 @@ class InterleavedRandomizedBenchmarking(_proto.Protocol):
             #So if we want EI use the standard dimensional conversion factor.
             if self.rtype == 'EI':
                 possible_bound_2 = ((dim + 1)/dim)*possible_bound_2
-                
             irb_bounds[fit_key] = min(possible_bound_1, possible_bound_2)
         
         children = {'crb': _proto.ProtocolResultsDir(data['crb'], crb_results),
