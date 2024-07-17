@@ -148,6 +148,9 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         except:
             pass
         
+        if ret.qiskit_isa_circuit_batches is None:
+            ret.qiskit_isa_circuit_batches = []
+        
         # Regenerate Qiskit RuntimeJobs
         ret.qjobs = []
         if regen_jobs:
@@ -199,7 +202,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         self.auxfile_types['qiskit_isa_circuit_batches'] = 'list:qpy'
         self.auxfile_types['qjobs'] = 'none'
         self.auxfile_types['job_ids'] = 'json'
-        self.auxfile_types['batch_results'] = 'pickle' # TODO: Fix this
+        self.auxfile_types['batch_results'] = 'none' # TODO: Fix this
         if _json_util is not None:
             self.auxfile_types['submit_time_calibration_data'] = 'list:json'
         else:
