@@ -1188,7 +1188,8 @@ class InterleavedRBDesign(_proto.CombinedExperimentDesign):
 
     seed : int, optional
         A seed to initialize the random number generator used for creating random clifford
-        circuits.
+        circuits. The first of the two subdesigns will use the specified seed directly,
+        while the second will use seed+1.
 
     verbosity : int, optional
         If > 0 the number of circuits generated so far is shown.
@@ -1211,7 +1212,7 @@ class InterleavedRBDesign(_proto.CombinedExperimentDesign):
         print('Constructing Interleaved CRB Subdesign:')
         icrb_subdesign = CliffordRBDesign(pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels, randomizeout,
                                               interleaved_circuit, citerations, compilerargs, exact_compilation_key,
-                                              descriptor + ' (Interleaved)', add_default_protocol, seed, verbosity, num_processes)
+                                              descriptor + ' (Interleaved)', add_default_protocol, seed+1, verbosity, num_processes)
 
         self._init_foundation(crb_subdesign, icrb_subdesign, circuits_per_depth, interleaved_circuit, randomizeout,
                               citerations, compilerargs, exact_compilation_key, interleave)
