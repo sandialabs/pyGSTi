@@ -94,9 +94,12 @@ def alt_coverage_edge_exists(error_gen_type, pauli_index, prep_string, meas_stri
     if error_gen_type == "h":
         num_qubits = len(prep_string)
         stim_prep = str(prep_string).strip("+-")
-        prep_string_iterator = stim.PauliString.iter_all(
+        
+        prep_string_iterator_extended = stim.PauliString.iter_all(
             num_qubits=num_qubits, allowed_paulis=stim_prep
         )
+
+        prep_string_iterator = [pstring for pstring in prep_string_iterator_extended if (set(pstring.pauli_indices("X")).issubset(prep_string.pauli_indices("X")) and set(pstring.pauli_indices("Y")).issubset(prep_string.pauli_indices("Y")) and set(pstring.pauli_indices("Z")).issubset(prep_string.pauli_indices("Z")))]
         t = 0
         for string in prep_string_iterator:
             error_gen = hamiltonian_error_generator(
@@ -105,27 +108,24 @@ def alt_coverage_edge_exists(error_gen_type, pauli_index, prep_string, meas_stri
                 ident.to_unitary_matrix(endian="little"),
             )
             # want approx non-zero rather than strict
-            if _np.any(error_gen):
-                error_gen_string = stim.PauliString.from_unitary_matrix(error_gen / (_np.linalg.norm(error_gen)/2))
-                second_matrix = meas_string * error_gen_string
-                # what is the correct coefficient here?
-                # t += (1 / 2**num_qubits) * _np.trace(
-                t += _np.trace(second_matrix.to_unitary_matrix(endian="little"))
-                # print(t)
-                if _np.absolute(t) > 0.0001:
-                    # print()
-                    # print(
-                    #     f"prep string: {string}, other thing: {stim.PauliString.after(meas_string,error_gen_string.to_tableau(), targets=[i for i in range(len(meas_string))])}, h_ string? {error_gen_string}, pauli index: {pauli_index}, measure string: {meas_string}, coef: {t}"
-                    # )
-                    # print()
-                    # quit()
-                    return True
+            # if _np.any(error_gen):
+            error_gen_string = stim.PauliString.from_unitary_matrix(error_gen / (_np.linalg.norm(error_gen)/2))
+            second_matrix = meas_string * error_gen_string
+            # what is the correct coefficient here?
+            # t += (1 / 2**num_qubits) * _np.trace(
+            t += _np.trace(second_matrix.to_unitary_matrix(endian="little"))
+            # print(t)
+        if _np.absolute(t) > 0.0001:
+            return True
     elif error_gen_type == "s":
         num_qubits = len(prep_string)
         stim_prep = str(prep_string).strip("+-")
-        prep_string_iterator = stim.PauliString.iter_all(
+        prep_string_iterator_extended = stim.PauliString.iter_all(
             num_qubits=num_qubits, allowed_paulis=stim_prep
         )
+
+        prep_string_iterator = [pstring for pstring in prep_string_iterator_extended if (set(pstring.pauli_indices("X")).issubset(prep_string.pauli_indices("X")) and set(pstring.pauli_indices("Y")).issubset(prep_string.pauli_indices("Y")) and set(pstring.pauli_indices("Z")).issubset(prep_string.pauli_indices("Z")))]
+
         t = 0
         for string in prep_string_iterator:
             error_gen = stochastic_error_generator(
@@ -141,22 +141,19 @@ def alt_coverage_edge_exists(error_gen_type, pauli_index, prep_string, meas_stri
                 # t += (1 / 2**num_qubits) * _np.trace(
                 t += _np.trace(second_matrix.to_unitary_matrix(endian="little"))
                 # print(t)
-                if _np.absolute(t) > 0.0001:
-                    # print()
-                    # print(
-                    #     f"prep string: {string}, other thing: {stim.PauliString.after(meas_string,error_gen_string.to_tableau(), targets=[i for i in range(len(meas_string))])}, h_ string? {error_gen_string}, pauli index: {pauli_index}, measure string: {meas_string}, coef: {t}"
-                    # )
-                    # print()
-                    # quit()
-                    return True
+        if _np.absolute(t) > 0.0001:
+            return True
     elif error_gen_type == "c":
         pauli_index_1 = pauli_index[0]
         pauli_index_2 = pauli_index[1]
         num_qubits = len(prep_string)
         stim_prep = str(prep_string).strip("+-")
-        prep_string_iterator = stim.PauliString.iter_all(
+        prep_string_iterator_extended = stim.PauliString.iter_all(
             num_qubits=num_qubits, allowed_paulis=stim_prep
         )
+
+        prep_string_iterator = [pstring for pstring in prep_string_iterator_extended if (set(pstring.pauli_indices("X")).issubset(prep_string.pauli_indices("X")) and set(pstring.pauli_indices("Y")).issubset(prep_string.pauli_indices("Y")) and set(pstring.pauli_indices("Z")).issubset(prep_string.pauli_indices("Z")))]
+        
         t = 0
         for string in prep_string_iterator:
             error_gen = pauli_correlation_error_generator(
@@ -174,23 +171,26 @@ def alt_coverage_edge_exists(error_gen_type, pauli_index, prep_string, meas_stri
                 # t += (1 / 2**num_qubits) * _np.trace(
                 t += _np.trace(second_matrix.to_unitary_matrix(endian="little"))
                 # print(t)
-                if _np.absolute(t) > 0.0001:
-                    # print()
-                    # print(
-                    #     f"prep string: {string}, other thing: {stim.PauliString.after(meas_string,error_gen_string.to_tableau(), targets=[i for i in range(len(meas_string))])}, h_ string? {error_gen_string}, pauli index: {pauli_index}, measure string: {meas_string}, coef: {t}"
-                    # )
-                    # print()
-                    # quit()
-                    return True
+        if _np.absolute(t) > 0.0001:
+            # print()
+            # print(
+            #     f"prep string: {string}, other thing: {stim.PauliString.after(meas_string,error_gen_string.to_tableau(), targets=[i for i in range(len(meas_string))])}, h_ string? {error_gen_string}, pauli index: {pauli_index}, measure string: {meas_string}, coef: {t}"
+            # )
+            # print()
+            # quit()
+            return True
                 
     elif error_gen_type == "a":
         pauli_index_1 = pauli_index[0]
         pauli_index_2 = pauli_index[1]
         num_qubits = len(prep_string)
         stim_prep = str(prep_string).strip("+-")
-        prep_string_iterator = stim.PauliString.iter_all(
+        prep_string_iterator_extended = stim.PauliString.iter_all(
             num_qubits=num_qubits, allowed_paulis=stim_prep
         )
+
+        prep_string_iterator = [pstring for pstring in prep_string_iterator_extended if (set(pstring.pauli_indices("X")).issubset(prep_string.pauli_indices("X")) and set(pstring.pauli_indices("Y")).issubset(prep_string.pauli_indices("Y")) and set(pstring.pauli_indices("Z")).issubset(prep_string.pauli_indices("Z")))]
+        
         t = 0
         for string in prep_string_iterator:
             error_gen = anti_symmetric_error_generator(
@@ -207,14 +207,14 @@ def alt_coverage_edge_exists(error_gen_type, pauli_index, prep_string, meas_stri
                 # t += (1 / 2**num_qubits) * _np.trace(
                 t += _np.trace(second_matrix.to_unitary_matrix(endian="little"))
                 # print(t)
-                if _np.absolute(t) > 0.0001:
-                    # print()
-                    # print(
-                    #     f"prep string: {string}, other thing: {stim.PauliString.after(meas_string,error_gen_string.to_tableau(), targets=[i for i in range(len(meas_string))])}, h_ string? {error_gen_string}, pauli index: {pauli_index}, measure string: {meas_string}, coef: {t}"
-                    # )
-                    # print()
-                    # quit()
-                    return True
+        if _np.absolute(t) > 0.0001:
+            # print()
+            # print(
+            #     f"prep string: {string}, other thing: {stim.PauliString.after(meas_string,error_gen_string.to_tableau(), targets=[i for i in range(len(meas_string))])}, h_ string? {error_gen_string}, pauli index: {pauli_index}, measure string: {meas_string}, coef: {t}"
+            # )
+            # print()
+            # quit()
+            return True
     return False
 
 
@@ -239,16 +239,7 @@ prep_meas_pairs = list(product(prep_string_attributes, measure_string_attributes
 # print(prep_meas_pairs)
 
 ident = stim.PauliString(num_qubits)
-# prep = prep_meas_pairs[0][0]
-# index = pauli_node_attributes[1]
-# meas = prep_meas_pairs[0][1]
-# print(ident, prep, meas, index)
-# h = hamiltonian_error_generator(prep.to_unitary_matrix(endian="little"), index.to_unitary_matrix(endian="little"), ident.to_unitary_matrix(endian="little"))
-# print(h)
-# print(stim.PauliString.from_unitary_matrix(h/2))
-# m = meas.to_unitary_matrix(endian="little")
-# print(commute(m,h))
-# quit()
+
 
 test_graph = nx.Graph()
 # test_graph.add_nodes_from(enumerate(pauli_node_attributes), pauli_string = pauli_node_attributes, bipartite=1)
@@ -354,7 +345,7 @@ for n in test_graph.nodes:
 # plt.savefig("dum_graf.pdf")
 # quit()
 
-with open("two_qubit_weight_two_test.txt", "w") as f:
+with open("two_qubit_weight_one_test.txt", "w") as f:
     for k,v,d in test_graph.edges.data():
         f.write("\n")
         f.write("Experiment " + str(test_graph.nodes[k]["prep_string"]) + " / " + str(test_graph.nodes[k]["meas_string"]) + " is sensitive to the error generator " + str(test_graph.nodes[v].get("error_gen_class")).capitalize() + "[" + str(test_graph.nodes[v].get("pauli_index"))[1:] + "]")
