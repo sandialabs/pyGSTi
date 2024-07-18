@@ -3734,7 +3734,8 @@ class Circuit(object):
             layer = self.layer(j)
             stim_layer=stim.Tableau(qubits)
             for sub_lbl in layer:
-                temp = gate_name_conversions[sub_lbl.name]    
+                temp = gate_name_conversions[sub_lbl.name]
+                   
                 stim_layer.append(temp,sub_lbl.qubits)
             stim_layers.append(stim_layer)
         return stim_layers

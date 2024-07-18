@@ -88,6 +88,7 @@ class localstimerrorgen(ElementaryErrorgenLabel):
     functions defaults to pauli product if not specified
     '''
     def toWeightedErrorBasisMatrix(self,weight=1.0,matrix_basis='pp'):
+        basis_labels=self.labels_to_strings()
         PauliDict={
             'I' : array([[1.0,0.0],[0.0,1.0]]),
             'X' : array([[0.0j, 1.0+0.0j], [1.0+0.0j, 0.0j]]),
@@ -95,7 +96,7 @@ class localstimerrorgen(ElementaryErrorgenLabel):
             'Z' : array([[1.0, 0.0j], [0.0j, -1.0]])
         }
         paulis=[]
-        for paulistring in self.basis_element_labels:
+        for paulistring in basis_labels:
             for idx,pauli in enumerate(paulistring):
                 if idx == 0:
                     pauliMat = PauliDict[pauli]
