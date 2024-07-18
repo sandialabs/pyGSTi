@@ -12,13 +12,14 @@ Defines the ParityCheckInst class
 
 import collections as _collections
 import numpy as _np
-from pygsti import unitary_to_pauligate
 from pygsti.modelmembers import modelmember as _mm
 from pygsti.modelmembers import operations as _op
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.report import reportables as _rp
+from pygsti.tools import optools as _ot
+
 
 class ParityCheckInst(_mm.ModelMember, _collections.OrderedDict):
     """
@@ -54,7 +55,7 @@ class ParityCheckInst(_mm.ModelMember, _collections.OrderedDict):
         #Calculate some necessary matrices to define the isometries below 
         zero = 1/_np.sqrt(2) * _np.array([[1],[0],[0],[1]])
         one = 1/_np.sqrt(2) * _np.array([[1],[0],[0],[-1]])
-        CNOT = unitary_to_pauligate(_np.array([[1,0,0,0], [0,1,0,0],[0,0,0,1],[0,0,1,0]]))
+        CNOT = _ot.unitary_to_pauligate(_np.array([[1,0,0,0], [0,1,0,0],[0,0,0,1],[0,0,1,0]]))
         
         dim = 16
         self.aux_GATES = _np.kron(CNOT, _np.identity(4)) @ _np.kron(_np.identity(4), CNOT) @ _np.kron(CNOT, _np.identity(4))
@@ -215,7 +216,7 @@ class ParityCheckInst(_mm.ModelMember, _collections.OrderedDict):
         self.dirty = True
     
     def __str__(self):
-            s = f'ParityCheckInstrument representing a parity check with elements:\n'
+            s = f'ParityCheckInstrument representing a two-qubit parity check with elements:\n'
             for lbl, element in self.items():
                 s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(element.to_dense(), width=4, prec=3))
             return s
