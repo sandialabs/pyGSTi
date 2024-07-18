@@ -456,10 +456,6 @@ class PeriodicMirrorCircuitDesign(BenchmarkingDesign):
                                                                   self.descriptor)
 
 
-
-
-
-
 class SummaryStatistics(_proto.Protocol):
     """
     A protocol that can construct "summary" quantities from raw data.

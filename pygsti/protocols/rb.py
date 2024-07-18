@@ -1212,7 +1212,8 @@ class InterleavedRBDesign(_proto.CombinedExperimentDesign):
         print('Constructing Interleaved CRB Subdesign:')
         icrb_subdesign = CliffordRBDesign(pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels, randomizeout,
                                               interleaved_circuit, citerations, compilerargs, exact_compilation_key,
-                                              descriptor + ' (Interleaved)', add_default_protocol, seed+1, verbosity, num_processes)
+                                              descriptor + ' (Interleaved)', add_default_protocol, seed+1 if seed is not None else None, 
+                                              verbosity, num_processes)
 
         self._init_foundation(crb_subdesign, icrb_subdesign, circuits_per_depth, interleaved_circuit, randomizeout,
                               citerations, compilerargs, exact_compilation_key, interleave)
