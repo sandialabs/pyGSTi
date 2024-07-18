@@ -396,13 +396,15 @@ def standard_gatenames_stim_conversions():
     'Gxmpi2': stim.Tableau.from_named_gate('SQRT_X_DAG'),
     'Gympi2': stim.Tableau.from_named_gate('SQRT_Y_DAG'),
     'Gzmpi2': stim.Tableau.from_named_gate('SQRT_Z_DAG'),
-    'Gs'    : stim.Tableau.from_named_gate('S'),
+    'Gp'    : stim.Tableau.from_named_gate('S'),
     'Gsm'   : stim.Tableau.from_named_gate('S_DAG'),
     'Gh'    : stim.Tableau.from_named_gate('H'),
     'Gxx'   : stim.Tableau.from_named_gate('SQRT_XX'),
     'Gzz'   : stim.Tableau.from_named_gate('SQRT_ZZ'),
     'Gcnot' : stim.Tableau.from_named_gate('CNOT'),
-    'Gswap' : stim.Tableau.from_named_gate('SWAP')
+    'Gswap' : stim.Tableau.from_named_gate('SWAP'),
+    'Gcz'   : stim.Tableau.from_named_gate('CZ'),
+    'Gcphase' : stim.Tableau.from_named_gate('CZ')
     }
     return pyGSTi_to_stim_GateDict
 

@@ -44,12 +44,14 @@ def ErrorPropagatorAnalytic(circ,errorModel,ErrorLayerDef=False,startingErrors=N
     if not startingErrors is None:
         errorLayers.insert(0,startingErrors)
     
+
     fully_propagated_layers=[]
     for (idx,layer) in enumerate(errorLayers):
         new_error_dict=dict()
         if idx <len(errorLayers)-1:
 
-            for error in layer:    
+            for error in layer:
+                    
                 propagated_error_gen=error.propagate_error_gen_tableau(propagation_layers[idx],1.)
                 new_error_dict[error]=propagated_error_gen   
         else:
@@ -57,7 +59,7 @@ def ErrorPropagatorAnalytic(circ,errorModel,ErrorLayerDef=False,startingErrors=N
                 new_error_dict[error]=(error,1)
         fully_propagated_layers.append(new_error_dict)
 
-    #print(len(fully_propagated_layers))
+    
     return fully_propagated_layers
     
 def InverseErrorMap(errorMap):
@@ -111,7 +113,7 @@ def ErrorPropagator(circ,errorModel,multi_gate_dict=None,bch_order=1,bch_layerwi
     if not error_layer_def:
         errorLayers=buildErrorlayers(circ,errorModel,len(circ.line_labels))
     else:
-        errorLayers=[[[_copy.deepcopy(eg) for eg in errorModel]] for i in range(circ.depth)]
+        errorLayers=[[[_copy.deepcopy(eg) for eg in errorModel] for i in range(circ.depth)]]
 
     num_error_layers=len(errorLayers)
     
@@ -256,7 +258,7 @@ def error_stitcher(first_error,second_error):
     link_dict=second_error.pop(0)
     new_errors=[]
     for layer in first_error:
-        #print(len(layer))
+        
         new_layer=dict()
         for key in layer:
             if layer[key][0] in link_dict:
