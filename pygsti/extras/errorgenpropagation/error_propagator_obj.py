@@ -96,7 +96,7 @@ class error_propagator:
             
             for sub_lbl in layer:
                 existant_errors=[]
-                p1='I'*len(self.circ.qubits)
+                p1='I'*len(self.circ.line_labels)
                 for errs in Gate_Err_Dict[sub_lbl.name]: #for an error in the accompanying error dictionary 
                     errType=errs[0]
                     paulis=[]
@@ -107,9 +107,9 @@ class error_propagator:
                     
                     paulis.append(stim.PauliString(p1))
                     existant_errors.append(localstimerrorgen(errType,paulis))
-
-            for key in self.__prop_dict[layer_no]:
-                if not self.__prop_dict[layer_no][key][0] in existant_errors:
+            key_list=list(self.__prop_dict[layer_no].keys())
+            for key in key_list:
+                if not key in existant_errors:
                     self.__prop_dict[layer_no].pop(key,None)
                 
                     
