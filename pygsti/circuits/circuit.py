@@ -4329,7 +4329,7 @@ class Circuit(object):
                     if q not in qubits_used:
                         # Delay 0 works because of the barrier
                         # In OpenQASM3, this should probably be a stretch instead
-                        #openqasm += 'delay(0)' + ' q[' + str(qubit_conversion[q]) + '];\n'
+                        openqasm += 'delay(0)' + ' q[' + str(qubit_conversion[q]) + '];\n'
                         pass
 
             # Add in a barrier after every circuit layer if block_between_layers==True.
