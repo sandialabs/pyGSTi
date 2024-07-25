@@ -187,6 +187,15 @@ class Label(object):
             :class:`CircuitLabel` objects).
         """
         return (self,)  # most labels just expand to themselves
+    
+    @property
+    def is_simple(self):
+        """
+        Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.    
+        """
+
+        return self.IS_SIMPLE
+
 
 
 class LabelTup(Label, tuple):
@@ -200,7 +209,7 @@ class LabelTup(Label, tuple):
 
     #flag used in certain Circuit subroutines
     #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-    is_simple= True
+    IS_SIMPLE = True
 
     @classmethod
     def init(cls, name, state_space_labels):
@@ -436,7 +445,7 @@ class LabelTupWithTime(Label, tuple):
 
     #flag used in certain Circuit subroutines
     #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-    is_simple= True
+    IS_SIMPLE = True
 
     @classmethod
     def init(cls, name, state_space_labels, time=0.0):
@@ -680,7 +689,7 @@ class LabelStr(Label, str):
 
     #flag used in certain Circuit subroutines
     #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-    is_simple= True
+    IS_SIMPLE = True
 
     @classmethod
     def init(cls, name, time=0.0):
@@ -853,7 +862,7 @@ class LabelTupTup(Label, tuple):
 
     #flag used in certain Circuit subroutines
     #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-    is_simple= False
+    IS_SIMPLE = False
 
     @classmethod
     def init(cls, tup_of_tups):
@@ -1108,7 +1117,7 @@ class LabelTupTupWithTime(Label, tuple):
 
     #flag used in certain Circuit subroutines
     #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-    is_simple= False
+    IS_SIMPLE = False
 
     @classmethod
     def init(cls, tup_of_tups, time=None):
@@ -1369,7 +1378,7 @@ class CircuitLabel(Label, tuple):
 
     #flag used in certain Circuit subroutines
     #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-    is_simple= True
+    IS_SIMPLE = True
 
     def __new__(cls, name, tup_of_layers, state_space_labels, reps=1, time=None):
         # Note: may need default args for all but 1st for pickling!
@@ -1641,7 +1650,7 @@ class LabelTupWithArgs(Label, tuple):
 
     #flag used in certain Circuit subroutines
     #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-    is_simple= True
+    IS_SIMPLE = True
 
     @classmethod
     def init(cls, name, state_space_labels, time=0.0, args=()):
@@ -1909,7 +1918,7 @@ class LabelTupTupWithArgs(Label, tuple):
 
     #flag used in certain Circuit subroutines
     #Whether this is a "simple" (opaque w/a true name, from a circuit perspective) label or not.
-    is_simple= False
+    IS_SIMPLE = False
 
     @classmethod
     def init(cls, tup_of_tups, time=None, args=()):

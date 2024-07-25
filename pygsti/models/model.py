@@ -664,17 +664,27 @@ class OpModel(Model):
             # we're confident this code always works.
             def clean_single_obj(obj, lbl):  # sync an object's to_vector result w/_paramvec
                 if obj.dirty:
-                    w = obj.to_vector()
+                    try:
+                        w = obj.to_vector()
+                    except RuntimeError as e:
+                        chk_message = 'ComplementPOVMEffect.to_vector() should never be called' 
+                        # ^ Defined in complementeffect.py::ComplementPOVMEffect::to_vector().
+                        if chk_message in str(e):
+                            return   # there's nothing to do in this call to clean_single_obj().
+                        else:
+                            raise e  # we don't know what went wrong.
                     chk_norm = _np.linalg.norm(ops_paramvec[obj.gpindices] - w)
                     #print(lbl, " is dirty! vec = ", w, "  chk_norm = ",chk_norm)
                     if (not _np.isfinite(chk_norm)) or chk_norm > TOL:
                         ops_paramvec[obj.gpindices] = w
                     obj.dirty = False
+                return
 
             def clean_obj(obj, lbl):  # recursive so works with objects that have sub-members
                 for i, subm in enumerate(obj.submembers()):
                     clean_obj(subm, _Label(lbl.name + ":%d" % i, lbl.sslbls))
                 clean_single_obj(obj, lbl)
+                return
 
             for lbl, obj in self._iter_parameterized_objs():
                 clean_obj(obj, lbl)

@@ -96,7 +96,7 @@ def _label_to_nested_lists_of_simple_labels(lbl, default_sslbls=None, always_ret
     """ Convert lbl into nested lists of *simple* labels """
     if not isinstance(lbl, _Label):  # if not a Label, make into a label,
         lbl = _Label(lbl)  # e.g. a string or list/tuple of labels, etc.
-    if lbl.is_simple:  # a *simple* label - the elements of our lists
+    if lbl.IS_SIMPLE:  # a *simple* label - the elements of our lists
         if lbl.sslbls is None and default_sslbls is not None:
             lbl = _Label(lbl.name, default_sslbls)
         return [lbl] if always_return_list else lbl
@@ -120,7 +120,7 @@ def _accumulate_explicit_sslbls(obj):
     """
     ret = set()
     if isinstance(obj, _Label):
-        if not obj.is_simple:
+        if not obj.IS_SIMPLE:
             for lbl in obj.components:
                 ret.update(_accumulate_explicit_sslbls(lbl))
         else:  # a simple label
@@ -1027,7 +1027,7 @@ class Circuit(object):
         if editable:
             if self._static:
                 #static and editable circuits have different conventions for _labels.
-                editable_labels =[[lbl] if lbl.is_simple else list(lbl.components) for lbl in self._labels]
+                editable_labels =[[lbl] if lbl.IS_SIMPLE else list(lbl.components) for lbl in self._labels]
                 return ret._copy_init(editable_labels, self._line_labels, editable, 
                                       self._name, self._str, self._occurrence_id, 
                                       self._compilable_layer_indices_tup)
@@ -1106,7 +1106,7 @@ class Circuit(object):
         """ Get the components of the `ilayer`-th layer as a list/tuple. """
         #(works for static and non-static Circuits)
         if self._static:
-            if self._labels[ilayer].is_simple: return [self._labels[ilayer]]
+            if self._labels[ilayer].IS_SIMPLE: return [self._labels[ilayer]]
             else: return self._labels[ilayer].components
         else:
             return self._labels[ilayer] if isinstance(self._labels[ilayer], list) \
@@ -2780,7 +2780,7 @@ class Circuit(object):
 
         def map_names(obj):  # obj is either a simple label or a list
             if isinstance(obj, _Label):
-                if obj.is_simple:  # *simple* label
+                if obj.IS_SIMPLE:  # *simple* label
                     new_name = mapper_func(obj.name)
                     newobj = _Label(new_name, obj.sslbls) \
                         if (new_name is not None) else obj
@@ -3419,7 +3419,7 @@ class Circuit(object):
         #TODO HERE -update from here down b/c of sub-circuit blocks
         if self._static:
             def size(lbl):  # obj a Label, perhaps compound
-                if lbl.is_simple:  # a simple label
+                if lbl.IS_SIMPLE:  # a simple label
                     return len(lbl.sslbls) if (lbl.sslbls is not None) else len(self._line_labels)
                 else:
                     return sum([size(sublbl) for sublbl in lbl.components])
@@ -3454,6 +3454,30 @@ class Circuit(object):
         """
         return self.num_nq_gates(2)
 
+    @property
+    def num_gates(self):
+        """
+        The number of gates in the circuit.
+
+        Returns
+        -------
+        int
+        """
+        if self._static:
+            def cnt(lbl):  # obj a Label, perhaps compound
+                if lbl.is_simple():  # a simple label
+                    return 1 if (lbl.sslbls is not None) else 0
+                else:
+                    return sum([cnt(sublbl) for sublbl in lbl.components])
+        else:
+            def cnt(obj):  # obj is either a simple label or a list
+                if isinstance(obj, _Label):  # all Labels are simple labels
+                    return 1 if (obj.sslbls is not None) else 0
+                else:
+                    return sum([cnt(sub) for sub in obj])
+
+        return sum([cnt(layer_lbl) for layer_lbl in self._labels])
+
     def num_nq_gates(self, nq):
         """
         The number of `nq`-qubit gates in the circuit.
@@ -3474,7 +3498,7 @@ class Circuit(object):
         """
         if self._static:
             def cnt(lbl):  # obj a Label, perhaps compound
-                if lbl.is_simple:  # a simple label
+                if lbl.IS_SIMPLE:  # a simple label
                     return 1 if (lbl.sslbls is not None) and (len(lbl.sslbls) == nq) else 0
                 else:
                     return sum([cnt(sublbl) for sublbl in lbl.components])
@@ -3502,7 +3526,7 @@ class Circuit(object):
         """
         if self._static:
             def cnt(lbl):  # obj a Label, perhaps compound
-                if lbl.is_simple:  # a simple label
+                if lbl.IS_SIMPLE:  # a simple label
                     return 1 if (lbl.sslbls is not None) and (len(lbl.sslbls) >= 2) else 0
                 else:
                     return sum([cnt(sublbl) for sublbl in lbl.components])
@@ -3525,7 +3549,7 @@ class Circuit(object):
             for layercomp in self._layer_components(ilayer):
                 if isinstance(layercomp, _Label):
                     comp_label = layercomp
-                    if layercomp.is_simple:
+                    if layercomp.IS_SIMPLE:
                         comp_sslbls = layercomp.sslbls
                     else:
                         #We can't intelligently flatten compound labels that occur within a layer-label yet...
@@ -4240,6 +4264,9 @@ class Circuit(object):
             # Include a delay instruction
             openqasm += 'opaque delay(t) q;\n\n'
 
+        # Add a template for ECR commands that we will replace/remove later
+        openqasm += "ECRPLACEHOLDER"
+
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
         # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))
         openqasm += 'creg cr[{0}];\n'.format(str(num_qubits + num_IMs))
@@ -4339,6 +4366,13 @@ class Circuit(object):
             # openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]), str(qubit_conversion[q]))
             openqasm += "measure q[{0}] -> cr[{1}];\n".format(str(qubit_conversion[q]),
                                                               str(num_IMs_used + qubit_conversion[q]))
+        
+        # Replace ECR placeholder
+        ecr_replace_str = ""
+        if 'ecr' in openqasm:
+            ecr_replace_str = "gate rzx(param0) q0,q1 { h q1; cx q0,q1; rz(param0) q1; cx q0,q1; h q1; }\n"
+            ecr_replace_str += "gate ecr q0,q1 { rzx(pi/4) q0,q1; x q0; rzx(-pi/4) q0,q1; }\n\n"
+        openqasm = openqasm.replace("ECRPLACEHOLDER", ecr_replace_str)
 
         return openqasm
     

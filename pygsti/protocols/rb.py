@@ -10,6 +10,7 @@ RB Protocol objects
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from collections import defaultdict
 import numpy as _np
 
 from pygsti.protocols import protocol as _proto
@@ -65,6 +66,10 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         the ideal output a circuit is randomized to a uniformly random bit-string. This setting is
         useful for, e.g., detecting leakage/loss/measurement-bias etc.
 
+    interleaved_circuit : Circuit, optional (default None)
+        Circuit to use in the constuction of an interleaved CRB experiment. When specified each
+        random clifford operation is interleaved with the specified circuit.
+
     citerations : int, optional
         Some of the Clifford compilation algorithms in pyGSTi (including the default algorithm) are
         randomized, and the lowest-cost circuit is chosen from all the circuit generated in the
@@ -111,7 +116,7 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
     """
 
     @classmethod
-    def from_existing_circuits(cls, circuits_and_idealouts_by_depth, qubit_labels=None,
+    def from_existing_circuits(cls, data_by_depth, qubit_labels=None,
                                randomizeout=False, citerations=20, compilerargs=(), interleaved_circuit=None,
                                descriptor='A Clifford RB experiment', add_default_protocol=False):
         """
@@ -123,10 +128,12 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
 
         Parameters
         ----------
-        circuits_and_idealouts_by_depth : dict
-            A dictionary whose keys are integer depths and whose values are lists of `(circuit, ideal_outcome)` 
-            2-tuples giving each RB circuit and its 
-            ideal (correct) outcome.
+        data_by_depth : dict
+            A dictionary whose keys are integer depths and whose values are lists of
+            `(circuit, ideal_outcome, num_native_gates)` tuples giving each RB circuit, its 
+            ideal (correct) outcome, and (optionally) the number of native gates in the compiled Cliffords.
+            If only a 2-tuple is passed, i.e. number of native gates is not included,
+            the :meth:`average_gates_per_clifford()` function will not work.
 
         qubit_labels : list, optional
             If not None, a list of the qubits that the RB circuits are to be sampled for. This should
@@ -183,22 +190,27 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         -------
         CliffordRBDesign
         """
-        depths = sorted(list(circuits_and_idealouts_by_depth.keys()))
-        circuit_lists = [[x[0] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
-        ideal_outs = [[x[1] for x in circuits_and_idealouts_by_depth[d]] for d in depths]
-        circuits_per_depth = [len(circuits_and_idealouts_by_depth[d]) for d in depths]
+        depths = sorted(list(data_by_depth.keys()))
+        circuit_lists = [[x[0] for x in data_by_depth[d]] for d in depths]
+        ideal_outs = [[x[1] for x in data_by_depth[d]] for d in depths]
+        try:
+            native_gate_counts = [[x[2] for x in data_by_depth[d]] for d in depths]
+        except IndexError:
+            native_gate_counts = None
+        circuits_per_depth = [len(data_by_depth[d]) for d in depths]
         self = cls.__new__(cls)
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                               randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
-                              interleaved_circuit)
+                              interleaved_circuit, native_gate_counts=native_gate_counts)
         return self
 
     def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels=None, randomizeout=False,
-                 interleaved_circuit=None, citerations=20, compilerargs=(), descriptor='A Clifford RB experiment',
-                 add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
+                 interleaved_circuit=None, citerations=20, compilerargs=(), exact_compilation_key=None,
+                 descriptor='A Clifford RB experiment', add_default_protocol=False, seed=None, verbosity=1, num_processes=1):
         if qubit_labels is None: qubit_labels = tuple(pspec.qubit_labels)
         circuit_lists = []
         ideal_outs = []
+        native_gate_counts = []
 
         if seed is None:
             self.seed = _np.random.randint(1, 1e6)  # Pick a random seed
@@ -214,26 +226,35 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
             args_list = [(pspec, clifford_compilations, l)] * circuits_per_depth
             kwargs_list = [dict(qubit_labels=qubit_labels, randomizeout=randomizeout, citerations=citerations,
                                 compilerargs=compilerargs, interleaved_circuit=interleaved_circuit,
-                                seed=lseed + i) for i in range(circuits_per_depth)]
+                                seed=lseed + i, return_native_gate_counts=True, exact_compilation_key=exact_compilation_key)
+                                for i in range(circuits_per_depth)]
             results = _tools.mptools.starmap_with_kwargs(_rc.create_clifford_rb_circuit, circuits_per_depth,
                                                          num_processes, args_list, kwargs_list)
 
             circuits_at_depth = []
             idealouts_at_depth = []
-            for c, iout in results:
+            native_gate_counts_at_depth = []
+            for c, iout, nng in results:
                 circuits_at_depth.append(c)
                 idealouts_at_depth.append((''.join(map(str, iout)),))
+                native_gate_counts_at_depth.append(nng)
 
             circuit_lists.append(circuits_at_depth)
             ideal_outs.append(idealouts_at_depth)
+            native_gate_counts.append(native_gate_counts_at_depth)
 
         self._init_foundation(depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                               randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
-                              interleaved_circuit)
+                              interleaved_circuit, native_gate_counts=native_gate_counts)
 
     def _init_foundation(self, depths, circuit_lists, ideal_outs, circuits_per_depth, qubit_labels,
                          randomizeout, citerations, compilerargs, descriptor, add_default_protocol,
-                         interleaved_circuit):
+                         interleaved_circuit, native_gate_counts=None, exact_compilation_key=None):
+        self.native_gate_count_lists = native_gate_counts
+        if self.native_gate_count_lists is not None:
+            # If we have native gate information, pair this with circuit data so that we serialize/truncate properly
+            self.paired_with_circuit_attrs = ["native_gate_count_lists"]
+
         super().__init__(depths, circuit_lists, ideal_outs, qubit_labels, remove_duplicates=False)
         self.circuits_per_depth = circuits_per_depth
         self.randomizeout = randomizeout
@@ -241,12 +262,102 @@ class CliffordRBDesign(_vb.BenchmarkingDesign):
         self.compilerargs = compilerargs
         self.descriptor = descriptor
         self.interleaved_circuit = interleaved_circuit
+        self.exact_compilation_key = exact_compilation_key
         if add_default_protocol:
             if randomizeout:
                 defaultfit = 'A-fixed'
             else:
                 defaultfit = 'full'
             self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
+        
+        #set some auxfile information for interleaved_circuit
+        self.auxfile_types['interleaved_circuit'] = 'circuit-str-json'
+
+    def average_native_gates_per_clifford_for_circuit(self, list_idx, circ_idx):
+        """The average number of native gates per Clifford for a specific circuit
+
+        Parameters
+        ----------
+        list_idx: int
+            The index of the circuit list (for a given depth)
+
+        circ_idx: int
+            The index of the circuit within the circuit list
+        
+        Returns
+        -------
+        avg_gate_counts: dict
+            The average number of native gates, native 2Q gates, and native size
+            per Clifford as values with respective label keys
+        """
+        if self.native_gate_counts_lists is None:
+            raise ValueError("Native gate counts not available, cannot compute average gates per Clifford")
+        
+        num_clifford_gates = self.depths[list_idx] + 1
+        avg_gate_counts = {}
+        for key, native_gate_count in self.native_gate_count_lists[list_idx][circ_idx].items():
+            avg_gate_counts[key.replace('native', 'avg_native_per_clifford')] = native_gate_count / num_clifford_gates
+        
+        return avg_gate_counts
+
+    def average_native_gates_per_clifford_for_circuit_list(self, list_idx):
+        """The average number of gates per Clifford for a circuit list
+
+        This essentially gives the average number of native gates per Clifford
+        for a given depth (indexed by list index, not depth).
+
+        Parameters
+        ----------
+        list_idx: int
+            The index of the circuit list (for a given depth)
+
+        circ_idx: int
+            The index of the circuit within the circuit list
+        
+        Returns
+        -------
+        float
+            The average number of native gates per Clifford
+        """
+        if self.native_gate_count_lists is None:
+            raise ValueError("Native gate counts not available, cannot compute average gates per Clifford")
+        
+        gate_counts = defaultdict(int)
+        for native_gate_counts in self.native_gate_count_lists[list_idx]:
+            for k, v in native_gate_counts.items():
+                gate_counts[k] += v
+        
+        num_clifford_gates = len(self.native_gate_count_lists[list_idx]) * (self.depths[list_idx] + 1)
+        avg_gate_counts = {}
+        for key, total_native_gate_counts in gate_counts.items():
+            avg_gate_counts[key.replace('native', 'avg_native_per_clifford')] = total_native_gate_counts / num_clifford_gates
+        
+        return avg_gate_counts
+
+    def average_native_gates_per_clifford(self):
+        """The average number of native gates per Clifford for all circuits
+
+        Returns
+        -------
+        float
+            The average number of native gates per Clifford
+        """
+        if self.native_gate_count_lists is None:
+            raise ValueError("Number of native gates not available, cannot compute average gates per Clifford")
+        
+        gate_counts = defaultdict(int)
+        num_clifford_gates = 0
+        for list_idx in range(len(self.depths)):
+            for native_gate_counts in self.native_gate_count_lists[list_idx]:
+                for k, v in native_gate_counts.items():
+                    gate_counts[k] += v
+            num_clifford_gates += len(self.native_gate_count_lists[list_idx]) * (self.depths[list_idx] + 1)
+            
+        avg_gate_counts = {}
+        for key, total_native_gate_counts in gate_counts.items():
+            avg_gate_counts[key.replace('native', 'avg_native_per_clifford')] = total_native_gate_counts / num_clifford_gates
+
+        return avg_gate_counts
 
     def map_qubit_labels(self, mapper):
         """
@@ -970,6 +1081,9 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
     def _init_foundation(self, depths, circuit_lists, measurements, signs, circuits_per_depth, qubit_labels, layer_sampling,
                          sampler, samplerargs,  addlocal, lsargs, descriptor,
                          add_default_protocol):
+        # Pair these attributes with circuit data so that we serialize/truncate properly
+        self.paired_with_circuit_attrs = ["measurements", "signs"]
+
         super().__init__(depths, circuit_lists, signs, qubit_labels, remove_duplicates=False)
         self.measurements = measurements
         self.signs = signs
@@ -986,10 +1100,184 @@ class BinaryRBDesign(_vb.BenchmarkingDesign):
 
         defaultfit = 'A-fixed'
         self.add_default_protocol(RB(name='RB', defaultfit=defaultfit))
-            
-        self.auxfile_types['signs'] = 'json' # Makes sure that signs and measurements are saved seperately
-        self.auxfile_types['measurements'] = 'json'
 
+
+class InterleavedRBDesign(_proto.CombinedExperimentDesign):
+    """
+    Experiment design for interleaved randomized benchmarking (IRB).
+
+    IRB encapsulates a pair of "Clifford randomized benchmarking" (CRB) experiments.
+    One of these CRB designs is a 'standard' one, but the other interleaves some
+    clifford gate of interest between each random clifford operation. 
+    The circuits created by this function will respect the connectivity and gate-set of the device encoded by 
+    `pspec` (see the :class:`QubitProcessorSpec` object docstring for how to construct the relevant `pspec` 
+    for a device).
+
+    Parameters
+    ----------
+    pspec : QubitProcessorSpec
+       The QubitProcessorSpec for the device that the CRB experiment is being generated for, which defines the 
+       "native" gate-set and the connectivity of the device. The returned CRB circuits will be over the gates in 
+       `pspec`, and will respect the connectivity encoded by `pspec`.
+
+    clifford_compilations : dict
+        A dictionary with the potential keys `'absolute'` and `'paulieq'` and corresponding class:`CompilationRules` values. 
+        These compilation rules specify how to compile the "native" gates of `pspec` into Clifford gates.
+
+    depths : list of ints
+        The "CRB depths" of the circuit; a list of integers >= 0. The CRB length is the number of Cliffords in the 
+        circuit - 2 *before* each Clifford is compiled into the native gate-set.
+
+    circuits_per_depth : int
+        The number of (possibly) different CRB circuits sampled at each length.
+
+    interleaved_circuit : Circuit
+        Circuit to use in the constuction of the interleaved CRB experiment. This is the circuit
+        whose error rate is to be estimated by the IRB experiment.
+
+    qubit_labels : list, optional
+        If not None, a list of the qubits that the RB circuits are to be sampled for. This should
+        be all or a subset of the qubits in the device specified by the QubitProcessorSpec `pspec`.
+        If None, it is assumed that the RB circuit should be over all the qubits. Note that the
+        ordering of this list is the order of the "wires" in the returned circuit, but is otherwise
+        irrelevant. If desired, a circuit that explicitly idles on the other qubits can be obtained
+        by using methods of the Circuit object.
+
+    randomizeout : bool, optional
+        If False, the ideal output of the circuits (the "success" or "survival" outcome) is always
+        the all-zeros bit string. This is probably considered to be the "standard" in CRB. If True,
+        the ideal output a circuit is randomized to a uniformly random bit-string. This setting is
+        useful for, e.g., detecting leakage/loss/measurement-bias etc.
+
+    citerations : int, optional
+        Some of the Clifford compilation algorithms in pyGSTi (including the default algorithm) are
+        randomized, and the lowest-cost circuit is chosen from all the circuit generated in the
+        iterations of the algorithm. This is the number of iterations used. The time required to
+        generate a CRB circuit is linear in `citerations * (CRB length + 2)`. Lower-depth / lower 2-qubit
+        gate count compilations of the Cliffords are important in order to successfully implement
+        CRB on more qubits.
+
+    compilerargs : list, optional
+        A list of arguments that are handed to compile_clifford() function, which includes all the
+        optional arguments of compile_clifford() *after* the `iterations` option (set by `citerations`).
+        In order, this list should be values for:
+        
+        * algorithm : str. A string that specifies the compilation algorithm. The default in
+          compile_clifford() will always be whatever we consider to be the 'best' all-round
+          algorithm.
+        * aargs : list. A list of optional arguments for the particular compilation algorithm.
+        * costfunction : 'str' or function. The cost-function from which the "best" compilation
+          for a Clifford is chosen from all `citerations` compilations. The default costs a
+          circuit as 10x the num. of 2-qubit gates in the circuit + 1x the depth of the circuit.
+        * prefixpaulis : bool. Whether to prefix or append the Paulis on each Clifford.
+        * paulirandomize : bool. Whether to follow each layer in the Clifford circuit with a
+          random Pauli on each qubit (compiled into native gates). I.e., if this is True the
+          native gates are Pauli-randomized. When True, this prevents any coherent errors adding
+          (on average) inside the layers of each compiled Clifford, at the cost of increased
+          circuit depth. Defaults to False.
+        
+        For more information on these options, see the compile_clifford() docstring.
+
+    descriptor : str, optional
+        A string describing the experiment generated, which will be stored in the returned
+        dictionary.
+
+    add_default_protocol : bool, optional
+        Whether to add a default RB protocol to the experiment design, which can be run
+        later (once data is taken) by using a :class:`DefaultProtocolRunner` object.
+
+    seed : int, optional
+        A seed to initialize the random number generator used for creating random clifford
+        circuits. The first of the two subdesigns will use the specified seed directly,
+        while the second will use seed+1.
+
+    verbosity : int, optional
+        If > 0 the number of circuits generated so far is shown.
+
+    interleave : bool, optional
+        Whether the circuits of the standard CRB and IRB sub designs should be interleaved to
+        form the circuit ordering of this experiment design. E.g. when calling the `all_circuits_needing_data`
+        attribute.
+    """
+
+    def __init__(self, pspec, clifford_compilations, depths, circuits_per_depth, interleaved_circuit, qubit_labels=None, randomizeout=False,
+                 citerations=20, compilerargs=(), exact_compilation_key=None,
+                 descriptor='An Interleaved RB experiment', add_default_protocol=False, seed=None, verbosity=1, num_processes=1,
+                 interleave = False):
+        #Farm out the construction of the experiment designs to CliffordRBDesign:
+        print('Constructing Standard CRB Subdesign:')
+        crb_subdesign = CliffordRBDesign(pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels, randomizeout,
+                                              None, citerations, compilerargs, exact_compilation_key,
+                                              descriptor + ' (Standard)', add_default_protocol, seed, verbosity, num_processes)
+        print('Constructing Interleaved CRB Subdesign:')
+        icrb_subdesign = CliffordRBDesign(pspec, clifford_compilations, depths, circuits_per_depth, qubit_labels, randomizeout,
+                                              interleaved_circuit, citerations, compilerargs, exact_compilation_key,
+                                              descriptor + ' (Interleaved)', add_default_protocol, seed+1 if seed is not None else None, 
+                                              verbosity, num_processes)
+
+        self._init_foundation(crb_subdesign, icrb_subdesign, circuits_per_depth, interleaved_circuit, randomizeout,
+                              citerations, compilerargs, exact_compilation_key, interleave)
+
+    @classmethod
+    def from_existing_designs(cls, crb_subdesign, icrb_subdesign, circuits_per_depth, interleaved_circuit, randomizeout=False,
+                              citerations=20, compilerargs=(), exact_compilation_key=None, interleave=False):        
+        self = cls.__new__(cls)
+        self._init_foundation(self, crb_subdesign, icrb_subdesign, circuits_per_depth, interleaved_circuit, randomizeout,
+                              citerations, compilerargs, exact_compilation_key, interleave)
+
+    #helper method for reducing code duplication on different class constructors.
+    def _init_foundation(self, crb_subdesign, icrb_subdesign, circuits_per_depth, interleaved_circuit, randomizeout,
+                              citerations, compilerargs, exact_compilation_key, interleave):
+        super().__init__({'crb':crb_subdesign, 
+                          'icrb':icrb_subdesign}, interleave=interleave)
+        self.circuits_per_depth = circuits_per_depth
+        self.randomizeout = randomizeout
+        self.citerations = citerations
+        self.compilerargs = compilerargs
+        self.interleaved_circuit = interleaved_circuit
+        self.exact_compilation_key = exact_compilation_key
+
+        #set some auxfile information for serializing interleaved_circuit
+        self.auxfile_types['interleaved_circuit'] = 'circuit-str-json'
+
+    def average_native_gates_per_clifford(self):
+        """
+        The average number of native gates per Clifford for all circuits
+
+        Returns
+        -------
+        tuple of floats
+            A tuple of the average number of native gates per Clifford
+            for the contained standard CRB design, and interleaved CRB design,
+            respectively.
+        """
+        avg_gate_counts_crb = self['crb'].average_native_gates_per_clifford()
+        avg_gate_counts_icrb = self['icrb'].average_native_gates_per_clifford()
+        
+        return (avg_gate_counts_crb, avg_gate_counts_icrb)
+
+    def map_qubit_labels(self, mapper):
+        """
+        Creates a new experiment design whose circuits' qubit labels are updated according to a given mapping.
+
+        Parameters
+        ----------
+        mapper : dict or function
+            A dictionary whose keys are the existing self.qubit_labels values
+            and whose value are the new labels, or a function which takes a
+            single (existing qubit-label) argument and returns a new qubit-label.
+
+        Returns
+        -------
+        InterleavedRBDesign
+        """
+
+        mapped_crb_design = self['crb'].map_qubit_labels(mapper)
+        mapped_icrb_design = self['icrb'].map_qubit_labels(mapper)
+
+        return InterleavedRBDesign.from_existing_designs(mapped_crb_design, mapped_icrb_design, self.circuits_per_depth, 
+                                                         self.randomizeout, self.citerations, self.compilerargs, self.interleaved_circuit,
+                                                         self.exact_compilation_key)
 
 class RandomizedBenchmarking(_vb.SummaryStatistics):
     """
@@ -998,55 +1286,10 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
     This same analysis protocol is used for Clifford, Direct and Mirror RB.
     The standard Mirror RB analysis is obtained by setting
     `datatype` = `adjusted_success_probabilities`.
-
-    Parameters
-    ----------
-    datatype: 'success_probabilities',  'adjusted_success_probabilities', or 'energies', optional
-        The type of summary data to extract, average, and the fit to an exponential decay. If
-        'success_probabilities' then the summary data for a circuit is the frequency that
-        the target bitstring is observed, i.e., the success probability of the circuit. If
-        'adjusted_success_probabilties' then the summary data for a circuit is
-        S = sum_{k = 0}^n (-1/2)^k h_k where h_k is the frequency at which the output bitstring is
-        a Hamming distance of k from the target bitstring, and n is the number of qubits.
-        This datatype is used in Mirror RB, but can also be used in Clifford and Direct RB. 
-        If 'energies',  then the summary data is Pauli operator measurement results. This datatype is
-        only used for Binary RB. 
-
-    defaultfit: 'A-fixed' or 'full'
-        The summary data is fit to A + Bp^m with A fixed and with A as a fit parameter.
-        If 'A-fixed' then the default results displayed are those from fitting with A
-        fixed, and if 'full' then the default results displayed are those where A is a
-        fit parameter.
-
-    asymptote : 'std' or float, optional
-        The summary data is fit to A + Bp^m with A fixed and with A has a fit parameter,
-        with the default results returned set by `defaultfit`. This argument specifies the
-        value used when 'A' is fixed. If left as 'std', then 'A' defaults to 1/2^n if
-        `datatype` is `success_probabilities` and to 1/4^n if `datatype` is
-        `adjusted_success_probabilities`.
-
-    rtype : 'EI' or 'AGI', optional
-        The RB error rate definition convention. 'EI' results in RB error rates that are associated
-        with the entanglement infidelity, which is the error probability with stochastic Pauli errors.
-        'AGI' results in RB error rates that are associated with the average gate infidelity.
-
-    seed : list, optional
-        Seeds for the fit of B and p (A is seeded to the asymptote defined by `asympote`).
-
-    bootstrap_samples : float, optional
-        The number of samples for generating bootstrapped error bars.
-
-    depths: list or 'all'
-        If not 'all', a list of depths to use (data at other depths is discarded).
-
-    name : str, optional
-        The name of this protocol, also used to (by default) name the
-        results produced by this protocol.  If None, the class name will
-        be used.
     """
 
     def __init__(self, datatype='success_probabilities', defaultfit='full', asymptote='std', rtype='EI',
-                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', square_mean_root=False, name=None):
+                 seed=(0.8, 0.95), bootstrap_samples=200, depths='all', name=None):
         """
         Initialize an RB protocol for analyzing RB data.
 
@@ -1109,7 +1352,6 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
         self.rtype = rtype
         self.datatype = datatype
         self.defaultfit = defaultfit
-        self.square_mean_root = square_mean_root
         if self.datatype == 'energies':
             self.energies = True
         else:
@@ -1143,8 +1385,6 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
         if self.datatype not in data.cache:
             summary_data_dict = self._compute_summary_statistics(data, energy = self.energies)
             data.cache.update(summary_data_dict)
-            #print('data cache updated')
-            #print(data.cache)
         src_data = data.cache[self.datatype]
         data_per_depth = src_data
 
@@ -1170,17 +1410,9 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             adj_sps = []
             for depth in depths:
                 percircuitdata = circuitdata_per_depth[depth]
-                #print(percircuitdata)
-                if self.square_mean_root:
-                    #print(percircuitdata)
-                    adj_sps.append(_np.nanmean(_np.sqrt(percircuitdata))**2)
-                    #print(adj_sps)
-                else:
-                    adj_sps.append(_np.nanmean(percircuitdata))  # average [adjusted] success probabilities or energies
+                adj_sps.append(_np.nanmean(percircuitdata))  # average [adjusted] success probabilities or energies
 
-            #print(adj_sps)
             # Don't think this needs changed
-            #print(asymptote)
             full_fit_results, fixed_asym_fit_results = _rbfit.std_least_squares_fit(
                 depths, adj_sps, nqubits, seed=self.seed, asymptote=asymptote,
                 ftype='full+FA', rtype=self.rtype)
@@ -1200,10 +1432,8 @@ class RandomizedBenchmarking(_vb.SummaryStatistics):
             failcount_faf = 0
 
             #Store bootstrap "cache" dicts (containing summary keys) as a list under data.cache
-            #print(len(data.cache['bootstraps']))
             if 'bootstraps' not in data.cache or len(data.cache['bootstraps']) < self.bootstrap_samples:
                 # TIM - finite counts always True here?
-                #print('adding bootstrap')
                 self._add_bootstrap_qtys(data.cache, self.bootstrap_samples, finitecounts=True)
             bootstrap_caches = data.cache['bootstraps']  # if finitecounts else 'infbootstraps'
 
@@ -1397,6 +1627,147 @@ class RandomizedBenchmarkingResults(_proto.ProtocolResults):
         data = _proto.ProtocolData(self.data.edesign, self.data.dataset)
         cpy = RandomizedBenchmarkingResults(data, self.protocol, self.fits, self.depths, self.defaultfit)
         return cpy
+    
+
+class InterleavedRandomizedBenchmarking(_proto.Protocol):
+    """
+    The interleaved randomized benchmarking protocol.
+
+    This object itself utilizes the RandomizedBenchmarking protocol to
+    perform the analysis for the standard CRB and interleaved RB subexperiments
+    that constitute the IRB process. As such, this class takes as input
+    the subset of RandomizedBenchmarking's arguments relevant for CRB.
+    """
+
+    def __init__(self, defaultfit='full', asymptote='std', rtype='EI', seed=(0.8, 0.95), 
+                 bootstrap_samples=200, depths='all', name=None):
+        """
+        Initialize an RB protocol for analyzing RB data.
+
+        Parameters
+        ----------
+        defaultfit: 'A-fixed' or 'full'
+            The summary data is fit to A + Bp^m with A fixed and with A as a fit parameter.
+            If 'A-fixed' then the default results displayed are those from fitting with A
+            fixed, and if 'full' then the default results displayed are those where A is a
+            fit parameter.
+
+        asymptote : 'std' or float, optional
+            The summary data is fit to A + Bp^m with A fixed and with A has a fit parameter,
+            with the default results returned set by `defaultfit`. This argument specifies the
+            value used when 'A' is fixed. If left as 'std', then 'A' defaults to 1/2^n if
+            `datatype` is `success_probabilities` and to 1/4^n if `datatype` is
+            `adjusted_success_probabilities`.
+
+        rtype : 'EI' or 'AGI', optional
+            The RB error rate definition convention. 'EI' results in RB error rates that are associated
+            with the entanglement infidelity, which is the error probability with stochastic Pauli errors.
+            'AGI' results in RB error rates that are associated with the average gate infidelity.
+
+        seed : list, optional
+            Seeds for the fit of B and p (A is seeded to the asymptote defined by `asympote`).
+
+        bootstrap_samples : float, optional
+            The number of samples for generating bootstrapped error bars.
+
+        depths: list or 'all'
+            If not 'all', a list of depths to use (data at other depths is discarded).
+
+        name : str, optional
+            The name of this protocol, also used to (by default) name the
+            results produced by this protocol.  If None, the class name will
+            be used.
+        """
+        super().__init__(name)
+        self.seed = seed
+        self.depths = depths
+        self.bootstrap_samples = bootstrap_samples
+        self.asymptote = asymptote
+        self.rtype = rtype
+        self.datatype = 'success_probabilities'
+        self.defaultfit = defaultfit
+
+    def run(self, data, memlimit=None, comm=None):
+        """
+        Run this protocol on `data`.
+
+        Parameters
+        ----------
+        data : ProtocolData
+            The input data.
+
+        memlimit : int, optional
+            A rough per-processor memory limit in bytes.
+
+        comm : mpi4py.MPI.Comm, optional
+            When not ``None``, an MPI communicator used to run this protocol
+            in parallel.
+
+        Returns
+        -------
+        RandomizedBenchmarkingResults
+        """
+        design = data.edesign
+        assert(isinstance(design, InterleavedRBDesign)), 'This protocol can only be run on InterleavedRBDesign.' 
+        #initialize a RandomizedBenchmarking protocol to use as a helper
+        #for performing analysis on the two subexperiments.
+        rb_protocol = RandomizedBenchmarking('success_probabilities', self.defaultfit, self.asymptote, self.rtype,
+                                             self.seed, self.bootstrap_samples, self.depths, name=None)
+
+        #run the RB protocol on both subdesigns.
+        crb_results = rb_protocol.run(data['crb'])
+        icrb_results = rb_protocol.run(data['icrb'])
+
+        nqubits = len(design.qubit_labels)
+        #let the dimension depend on the value of rtype.
+        dim = 2**nqubits
+        if self.rtype == 'EI':
+            dim_prefactor = (dim**2 -1)/(dim**2)
+        elif self.rtype == 'AGI':
+            dim_prefactor = (dim -1)/dim
+        else:
+            raise ValueError('Only EI and AGI type IRB numbers are currently implemented.')
+
+        irb_numbers = dict()
+        irb_bounds = dict()
+        #use the crb and icrb results to get the irb number and the bounds.
+        for fit_key in crb_results.fits.keys():
+            p_crb = crb_results.fits[fit_key].estimates['p']
+            p_icrb = icrb_results.fits[fit_key].estimates['p']
+            irb_numbers[fit_key] = dim_prefactor*(1-(p_icrb/p_crb))
+            #Magesan paper gives the bounds as the minimum of two quantities.
+            possible_bound_1 = dim_prefactor * (abs(p_crb - (p_icrb/p_crb)) + (1 - p_crb))
+            possible_bound_2 = (2*(dim**2-1)*(1-p_crb))/(p_crb*dim**2) + (4*_np.sqrt(1-p_crb)*_np.sqrt(dim**2 - 1))/p_crb
+            #The value of the possible_bound_2 coming directly from the Magesan paper should be in units of AGI.
+            #So if we want EI use the standard dimensional conversion factor.
+            if self.rtype == 'EI':
+                possible_bound_2 = ((dim + 1)/dim)*possible_bound_2
+            irb_bounds[fit_key] = min(possible_bound_1, possible_bound_2)
+        
+        children = {'crb': _proto.ProtocolResultsDir(data['crb'], crb_results),
+                    'icrb': _proto.ProtocolResultsDir(data['icrb'], icrb_results)}
+
+        irb_top_results = InterleavedRandomizedBenchmarkingResults(data, self, irb_numbers, irb_bounds)
+
+        return _proto.ProtocolResultsDir(data, irb_top_results, children = children)
+
+class InterleavedRandomizedBenchmarkingResults(_proto.ProtocolResults):
+    """
+    Class for storing the results of an interleaved randomized benchmarking experiment.
+    This subclasses off of ProtocolResultsDir as this class acts primarily as both a container
+    class for holding the two subexperiment's results, as well as containing some specialized
+    information regarding the IRB number estimates.
+    """
+
+    def __init__(self, data, protocol, irb_numbers, irb_bounds):
+        #msg = 'rb_subexperiment_results should be a dictionary with values corresponding to the'\
+        #      +' standard CRB and interleaved CRB subexperiments used in performing IRB.'
+        #assert(isinstance(rb_subexperiment_results, dict)), msg
+        #super().__init__(data, rb_subexperiment_results)
+        super().__init__(data, protocol)
+
+        self.irb_numbers = irb_numbers
+        self.irb_bounds = irb_bounds
 
 
 RB = RandomizedBenchmarking
