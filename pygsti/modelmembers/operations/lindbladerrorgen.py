@@ -761,25 +761,14 @@ class LindbladErrorgen(_LinearOperator):
         numpy.ndarray
         """
         if self._rep_type == 'lindblad errorgen':
-            # assert(on_space in ('minimal', 'HilbertSchmidt'))
+            assert(on_space in ('minimal', 'HilbertSchmidt'))
             lnd_error_gen = sum([_np.tensordot(blk.block_data.flat, Lterm_superops, (0, 0)) for blk, (Lterm_superops, _)
                                  in zip(self.coefficient_blocks, self.lindblad_term_superops_and_1norms)])
 
             assert(_np.isclose(_np.linalg.norm(lnd_error_gen.imag), 0)), \
                 "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
             
-            superop = lnd_error_gen.real
-            
-            if on_space == 'Hilbert' or (on_space == 'minimal' and self.evotype.minimal_space == 'Hilbert'):
-                # Attempt to cast down to unitary
-                try:
-                    U = _ot.superop_to_unitary(lnd_error_gen.real, self.matrix_basis, True)
-                except ValueError as e:
-                    raise ValueError("Could not convert to unitary. Check that only Hamiltonian errors are provided.") from e
-                
-                return U
-            
-            return superop
+            return lnd_error_gen.real
 
         elif self._rep_type == 'sparse superop':
             return self.to_sparse(on_space).toarray()

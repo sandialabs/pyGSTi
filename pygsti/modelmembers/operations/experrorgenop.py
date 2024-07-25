@@ -24,6 +24,7 @@ from pygsti.modelmembers import modelmember as _modelmember, term as _term
 from pygsti.modelmembers.errorgencontainer import ErrorGeneratorContainer as _ErrorGeneratorContainer
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools import optools as _ot
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 MAX_EXPONENT = _np.log(_np.finfo('d').max) - 10.0  # so that exp(.) doesn't overflow
@@ -180,11 +181,22 @@ class ExpErrorgenOp(_LinearOperator, _ErrorGeneratorContainer):
         """
         if self._rep_type == 'dense':
             # Then self._rep contains a dense version already
-            return self._rep.base  # copy() unnecessary since we set to readonly
+            superop = self._rep.base  # copy() unnecessary since we set to readonly
 
         else:
             # Construct a dense version from scratch (more time consuming)
-            return _spl.expm(self.errorgen.to_dense(on_space))
+            superop = _spl.expm(self.errorgen.to_dense(on_space))
+        
+        # Attempt to cast down to unitary, if requested
+        if on_space == 'Hilbert' or (on_space == 'minimal' and self.evotype.minimal_space == 'Hilbert'):
+            try:
+                U = _ot.superop_to_unitary(superop, self.errorgen.matrix_basis, True)
+            except ValueError as e:
+                raise ValueError("Could not convert to unitary. Check that only Hamiltonian errors are provided.") from e
+            
+            return U
+    
+        return superop
 
     #FUTURE: maybe remove this function altogether, as it really shouldn't be called
     def to_sparse(self, on_space='minimal'):
