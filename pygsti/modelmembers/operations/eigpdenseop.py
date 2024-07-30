@@ -432,13 +432,13 @@ class EigenvalueParamDenseOp(_DenseOperator):
             dMx = _np.zeros((self.dim, self.dim), 'complex')
             for prefactor, (i, j) in pdesc:
                 dMx[i, j] = prefactor
-            tmp = _np.dot(self.B, _np.dot(dMx, self.Bi))
+            tmp = self.B @ (dMx @ self.Bi)
             if _np.linalg.norm(tmp.imag) >= IMAG_TOL:  # just a warning until we figure this out.
                 print("EigenvalueParamDenseOp deriv_wrt_params WARNING:"
                       " Imag part = ", _np.linalg.norm(tmp.imag), " pdesc = ", pdesc)  # pragma: no cover
             #assert(_np.linalg.norm(tmp.imag) < IMAG_TOL), \
             #       "Imaginary mag = %g!" % _np.linalg.norm(tmp.imag)
-            derivMx[:, k] = tmp.real.flatten()
+            derivMx[:, k] = tmp.real.ravel()
 
         if wrt_filter is None:
             return derivMx
