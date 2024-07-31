@@ -709,6 +709,7 @@ class CloudNoiseLayerRules(_LayerRules):
 
         else:
             for complbl in complbl_list:
+                complbl = complbl.strip_args() if complbl.collect_args() else complbl
                 if complbl in cache:
                     ret.append(cache[complbl])  # caches['cloudnoise-layers'] would hold "simplified" instrument members
                 elif complbl in model.operation_blks['cloudnoise']:
