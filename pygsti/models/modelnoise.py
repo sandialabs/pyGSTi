@@ -537,7 +537,7 @@ class OpModelPerOpNoise(OpModelNoise):
                 # `None` in list signals a non-present direction => skip these terms
                 sslbls_list = list(filter(lambda x: x is not None, sslbls_list))
             for sslbls in sslbls_list:
-                op_to_embed = local_errormap if (sslbls is None or state_space.is_entire_space(sslbls)) \
+                op_to_embed = local_errormap if (sslbls is None) \
                     else _op.EmbeddedOp(state_space, sslbls, local_errormap)
                 embedded_errmaps.append(op_to_embed.copy() if copy else op_to_embed)
 
