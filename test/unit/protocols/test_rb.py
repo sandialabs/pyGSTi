@@ -114,9 +114,9 @@ class TestCliffordRBDesign(BaseCase):
             citerations=self.citerations, compilerargs=self.compiler_args, seed=self.seed,
             verbosity=self.verbosity, num_processes=1)
 
-        crb_design.write(f'{FILE_PATH}/../../test_packages/temp_test_files/test_CliffordRBDesign_serialization')
+        crb_design.write('../../test/test_packages/temp_test_files/test_CliffordRBDesign_serialization')
         #then read this back in
-        crb_design_read = _rb.CliffordRBDesign.from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_CliffordRBDesign_serialization')
+        crb_design_read = _rb.CliffordRBDesign.from_dir('../../test/test_packages/temp_test_files/test_CliffordRBDesign_serialization')
 
         self.assertEqual(crb_design.all_circuits_needing_data, crb_design_read.all_circuits_needing_data)
         self.assertEqual(crb_design.interleaved_circuit, crb_design_read.interleaved_circuit)
@@ -166,9 +166,9 @@ class TestInterleavedRBDesign(BaseCase):
 
     def test_serialization(self):
 
-        self.irb_design.write(f'{FILE_PATH}/../../test_packages/temp_test_files/test_InterleavedRBDesign_serialization')
+        self.irb_design.write('../../test/test_packages/temp_test_files/test_InterleavedRBDesign_serialization')
         #then read this back in
-        irb_design_read = _rb.InterleavedRBDesign.from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_InterleavedRBDesign_serialization')
+        irb_design_read = _rb.InterleavedRBDesign.from_dir('../../test/test_packages/temp_test_files/test_InterleavedRBDesign_serialization')
 
         self.assertEqual(self.irb_design.all_circuits_needing_data, irb_design_read.all_circuits_needing_data)
         self.assertEqual(self.irb_design['crb'].all_circuits_needing_data, irb_design_read['crb'].all_circuits_needing_data)
@@ -251,9 +251,9 @@ class TestDirectRBDesign(BaseCase):
             conditionaltwirl=True, citerations=self.citerations, compilerargs=self.compiler_args,
             partitioned=False, seed=self.seed, verbosity=self.verbosity, num_processes=1)
 
-        drb_design.write(f'{FILE_PATH}/../../test_packages/temp_test_files/test_DirectRBDesign_serialization')
+        drb_design.write('../../test/test_packages/temp_test_files/test_DirectRBDesign_serialization')
         #then read this back in
-        drb_design_read = _rb.DirectRBDesign.from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_DirectRBDesign_serialization')
+        drb_design_read = _rb.DirectRBDesign.from_dir('../../test/test_packages/temp_test_files/test_DirectRBDesign_serialization')
 
         self.assertEqual(drb_design.all_circuits_needing_data, drb_design_read.all_circuits_needing_data)
 
@@ -378,9 +378,9 @@ class TestMirrorRBDesign(BaseCase):
             localclifford=True, paulirandomize=True, seed=self.seed, verbosity=self.verbosity,
             num_processes=1)
 
-        mrb_design.write(f'{FILE_PATH}/../../test_packages/temp_test_files/test_MirrorRBDesign_serialization')
+        mrb_design.write('../../test/test_packages/temp_test_files/test_MirrorRBDesign_serialization')
         #then read this back in
-        mrb_design_read = _rb.MirrorRBDesign.from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_MirrorRBDesign_serialization')
+        mrb_design_read = _rb.MirrorRBDesign.from_dir('../../test/test_packages/temp_test_files/test_MirrorRBDesign_serialization')
 
         self.assertEqual(mrb_design.all_circuits_needing_data, mrb_design_read.all_circuits_needing_data)
 
@@ -427,9 +427,9 @@ class TestBiRBDesign(BaseCase):
                                                  sampler=self.sampler, samplerargs=self.samplerargs, 
                                                  seed=self.seed, verbosity=0)
         
-        birb_design.write(f'{FILE_PATH}/../../test_packages/temp_test_files/test_BinaryRBDesign_serialization')
+        birb_design.write('../../test/test_packages/temp_test_files/test_BinaryRBDesign_serialization')
         #then read this back in
-        birb_design_read = _rb.BinaryRBDesign.from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_BinaryRBDesign_serialization')
+        birb_design_read = _rb.BinaryRBDesign.from_dir('../../test/test_packages/temp_test_files/test_BinaryRBDesign_serialization')
 
         self.assertEqual(birb_design.all_circuits_needing_data, birb_design_read.all_circuits_needing_data)
         
@@ -536,8 +536,8 @@ class TestCliffordRBProtocol(BaseCase):
         self.assertTrue(abs(result.fits['A-fixed'].estimates['r'])<=3e-5)
 
         #also test writing and reading the results from disk.
-        result.write(f'{FILE_PATH}/../../test_packages/temp_test_files/test_RandomizedBenchmarking_results')
-        result_read = pygsti.io.read_results_from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_RandomizedBenchmarking_results')
+        result.write('../../test/test_packages/temp_test_files/test_RandomizedBenchmarking_results')
+        result_read = pygsti.io.read_results_from_dir('../../test/test_packages/temp_test_files/test_RandomizedBenchmarking_results')
         
     def test_cliffordrb_protocol_noisy(self):
         proto = pygsti.protocols.rb.RandomizedBenchmarking(datatype='success_probabilities', defaultfit='A-fixed', rtype='EI',
@@ -706,8 +706,8 @@ class TestInterleavedRBProtocol(BaseCase):
         self.assertTrue(abs(estimated_irb_num) <= 1e-5)
 
         #also test writing and reading the results from disk.
-        result.write(f'{FILE_PATH}/../../test_packages/temp_test_files/test_InterleavedRandomizedBenchmarking_results')
-        result_read = pygsti.io.read_results_from_dir(f'{FILE_PATH}/../../test_packages/temp_test_files/test_InterleavedRandomizedBenchmarking_results')
+        result.write('../../test/test_packages/temp_test_files/test_InterleavedRandomizedBenchmarking_results')
+        result_read = pygsti.io.read_results_from_dir('../../test/test_packages/temp_test_files/test_InterleavedRandomizedBenchmarking_results')
         
         
     def test_interleavedrb_protocol_noisy(self):
