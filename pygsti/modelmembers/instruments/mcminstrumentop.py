@@ -13,6 +13,8 @@ The MCMInstrumentOp class and supporting functionality.
 import numpy as _np
 
 from pygsti.modelmembers.operations import DenseOperator as _DenseOperator
+from pygsti.baseobjs import statespace as _statespace
+
 
 class MCMInstrumentOp(_DenseOperator):
     """
