@@ -26,6 +26,8 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas
+from pygsti.tools import listtools as _lt
+from pygsti.circuits import CircuitList as _CircuitList
 
 _dummy_profiler = _DummyProfiler()
 
@@ -329,17 +331,17 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         
 
         if dataset is not None:
-            outcomes_list = []
-            for ckt in circuits:
+            aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
+            ds_circuits = _lt.apply_aliases_to_circuits(circuits, aliases)
+            unique_outcomes_list = []
+            for ckt in ds_circuits:
                 ds_row = dataset[ckt]
-                outcomes_list.append(ds_row.outcomes if ds_row is not None else None)
-                #slightly different than matrix, for some reason outcomes is used in this class
-                #and unique_outcomes is used in matrix.
+                unique_outcomes_list.append(ds_row.unique_outcomes if ds_row is not None else None)
         else:
-            outcomes_list = [None]*len(circuits)
+            unique_outcomes_list = [None]*len(circuits)
 
         expanded_circuit_outcome_list = model.bulk_expand_instruments_and_separate_povm(circuits, 
-                                                                                        observed_outcomes_list = outcomes_list, 
+                                                                                        observed_outcomes_list = unique_outcomes_list, 
                                                                                         completed_circuits= completed_circuits)
         
         expanded_circuit_cache = {ckt: expanded_ckt for ckt,expanded_ckt in zip(completed_circuits, expanded_circuit_outcome_list)}                

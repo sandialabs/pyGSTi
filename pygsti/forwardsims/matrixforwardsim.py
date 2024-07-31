@@ -29,6 +29,8 @@ from pygsti.tools import mpitools as _mpit
 from pygsti.tools import sharedmemtools as _smt
 from pygsti.tools import slicetools as _slct
 from pygsti.tools.matrixtools import _fas
+from pygsti.tools import listtools as _lt
+from pygsti.circuits import CircuitList as _CircuitList
 
 _dummy_profiler = _DummyProfiler()
 
@@ -1167,11 +1169,11 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         cache['completed_circuits'] = {ckt: comp_ckt for ckt, comp_ckt in zip(circuits, completed_circuits)}
         cache['split_circuits'] = {ckt: split_ckt for ckt, split_ckt in zip(circuits, split_circuits)}
 
-        #There is some potential aliasing that happens in the init that I am not
-        #doing here, but I think 90+% of the time this ought to be fine.
         if dataset is not None:
+            aliases = circuits.op_label_aliases if isinstance(circuits, _CircuitList) else None
+            ds_circuits = _lt.apply_aliases_to_circuits(circuits, aliases)
             unique_outcomes_list = []
-            for ckt in circuits:
+            for ckt in ds_circuits:
                 ds_row = dataset[ckt]
                 unique_outcomes_list.append(ds_row.unique_outcomes if ds_row is not None else None)
         else:
