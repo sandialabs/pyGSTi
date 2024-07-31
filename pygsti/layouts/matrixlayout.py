@@ -74,6 +74,9 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
                  ds_circuits, group, helpful_scratch, model, unique_circuits, dataset=None, expanded_and_separated_circuit_cache=None,
                  double_expanded_nospam_circuits_cache = None):
 
+        if expanded_and_separated_circuit_cache is None:
+            expanded_and_separated_circuit_cache = dict()
+
         #Note: group gives unique_nospam_circuits indices, which circuits_by_unique_nospam_circuits
         # turns into "unique complete circuit" indices, which the layout via it's to_unique can map
         # to original circuit indices.
@@ -82,18 +85,13 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
             for i in indices:
                 nospam_c = unique_nospam_circuits[i]
                 for unique_i in circuits_by_unique_nospam_circuits[nospam_c]:  # "unique" circuits: add SPAM to nospam_c
-                    if expanded_and_separated_circuit_cache is None:
+                    #the cache is indexed into using the (potentially) incomplete circuits
+                    expc_outcomes = expanded_and_separated_circuit_cache.get(unique_circuits[unique_i], None)
+                    if expc_outcomes is None: #fall back on original non-cache behavior.
                         observed_outcomes = None if (dataset is None) else dataset[ds_circuits[unique_i]].unique_outcomes
                         expc_outcomes = model.expand_instruments_and_separate_povm(unique_complete_circuits[unique_i], observed_outcomes)
-                        #Note: unique_complete_circuits may have duplicates (they're only unique *pre*-completion)
-                    else:
-                        #the cache is indexed into using the (potentially) incomplete circuits
-                        expc_outcomes = expanded_and_separated_circuit_cache.get(unique_circuits[unique_i], None)
-                        if expc_outcomes is None: #fall back on original non-cache behavior.
-                            observed_outcomes = None if (dataset is None) else dataset[ds_circuits[unique_i]].unique_outcomes
-                            expc_outcomes = model.expand_instruments_and_separate_povm(unique_complete_circuits[unique_i], observed_outcomes)
-                            #and add this new value to the cache.
-                            expanded_and_separated_circuit_cache[unique_circuits[unique_i]] = expc_outcomes 
+                        #and add this new value to the cache.
+                        expanded_and_separated_circuit_cache[unique_circuits[unique_i]] = expc_outcomes 
                     for sep_povm_c, outcomes in expc_outcomes.items():  # for each expanded cir from unique_i-th circuit
                         prep_lbl = sep_povm_c.circuit_without_povm[0]
                         exp_nospam_c = sep_povm_c.circuit_without_povm[1:]  # sep_povm_c *always* has prep lbl
@@ -130,21 +128,16 @@ class _MatrixCOPALayoutAtom(_DistributableAtom):
             expanded_nospam_circuits_plus_scratch = {i:cir for i, cir in enumerate(expanded_nospam_circuit_outcomes_plus_scratch.keys())}
         else:
             expanded_nospam_circuits_plus_scratch = expanded_nospam_circuits.copy()
-
+        
+        if double_expanded_nospam_circuits_cache is None:
+            double_expanded_nospam_circuits_cache = dict()
         double_expanded_nospam_circuits_plus_scratch = dict()
-        if double_expanded_nospam_circuits_cache is not None:
-            for i, cir in expanded_nospam_circuits_plus_scratch.items():
-                # expand sub-circuits for a more efficient tree
-                double_expanded_ckt = double_expanded_nospam_circuits_cache.get(cir, None)
-                if double_expanded_ckt is None: #Fall back to standard behavior and do expansion.
-                    double_expanded_nospam_circuits_plus_scratch[i] = cir.expand_subcircuits()
-                else:
-                    double_expanded_nospam_circuits_plus_scratch[i] = double_expanded_ckt
-        else:
-            for i, cir in expanded_nospam_circuits_plus_scratch.items():
-                # expand sub-circuits for a more efficient tree
-                double_expanded_nospam_circuits_plus_scratch[i] = cir.expand_subcircuits()
-
+        for i, cir in expanded_nospam_circuits_plus_scratch.items():
+            # expand sub-circuits for a more efficient tree
+            double_expanded_ckt = double_expanded_nospam_circuits_cache.get(cir, None)
+            if double_expanded_ckt is None: #Fall back to standard behavior and do expansion.
+                double_expanded_ckt = cir.expand_subcircuits()
+            double_expanded_nospam_circuits_plus_scratch[i] = double_expanded_ckt
         self.tree = _EvalTree.create(double_expanded_nospam_circuits_plus_scratch)
         #print("Atom tree: %d circuits => tree of size %d" % (len(expanded_nospam_circuits), len(self.tree)))
 
@@ -313,16 +306,12 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
 
         #extract subcaches from layout_creation_circuit_cache:
-        if layout_creation_circuit_cache is not None:
-            self.completed_circuit_cache = layout_creation_circuit_cache.get('completed_circuits', None)
-            self.split_circuit_cache = layout_creation_circuit_cache.get('split_circuits', None)
-            self.expanded_and_separated_circuits_cache = layout_creation_circuit_cache.get('expanded_and_separated_circuits', None)
-            self.expanded_subcircuits_no_spam_cache = layout_creation_circuit_cache.get('expanded_subcircuits_no_spam', None)
-        else:
-            self.completed_circuit_cache = None
-            self.split_circuit_cache = None
-            self.expanded_and_separated_circuits_cache = None
-            self.expanded_subcircuits_no_spam_cache = None
+        if layout_creation_circuit_cache is None:
+            layout_creation_circuit_cache = dict()
+        self.completed_circuit_cache = layout_creation_circuit_cache.get('completed_circuits', None)
+        self.split_circuit_cache = layout_creation_circuit_cache.get('split_circuits', None)
+        self.expanded_and_separated_circuits_cache = layout_creation_circuit_cache.get('expanded_and_separated_circuits', None)
+        self.expanded_subcircuits_no_spam_cache = layout_creation_circuit_cache.get('expanded_subcircuits_no_spam', None)
         
         if self.completed_circuit_cache is None:
             unique_complete_circuits, split_unique_circuits = model.complete_circuits(unique_circuits, return_split=True)
@@ -337,7 +326,7 @@ class MatrixCOPALayout(_DistributableCOPALayout):
         #Note: "unique" means a unique circuit *before* circuit-completion, so there could be duplicate
         # "unique circuits" after completion, e.g. "rho0Gx" and "Gx" could both complete to "rho0GxMdefault_0".
 
-        circuits_by_unique_nospam_circuits = _collections.OrderedDict()
+        circuits_by_unique_nospam_circuits = dict()
         if self.completed_circuit_cache is None:
             for i, (_, nospam_c, _) in enumerate(split_unique_circuits):
                 if nospam_c in circuits_by_unique_nospam_circuits:
@@ -345,12 +334,15 @@ class MatrixCOPALayout(_DistributableCOPALayout):
                 else:
                     circuits_by_unique_nospam_circuits[nospam_c] = [i]
             #also create the split circuit cache at this point for future use.
-            self.split_circuit_cache = {unique_ckt:split_ckt for unique_ckt, split_ckt in zip(unique_circuits, split_unique_circuits)}
+            if self.split_circuit_cache is None:
+                self.split_circuit_cache = {unique_ckt:split_ckt for unique_ckt, split_ckt in zip(unique_circuits, split_unique_circuits)}
 
         else:
+            if self.split_circuit_cache is None:
+                self.split_circuit_cache = dict()
             for i, (c_unique_complete, c_unique) in enumerate(zip(unique_complete_circuits, unique_circuits)):
                 split_ckt_tup = self.split_circuit_cache.get(c_unique, None)
-                nospam_c= split_ckt_tup[1] 
+                nospam_c= split_ckt_tup[1] if split_ckt_tup is not None else None
                 if nospam_c is None:
                     split_ckt_tup = model.split_circuit(c_unique_complete)
                     nospam_c= split_ckt_tup[1]

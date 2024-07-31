@@ -53,18 +53,17 @@ class _MapCOPALayoutAtom(_DistributableAtom):
     def __init__(self, unique_complete_circuits, ds_circuits, group, model,
                  dataset, max_cache_size, expanded_complete_circuit_cache = None):
 
-        expanded_circuit_info_by_unique = _collections.OrderedDict()
-        expanded_circuit_set = _collections.OrderedDict()  # only use SeparatePOVMCircuit keys as ordered set
+        expanded_circuit_info_by_unique = dict()
+        expanded_circuit_set = dict() # only use SeparatePOVMCircuit keys as ordered set
+
+        if expanded_complete_circuit_cache is None:
+            expanded_complete_circuit_cache = dict()
 
         for i in group:
-            if expanded_complete_circuit_cache is None:
-                observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
-                d = model.expand_instruments_and_separate_povm(unique_complete_circuits[i], observed_outcomes)
-            else:
-                d = expanded_complete_circuit_cache.get(unique_complete_circuits[i], None)
-                if d is None:
-                    observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
-                    d = model.expand_instruments_and_separate_povm(unique_complete_circuits[i], observed_outcomes)
+            d = expanded_complete_circuit_cache.get(unique_complete_circuits[i], None)
+            if d is None:
+                unique_observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].unique_outcomes
+                d = model.expand_instruments_and_separate_povm(unique_complete_circuits[i], unique_observed_outcomes)
             expanded_circuit_info_by_unique[i] = d  # a dict of SeparatePOVMCircuits => tuples of outcome labels
             expanded_circuit_set.update(d)
             
@@ -220,14 +219,11 @@ class MapCOPALayout(_DistributableCOPALayout):
         ds_circuits = _lt.apply_aliases_to_circuits(unique_circuits, aliases)
 
         #extract subcaches from layout_creation_circuit_cache:
-        if layout_creation_circuit_cache is not None:
-            self.completed_circuit_cache = layout_creation_circuit_cache.get('completed_circuits', None)
-            self.split_circuit_cache = layout_creation_circuit_cache.get('split_circuits', None)
-            self.expanded_and_separated_circuits_cache = layout_creation_circuit_cache.get('expanded_and_separated_circuits', None)
-        else:
-            self.completed_circuit_cache = None
-            self.split_circuit_cache = None
-            self.expanded_and_separated_circuits_cache = None
+        if layout_creation_circuit_cache is None:
+            layout_creation_circuit_cache = dict()
+        self.completed_circuit_cache = layout_creation_circuit_cache.get('completed_circuits', None)
+        self.split_circuit_cache = layout_creation_circuit_cache.get('split_circuits', None)
+        self.expanded_and_separated_circuits_cache = layout_creation_circuit_cache.get('expanded_and_separated_circuits', None)
         
         if self.completed_circuit_cache is None:
             unique_complete_circuits = model.complete_circuits(unique_circuits)
