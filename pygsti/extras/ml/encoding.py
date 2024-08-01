@@ -247,13 +247,56 @@ def z_mask(P: _np.array, measurement: _np.array):
     measured_qubits = _np.where(measurement == 1)[0]
     good_errors = _np.vectorize(lambda x: good_error(x, measured_qubits, num_qubits))(P)
     return good_errors.astype(float)
+
+def unique_value_mapping(A):
+    """
+    Finds the unique values in a ND numpy array, orders them by size,
+    and creates a mapping from each unique value to its index in the ordering.
+
+    Parameters:
+    A (numpy.ndarray): A ND numpy array.
+
+    Returns:
+    dict: A dictionary mapping each unique value to its index in the sorted list of unique values.
+    """
+    # Find the unique values in the array
+    unique_values = _np.unique(A)
+    
+    # Sort the unique values
+    sorted_unique_values = _np.sort(unique_values)
+    
+    # Create a mapping from each unique value to its index in the sorted array
+    value_to_index_mapping = {value: index for index, value in enumerate(sorted_unique_values)}
+    
+    return value_to_index_mapping
+
+def map_array_values(A, mapping):
+    """
+    Maps the entries of an ND numpy array to their corresponding indices
+    based on a provided mapping of unique values to indices.
+
+    Parameters:
+    A (numpy.ndarray): A 3D numpy array.
+    mapping (dict): A dictionary mapping unique values to their indices.
+
+    Returns:
+    numpy.ndarray: A new 3D numpy array with values mapped to their corresponding indices.
+    """
+    # Vectorize the mapping function
+    vectorized_mapping = _np.vectorize(mapping.get)
+    
+    # Apply the mapping to the array
+    mapped_A = vectorized_mapping(A)
+    
+    return mapped_A
         
 def create_input_data(circs:list, fidelities:list, tracked_error_gens: list, 
                       pspec, geometry: str, num_qubits = None, num_channels = None, 
                       measurement_encoding = None, idealouts = None,
                       indexmapper = None, indexmapper_kwargs = {}, 
                       valuemapper = None, valuemapper_kwargs = {},
-                      max_depth = None, return_separate=False, stimDict = None):
+                      max_depth = None, return_separate=False, stimDict = None,
+                      large_encoding = False):
     '''
     Maps a list of circuits and fidelities to numpy arrays of encoded circuits and fidelities. 
 
@@ -313,6 +356,9 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
                                                          valuemapper, valuemapper_kwargs 
                                                          )              
         c_indices, c_signs = create_error_propagation_matrix(c, tracked_error_gens, stim_dict = stimDict)
+        if large_encoding:
+            mapping = unique_value_mapping(c_indices)
+            c_indices = map_array_values(c_indices, mapping)
         x_indices[i, 0:c.depth, :] = c_indices # deprecated: np.rint(c_indices)
         x_signs[i, 0:c.depth, :] = c_signs # deprecated: np.rint(c_signs)
         if measurement_encoding == 1:
