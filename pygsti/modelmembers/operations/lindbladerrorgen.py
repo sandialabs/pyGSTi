@@ -767,6 +767,7 @@ class LindbladErrorgen(_LinearOperator):
 
             assert(_np.isclose(_np.linalg.norm(lnd_error_gen.imag), 0)), \
                 "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
+            
             return lnd_error_gen.real
 
         elif self._rep_type == 'sparse superop':
