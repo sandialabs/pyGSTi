@@ -72,12 +72,6 @@ class SU2:
     
     @classmethod
     def angles_from_unitary(cls,R, tol=1e-10):
-        """
-        T = logm(R)/i
-        Is T in the span of Jx,Jy,Jz for the appropriately sized (Jx,Jy,Jz) ?
-        """
-        # if R.shape == (2,2):
-        #     return SU2.angles_from_2x2_unitary(R)
         
         def log_unitary(U):
             T,Z = la.schur(U, output='complex')
@@ -88,8 +82,7 @@ class SU2:
             U_recover_mine      = la.expm(log_U)
             U_recover_reference = la.expm(la.logm(U))
             assert la.norm(U_recover_mine - U_recover_reference) < tol
-            if la.norm(U_recover_mine - U) > tol:
-                warnings.warn('Logm did not invert under expm!')
+            assert la.norm(U_recover_mine - U) < tol
             return log_U
         
         T = log_unitary(R) / 1j
@@ -194,7 +187,7 @@ class SU2:
         return out
 
     @classmethod
-    def character_from_unitary(cls, U, j=None):
+    def character_from_unitary(cls, U, j=1/2):
         assert U.shape[0] == U.shape[1]
         dim = U.shape[0]
         if dim != 2:
@@ -203,31 +196,14 @@ class SU2:
             R2x2 = SU2.unitaries_from_angles(a,b,g)[0]
             return SU2.character_from_unitary(R2x2, j)
         
-        if j is None:
-            j = (dim - 1)/2
         eigs = la.eigvals(U) # eigs = exp(\pm i theta /2)
         theta = np.real(2*np.log(eigs[0])/1j)
         tr = np.trace(U)
         check = tr - 2*np.cos(theta/2)
         assert abs(check) < 1e-10
 
-        ceil_j = int(np.ceil(j))
+        return np.real(np.sum([np.exp(1j*__j*theta) for __j in np.arange(-j, j+1)]))
 
-        if ceil_j == int(np.floor(j + 1)):
-            # character  = 2 * Sum_{k=1}^{j+1/2}{ cos( (k-1/2)*Theta ) }
-            j_plus_half = int(np.ceil(j))
-            k_vec = np.arange(1, j_plus_half + 1)
-            temp = np.cos((k_vec - 0.5) * theta)
-            character = 2*np.sum(temp)
-            return character
-        
-        if abs(ceil_j == int(np.floor(j))):
-            # character = 1 + 2*Sum_{k=1}^{j}{ cos( k*Theta ) }
-            k_vec = np.arange(1, j+1)
-            temp = np.cos(k_vec * theta)
-            character = 1 + 2*np.sum(temp)
-            return character
-        return
     
     @staticmethod
     def characters_from_angles(alphas, betas, gammas, j):
@@ -597,9 +573,24 @@ class Spin72(SU2):
         coeffs /= Spin72.irrep_block_sizes
         tA = np.sum([coeffs[i]*P for i,P in enumerate(Spin72.irrep_stdmx_projectors)])
         return tA
-    
-    # @staticmethod
-    # def chi()
+
+    @classmethod
+    def all_characters_from_unitary(cls, U):
+        """
+        Equivalent to np.array([
+            SU2.characters_from_angles(a, b, g, (__twojplusone-1)/2 )[0] for __twojplusone in range(1,16,2)
+        ]), where (a,b,g) are the Euler angles for U.
+        """
+        A = pygsti.tools.unitary_to_std_process_mx(U)
+        diag = np.diag(cls.superop_stdmx_cob @ A @ cls.superop_stdmx_cob.conj().T).real
+        out = []
+        idx = 0
+        for b_sz in cls.irrep_block_sizes:
+            vec = diag[idx:idx+b_sz]
+            out.append(np.sum(vec))
+            idx += b_sz
+        out = np.array(out)
+        return out
 
 
 def get_M():
