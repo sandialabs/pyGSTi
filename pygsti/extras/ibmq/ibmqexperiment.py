@@ -51,6 +51,7 @@ except ImportError:
 from pygsti import data as _data, io as _io
 from pygsti.protocols import ProtocolData as _ProtocolData, HasProcessorSpec as _HasPSpec
 from pygsti.protocols.protocol import _TreeNode
+from pygsti.io import metadir as _metadir
 
 
 # Needs to be defined first for multiprocessing reasons
@@ -195,6 +196,7 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         # If not in this list, will be automatically dumped to meta.json
         # 'none' means it will not be read in, 'reset' means it will come back in as None
         # Several of these could be stored in the meta.json but are kept external for easy chkpts
+        # DEV NOTE: If any of these change, make sure to update the checkpointing code appropriately
         self.auxfile_types['edesign'] = 'none'
         self.auxfile_types['data'] = 'reset'
         # self.processor_spec is handled by _HasPSpec base class
@@ -239,9 +241,15 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                             try:
                                 metrics = qjob.metrics()
                                 start_time = _datetime.fromisoformat(metrics["estimated_start_time"])
-                                print(f'  - Estimated start time: {start_time.astimezone()} (local timezone)')
+                                local_time = start_time.astimezone()
+                                print(f'  - Estimated start time: {local_time.strftime("%Y-%m-%d %H:%M:%S")} (local timezone)')
                             except Exception:
                                 print(f'  - Unable to retrieve estimated start time')
+            elif status in [_JobStatus.ERROR, 'ERROR']:
+                try:
+                    print(f'  - Error logs: {qjob.logs()}')
+                except Exception:
+                    print(f'  - Unable to access error logs')
 
         # Print unsubmitted for any entries in qobj but not qjob
         for counter in range(len(self.qjobs), len(self.qiskit_isa_circuit_batches)):
@@ -446,7 +454,23 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 finally:
                     # Checkpoint calibration and job id data
                     if not self.disable_checkpointing:
-                        self._write_checkpoint()
+                        chkpt_path = _pathlib.Path(self.checkpoint_path) / "ibmqexperiment"
+                        with open(chkpt_path / 'meta.json', 'r') as f:
+                            metadata = _json.load(f)
+
+                        _metadir._write_auxfile_member(chkpt_path, 'job_ids', self.auxfile_types['job_ids'], self.job_ids)
+                        
+                        if self.auxfile_types['submit_time_calibration_data'] == 'list:json':
+                            # We only need to write the last calibration data
+                            filenm = f"submit_time_calibration_data{len(self.submit_time_calibration_data)-1}"
+                            _metadir._write_auxfile_member(chkpt_path, filenm, 'json', self.submit_time_calibration_data[-1])
+                            metadata['submit_time_calibration_data'].append(None)
+                        else:
+                            # We are pickling the whole thing, no option to do incremental
+                            _metadir._write_auxfile_member(chkpt_path, 'submit_time_calibration_data', 'pickle', self.submit_time_calibration_data)
+                        
+                        with open(chkpt_path / 'meta.json', 'w') as f:
+                            _json.dump(metadata, f, indent=4)
             
             if submit_status is False:
                 raise RuntimeError("Ran out of max attempts and job was still not submitted successfully")
@@ -506,10 +530,21 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
                 self.pygsti_circuit_batches.append(circuits[start:end])
             
             if not self.disable_checkpointing:
-                self._write_checkpoint()
+                chkpt_path = _pathlib.Path(self.checkpoint_path) / "ibmqexperiment"
+                with open(chkpt_path / 'meta.json', 'r') as f:
+                    metadata = _json.load(f)
+                
+                pcbdata = _metadir._write_auxfile_member(chkpt_path, 'pygsti_circuit_batches', self.auxfile_types['pygsti_circuit_batches'], self.pygsti_circuit_batches)
+                if 'pygsti_circuit_batches' in metadata:
+                    metadata['pygsti_circuit_batches'] = pcbdata
+                
+                with open(chkpt_path / 'meta.json', 'w') as f:
+                    _json.dump(metadata, f)
 
         if len(self.qiskit_isa_circuit_batches):
             print(f'Already completed transpilation of {len(self.qiskit_isa_circuit_batches)}/{num_batches} circuit batches')
+            if len(self.qiskit_isa_circuit_batches) == num_batches:
+                return
 
         pm = _pass_manager(backend=ibmq_backend, **qiskit_pass_kwargs)
 
@@ -521,14 +556,23 @@ class IBMQExperiment(_TreeNode, _HasPSpec):
         task_fn = _partial(_transpile_batch, pass_manager=pm, qasm_convert_kwargs=qasm_convert_kwargs)
 
         # Run in parallel (p.imap) with progress bars (tqdm)
-        with _mp.Pool(num_workers) as p:
-            isa_circuits = list(_tqdm.tqdm(p.imap(task_fn, tasks), total=len(tasks)))
-        
-        # Save all of our circuits
-        self.qiskit_isa_circuit_batches.extend(isa_circuits)
+        #with _mp.Pool(num_workers) as p:
+        #    isa_circuits = list(_tqdm.tqdm(p.imap(task_fn, tasks), total=len(tasks)))
+        for task in _tqdm.tqdm(tasks):
+            self.qiskit_isa_circuit_batches.append(task_fn(task))
 
-        if not self.disable_checkpointing:
-            self._write_checkpoint()
+            # Save single batch
+            chkpt_path = _pathlib.Path(self.checkpoint_path) / "ibmqexperiment"
+            with open(chkpt_path / 'meta.json', 'r') as f:
+                metadata = _json.load(f)
+
+            filenm = f"qiskit_isa_circuit_batches{len(self.qiskit_isa_circuit_batches)-1}"
+            _metadir._write_auxfile_member(chkpt_path, filenm, 'qpy', self.qiskit_isa_circuit_batches[-1])    
+            if 'qiskit_isa_circuit_batches' in metadata:
+                metadata['qiskit_isa_circuit_batches'].append(None)
+            
+            with open(chkpt_path / 'meta.json', 'w') as f:
+                _json.dump(metadata, f)
 
     def write(self, dirname=None):
         """
