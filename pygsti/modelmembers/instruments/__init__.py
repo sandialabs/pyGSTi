@@ -13,11 +13,9 @@ Sub-package holding model instrument objects.
 from .instrument import Instrument
 from .tpinstrument import TPInstrument
 from .tpinstrumentop import TPInstrumentOp
-from .mcminstrument import MCMInstrument
-from .mcminstrumentop import MCMInstrumentOp
+from .composedinstrument import ComposedInstrument
+from .composedinstrumentop import ComposedInstrumentOp
 from .embeddedinst import EmbeddedInst
-from .paritycheckinst import ParityCheckInst
-
 from pygsti.tools import optools as _ot
 
 # Avoid circular import
