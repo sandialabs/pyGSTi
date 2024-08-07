@@ -13,7 +13,7 @@ Defines the MCMInstrument class
 import collections as _collections
 import numpy as _np
 from pygsti.modelmembers import modelmember as _mm
-from pygsti.modelmembers.instruments.mcminstrumentop import MCMInstrumentOp as _MCMInstrumentOp
+from pygsti.modelmembers.instruments.composedinstrumentop import ComposedInstrumentOp as _ComposedInstrumentOp
 
 
 from pygsti.modelmembers import operations as _op
@@ -22,7 +22,7 @@ from pygsti.tools import matrixtools as _mt
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.tools import optools as _ot
 
-class MCMInstrument(_mm.ModelMember, _collections.OrderedDict):
+class ComposedInstrument(_mm.ModelMember, _collections.OrderedDict):
     """
     A new class for representing a quantum instrument, the mathematical description 
     of an intermediate measurement. This class relies on the "auxiliary picture" where 
@@ -51,7 +51,7 @@ class MCMInstrument(_mm.ModelMember, _collections.OrderedDict):
         The parameterization for this instrument, either "CPTPLND" or "GLND" (full TP). 
     """
  
-    def __init__(self, evotype="default", state_space=None, items=None, parameterization="CPTPLND"):
+    def __init__(self, evotype="default", state_space=None, items=None, type="MCM", parameterization="CPTPLND"):
         self.parameterization = parameterization
 
         #Calculate some necessary matrices to define the isometries below 
@@ -59,12 +59,18 @@ class MCMInstrument(_mm.ModelMember, _collections.OrderedDict):
         one = 1/_np.sqrt(2) * _np.array([[1],[0],[0],[-1]])
         CNOT = _ot.unitary_to_pauligate(_np.array([[1,0,0,0], [0,1,0,0],[0,0,0,1],[0,0,1,0]]))
         
-        dim = 4
-        self.aux_GATES = CNOT
-        
+        if type == "MCM": 
+            dim = 4
+            self.aux_GATES = CNOT
+        elif type == "PC":
+            dim = 16
+            self.aux_GATES = _np.kron(CNOT, _np.identity(4)) @ _np.kron(_np.identity(4), CNOT) @ _np.kron(CNOT, _np.identity(4))
+        else: 
+            raise NotImplementedError("Only parity check and MCM implemented currently.")   
+            
         #Define the error generator as the all ones string
         if parameterization == "TP Map":
-            self.noise_map = _op.FullTPOp(_np.identity(16), basis='pp')
+            self.noise_map = _op.FullTPOp(_np.identity(dim*4), basis='pp')
         else: 
             error_gen = _op.LindbladErrorgen.from_error_generator(_np.zeros((dim*4,dim*4)), parameterization=self.parameterization) 
             self.noise_map = _op.ExpErrorgenOp(error_gen)
@@ -79,7 +85,7 @@ class MCMInstrument(_mm.ModelMember, _collections.OrderedDict):
         #Create the ordered dictionary structure characteristic of instruments 
         items = []
         for i in range(2): 
-            items.append([f'p{i}', _MCMInstrumentOp(self.noise_map, i, self.right_isometry, self.left_isometry, 'pp')])
+            items.append([f'p{i}', _ComposedInstrumentOp(self.noise_map, i, self.right_isometry, self.left_isometry, 'pp')])
 
         #some necessary initialization 
         _collections.OrderedDict.__init__(self, items)
@@ -124,7 +130,7 @@ class MCMInstrument(_mm.ModelMember, _collections.OrderedDict):
         """
         self.noise_map.from_vector(v)
         for i in range(2): 
-            self[f'p{i}'] =  _MCMInstrumentOp(self.noise_map, i, self.right_isometry, self.left_isometry, 'pp')
+            self[f'p{i}'] =  _ComposedInstrumentOp(self.noise_map, i, self.right_isometry, self.left_isometry, 'pp')
         self.dirty = dirty_value 
 
     def submembers(self):
@@ -225,7 +231,7 @@ class MCMInstrument(_mm.ModelMember, _collections.OrderedDict):
         Si = s.transform_matrix_inverse
         self.noise_map = _op.FullTPOp(_np.kron(Si, _np.eye(4)) @ self.noise_map.to_dense() @ self.aux_GATES @ _np.kron(Smx, _np.eye(4))  @ self.aux_GATES)
         for i in range(2): 
-            self[f'p{i}'] = _MCMInstrumentOp(self.noise_map, i, self.right_isometry, self.left_isometry, 'pp')
+            self[f'p{i}'] = _ComposedInstrumentOp(self.noise_map, i, self.right_isometry, self.left_isometry, 'pp')
         self.dirty = True
     
     def __str__(self):

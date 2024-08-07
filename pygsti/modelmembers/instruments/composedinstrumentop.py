@@ -16,7 +16,7 @@ from pygsti.modelmembers.operations import DenseOperator as _DenseOperator
 from pygsti.baseobjs import statespace as _statespace
 
 
-class MCMInstrumentOp(_DenseOperator):
+class ComposedInstrumentOp(_DenseOperator):
     """
     An element of a :class:`MCMInstrument`.
 
@@ -51,9 +51,9 @@ class MCMInstrumentOp(_DenseOperator):
     
     """
     def __init__(self, noise_map, index, right_isometry, left_isometry, basis=None):
-        dim = 4 
         self.index = index
         self.noise_map = noise_map 
+        dim = int(self.noise_map.dim/4)
         
         self.op_right_iso = right_isometry 
         self.op_left_iso = left_isometry[index] 
@@ -93,14 +93,14 @@ class MCMInstrumentOp(_DenseOperator):
         numpy array
             Array of derivatives with shape (dimension^2, num_params)
         """
-
+        map_dim = self.noise_map.dim 
         noise_map_derivMx = self.noise_map.deriv_wrt_params()
         ptm_wrt_params = []
-        for param_num in range(240):
+        for param_num in range(self.noise_map.num_params):
             ptm_noise_map_derivMx = []
-            for matrix_el in range(256):
+            for matrix_el in range(map_dim*map_dim):
                 ptm_noise_map_derivMx += [noise_map_derivMx[matrix_el][param_num]]
-            ptm_wrt_params += [list(_np.ravel(self.op_left_iso @ _np.reshape(ptm_noise_map_derivMx, (16,16)) @ self.op_right_iso))]
+            ptm_wrt_params += [list(_np.ravel(self.op_left_iso @ _np.reshape(ptm_noise_map_derivMx, (map_dim,map_dim)) @ self.op_right_iso))]
         derivMx = _np.array(ptm_wrt_params).transpose()
         if wrt_filter is None:
             return derivMx
