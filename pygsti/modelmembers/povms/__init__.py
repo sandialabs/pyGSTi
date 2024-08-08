@@ -409,18 +409,48 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
 
                 dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
                 dense_povm = _np.concatenate(dense_effects, axis=0)
+
+                def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-9):
+	
+                        errgen = _LindbladErrorgen.from_error_generator(4, parameterization="GLND")
+                        exp_errgen = _ExpErrorgenOp(errgen)
+                        ideal_vec = _np.zeros(12)
+                        J = _np.zeros((dense_ideal_povm.shape[0]*dense_ideal_povm.shape[1],12))
+                        
+                        for i in range(len(ideal_vec)):
+                            new_vec = ideal_vec.copy()
+                            new_vec[i] = epsilon
+                            exp_errgen.from_vector(new_vec)
+                            vectorized_povm = _np.zeros(dense_ideal_povm.shape[0]*dense_ideal_povm.shape[1])
+                            perturbed_povm = (dense_ideal_povm @ exp_errgen.to_dense() - dense_ideal_povm)/epsilon
+
+                            perturbed_povm_t = perturbed_povm.transpose()
+                            for j, column in enumerate(perturbed_povm_t):
+                                vectorized_povm[j*len(perturbed_povm_t[0]):(j+1)*len(perturbed_povm_t[0])] = column
+                            
+                            J[:,i] = vectorized_povm.transpose()
+
+                        _,S,V = _np.linalg.svd(J)
+                        return V[:len(S),]
+                
+                phys_directions = calc_physical_subspace(dense_ideal_povm)
+
                 
                 def _objfn(v):
-                    errorgen.from_vector(v)
+                    L_vec = _np.zeros(len(phys_directions[0]))
+                    for coeff, phys_direction in zip(v,phys_directions):
+                        L_vec += coeff * phys_direction
+                    errorgen.from_vector(L_vec)
                     return _np.linalg.norm(dense_povm - dense_ideal_povm @ _spl.expm(errorgen.to_dense()))
                 
                 #def callback(x): print("callbk: ",_np.linalg.norm(x),_objfn(x))  # REMOVE
-                soln = _spo.minimize(_objfn, _np.zeros(errorgen.num_params, 'd'), method="Nelder-Mead", options={},
-                                        tol=1e-12)  # , callback=callback)
+                soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
+                                        tol=1e-13)  # , callback=callback)
                 #print("DEBUG: opt done: ",soln.success, soln.fun, soln.x)  # REMOVE
                 if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
-                    raise ValueError("Failed to find an errorgen such that exp(errorgen)|ideal> = |state>")
-                errorgen.from_vector(soln.x)
+                    raise ValueError("Failed to find an errorgen such that <ideal|exp(errorgen) = <effect|")
+                errgen_vec = _np.linalg.pinv(phys_directions)  @ soln.x
+                errorgen.from_vector(errgen_vec)
                 
                 EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
                 return ComposedPOVM(EffectiveExpErrorgen(errorgen), base_povm, mx_basis=basis)

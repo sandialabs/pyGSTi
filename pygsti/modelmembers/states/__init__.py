@@ -262,16 +262,39 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                     dense_st = st.to_dense()
                     dense_state = state.to_dense()
 
+                    def calc_physical_subspace(ideal_prep, epsilon = 1e-9):
+	
+                        errgen = _LindbladErrorgen.from_error_generator(4, parameterization="GLND")
+                        exp_errgen = _ExpErrorgenOp(errgen)
+                        ideal_vec = _np.zeros(12)
+                        J = _np.zeros((3,12))
+
+                        for i in range(len(ideal_vec)):
+                            new_vec = ideal_vec.copy()
+                            new_vec[i] = epsilon
+                            exp_errgen.from_vector(new_vec)
+                            J[:,i] = (exp_errgen.to_dense() @ ideal_prep - ideal_prep)[1:]/epsilon
+
+                        _,S,V = _np.linalg.svd(J)
+                        return V[:len(S),]
+                        
+                    phys_directions = calc_physical_subspace(dense_state)
+
                     def _objfn(v):
-                        errorgen.from_vector(v)
+                        L_vec = _np.zeros(len(phys_directions[0]))
+                        for coeff, phys_direction in zip(v,phys_directions):
+                            L_vec += coeff * phys_direction
+                        errorgen.from_vector(L_vec)
                         return _np.linalg.norm(_spl.expm(errorgen.to_dense()) @ dense_st - dense_state)
                     #def callback(x): print("callbk: ",_np.linalg.norm(x),_objfn(x))  # REMOVE
-                    soln = _spo.minimize(_objfn, _np.zeros(errorgen.num_params, 'd'), method="Nelder-Mead", options={},
-                                         tol=1e-12)  # , callback=callback)
+                    soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
+                                         tol=1e-13)  # , callback=callback)
                     #print("DEBUG: opt done: ",soln.success, soln.fun, soln.x)  # REMOVE
                     if not soln.success and soln.fun > 1e-6:  # not "or" because success is often not set correctly
                         raise ValueError("Failed to find an errorgen such that exp(errorgen)|ideal> = |state>")
-                    errorgen.from_vector(soln.x)
+                    
+                    errgen_vec = _np.linalg.pinv(phys_directions)  @ soln.x
+                    errorgen.from_vector(errgen_vec)
 
                 EffectiveExpErrorgen = _IdentityPlusErrorgenOp if lndtype.meta == '1+' else _ExpErrorgenOp
                 return ComposedState(st, EffectiveExpErrorgen(errorgen))
