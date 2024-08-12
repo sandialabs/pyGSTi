@@ -71,6 +71,45 @@ class ComposedInstrumentOp(_DenseOperator):
         assert(self._ptr.shape == (self.dim, self.dim))
         self._ptr.flags.writeable = False
         self._ptr_has_changed()
+
+    def from_vector(self, v, close=False, dirty_value=True):
+        """
+        Initialize the Instrument using a vector of its parameters.
+
+        Parameters
+        ----------
+        v : numpy array
+            The 1D vector of gate parameters.  Length
+            must == num_params().
+
+        close : bool, optional
+            Whether `v` is close to this Instrument's current
+            set of parameters.  Under some circumstances, when this
+            is true this call can be completed more quickly.
+
+        dirty_value : bool, optional
+            The value to set this object's "dirty flag" to before exiting this
+            call.  This is passed as an argument so it can be updated *recursively*.
+            Leave this set to `True` unless you know what you're doing.
+
+        Returns
+        -------
+        None
+        """
+        self.noise_map.from_vector(v) 
+        self.dirty = dirty_value
+
+    def to_vector(self):  # same as in Instrument but w/.submembers() CONSOLIDATE?
+        """
+        Extract a vector of the underlying gate parameters from this Instrument.
+
+        Returns
+        -------
+        numpy array
+            a 1D numpy array with length == num_params().
+        """
+        v = self.noise_map.to_vector()
+        return v
         
     def deriv_wrt_params(self, wrt_filter=None):
         """

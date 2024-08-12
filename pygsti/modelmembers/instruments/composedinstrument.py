@@ -211,6 +211,28 @@ class ComposedInstrument(_mm.ModelMember, _collections.OrderedDict):
         int
         """
         return sum([g.size for g in self.values()])
+    
+    def to_dense(self, on_space='minimal'):
+        """
+        Return the dense array used to represent this operation within its evolution type.
+
+        Note: for efficiency, this doesn't copy the underlying data, so
+        the caller should copy this data before modifying it.
+
+        Parameters
+        ----------
+        on_space : {'minimal', 'Hilbert', 'HilbertSchmidt'}
+            The space that the returned dense operation acts upon.  For unitary matrices and bra/ket vectors,
+            use `'Hilbert'`.  For superoperator matrices and super-bra/super-ket vectors use `'HilbertSchmidt'`.
+            `'minimal'` means that `'Hilbert'` is used if possible given this operator's evolution type, and
+            otherwise `'HilbertSchmidt'` is used.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+
+        return self.noise_map.to_dense(on_space)
 
     def transform_inplace(self,s): 
         """
