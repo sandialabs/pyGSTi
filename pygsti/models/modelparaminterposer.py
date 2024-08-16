@@ -66,7 +66,7 @@ class LinearInterposer(ModelParamsInterposer):
         self.transform_matrix = transform_matrix  # cols specify a model parameter in terms of op params.
         self.inv_transform_matrix = _np.linalg.pinv(self.transform_matrix)
         super().__init__(transform_matrix.shape[1], transform_matrix.shape[0])
-
+    
     def model_paramvec_to_ops_paramvec(self, v):
         return _np.dot(self.transform_matrix, v)
 
