@@ -10,6 +10,8 @@ from pygsti.tools.optools import unitary_to_superop
 from pygsti.baseobjs import basisconstructors as bcons
 from typing import List, Tuple
 import warnings
+import scipy as sp
+from tqdm import tqdm
 
 
 def check_su2_generators(Jx, Jy, Jz):
@@ -38,6 +40,50 @@ def check_su2_generators(Jx, Jy, Jz):
     assert is_zero(diff), f'\n{str(diff)}\n\tis not zero up to tolerance {tol}.'
     return
 
+def batch_normal_expm_1jscales(eigvecs, eigvals, scales):
+    """
+    eigvecs is a square unitary matrix of order n, and eigvals is a vector of length n.
+    We return a numpy array of that's equivalent to
+
+        np.array([
+            eigvecs @ np.diag(1j * s * eigvals) @ eigvecs.T.conj() for s in scales
+        ])
+    
+    but that's constructed more efficiently.
+    
+    Note: The word "normal" appears in this function name because (eigvals, eigvecs)
+    implicitly define the normal operator eigvecs @ diag(eigvals) @ eigvecs.T.conj().
+    """
+    assert eigvals.ndim == 1
+    n = eigvals.size
+    assert eigvecs.shape == (n, n)
+
+    exp_eig = np.exp(1j * scales[:, np.newaxis] * eigvals[np.newaxis, :])
+    eigvecs_tile = np.broadcast_to(eigvecs, (scales.size, n, n))
+    left = eigvecs_tile * exp_eig[:, np.newaxis, :]
+    batch_out = left @ eigvecs.T.conj()
+    return batch_out
+
+def batch_eigvals_2x2(mats):
+    """
+    If M is a 2-by-2 matrix, then its eigenvalues are a ± √(a² - d), where a = mean(diag(M)) and d = det(M).
+
+    Given an array mats of shape (dim,2,2), we return a dim-by-2 array whose rows are the eigenvalues of
+    the matrices mat[i,:,:]. This function's output is only accurate to the square-root of the working precision
+    (so for IEEE double precision that comes out to about 1e-8).
+    """
+    panels = mats.shape[0]
+    assert mats.ndim == 3
+    assert mats.shape == (panels, 2, 2)
+    a = np.trace(mats, axis1=1, axis2=2)/2
+    d = mats[:,0,0]*mats[:,1,1] - mats[:,0,1]*mats[1,0]
+    radical = np.sqrt(a**2 - d)
+    out = np.zeros(panels, 2)
+    out[:,0] = a + radical
+    out[:,1] = a - radical
+    return out
+
+
 
 class SU2:
 
@@ -45,15 +91,10 @@ class SU2:
     Jy = bcons.sigmay / 2
     Jz = bcons.sigmaz / 2
     check_su2_generators(Jx, Jy, Jz)
-
-    """
-    The "formula" for the character function in terms of euler angles is nasty.
-    Just convert to a 2-by-2 matrix represetation, compute the eigenvalues,
-    I'll get e^(\pm 1j \theta /2), and that lets me read off theta.
-
-    The character only depends on \theta and it has a specific formula for a given
-    j that depends on whether j is integral or half-integral. Robin will send formula.
-    """
+    VJx = np.array([[1, 1], [1,   -1]]) / np.sqrt(2)
+    VJy = np.array([[1, 1], [1j, -1j]]) / np.sqrt(2)
+    # VJx and VJy are eigenbases for Jx and Jy, respectively.
+    # The eigenvalues of Jx, Jy are both (0.5, -0.5).
 
     @staticmethod
     def random_euler_angles(size=1):
@@ -71,7 +112,7 @@ class SU2:
         return Rs
     
     @classmethod
-    def angles_from_unitary(cls,R, tol=1e-10):
+    def angles_from_unitary(cls, R, tol=1e-10):
         
         def log_unitary(U):
             T,Z = la.schur(U, output='complex')
@@ -98,25 +139,36 @@ class SU2:
 
     @staticmethod
     def expm_iJx(theta):
-        return la.expm(1j*theta*SU2.Jx)
+        if not isinstance(theta, np.ndarray):
+            batch = SU2.expm_iJx(np.array(theta))
+            return batch[0]
+        return batch_normal_expm_1jscales(SU2.VJx, np.array([0.5, -0.5]), theta)
     
     @staticmethod
     def expm_iJy(theta):
-        return la.expm(1j*theta*SU2.Jy)
+        if not isinstance(theta, np.ndarray):
+            batch = SU2.expm_iJy(np.array(theta))
+            return batch[0]
+        return batch_normal_expm_1jscales(SU2.VJy, np.array([0.5, -0.5]), theta)
 
     @staticmethod
     def angles_from_2x2_unitary(R):
         assert R.shape == (2, 2)
         # Compute the euler angles from the SU(2) elements
         beta = 2*np.arccos(np.real(np.sqrt(R[0,0]*R[1,1])))
-        alpha = np.angle(-1.j*R[0,0]*R[0,1]/(np.sin(beta/2)*np.cos(beta/2)))
-        if alpha < 0:
-            alpha += 2*np.pi
-        gamma = np.angle(-1.j*R[0,0]*R[1,0]/(np.sin(beta/2)*np.cos(beta/2)))
-        if gamma < 0:
-            gamma += 2*np.pi
-        if np.isclose(np.exp(1.j*(alpha+gamma)/2)*np.cos(beta/2) / R[0,0], -1):
-            gamma += 2*np.pi
+        try:
+            alpha = np.angle(-1.j*R[0,0]*R[0,1]/(np.sin(beta/2)*np.cos(beta/2)))
+            if alpha < 0:
+                alpha += 2*np.pi
+            gamma = np.angle(-1.j*R[0,0]*R[1,0]/(np.sin(beta/2)*np.cos(beta/2)))
+            if gamma < 0:
+                gamma += 2*np.pi
+            if np.isclose(np.exp(1.j*(alpha+gamma)/2)*np.cos(beta/2) / R[0,0], -1):
+                gamma += 2*np.pi
+        except ZeroDivisionError:
+            alpha, beta, gamma = 0, 0, 0
+        if np.any(np.isnan((alpha, beta, gamma))):
+            return 0,0,0
         return alpha, beta, gamma
     
     @classmethod
@@ -129,61 +181,79 @@ class SU2:
         gamma = np.atleast_1d(gamma)
 
         if not array_on_input:
-            alpha.size == beta.size == gamma.size == 1
+            assert alpha.size == beta.size == gamma.size == 1
 
         dJz = np.diag(cls.Jz)
-        angles = zip(alpha, beta, gamma)
-        out = []
-        for abg in angles:
-            a, b, g = abg
-            scaled_rows = cls.expm_iJx(b) * (np.exp(1j * a * dJz))[:, np.newaxis]
-            # scaled_rows = la.expm(1j * b * Jx) * (np.exp(1j * a * dJz))[:, np.newaxis]
-            mat = scaled_rows * (np.exp(1j * g * dJz))[np.newaxis, :]
-            # left   = np.diag(np.exp(1j * a * dJz))
-            # middle = la.expm(1j * b * Jx) 
-            # right  = np.diag(np.exp(1j * g * dJz))
-            # mat = left @ middle @ right
-            out.append(mat)
 
+        if cls == SU2:
+            right = (np.exp(1j * alpha[:, np.newaxis] * dJz[np.newaxis,:]))[:, :, np.newaxis]
+            center = cls.expm_iJx(beta)
+            left  = (np.exp(1j * gamma[:, np.newaxis] * dJz[np.newaxis,:]))[:, np.newaxis, :]
+            out = left * center * right
+        else:
+            out = []
+            angles = zip(alpha, beta, gamma)
+            for abg in angles:
+                a, b, g = abg
+                scaled_rows = cls.expm_iJx(b) * (np.exp(1j * a * dJz))[:, np.newaxis]
+                # scaled_rows = la.expm(1j * b * Jx) * (np.exp(1j * a * dJz))[:, np.newaxis]
+                mat = scaled_rows * (np.exp(1j * g * dJz))[np.newaxis, :]
+                # left   = np.diag(np.exp(1j * a * dJz))
+                # middle = la.expm(1j * b * Jx) 
+                # right  = np.diag(np.exp(1j * g * dJz))
+                # mat = left @ middle @ right
+                out.append(mat)    
         return out
 
     @classmethod
-    def composition_inverse(cls, alphas, betas, gammas, as_angles=True):
+    def composition(cls, alphas, betas, gammas, as_angles=True):
         Rs = SU2.unitaries_from_angles(alphas, betas, gammas)
         R_composed = np.eye(2)
         for R in Rs:
             R_composed = R @ R_composed
-        invR_composed = R_composed.T.conj()
-        ea = SU2.angles_from_2x2_unitary(invR_composed)
+        ea = SU2.angles_from_2x2_unitary(R_composed)
         if as_angles:
             return ea
         else:
-            invR_mat = cls.unitaries_from_angles(*ea)[0]
-            return invR_mat
+            R_mat = cls.unitaries_from_angles(*ea)[0]
+            return R_mat
+
+    @staticmethod
+    def inverse_angles(alpha, beta, gamma):
+        R = SU2.unitaries_from_angles(alpha, beta, gamma)[0]
+        R = R.T.conj()
+        angles = SU2.angles_from_2x2_unitary(R)
+        return angles
+
+    @classmethod
+    def composition_inverse(cls, alphas, betas, gammas, as_angles=True):
+        composed_angles = SU2.composition(alphas, betas, gammas)
+        inverted_angles = SU2.inverse_angles(*composed_angles)
+        if as_angles:
+            return inverted_angles
+        else:
+            return cls.unitaries_from_angles(*inverted_angles)[0]
     
     @staticmethod
-    def rb_circuits_by_angles(N: int, lengths: List[int], seed=0) -> np.ndarray[Tuple[float,float,float]]:
+    def rb_circuits_by_angles(N: int, lengths: List[int], seed=0, invert_from=0) -> np.ndarray[Tuple[float,float,float]]:
         np.random.seed(seed)
         out = []
     
-        if lengths[0] == 0:
-            angles_for_length_0 = [np.zeros((1,3)) for _ in range(N)]
-            out.append(angles_for_length_0)
-            remaining_lengths = lengths[1:]
-        else:
-            remaining_lengths = lengths
-
-        assert 0 not in remaining_lengths
-        for ell in remaining_lengths:
-            angles_for_length_ell = []
+        assert 0 not in lengths
+        for ell in lengths:
+            circuits_for_length_ell = []
             for _ in range(N):
                 alphas, betas, gammas = SU2.random_euler_angles(ell)
-                inv_angles = SU2.composition_inverse(alphas, betas, gammas, as_angles=True)
-                ell_out = list(zip(alphas, betas, gammas))
-                ell_out.append(inv_angles)
-                angles_for_length_ell.append(np.array(ell_out))
-            out.append(angles_for_length_ell)
-        # out[i,j] = (lengths[i]+1)-by-3 array whose columns contain angles for the j-th RB circuit of length lenghts[i].
+                gf_angles = SU2.composition_inverse(
+                    alphas[invert_from:], betas[invert_from:], gammas[invert_from:]
+                )
+                circuit = list(zip(alphas, betas, gammas))
+                circuit.append(gf_angles)
+                circuit = np.array(circuit)
+                circuits_for_length_ell.append(circuit)
+            circuits_for_length_ell = np.array(circuits_for_length_ell)
+            out.append(circuits_for_length_ell)
+        # out[i][j] == out[i][j,:,:] == (lengths[i]+1)-by-3 array whose columns contain angles for the j-th RB circuit of length lenghts[i].
         return out
 
     @classmethod
@@ -415,6 +485,7 @@ class Spin72(SU2):
     C = clebsh_gordan_matrix_spin72()
     superop_stdmx_cob = C @ np.kron(la.expm(1j * np.pi * Jy), np.eye(8))
     irrep_block_sizes = np.array([i for i in range(1, 16, 2)])
+    irrep_labels = (irrep_block_sizes-1)/2
     irrep_stdmx_projectors = irrep_projectors(irrep_block_sizes, superop_stdmx_cob)
 
     @staticmethod
@@ -685,7 +756,10 @@ class Spin72RB:
         pass
 
     def set_error_channel_exponential(self, gamma: float):
-        assert gamma > 0
+        assert gamma >= 0
+        if gamma == 0:
+            self._noise_channel = np.eye(64)
+            return
         E_matrixunit = np.zeros((64, 64))
         for ell in range(64):
             # convert ell to a linear index; i = ell % 8, j = ell // 8
@@ -693,7 +767,7 @@ class Spin72RB:
             j = ell // 8
             E_matrixunit[ell,ell] = np.exp(-gamma * abs(i - j))
         self._noise_channel = pygsti.tools.basistools.change_basis(E_matrixunit, 'std', self._basis)
-        pass
+        return
 
     def set_error_channel_gaussian(self, gamma: float):
         assert gamma > 0
@@ -748,3 +822,73 @@ class Spin72RB:
             block[k,:] = self._povm @ superket
         return block
     
+    @staticmethod
+    def synspam_transform(_probs, shots_per_circuit=np.inf, seed=0):
+        #  probs[i,j,k,ell] = probability of measuring outcome ell when running the k-th lengths[j] circuit given preparation in state i.
+        M = get_M()
+        state = np.random.default_rng(seed)
+        num_lengths = _probs.shape[1]
+        N = _probs.shape[2]
+        pkm = np.zeros((8, num_lengths))
+        plm_equivs = []
+        for j in range(num_lengths):
+            # m = lengths[j]
+            Pmj = np.zeros((8,8))
+            for i in range(8):
+                distns_i = _probs[i,j,:,:]
+                if shots_per_circuit < np.inf:
+                    samples_i = np.zeros(8)
+                    for k in range(N):
+                        dist = distns_i[k]
+                        assert la.norm(dist[dist < 0]) < 1e-14
+                        dist[dist < 0] = 0.0
+                        dist /= np.sum(dist)
+                        temp = sp.stats.multinomial.rvs(shots_per_circuit, dist, random_state=state)
+                        samples_i += temp
+                    samples_i /= np.sum(samples_i)
+                else:
+                    samples_i = np.mean(distns_i, axis=0)
+                Pmj[i,:] = samples_i
+            plm_equivs.append(Pmj[np.diag_indices(8)])
+            Qmj = M @ Pmj @ M.T
+            pkm[:,j] = Qmj[np.diag_indices(8)]
+        plm = np.column_stack(plm_equivs)
+        return pkm, plm
+    
+    @staticmethod
+    def synspam_character_transform(_probs, _chars, shots_per_circuit=np.inf, seed=0):
+        #  probs[i,j,k,ell] = probability of measuring outcome ell when running the k-th lengths[j] circuit given preparation in state i.
+        #  chars[i,j,k,ell] = the value of the ell^th irrep's character function for the "hidden" initial gate in the k-th circuit of length lengths[j] given state prep in i.
+        assert _probs.shape == _chars.shape
+        M = get_M()
+        state = np.random.default_rng(seed)
+        num_lengths = _probs.shape[1]
+        N = _probs.shape[2]  # we ran this many circuits per (stateprep, rank-1 povm, length).
+        pkm = np.zeros((8, num_lengths))
+        plm_equivs = []
+        for j in range(num_lengths):
+            # m = lengths[j]
+            Pmj = np.zeros((8,8))
+            iterator = range(8) if shots_per_circuit == np.inf else tqdm(range(8))
+            for i in iterator:
+                distns_i = _probs[i,j,:,:]
+                if shots_per_circuit < np.inf:
+                    samples_i = np.zeros(8)
+                    for k in range(N):
+                        dist = distns_i[k].copy()
+                        assert la.norm(dist[dist < 0]) < 1e-14
+                        dist[dist < 0] = 0.0
+                        dist /= dist.sum()
+                        temp = sp.stats.multinomial.rvs(shots_per_circuit, dist, random_state=state)
+                        samples_i += (temp * _chars[i,j,k,:])
+                    samples_i *= Spin72.irrep_block_sizes
+                    samples_i /= (N*shots_per_circuit)
+                else:
+                    distns_i = distns_i * _chars[i,j,:,:] * Spin72.irrep_block_sizes[np.newaxis, :]
+                    samples_i = np.sum(distns_i, axis=0) / N  # How should I be normalizing this?
+                Pmj[i,:] = samples_i
+            plm_equivs.append(Pmj[np.diag_indices(8)])
+            Qmj = M @ Pmj @ M.T
+            pkm[:,j] = Qmj[np.diag_indices(8)]
+        plm = np.column_stack(plm_equivs)
+        return pkm, plm
