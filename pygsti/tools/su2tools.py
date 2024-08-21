@@ -6,12 +6,8 @@ from numpy import sqrt
 import pygsti.modelmembers
 import scipy.linalg as la
 import scipy.sparse as spar
-from pygsti.tools.optools import unitary_to_superop
 from pygsti.baseobjs import basisconstructors as bcons
 from typing import List, Tuple
-import warnings
-import scipy as sp
-import tqdm
 
 
 def check_su2_generators(Jx, Jy, Jz):
