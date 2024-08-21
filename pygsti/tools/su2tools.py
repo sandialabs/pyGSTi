@@ -10,6 +10,8 @@ from pygsti.tools.optools import unitary_to_superop
 from pygsti.baseobjs import basisconstructors as bcons
 from typing import List, Tuple
 import warnings
+import scipy as sp
+import tqdm
 
 
 def check_su2_generators(Jx, Jy, Jz):
@@ -402,7 +404,6 @@ def irrep_projectors(dims, cob):
         start = stop 
     return projectors
 
-
 class Spin72(SU2):
 
     SPINS = np.arange(start=7, stop=-8, step=-2)/2.0
@@ -415,6 +416,7 @@ class Spin72(SU2):
     C = clebsh_gordan_matrix_spin72()
     superop_stdmx_cob = C @ np.kron(la.expm(1j * np.pi * Jy), np.eye(8))
     irrep_block_sizes = np.array([i for i in range(1, 16, 2)])
+    irrep_labels = (irrep_block_sizes-1)/2
     irrep_stdmx_projectors = irrep_projectors(irrep_block_sizes, superop_stdmx_cob)
 
     @staticmethod
@@ -464,7 +466,7 @@ class Spin72(SU2):
         mat[5,5] = mat[2,2]
         mat[6,5] = s[1]*c[4]*(7*c[2] - 5) * sqrt(3)
         mat[7,5] = s[2]*c[5] * sqrt(21)
-        
+
         mat[6,6] = mat[1,1]
         mat[7,6] = s[1]*c[6] * sqrt(7)
 
@@ -487,7 +489,7 @@ class Spin72(SU2):
             assert la.norm(mat - num_mat, 'fro') <= 1e-13, 'Numeric and symbolic exponentiation give different results'
             # ^ an extremely crude sanity check.
         return mat
-    
+
     @staticmethod
     def expm_iJx(theta, numerically_verify=False):
         """
@@ -535,7 +537,7 @@ class Spin72(SU2):
         mat[5,5] = mat[2,2]
         mat[6,5] = s[1]*c[4]*(7*c[2] - 5) * sqrt(3) * (-1j)
         mat[7,5] = s[2]*c[5] * sqrt(21) * (-1)
-        
+
         mat[6,6] = mat[1,1]
         mat[7,6] = s[1]*c[6] * sqrt(7) * (-1j)
 
@@ -566,7 +568,7 @@ class Spin72(SU2):
         #       Rz_phi = np.diag(np.exp(-1j * Spin72.SPINS * phi))
         #       mat = Rz_phi @ Spin72.expm_iJy(-theta, numeric)
         return mat
-    
+
     @staticmethod
     def stdmx_twirl(A : np.ndarray) -> np.ndarray:
         coeffs = np.array([np.vdot(A,P) for P in Spin72.irrep_stdmx_projectors])
@@ -685,7 +687,10 @@ class Spin72RB:
         pass
 
     def set_error_channel_exponential(self, gamma: float):
-        assert gamma > 0
+        assert gamma >= 0
+        if gamma == 0:
+            self._noise_channel = np.eye(64)
+            return
         E_matrixunit = np.zeros((64, 64))
         for ell in range(64):
             # convert ell to a linear index; i = ell % 8, j = ell // 8
@@ -693,7 +698,7 @@ class Spin72RB:
             j = ell // 8
             E_matrixunit[ell,ell] = np.exp(-gamma * abs(i - j))
         self._noise_channel = pygsti.tools.basistools.change_basis(E_matrixunit, 'std', self._basis)
-        pass
+        return
 
     def set_error_channel_gaussian(self, gamma: float):
         assert gamma > 0
@@ -733,7 +738,7 @@ class Spin72RB:
                 starting_state = self._povm[i, :]
                 probs[i,j] = self.process_circuit_block(fixed_length_circuits, starting_state)
         return probs
-    
+
     def process_circuit_block(self, circuits, starting_superket):
         block = np.zeros(shape=(len(circuits), 8))
         # block[k,ell] = the probability of measuring outcome j after running the k-th circuit.
@@ -747,4 +752,36 @@ class Spin72RB:
                 superket = self._noise_channel @ (superop @ superket)
             block[k,:] = self._povm @ superket
         return block
-    
+
+    @staticmethod
+    def synspam_transform(_probs, shots_per_circuit=np.inf, seed=0):
+        #  probs[i,j,k,ell] = probability of measuring outcome ell when running the k-th lengths[j] circuit given preparation in state i.
+        M = get_M()
+        state = np.random.default_rng(seed)
+        num_lengths = _probs.shape[1]
+        N = _probs.shape[2]
+        pkm = np.zeros((8, num_lengths))
+        plm_equivs = []
+        for j in range(num_lengths):
+            # m = lengths[j]
+            Pmj = np.zeros((8,8))
+            for i in range(8):
+                distns_i = _probs[i,j,:,:]
+                if shots_per_circuit < np.inf:
+                    samples_i = np.zeros(8)
+                    for k in range(N):
+                        dist = distns_i[k]
+                        assert la.norm(dist[dist < 0]) < 1e-14
+                        dist[dist < 0] = 0.0
+                        dist /= np.sum(dist)
+                        temp = sp.stats.multinomial.rvs(shots_per_circuit, dist, random_state=state)
+                        samples_i += temp
+                    samples_i /= np.sum(samples_i)
+                else:
+                    samples_i = np.mean(distns_i, axis=0)
+                Pmj[i,:] = samples_i
+            plm_equivs.append(Pmj[np.diag_indices(8)])
+            Qmj = M @ Pmj @ M.T
+            pkm[:,j] = Qmj[np.diag_indices(8)]
+        plm = np.column_stack(plm_equivs)
+        return pkm, plm
