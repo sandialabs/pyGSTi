@@ -6,6 +6,7 @@ import pygsti.modelmembers
 import scipy.linalg as la
 from pygsti.tools.su2tools import SU2, Spin72
 from pygsti.tools.optools import unitary_to_superop
+from pygsti.tools.basistools import stdmx_to_vec, vec_to_stdmx
 from pygsti.baseobjs.basis import Basis, BuiltinBasis
 from typing import List
 from tqdm import tqdm
@@ -83,14 +84,14 @@ def get_F():
 
 
 @functools.cache
-def get_basischangers(dim, from_basis, to_basis):
+def get_operator_basischangers(dim, from_basis, to_basis):
     """
     Return matrices to_mx, from_mx so that a square matrix A of order "dim"
     in basis from_basis can be converted into its represention in to_basis by
     B = to_mx @ A @ from_mx
     """
     if from_basis == to_basis:
-        return np.eye(dim)
+        return np.eye(dim), np.eye(dim)
     if not isinstance(from_basis, Basis):
         from_basis = BuiltinBasis(from_basis, dim, sparse=False)
     if not isinstance(to_basis, Basis):
@@ -98,12 +99,52 @@ def get_basischangers(dim, from_basis, to_basis):
     to_mx = from_basis.create_transform_matrix(to_basis)
     from_mx = to_basis.create_transform_matrix(from_basis)
     return to_mx, from_mx
-    
+
+@functools.cache
+def get_vector_basischanger(dim, from_basis, to_basis):
+    if from_basis == to_basis:
+        return np.eye(dim)
+    if not isinstance(from_basis, Basis):
+        from_basis = BuiltinBasis(from_basis, dim, sparse=False)
+    if not isinstance(to_basis, Basis):
+        to_basis = BuiltinBasis(to_basis, dim, sparse=False)
+    to_mx = from_basis.create_transform_matrix(to_basis)
+    return to_mx
+
+
+@functools.cache
+def get_stacked_basis_elements(basis, dim):
+    if not isinstance(basis, Basis):
+        basis = BuiltinBasis(basis, dim, sparse=False)
+    stacked = np.stack(basis.elements, axis=-1)
+    return stacked, basis
+
 
 def unitary_to_superoperator(U, basis):
     superop_std = pygsti.tools.unitary_to_std_process_mx(U)
-    to_mx, from_mx = get_basischangers(superop_std.shape[0], 'std', basis)
-    return to_mx @ superop_std @ from_mx
+    if basis == 'std':
+        return superop_std
+    else:
+        to_mx, from_mx = get_operator_basischangers(superop_std.shape[0], 'std', basis)
+        return to_mx @ superop_std @ from_mx
+    
+
+def evolve_superket_by_std_unitary(superket, U, basis):
+    dim = superket.size
+    stdmxs, basis = get_stacked_basis_elements(basis, dim)
+    # ^ stdmxs has shape (dim, dim, len(basis.elements))
+    densitymx_in = np.tensordot(stdmxs, superket, axes=1)
+    # ^ that's the sum of stdmxs[:,:,i] * superket[i]
+    densitymx_out = U @ densitymx_in @ U.T.conj()
+    superket = np.tensordot(stdmxs.T, densitymx_out.conj(), axes=2)
+    # ^ stdmxs.T is obtained by reversing the order of axes in stdmx.
+    #   so it's shape is (len(basis.elements), dim, dim).
+    #   We'll have superket[i] == stdmxs[:,:,i] @ densitymx_out.conj().
+    #   Note that the conjugation needs to happen on the density matrix.
+    if basis.real:
+        assert la.norm(superket.imag) <= 1e-12 * la.norm(superket)
+        superket = superket.real
+    return superket
 
 
 def default_povm(d, basis):
@@ -120,7 +161,7 @@ class SU2RBSim:
         self._su2rep = su2class
         self._unitary_dim = su2class.eigJx.size
         self._superop_dim = self._unitary_dim ** 2
-        self._basis = 'pp'
+        self._basis = 'std'
         self._noise_channel = np.eye(self._superop_dim)
         self._povm = default_povm(self._unitary_dim, self._basis)
         self.N = N
@@ -137,7 +178,10 @@ class SU2RBSim:
             i = ell  % self._unitary_dim
             j = ell // self._unitary_dim
             E_matrixunit[ell,ell] = np.exp(-gamma * abs(i - j)**power)
-        self._noise_channel = pygsti.tools.basistools.change_basis(E_matrixunit, 'std', self._basis)
+        if self._basis == 'std':
+            self._noise_channel = E_matrixunit
+        else:
+            self._noise_channel = pygsti.tools.basistools.change_basis(E_matrixunit, 'std', self._basis)
         return
 
     def set_error_channel_exponential(self, gamma: float):
@@ -179,14 +223,19 @@ class SU2RBSim:
     def process_circuit_block(self, circuits, starting_superket):
         block = np.zeros(shape=(len(circuits), self._unitary_dim))
         # block[k,ell] = the probability of measuring outcome j after running the k-th circuit.
+        assert self._basis == 'std'
         for k, angles in enumerate(circuits):
             # angles has three columns. Each row of angles specifies an element of SU(2).
             # The sequence of SU(2) elements induced by the rows of angles defines a circuit. 
             unitaries = self._su2rep.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
-            superops = [unitary_to_superoperator(U, self._basis) for U in unitaries]
             superket = starting_superket
-            for superop in superops:
-                superket = self._noise_channel @ (superop @ superket)
+            for U in unitaries:
+                superket = evolve_superket_by_std_unitary(superket, U, self._basis)
+                superket = self._noise_channel @ superket
+            # superops = [unitary_to_superoperator(U, self._basis) for U in unitaries]
+            # superket = starting_superket
+            # for superop in superops:
+            #     superket = self._noise_channel @ (superop @ superket)
             block[k,:] = self._povm @ superket
         return block
 
@@ -195,7 +244,7 @@ class SU2RBSim:
         #  probs[i,j,k,ell] = probability of measuring outcome ell when running the k-th lengths[j] circuit given preparation in state i.
         if M is None:
             M = get_M()
-        
+
         num_statepreps, num_lengths, circuits_per_length, num_povm_effects = _probs.shape
         assert circuits_per_length > 1
         assert M.shape == (num_statepreps, num_povm_effects)
