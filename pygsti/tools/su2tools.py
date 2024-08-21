@@ -8,6 +8,7 @@ import scipy.linalg as la
 import scipy.sparse as spar
 from pygsti.tools.optools import unitary_to_superop
 from pygsti.baseobjs import basisconstructors as bcons
+from pygsti.baseobjs import basis as _basis
 from typing import List, Tuple
 import warnings
 import scipy as sp
@@ -76,13 +77,28 @@ def batch_eigvals_2x2(mats):
     assert mats.ndim == 3
     assert mats.shape == (panels, 2, 2)
     a = np.trace(mats, axis1=1, axis2=2)/2
-    d = mats[:,0,0]*mats[:,1,1] - mats[:,0,1]*mats[1,0]
+    d = mats[:,0,0]*mats[:,1,1] - mats[:,0,1]*mats[:,1,0]
     radical = np.sqrt(a**2 - d)
     out = np.zeros(panels, 2)
     out[:,0] = a + radical
     out[:,1] = a - radical
     return out
 
+def eign(mat, tol=1e-12):
+    """
+    Return the eigendecomposition of a normal operator "mat": 
+
+        mat = V @ np.diag(eigvals) @ V.T.conj().
+    """
+    T, V = la.schur(mat)
+    offdiag_norm = la.norm(T[np.triu_indices_from(T, 1)])
+    if offdiag_norm > tol:
+        raise ValueError(
+            f'Off-diagonal of triangular factor T from Schur decomposition had norm {offdiag_norm}, '
+            f'which exceeds tolerance of {tol}.'
+        )
+    eigvals = np.diag(T)
+    return eigvals, V
 
 
 class SU2:
@@ -91,10 +107,12 @@ class SU2:
     Jy = bcons.sigmay / 2
     Jz = bcons.sigmaz / 2
     check_su2_generators(Jx, Jy, Jz)
+    eigJx =  np.array([0.5, -0.5])
+    eigJy =  np.array([0.5, -0.5])
     VJx = np.array([[1, 1], [1,   -1]]) / np.sqrt(2)
     VJy = np.array([[1, 1], [1j, -1j]]) / np.sqrt(2)
-    # VJx and VJy are eigenbases for Jx and Jy, respectively.
-    # The eigenvalues of Jx, Jy are both (0.5, -0.5).
+    # VJx and VJy are eigenbases for Jx and Jy, respectively,
+    # with corresponding eigenvalues in eigJx and eigJy.
 
     @staticmethod
     def random_euler_angles(size=1):
@@ -134,41 +152,51 @@ class SU2:
         
         u,v,w = coeffs.real
         R2x2 = la.expm(1j*(u*SU2.Jx + v*SU2.Jy + w*SU2.Jz))
-        a, b, g = SU2.angles_from_2x2_unitary(R2x2)
+        a, b, g = SU2.angles_from_2x2_unitaries(R2x2)
         return a, b, g
 
-    @staticmethod
-    def expm_iJx(theta):
+    @classmethod
+    def expm_iJx(cls, theta):
         if not isinstance(theta, np.ndarray):
-            batch = SU2.expm_iJx(np.array(theta))
+            batch = cls.expm_iJx(np.array(theta))
             return batch[0]
-        return batch_normal_expm_1jscales(SU2.VJx, np.array([0.5, -0.5]), theta)
+        return batch_normal_expm_1jscales(cls.VJx, cls.eigJx, theta)
     
-    @staticmethod
-    def expm_iJy(theta):
+    @classmethod
+    def expm_iJy(cls, theta):
         if not isinstance(theta, np.ndarray):
-            batch = SU2.expm_iJy(np.array(theta))
+            batch = cls.expm_iJy(np.array(theta))
             return batch[0]
-        return batch_normal_expm_1jscales(SU2.VJy, np.array([0.5, -0.5]), theta)
+        return batch_normal_expm_1jscales(cls.VJy, cls.eigJy, theta)
 
     @staticmethod
-    def angles_from_2x2_unitary(R):
-        assert R.shape == (2, 2)
+    def angles_from_2x2_unitaries(R):
+        if R.ndim != 3:
+            R = R[np.newaxis,:,:]
+            a,b,g = SU2.angles_from_2x2_unitaries(R)
+            return a[0], b[0], g[0]
+
+        assert R.shape[1:] == (2, 2)
         # Compute the euler angles from the SU(2) elements
-        beta = 2*np.arccos(np.real(np.sqrt(R[0,0]*R[1,1])))
-        try:
-            alpha = np.angle(-1.j*R[0,0]*R[0,1]/(np.sin(beta/2)*np.cos(beta/2)))
-            if alpha < 0:
-                alpha += 2*np.pi
-            gamma = np.angle(-1.j*R[0,0]*R[1,0]/(np.sin(beta/2)*np.cos(beta/2)))
-            if gamma < 0:
-                gamma += 2*np.pi
-            if np.isclose(np.exp(1.j*(alpha+gamma)/2)*np.cos(beta/2) / R[0,0], -1):
-                gamma += 2*np.pi
-        except ZeroDivisionError:
-            alpha, beta, gamma = 0, 0, 0
-        if np.any(np.isnan((alpha, beta, gamma))):
-            return 0,0,0
+        beta = 2*np.arccos(np.real(np.sqrt(R[:,0,0]*R[:,1,1])))
+
+        beta = np.atleast_1d(beta)
+        sbh  = np.sin(beta/2)
+        cbh  = np.cos(beta/2)
+        scbh = sbh * cbh
+
+        div_zero_tol = 1e-14
+        safe = np.abs(scbh) >= div_zero_tol**2
+        alpha = np.zeros_like(beta)
+        gamma = np.zeros_like(beta) 
+        alpha[safe] = np.angle(-1j * R[safe,0,0] * R[safe,0,1] / scbh[safe])
+        gamma[safe] = np.angle(-1j * R[safe,0,0] * R[safe,1,0] / scbh[safe])
+
+        two_pi = 2*np.pi
+        alpha += two_pi * (alpha < 0)
+        gamma += two_pi * (gamma < 0)
+        gamma += two_pi * np.isclose(sbh * np.exp(0.5j*(alpha + gamma)), -R[:,0,0])
+        
         return alpha, beta, gamma
     
     @classmethod
@@ -184,103 +212,115 @@ class SU2:
             assert alpha.size == beta.size == gamma.size == 1
 
         dJz = np.diag(cls.Jz)
-
-        if cls == SU2:
-            right = (np.exp(1j * alpha[:, np.newaxis] * dJz[np.newaxis,:]))[:, :, np.newaxis]
-            center = cls.expm_iJx(beta)
-            left  = (np.exp(1j * gamma[:, np.newaxis] * dJz[np.newaxis,:]))[:, np.newaxis, :]
-            out = left * center * right
-        else:
-            out = []
-            angles = zip(alpha, beta, gamma)
-            for abg in angles:
-                a, b, g = abg
-                scaled_rows = cls.expm_iJx(b) * (np.exp(1j * a * dJz))[:, np.newaxis]
-                # scaled_rows = la.expm(1j * b * Jx) * (np.exp(1j * a * dJz))[:, np.newaxis]
-                mat = scaled_rows * (np.exp(1j * g * dJz))[np.newaxis, :]
-                # left   = np.diag(np.exp(1j * a * dJz))
-                # middle = la.expm(1j * b * Jx) 
-                # right  = np.diag(np.exp(1j * g * dJz))
-                # mat = left @ middle @ right
-                out.append(mat)    
+        right = (np.exp(1j * alpha[:, np.newaxis] * dJz[np.newaxis,:]))[:, :, np.newaxis]
+        center = cls.expm_iJx(beta)
+        left  = (np.exp(1j * gamma[:, np.newaxis] * dJz[np.newaxis,:]))[:, np.newaxis, :]
+        out = left * center * right 
         return out
 
-    @classmethod
-    def composition(cls, alphas, betas, gammas, as_angles=True):
-        Rs = SU2.unitaries_from_angles(alphas, betas, gammas)
+    @staticmethod
+    def composition(alphas, betas, gammas):
+        Rs = SU2.unitaries_from_angles(alphas.ravel(), betas.ravel(), gammas.ravel())
         R_composed = np.eye(2)
         for R in Rs:
             R_composed = R @ R_composed
-        ea = SU2.angles_from_2x2_unitary(R_composed)
-        if as_angles:
-            return ea
-        else:
-            R_mat = cls.unitaries_from_angles(*ea)[0]
-            return R_mat
+        ea = SU2.angles_from_2x2_unitaries(R_composed)
+        return ea
+
 
     @staticmethod
     def inverse_angles(alpha, beta, gamma):
-        R = SU2.unitaries_from_angles(alpha, beta, gamma)[0]
-        R = R.T.conj()
-        angles = SU2.angles_from_2x2_unitary(R)
+        R = SU2.unitaries_from_angles(alpha, beta, gamma)
+        R = np.transpose(R, axes=[0,2,1]).conj()
+        angles = SU2.angles_from_2x2_unitaries(R)
         return angles
 
-    @classmethod
-    def composition_inverse(cls, alphas, betas, gammas, as_angles=True):
-        composed_angles = SU2.composition(alphas, betas, gammas)
-        inverted_angles = SU2.inverse_angles(*composed_angles)
-        if as_angles:
-            return inverted_angles
-        else:
-            return cls.unitaries_from_angles(*inverted_angles)[0]
     
     @staticmethod
-    def rb_circuits_by_angles(N: int, lengths: List[int], seed=0, invert_from=0) -> np.ndarray[Tuple[float,float,float]]:
+    def rb_circuits_by_angles(N: int, lengths: List[int], seed=0, invert_from=0) -> List[np.ndarray]:
         np.random.seed(seed)
         out = []
-    
+
         assert 0 not in lengths
         for ell in lengths:
-            circuits_for_length_ell = []
-            for _ in range(N):
-                alphas, betas, gammas = SU2.random_euler_angles(ell)
-                gf_angles = SU2.composition_inverse(
-                    alphas[invert_from:], betas[invert_from:], gammas[invert_from:]
-                )
-                circuit = list(zip(alphas, betas, gammas))
-                circuit.append(gf_angles)
-                circuit = np.array(circuit)
-                circuits_for_length_ell.append(circuit)
-            circuits_for_length_ell = np.array(circuits_for_length_ell)
-            out.append(circuits_for_length_ell)
-        # out[i][j] == out[i][j,:,:] == (lengths[i]+1)-by-3 array whose columns contain angles for the j-th RB circuit of length lenghts[i].
+            base_angles = np.column_stack(SU2.random_euler_angles(ell * N))
+            # ^ Each block of ell rows in base_angles defines gates for our length-(ell+1) circuits
+            #   (the +1'th circuit comes from the inversion gate, which we need to construct).
+            base_angles = base_angles.reshape((N, ell, 3))
+            # ^ Now each angles[k,:,:] defines a circuit, for k = 0, ..., N-1.
+
+            comps_angles = np.row_stack(SU2.composition(
+                base_angles[:, invert_from:, 0],
+                base_angles[:, invert_from:, 1],
+                base_angles[:, invert_from:, 2]
+            ))
+            # ^ array of shape (3, N).
+            #   Its k-th column gives the Euler angles for the composition of all SU(2) elements
+            #   induced from the (ell-invert_from)-by-3 array "base_angles[k, invert_from:, :]"
+            last_angles = np.column_stack(SU2.inverse_angles(*comps_angles))
+            # ^ array of shape (N, 3)
+            #   Its k-th row gives the Euler angles for the SU(2) element that's inverse to  
+            #   the SU(2) element whose Euler angles are in comps_angles[k,:].
+        
+            all_angles = np.zeros((N, ell+1, 3))
+            all_angles[:, 0:ell, :] = base_angles
+            all_angles[:,   ell, :] = last_angles
+        
+            out.append(all_angles)
+        # out[j][k] == out[j][k,:,:] == (lengths[j]+1)-by-3 array giving the Euler angles for the k-th RB circuit of length lenghts[j].
         return out
 
-    @classmethod
-    def character_from_unitary(cls, U, j=1/2):
-        assert U.shape[0] == U.shape[1]
-        dim = U.shape[0]
-        if dim != 2:
-            j = (dim - 1)/2  # ignore j if it was provided.
-            a,b,g = cls.angles_from_unitary(U)
-            R2x2 = SU2.unitaries_from_angles(a,b,g)[0]
-            return SU2.character_from_unitary(R2x2, j)
+    @staticmethod
+    def characters_from_2x2_unitaries(U, j, check_numeric=False, tol=1e-8):
         
-        eigs = la.eigvals(U) # eigs = exp(\pm i theta /2)
-        theta = np.real(2*np.log(eigs[0])/1j)
-        tr = np.trace(U)
-        check = tr - 2*np.cos(theta/2)
-        assert abs(check) < 1e-10
+        j = np.atleast_1d(j)
+        if U.ndim == 2:
+            U = U[np.newaxis,:,:]
+        
+        assert U.shape[1] == U.shape[2] == 2
+        assert np.all(j >= 0) and np.all(2*j % 1 == 0)
 
-        return np.real(np.sum([np.exp(1j*__j*theta) for __j in np.arange(-j, j+1)]))
+        trs = np.trace(U, axis1=1, axis2=2)
+        thetas = 2*np.arccos(trs/2)
+        if check_numeric:
+            eigs = batch_eigvals_2x2(U)
+            thetas_ref = np.real(2*np.log(eigs[:, 0])/1j)
+            checks = np.abs(thetas_ref - thetas)
+            failed = (checks > tol).nonzero()[0]
+            if np.any(failed):
+                raise ValueError(
+                    f'Checks for correct computation of eigenvalues failed at indices {failed}.\n'
+                    f'The difference between the traces of these matrices and expected traces were {checks[failed]}.'    
+                )
+        thetas = thetas.reshape((-1,1))
+
+        # Compute a matrix whose rows are of length j.size:
+        #       np.sum([np.exp(1j*__j*theta) for __j in np.arange(-_j, _j+1)]) for each _j in j 
+        # as theta ranges over theta.
+        out = np.array([
+             np.sum(np.exp(1j * thetas * np.arange(-_j, _j+1)[np.newaxis, :]), axis=1) for _j in j
+        ])
+        out = np.real(out).T
+        assert out.shape == (thetas.size, j.size)
+        return out
 
     
     @staticmethod
-    def characters_from_angles(alphas, betas, gammas, j):
+    def characters_from_angles(alphas, betas, gammas, j, tol=1e-8):
         U2x2s = SU2.unitaries_from_angles(alphas, betas, gammas)
         characters = np.zeros(len(U2x2s))
-        for i,U in enumerate(U2x2s):
-            characters[i] = SU2.character_from_unitary(U, j)
+        eigs = batch_eigvals_2x2(U2x2s)
+        thetas = np.real(2*np.log(eigs[:, 0])/1j)
+        trs = np.trace(U2x2s, axis1=1, axis2=2)
+        checks = np.abs(trs - 2*np.cos(thetas/2))
+        failed = (checks > tol).nonzero()[0]
+        if np.any(failed):
+            raise ValueError(
+                f'Checks for correct computation of eigenvalues failed at indices {failed}.\n'
+                f'The difference between the traces of these matrices and expected traces were {checks}.'    
+            )
+        toreduce = np.array([np.exp(1j*__j*thetas) for __j in np.arange(-j, j+1)])
+        characters = np.real(np.sum(toreduce, axis=1))
         return characters
 
 
@@ -481,6 +521,8 @@ class Spin72(SU2):
     Jy = np.diag(-1j*Jx_sup, 1) + np.diag(1j*Jx_sup, -1)
     Jz = np.diag(SPINS)
     check_su2_generators(Jx, Jy, Jz)
+    eigJx, VJx = eign(Jx)
+    eigJy, VJy = eign(Jy)
 
     C = clebsh_gordan_matrix_spin72()
     superop_stdmx_cob = C @ np.kron(la.expm(1j * np.pi * Jy), np.eye(8))
@@ -489,150 +531,8 @@ class Spin72(SU2):
     irrep_stdmx_projectors = irrep_projectors(irrep_block_sizes, superop_stdmx_cob)
 
     @staticmethod
-    def expm_iJy(theta, numerically_verify=False):
-        """
-        Returns expm(1j * theta * Jy).
-        This is equivalent to the matrix "Ry(-theta)" from the file '2023_12-22_SU2-rotate.pdf' provided by Robin.
-        """
-        if isinstance(theta, np.ndarray):
-            assert theta.size == 1
-            theta = theta.item()
-        theta *= -1  # this was originally written to compute expm(-1j * theta * Jy)
-        mat = np.zeros(shape=(8,8), dtype=np.double)
-        c = np.power(np.cos(theta/2), np.arange(8))
-        s = np.power(np.sin(theta/2), np.arange(8))
-        """
-        Build the lower triangle of "mat", column-by-column
-        """
-        mat[:,0] = c[::-1] * s * np.sqrt([1, 7, 21, 35, 35, 21, 7, 1])
-
-        mat[1,1] = 7*c[7] - 6*c[5]
-        mat[2,1] = s[1]*c[4]*(7*c[2] - 5) * sqrt(3)
-        mat[3,1] = s[2]*c[3]*(7*c[2] - 4) * sqrt(5)
-        mat[4,1] = s[3]*c[2]*(7*c[2] - 3) * sqrt(5)
-        mat[5,1] = s[4]*c[1]*(7*c[2] - 2) * sqrt(3)
-        mat[6,1] = s[5]*c[0]*(7*c[2] - 1)
-        mat[7,1] = s[6]*c[1]*sqrt(7)
-
-        mat[2,2] = 21*c[7] - 30*c[5] + 10*c[3]
-        mat[3,2] = s[1]*c[2]*(7*c[4] - 8*c[2] + 2) * sqrt(15)
-        mat[4,2] = s[2]*c[1]*(7*c[4] - 6*c[2] + 1) * sqrt(15)
-        mat[5,2] = s[3]*c[0]*(21*c[4] - 12*c[2] + 1)
-        mat[6,2] = s[4]*c[1]*(7*c[2] - 2)*sqrt(3)
-        mat[7,2] = s[5]*c[2]*sqrt(21)
-
-        mat[3,3] = s[0] * c[[7,5,3,1]] @ np.array([35, -60, 30, -4])
-        mat[4,3] = s[1] * c[[6,4,2,0]] @ np.array([35, -45, 15, -1])
-        mat[5,3] = s[2] * c[1]*(7*c[4] - 6*c[2] + 1) * sqrt(15)
-        mat[6,3] = s[3] * c[2]*(7*c[2] - 3) * sqrt(5)
-        mat[7,3] = s[4] * c[3] * sqrt(35)
-
-        mat[4,4] = mat[3,3]
-        mat[5,4] = s[1]*c[2]*(7*c[4] - 8*c[2] + 2) * sqrt(15)
-        mat[6,4] = s[2]*c[3]*(7*c[2] - 4) * sqrt(5)
-        mat[7,4] = s[3]*c[4] * sqrt(35)
-
-        mat[5,5] = mat[2,2]
-        mat[6,5] = s[1]*c[4]*(7*c[2] - 5) * sqrt(3)
-        mat[7,5] = s[2]*c[5] * sqrt(21)
-        
-        mat[6,6] = mat[1,1]
-        mat[7,6] = s[1]*c[6] * sqrt(7)
-
-        mat[7,7] = mat[0,0]
-
-        """
-        Go back and build the upper triangle
-        """
-        mat[0, 1] = -mat[1,0]
-        mat[:2,2] = mat[2,:2] * np.array([ 1, -1])
-        mat[:3,3] = mat[3,:3] * np.array([-1,  1, -1])
-        mat[:4,4] = mat[4,:4] * np.array([ 1, -1,  1, -1])
-        mat[:5,5] = mat[5,:5] * np.array([-1,  1, -1,  1, -1])
-        mat[:6,6] = mat[6,:6] * np.array([ 1, -1,  1, -1,  1, -1])
-        mat[:7,7] = mat[7,:7] * np.array([-1,  1, -1,  1, -1, 1, -1])
-
-        if numerically_verify:
-            expm_arg = 1j * (-theta) * Spin72.Jy
-            num_mat = la.expm(expm_arg)
-            assert la.norm(mat - num_mat, 'fro') <= 1e-13, 'Numeric and symbolic exponentiation give different results'
-            # ^ an extremely crude sanity check.
-        return mat
-    
-    @staticmethod
-    def expm_iJx(theta, numerically_verify=False):
-        """
-        Returns expm(1j * theta * Jx).
-        """
-        if isinstance(theta, np.ndarray):
-            assert theta.size == 1
-            theta = theta.item()
-        theta *= -1  # this was originally written to compute expm(-1j * theta * Jx)
-        mat = np.zeros(shape=(8,8), dtype=np.complex128)
-        c = np.power(np.cos(theta/2), np.arange(8))
-        s = np.power(np.sin(theta/2), np.arange(8))
-        """
-        Build the lower triangle of "mat", column-by-column
-        """
-        mat[:,0] = c[::-1] * s * np.sqrt([1, 7, 21, 35, 35, 21, 7, 1])
-        mat[:,0] = mat[:,0] * np.array([1, -1j, -1, 1j, 1, -1j, -1, 1j])
-
-        mat[1,1] = 7*c[7] - 6*c[5]
-        mat[2,1] = s[1]*c[4]*(7*c[2] - 5) * sqrt(3) * (-1j)
-        mat[3,1] = s[2]*c[3]*(7*c[2] - 4) * sqrt(5) * (-1)
-        mat[4,1] = s[3]*c[2]*(7*c[2] - 3) * sqrt(5) * (1j)
-        mat[5,1] = s[4]*c[1]*(7*c[2] - 2) * sqrt(3)
-        mat[6,1] = s[5]*c[0]*(7*c[2] - 1) * (-1j)
-        mat[7,1] = s[6]*c[1]*sqrt(7) * (-1)
-
-        mat[2,2] = 21*c[7] - 30*c[5] + 10*c[3]
-        mat[3,2] = s[1]*c[2]*(7*c[4] - 8*c[2] + 2) * sqrt(15) * (-1j)
-        mat[4,2] = s[2]*c[1]*(7*c[4] - 6*c[2] + 1) * sqrt(15) * (-1)
-        mat[5,2] = s[3]*c[0]*(21*c[4] - 12*c[2] + 1) * (1j)
-        mat[6,2] = s[4]*c[1]*(7*c[2] - 2)*sqrt(3)
-        mat[7,2] = s[5]*c[2]*sqrt(21) * (-1j)
-
-        mat[3,3] = s[0] * c[[7,5,3,1]] @ np.array([35, -60, 30, -4])
-        mat[4,3] = s[1] * c[[6,4,2,0]] @ np.array([35, -45, 15, -1]) * (-1j)
-        mat[5,3] = s[2] * c[1]*(7*c[4] - 6*c[2] + 1) * sqrt(15) * (-1)
-        mat[6,3] = s[3] * c[2]*(7*c[2] - 3) * sqrt(5) * (1j)
-        mat[7,3] = s[4] * c[3] * sqrt(35)
-
-        mat[4,4] = mat[3,3]
-        mat[5,4] = s[1]*c[2]*(7*c[4] - 8*c[2] + 2) * sqrt(15) * (-1j)
-        mat[6,4] = s[2]*c[3]*(7*c[2] - 4) * sqrt(5) * (-1)
-        mat[7,4] = s[3]*c[4] * sqrt(35) * (1j)
-
-        mat[5,5] = mat[2,2]
-        mat[6,5] = s[1]*c[4]*(7*c[2] - 5) * sqrt(3) * (-1j)
-        mat[7,5] = s[2]*c[5] * sqrt(21) * (-1)
-        
-        mat[6,6] = mat[1,1]
-        mat[7,6] = s[1]*c[6] * sqrt(7) * (-1j)
-
-        mat[7,7] = mat[0,0]
-
-        """
-        Go back and build the upper triangle. It turns out this is a lot simpler than Jy.
-        """
-        mat[0, 1] = mat[1,0]
-        mat[:2,2] = mat[2,:2] #* np.array([ 1, 1])
-        mat[:3,3] = mat[3,:3] #* np.array([ 1,  1,  1])
-        mat[:4,4] = mat[4,:4] #* np.array([ 1,  1,  1,  1])
-        mat[:5,5] = mat[5,:5] #* np.array([ 1,  1,  1,  1,  1])
-        mat[:6,6] = mat[6,:6] #* np.array([ 1,  1,  1,  1,  1,  1])
-        mat[:7,7] = mat[7,:7] #* np.array([ 1,  1,  1,  1,  1, 1, 1])
-
-        if numerically_verify:
-            expm_arg = 1j * (-theta) * Spin72.Jx
-            num_mat = la.expm(expm_arg)
-            assert la.norm(mat - num_mat, 'fro') <= 1e-13, 'Numeric and symbolic exponentiation give different results'
-            # ^ an extremely crude sanity check.
-        return mat
-
-    @staticmethod
-    def mat_R(theta, phi, numerically_verify=False):
-        mat = np.exp(-1j * Spin72.SPINS * phi).reshape(8, 1) * Spin72.expm_iJy(-theta, numerically_verify)
+    def mat_R(theta, phi):
+        mat = np.exp(-1j * Spin72.SPINS * phi)[:, np.newaxis] * Spin72.expm_iJy(-theta)
         # ^ that line is equivalent to, but more efficient than the following.
         #       Rz_phi = np.diag(np.exp(-1j * Spin72.SPINS * phi))
         #       mat = Rz_phi @ Spin72.expm_iJy(-theta, numeric)
@@ -733,6 +633,18 @@ def get_F():
     return F
 
 
+def std_to_pp(dim):
+    """
+    Return 
+    """
+    from_basis = _basis.BuiltinBasis('std', dim, sparse=False)
+    to_basis   = _basis.BuiltinBasis('pp',  dim, sparse=False)
+    toMx   = from_basis.create_transform_matrix(to_basis)
+    fromMx = to_basis.create_transform_matrix(from_basis)
+    
+    pass
+
+
 def unitary_to_superoperator(U, basis):
     return pygsti.tools.basistools.change_basis(pygsti.tools.unitary_to_std_process_mx(U), 'std', basis)
 
@@ -802,7 +714,7 @@ class Spin72RB:
         for i in range(8):
             all_circuits = SU2.rb_circuits_by_angles(self.N, self.lengths, seed + i)
             # ^ all_circuits[j][k] = (lengths[j]+1)-by-3 array.
-            for j in tqdm(range(self.lengths.size)):
+            for j in tqdm(range(self.lengths.size), desc=f'Simulating with stateprep at |{i}>'):
                 fixed_length_circuits = all_circuits[j]
                 starting_state = self._povm[i, :]
                 probs[i,j] = self.process_circuit_block(fixed_length_circuits, starting_state)
@@ -869,7 +781,7 @@ class Spin72RB:
         for j in range(num_lengths):
             # m = lengths[j]
             Pmj = np.zeros((8,8))
-            iterator = range(8) if shots_per_circuit == np.inf else tqdm(range(8))
+            iterator = range(8) if shots_per_circuit == np.inf else tqdm(range(8), desc='Processing data from circuits that started at |{i}>')
             for i in iterator:
                 distns_i = _probs[i,j,:,:]
                 if shots_per_circuit < np.inf:
