@@ -136,7 +136,6 @@ class SU2RBSim:
         self._su2rep = su2class
         self._unitary_dim = su2class.eigJx.size
         self._superop_dim = self._unitary_dim ** 2
-        self._basis = 'std'
         self._noise_channel = np.eye(self._superop_dim)
         self._povm = default_povm(self._unitary_dim, 'std')
         self.N = N
