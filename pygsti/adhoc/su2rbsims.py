@@ -6,8 +6,10 @@ import pygsti.modelmembers
 import scipy.linalg as la
 from pygsti.tools.su2tools import SU2, Spin72
 from pygsti.tools.optools import unitary_to_superop
+from pygsti.baseobjs.basis import Basis, BuiltinBasis
 from typing import List
 from tqdm import tqdm
+import functools
 
 
 
@@ -80,8 +82,28 @@ def get_F():
     return F
 
 
+@functools.cache
+def get_basischangers(dim, from_basis, to_basis):
+    """
+    Return matrices to_mx, from_mx so that a square matrix A of order "dim"
+    in basis from_basis can be converted into its represention in to_basis by
+    B = to_mx @ A @ from_mx
+    """
+    if from_basis == to_basis:
+        return np.eye(dim)
+    if not isinstance(from_basis, Basis):
+        from_basis = BuiltinBasis(from_basis, dim, sparse=False)
+    if not isinstance(to_basis, Basis):
+        to_basis = BuiltinBasis(to_basis, dim, sparse=False)
+    to_mx = from_basis.create_transform_matrix(to_basis)
+    from_mx = to_basis.create_transform_matrix(from_basis)
+    return to_mx, from_mx
+    
+
 def unitary_to_superoperator(U, basis):
-    return pygsti.tools.basistools.change_basis(pygsti.tools.unitary_to_std_process_mx(U), 'std', basis)
+    superop_std = pygsti.tools.unitary_to_std_process_mx(U)
+    to_mx, from_mx = get_basischangers(superop_std.shape[0], 'std', basis)
+    return to_mx @ superop_std @ from_mx
 
 
 def default_povm(d, basis):
