@@ -2,16 +2,11 @@
 Tools for working with representations of the special unitary group, SU(2).
 """
 import numpy as np
-from numpy import sqrt
 import pygsti.modelmembers
 import scipy.linalg as la
-import scipy.sparse as spar
 from pygsti.tools.su2tools import SU2, Spin72
 from pygsti.tools.optools import unitary_to_superop
-from pygsti.baseobjs import basisconstructors as bcons
-from typing import List, Tuple
-import warnings
-import scipy as sp
+from typing import List
 from tqdm import tqdm
 
 
