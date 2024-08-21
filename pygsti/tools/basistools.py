@@ -14,8 +14,8 @@ from functools import partial
 
 import numpy as _np
 
+from . import matrixtools as _mt
 from pygsti.baseobjs.basisconstructors import _basis_constructor_dict
-# from ..baseobjs.basis import Basis, BuiltinBasis, DirectSumBasis
 from pygsti.baseobjs import basis as _basis
 
 
@@ -150,7 +150,8 @@ def change_basis(mx, from_basis, to_basis):
     dim = mx.shape[0]
     if not from_is_basis and not to_is_basis:
         #Case1: no Basis objects, so just construct builtin bases based on `mx` dim
-        if from_basis == to_basis: return mx.copy()  # (shortcut)
+        if from_basis == to_basis:
+            return mx.copy()  # (shortcut)
         from_basis = _basis.BuiltinBasis(from_basis, dim, sparse=False)
         to_basis = _basis.BuiltinBasis(to_basis, dim, sparse=False)
 
@@ -456,7 +457,8 @@ def state_to_stdmx(state_vec):
         A density matrix of shape (d,d), corresponding to the pure state
         given by the length-`d` array, `state_vec`.
     """
-    st_vec = state_vec.view(); st_vec.shape = (len(st_vec), 1)  # column vector
+    st_vec = state_vec.view()
+    st_vec.shape = (len(st_vec), 1)  # column vector
     dm_mx = _np.kron(_np.conjugate(_np.transpose(st_vec)), st_vec)
     return dm_mx  # density matrix in standard (sigma-z) basis
 
@@ -523,8 +525,6 @@ gmvec_to_stdmx = partial(vec_to_stdmx, basis='gm')
 ppvec_to_stdmx = partial(vec_to_stdmx, basis='pp')
 qtvec_to_stdmx = partial(vec_to_stdmx, basis='qt')
 stdvec_to_stdmx = partial(vec_to_stdmx, basis='std')
-
-from . import matrixtools as _mt
 
 
 def stdmx_to_vec(m, basis):
