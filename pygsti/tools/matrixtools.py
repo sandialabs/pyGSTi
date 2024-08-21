@@ -20,8 +20,6 @@ import scipy.optimize as _spo
 import scipy.sparse as _sps
 import scipy.sparse.linalg as _spsl
 
-from pygsti.tools.basistools import change_basis
-
 try:
     from . import fastcalc as _fastcalc
 except ImportError:
@@ -598,17 +596,19 @@ def unitary_superoperator_matrix_log(m, mx_basis):
         A matrix `logM`, of the same shape as `m`, such that `m = exp(logM)`
         and `logM` can be written as the action `rho -> -i[H,rho]`.
     """
-    from . import lindbladtools as _lt  # (would create circular imports if at top)
-    from . import optools as _ot  # (would create circular imports if at top)
+    # First: perform some imports that would be circulatar if at the top of the file.
+    from . import basistools as _bt
+    from . import lindbladtools as _lt
+    from . import optools as _ot
 
-    M_std = change_basis(m, mx_basis, "std")
+    M_std = _bt.change_basis(m, mx_basis, "std")
     evals = _np.linalg.eigvals(M_std)
     assert(_np.allclose(_np.abs(evals), 1.0))  # simple but technically incomplete check for a unitary superop
     # (e.g. could be anti-unitary: diag(1, -1, -1, -1))
     U = _ot.std_process_mx_to_unitary(M_std)
     H = _spl.logm(U) / -1j  # U = exp(-iH)
     logM_std = _lt.create_elementary_errorgen('H', H)  # rho --> -i[H, rho]
-    logM = change_basis(logM_std, "std", mx_basis)
+    logM = _bt.change_basis(logM_std, "std", mx_basis)
     assert(_np.linalg.norm(_spl.expm(logM) - m) < 1e-8)  # expensive b/c of expm - could comment for performance
     return logM
 
