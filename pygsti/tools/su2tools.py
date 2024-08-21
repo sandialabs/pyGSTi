@@ -69,11 +69,11 @@ def batch_normal_expm_1jscales(eigvecs, eigvals, scales):
     assert eigvals.ndim == 1
     n = eigvals.size
     assert eigvecs.shape == (n, n)
+    scales = np.atleast_1d(scales)
 
-    exp_eig = np.exp(1j * scales[:, np.newaxis] * eigvals[np.newaxis, :])
-    eigvecs_tile = np.broadcast_to(eigvecs, (scales.size, n, n))
-    left = eigvecs_tile * exp_eig[:, np.newaxis, :]
-    batch_out = left @ eigvecs.T.conj()
+    batch_out = np.array([
+        (eigvecs * np.exp(1j*s*eigvals)[np.newaxis,:]) @ eigvecs for s in scales
+    ])
     return batch_out
 
 
@@ -153,18 +153,24 @@ class SU2:
     @staticmethod
     def angles_from_2x2_unitary(R):
         assert R.shape == (2, 2)
-        # Compute the euler angles from the SU(2) elements
-        beta = 2*np.arccos(np.real(np.sqrt(R[0,0]*R[1,1])))
-        alpha = np.angle(-1.j*R[0,0]*R[0,1]/(np.sin(beta/2)*np.cos(beta/2)))
-        if alpha < 0:
-            alpha += 2*np.pi
-        gamma = np.angle(-1.j*R[0,0]*R[1,0]/(np.sin(beta/2)*np.cos(beta/2)))
-        if gamma < 0:
-            gamma += 2*np.pi
-        if np.isclose(np.exp(1.j*(alpha+gamma)/2)*np.cos(beta/2) / R[0,0], -1):
-            gamma += 2*np.pi
+        try:
+            # Compute the euler angles from the SU(2) elements
+            beta = 2*np.arccos(np.real(np.sqrt(R[0,0]*R[1,1])))
+            alpha = np.angle(-1.j*R[0,0]*R[0,1]/(np.sin(beta/2)*np.cos(beta/2)))
+            if alpha < 0:
+                alpha += 2*np.pi
+            gamma = np.angle(-1.j*R[0,0]*R[1,0]/(np.sin(beta/2)*np.cos(beta/2)))
+            if gamma < 0:
+                gamma += 2*np.pi
+            if np.isclose(np.exp(1.j*(alpha+gamma)/2)*np.cos(beta/2) / R[0,0], -1):
+                gamma += 2*np.pi
+        except ZeroDivisionError:
+            return 0, 0, 0
+        if np.any(np.isnan((alpha, beta, gamma))):
+            return 0, 0, 0
         return alpha, beta, gamma
     
+    # TODO: interrogate all the places where I'm using np.newaxis and de-vectorize in case I broke things.
     @classmethod
     def unitaries_from_angles(cls,alpha,beta,gamma):
         # Construct an element of SU(2) from Euler angles
@@ -184,38 +190,32 @@ class SU2:
         out = left * center * right 
         return out
 
-    @classmethod
-    def composition_inverse(cls, alphas, betas, gammas, as_angles=True):
-        Rs = SU2.unitaries_from_angles(alphas, betas, gammas)
+    @staticmethod
+    def composition_inverse(alphas, betas, gammas):
         R_composed = np.eye(2)
-        for R in Rs:
-            R_composed = R @ R_composed
+        if alphas.size > 0:
+            Rs = SU2.unitaries_from_angles(alphas, betas, gammas)
+            for R in Rs:
+                R_composed = R @ R_composed
         invR_composed = R_composed.T.conj()
         ea = SU2.angles_from_2x2_unitary(invR_composed)
-        if as_angles:
-            return ea
-        else:
-            invR_mat = cls.unitaries_from_angles(*ea)[0]
-            return invR_mat
+        return ea
     
     @staticmethod
-    def rb_circuits_by_angles(N: int, lengths: List[int], seed=0) -> np.ndarray[Tuple[float,float,float]]:
+    def rb_circuits_by_angles(N: int, lengths: List[int], seed=0, invert_from=0) -> np.ndarray[Tuple[float,float,float]]:
         np.random.seed(seed)
         out = []
-    
-        if lengths[0] == 0:
-            angles_for_length_0 = [np.zeros((1,3)) for _ in range(N)]
-            out.append(angles_for_length_0)
-            remaining_lengths = lengths[1:]
-        else:
-            remaining_lengths = lengths
 
-        assert 0 not in remaining_lengths
-        for ell in remaining_lengths:
+        assert 0 not in lengths
+        for ell in lengths:
             angles_for_length_ell = []
             for _ in range(N):
                 alphas, betas, gammas = SU2.random_euler_angles(ell)
-                inv_angles = SU2.composition_inverse(alphas, betas, gammas, as_angles=True)
+                inv_angles = SU2.composition_inverse(
+                    alphas[invert_from:],
+                    betas[invert_from:],
+                    gammas[invert_from:]
+                )
                 ell_out = list(zip(alphas, betas, gammas))
                 ell_out.append(inv_angles)
                 angles_for_length_ell.append(np.array(ell_out))

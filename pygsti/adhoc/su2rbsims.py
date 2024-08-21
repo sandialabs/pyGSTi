@@ -4,13 +4,12 @@ Tools for working with representations of the special unitary group, SU(2).
 import numpy as np
 import pygsti.modelmembers
 import scipy.linalg as la
-from pygsti.tools.su2tools import SU2
+from pygsti.tools.su2tools import SU2, Spin72
 from pygsti.tools.optools import unitary_to_superop
 from pygsti.baseobjs.basis import Basis, BuiltinBasis
 from typing import List
 from tqdm import tqdm
 import functools
-
 
 
 def get_M():
@@ -110,7 +109,6 @@ def get_vector_basischanger(dim, from_basis, to_basis):
         to_basis = BuiltinBasis(to_basis, dim, sparse=False)
     to_mx = from_basis.create_transform_matrix(to_basis)
     return to_mx
-
 
 
 def unitary_to_superoperator(U, basis):
@@ -250,10 +248,10 @@ class SU2RBSim:
         return synthetic_probs, survival_probs
 
 
-class SU2CharacterRBSim(SU2RBSim):
+class Spin72CharacterRBSim(SU2RBSim):
 
-    def __init__(self, su2class, N: int, lengths: List[int]):
-        SU2RBSim.__init__(self, su2class, N, lengths)
+    def __init__(self, N: int, lengths: List[int]):
+        SU2RBSim.__init__(self, Spin72, N, lengths)
         pass
 
     def data_generators(self, seed=0, characters_only=False):
@@ -270,7 +268,7 @@ class SU2CharacterRBSim(SU2RBSim):
         #    ... given preparation in state i.
 
         for i in range(dim):
-            all_circuits = SU2.rb_circuits_by_angles(self.N, self.lengths, seed + i)
+            all_circuits = SU2.rb_circuits_by_angles(self.N, self.lengths, seed + i, invert_from=1)
             # ^ all_circuits[j] = array of shape (N, lengths[j]+1, 3)
             for j in tqdm(range(self.lengths.size), desc=f'Simulating with stateprep at |{i}>'):
                 fixed_length_circuits = all_circuits[j]
@@ -283,36 +281,42 @@ class SU2CharacterRBSim(SU2RBSim):
     
     def process_circuit_block(self, circuits, starting_superket, characters_only):
         dim = self._unitary_dim
-        N = circuits.shape[0]
+        N = len(circuits)
         probs_block = np.zeros((N, dim))
         chars_block = np.zeros((N, dim))
         # circuits[k]        = array of shape (d, 3) where d is the circuit depth. 
         # probs_block[k,ell] = the probability of measuring outcome ell after running the k-th circuit.
         # chars_block[k,ell] = the value of the ell^th irrep's character function for the "hidden" initial gate in the k-th circuit.
-        raise NotImplementedError()
+        
         # Compute the characters for each circuit. 
-        chars_angles = circuits[:,0,:]
+        # chars_angles = circuits[:,0,:]
         # Us2x2 = SU2.unitaries_from_angles(*chars_angles.T)
         # chars_block[:] = Spin72.characters_from_2x2_unitaries(Us2x2, Spin72.irrep_labels)
         # if characters_only:
         #     return probs_block, chars_block
         
-        # error_free = la.norm(self._noise_channel - np.eye(64)) <= 1e-16
-        # for k, angles in enumerate(circuits):
-        #     # angles has three columns. Each row of angles specifies an element of SU(2).
-        #     # The sequence of SU(2) elements induced by the rows of angles defines a circuit. 
-        #     a,b,g = angles.T
-        #     if error_free:
-        #         unitary = Spin72.unitaries_from_angles(a[0], b[0], g[0])[0]
-        #         superop = unitary_to_superoperator(unitary, 'pp')
-        #         superket = superop @ starting_superket
-        #     else:
-        #         unitaries = Spin72.unitaries_from_angles(a,b,g)
-        #         superops = [unitary_to_superoperator(U, self._basis) for U in unitaries]
-        #         superket = starting_superket
-        #         for superop in superops:
-        #             superket = self._noise_channel @ (superop @ superket)
-            
-        #     probs_block[k] = self._povm @ superket
+        error_free = la.norm(self._noise_channel - np.eye(64)) <= 1e-16
+        for k, angles in enumerate(circuits):
+            # angles has three columns. Each row of angles specifies an element of SU(2).
+            # The sequence of SU(2) elements induced by the rows of angles defines a circuit. 
+            a,b,g = angles.T
+            char_U = SU2.unitaries_from_angles(a[0], b[0], g[0])[0]
+            chars_block[k] = [Spin72.character_from_unitary(char_U, j) for j in Spin72.irrep_labels]
+            if characters_only:
+                continue
 
-        # return probs_block, chars_block
+            if error_free:
+                superop = unitary_to_superoperator(char_U, 'std')
+                superket = superop @ starting_superket
+            else:
+                unitaries = Spin72.unitaries_from_angles(a,b,g)
+                superket = starting_superket
+                for U in unitaries:
+                    densitymx_in = superket.reshape(U.shape)
+                    densitymx_out = U @ densitymx_in @ U.T.conj()
+                    superket = densitymx_out.ravel()
+                    superket = self._noise_channel @ superket
+
+            probs_block[k] = self._povm @ superket
+
+        return probs_block, chars_block
