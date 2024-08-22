@@ -261,13 +261,14 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                     #Need to set errorgen so exp(errorgen)|st> == |state>
                     dense_st = st.to_dense()
                     dense_state = state.to_dense()
-
+                    num_qubits = st.state_space.num_qubits
+                    num_errgens = 2**(4*num_qubits)-2**(2*num_qubits)
                     def calc_physical_subspace(ideal_prep, epsilon = 1e-9):
 	
-                        errgen = _LindbladErrorgen.from_error_generator(4, parameterization="GLND")
+                        errgen = _LindbladErrorgen.from_error_generator(2**(2*num_qubits), parameterization="GLND")
                         exp_errgen = _ExpErrorgenOp(errgen)
-                        ideal_vec = _np.zeros(12)
-                        J = _np.zeros((3,12))
+                        ideal_vec = _np.zeros(num_errgens)
+                        J = _np.zeros((state.num_params, num_errgens))
 
                         for i in range(len(ideal_vec)):
                             new_vec = ideal_vec.copy()
