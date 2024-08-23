@@ -415,14 +415,21 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
         
                             errgen = _LindbladErrorgen.from_error_generator(4, parameterization="GLND")
                             exp_errgen = _ExpErrorgenOp(errgen)
-                            ideal_vec = _np.zeros(12)
-                            J = _np.zeros((dense_ideal_povm.shape[0]*dense_ideal_povm.shape[1],12))
+                            num_qubits = povm.state_space.num_qubits
+                            num_errgens = 2**(4*num_qubits)-2**(2*num_qubits)
+                            #TODO: Maybe we can use the num of params instead of number of matrix entries, as some of them are linearly dependent.
+                            #i.e E0 completely determines E1 if those are the only two povm elements (E0 + E1 = Identity)
+                            num_entries = dense_ideal_povm.shape[0]*dense_ideal_povm.shape[1]
+                            assert num_errgens > povm.num_params, "POVM has too many elements, GLND parameterization is not possible"
+
+                            ideal_vec = _np.zeros(num_errgens)
+                            J = _np.zeros((num_entries,num_errgens))
                             
                             for i in range(len(ideal_vec)):
                                 new_vec = ideal_vec.copy()
                                 new_vec[i] = epsilon
                                 exp_errgen.from_vector(new_vec)
-                                vectorized_povm = _np.zeros(dense_ideal_povm.shape[0]*dense_ideal_povm.shape[1])
+                                vectorized_povm = _np.zeros(num_entries)
                                 perturbed_povm = (dense_ideal_povm @ exp_errgen.to_dense() - dense_ideal_povm)/epsilon
 
                                 perturbed_povm_t = perturbed_povm.transpose()
