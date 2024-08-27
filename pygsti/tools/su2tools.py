@@ -56,9 +56,17 @@ def batch_normal_expm_1jscales(eigvecs, eigvals, scales):
     scales = np.atleast_1d(scales)
 
     batch_out = np.array([
-        (eigvecs * np.exp(1j*s*eigvals)[np.newaxis,:]) @ eigvecs for s in scales
+        (eigvecs * np.exp(1j*s*eigvals)[np.newaxis,:]) @ eigvecs.T.conj() for s in scales
     ])
     return batch_out
+
+
+def distance_mod_phase(U1, U2):
+    # Return min{ ||U1 - z*U2|| : |z|=1 }
+    scale = np.vdot(U2, U1)
+    scale /= abs(scale)
+    delta = U1 - scale*U2
+    return la.norm(delta)
 
 
 class SU2:
@@ -175,15 +183,30 @@ class SU2:
         return out
 
     @staticmethod
-    def composition_inverse(alphas, betas, gammas):
+    def composition_asmatrix(angles):
+        """
+        Set R[i] = unitary for angles[i,:]
+        The circuit defined by R[0], then R[1], then R[2] ... is represented
+        by the unitary R[end] R[end-1] @ ... @ R[0]
+
+        """
+        assert angles.shape[1] == 3
+        alphas, betas, gammas = angles.T
+        assert alphas.ndim == betas.ndim == gammas.ndim == 1
         R_composed = np.eye(2)
         if alphas.size > 0:
             Rs = SU2.unitaries_from_angles(alphas, betas, gammas)
+            assert Rs.shape == (alphas.size, 2,2)
             for R in Rs:
                 R_composed = R @ R_composed
-        invR_composed = R_composed.T.conj()
-        ea = SU2.angles_from_2x2_unitary(invR_composed)
-        return ea
+        return R_composed
+    
+    @staticmethod
+    def composition_inverse(alphas, betas, gammas):
+        assert alphas.ndim == betas.ndim == gammas.ndim == 1
+        R_composed = SU2.composition_asmatrix(np.column_stack([alphas, betas, gammas]))
+        invR = R_composed.T.conj()
+        return SU2.angles_from_2x2_unitary(invR)
 
     @classmethod
     def character_from_unitary(cls, U, j=1/2):
