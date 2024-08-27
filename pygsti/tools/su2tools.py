@@ -8,6 +8,7 @@ import scipy.linalg as la
 import scipy.sparse as spar
 from pygsti.baseobjs import basisconstructors as bcons
 from typing import List, Tuple
+from pygsti.tools.matrixtools import eign
 
 
 def check_su2_generators(Jx, Jy, Jz):
@@ -35,22 +36,6 @@ def check_su2_generators(Jx, Jy, Jz):
     diff = bracket(Jy, Jz) - 1j*scale*Jx
     assert is_zero(diff), f'\n{str(diff)}\n\tis not zero up to tolerance {tol}.'
     return
-
-
-def eign(mat, tol=1e-12):
-    """
-    Return the eigendecomposition of a normal operator "mat": 
-        mat = V @ np.diag(eigvals) @ V.T.conj().
-    """
-    T, V = la.schur(mat)
-    offdiag_norm = la.norm(T[np.triu_indices_from(T, 1)])
-    if offdiag_norm > tol:
-        raise ValueError(
-            f'Off-diagonal of triangular factor T from Schur decomposition had norm {offdiag_norm}, '
-            f'which exceeds tolerance of {tol}.'
-        )
-    eigvals = np.diag(T)
-    return eigvals, V
 
 
 def batch_normal_expm_1jscales(eigvecs, eigvals, scales):
