@@ -98,19 +98,20 @@ class TestSU2(BaseSU2Tests):
         
     def test_composition_inverse(self):
         np.random.seed(0)
-        sequence_len = 11
-        angles = np.column_stack(SU2.random_euler_angles(sequence_len))
-        a,b,g = angles.T
-        char_angles = (a[0],b[0],g[0])
-        inv_angles = np.column_stack(SU2.composition_inverse(a[1:], b[1:], g[1:]))
-        comp_to_char_angles = np.block([
-              [  angles  ],
-              [inv_angles]
-        ])
-        U_char_expect = SU2.composition_asmatrix(comp_to_char_angles)
-        U_char_actual = SU2.unitaries_from_angles(*char_angles)[0]
-        discrepency = distance_mod_phase(U_char_actual, U_char_expect)
-        self.assertLessEqual(discrepency, self.RELTOL)
+        lengths = np.arange(1,16,2)
+        for sequence_len in lengths:
+            angles = np.column_stack(SU2.random_euler_angles(sequence_len))
+            a,b,g = angles.T
+            char_angles = (a[0],b[0],g[0])
+            inv_angles = np.column_stack(SU2.composition_inverse(a[1:], b[1:], g[1:]))
+            comp_to_char_angles = np.block([
+                [  angles  ],
+                [inv_angles]
+            ])
+            U_char_expect = SU2.composition_asmatrix(comp_to_char_angles)
+            U_char_actual = SU2.unitaries_from_angles(*char_angles)[0]
+            discrepency = distance_mod_phase(U_char_actual, U_char_expect)
+            self.assertLessEqual(discrepency, self.RELTOL)
 
 
 class TestSpin72(BaseSU2Tests):
