@@ -7,7 +7,7 @@ import scipy.linalg as la
 from pygsti.tools.su2tools import SU2, Spin72
 from pygsti.tools.optools import unitary_to_superop
 from pygsti.baseobjs.basis import Basis, BuiltinBasis
-from typing import List
+from typing import List, Tuple, Callable
 from tqdm import tqdm
 import functools
 
@@ -128,17 +128,86 @@ def default_povm(d, basis):
     return povm
 
 
+def raw_su2_rb_design(N: int, lengths: np.ndarray, seed: int, character=False):
+    np.random.seed(seed)
+    all_circuits = []
+    invert_from = 1 if character else 0
+    assert 0 not in lengths
+    for ell in lengths:
+        angles_for_length_ell = []
+        for _ in range(N):
+            alphas, betas, gammas = SU2.random_euler_angles(ell)
+            inv_angles = SU2.composition_inverse(
+                alphas[invert_from:],
+                betas[invert_from:],
+                gammas[invert_from:]
+            )
+            ell_out = list(zip(alphas, betas, gammas))
+            ell_out.append(inv_angles)
+            angles_for_length_ell.append(np.array(ell_out))
+        all_circuits.append(angles_for_length_ell)
+    return all_circuits
+
+
+"""
+Classic RB (although allowing for multiple state preps, and allowing full POVMs rather than 2-element POVMs)
+"""
+
+
+class SU2RBDesign:
+
+    def __init__(self, N, lengths, statepreps, povm, seed, __character__=False):
+        self.N = N
+        self.lengths = lengths
+        self.all_circuits = raw_su2_rb_design(N, lengths, seed, __character__)
+        self.statepreps = statepreps
+        self.povm = povm
+        assert self.statepreps.ndim == 2
+        assert self.povm.ndim == 2
+        assert self.statepreps.shape[0] == self.povm.shape[1]
+        return
+    
+    @property
+    def num_effects(self) -> int:
+        return self.povm.shape[0]
+
+    @property
+    def num_statepreps(self) -> int:
+        return self.statepreps.shape[0]
+    
+    @property
+    def num_lens(self) -> int:
+        return self.lengths.size
+
+
 class SU2RBSim:
 
-    def __init__(self, su2class,  N: int, lengths: List[int]):
+    def __init__(self, su2class, design):
         self._su2rep = su2class
         self._unitary_dim = su2class.eigJx.size
         self._superop_dim = self._unitary_dim ** 2
         self._noise_channel = np.eye(self._superop_dim)
         self._povm = default_povm(self._unitary_dim, 'std')
-        self.N = N
-        self.lengths = np.array(lengths)
+        self._statepreps = self._povm.copy()
+        self.design = design
+        self.probs = None
         pass
+    
+    @property
+    def N(self) -> int:
+        return self.design.N
+
+    @property
+    def num_statepreps(self) -> int:
+        return self.design.num_statepreps
+    
+    @property
+    def num_effects(self) -> int:
+        return self.design.num_effects
+    
+    @property
+    def num_lens(self) -> int:
+        return self.design.lengths.size
 
     def _set_error_channel_Jz_dephasing(self, gamma: float, power: float):
         assert gamma >= 0
@@ -173,41 +242,32 @@ class SU2RBSim:
         E1 = self._noise_channel
         self._noise_channel = E1 @ E0
 
-    def probabilities(self, seed=0):
-        np.random.seed(seed)
-        dim = self._unitary_dim
-        statepreps = self._povm
-        num_statepreps = statepreps.shape[0]
-        probs = np.zeros((num_statepreps, self.lengths.size, self.N, dim))
+    def compute_probabilities(self):
+        probs = np.zeros((self.num_statepreps, self.num_lens, self.N,  self.num_effects))
         # probs[i,j,k,ell] = probability of measuring outcome ell 
         #    ... when running the k-th circuit of length lengths[j] 
         #    ... given preparation in state i.
-
-        all_circuits = SU2.rb_circuits_by_angles(self.N, self.lengths, seed)
+        all_circuits = self.design.all_circuits
         # ^ For each k in range(N), all_circuits[j][k] is a (lengths[j]+1)-by-3 array.
-        for j in tqdm(range(self.lengths.size)):
-            fixed_length_circuits = all_circuits[j]
-            probs[:,j,:,:] = self.process_circuits(fixed_length_circuits, statepreps)
-        return probs
+        for j, fixed_length_circuits in tqdm(enumerate(all_circuits)):
+            probs[:,j,:,:] = self._process_circuits(fixed_length_circuits)
+        self.probs = probs
+        return
 
-    def process_circuits(self, fixedlen_circuits, statepreps):
-        N = len(fixedlen_circuits)
-        num_statepreps = statepreps.size // (self._unitary_dim**2)
-        statepreps = statepreps.reshape((num_statepreps, -1)) # make sure it's a bunch of row vectors.
-
-        block = np.zeros(shape=(num_statepreps, N, self._unitary_dim))
+    def _process_circuits(self, fixedlen_circuits):
+        block = np.zeros(shape=(self.num_statepreps, self.N, self.num_effects))
         # block[i,k,ell] = the probability of measuring outcome ell after running the k-th circuit, given i-th starting state.
         for k, angles in enumerate(fixedlen_circuits):
             # angles has three columns. Each row of angles specifies an element of SU(2).
             # The sequence of SU(2) elements induced by the rows of angles defines a circuit. 
             unitaries = self._su2rep.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
-            for i,superket in enumerate(statepreps):
+            for i,superket in enumerate(self.design.statepreps):
                 for U in unitaries:
                     densitymx_in = superket.reshape(U.shape)
                     densitymx_out = U @ densitymx_in @ U.T.conj()
                     superket = densitymx_out.ravel()
                     superket = self._noise_channel @ superket
-                block[i,k,:] = self._povm @ superket
+                block[i,k,:] = self.design.povm @ superket
         return block
 
     @staticmethod
@@ -253,75 +313,65 @@ class SU2RBSim:
         return synthetic_probs, survival_probs
 
 
-class Spin72CharacterRBSim(SU2RBSim):
+"""
+Character RB (although allowing for multiple state preps, and allowing full POVMs rather than 2-element POVMs)
+"""
 
-    def __init__(self, N: int, lengths: List[int]):
-        SU2RBSim.__init__(self, Spin72, N, lengths)
-        pass
 
-    def data_generators(self, seed=0, characters_only=False):
-        """
-        The loop over i in range(8) could be vectorized away if we could use the same
-        collection of circuits for each state prep.
-        """
+class SU2CharacterRBDesign(SU2RBDesign):
 
-        np.random.seed(seed)
-        dim = self._unitary_dim
-        statepreps = self._povm
-        num_statepreps = statepreps.shape[0]
-        probs = np.zeros((num_statepreps, self.lengths.size, self.N, dim))
-        chars = np.zeros((num_statepreps, self.lengths.size, self.N, dim))
-        # probs[i,j,k,ell] = probability of measuring outcome ell 
-        #    ... when running the k-th circuit of length lengths[j] 
-        #    ... given preparation in state i.
+    def __init__(self, N, lengths, statepreps, povm, unitary2irrepchars : Callable[[np.ndarray],np.ndarray], seed):
+        SU2RBDesign.__init__(self, N, lengths, statepreps, povm, seed, __character__=True)
+        self.unitary2irrepchars = unitary2irrepchars
+        self.num_irreps = unitary2irrepchars(np.eye(2)).size
+        self.chars = np.zeros(shape=(self.lengths.size, self.N, self.num_irreps))
+        # chars[j,k,ell] = the ell-th irrep's character for the unitary induced by the (noiseless version of the) k-th circuit of length lengths[j]
+        self._compute_chars()
 
-        all_circuits = SU2.rb_circuits_by_angles(self.N, self.lengths, seed)
-        # ^ For each k in range(N), all_circuits[j][k] is a (lengths[j]+1)-by-3 array.
-        for j in tqdm(range(self.lengths.size)):
-            fixedlen_circuits = all_circuits[j]
-            pb, cb = self.process_circuits(fixedlen_circuits, statepreps, characters_only)
-            probs[:,j,:,:] = pb
-            chars[:,j,:,:] = cb
+    """Inherited properties: N, num_effects, num_lens, num_statepreps
+    """
 
-        return probs, chars
+    def _compute_chars(self):
+        # This is a separate function since it might take a while.
+        for j in range(len(self.lengths.size)):
+            for k in range(self.N):
+                angles = self.all_circuits[j][k]
+                a,b,g = angles.T # vectors of 
+                char_U = SU2.unitaries_from_angles(a[0], b[0], g[0])[0]
+                self.chars[j,k,:] = self.unitary2irrepchars(char_U)
+        return
+
+
+class SU2CharacterRBSim(SU2RBSim):
+
+    def __init__(self, su2rep, design : SU2CharacterRBDesign):
+        SU2RBSim.__init__(self, su2rep, design)
+        return
     
-    def process_circuits(self, fixedlen_circuits, statepreps, characters_only):
+    """Inherited properties: N, num_effects, num_lens, num_statepreps
+    """
 
-        # Set dimensions
-        num_effects = self._unitary_dim
-        num_irreps  = len(Spin72.irrep_labels)
-        if num_effects != num_irreps:
-            raise NotImplementedError()
-        assert statepreps.ndim == 2
-        num_statepreps = statepreps.shape[0]
-        N = len(fixedlen_circuits)
-        
-        probs = np.zeros(shape=(num_statepreps, N, num_effects))
-        # probs[i,k,ell] = the probability of measuring outcome ell after running the k-th circuit, given i-th starting state.
-        chars = np.zeros(shape=(num_statepreps, N, num_irreps))
-        # chars[i,k,ell] = the ell-th irrep's character for the unitary induced by the (noiseless version of the) k-th circuit, given the i-th starting state.
-        #       --> Fun fact, this doesn't depend on i!
-        error_free = la.norm(self._noise_channel - np.eye(64)) <= 1e-16
-        for k, angles in enumerate(fixedlen_circuits):
-            # angles has three columns. Each row of angles specifies an element of SU(2).
-            # The sequence of SU(2) elements induced by the rows of angles defines a circuit. 
-            a,b,g = angles.T # vectors of 
-            char_U = SU2.unitaries_from_angles(a[0], b[0], g[0])[0]
-            unitaries = self._su2rep.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
-            chars[0,k,:] = [Spin72.character_from_unitary(char_U, j) for j in Spin72.irrep_labels]
-            if characters_only:
-                continue
-            for i,superket in enumerate(statepreps):
-                if error_free:
+    @property
+    def chars(self) -> np.ndarray:
+        return self.design.chars
+
+    def _process_circuits(self, fixedlen_circuits):
+        if la.norm(self._noise_channel - np.eye(64)) <= 1e-16:
+            # We're simulating character RB on a noiseless system;
+            # we can evaluate the circuit faster since we know in
+            # advance that the composition of all rotations is equal
+            # to the first rotation.
+            probs = np.zeros(shape=(self.num_statepreps, self.N, self.num_effects))
+            # probs[i,k,ell] = the probability of measuring outcome ell after running the k-th circuit, given i-th starting state.
+            for k, angles in enumerate(fixedlen_circuits):
+                a,b,g = angles.T
+                for i,superket in enumerate(self.statepreps):
+                    char_U = SU2.unitaries_from_angles(a[0], b[0], g[0])[0]
                     superket = superket.copy()
                     superop = unitary_to_superoperator(char_U, 'std')
                     superket = superop @ superket
-                for U in unitaries:
-                    densitymx_in = superket.reshape(U.shape)
-                    densitymx_out = U @ densitymx_in @ U.T.conj()
-                    superket = densitymx_out.ravel()
-                    superket = self._noise_channel @ superket
-                probs[i,k,:] = self._povm @ superket
-        chars[1:,:,:] =  np.broadcast_to(chars[0,:,:], (num_statepreps-1, N, num_irreps))
+                    probs[i,k,:] = self.design._povm @ superket
+        else:
+            probs = SU2RBSim._process_circuits(self, fixedlen_circuits)
         return probs
 
