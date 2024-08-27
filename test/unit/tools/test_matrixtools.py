@@ -1,12 +1,47 @@
 import numpy as np
-import scipy.linalg as spl
-import scipy.sparse as sps
+import scipy.linalg as la
+import scipy.sparse as spar
 
 import pygsti.tools.matrixtools as mt
 from ..util import BaseCase
 
 
 class MatrixToolsTester(BaseCase):
+
+    def test_eign(self):
+
+        gen = np.random.default_rng(0)
+        n = 5
+        TOL = 1e-14
+
+        def reconstruct(_eigvals, _eigvecs):
+            return _eigvecs @ np.diag(_eigvals) @ _eigvecs.T.conj()
+
+        def check_matrix(mat):
+            mat_norm = la.norm(mat, ord=2)
+            eigvals, eigvecs = mt.eign(mat)
+            mat_recon = reconstruct(eigvals, eigvecs)
+            error = mat - mat_recon
+            self.assertLessEqual(la.norm(error), np.sqrt(n) * TOL * mat_norm)
+            return
+
+        G_real     = gen.standard_normal(size=(n, n))
+        orthogonal = la.qr(G_real)[0]
+        symmetric  = G_real + G_real.T
+
+        G_imaginary = gen.standard_normal(size=(n, n))
+        G_complex   = G_real + 1j * G_imaginary
+        unitary     = la.qr(G_complex)[0]
+        hermitian   = G_complex + G_complex.T.conj()
+        normal      = reconstruct(np.diag(G_complex), unitary)
+
+        check_matrix(orthogonal)
+        check_matrix(symmetric)
+        check_matrix(unitary)
+        check_matrix(hermitian)
+        check_matrix(normal)
+
+        return
 
     def test_is_hermitian(self):
         herm_mx = np.array([[ 1, 1+2j],
@@ -68,11 +103,11 @@ class MatrixToolsTester(BaseCase):
     def test_matrix_log(self):
         M = np.array([[-1, 0], [0, -1]], 'complex')  # degenerate negative evals
         logM = mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
-        self.assertArraysAlmostEqual(spl.expm(logM), M)
+        self.assertArraysAlmostEqual(la.expm(logM), M)
 
         M = np.array([[-1, 1e-10], [1e-10, -1]], 'complex')  # degenerate negative evals, but will generate complex evecs
         logM = mt.real_matrix_log(M, action_if_imaginary="raise", tol=1e-6)
-        self.assertArraysAlmostEqual(spl.expm(logM), M)
+        self.assertArraysAlmostEqual(la.expm(logM), M)
 
         with self.assertRaises(ValueError):
             M = np.array([[1, 0], [0, -1]], 'd')  # a negative *unparied* eigenvalue => log may be imaginary
@@ -80,7 +115,7 @@ class MatrixToolsTester(BaseCase):
 
         M = np.array([[1, 0], [0, -1]], 'd')  # a negative *unparied* eigenvalue => log may be imaginary
         logM = mt.real_matrix_log(M, action_if_imaginary="ignore", tol=1e-6)
-        self.assertArraysAlmostEqual(spl.expm(logM), M)
+        self.assertArraysAlmostEqual(la.expm(logM), M)
 
     def test_matrix_log_warns_on_imaginary(self):
         M = np.array([[1, 0], [0, -1]], 'd')
@@ -163,8 +198,8 @@ class MatrixToolsTester(BaseCase):
     def test_safe_ops(self):
         mx = np.array([[1+1j, 0],
                        [2+2j, 3+3j]], 'complex')
-        smx = sps.csr_matrix(mx)
-        smx_lil = sps.lil_matrix(mx)  # currently unsupported
+        smx = spar.csr_matrix(mx)
+        smx_lil = spar.lil_matrix(mx)  # currently unsupported
 
         r = mt.safe_real(mx, inplace=False)
         self.assertArraysAlmostEqual(r, np.real(mx))
@@ -199,20 +234,20 @@ class MatrixToolsTester(BaseCase):
     def test_fast_expm(self):
         mx = np.array([[1, 2],
                        [2, 3]], 'd')
-        A = sps.csr_matrix(mx)
+        A = spar.csr_matrix(mx)
         A, mu, m_star, s, eta = mt.expm_multiply_prep(A)
         tol = 1e-6
 
         B = np.array([1, 1], 'd')
         expA = mt._custom_expm_multiply_simple_core(A, B, mu, m_star, s, tol, eta)
 
-        sp_expA = np.inner(spl.expm(mx), B)
+        sp_expA = np.inner(la.expm(mx), B)
         self.assertArraysAlmostEqual(expA, sp_expA)
 
     def test_fast_expm_raises_on_non_square(self):
         nonSq = np.array([[1, 2, 4],
                           [2, 3, 5]], 'd')
-        N = sps.csr_matrix(nonSq)
+        N = spar.csr_matrix(nonSq)
 
         with self.assertRaises(ValueError):
             mt.expm_multiply_prep(N)

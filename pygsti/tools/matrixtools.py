@@ -29,6 +29,23 @@ except ImportError:
 EXPM_DEFAULT_TOL = 2**-53  # Scipy default
 
 
+def eign(mat, tol=1e-12):
+    """
+    Return the eigendecomposition of a normal operator "mat": 
+        mat = V @ np.diag(eigvals) @ V.T.conj().
+    """
+    T, V = _spl.schur(mat, output='complex')
+    offdiag_norm = _spl.norm(T[_np.triu_indices_from(T, 1)])
+    diag_norm = _spl.norm(_np.diag(T), ord=_np.inf)
+    if offdiag_norm > tol * diag_norm:
+        raise ValueError(
+            f'Off-diagonal of triangular factor T from Schur decomposition had norm {offdiag_norm}, '
+            f'which exceeds relative tolerance of {tol * diag_norm}.'
+        )
+    eigvals = _np.diag(T)
+    return eigvals, V
+
+
 def is_hermitian(mx, tol=1e-9):
     """
     Test whether mx is a hermitian matrix.
