@@ -222,10 +222,6 @@ class SU2RBSim:
         self._noise_channel = E_matrixunit
         return
 
-    def set_error_channel_exponential(self, gamma: float):
-        self._set_error_channel_Jz_dephasing(gamma, 1.0)
-        return
-
     def set_error_channel_gaussian(self, gamma: float):
         self._set_error_channel_Jz_dephasing(gamma, 2.0)
         pass
@@ -235,8 +231,8 @@ class SU2RBSim:
         self._noise_channel = unitary_to_superop(U, 'std')
         pass
 
-    def set_error_channel_exponential_compose_rotate_Jz2(self, gamma:float, theta:float):
-        self.set_error_channel_exponential(gamma)
+    def set_error_channel_gaussian_compose_rotate_Jz2(self, gamma:float, theta:float):
+        self.set_error_channel_gaussian(gamma)
         E0 = self._noise_channel
         self.set_error_channel_rotate_Jz2(theta)
         E1 = self._noise_channel
