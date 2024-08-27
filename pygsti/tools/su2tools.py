@@ -7,7 +7,6 @@ import pygsti.modelmembers
 import scipy.linalg as la
 import scipy.sparse as spar
 from pygsti.baseobjs import basisconstructors as bcons
-from typing import List, Tuple
 from pygsti.tools.matrixtools import eign
 
 
@@ -185,28 +184,6 @@ class SU2:
         invR_composed = R_composed.T.conj()
         ea = SU2.angles_from_2x2_unitary(invR_composed)
         return ea
-    
-    @staticmethod
-    def rb_circuits_by_angles(N: int, lengths: List[int], seed=0, invert_from=0) -> np.ndarray[Tuple[float,float,float]]:
-        np.random.seed(seed)
-        out = []
-
-        assert 0 not in lengths
-        for ell in lengths:
-            angles_for_length_ell = []
-            for _ in range(N):
-                alphas, betas, gammas = SU2.random_euler_angles(ell)
-                inv_angles = SU2.composition_inverse(
-                    alphas[invert_from:],
-                    betas[invert_from:],
-                    gammas[invert_from:]
-                )
-                ell_out = list(zip(alphas, betas, gammas))
-                ell_out.append(inv_angles)
-                angles_for_length_ell.append(np.array(ell_out))
-            out.append(angles_for_length_ell)
-        # out[i,j] = (lengths[i]+1)-by-3 array whose columns contain angles for the j-th RB circuit of length lenghts[i].
-        return out
 
     @classmethod
     def character_from_unitary(cls, U, j=1/2):
