@@ -81,6 +81,8 @@ class SU2:
     VJy = np.array([[1, 1], [1j, -1j]]) / np.sqrt(2)
     # VJx and VJy are eigenbases for Jx and Jy, respectively,
     # with corresponding eigenvalues in eigJx and eigJy.
+    irrep_block_sizes = np.array([1, 3])
+    irrep_labels = np.array([0, 1])
 
     """
     The "formula" for the character function in terms of euler angles is nasty.
@@ -225,6 +227,15 @@ class SU2:
         assert abs(check) < 1e-10
 
         return np.real(np.sum([np.exp(1j*__j*theta) for __j in np.arange(-j, j+1)]))
+
+    @classmethod
+    def angles2irrepchars(cls, angles):
+        angles = np.atleast_1d(angles)
+        assert angles.ndim == 1
+        assert angles.size == 3
+        U = SU2.unitaries_from_angles(angles[0], angles[1], angles[2])[0]
+        out = np.array([ SU2.character_from_unitary(U, j) for j in cls.irrep_labels ])
+        return out
 
     @staticmethod
     def characters_from_angles(alphas, betas, gammas, j):
@@ -434,11 +445,11 @@ class Spin72(SU2):
     check_su2_generators(Jx, Jy, Jz)
     eigJx, VJx = eign(Jx)
     eigJy, VJy = eign(Jy)
+    irrep_block_sizes = np.array([i for i in range(1, 16, 2)])
+    irrep_labels = (irrep_block_sizes-1)/2
 
     C = clebsh_gordan_matrix_spin72()
     superop_stdmx_cob = C @ np.kron(la.expm(1j * np.pi * Jy), np.eye(8))
-    irrep_block_sizes = np.array([i for i in range(1, 16, 2)])
-    irrep_labels = (irrep_block_sizes-1)/2
     irrep_stdmx_projectors = irrep_projectors(irrep_block_sizes, superop_stdmx_cob)
 
     @staticmethod
