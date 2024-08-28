@@ -106,11 +106,14 @@ class TreeNode(object):
         #else:  # just take from already-loaded edesign
         #    child_id_suffixes = preloaded_edesign._dirs.copy()
 
-        self._dirs = {nm: subdir for subdir, nm in doc['children'].items()}
+        def _to_immutable(x):
+            return tuple(x) if isinstance(x, list) else x
+
+        self._dirs = {_to_immutable(nm): subdir for subdir, nm in doc['children'].items()}
         self._vals = {}
 
         for subdir, child_id in doc['children_ids'].items():
-            child_nm = doc['children'][subdir]
+            child_nm = _to_immutable(doc['children'][subdir])
             child_doc = mongodb[doc['children_collection_name']].find_one({'_id': child_id})
             if child_doc is None:  # if there's no child document, generate the child value later
                 continue  # don't load anything - create child value on demand
