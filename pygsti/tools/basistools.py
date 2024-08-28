@@ -508,6 +508,9 @@ def vec_to_stdmx(v, basis, keep_complex=False):
     if not isinstance(basis, _basis.Basis):
         basis = _basis.BuiltinBasis(basis, len(v))
     ret = _np.zeros(basis.elshape, 'complex')
+    if v.ndim > 1:
+        assert v.size == v.shape[0]
+        v = v.ravel()
     for i, mx in enumerate(basis.elements):
         if keep_complex:
             ret += v[i] * mx

@@ -32,6 +32,10 @@ doc/build
 *model_test_checkpoints*
 *standard_gst_checkpoints*
 
+# Serialization Testing Artifacts #
+###################################
+*LinearGateSetTomography_serialization*
+
 # Test Metadata #
 #################
 test/output/*
@@ -56,6 +60,7 @@ jupyter_notebooks/Tutorials/tutorial_files/exampleBriefReport
 jupyter_notebooks/Tutorials/tutorial_files/*.ipynb
 jupyter_notebooks/Tutorials/tutorial_files/tempTest
 jupyter_notebooks/Tutorials/tutorial_files/*checkpoints
+jupyter_notebooks/Tutorials/tutorial_files/test_mirror_benchmark
 
 
 

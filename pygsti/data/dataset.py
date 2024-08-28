@@ -1415,17 +1415,19 @@ class DataSet(_MongoSerializable):
         # if "keepseparate" mode, set occurrence id existing circuits to next available (positive) integer.
         if self.collisionAction == "keepseparate":
             if circuit in self.cirIndex:
-                tagged_circuit = circuit.copy()
+                tagged_circuit = circuit.copy(editable=True)
                 i = 1; tagged_circuit.occurrence = i
                 while tagged_circuit in self.cirIndex:
                     i += 1; tagged_circuit.occurrence = i
+                tagged_circuit.done_editing()
                 #add data for a new (duplicate) circuit
                 circuit = tagged_circuit
 
         # in other modes ("overwrite" and "aggregate"), strip off occurrence so duplicates are acted on appropriately
         elif circuit.occurrence is not None:
-            stripped_circuit = circuit.copy()
+            stripped_circuit = circuit.copy(editable=True)
             stripped_circuit.occurrence = None
+            stripped_circuit.done_editing()
             circuit = stripped_circuit
 
         return circuit

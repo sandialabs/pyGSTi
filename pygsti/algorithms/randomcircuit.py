@@ -2137,9 +2137,129 @@ def create_direct_rb_circuit(pspec, clifford_compilations, length, qubit_labels=
 
 #     return experiment_dict
 
+def _sample_clifford_circuit(pspec, clifford_compilations, qubit_labels, citerations,
+        compilerargs, exact_compilation_key, srep_cache, rand_state):
+    """Helper function to compile a random Clifford circuit.
+
+    Parameters
+    ----------
+    pspec : QubitProcessorSpec
+        The QubitProcessorSpec for the device that the circuit is being sampled for, which defines the
+        "native" gate-set and the connectivity of the device. The returned CRB circuit will be over
+        the gates in `pspec`, and will respect the connectivity encoded by `pspec`.
+
+    clifford_compilations : dict
+        A dictionary with at least the potential keys `'absolute'` and `'paulieq'` and corresponding
+        :class:`CompilationRules` values.  These compilation rules specify how to compile the
+        "native" gates of `pspec` into Clifford gates. Additional :class:`CompilationRules` can be
+        provided, particularly for use with `exact_compilation_key`.
+
+    qubit_labels : list
+        A list of the qubits that the RB circuit is to be sampled for.
+
+    citerations : int
+        Some of the Clifford compilation algorithms in pyGSTi (including the default algorithm) are
+        randomized, and the lowest-cost circuit is chosen from all the circuit generated in the
+        iterations of the algorithm. This is the number of iterations used. The time required to
+        generate a CRB circuit is linear in `citerations` * (`length` + 2). Lower-depth / lower 2-qubit
+        gate count compilations of the Cliffords are important in order to successfully implement
+        CRB on more qubits.
+
+    compilerargs : list
+        A list of arguments that are handed to compile_clifford() function, which includes all the
+        optional arguments of compile_clifford() *after* the `iterations` option (set by `citerations`).
+        In order, this list should be values for:
+        
+        algorithm : str. A string that specifies the compilation algorithm. The default in
+        compile_clifford() will always be whatever we consider to be the 'best' all-round
+        algorithm
+        
+        aargs : list. A list of optional arguments for the particular compilation algorithm.
+        
+        costfunction : 'str' or function. The cost-function from which the "best" compilation
+        for a Clifford is chosen from all `citerations` compilations. The default costs a
+        circuit as 10x the num. of 2-qubit gates in the circuit + 1x the depth of the circuit.
+        
+        prefixpaulis : bool. Whether to prefix or append the Paulis on each Clifford.
+        
+        paulirandomize : bool. Whether to follow each layer in the Clifford circuit with a
+        random Pauli on each qubit (compiled into native gates). I.e., if this is True the
+        native gates are Pauli-randomized. When True, this prevents any coherent errors adding
+        (on average) inside the layers of each compiled Clifford, at the cost of increased
+        circuit depth. Defaults to False.
+        
+        For more information on these options, see the `:func:compile_clifford()` docstring.
+    
+    exact_compilation_key: str, optional
+        The key into `clifford_compilations` to use for exact deterministic complation of Cliffords.
+        The underlying :class:`CompilationRules` object must provide compilations for all possible
+        n-qubit Cliffords that will be generated. This also requires the pspec is able to generate the
+        symplectic representations for all n-qubit Cliffords in :meth:`compute_clifford_symplectic_reps`.
+        This is currently generally intended for use out-of-the-box with 1-qubit Clifford RB;
+        however, larger number of qubits can be used so long as the user specifies the processor spec and
+        compilation rules properly.
+
+    srep_cache: dict
+        Keys are gate labels and values are precomputed symplectic representations.
+    
+    rand_state: np.random.RandomState
+        A RandomState to use for RNG
+
+    Returns
+    -------
+    clifford_circuit : Circuit
+        The compiled Clifford circuit
+    
+    s:
+        The symplectic matrix of the Clifford
+    
+    p:
+        The symplectic phase vector of the Clifford
+    """
+    # Find the labels of the qubits to create the circuit for.
+    if qubit_labels is not None: qubits = qubit_labels[:]  # copy this list
+    else: qubits = pspec.qubit_labels[:]  # copy this list
+    # The number of qubits the circuit is over.
+    n = len(qubits)
+
+    if exact_compilation_key is not None:
+        # Deterministic compilation based on a provided clifford compilation
+        assert exact_compilation_key in clifford_compilations, \
+                f"{exact_compilation_key} not provided in `clifford_compilations`"
+        
+        # Pick clifford
+        cidx = rand_state.randint(_symp.compute_num_cliffords(n))
+        lbl = _lbl.Label(f'C{cidx}', qubits)
+        
+        # Try to do deterministic compilation
+        try:
+            circuit = clifford_compilations[exact_compilation_key].retrieve_compilation_of(lbl)
+        except AssertionError:
+            raise ValueError(
+                f"Failed to compile n-qubit Clifford 'C{cidx}'. Ensure this is provided in the " + \
+                "compilation rules, or use a compilation algorithm to synthesize it by not " + \
+                "specifying `exact_compilation_key`."
+            )
+    
+        # compute the symplectic rep of the chosen clifford
+        # TODO: Note that this is inefficient. For speed, we could implement the pair to
+        # _symp.compute_symplectic_matrix and just calculate s and p directly
+        s, p = _symp.symplectic_rep_of_clifford_circuit(circuit, srep_cache)
+    else:
+        # Random compilation
+        s, p = _symp.random_clifford(n, rand_state=rand_state)
+        circuit = _cmpl.compile_clifford(s, p, pspec,
+                                        clifford_compilations.get('absolute', None),
+                                        clifford_compilations.get('paulieq', None),
+                                        qubit_labels=qubit_labels, iterations=citerations, *compilerargs,
+                                            rand_state=rand_state)
+    
+    return circuit, s, p
+
 
 def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_labels=None, randomizeout=False,
-                               citerations=20, compilerargs=None, interleaved_circuit=None, seed=None):
+                               citerations=20, compilerargs=None, interleaved_circuit=None, seed=None,
+                               return_native_gate_counts=False, exact_compilation_key=None):
     """
     Generates a "Clifford randomized benchmarking" (CRB) circuit.
 
@@ -2165,9 +2285,10 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
         the gates in `pspec`, and will respect the connectivity encoded by `pspec`.
 
     clifford_compilations : dict
-        A dictionary with the potential keys `'absolute'` and `'paulieq'` and corresponding
+        A dictionary with at least the potential keys `'absolute'` and `'paulieq'` and corresponding
         :class:`CompilationRules` values.  These compilation rules specify how to compile the
-        "native" gates of `pspec` into Clifford gates.
+        "native" gates of `pspec` into Clifford gates. Additional :class:`CompilationRules` can be
+        provided, particularly for use with `exact_compilation_key`.
 
     length : int
         The "CRB length" of the circuit -- an integer >= 0 --  which is the number of Cliffords in the
@@ -2223,6 +2344,18 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
     seed : int, optional
         A seed to initialize the random number generator used for creating random clifford
         circuits.
+    
+    return_native_gate_counts: bool, optional
+        Whether to return the number of native gates in the first `length`+1 compiled Cliffords
+    
+    exact_compilation_key: str, optional
+        The key into `clifford_compilations` to use for exact deterministic complation of Cliffords.
+        The underlying :class:`CompilationRules` object must provide compilations for all possible
+        n-qubit Cliffords that will be generated. This also requires the pspec is able to generate the
+        symplectic representations for all n-qubit Cliffords in :meth:`compute_clifford_symplectic_reps`.
+        This is currently generally intended for use out-of-the-box with 1-qubit Clifford RB;
+        however, larger number of qubits can be used so long as the user specifies the processor spec and
+        compilation rules properly.
 
     Returns
     -------
@@ -2236,6 +2369,10 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
         `qubit_labels`, if `qubit_labels` is not None; the ith element of `pspec.qubit_labels`, otherwise.
         In both cases, the ith element of the tuple corresponds to the error-free outcome for the
         qubit on the ith wire of the output circuit.
+    
+    native_gate_counts: dict
+        Total number of native gates, native 2q gates, and native circuit size in the
+        first `length`+1 compiled Cliffords. Only returned when `return_num_native_gates` is True
     """
     if compilerargs is None:
         compilerargs = []
@@ -2244,6 +2381,12 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
     else: qubits = pspec.qubit_labels[:]  # copy this list
     # The number of qubits the circuit is over.
     n = len(qubits)
+
+    srep_cache = {}
+    if exact_compilation_key is not None:
+        # Precompute some of the symplectic reps if we are doing exact compilation
+        srep_cache = _symp.compute_internal_gate_symplectic_representations()
+        srep_cache.update(pspec.compute_clifford_symplectic_reps())
 
     rand_state = _np.random.RandomState(seed)  # OK if seed is None
 
@@ -2255,14 +2398,17 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
 
     # Sample length+1 uniformly random Cliffords (we want a circuit of length+2 Cliffords, in total), compile
     # them, and append them to the current circuit.
-    for i in range(0, length + 1):
+    num_native_gates = 0
+    num_native_2q_gates = 0
+    native_size = 0
+    for _ in range(0, length + 1):
+        # Perform sampling
+        circuit, s, p = _sample_clifford_circuit(pspec, clifford_compilations, qubit_labels, citerations,
+                                 compilerargs, exact_compilation_key, srep_cache, rand_state)
+        num_native_gates += circuit.num_gates
+        num_native_2q_gates += circuit.num_nq_gates(2)
+        native_size += circuit.size
 
-        s, p = _symp.random_clifford(n, rand_state=rand_state)
-        circuit = _cmpl.compile_clifford(s, p, pspec,
-                                         clifford_compilations.get('absolute', None),
-                                         clifford_compilations.get('paulieq', None),
-                                         qubit_labels=qubit_labels, iterations=citerations, *compilerargs,
-                                         rand_state=rand_state)
         # Keeps track of the current composite Clifford
         s_composite, p_composite = _symp.compose_cliffords(s_composite, p_composite, s, p)
         full_circuit.append_circuit_inplace(circuit)
@@ -2306,6 +2452,15 @@ def create_clifford_rb_circuit(pspec, clifford_compilations, length, qubit_label
     idealout = tuple(idealout)
 
     full_circuit.done_editing()
+
+    native_gate_counts = {
+        "native_gate_count": num_native_gates,
+        "native_2q_gate_count": num_native_2q_gates,
+        "native_size": native_size
+    }
+
+    if return_native_gate_counts:
+        return full_circuit, idealout, native_gate_counts
     return full_circuit, idealout
 
 
@@ -2619,198 +2774,6 @@ def create_mirror_rb_circuit(pspec, absolute_compilation, length, qubit_labels=N
     idealout = tuple(idealout)
 
     return circuit, idealout
-
-#### Commented out as most of this functionality can be found elsewhere and this code has not been tested recently.
-# def sample_one_q_generalized_rb_circuit(m, group_or_model, inverse=True, random_pauli=False, interleaved=None,
-#                                         group_inverse_only=False, group_prep=False, compilation=None,
-#                                         generated_group=None, model_to_group_labels=None, seed=None, rand_state=None):
-#     """
-#     Makes a random 1-qubit RB circuit, with RB over an arbitrary group.
-
-#     This function also contains a range of other options that allow circuits for many
-#     types of RB to be generated, including:
-
-#     - Clifford RB
-#     - Direct RB
-#     - Interleaved Clifford or direct RB
-#     - Unitarity Clifford or direct RB
-
-#     The function can in-principle be used beyond 1-qubit RB, but it relies on explicit matrix representation
-#     of a group, which is infeasble for, e.g., the many-qubit Clifford group.
-
-#     Note that this function has *not* been carefully tested. This will be rectified in the future,
-#     or this function will be replaced.
-
-#     Parameters
-#     ----------
-#     m : int
-#         The number of random gates in the circuit.
-
-#     group_or_model : Model or MatrixGroup
-#         Which Model of MatrixGroup to create the random circuit for. If
-#         inverse is true and this is a Model, the Model gates must form
-#         a group (so in this case it requires the *target model* rather than
-#         a noisy model). When inverse is true, the MatrixGroup for the model
-#         is generated. Therefore, if inverse is true and the function is called
-#         multiple times, it will be much faster if the MatrixGroup is provided.
-
-#     inverse : Bool, optional
-#         If true, the random circuit is followed by its inverse gate. The model
-#         must form a group if this is true. If it is true then the circuit
-#         returned is length m+1 (2m+1) if interleaved is False (True).
-
-#     random_pauli : <TODO typ>, optional
-#         <TODO description>
-
-#     interleaved : Str, optional
-#         If not None, then a oplabel string. When a oplabel string is provided,
-#         every random gate is followed by this gate. So the returned circuit is of
-#         length 2m+1 (2m) if inverse is True (False).
-
-#     group_inverse_only : <TODO typ>, optional
-#         <TODO description>
-
-#     group_prep : bool, optional
-#         If group_inverse_only is True and inverse is True, setting this to true
-#         creates a "group pre-twirl". Does nothing otherwise (which should be changed
-#         at some point).
-
-#     compilation : <TODO typ>, optional
-#         <TODO description>
-
-#     generated_group : <TODO typ>, optional
-#         <TODO description>
-
-#     model_to_group_labels : <TODO typ>, optional
-#         <TODO description>
-
-#     seed : int, optional
-#         Seed for random number generator; optional.
-
-#     rand_state : numpy.random.RandomState, optional
-#         A RandomState object to generate samples from. Can be useful to set
-#         instead of `seed` if you want reproducible distribution samples across
-#         multiple random function calls but you don't want to bother with
-#         manually incrementing seeds between those calls.
-
-#     Returns
-#     -------
-#     Circuit
-#         The random circuit of length:
-#         m if inverse = False, interleaved = None
-#         m + 1 if inverse = True, interleaved = None
-#         2m if inverse = False, interleaved not None
-#         2m + 1 if inverse = True, interleaved not None
-#     """
-#     assert hasattr(group_or_model, 'gates') or hasattr(group_or_model,
-#                                                        'product'), 'group_or_model must be a MatrixGroup of Model'
-#     group = None
-#     model = None
-#     if hasattr(group_or_model, 'gates'):
-#         model = group_or_model
-#     if hasattr(group_or_model, 'product'):
-#         group = group_or_model
-
-#     if rand_state is None:
-#         rndm = _np.random.RandomState(seed)  # ok if seed is None
-#     else:
-#         rndm = rand_state
-
-#     if (inverse) and (not group_inverse_only):
-#         if model:
-#             group = _rbobjs.MatrixGroup(group_or_model.operations.values(),
-#                                         group_or_model.operations.keys())
-
-#         rndm_indices = rndm.randint(0, len(group), m)
-#         if interleaved:
-#             interleaved_index = group.label_indices[interleaved]
-#             interleaved_indices = interleaved_index * _np.ones((m, 2), _np.int64)
-#             interleaved_indices[:, 0] = rndm_indices
-#             rndm_indices = interleaved_indices.flatten()
-
-#         random_string = [group.labels[i] for i in rndm_indices]
-#         effective_op = group.product(random_string)
-#         inv = group.inverse_index(effective_op)
-#         random_string.append(inv)
-
-#     if (inverse) and (group_inverse_only):
-#         assert (model is not None), "gateset_or_group should be a Model!"
-#         assert (compilation is not None), "Compilation of group elements to model needs to be specified!"
-#         assert (generated_group is not None), "Generated group needs to be specified!"
-#         if model_to_group_labels is None:
-#             model_to_group_labels = {}
-#             for gate in model.primitive_op_labels:
-#                 assert(gate in generated_group.labels), "model labels are not in \
-#                 the generated group! Specify a model_to_group_labels dictionary."
-#                 model_to_group_labels = {'gate': 'gate'}
-#         else:
-#             for gate in model.primitive_op_labels:
-#                 assert(gate in model_to_group_labels.keys()), "model to group labels \
-#                 are invalid!"
-#                 assert(model_to_group_labels[gate] in generated_group.labels), "model to group labels \
-#                 are invalid!"
-
-#         opLabels = model.primitive_op_labels
-#         rndm_indices = rndm.randint(0, len(opLabels), m)
-#         if interleaved:
-#             interleaved_index = opLabels.index(interleaved)
-#             interleaved_indices = interleaved_index * _np.ones((m, 2), _np.int64)
-#             interleaved_indices[:, 0] = rndm_indices
-#             rndm_indices = interleaved_indices.flatten()
-
-#         # This bit of code is a quick hashed job. Needs to be checked at somepoint
-#         if group_prep:
-#             rndm_group_index = rndm.randint(0, len(generated_group))
-#             prep_random_string = compilation[generated_group.labels[rndm_group_index]]
-#             prep_random_string_group = [generated_group.labels[rndm_group_index], ]
-
-#         random_string = [opLabels[i] for i in rndm_indices]
-#         random_string_group = [model_to_group_labels[opLabels[i]] for i in rndm_indices]
-#         # This bit of code is a quick hashed job. Needs to be checked at somepoint
-#         if group_prep:
-#             random_string = prep_random_string + random_string
-#             random_string_group = prep_random_string_group + random_string_group
-#         #print(random_string)
-#         inversion_group_element = generated_group.inverse_index(generated_group.product(random_string_group))
-
-#         # This bit of code is a quick hash job, and only works when the group is the 1-qubit Cliffords
-#         if random_pauli:
-#             pauli_keys = ['Gc0', 'Gc3', 'Gc6', 'Gc9']
-#             rndm_index = rndm.randint(0, 4)
-
-#             if rndm_index == 0 or rndm_index == 3:
-#                 bitflip = False
-#             else:
-#                 bitflip = True
-#             inversion_group_element = generated_group.product([inversion_group_element, pauli_keys[rndm_index]])
-
-#         inversion_sequence = compilation[inversion_group_element]
-#         random_string.extend(inversion_sequence)
-
-#     if not inverse:
-#         if model:
-#             opLabels = model.primitive_op_labels
-#             rndm_indices = rndm.randint(0, len(opLabels), m)
-#             if interleaved:
-#                 interleaved_index = opLabels.index(interleaved)
-#                 interleaved_indices = interleaved_index * _np.ones((m, 2), _np.int64)
-#                 interleaved_indices[:, 0] = rndm_indices
-#                 rndm_indices = interleaved_indices.flatten()
-#             random_string = [opLabels[i] for i in rndm_indices]
-
-#         else:
-#             rndm_indices = rndm.randint(0, len(group), m)
-#             if interleaved:
-#                 interleaved_index = group.label_indices[interleaved]
-#                 interleaved_indices = interleaved_index * _np.ones((m, 2), _np.int64)
-#                 interleaved_indices[:, 0] = rndm_indices
-#                 rndm_indices = interleaved_indices.flatten()
-#             random_string = [group.labels[i] for i in rndm_indices]
-
-#     if not random_pauli:
-#         return _cir.Circuit(random_string)
-#     if random_pauli:
-#         return _cir.Circuit(random_string), bitflip
 
 
 def create_random_germ(pspec, depths, interacting_qs_density, qubit_labels, rand_state=None):
