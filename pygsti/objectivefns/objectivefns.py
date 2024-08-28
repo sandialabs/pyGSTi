@@ -916,8 +916,8 @@ class ModelDatasetCircuitsStore(object):
             assert(self.global_nparams is None or self.global_nparams == self.model.num_params)
         else:
             self.global_nelements = self.host_nelements = self.nelements = len(self.layout)
-            self.global_nparams = self.host_nparams = self.nparams = self.model.num_params
-            self.global_nparams2 = self.host_nparams2 = self.nparams2 = self.model.num_params
+            self.global_nparams = self.host_nparams = self.nparams = self.model.num_params if self.model else 0
+            self.global_nparams2 = self.host_nparams2 = self.nparams2 = self.model.num_params if self.model else 0
 
     @property
     def opBasis(self):
@@ -944,7 +944,7 @@ class ModelDatasetCircuitsStore(object):
             for i, c in enumerate(self.circuits):
                 indices = _slct.to_array(self.layout.indices_for_index(i))
                 lklen = _slct.length(self.layout.indices_for_index(i))
-                if 0 < lklen < self.model.compute_num_outcomes(c):
+                if self.model is not None and 0 < lklen < self.model.compute_num_outcomes(c):
                     self.firsts.append(indices[0])
                     self.indicesOfCircuitsWithOmittedData.append(i)
             if len(self.firsts) > 0:
