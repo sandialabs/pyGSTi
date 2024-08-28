@@ -33,10 +33,6 @@ class TestSU2CharacterRBSim(unittest.TestCase):
     def test_smoke_spin72(self):
         lengths = np.arange(1, 16, 3)
         N = 10
-        max_circuit_length = 32
-        temp = np.around(np.geomspace(1, max_circuit_length, num=15)).astype(int)
-        lengths = np.unique(temp)
-
 
         rbd = SU2CharacterRBDesign(Spin72, N, lengths, default_povm(8,'std'), default_povm(8,'std'), seed=0)
         rbm = SU2CharacterRBSim(rbd)

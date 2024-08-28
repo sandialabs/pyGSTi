@@ -222,16 +222,22 @@ class SU2RBSim:
             j = ell // self._unitary_dim
             E_matrixunit[ell,ell] = np.exp(-gamma * abs(i - j)**power)
         self._noise_channel = E_matrixunit
+        self._noise_channel_info = ('Jz_dephasing', (gamma, power))
+        return
+
+    def set_error_channel_exponential(self, gamma: float):
+        self._set_error_channel_Jz_dephasing(gamma, 1.0)
         return
 
     def set_error_channel_gaussian(self, gamma: float):
         self._set_error_channel_Jz_dephasing(gamma, 2.0)
-        pass
+        return
 
     def set_error_channel_rotate_Jz2(self, theta: float):
         U = la.expm(1j * theta * self.su2rep.Jz @ self.su2rep.Jz)
         self._noise_channel = unitary_to_superop(U, 'std')
-        pass
+        self._noise_channel_info = ('rotate_Jz2', (theta,))
+        return
 
     def set_error_channel_gaussian_compose_rotate_Jz2(self, gamma:float, theta:float):
         self.set_error_channel_gaussian(gamma)
@@ -239,6 +245,7 @@ class SU2RBSim:
         self.set_error_channel_rotate_Jz2(theta)
         E1 = self._noise_channel
         self._noise_channel = E1 @ E0
+        self._noise_channel_info = ('gaussian_compose_rotate_Jz2', (gamma, theta))
 
     def compute_probabilities(self):
         probs = np.zeros((self.num_statepreps, self.num_lens, self.N,  self.num_effects))
