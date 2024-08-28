@@ -156,7 +156,8 @@ Classic RB (although allowing for multiple state preps, and allowing full POVMs 
 
 class SU2RBDesign:
 
-    def __init__(self, N, lengths, statepreps, povm, seed, __character__=False):
+    def __init__(self, su2rep, N, lengths, statepreps, povm, seed, __character__=False):
+        self.su2rep = su2rep
         self.N = N
         self.lengths = lengths
         self.all_circuits = raw_su2_rb_design(N, lengths, seed, __character__)
@@ -164,7 +165,7 @@ class SU2RBDesign:
         self.povm = povm
         assert self.statepreps.ndim == 2
         assert self.povm.ndim == 2
-        assert self.statepreps.shape[0] == self.povm.shape[1]
+        assert self.statepreps.shape[1] == self.povm.shape[1]
         return
     
     @property
@@ -182,13 +183,10 @@ class SU2RBDesign:
 
 class SU2RBSim:
 
-    def __init__(self, su2class, design):
-        self._su2rep = su2class
-        self._unitary_dim = su2class.eigJx.size
+    def __init__(self, design):
+        self._unitary_dim = design.su2rep.eigJx.size
         self._superop_dim = self._unitary_dim ** 2
         self._noise_channel = np.eye(self._superop_dim)
-        self._povm = default_povm(self._unitary_dim, 'std')
-        self._statepreps = self._povm.copy()
         self.design = design
         self.probs = None
         pass
@@ -209,6 +207,10 @@ class SU2RBSim:
     def num_lens(self) -> int:
         return self.design.lengths.size
 
+    @property
+    def su2rep(self):
+        return self.design.su2rep
+
     def _set_error_channel_Jz_dephasing(self, gamma: float, power: float):
         assert gamma >= 0
         if gamma == 0:
@@ -227,7 +229,7 @@ class SU2RBSim:
         pass
 
     def set_error_channel_rotate_Jz2(self, theta: float):
-        U = la.expm(1j * theta * self._su2rep.Jz @ self._su2rep.Jz)
+        U = la.expm(1j * theta * self.su2rep.Jz @ self.su2rep.Jz)
         self._noise_channel = unitary_to_superop(U, 'std')
         pass
 
@@ -256,7 +258,7 @@ class SU2RBSim:
         for k, angles in enumerate(fixedlen_circuits):
             # angles has three columns. Each row of angles specifies an element of SU(2).
             # The sequence of SU(2) elements induced by the rows of angles defines a circuit. 
-            unitaries = self._su2rep.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
+            unitaries = self.su2rep.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
             for i,superket in enumerate(self.design.statepreps):
                 for U in unitaries:
                     densitymx_in = superket.reshape(U.shape)
@@ -265,6 +267,15 @@ class SU2RBSim:
                     superket = self._noise_channel @ superket
                 block[i,k,:] = self.design.povm @ superket
         return block
+
+    @staticmethod
+    def sanitize_probs(_probs):
+        tol = 1e-14
+        temp = _probs.copy()
+        temp[temp >= 0] = 0
+        assert np.all(la.norm(temp, axis=3, ord=2) <= tol)
+        _probs[_probs < 0] = 0.0
+        _probs /= np.sum(_probs, axis=3)[:,:,:,np.newaxis]
 
     @staticmethod
     def synspam_transform(_probs, M=None, shots_per_circuit=np.inf, seed=0):
@@ -286,12 +297,7 @@ class SU2RBSim:
             return np.mean(empirical_distn, axis=0)
 
         # check each _probs[i,j,k,:] for negative values and normalize to a probability distribution
-        tol = 1e-14
-        temp = _probs.copy()
-        temp[temp >= 0] = 0
-        assert np.all(la.norm(temp, axis=3, ord=2) <= tol)
-        _probs[_probs < 0] = 0.0
-        _probs /= np.sum(_probs, axis=3)[:,:,:,np.newaxis]
+        SU2RBSim.sanitize_probs(_probs)
 
         diag_statepreps  = np.diag_indices(num_statepreps)
         diag_povmeffects = np.diag_indices(num_povm_effects)
@@ -316,10 +322,10 @@ Character RB (although allowing for multiple state preps, and allowing full POVM
 
 class SU2CharacterRBDesign(SU2RBDesign):
 
-    def __init__(self, N, lengths, statepreps, povm, unitary2irrepchars : Callable[[np.ndarray],np.ndarray], seed):
-        SU2RBDesign.__init__(self, N, lengths, statepreps, povm, seed, __character__=True)
-        self.unitary2irrepchars = unitary2irrepchars
-        self.num_irreps = unitary2irrepchars(np.eye(2)).size
+    def __init__(self, su2rep, N, lengths, statepreps, povm, seed):
+        SU2RBDesign.__init__(self, su2rep, N, lengths, statepreps, povm, seed, __character__=True)
+        self.angles2irrepchars = su2rep.angles2irrepchars
+        self.num_irreps = su2rep.irrep_labels.size
         self.chars = np.zeros(shape=(self.lengths.size, self.N, self.num_irreps))
         # chars[j,k,ell] = the ell-th irrep's character for the unitary induced by the (noiseless version of the) k-th circuit of length lengths[j]
         self._compute_chars()
@@ -329,19 +335,17 @@ class SU2CharacterRBDesign(SU2RBDesign):
 
     def _compute_chars(self):
         # This is a separate function since it might take a while.
-        for j in range(len(self.lengths.size)):
+        for j in range(self.num_lens):
             for k in range(self.N):
                 angles = self.all_circuits[j][k]
-                a,b,g = angles.T # vectors of 
-                char_U = SU2.unitaries_from_angles(a[0], b[0], g[0])[0]
-                self.chars[j,k,:] = self.unitary2irrepchars(char_U)
+                self.chars[j,k,:] = self.angles2irrepchars(angles[0,:])
         return
 
 
 class SU2CharacterRBSim(SU2RBSim):
 
-    def __init__(self, su2rep, design : SU2CharacterRBDesign):
-        SU2RBSim.__init__(self, su2rep, design)
+    def __init__(self, design : SU2CharacterRBDesign):
+        SU2RBSim.__init__(self, design)
         return
     
     """Inherited properties: N, num_effects, num_lens, num_statepreps
@@ -371,3 +375,57 @@ class SU2CharacterRBSim(SU2RBSim):
             probs = SU2RBSim._process_circuits(self, fixedlen_circuits)
         return probs
 
+    @staticmethod
+    def synspam_character_transform(_probs, _chars, _irrep_sizes, M=None, shots_per_circuit=np.inf, weighting=True, seed=0):
+        #  probs[i,j,k,ell] = probability of measuring outcome ell when running the k-th lengths[j] circuit given preparation in state i.
+        #  chars[  j,k,ell] = the value of the ell^th irrep's character function for the "hidden" initial gate in the k-th circuit of length lengths[j];
+        #   ^ the same circuits and hidden initial gates were used for all statepreps.
+        if M is None:
+            M = get_M()
+
+        num_statepreps, num_lens, circuits_per_length, num_effects = _probs.shape
+        assert circuits_per_length > 1
+        assert M.shape == (num_statepreps, num_effects)
+        num_irreps = _irrep_sizes.size
+        assert _chars.shape == (num_lens, circuits_per_length, num_irreps)
+        if num_irreps != num_effects:
+            raise NotImplementedError()
+
+        g = np.random.default_rng(seed)
+
+        if weighting:
+            dimweighted_chars = _chars * _irrep_sizes[np.newaxis, np.newaxis, :]
+        else:
+            dimweighted_chars = _chars.copy()
+        
+        def mean_charweighted_empirical_distribution(distributions, wchars):
+            # distributions will be _probs[i,j,:,:] for some i,j,
+            #       --> rows will be indexed from 0 to N-1 and it'll have num_effects columns.
+            # wchars will be dimweighted_chars[j,:,:] for some j.
+            #       --> rows will be indexed from 0 to N-1, cols will be indexed by num_irreps.
+            #
+            # How in the heck do irrep labels correspond to effects? I guess the assumption is that
+            # each effect exists to help us pin down an irrep?
+            if shots_per_circuit == np.inf:
+                empirical_distn = distributions
+            else:
+                empirical_distn = g.multinomial(shots_per_circuit, distributions) / shots_per_circuit
+                empirical_distn *= wchars
+            return np.mean(empirical_distn, axis=0)
+
+        # check each _probs[i,j,k,:] for negative values and normalize to a probability distribution
+        SU2RBSim.sanitize_probs(_probs)
+
+        diag_statepreps  = np.diag_indices(num_statepreps)
+        diag_povmeffects = np.diag_indices(num_effects)
+        synthetic_probs  = np.zeros((num_effects, num_lens))
+        survival_probs   = np.zeros((num_statepreps,   num_lens))
+        for j in range(num_lens):
+            P = np.zeros((num_statepreps, num_statepreps))
+            for i in range(num_statepreps):
+                P[i,:] = mean_charweighted_empirical_distribution(_probs[i,j,:,:], dimweighted_chars[j,:,:])
+            Q = M @ P @ M.T
+            survival_probs[ :, j] = P[diag_statepreps]
+            synthetic_probs[:, j] = Q[diag_povmeffects]
+
+        return synthetic_probs, survival_probs
