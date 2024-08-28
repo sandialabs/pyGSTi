@@ -383,7 +383,7 @@ class SU2CharacterRBSim(SU2RBSim):
         return probs
 
     @staticmethod
-    def synspam_character_transform(_probs, _chars, _irrep_sizes, M=None, shots_per_circuit=np.inf, weighting=True, seed=0):
+    def synspam_character_transform(_probs, _chars, _irrep_sizes, M=None, shots_per_circuit=np.inf, blockweight_power=1, seed=0):
         #  probs[i,j,k,ell] = probability of measuring outcome ell when running the k-th lengths[j] circuit given preparation in state i.
         #  chars[  j,k,ell] = the value of the ell^th irrep's character function for the "hidden" initial gate in the k-th circuit of length lengths[j];
         #   ^ the same circuits and hidden initial gates were used for all statepreps.
@@ -399,11 +399,9 @@ class SU2CharacterRBSim(SU2RBSim):
             raise NotImplementedError()
 
         g = np.random.default_rng(seed)
+    
+        dimweighted_chars = _chars * (_irrep_sizes[np.newaxis, np.newaxis, :]**blockweight_power)
 
-        if weighting:
-            dimweighted_chars = _chars * _irrep_sizes[np.newaxis, np.newaxis, :]
-        else:
-            dimweighted_chars = _chars.copy()
         
         def mean_charweighted_empirical_distribution(distributions, wchars):
             # distributions will be _probs[i,j,:,:] for some i,j,
@@ -414,7 +412,8 @@ class SU2CharacterRBSim(SU2RBSim):
             # How in the heck do irrep labels correspond to effects? I guess the assumption is that
             # each effect exists to help us pin down an irrep?
             if shots_per_circuit == np.inf:
-                empirical_distn = distributions
+                empirical_distn = distributions.copy()
+                empirical_distn *= wchars
             else:
                 empirical_distn = g.multinomial(shots_per_circuit, distributions) / shots_per_circuit
                 empirical_distn *= wchars
