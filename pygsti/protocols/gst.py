@@ -38,6 +38,7 @@ from pygsti import baseobjs as _baseobjs
 from pygsti.processors import QuditProcessorSpec as _QuditProcessorSpec
 from pygsti.modelmembers import operations as _op
 from pygsti.models import Model as _Model
+from pygsti.models.explicitmodel import ExplicitOpModel as _ExplicitOpModel
 from pygsti.models.gaugegroup import GaugeGroup as _GaugeGroup, GaugeGroupElement as _GaugeGroupElement
 from pygsti.objectivefns import objectivefns as _objfns, wildcardbudget as _wild
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
@@ -2359,9 +2360,16 @@ def _compute_wildcard_budget_1d_model(estimate, objfn_cache, mdc_objfn, paramete
     if gaugeopt_suite is None or gaugeopt_suite.gaugeopt_suite_names is None:
         gaugeopt_labels = None
         primitive_ops = list(ref.keys())
+        if sum([v**2 for v in ref.values()]) < 1e-4:
+            _warnings.warn("Reference values for 1D wildcard budget are all near-zero!"
+                           "This usually indicates an incorrect target model and will likely cause problems computing alpha.")
+
     else:
         gaugeopt_labels = gaugeopt_suite.gaugeopt_suite_names
         primitive_ops = list(ref[list(gaugeopt_labels)[0]].keys())
+        if sum([v**2 for v in ref[list(gaugeopt_labels)[0]].values()]) < 1e-4:
+            _warnings.warn("Reference values for 1D wildcard budget are all near-zero!"
+                           "This usually indicates an incorrect target model and will likely cause problems computing alpha.")
 
     if gaugeopt_labels is None:
         wcm = _wild.PrimitiveOpsSingleScaleWildcardBudget(primitive_ops, [ref[k] for k in primitive_ops],
@@ -2386,21 +2394,38 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
         if gaugeopt_suite is None or gaugeopt_suite.gaugeopt_suite_names is None:
             final_model = estimate.models['final iteration estimate']
             target_model = estimate.models['target']
-            gaugeopt_model = _alg.gaugeopt_to_target(final_model, target_model)
+
+            if isinstance(final_model, _ExplicitOpModel):
+                gaugeopt_model = _alg.gaugeopt_to_target(final_model, target_model)
+                operations_dict = gaugeopt_model.operations
+                targetops_dict = target_model.operations
+                preps_dict = gaugeopt_model.preps
+                targetpreps_dict = target_model.preps
+                povmops_dict = gaugeopt_model.povms
+            else:
+                # Local/cloud noise models don't have default_gauge_group attribute and can't be gauge
+                #  optimized - at least not easily.
+                gaugeopt_model = final_model
+                operations_dict = gaugeopt_model.operation_blks['gates']
+                targetops_dict = target_model.operation_blks['gates']
+                preps_dict = gaugeopt_model.prep_blks['layers']
+                targetpreps_dict = target_model.prep_blks['layers']
+                povmops_dict = {}  # HACK - need to rewrite povm_diamonddist below to work
+
             dd = {}
-            for key, op in gaugeopt_model.operations.items():
-                dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), target_model.operations[key].to_dense())
+            for key, op in operations_dict.items():
+                dd[key] = 0.5 * _tools.diamonddist(op.to_dense(), targetops_dict[key].to_dense())
                 if dd[key] < 0:  # indicates that diamonddist failed (cvxpy failure)
                     _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
                                     " Falling back to trace distance.") % str(key))
                     dd[key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
 
             spamdd = {}
-            for key, op in gaugeopt_model.preps.items():
+            for key, op in preps_dict.items():
                 spamdd[key] = _tools.tracedist(_tools.vec_to_stdmx(op.to_dense(), 'pp'),
-                                               _tools.vec_to_stdmx(target_model.preps[key].to_dense(), 'pp'))
+                                               _tools.vec_to_stdmx(targetpreps_dict[key].to_dense(), 'pp'))
 
-            for key in gaugeopt_model.povms.keys():
+            for key in povmops_dict.keys():
                 spamdd[key] = 0.5 * _tools.optools.povm_diamonddist(gaugeopt_model, target_model, key)
 
             dd['SPAM'] = sum(spamdd.values())
