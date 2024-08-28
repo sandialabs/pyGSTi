@@ -1,7 +1,6 @@
-from unittest import mock, TestCase
-
+from unittest import TestCase
+from pygsti.tools import unitary_to_std_process_mx
 import numpy as np
-import pytest
 import scipy.linalg as la
 from pygsti.tools.su2tools import batch_normal_expm_1jscales, SU2, Spin72, distance_mod_phase
 
@@ -119,10 +118,49 @@ class TestSpin72(BaseSU2Tests):
     RELTOL = 1e-13
 
     def test_static_variables(self):
-        return self._test_static_variables(Spin72)
+        # First we check the static variables that also appear in the base SU2 class.
+        self._test_static_variables(Spin72)
+        # Next, check unitarity of C:= Spin72.superop_stdmx_cob
+        C =  Spin72.superop_stdmx_cob
+        discrepency = la.norm(C @ C.T.conj() - np.eye(64))
+        self.assertLessEqual(discrepency, self.RELTOL)
+        # Finally, we check if C actually block diagonalizes random SU2 elements
+        # in the superop-of-spin72 representation.
+        np.random.seed(0)
+        aa = np.column_stack(Spin72.random_euler_angles(5))
+        Us = Spin72.unitaries_from_angles(aa[:,0], aa[:,1], aa[:,2])
+        for U in Us:
+            V = unitary_to_std_process_mx(U)
+            W = C @ V @ C.T.conj()
+            start = 0
+            for b_sz in Spin72.irrep_block_sizes:
+                stop = start + b_sz
+                block = W[start:stop, start:stop].copy()
+                W[start:stop, start:stop] -= block
+                start = stop
+            self.assertLessEqual(la.norm(W), self.RELTOL)
+        return
     
     def test_expmiJx_single(self):
         return self._test_expmiJx_single(Spin72)
 
     def test_expmiJy_single(self):
         return self._test_expmiJy_single(Spin72)
+
+    def test_angles2irrepchars(self):
+        # use the fact that we can compute character functions in one
+        # of two ways. We can either take the traces of the blocks of the
+        # block-diagonalized version of the superoperator, or we can use the nice
+        # function implied by Robin's note. Obviously the latter is faster.
+        # The former is nice because the block-diagonal structure can plausibly 
+        # be verified by testing a single random SU(2) element, and the diagonalizer's
+        # unitarity can be checked cheaply.
+        np.random.seed(0)
+        aa = np.column_stack(Spin72.random_euler_angles(5))
+        Us = Spin72.unitaries_from_angles(aa[:,0], aa[:,1], aa[:,2])
+        for i,U in enumerate(Us):
+            expect = Spin72.all_characters_from_unitary(U)
+            actual = Spin72.angles2irrepchars(aa[i,:])
+            discrepency = la.norm(actual - expect)
+            self.assertLessEqual(discrepency, 64*self.RELTOL)
+        return
