@@ -176,7 +176,8 @@ class Model(_NicelySerializable):
         if lower_bound == -_np.inf and upper_bound == _np.inf:
             return  # do nothing
 
-        if self._param_bounds is None:
+        #Note, this property call will also invoke a param vector rebuild if needed.
+        if self.parameter_bounds is None:
             self._param_bounds = _default_param_bounds(self.num_params)
         self._param_bounds[index, :] = (lower_bound, upper_bound)
 
@@ -602,6 +603,56 @@ class OpModel(Model):
         """
         self._clean_paramvec()
         return len(self._paramvec)
+    
+    @property
+    def parameter_labels(self):
+        """
+        A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
+        """
+        self._clean_paramvec()
+        return self._paramlbls
+    
+    def set_parameter_label(self, index, label):
+        """
+        Set the label of a single model parameter.
+
+        Parameters
+        ----------
+        index : int
+            The index of the paramter whose label should be set.
+
+        label : object
+            An object that serves to label this parameter.  Often a string.
+
+        Returns
+        -------
+        None
+        """
+        self._clean_paramvec()
+        self._paramlbls[index] = label
+    
+    @property
+    def parameter_bounds(self):
+        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
+        self._clean_paramvec()
+        return self._param_bounds
+    
+    @property
+    def num_modeltest_params(self):
+        """
+        The parameter count to use when testing this model against data.
+
+        Often times, this is the same as :meth:`num_params`, but there are times
+        when it can convenient or necessary to use a parameter count different than
+        the actual number of parameters in this model.
+
+        Returns
+        -------
+        int
+            the number of model parameters.
+        """
+        self._clean_paramvec()
+        return Model.num_modeltest_params.fget(self)
 
     def _iter_parameterized_objs(self):
         raise NotImplementedError("Derived Model classes should implement _iter_parameterized_objs")
