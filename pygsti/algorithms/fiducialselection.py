@@ -1973,7 +1973,7 @@ def create_candidate_fiducial_list(target_model, omit_identity= True, ops_to_omi
     if ops_to_omit is None:
         ops_to_omit = []
         
-    fidOps = [gate for gate in target_model.operations if gate not in ops_to_omit]
+    fidOps = [gate for gate in target_model.operations if str(gate) not in ops_to_omit]
         
     if omit_identity:
         # we assume identity gate is always the identity mx regardless of basis
@@ -2013,6 +2013,10 @@ def create_candidate_fiducial_list(target_model, omit_identity= True, ops_to_omi
         else:
             availableFidList.extend(_circuits.list_random_circuits_onelen(
                 fidOps, fidLength, count, seed=candidate_seed))
+            
+    for ckt in availableFidList:
+        ckt.line_labels = target_model.state_space.state_space_labels
+        print(ckt.line_labels)
     return availableFidList
     
     

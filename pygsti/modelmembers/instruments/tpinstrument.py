@@ -254,7 +254,9 @@ class TPInstrument(_mm.ModelMember, _collections.OrderedDict):
     @property
     def parameter_labels(self):  # same as in Instrument CONSOLIDATE?
         """
-        An array of labels (usually strings) describing this model member's parameters.
+        An array of labels (usually strings) describing this model member's parameters. Here, 
+        we will have d^2(d^2-1) parameters corresponding to the sum of the instrument elements
+        followed by d^2*d^2 parameters for each of the instrument elements (except the first one). 
         """
         plabels_per_local_index = _collections.defaultdict(list)
         for operation, factorgate_local_inds in zip(self.submembers(), self._submember_rpindices):

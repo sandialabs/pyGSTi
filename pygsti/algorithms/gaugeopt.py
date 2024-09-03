@@ -161,7 +161,7 @@ def gaugeopt_to_target(model, target_model, item_weights=None,
         model = model.copy()  # don't alter the original model's parameterization (this would be unexpected)
         for args in conversion_args:
             if isinstance(args, str):
-                model.convert_members_inplace(args, set_default_gauge_group=True)
+                model.convert_members_inplace(args, set_default_gauge_group=True, convert_new_inst=False)
             elif isinstance(args, dict):
                 model.convert_members_inplace(**args)
             else:

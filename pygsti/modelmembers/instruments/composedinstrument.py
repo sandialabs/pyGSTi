@@ -252,12 +252,13 @@ class ComposedInstrument(_mm.ModelMember, _collections.OrderedDict):
         Smx = s.transform_matrix
         Si = s.transform_matrix_inverse
         self.noise_map = _op.FullTPOp(_np.kron(Si, _np.eye(4)) @ self.noise_map.to_dense() @ self.aux_GATES @ _np.kron(Smx, _np.eye(4))  @ self.aux_GATES)
+
         for i in range(2): 
             self[f'p{i}'] = _ComposedInstrumentOp(self.noise_map, i, self.right_isometry, self.left_isometry, 'pp')
         self.dirty = True
     
     def __str__(self):
-            s = f'MCMInstrument representing a MCM with elements:\n'
+            s = f'ComposedInstrument representing a mid-curcuit measurement with elements:\n'
             for lbl, element in self.items():
                 s += "%s:\n%s\n" % (lbl, _mt.mx_to_string(element.to_dense(), width=4, prec=3))
             return s

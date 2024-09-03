@@ -372,7 +372,7 @@ class ExplicitOpModel(_mdl.OpModel):
             raise KeyError("Key %s has an invalid prefix" % label)
 
     def convert_members_inplace(self, to_type, categories_to_convert='all', labels_to_convert='all',
-                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, cptp_truncation_tol= 1e-6):
+                                ideal_model=None, flatten_structure=False, set_default_gauge_group=False, cptp_truncation_tol= 1e-6, convert_new_inst = True):
         """
         TODO: docstring -- like set_all_parameterizations but doesn't set default gauge group by default
         """
@@ -385,8 +385,9 @@ class ExplicitOpModel(_mdl.OpModel):
         if any([c in categories_to_convert for c in ('all', 'instruments')]):
             for lbl, inst in self.instruments.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
-                    ideal = ideal_model.instruments.get(lbl, None) if (ideal_model is not None) else None
-                    self.instruments[lbl] = _instrument.convert(inst, to_type, self.basis, ideal, flatten_structure)
+                    if not isinstance(inst, _instrument.ComposedInstrument) and not convert_new_inst:
+                        ideal = ideal_model.instruments.get(lbl, None) if (ideal_model is not None) else None
+                        self.instruments[lbl] = _instrument.convert(inst, to_type, self.basis, ideal, flatten_structure)
         if any([c in categories_to_convert for c in ('all', 'preps')]):
             for lbl, prep in self.preps.items():
                 if labels_to_convert == 'all' or lbl in labels_to_convert:
@@ -564,7 +565,7 @@ class ExplicitOpModel(_mdl.OpModel):
         int
             the number of non-gauge model parameters.
         """
-        return self.num_params - self.num_gauge_params
+        return self.num_params - self.num_gauge_params 
 
     @property
 

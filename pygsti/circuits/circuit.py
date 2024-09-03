@@ -4047,6 +4047,7 @@ class Circuit(object):
         if include_delay_on_idle:
             # Include a delay instruction
             openqasm += 'opaque delay(t) q;\n\n'
+        openqasm += 'gate rzx(param0) q0,q1 { h q1; cx q0,q1; rz(param0) q1; cx q0,q1; h q1; }\ngate ecr q0,q1 { rzx(pi/4) q0,q1; x q0; rzx(-pi/4) q0,q1; }' 
 
         openqasm += 'qreg q[{0}];\n'.format(str(num_qubits))
         # openqasm += 'creg cr[{0}];\n'.format(str(num_qubits))

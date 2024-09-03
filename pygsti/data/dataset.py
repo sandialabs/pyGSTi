@@ -1365,6 +1365,7 @@ class DataSet(_MongoSerializable):
         nDOF = 0
         Nout = len(self.olIndex)
         if model is not None: 
+            prev_sim = model.sim
             model.sim = 'map'
 
         def compute_tuned_expected_llr(cur_outcomes):
@@ -1449,7 +1450,7 @@ class DataSet(_MongoSerializable):
                 nDOF += nOutcomes - 1  # last time stamp
 
         if model is not None: 
-            model.sim = 'matrix'
+            model.sim = prev_sim
         
         if keyerrors != 0:
             _warnings.warn(f'The dataset includes circuits the model cannot calculate probabilities for (e.g. the model does not include instruments for an instrument-containing dataset). Skipping KeyErrors = {keyerrors} circuits in calculation of degrees of freedom.')
