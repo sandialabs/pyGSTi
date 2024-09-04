@@ -258,16 +258,22 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                 errorgen = _LindbladErrorgen.from_error_generator(state.state_space.dim, to_type, proj_basis,
                                                                   basis, truncate=True, evotype=state.evotype)
                 if st is not state and not _np.allclose(st.to_dense(), state.to_dense()):
-                    #Need to set errorgen so exp(errorgen)|st> == |state>
+                    
                     dense_st = st.to_dense()
                     dense_state = state.to_dense()
                     num_qubits = st.state_space.num_qubits
                     num_errgens = 2**(4*num_qubits)-2**(2*num_qubits)
+
+                    #GLND for states suffers from "dumb gauge" freedom. This function identifies
+                    #the physical directions to avoid this gauge.
                     def calc_physical_subspace(ideal_prep, epsilon = 1e-9):
 	
                         errgen = _LindbladErrorgen.from_error_generator(2**(2*num_qubits), parameterization="GLND")
                         exp_errgen = _ExpErrorgenOp(errgen)
                         ideal_vec = _np.zeros(num_errgens)
+
+                        #Compute the jacobian with respect to the error generators. This will allow us to see which
+                        #error generators change the POVM entries
                         J = _np.zeros((state.num_params, num_errgens))
 
                         for i in range(len(ideal_vec)):
@@ -281,13 +287,15 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                         
                     phys_directions = calc_physical_subspace(dense_state)
 
+                    #We use optimization to find the best error generator representation
+                    #we only vary physical directions, not independent error generators
                     def _objfn(v):
                         L_vec = _np.zeros(len(phys_directions[0]))
                         for coeff, phys_direction in zip(v,phys_directions):
                             L_vec += coeff * phys_direction
                         errorgen.from_vector(L_vec)
                         return _np.linalg.norm(_spl.expm(errorgen.to_dense()) @ dense_st - dense_state)
-                    #def callback(x): print("callbk: ",_np.linalg.norm(x),_objfn(x))  # REMOVE
+                    
                     soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
                                          tol=1e-13)  # , callback=callback)
                     #print("DEBUG: opt done: ",soln.success, soln.fun, soln.x)  # REMOVE
