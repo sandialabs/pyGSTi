@@ -395,7 +395,8 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
                 errorgen = _LindbladErrorgen.from_error_generator(povm.state_space.dim, lndtype, proj_basis,
                                                                   basis, truncate=True, evotype=povm.evotype)
                 if to_type == 'GLND' and isinstance(povm, destination_types.get('full TP', NoneType)):
-                    #Need to set errorgen so exp(errorgen)|st> == |state>
+                    
+                    #Collect all ideal effects
                     base_dense_effects = []
                     for item in base_items:
                         dense_effect = item[1].to_dense()
@@ -403,6 +404,7 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
 
                     dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
 
+                    #Collect all noisy effects
                     dense_effects = []
                     for effect in povm.values():
                         dense_effect = effect.to_dense()
@@ -411,6 +413,9 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
                     dense_ideal_povm = _np.concatenate(base_dense_effects, axis=0)
                     dense_povm = _np.concatenate(dense_effects, axis=0)
 
+                    #It is often the case that there are more error generators than physical degrees of freedom in the POVM
+                    #We define a function which finds linear comb. of errgens that span these degrees of freedom.
+                    #This has been called "the dumb gauge", and this function is meant to avoid it
                     def calc_physical_subspace(dense_ideal_povm, epsilon = 1e-9):
         
                             errgen = _LindbladErrorgen.from_error_generator(4, parameterization="GLND")
@@ -423,6 +428,9 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
                             assert num_errgens > povm.num_params, "POVM has too many elements, GLND parameterization is not possible"
 
                             ideal_vec = _np.zeros(num_errgens)
+
+                            #Compute the jacobian with respect to the error generators. This will allow us to see which
+                            #error generators change the POVM entries
                             J = _np.zeros((num_entries,num_errgens))
                             
                             for i in range(len(ideal_vec)):
@@ -443,7 +451,8 @@ def convert(povm, to_type, basis, ideal_povm=None, flatten_structure=False):
                     
                     phys_directions = calc_physical_subspace(dense_ideal_povm)
 
-                    
+                    #We use optimization to find the best error generator representation
+                    #we only vary physical directions, not independent error generators
                     def _objfn(v):
                         L_vec = _np.zeros(len(phys_directions[0]))
                         for coeff, phys_direction in zip(v,phys_directions):
