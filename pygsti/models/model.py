@@ -948,6 +948,13 @@ class OpModel(Model):
         w = self._model_paramvec_to_ops_paramvec(self._paramvec)
         Np = len(w)  # NOT self.num_params since the latter calls us!
         wl = self._paramlbls
+        
+        if self._param_bounds is not None:
+            msg = 'Internal Model attributes are being rebuilt. This is likely because a modelmember has been '\
+                  + 'either added or removed. If you have manually set parameter bounds values at the Model level '\
+                  + '(not the model member level), for example using the `set_parameter_bounds` method, these values '\
+                  + 'will be overwritten by the parameter bounds found in each of the modelmembers.' 
+            _warnings.warn(msg)
         wb = self._param_bounds if (self._param_bounds is not None) else _default_param_bounds(Np)
         #NOTE: interposer doesn't quite work with parameter bounds yet, as we need to convert "model"
         # bounds to "ops" bounds like we do the parameter vector.  Need something like:
@@ -1065,7 +1072,6 @@ class OpModel(Model):
         Np = len(w)  # reset Np from possible new params (NOT self.num_params since the latter calls us!)
         indices_to_remove = sorted(set(range(Np)) - used_gpindices)
         if debug: print("Indices to remove = ", indices_to_remove, " of ", Np)
-
         if len(indices_to_remove) > 0:
             #if debug: print("DEBUG: Removing %d params:"  % len(indices_to_remove), indices_to_remove)
             w = _np.delete(w, indices_to_remove)
