@@ -1430,11 +1430,24 @@ class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple desi
         if not isinstance(sub_designs, dict):
             sub_designs = {("**%d" % i): des for i, des in enumerate(sub_designs)}
 
-        if interleave:
-            raise NotImplementedError("Interleaving not implemented and will be removed in 0.9.13")
-
+        self.interleave = interleave
         all_circuits = self._create_all_circuits_needing_data(sub_designs) if all_circuits is None \
             else all_circuits
+
+        if all_circuits is None:
+            all_circuits = []
+            if interleave:
+                subdesign_circuit_lists = [sub_design.all_circuits_needing_data for sub_design in sub_designs.values()]
+                #zip_longest is like zip, but if the iterables are of different lengths it returns a specified fill value
+                #(default None) in place of the missing elements once an iterable has been exhausted.
+                for circuits in _itertools.zip_longest(*subdesign_circuit_lists):
+                    for circuit in circuits:
+                        if circuit is not None:
+                            all_circuits.append(circuit)
+            else:
+                for des in sub_designs.values():
+                    all_circuits.extend(des.all_circuits_needing_data)
+            _lt.remove_duplicates_in_place(all_circuits)  # Maybe don't always do this?
 
         if qubit_labels is None and len(sub_designs) > 0:
             first = sub_designs[list(sub_designs.keys())[0]].qubit_labels
@@ -2677,23 +2690,6 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
 
     2. Child :class:`ProtocolResultsDir` objects, obtained by indexing this
        object directly using the name of the sub-directory.
-
-    Parameters
-    ----------
-    data : ProtocolData
-        The data from which *all* the Results objects in this
-        ProtocolResultsDir are derived.
-
-    protocol_results : ProtocolResults, optional
-        An initial (single) results object to add.  The name of the
-        results object is used as its key within the `.for_protocol`
-        dictionary.  If None, then an empty results directory is created.
-
-    children : dict, optional
-        A dictionary of the :class:`ProtocolResultsDir` objects that are
-        sub-directories beneath this one.  If None, then children are
-        automatically created based upon the tree given by `data`.  (To
-        avoid creating any children, you can pass an empty dict here.)
     """
     collection_name = "pygsti_results_directories"
 
@@ -2812,14 +2808,6 @@ class ProtocolResultsDir(_TreeNode, _MongoSerializable):
     def __init__(self, data, protocol_results=None, children=None):
         """
         Create a new ProtocolResultsDir object.
-
-        This container object holds two things:
-        
-        1. A `.for_protocol` dictionary of :class:`ProtocolResults` corresponding
-           to different protocols (keys are protocol names).
-
-        2. Child :class:`ProtocolResultsDir` objects, obtained by indexing this
-           object directly using the name of the sub-directory.
 
         Parameters
         ----------

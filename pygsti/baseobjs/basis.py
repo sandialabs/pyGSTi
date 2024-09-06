@@ -387,6 +387,7 @@ class Basis(_NicelySerializable):
         if self.sparse:
             return [_sps.lil_matrix(el).reshape((self.elsize, 1)) for el in self.elements]
         else:
+            # Use flatten (rather than ravel) to ensure a copy is made.
             return [el.flatten() for el in self.elements]
 
     def copy(self):
@@ -1468,7 +1469,7 @@ class DirectSumBasis(LazyBasis):
             if self.sparse:
                 vel = _sps.lil_matrix(el.reshape(-1, 1))  # sparse vector == sparse n x 1 matrix
             else:
-                vel = el.flatten()
+                vel = el.ravel()
             toSimpleStd[:, i] = vel
         return toSimpleStd
 

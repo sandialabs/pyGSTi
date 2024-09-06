@@ -380,9 +380,9 @@ def _summable_color_boxplot(sub_mxs, xlabels, ylabels, xlabel, ylabel,
 
     def sum_up_mx(mx):
         """ Sum up `mx` in a NAN-ignoring way """
-        flat_mx = mx.flatten()
-        if any([_np.isnan(x) for x in flat_mx]):
-            if all([_np.isnan(x) for x in flat_mx]):
+        flat_mx = mx.ravel()
+        if _np.any(_np.isnan(flat_mx)):
+            if _np.all(_np.isnan(flat_mx)):
                 return _np.nan
             # replace NaNs with zeros for purpose of summing (when there's at least one non-NaN)
             return sum(_np.nan_to_num(flat_mx))
@@ -2566,8 +2566,8 @@ class PolarEigenvaluePlot(WorkspacePlot):
         for i, evals in enumerate(evals_list):
             color = colors[i] if (colors is not None) else "black"
             trace = go.Scatterpolar(
-                r=list(_np.absolute(evals).flat),
-                theta=list(_np.angle(evals).flatten() * (180.0 / _np.pi)),
+                r=list(_np.absolute(evals).ravel()),
+                theta=list(_np.angle(evals).ravel() * (180.0 / _np.pi)),
                 mode='markers',
                 marker=dict(
                     color=color,
@@ -2587,8 +2587,8 @@ class PolarEigenvaluePlot(WorkspacePlot):
             if amp is not None:
                 amp_evals = evals**amp
                 trace = go.Scatterpolar(
-                    r=list(_np.absolute(amp_evals).flat),
-                    theta=list(_np.angle(amp_evals).flatten() * (180.0 / _np.pi)),
+                    r=list(_np.absolute(amp_evals).ravel()),
+                    theta=list(_np.angle(amp_evals).ravel() * (180.0 / _np.pi)),
                     showlegend=False,
                     mode='markers',
                     marker=dict(
@@ -2898,16 +2898,17 @@ class ChoiEigenvalueBarPlot(WorkspacePlot):
                                                     errbars, scale)
 
     def _create(self, evals, errbars, scale):
-
+        if errbars is not None:
+            flat_errbars = errbars.ravel()
         HOVER_PREC = 7
         xs = list(range(evals.size))
-        ys = []; colors = []; texts = []
-        for i, ev in enumerate(evals.flatten()):
+        ys, colors, texts = [], [], []
+        for i, ev in enumerate(evals.ravel()):
             ys.append(abs(ev.real))
             colors.append('rgb(200,200,200)' if ev.real > 0 else 'red')
             if errbars is not None:
                 texts.append("%g +/- %g" % (round(ev.real, HOVER_PREC),
-                                            round(errbars.flatten()[i].real, HOVER_PREC)))
+                                            round(flat_errbars[i].real, HOVER_PREC)))
             else:
                 texts.append("%g" % round(ev.real, HOVER_PREC))
 
@@ -3033,13 +3034,13 @@ class GramMatrixBarPlot(WorkspacePlot):
 
         xs = list(range(svals.size))
         trace1 = go.Bar(
-            x=xs, y=list(svals.flatten()),
+            x=xs, y=list(svals.ravel()),
             marker=dict(color="blue"),
             hoverinfo='y',
             name="from Data"
         )
         trace2 = go.Bar(
-            x=xs, y=list(target_svals.flatten()),
+            x=xs, y=list(target_svals.ravel()),
             marker=dict(color="black"),
             hoverinfo='y',
             name="from Target"
@@ -3050,7 +3051,8 @@ class GramMatrixBarPlot(WorkspacePlot):
             ymax = max(_np.max(svals), _np.max(target_svals))
             ymin = max(ymin, 1e-8)  # prevent lower y-limit from being riduculously small
         else:
-            ymin = 0.1; ymax = 1.0  # just pick some values for empty plot
+            ymin = 0.1
+            ymax = 1.0  # just pick some values for empty plot
 
         data = [trace1, trace2]
         layout = go.Layout(
