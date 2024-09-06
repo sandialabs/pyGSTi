@@ -757,7 +757,7 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
         logM = flat_logm.reshape(mx_shape)
         testM = _spl.expm(logM)
         ret = target_weight * _np.linalg.norm(logM - target_logm)**2 + \
-            _np.linalg.norm(testM.flatten() - m.flatten(), 1)
+            _np.linalg.norm(testM.ravel() - m.ravel(), 1)
         #print("DEBUG: ",ret)
         return ret
 
@@ -774,7 +774,7 @@ def approximate_matrix_log(m, target_logm, target_weight=10.0, tol=1e-6):
     print_obj_func = None
 
     logM = _np.real(real_matrix_log(m, action_if_imaginary="ignore"))  # just drop any imaginary part
-    initial_flat_logM = logM.flatten()  # + 0.1*target_logm.flatten()
+    initial_flat_logM = logM.ravel()  # + 0.1*target_logm.flatten()
     # Note: adding some of target_logm doesn't seem to help; and hurts in easy cases
 
     if _objective(initial_flat_logM) > 1e-16:  # otherwise initial logM is fine!
@@ -1345,9 +1345,9 @@ def _fas(a, inds, rhs, add=False):
                 indx_tups = list(_itertools.product(*b))
                 inds = tuple(zip(*indx_tups))  # un-zips to one list per dim
                 if add:
-                    a[inds] += rhs.flatten()
+                    a[inds] += rhs.ravel()
                 else:
-                    a[inds] = rhs.flatten()
+                    a[inds] = rhs.ravel()
 
             #OLD DEBUG: just a reference for building the C-implementation (this is very slow in python!)
             ##Alt: C-able impl

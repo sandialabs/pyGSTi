@@ -84,18 +84,21 @@ def create_elementary_errorgen_dual(typ, p, q=None, sparse=False, normalization_
             rho1 = (p @ rho0 @ qdag + q @ rho0 @ pdag)  # 1 / (2 * d2) *
         elif typ == 'A':
             rho1 = 1j * (p @ rho0 @ qdag - q @ rho0 @ pdag)  # 1j / (2 * d2)
-        elem_errgen[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+        elem_errgen[:, i] = rho1.ravel()
+        # ^ That line used to branch depending on the value of "sparse", but it
+        #   turns out that both codepaths produced the same result.
 
     return_normalization = bool(normalization_factor == 'auto_return')
     if normalization_factor in ('auto', 'auto_return'):
         primal = create_elementary_errorgen(typ, p, q, sparse)
         if sparse:
-            normalization_factor = _np.vdot(elem_errgen.toarray().flatten(), primal.toarray().flatten())
+            normalization_factor = _np.vdot(elem_errgen.toarray(), primal.toarray())
         else:
-            normalization_factor = _np.vdot(elem_errgen.flatten(), primal.flatten())
+            normalization_factor = _np.vdot(elem_errgen, primal)
     elem_errgen *= _np.real_if_close(1 / normalization_factor).item()  # item() -> scalar
 
-    if sparse: elem_errgen = elem_errgen.tocsr()
+    if sparse:
+        elem_errgen = elem_errgen.tocsr()
     return (elem_errgen, normalization_factor) if return_normalization else elem_errgen
 
 
@@ -134,7 +137,8 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
     -------
     ndarray or Scipy CSR matrix
     """
-    d = p.shape[0]; d2 = d**2
+    d = p.shape[0]
+    d2 = d**2
     if sparse:
         elem_errgen = _sps.lil_matrix((d2, d2), dtype=p.dtype)
     else:
@@ -163,10 +167,12 @@ def create_elementary_errorgen(typ, p, q=None, sparse=False):
             rho1 = p @ rho0 @ qdag + q @ rho0 @ pdag - 0.5 * (pq_plus_qp @ rho0 + rho0 @ pq_plus_qp)
         elif typ == 'A':
             rho1 = 1j * (p @ rho0 @ qdag - q @ rho0 @ pdag + 0.5 * (pq_minus_qp @ rho0 + rho0 @ pq_minus_qp))
+        elem_errgen[:, i] = rho1.ravel()
+        # ^ That line used to branch depending on the value of sparse, but both
+        #   branches had the same effect.
 
-        elem_errgen[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
-
-    if sparse: elem_errgen = elem_errgen.tocsr()
+    if sparse:
+        elem_errgen = elem_errgen.tocsr()
     return elem_errgen
 
 def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N803
@@ -226,7 +232,10 @@ def create_lindbladian_term_errorgen(typ, Lm, Ln=None, sparse=False):  # noqa N8
         elif typ == 'O':
             rho1 = Ln @ rho0 @ Lm_dag - 0.5 * (Lmdag_Ln @ rho0 + rho0 @ Lmdag_Ln)
         else: raise ValueError("Invalid lindblad term errogen type!")
-        lind_errgen[:, i] = rho1.flatten()[:, None] if sparse else rho1.flatten()
+        lind_errgen[:, i] = rho1.ravel()
+        # ^ That line used to branch based on the value of sparse, but both branches
+        #   produced the same result.
 
-    if sparse: lind_errgen = lind_errgen.tocsr()
+    if sparse:
+        lind_errgen = lind_errgen.tocsr()
     return lind_errgen

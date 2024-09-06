@@ -52,7 +52,7 @@ class EffectRepConjugatedState(EffectRep):
 
         qibo_circuit = state.qibo_circuit
         results = qibo_circuit(initial_state)
-        return _np.real_if_close(_np.dot(effect_state.flatten().conjugate(), results.state().flatten()))
+        return _np.real_if_close(effect_state.ravel().conjugate() @ results.state().ravel())
 
     def to_dense(self, on_space):
         return self.state_rep.to_dense(on_space)
