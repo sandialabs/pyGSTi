@@ -827,13 +827,12 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
         #    return _np.concatenate(all_results, axis=1)  # TODO: remove this concat w/better gather?
         #
         ## ------------------------------------------------------------------
-
         tSerialStart = _time.time()
         dProdCache = _np.zeros((cacheSize,) + deriv_shape)
         wrtIndices = _slct.indices(wrt_slice) if (wrt_slice is not None) else None
 
         for iDest, iRight, iLeft in eval_tree:
-
+            #Combination of product rule and chain rule 
             #Special case of an "initial operation" that can be filled directly
             if iRight is None:  # then iLeft gives operation:
                 opLabel = iLeft
@@ -841,7 +840,7 @@ class MatrixForwardSimulator(_DistributableForwardSimulator, SimpleMatrixForward
                     dProdCache[iDest] = _np.zeros(deriv_shape)
                 else:
                     #doperation = self.dproduct( (opLabel,) , wrt_filter=wrtIndices)
-                    doperation = self._doperation(opLabel, wrt_filter=wrtIndices)
+                    doperation = self._doperation(opLabel, wrt_filter=wrtIndices) #TODO: would need to get doperation working for instrument
                     dProdCache[iDest] = doperation / _np.exp(scale_cache[iDest])
                 continue
 

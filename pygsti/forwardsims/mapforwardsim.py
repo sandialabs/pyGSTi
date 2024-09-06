@@ -87,10 +87,11 @@ class SimpleMapForwardSimulator(_ForwardSimulator):
         """ Called when the evotype being used (defined by the parent model) changes.
             `evotype` will be `None` when the current model is None"""
         if evotype is not None:
-            try:
-                self.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_" + evotype.name)
-            except ImportError:
-                self.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic")
+            #try:
+                #self.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_" + evotype.name)
+            #except ImportError:
+                #self.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic")
+            self.calclib = _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic")
         else:
             self.calclib = None
 

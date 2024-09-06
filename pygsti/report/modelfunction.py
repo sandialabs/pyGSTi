@@ -241,9 +241,15 @@ def opsfn_factory(fn):
 
         def evaluate(self, model):
             """ Evaluate this gate-set-function at `model`."""
-            return fn(model.operations[self.gl].to_dense(on_space='HilbertSchmidt'),
-                      self.other_model.operations[self.gl].to_dense(on_space='HilbertSchmidt'),
-                      model.basis, *self.args, **self.kwargs)  # assume functions want *dense* gates
+            try: 
+                ev_result = fn(model.operations[self.gl].to_dense(on_space='HilbertSchmidt'),
+                        self.other_model.operations[self.gl].to_dense(on_space='HilbertSchmidt'),
+                        model.basis, *self.args, **self.kwargs)  # assume functions want *dense* gates
+            except KeyError:
+                ev_result = fn(model.instruments[self.gl].to_dense(on_space='HilbertSchmidt'),
+                        self.other_model.instruments[self.gl].to_dense(on_space='HilbertSchmidt'),
+                        model.basis, *self.args, **self.kwargs)
+            return ev_result
 
     GSFTemp.__name__ = fn.__name__ + str("_class")
     return GSFTemp

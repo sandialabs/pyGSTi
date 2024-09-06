@@ -27,6 +27,7 @@ from pygsti import baseobjs as _baseobjs
 from pygsti import tools as _tools
 from pygsti.algorithms import gaugeopt as _gopt
 from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers import instruments as _instruments
 from pygsti.modelmembers import povms as _povm
 from pygsti.modelmembers import states as _state
 from pygsti.objectivefns import objectivefns as _objfns
@@ -1480,7 +1481,7 @@ class ErrgenTable(WorkspaceTable):
     def _create(self, model, target_model,
                 confidence_region_info, display, display_as, gen_type):
 
-        opLabels = model.primitive_op_labels  # operation labels
+        gateLabels = model.primitive_op_labels  # operation labels
         basis = model.basis
         basisPrefix = ""
         if basis.name == "pp": basisPrefix = "Pauli "
@@ -1489,6 +1490,12 @@ class ErrgenTable(WorkspaceTable):
         elif basis.name == "std": basisPrefix = "Mx unit "
 
         colHeadings = ['Gate']
+
+        opLabels = list(gateLabels)
+        #for instLabel in model.primitive_instrument_labels:
+            #if isinstance(model[instLabel], _instruments.ComposedInstrument):
+                #opLabels += [instLabel]
+        opLabels = tuple(opLabels)
 
         for disp in display:
             if disp == "errgen":
