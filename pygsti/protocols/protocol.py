@@ -1335,7 +1335,7 @@ class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple desi
         form the circuit ordering of this experiment design. DEPRECATED
     """
 
-    def _create_all_circuits_needing_data(self, subdesigns=None):
+    def _create_all_circuits_needing_data(self, sub_designs=None, interleave=False):
         """Create all_circuits_needing_data for other information.
 
         This interface is needed to ensure that all_circuits_needing_data
@@ -1353,11 +1353,19 @@ class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple desi
         all_circuits: list of Circuits
             Union of all_circuits_needing_data from subdesigns without duplicates
         """
-        subdesigns = self._vals if subdesigns is None else subdesigns
+        sub_designs = self._vals if sub_designs is None else sub_designs
         all_circuits = []
-        for des in subdesigns.values():
-            all_circuits.extend(des.all_circuits_needing_data)
-        _lt.remove_duplicates_in_place(all_circuits)  # Maybe don't always do this?
+        if interleave:
+            subdesign_circuit_lists = [sub_design.all_circuits_needing_data for sub_design in sub_designs.values()]
+            #zip_longest is like zip, but if the iterables are of different lengths it returns a specified fill value
+            #(default None) in place of the missing elements once an iterable has been exhausted.
+            for circuits in _itertools.zip_longest(*subdesign_circuit_lists):
+                for circuit in circuits:
+                    if circuit is not None:
+                        all_circuits.append(circuit)
+        else:
+            for des in sub_designs.values():
+                all_circuits.extend(des.all_circuits_needing_data)
         return all_circuits
 
     @classmethod
@@ -1430,24 +1438,8 @@ class CombinedExperimentDesign(CanCreateAllCircuitsDesign):  # for multiple desi
         if not isinstance(sub_designs, dict):
             sub_designs = {("**%d" % i): des for i, des in enumerate(sub_designs)}
 
-        self.interleave = interleave
-        all_circuits = self._create_all_circuits_needing_data(sub_designs) if all_circuits is None \
-            else all_circuits
-
         if all_circuits is None:
-            all_circuits = []
-            if interleave:
-                subdesign_circuit_lists = [sub_design.all_circuits_needing_data for sub_design in sub_designs.values()]
-                #zip_longest is like zip, but if the iterables are of different lengths it returns a specified fill value
-                #(default None) in place of the missing elements once an iterable has been exhausted.
-                for circuits in _itertools.zip_longest(*subdesign_circuit_lists):
-                    for circuit in circuits:
-                        if circuit is not None:
-                            all_circuits.append(circuit)
-            else:
-                for des in sub_designs.values():
-                    all_circuits.extend(des.all_circuits_needing_data)
-            _lt.remove_duplicates_in_place(all_circuits)  # Maybe don't always do this?
+            all_circuits = self._create_all_circuits_needing_data(sub_designs, interleave)
 
         if qubit_labels is None and len(sub_designs) > 0:
             first = sub_designs[list(sub_designs.keys())[0]].qubit_labels
