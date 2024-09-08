@@ -11,6 +11,7 @@
 .ipynb_checkpoints
 test/test_packages/temp_test_files/*
 *_checkpoints/
+*_checkpoint/
 jupyter_notebooks/**/offline
 test/test_packages/offline
 hooks/etc/permissions.yml
@@ -59,6 +60,7 @@ jupyter_notebooks/Tutorials/tutorial_files/exampleBriefReport
 jupyter_notebooks/Tutorials/tutorial_files/*.ipynb
 jupyter_notebooks/Tutorials/tutorial_files/tempTest
 jupyter_notebooks/Tutorials/tutorial_files/*checkpoints
+jupyter_notebooks/Tutorials/objects/advanced/test_ibmq*
 jupyter_notebooks/Tutorials/tutorial_files/test_mirror_benchmark
 
 

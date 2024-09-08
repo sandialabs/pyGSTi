@@ -63,22 +63,13 @@ class ExperimentalDevice(object):
         -------
         Initialized ExperimentalDevice
         """
-        try:
-            props = backend.properties().to_dict()
+        # Get qubits
+        num_qubits = backend.num_qubits
+        qubits = [f'Q{i}' for i in range(num_qubits)]
 
-            qubits = [f'Q{i}' for i in range(len(props['qubits']))]
-            # Technically we could read all the gates off and create the actual native pspec
-            # This is not how devices functioned in the past, but maybe it is useful. Thoughts?
-            edges = [[f'Q{i}' for i in g['qubits']] for g in props['gates'] if g['gate'] == 'cx']
-            graph = _QubitGraph(qubits, initial_edges=edges)
-        except AttributeError:
-            # Probably the simulator backend 32 qubits max with arbitrary connectivity
-            qubits = [f'Q{i}' for i in range(32)]
-            edges = []
-            for i in range(32):
-                for j in range(i+1, 32):
-                    edges.extend([(f'Q{i}', f'Q{j}'), (f'Q{j}', f'Q{i}')])
-            graph = _QubitGraph(qubits, initial_edges=edges)
+        # Get qubit connectivity
+        edges = [[qubits[edge[0]], qubits[edge[1]]] for edge in backend.coupling_map]
+        graph = _QubitGraph(qubits, initial_edges=edges)
 
         return cls(qubits, graph, gate_mapping)
     
