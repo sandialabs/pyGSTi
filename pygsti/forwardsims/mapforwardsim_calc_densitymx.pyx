@@ -1,6 +1,7 @@
 # encoding: utf-8
-# cython: profile=False
-# cython: linetrace=False
+# cython: linetrace=True
+# cython: binding=True
+# distutils: define_macros=CYTHON_TRACE_NOGIL=1
 
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
@@ -27,12 +28,6 @@ from ..tools import mpitools as _mpit
 from ..tools import slicetools as _slct
 #from ..tools import optools as _ot
 from ..tools.matrixtools import _fas
-
-#DEBUG REMOVE MEMORY PROFILING
-#import os, psutil
-#process = psutil.Process(os.getpid())
-#def print_mem_usage(prefix):
-#    print("%s: mem usage = %.3f GB" % (prefix, process.memory_info().rss / (1024.0**3)))
 
 #Use 64-bit integers
 ctypedef long long INT
@@ -182,17 +177,6 @@ def mapfill_probs_atom(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to_fil
     cdef vector[vector[INT]] final_indices_per_circuit = convert_and_wrap_dict_of_intlists(
         layout_atom.elindices_by_expcircuit, dest_indices)
 
-    #DEBUG REMOVE
-    #print_mem_usage("MAPFILL PROBS begin")
-    #for i in [1808, 419509, 691738, 497424]:
-    #    from ..evotypes.densitymx.opreps import OpRepComposed
-    #    op = operationreps[i]
-    #    if isinstance(op.embedded_rep, OpRepComposed):
-    #        extra = " factors = " + ', '.join([str(type(opp)) for opp in op.embedded_rep.factor_reps])
-    #    else:
-    #        extra = ""
-    #    print("ID ",i,str(type(op)),str(type(op.embedded_rep)), extra)
-
     if shared_mem_leader:
         #Note: dm_mapfill_probs could have taken a resource_alloc to employ multiple cpus to do computation.
         # Since array_fo_fill is assumed to be shared mem it would need to only update `array_to_fill` *if*
@@ -234,7 +218,7 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
     # - all rho_cache entries have been allocated via "new"
     #REMOVE print("MAPFILL PROBS begin cfn")
     for k in range(<INT>c_layout_atom.size()):
-        t0 = pytime.time() # DEBUG
+        #t0 = pytime.time() # DEBUG
         intarray = c_layout_atom[k]
         i = intarray[0]
         istart = intarray[1]
@@ -360,26 +344,32 @@ def mapfill_dprobs_atom(fwdsim,
     # final index within array_to_fill
     iParamToFinal = {i: dest_index for i, dest_index in zip(param_indices, dest_param_indices)}
 
-    for i in range(fwdsim.model.num_params):
-        #print("dprobs cache %d of %d" % (i,self.Np))
-        if i in iParamToFinal:
-            #if resource_alloc.comm_rank == 0:
-            #    print("MAPFILL DPROBS ATOM 3 (i=%d) %.3fs elapssed=%.1fs" % (i, pytime.time() - t, pytime.time() - t0)); t=pytime.time()
-            iFinal = iParamToFinal[i]
-            vec = orig_vec.copy(); vec[i] += eps
-            fwdsim.model.from_vector(vec, close=True)
-            #Note: dm_mapfill_probs could have taken a resource_alloc to employ multiple cpus to do computation.
-            # If probs2 were shared mem (seems not benefit to this?) it would need to only update `probs2` *if*
-            # it were the host leader.
-            if shared_mem_leader:  # don't fill assumed-shared array-to_fill on non-mem-leaders
-                dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
-                                 elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
-                #_fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)  # I don't think this is needed
-                array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
+    #Split off the first finite difference step, as the pattern I want in the loop with each step
+    #is to simultaneously undo the previous update and apply the new one.
+    if len(param_indices)>0:
+        first_param_idx = param_indices[0]
+        iFinal = iParamToFinal[first_param_idx]
+        fwdsim.model.set_parameter_value(first_param_idx, orig_vec[first_param_idx]+eps)
+        if shared_mem_leader:  # don't fill assumed-shared array-to_fill on non-mem-leaders
+            dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
+                                elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
+            #_fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)  # I don't think this is needed
+            array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
 
-    #if resource_alloc.comm_rank == 0:
-    #    print("MAPFILL DPROBS ATOM 4 elapsed=%.1fs" % (pytime.time() - t0))
-    fwdsim.model.from_vector(orig_vec, close=True)
+    for i in range(1, len(param_indices)):
+        iFinal = iParamToFinal[param_indices[i]]
+        fwdsim.model.set_parameter_values([param_indices[i-1], param_indices[i]], 
+                                          [orig_vec[param_indices[i-1]], orig_vec[param_indices[i]]+eps])
+        
+        if shared_mem_leader:  # don't fill assumed-shared array-to_fill on non-mem-leaders
+            dm_mapfill_probs(probs2, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
+                                elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
+            #_fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)  # I don't think this is needed
+            array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
+        
+    #reset the final model parameter we changed to it's original value.
+    fwdsim.model.set_parameter_value(param_indices[-1], orig_vec[param_indices[-1]])
+
     free_rhocache(rho_cache)  #delete cache entries
 
 

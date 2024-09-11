@@ -82,11 +82,10 @@ def mapfill_probs_atom(fwdsim, mx_to_fill, dest_indices, layout_atom, resource_a
 def mapfill_dprobs_atom(fwdsim, mx_to_fill, dest_indices, dest_param_indices, layout_atom, param_indices,
                         resource_alloc, eps):
 
-    #eps = 1e-7
-    #shared_mem_leader = resource_alloc.is_host_leader if (resource_alloc is not None) else True
+    num_params = fwdsim.model.num_params
 
     if param_indices is None:
-        param_indices = list(range(fwdsim.model.num_params))
+        param_indices = list(range(num_params))
     if dest_param_indices is None:
         dest_param_indices = list(range(_slct.length(param_indices)))
 
@@ -105,17 +104,31 @@ def mapfill_dprobs_atom(fwdsim, mx_to_fill, dest_indices, dest_param_indices, la
     nEls = layout_atom.num_elements
     probs, shm = _smt.create_shared_ndarray(resource_alloc, (nEls,), 'd', memory_tracker=None)
     probs2, shm2 = _smt.create_shared_ndarray(resource_alloc, (nEls,), 'd', memory_tracker=None)
+    #probs2_test, shm2 = _smt.create_shared_ndarray(resource_alloc, (nEls,), 'd', memory_tracker=None)
+    
+    #mx_to_fill_test = mx_to_fill.copy()
+
     mapfill_probs_atom(fwdsim, probs, slice(0, nEls), layout_atom, resource_alloc)  # probs != shared
 
-    for i in range(fwdsim.model.num_params):
-        #print("dprobs cache %d of %d" % (i,self.Np))
-        if i in iParamToFinal:
-            iFinal = iParamToFinal[i]
-            vec = orig_vec.copy(); vec[i] += eps
-            fwdsim.model.from_vector(vec, close=True)
-            mapfill_probs_atom(fwdsim, probs2, slice(0, nEls), layout_atom, resource_alloc)
-            _fas(mx_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
-    fwdsim.model.from_vector(orig_vec, close=True)
+    #Split off the first finite difference step, as the pattern I want in the loop with each step
+    #is to simultaneously undo the previous update and apply the new one.
+    if len(param_indices)>0:
+        first_param_idx = param_indices[0]
+        iFinal = iParamToFinal[first_param_idx]
+        fwdsim.model.set_parameter_value(first_param_idx, orig_vec[first_param_idx]+eps)
+        mapfill_probs_atom(fwdsim, probs2, slice(0, nEls), layout_atom, resource_alloc)
+        _fas(mx_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
+
+    for i in range(1, len(param_indices)):
+        iFinal = iParamToFinal[param_indices[i]]
+        fwdsim.model.set_parameter_values([param_indices[i-1], param_indices[i]], 
+                                          [orig_vec[param_indices[i-1]], orig_vec[param_indices[i]]+eps])
+        mapfill_probs_atom(fwdsim, probs2, slice(0, nEls), layout_atom, resource_alloc)
+        _fas(mx_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)
+
+    #reset the final model parameter we changed to it's original value.
+    fwdsim.model.set_parameter_value(param_indices[-1], orig_vec[param_indices[-1]])
+
     _smt.cleanup_shared_ndarray(shm)
     _smt.cleanup_shared_ndarray(shm2)
 
