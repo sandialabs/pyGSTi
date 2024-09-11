@@ -1629,6 +1629,28 @@ class OpModel(Model):
         else:
             return comp_circuits
         
+    def circuit_parameter_dependence(self, circuits):
+        #start by completing the model:
+        #Here we want to do this for all of the different primitive prep and
+        #measurement layers present.
+        circuit_parameter_map = {}
+        
+        for circuit in circuits:
+            completed_circuits = []
+            prep_povm_pairs = list(_itertools.product(self.primitive_prep_labels, self.primitive_povm_labels))
+            for prep_lbl, povm_lbl in prep_povm_pairs:
+                completed_circuits.append(self.complete_circuit(circuit, prep_lbl_to_prepend=prep_lbl, povm_lbl_to_append=povm_lbl))
+            #loop through the circuit layers and get the circuit layer operators.
+            #from each of the circuit layer operators we'll get their gpindices. 
+            seen_gpindices = []
+            for ckt in completed_circuits:
+                for layer in ckt:
+                    seen_gpindices.extend(_slct.indices(self.circuit_layer_operator(layer).gpindices))
+            seen_gpindices = sorted(list(set(seen_gpindices)))
+            circuit_parameter_map[circuit] = seen_gpindices
+        
+        return circuit_parameter_map
+
 
     # ---- Operation container interface ----
     # These functions allow oracle access to whether a label of a given type
