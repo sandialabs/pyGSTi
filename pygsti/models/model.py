@@ -480,6 +480,8 @@ class OpModel(Model):
         self._param_interposer = None
         self._reinit_opcaches()
         self.fogi_store = None
+        self._index_mm_map = None
+        self._index_mm_label_map = None
 
     def __setstate__(self, state_dict):
         self.__dict__.update(state_dict)
@@ -696,10 +698,6 @@ class OpModel(Model):
         #    Whether this operation should refrain from setting it's dirty
         #    flag as a result of this call.  `False` is the safe option, as
         #    this call potentially changes this operation's parameters.
-
-        #print("Cleaning Paramvec (dirty=%s, rebuild=%s)" % (self.dirty, self._need_to_rebuild))
-        #import inspect, pprint
-        #pprint.pprint([(x.filename,x.lineno,x.function) for x in inspect.stack()[0:7]])
 
         if self._need_to_rebuild:
             self._rebuild_paramvec()
@@ -1097,6 +1095,10 @@ class OpModel(Model):
         self._paramlbls = self._ops_paramlbls_to_model_paramlbls(wl)
         self._param_bounds = wb if _param_bounds_are_nontrivial(wb) else None
         if debug: print("DEBUG: Done rebuild: %d op params" % len(w))
+        
+        #rebuild the model index to model member map if needed.
+        self._build_index_mm_map()
+
 
     def _init_virtual_obj(self, obj):
         """
@@ -1123,6 +1125,34 @@ class OpModel(Model):
         for _, o in self._iter_parameterized_objs():
             cnt += o._obj_refcount(obj)
         return cnt
+    
+    def _build_index_mm_map(self):
+        """
+        Build a map between indices into a model's parameter vector and the corresponding children.
+        The map is a list whose indices are indexes into the model's parameter vector and whose values are
+        lists (because there can be more than one with parameter collection) of references to the 
+        corresponding child model members who's gpindices correspond it.
+        """
+
+        #Mapping between the model index and the corresponding model members will be more complicated
+        #when there is a parameter interposer, so table implementing this for that case.
+        if self.param_interposer is not None:
+            self._index_mm_map = None
+            self._index_mm_label_map = None
+        else:
+            index_mm_map = [[] for _ in range(len(self._paramvec))]
+            index_mm_label_map = [[] for _ in range(len(self._paramvec))]
+            
+            for lbl, obj in self._iter_parameterized_objs():
+                #if the gpindices are a slice then convert to a list of indices.
+                gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+                for gpidx in gpindices:
+                    index_mm_map[gpidx].append(obj)
+                    index_mm_label_map[gpidx].append(lbl)
+            self._index_mm_map = index_mm_map
+            self._index_mm_label_map = index_mm_label_map
+        #Note to future selves. If we add a flag indicating the presence of collected parameters
+        #then we can improve the performance of this by using a simpler structure when no collected
 
     def to_vector(self):
         """
@@ -1171,6 +1201,94 @@ class OpModel(Model):
 
         if OpModel._pcheck: self._check_paramvec()
 
+    def set_parameter_value(self, index, val, close=False):
+        """
+        This method allows for updating the value of a single model parameter at the
+        specified parameter index.
+
+        Parameters
+        ----------
+        index : int
+            Index of the parameter value in the model's parameter vector to update.
+        
+        val : float
+            Updated parameter value.
+
+        close : bool, optional
+            Set to `True` if val is close to the current parameter vector.
+            This can make some operations more efficient.  
+
+        Returns
+        -------
+        None
+        """
+    
+        self._paramvec[index] = val
+        if self._param_interposer is not None or self._index_mm_map is None:
+            #fall back to standard from_vector call.
+            self.from_vector(self._paramvec)
+        else:
+            #loop through the modelmembers associated with this index and update their parameters.
+            for obj in self._index_mm_map[index]:
+                obj.from_vector(self._paramvec[obj.gpindices].copy(), close, dirty_value=False)
+
+            # Call from_vector on elements of the cache
+            if self._call_fromvector_on_cache:
+                for opcache in self._opcaches.values():
+                    for obj in opcache.values():
+                        opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+                        if index in opcache_elem_gpindices:
+                            obj.from_vector(self._paramvec[opcache_elem_gpindices], close, dirty_value=False)
+
+            if OpModel._pcheck: self._check_paramvec()
+        
+
+    def set_parameter_values(self, indices, values, close=False):
+        """
+        This method allows for updating the values of multiple model parameter at the
+        specified parameter indices.
+
+        Parameters
+        ----------
+        indices : list of ints
+            Indices of the parameter values in the model's parameter vector to update.
+        
+        values : list or tuple of floats
+            Updated parameter values.
+
+        close : bool, optional
+            Set to `True` if values are close to the current parameter vector.
+            This can make some operations more efficient.  
+
+        Returns
+        -------
+        None
+        """
+                        
+        for idx, val in zip(indices, values):
+            self._paramvec[idx] = val
+
+        if self._param_interposer is not None or self._index_mm_map is None:
+            #fall back to standard from_vector call.
+            self.from_vector(self._paramvec)
+        else:
+            #get all of the model members which need to be be updated and loop through them to update their
+            #parameters.
+            unique_mms = {lbl:val for idx in indices for lbl, val in zip(self._index_mm_label_map[idx], self._index_mm_map[idx])}
+            for obj in unique_mms.values():
+                obj.from_vector(self._paramvec[obj.gpindices].copy(), close, dirty_value=False)
+            
+            # Call from_vector on elements of the cache
+            if self._call_fromvector_on_cache:
+                #print(f'{self._opcaches=}')
+                for opcache in self._opcaches.values():
+                    for obj in opcache.values():
+                        opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
+                        if any([idx in opcache_elem_gpindices for idx in indices]):
+                            obj.from_vector(self._paramvec[opcache_elem_gpindices], close, dirty_value=False)
+
+            if OpModel._pcheck: self._check_paramvec()
+
     @property
     def param_interposer(self):
         return self._param_interposer
@@ -1195,6 +1313,8 @@ class OpModel(Model):
     def _ops_paramlbls_to_model_paramlbls(self, w):
         return self.param_interposer.ops_paramlbls_to_model_paramlbls(w) \
             if (self.param_interposer is not None) else w
+
+#------Model-Specific Circuit Operations------------#
 
     def circuit_outcomes(self, circuit):
         """
