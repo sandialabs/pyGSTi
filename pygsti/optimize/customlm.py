@@ -28,7 +28,7 @@ from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySeri
 #Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
 #This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
 #so this can be turned off by setting the PYGSTI_NO_CUSTOMLM_SIGINT environment variable
-if 'PYGSTI_NO_CUSTOMLM_SIGINT' not in _os.environ:
+if 'PYGSTI_NO_CUSTOMLM_SIGINT' in _os.environ:
     _signal.signal(_signal.SIGINT, _signal.default_int_handler)
 
 #constants
