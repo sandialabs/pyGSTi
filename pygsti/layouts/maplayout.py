@@ -14,7 +14,7 @@ import collections as _collections
 
 from pygsti.layouts.distlayout import DistributableCOPALayout as _DistributableCOPALayout
 from pygsti.layouts.distlayout import _DistributableAtom
-from pygsti.layouts.prefixtable import PrefixTable as _PrefixTable
+from pygsti.layouts.prefixtable import PrefixTable as _PrefixTable, PrefixTableJacobian as _PrefixTableJacobian
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.tools import listtools as _lt
 
@@ -51,10 +51,16 @@ class _MapCOPALayoutAtom(_DistributableAtom):
     """
 
     def __init__(self, unique_complete_circuits, ds_circuits, group, model,
-                 dataset, max_cache_size, expanded_complete_circuit_cache = None):
-
+                 dataset, max_cache_size, 
+                 circuit_param_dependencies, param_circuit_dependencies, 
+                 expanded_complete_circuit_cache = None):
+        
+        #print(f'{unique_complete_circuits=}')
         expanded_circuit_info_by_unique = dict()
         expanded_circuit_set = dict() # only use SeparatePOVMCircuit keys as ordered set
+
+        #create a list for storing the model parameter dependencies of expanded circuits
+        expanded_param_circuit_depend = [{} for _ in range(len(param_circuit_dependencies))]
 
         if expanded_complete_circuit_cache is None:
             expanded_complete_circuit_cache = dict()
@@ -66,9 +72,21 @@ class _MapCOPALayoutAtom(_DistributableAtom):
                 d = model.expand_instruments_and_separate_povm(unique_complete_circuits[i], unique_observed_outcomes)
             expanded_circuit_info_by_unique[i] = d  # a dict of SeparatePOVMCircuits => tuples of outcome labels
             expanded_circuit_set.update(d)
-            
+            #add in the parameter dependencies too.
+            for param_idx in circuit_param_dependencies[i]:
+                expanded_param_circuit_depend[param_idx].update(d)
+            #for exp_ckt in d.keys():
+            #    expanded_circuit_param_depend[exp_ckt] = circuit_param_dependencies[i]
+
         expanded_circuits = list(expanded_circuit_set.keys())
-        self.table = _PrefixTable(expanded_circuits, max_cache_size)
+        expanded_param_circuit_depend = [list(param_circuit_depend_dict.keys()) for  param_circuit_depend_dict in expanded_param_circuit_depend]
+        #print(f'{expanded_param_circuit_depend=}')
+        #expanded_circuit_param_depend_list = list(expanded_circuit_param_depend.values())
+        self.table = _PrefixTable(expanded_circuits, max_cache_size)#, expanded_circuit_param_depend_list)
+        
+        self.jac_table = _PrefixTableJacobian(expanded_circuits, max_cache_size, expanded_param_circuit_depend)
+
+        #print(f'{self.table.circuit_param_dependence[-1]=}')
 
         #Create circuit element <=> integer index lookups for speed
         all_rholabels = set()
@@ -243,7 +261,13 @@ class MapCOPALayout(_DistributableCOPALayout):
                     split_circuits.append(split_ckt)
                 else:
                     split_circuits.append(model.split_circuit(c_complete, split_prep=False))
-            
+
+        #construct a map for the parameter dependence for each of the unique_complete_circuits.
+        #returns a dictionary who's keys are the unique completed circuits, and whose
+        #values are lists of model parameters upon which that circuit depends.
+        circ_param_map, param_circ_map = model.circuit_parameter_dependence(unique_complete_circuits, return_param_circ_map=True)
+        uniq_comp_circs_param_depend = list(circ_param_map.values())
+        uniq_comp_param_circs_depend = param_circ_map
 
         #construct list of unique POVM-less circuits.
         unique_povmless_circuits = [ckt_tup[1] for ckt_tup in split_circuits]
@@ -258,6 +282,8 @@ class MapCOPALayout(_DistributableCOPALayout):
         def _create_atom(group):
             return _MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, group,
                                       model, dataset, max_cache_size,
+                                      circuit_param_dependencies= uniq_comp_circs_param_depend,
+                                      param_circuit_dependencies= uniq_comp_param_circs_depend,
                                       expanded_complete_circuit_cache=self.expanded_and_separated_circuits_cache)
 
         super().__init__(circuits, unique_circuits, to_unique, unique_complete_circuits,

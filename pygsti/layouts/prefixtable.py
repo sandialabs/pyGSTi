@@ -21,7 +21,7 @@ class PrefixTable(object):
 
     """
 
-    def __init__(self, circuits_to_evaluate, max_cache_size):
+    def __init__(self, circuits_to_evaluate, max_cache_size, circuit_parameter_dependencies=None):
         """
         Creates a "prefix table" for evaluating a set of circuits.
 
@@ -38,6 +38,14 @@ class PrefixTable(object):
         `iDest` is always in the range [0,len(circuits_to_evaluate)-1], and
         indexes the result computed for each of the circuits.
 
+        Parameters
+        ----------
+
+
+        circuit_parameter_sensitivities : 
+            A map between the circuits in circuits_to_evaluate and the indices of the model parameters
+            to which these circuits depend.
+
         Returns
         -------
         tuple
@@ -45,12 +53,23 @@ class PrefixTable(object):
             of tuples as given above and `cache_size` is the total size of the state
             cache used to hold intermediate results.
         """
+        #print(f'{circuits_to_evaluate=}')
+        #print(f'{circuit_parameter_dependencies=}')
         #Sort the operation sequences "alphabetically", so that it's trivial to find common prefixes
-        circuits_to_evaluate_fastlookup = {i: cir for i, cir in enumerate(circuits_to_evaluate)}
+        #circuits_to_evaluate_fastlookup = {i: cir for i, cir in enumerate(circuits_to_evaluate)}
         circuits_to_sort_by = [cir.circuit_without_povm if isinstance(cir, _SeparatePOVMCircuit) else cir
                                for cir in circuits_to_evaluate]  # always Circuits - not SeparatePOVMCircuits
         sorted_circuits_to_sort_by = sorted(list(enumerate(circuits_to_sort_by)), key=lambda x: x[1])
-        sorted_circuits_to_evaluate = [(i, circuits_to_evaluate_fastlookup[i]) for i, _ in sorted_circuits_to_sort_by]
+        sorted_circuits_to_evaluate = [(i, circuits_to_evaluate[i]) for i, _ in sorted_circuits_to_sort_by]
+        
+        #print(f'{sorted_circuits_to_evaluate[-1][1].circuit_without_povm=}')
+
+        #If the circuit parameter dependencies have been specified sort these in the same order used for
+        #circuits_to_evaluate.
+        if circuit_parameter_dependencies is not None:
+            sorted_circuit_parameter_dependencies = [circuit_parameter_dependencies[i] for i, _ in sorted_circuits_to_evaluate]
+        else:
+            sorted_circuit_parameter_dependencies = None
 
         distinct_line_labels = set([cir.line_labels for cir in circuits_to_sort_by])
         if len(distinct_line_labels) == 1:  # if all circuits have the *same* line labels, we can just compare tuples
@@ -58,7 +77,7 @@ class PrefixTable(object):
                                                    for i, cir in enumerate(circuits_to_sort_by)}
         else:
             circuit_reps_to_compare_and_lengths = {i: (cir, len(cir)) for i, cir in enumerate(circuits_to_sort_by)}
-
+        #print(f'{max_cache_size=}')
         if max_cache_size is None or max_cache_size > 0:
             #CACHE assessment pass: figure out what's worth keeping in the cache.
             # In this pass, we cache *everything* and keep track of how many times each
@@ -93,11 +112,11 @@ class PrefixTable(object):
                 candidate, Lc = circuit_reps_to_compare_and_lengths[cacheIndices[i_in_cache]]
                 if L >= Lc > 0 and circuit_rep[0:Lc] == candidate:  # ">=" allows for duplicates
                     iStart = i_in_cache  # an index into the *cache*, not into circuits_to_evaluate
-                    remaining = circuit[Lc:]  # *always* a SeparatePOVMCircuit or Circuit
+                    remaining = circuit_rep[Lc:]  # *always* a SeparatePOVMCircuit or Circuit
                     break
             else:  # no break => no prefix
                 iStart = None
-                remaining = circuit[:]
+                remaining = circuit_rep
 
             # if/where this string should get stored in the cache
             if (max_cache_size is None or curCacheSize < max_cache_size) and cache_hits.get(i, 0) > 0:
@@ -118,6 +137,7 @@ class PrefixTable(object):
         # order.
         self.contents = table_contents
         self.cache_size = curCacheSize
+        self.circuit_param_dependence = sorted_circuit_parameter_dependencies
 
     def __len__(self):
         return len(self.contents)
@@ -333,3 +353,237 @@ class PrefixTable(object):
 
         assert(sum(map(len, subTableSetList)) == len(self)), "sub-table sets are not disjoint!"
         return subTableSetList
+    
+
+class PrefixTableJacobian(object):
+    """
+    An ordered list ("table") of circuits to evaluate, where common prefixes can be cached.
+    Specialized for purposes of jacobian calculations.
+
+    """
+
+    def __init__(self, circuits_to_evaluate, max_cache_size, parameter_circuit_dependencies=None):
+        """
+        Creates a "prefix table" for evaluating a set of circuits.
+
+        The table is list of tuples, where each element contains
+        instructions for evaluating a particular operation sequence:
+
+        (iDest, iStart, tuple_of_following_items, iCache)
+
+        Means that circuit[iDest] = cached_circuit[iStart] + tuple_of_following_items,
+        and that the resulting state should be stored at cache index iCache (for
+        later reference as an iStart value).  The ordering of the returned list
+        specifies the evaluation order.
+
+        `iDest` is always in the range [0,len(circuits_to_evaluate)-1], and
+        indexes the result computed for each of the circuits.
+
+        Parameters
+        ----------
+
+
+        circuit_parameter_sensitivities : 
+            A map between the circuits in circuits_to_evaluate and the indices of the model parameters
+            to which these circuits depend.
+
+        Returns
+        -------
+        tuple
+            A tuple of `(table_contents, cache_size)` where `table_contents` is a list
+            of tuples as given above and `cache_size` is the total size of the state
+            cache used to hold intermediate results.
+        """
+        #print(f'{circuits_to_evaluate=}')
+        #print(f'{circuit_parameter_dependencies=}')
+        #Sort the operation sequences "alphabetically", so that it's trivial to find common prefixes        
+        circuits_to_sort_by = [cir.circuit_without_povm if isinstance(cir, _SeparatePOVMCircuit) else cir
+                               for cir in circuits_to_evaluate]  # always Circuits - not SeparatePOVMCircuits
+        sorted_circuits_to_sort_by = sorted(list(enumerate(circuits_to_sort_by)), key=lambda x: x[1])
+        sorted_circuits_to_evaluate = [(i, circuits_to_evaluate[i]) for i, _ in sorted_circuits_to_sort_by]
+        #print(f'{sorted_circuits_to_evaluate=}')
+        #create a map from sorted_circuits_to_sort_by by can be used to quickly sort each of the parameter
+        #dependency lists.
+        fast_sorting_map = {circuits_to_evaluate[i]:j for j, (i, _) in enumerate(sorted_circuits_to_sort_by)} 
+
+        #also need a map from circuits to their original indices in circuits_to_evaluate
+        #for the purpose of setting the correct destination indices in the evaluation instructions.
+        circuit_to_orig_index_map = {circuit: i for i,circuit in enumerate(circuits_to_evaluate)}
+
+        #use this map to sort the parameter_circuit_dependencies sublists.
+        sorted_parameter_circuit_dependencies = []
+        sorted_parameter_circuit_dependencies_orig_indices = []
+        for sublist in parameter_circuit_dependencies:
+            sorted_sublist = [None]*len(sorted_circuits_to_evaluate)
+            for ckt in sublist:
+                sorted_sublist[fast_sorting_map[ckt]] = ckt
+            
+            #filter out instances of None to get the correctly sized and sorted
+            #sublist.
+            filtered_sorted_sublist = [val for val in sorted_sublist if val is not None]
+            orig_index_sublist = [circuit_to_orig_index_map[ckt] for ckt in filtered_sorted_sublist]
+            
+            sorted_parameter_circuit_dependencies.append(filtered_sorted_sublist)
+            sorted_parameter_circuit_dependencies_orig_indices.append(orig_index_sublist)
+
+        sorted_circuit_reps = []
+        sorted_circuit_lengths = []
+        for sublist in sorted_parameter_circuit_dependencies:
+            circuit_reps, circuit_lengths = self._circuits_to_compare(sublist)
+            sorted_circuit_reps.append(circuit_reps)
+            sorted_circuit_lengths.append(circuit_lengths)
+
+        #Intuition: The sorted circuit lists should likely break into equivalence classes, wherein multiple
+        #parameters will have the same dependent circuits. This is because in typical models parameters
+        #appear in blocks corresponding to a particular gate label, and so most of the time it should be the
+        #case that the list fractures into all those circuits containing a particular label.
+        #This intuition probably breaks down for ImplicitOpModels with complicated layer rules for which
+        #the breaking into equivalence classes may have limited savings.
+        unique_parameter_circuit_dependency_classes = {}
+        for i, sublist in enumerate(sorted_circuit_reps):
+            if unique_parameter_circuit_dependency_classes.get(sublist, None) is None:
+                unique_parameter_circuit_dependency_classes[sublist] = [i]
+            else:
+                unique_parameter_circuit_dependency_classes[sublist].append(i)
+        
+        #the keys of the dictionary already give the needed circuit rep lists for 
+        #each class, also grab the appropriate list of length for each class.
+        sorted_circuit_lengths_by_class = [sorted_circuit_lengths[class_indices[0]] 
+                                           for class_indices in unique_parameter_circuit_dependency_classes.values()]
+        
+        #also need representatives fo the entries in sorted_parameter_circuit_dependencies for each class,
+        #and for sorted_parameter_circuit_dependencies_orig_indices
+        sorted_parameter_circuit_dependencies_by_class = [sorted_parameter_circuit_dependencies[class_indices[0]] 
+                                                          for class_indices in unique_parameter_circuit_dependency_classes.values()]
+        sorted_parameter_circuit_dependencies_orig_indices_by_class = [sorted_parameter_circuit_dependencies_orig_indices[class_indices[0]] 
+                                                                       for class_indices in unique_parameter_circuit_dependency_classes.values()]
+        
+        #now we can just do the calculation for each of these equivalence classes.
+
+        #get the cache hits for all of the parameter circuit dependency sublists
+        if max_cache_size is None or max_cache_size > 0:
+            cache_hits_by_class = []
+            #CACHE assessment pass: figure out what's worth keeping in the cache.
+            # In this pass, we cache *everything* and keep track of how many times each
+            # original index (after it's cached) is utilized as a prefix for another circuit.
+            # Not: this logic could be much better, e.g. computing a cost savings for each
+            #  potentially-cached item and choosing the best ones, and proper accounting
+            #  for chains of cached items.
+            for circuit_reps, circuit_lengths in zip(unique_parameter_circuit_dependency_classes.keys(), 
+                                                     sorted_circuit_lengths_by_class):
+                cache_hits_by_class.append(self._cache_hits(circuit_reps, circuit_lengths))
+        else:
+            cache_hits_by_class = [None]*len(unique_parameter_circuit_dependency_classes)
+                
+        #next construct a prefix table for each sublist.
+        table_contents_by_class = []
+        cache_size_by_class = []
+        for sublist, cache_hits, circuit_reps, circuit_lengths, orig_indices in zip(sorted_parameter_circuit_dependencies_by_class, 
+                                                                                    cache_hits_by_class,
+                                                                                    unique_parameter_circuit_dependency_classes.keys(),
+                                                                                    sorted_circuit_lengths_by_class,
+                                                                                    sorted_parameter_circuit_dependencies_orig_indices_by_class):
+            table_contents, curCacheSize = self._build_table(sublist, cache_hits,
+                                                             max_cache_size, circuit_reps, circuit_lengths,
+                                                             orig_indices)
+            table_contents_by_class.append(table_contents)
+            cache_size_by_class.append(curCacheSize)
+            #print(f'{table_contents=}')
+            #raise Exception
+        #FUTURE: could perform a second pass, and if there is
+        # some threshold number of elements which share the
+        # *same* iStart and the same beginning of the
+        # 'remaining' part then add a new "extra" element
+        # (beyond the #circuits index) which computes
+        # the shared prefix and insert this into the eval
+        # order.
+
+        #map back from equivalence classes to by parameter.
+        table_contents_by_parameter = [None]*len(parameter_circuit_dependencies)
+        cache_size_by_parameter = [None]*len(parameter_circuit_dependencies)
+        for table_contents, cache_size, param_class in zip(table_contents_by_class, cache_size_by_class,
+                                                           unique_parameter_circuit_dependency_classes.values()):
+            for idx in param_class:
+                table_contents_by_parameter[idx] = table_contents
+                cache_size_by_parameter[idx] = cache_size
+
+        self.contents_by_parameter = table_contents_by_parameter
+        self.cache_size_by_parameter = cache_size_by_parameter
+        self.parameter_circuit_dependencies = sorted_parameter_circuit_dependencies
+
+    def _circuits_to_compare(self, sorted_circuits_to_evaluate):
+        circuit_reps = [None]*len(sorted_circuits_to_evaluate)
+        circuit_lens = [None]*len(sorted_circuits_to_evaluate)
+        for i, cir in enumerate(sorted_circuits_to_evaluate):
+            if isinstance(cir, _SeparatePOVMCircuit):
+                circuit_reps[i] = cir.circuit_without_povm.layertup
+                circuit_lens[i] = len(circuit_reps[i])
+            else:
+                circuit_reps[i] = cir.layertup
+                circuit_lens[i] = len(circuit_reps[i])
+        return tuple(circuit_reps), tuple(circuit_lens)
+
+
+    def _cache_hits(self, circuit_reps, circuit_lengths):
+
+        #CACHE assessment pass: figure out what's worth keeping in the cache.
+        # In this pass, we cache *everything* and keep track of how many times each
+        # original index (after it's cached) is utilized as a prefix for another circuit.
+        # Not: this logic could be much better, e.g. computing a cost savings for each
+        #  potentially-cached item and choosing the best ones, and proper accounting
+        #  for chains of cached items.
+        
+        cacheIndices = []  # indices into circuits_to_evaluate of the results to cache
+        cache_hits = [0]*len(circuit_reps)
+
+        for i in range(len(circuit_reps)):
+            circuit = circuit_reps[i] 
+            L = circuit_lengths[i]  # can be a Circuit or a label tuple
+            for cached_index in reversed(cacheIndices):
+                candidate = circuit_reps[cached_index]
+                Lc = circuit_lengths[cached_index]
+                if L >= Lc > 0 and circuit[0:Lc] == candidate:  # a cache hit!
+                    cache_hits[cached_index] += 1
+                    break  # stop looking through cache
+            cacheIndices.append(i)  # cache *everything* in this pass
+    
+        return cache_hits
+
+
+    def _build_table(self, sorted_circuits_to_evaluate, cache_hits, max_cache_size, circuit_reps, circuit_lengths,
+                     orig_indices):
+
+        # Build prefix table: construct list, only caching items with hits > 0 (up to max_cache_size)
+        cacheIndices = []  # indices into circuits_to_evaluate of the results to cache
+        table_contents = [None]*len(sorted_circuits_to_evaluate)
+        curCacheSize = 0
+
+        for j, (i, circuit) in zip(orig_indices,enumerate(sorted_circuits_to_evaluate)):
+            circuit_rep = circuit_reps[i] 
+            L = circuit_lengths[i]
+
+            #find longest existing prefix for circuit by working backwards
+            # and finding the first string that *is* a prefix of this string
+            # (this will necessarily be the longest prefix, given the sorting)
+            for i_in_cache in range(curCacheSize - 1, -1, -1):  # from curCacheSize-1 -> 0
+                candidate = circuit_reps[cacheIndices[i_in_cache]]
+                Lc = circuit_lengths[cacheIndices[i_in_cache]]
+                if L >= Lc > 0 and circuit_rep[0:Lc] == candidate:  # ">=" allows for duplicates
+                    iStart = i_in_cache  # an index into the *cache*, not into circuits_to_evaluate
+                    remaining = circuit_rep[Lc:]  # *always* a SeparatePOVMCircuit or Circuit
+                    break
+            else:  # no break => no prefix
+                iStart = None
+                remaining = circuit_rep
+
+            # if/where this string should get stored in the cache
+            if (max_cache_size is None or curCacheSize < max_cache_size) and cache_hits[i]:
+                iCache = len(cacheIndices)
+                cacheIndices.append(i); curCacheSize += 1
+            else:  # don't store in the cache
+                iCache = None
+
+            #Add instruction for computing this circuit
+            table_contents[i] = (j, iStart, remaining, iCache)
+        
+        return table_contents, curCacheSize, 

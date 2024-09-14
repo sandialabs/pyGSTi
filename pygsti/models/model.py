@@ -1841,28 +1841,62 @@ class OpModel(Model):
         else:
             return comp_circuits
         
-    def circuit_parameter_dependence(self, circuits):
+    def circuit_parameter_dependence(self, circuits, return_param_circ_map = False):
         #start by completing the model:
         #Here we want to do this for all of the different primitive prep and
         #measurement layers present.
         circuit_parameter_map = {}
+        circuit_parameter_set_map = {}
         
-        for circuit in circuits:
-            completed_circuits = []
-            prep_povm_pairs = list(_itertools.product(self.primitive_prep_labels, self.primitive_povm_labels))
-            for prep_lbl, povm_lbl in prep_povm_pairs:
-                completed_circuits.append(self.complete_circuit(circuit, prep_lbl_to_prepend=prep_lbl, povm_lbl_to_append=povm_lbl))
-            #loop through the circuit layers and get the circuit layer operators.
-            #from each of the circuit layer operators we'll get their gpindices. 
-            seen_gpindices = []
-            for ckt in completed_circuits:
-                for layer in ckt:
-                    seen_gpindices.extend(_slct.indices(self.circuit_layer_operator(layer).gpindices))
-            seen_gpindices = sorted(list(set(seen_gpindices)))
-            circuit_parameter_map[circuit] = seen_gpindices
+        completed_circuits_by_prep_povm = []
+        prep_povm_pairs = list(_itertools.product(self.primitive_prep_labels, self.primitive_povm_labels))
+        for prep_lbl, povm_lbl in prep_povm_pairs:
+            completed_circuits_by_prep_povm.append(self.complete_circuits(circuits, prep_lbl_to_prepend=prep_lbl, povm_lbl_to_append=povm_lbl))
         
-        return circuit_parameter_map
+        #we should now have in completed_circuits_by_prep_povm a list of completed circuits
+        #for each prep, povm pair. Unique layers by circuit will then be the union of these
+        #accross each of the sublists.
 
+        unique_layers_by_circuit = []
+        for circuits_by_prep_povm in zip(*completed_circuits_by_prep_povm):    
+            #Take the complete set of circuits and get the unique layers which appear accross all of them
+            #then use this to pre-compute circuit_layer_operators and gpindices.
+            unique_layers_by_circuit.append(set(sum([ckt.layertup for ckt in circuits_by_prep_povm], ())))
+
+        #then aggregate these:
+        unique_layers = set()
+        unique_layers = unique_layers.union(*unique_layers_by_circuit)
+
+        #Now pre-compute the gpindices for all of these unique layers
+        unique_layers_gpindices_dict = {layer:_slct.indices(self.circuit_layer_operator(layer).gpindices) for layer in unique_layers}
+        
+        #loop through the circuit layers and get the circuit layer operators.
+        #from each of the circuit layer operators we'll get their gpindices. 
+        
+        for circuit, ckt_layer_set in zip(circuits, unique_layers_by_circuit):
+            seen_gpindices = []
+            for layer in ckt_layer_set:
+                gpindices_for_layer = unique_layers_gpindices_dict[layer]
+                seen_gpindices.extend(gpindices_for_layer)
+                    
+            seen_gpindices_set = set(seen_gpindices)
+            seen_gpindices = sorted(list(seen_gpindices_set))
+
+            circuit_parameter_map[circuit] = seen_gpindices
+            circuit_parameter_set_map[circuit] = seen_gpindices_set
+        
+        #We can also optionally compute the reverse map, from parameters to circuits which touch that parameter.
+        #it would be more efficient to do this in parallel with the other maps construction, so refactor this later.
+        if return_param_circ_map:
+            param_to_circuit_map = [[] for _ in range(self.num_params)]
+            #keys in circuit_parameter_map should be in the same order as in circuits.
+            for param_list in circuit_parameter_map.values():
+                for param_idx in param_list:
+                    param_to_circuit_map[param_idx].append(circuit)
+
+            return circuit_parameter_map, param_to_circuit_map
+        else:
+            return circuit_parameter_map
 
     # ---- Operation container interface ----
     # These functions allow oracle access to whether a label of a given type
