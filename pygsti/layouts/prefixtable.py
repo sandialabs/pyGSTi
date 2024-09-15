@@ -446,6 +446,9 @@ class PrefixTableJacobian(object):
             else:
                 unique_parameter_circuit_dependency_classes[sublist].append(i)
         
+        self.unique_parameter_circuit_dependency_classes = unique_parameter_circuit_dependency_classes
+        #print(unique_parameter_circuit_dependency_classes)
+
         #the keys of the dictionary already give the needed circuit rep lists for 
         #each class, also grab the appropriate list of length for each class.
         sorted_circuit_lengths_by_class = [sorted_circuit_lengths[class_indices[0]] 
