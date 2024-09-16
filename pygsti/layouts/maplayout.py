@@ -55,7 +55,6 @@ class _MapCOPALayoutAtom(_DistributableAtom):
                  circuit_param_dependencies, param_circuit_dependencies, 
                  expanded_complete_circuit_cache = None):
         
-        #print(f'{unique_complete_circuits=}')
         expanded_circuit_info_by_unique = dict()
         expanded_circuit_set = dict() # only use SeparatePOVMCircuit keys as ordered set
 
@@ -75,18 +74,12 @@ class _MapCOPALayoutAtom(_DistributableAtom):
             #add in the parameter dependencies too.
             for param_idx in circuit_param_dependencies[i]:
                 expanded_param_circuit_depend[param_idx].update(d)
-            #for exp_ckt in d.keys():
-            #    expanded_circuit_param_depend[exp_ckt] = circuit_param_dependencies[i]
 
         expanded_circuits = list(expanded_circuit_set.keys())
         expanded_param_circuit_depend = [list(param_circuit_depend_dict.keys()) for  param_circuit_depend_dict in expanded_param_circuit_depend]
-        #print(f'{expanded_param_circuit_depend=}')
-        #expanded_circuit_param_depend_list = list(expanded_circuit_param_depend.values())
-        self.table = _PrefixTable(expanded_circuits, max_cache_size)#, expanded_circuit_param_depend_list)
         
+        self.table = _PrefixTable(expanded_circuits, max_cache_size)#, expanded_circuit_param_depend_list)
         self.jac_table = _PrefixTableJacobian(expanded_circuits, max_cache_size, expanded_param_circuit_depend)
-
-        #print(f'{self.table.circuit_param_dependence[-1]=}')
 
         #Create circuit element <=> integer index lookups for speed
         all_rholabels = set()

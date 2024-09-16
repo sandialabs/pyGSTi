@@ -102,6 +102,8 @@ cdef vector[vector[INT]] convert_and_wrap_dict_of_intlists(d, wrapper):
             ret[i][j] = wrapper[intlist[j]]
     return ret
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef vector[StateCRep*] create_rhocache(INT cacheSize, INT state_dim):
     cdef INT i
     cdef vector[StateCRep*] rho_cache = vector[StateCRep_ptr](cacheSize)
@@ -109,11 +111,14 @@ cdef vector[StateCRep*] create_rhocache(INT cacheSize, INT state_dim):
         rho_cache[i] = new StateCRep(state_dim)
     return rho_cache
 
+@cython.boundscheck(False)
+@cython.wraparound(False)
 cdef void free_rhocache(vector[StateCRep*] rho_cache):
     cdef UINT i
     for i in range(rho_cache.size()): # fill cache with empty but alloc'd states
         del rho_cache[i]
 
+@cython.wraparound(False)
 cdef vector[OpCRep*] convert_opreps(operationreps):
     # c_opreps : an array of OpCReps
     cdef vector[OpCRep*] c_opreps = vector[OpCRep_ptr](len(operationreps))
@@ -125,18 +130,19 @@ cdef StateCRep* convert_rhorep(rhorep):
     # extract c-reps from rhorep and ereps => c_rho and c_ereps
     return (<StateRep?>rhorep).c_state
 
+@cython.wraparound(False)
 cdef vector[StateCRep*] convert_rhoreps(rhoreps):
     cdef vector[StateCRep*] c_rhoreps = vector[StateCRep_ptr](len(rhoreps))
     for ii,rrep in rhoreps.items(): # (ii = python variable)
         c_rhoreps[ii] = (<StateRep?>rrep).c_state
     return c_rhoreps
 
+@cython.wraparound(False)
 cdef vector[EffectCRep*] convert_ereps(ereps):
     cdef vector[EffectCRep*] c_ereps = vector[EffectCRep_ptr](len(ereps))
     for i in range(len(ereps)):
         c_ereps[i] = (<EffectRep>ereps[i]).c_effect
     return c_ereps
-
 
 # -----------------------------------------
 # Mapfill functions
@@ -186,51 +192,8 @@ def mapfill_probs_atom(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to_fil
 
     free_rhocache(rho_cache)  #delete cache entries
 
-#def cond_update_probs_atom(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to_fill,
-#                           dest_indices, layout_atom, int param_index, resource_alloc):
-#
-#    # The required ending condition is that array_to_fill on each processor has been filled.  But if
-#    # memory is being shared and resource_alloc contains multiple processors on a single host, we only
-#    # want *one* (the rank=0) processor to perform the computation, since array_to_fill will be
-#    # shared memory that we don't want to have muliple procs using simultaneously to compute the
-#    # same thing.  Thus, we carefully guard any shared mem updates/usage
-#    # using "if shared_mem_leader" (and barriers, if needed) below.
-#    shared_mem_leader = resource_alloc.is_host_leader if (resource_alloc is not None) else True
-#
-#    dest_indices = _slct.to_array(dest_indices)  # make sure this is an array and not a slice
-#    #dest_indices = np.ascontiguousarray(dest_indices) #unneeded
-#
-#    #Get (extension-type) representation objects
-#    rho_lookup = { lbl:i for i,lbl in enumerate(layout_atom.rho_labels) } # rho labels -> ints for faster lookup
-#    rhoreps = { i: fwdsim.model._circuit_layer_operator(rholbl, 'prep')._rep for rholbl,i in rho_lookup.items() }
-#    operation_lookup = { lbl:i for i,lbl in enumerate(layout_atom.op_labels) } # operation labels -> ints for faster lookup
-#    operationreps = { i:fwdsim.model._circuit_layer_operator(lbl, 'op')._rep for lbl,i in operation_lookup.items() }
-#    ereps = [fwdsim.model._circuit_layer_operator(elbl, 'povm')._rep for elbl in layout_atom.full_effect_labels]  # cache these in future
-#
-#    # convert to C-mode:  evaltree, operation_lookup, operationreps
-#    cdef vector[vector[INT]] c_layout_atom = convert_maplayout(layout_atom.jac_table.contents_by_parameter[param_index], operation_lookup, rho_lookup)
-#    cdef vector[StateCRep*] c_rhos = convert_rhoreps(rhoreps)
-#    cdef vector[EffectCRep*] c_ereps = convert_ereps(ereps)
-#    cdef vector[OpCRep*] c_opreps = convert_opreps(operationreps)
-#
-#    # create rho_cache = vector of StateCReps
-#    #print "DB: creating rho_cache of size %d * %g GB => %g GB" % \
-#    #   (layout_atom.cache_size, 8.0 * fwdsim.model.dim / 1024.0**3, layout_atom.cache_size * 8.0 * fwdsim.model.dim / 1024.0**3)
-#    cdef vector[StateCRep*] rho_cache = create_rhocache(layout_atom.jac_table.cache_size_by_parameter[param_index], fwdsim.model.dim)
-#    cdef vector[vector[INT]] elabel_indices_per_circuit = convert_dict_of_intlists(layout_atom.elbl_indices_by_expcircuit)
-#    cdef vector[vector[INT]] final_indices_per_circuit = convert_and_wrap_dict_of_intlists(
-#        layout_atom.elindices_by_expcircuit, dest_indices)
-#
-#    if shared_mem_leader:
-#        #Note: dm_mapfill_probs could have taken a resource_alloc to employ multiple cpus to do computation.
-#        # Since array_fo_fill is assumed to be shared mem it would need to only update `array_to_fill` *if*
-#        # it were the host leader.
-#        dm_mapfill_probs(array_to_fill, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
-#                         elabel_indices_per_circuit, final_indices_per_circuit, fwdsim.model.dim)
-#
-#    free_rhocache(rho_cache)  #delete cache entries
 
-
+@cython.wraparound(False)
 cdef dm_mapfill_probs(double[:] array_to_fill,
                       vector[vector[INT]] c_layout_atom,
                       vector[OpCRep*] c_opreps,
@@ -326,7 +289,7 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
     del prop2
     del shelved
 
-
+@cython.wraparound(False)
 def mapfill_dprobs_atom(fwdsim,
                         np.ndarray[double, ndim=2] array_to_fill,
                         dest_indices,
@@ -341,8 +304,12 @@ def mapfill_dprobs_atom(fwdsim,
     if dest_param_indices is None:
         dest_param_indices = list(range(_slct.length(param_indices)))
 
-    param_indices = _slct.to_array(param_indices)
-    dest_param_indices = _slct.to_array(dest_param_indices)
+    cdef np.ndarray[np.int64_t, ndim=1, mode='c'] param_indices_array = _slct.to_array(param_indices)
+    cdef np.ndarray[np.int64_t, ndim=1, mode='c'] dest_param_indices_array = _slct.to_array(dest_param_indices)
+
+    cdef np.int64_t[::1] param_indices_view = param_indices_array
+    cdef np.int64_t[::1] dest_param_indices_view = dest_param_indices_array
+    
 
     #Get (extension-type) representation objects
     # NOTE: the circuit_layer_operator(lbl) functions cache the returned operation
@@ -373,27 +340,30 @@ def mapfill_dprobs_atom(fwdsim,
     fwdsim.model.from_vector(orig_vec, close=False)  # ensure we call with close=False first
 
     nEls = layout_atom.num_elements
-    probs = np.empty(nEls, 'd') #must be contiguous!
-    probs2 = np.empty(nEls, 'd') #must be contiguous!
+    cdef np.ndarray[np.float64_t, ndim=1, mode='c'] probs = np.empty(nEls, dtype=np.float64) #must be contiguous!
+    cdef np.ndarray[np.float64_t, ndim=1, mode='c'] probs2 = np.empty(nEls, dtype=np.float64) #must be contiguous!
+
+    cdef double[::1] probs_view = probs
+    cdef double[::1] probs2_view = probs2
 
     #if resource_alloc.comm_rank == 0:
     #    print("MAPFILL DPROBS ATOM 1"); t=pytime.time(); t0=pytime.time()
-    dm_mapfill_probs(probs, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache,
-                     elabel_indices_per_circuit, final_indices_per_circuit, model_dim)
+    dm_mapfill_probs(probs_view, c_layout_atom, c_opreps, c_rhos, c_ereps, &rho_cache, elabel_indices_per_circuit, final_indices_per_circuit, model_dim)
     #if resource_alloc.comm_rank == 0:
     #    print("MAPFILL DPROBS ATOM 2 %.3fs" % (pytime.time() - t)); t=pytime.time()
 
-    shared_mem_leader = resource_alloc.is_host_leader
+    cdef bint shared_mem_leader = resource_alloc.is_host_leader
 
     #Get a map from global parameter indices to the desired
     # final index within array_to_fill
-    iParamToFinal = {i: dest_index for i, dest_index in zip(param_indices, dest_param_indices)}
+    #iParamToFinal = {i: dest_index for i, dest_index in zip(param_indices_view, dest_param_indices_view)}
 
     #create the c_layout_atoms and rho_caches for each parameter.
     cdef vector[vector[vector[INT]]] c_layout_atom_by_parameter = vector[vector[vector[INT]]](num_params)
     #cdef vector[vector[StateCRep*]] rho_cache_by_parameter = vector[vector[StateCRep_ptr]](num_params)
 
-
+    cdef int param_index
+    cdef list[int] param_group
     for param_group in layout_atom.jac_table.unique_parameter_circuit_dependency_classes.values():
         if len(param_group)>0:
             c_layout_atom = convert_maplayout(layout_atom.jac_table.contents_by_parameter[param_group[0]], operation_lookup, rho_lookup)
@@ -402,45 +372,45 @@ def mapfill_dprobs_atom(fwdsim,
             c_layout_atom_by_parameter[param_index] = c_layout_atom
             #rho_cache_by_parameter[param_index] = rho_cache
 
+    #add typing to indices we'll be using below:
+    cdef int i
+    cdef int first_param_idx
+    cdef int iFinal
+
     #Split off the first finite difference step, as the pattern I want in the loop with each step
     #is to simultaneously undo the previous update and apply the new one.
-    if len(param_indices)>0:
-        probs2[:] = probs[:]
-        first_param_idx = param_indices[0]
+    if len(param_indices_view)>0:
+        probs2_view[:] = probs_view[:]
+        first_param_idx = param_indices_view[0]
         #need the c layout atom and the rho caches for each parameter. Should be able to eventually speed this
         #up by leveraging information about circuit equivalence classes.
         #c_layout_atom = convert_maplayout(layout_atom.jac_table.contents_by_parameter[first_param_idx], operation_lookup, rho_lookup)
         rho_cache = create_rhocache(layout_atom.jac_table.cache_size_by_parameter[first_param_idx], model_dim)
 
-        iFinal = iParamToFinal[first_param_idx]
+        iFinal = dest_param_indices_view[0]
         fwdsim.model.set_parameter_value(first_param_idx, orig_vec[first_param_idx]+eps)
         if shared_mem_leader:  # don't fill assumed-shared array-to_fill on non-mem-leaders
-            dm_mapfill_probs(probs2, c_layout_atom_by_parameter[first_param_idx], c_opreps, c_rhos, c_ereps, 
-                             &rho_cache,
-                             elabel_indices_per_circuit, final_indices_per_circuit, model_dim)
+            dm_mapfill_probs(probs2_view, c_layout_atom_by_parameter[first_param_idx], c_opreps, c_rhos, c_ereps, &rho_cache, elabel_indices_per_circuit, final_indices_per_circuit, model_dim)
             #_fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)  # I don't think this is needed
             array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
 
-    for i in range(1, len(param_indices)):
-        probs2[:] = probs[:]
-        iFinal = iParamToFinal[param_indices[i]]
-        fwdsim.model.set_parameter_values([param_indices[i-1], param_indices[i]], 
-                                          [orig_vec[param_indices[i-1]], orig_vec[param_indices[i]]+eps])
+    for i in range(1, len(param_indices_view)):
+        probs2_view[:] = probs_view[:]
+        iFinal = dest_param_indices_view[i]
+        fwdsim.model.set_parameter_values([param_indices_view[i-1], param_indices_view[i]], [orig_vec[param_indices_view[i-1]], orig_vec[param_indices_view[i]]+eps])
         
         #need the c layout atom and the rho caches for each parameter. Should be able to eventually speed this
         #up by leveraging information about circuit equivalence classes.
         #c_layout_atom = convert_maplayout(layout_atom.jac_table.contents_by_parameter[param_indices[i]], operation_lookup, rho_lookup)
-        rho_cache = create_rhocache(layout_atom.jac_table.cache_size_by_parameter[param_indices[i]], model_dim)
+        rho_cache = create_rhocache(layout_atom.jac_table.cache_size_by_parameter[param_indices_view[i]], model_dim)
 
         if shared_mem_leader:  # don't fill assumed-shared array-to_fill on non-mem-leaders
-            dm_mapfill_probs(probs2, c_layout_atom_by_parameter[param_indices[i]], 
-                             c_opreps, c_rhos, c_ereps,  &rho_cache,
-                             elabel_indices_per_circuit, final_indices_per_circuit, model_dim)
+            dm_mapfill_probs(probs2_view, c_layout_atom_by_parameter[param_indices_view[i]], c_opreps, c_rhos, c_ereps,  &rho_cache, elabel_indices_per_circuit, final_indices_per_circuit, model_dim)
             #_fas(array_to_fill, [dest_indices, iFinal], (probs2 - probs) / eps)  # I don't think this is needed
             array_to_fill[dest_indices, iFinal] = (probs2 - probs) / eps
         
     #reset the final model parameter we changed to it's original value.
-    fwdsim.model.set_parameter_value(param_indices[-1], orig_vec[param_indices[-1]])
+    fwdsim.model.set_parameter_value(param_indices_view[len(param_indices_view)-1], orig_vec[param_indices_view[len(param_indices_view)-1]])
 
     free_rhocache(rho_cache)  #delete cache entries
     
