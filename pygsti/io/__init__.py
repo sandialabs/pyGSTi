@@ -12,8 +12,7 @@ pyGSTi Input/Output Python Package
 
 # Import the most important/useful routines of each module into
 # the package namespace
-#from .legacyio import enable_no_cython_unpickling
-#from .legacyio import enable_old_object_unpickling  # , disable_old_object_unpickling
+
 from .readers import *
 from .metadir import *
 from .stdinput import *
