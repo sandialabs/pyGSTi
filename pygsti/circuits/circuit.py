@@ -3447,7 +3447,7 @@ class Circuit(object):
         """
         if self._static:
             def cnt(lbl):  # obj a Label, perhaps compound
-                if lbl.is_simple():  # a simple label
+                if lbl.IS_SIMPLE:  # a simple label
                     return 1 if (lbl.sslbls is not None) else 0
                 else:
                     return sum([cnt(sublbl) for sublbl in lbl.components])
