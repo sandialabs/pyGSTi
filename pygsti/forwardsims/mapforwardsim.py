@@ -226,7 +226,8 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             Determines how much output to send to stdout.  0 means no output, higher
             integers mean more output.
         
-        A precomputed dictionary serving as a cache for completed
+        layout_creation_circuit_cache:
+            A precomputed dictionary serving as a cache for completed
             circuits. I.e. circuits with prep labels and POVM labels appended.
             Along with other useful pre-computed circuit structures used in layout
             creation.
