@@ -46,6 +46,11 @@ extras = {
     'report_pickling': ['pandas'],
     'report_pdf_figures': ['matplotlib'],
     'html_reports': ['jinja2', 'MarkupSafe'],
+    'reports':[
+        'pygsti[report_pickling]',
+        'pygsti[report_pdf_figures]',
+        'pygsti[html_reports]'
+    ],
     'notebooks': [
         'ipython',
         'notebook',
@@ -71,29 +76,25 @@ extras = {
         'pytest',
         'pytest-xdist',
         'pytest-cov',
+        'cython', # Don't call this pygsti[extensions] for testing_no_cython logic below
+        'mpi4py', # Don't call this pygsti[multiprocessor] for no_mpi logic below
         'nbval',
-        'bson',
-        'csaps',
-        'cvxopt',
-        'cvxpy',
-        'cython',
-        'matplotlib',
-        'mpi4py',
-        'msgpack',
         'packaging',
-        'pandas',
         'psutil',
         'zmq',
-        'jinja2',
         'seaborn',
         'scipy',
         'ply',
         'qibo<=0.1.7',
         'cirq-core',
-        'notebook',
-        'ipython',
-        'jupyter_server',
-        'torch'
+        'pygsti[diamond_norm]',
+        'pygsti[ibmq]',
+        'pygsti[interpygate]',
+        'pygsti[msgpack]',
+        'pygsti[notebooks]',
+        'pygsti[pytorch]',
+        'pygsti[reports]',
+        'pygsti[serialization]'
     ]
 }
 
