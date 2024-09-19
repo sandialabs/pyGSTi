@@ -491,13 +491,6 @@ class OpModel(Model):
     ##########################################
 
     @property
-    def parameter_labels(self):
-        """
-        A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
-        """
-        return self._ops_paramlbls_to_model_paramlbls(self._paramlbls)
-
-    @property
     def sim(self):
         """ Forward simulator for this model """
         self._clean_paramvec()  # clear opcache and rebuild paramvec when needed
@@ -611,14 +604,14 @@ class OpModel(Model):
         """
         self._clean_paramvec()
         return len(self._paramvec)
-    
+
     @property
     def parameter_labels(self):
         """
         A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
         """
         self._clean_paramvec()
-        return self._paramlbls
+        return self._ops_paramlbls_to_model_paramlbls(self._paramlbls)
     
     def set_parameter_label(self, index, label):
         """
