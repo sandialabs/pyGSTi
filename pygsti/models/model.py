@@ -177,7 +177,8 @@ class Model(_NicelySerializable):
         if lower_bound == -_np.inf and upper_bound == _np.inf:
             return  # do nothing
 
-        if self._param_bounds is None:
+        #Note, this property call will also invoke a param vector rebuild if needed.
+        if self.parameter_bounds is None:
             self._param_bounds = _default_param_bounds(self.num_params)
         self._param_bounds[index, :] = (lower_bound, upper_bound)
 
@@ -490,13 +491,6 @@ class OpModel(Model):
     ##########################################
 
     @property
-    def parameter_labels(self):
-        """
-        A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
-        """
-        return self._ops_paramlbls_to_model_paramlbls(self._paramlbls)
-
-    @property
     def sim(self):
         """ Forward simulator for this model """
         self._clean_paramvec()  # clear opcache and rebuild paramvec when needed
@@ -610,6 +604,56 @@ class OpModel(Model):
         """
         self._clean_paramvec()
         return len(self._paramvec)
+
+    @property
+    def parameter_labels(self):
+        """
+        A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
+        """
+        self._clean_paramvec()
+        return self._ops_paramlbls_to_model_paramlbls(self._paramlbls)
+    
+    def set_parameter_label(self, index, label):
+        """
+        Set the label of a single model parameter.
+
+        Parameters
+        ----------
+        index : int
+            The index of the paramter whose label should be set.
+
+        label : object
+            An object that serves to label this parameter.  Often a string.
+
+        Returns
+        -------
+        None
+        """
+        self._clean_paramvec()
+        self._paramlbls[index] = label
+    
+    @property
+    def parameter_bounds(self):
+        """ Upper and lower bounds on the values of each parameter, utilized by optimization routines """
+        self._clean_paramvec()
+        return self._param_bounds
+    
+    @property
+    def num_modeltest_params(self):
+        """
+        The parameter count to use when testing this model against data.
+
+        Often times, this is the same as :meth:`num_params`, but there are times
+        when it can convenient or necessary to use a parameter count different than
+        the actual number of parameters in this model.
+
+        Returns
+        -------
+        int
+            the number of model parameters.
+        """
+        self._clean_paramvec()
+        return Model.num_modeltest_params.fget(self)
 
     def _iter_parameterized_objs(self):
         raise NotImplementedError("Derived Model classes should implement _iter_parameterized_objs")
@@ -905,6 +949,13 @@ class OpModel(Model):
         w = self._model_paramvec_to_ops_paramvec(self._paramvec)
         Np = len(w)  # NOT self.num_params since the latter calls us!
         wl = self._paramlbls
+        
+        if self._param_bounds is not None:
+            msg = 'Internal Model attributes are being rebuilt. This is likely because a modelmember has been '\
+                  + 'either added or removed. If you have manually set parameter bounds values at the Model level '\
+                  + '(not the model member level), for example using the `set_parameter_bounds` method, these values '\
+                  + 'will be overwritten by the parameter bounds found in each of the modelmembers.' 
+            _warnings.warn(msg)
         wb = self._param_bounds if (self._param_bounds is not None) else _default_param_bounds(Np)
         #NOTE: interposer doesn't quite work with parameter bounds yet, as we need to convert "model"
         # bounds to "ops" bounds like we do the parameter vector.  Need something like:
@@ -1022,7 +1073,6 @@ class OpModel(Model):
         Np = len(w)  # reset Np from possible new params (NOT self.num_params since the latter calls us!)
         indices_to_remove = sorted(set(range(Np)) - used_gpindices)
         if debug: print("Indices to remove = ", indices_to_remove, " of ", Np)
-
         if len(indices_to_remove) > 0:
             #if debug: print("DEBUG: Removing %d params:"  % len(indices_to_remove), indices_to_remove)
             w = _np.delete(w, indices_to_remove)
