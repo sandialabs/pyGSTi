@@ -57,7 +57,7 @@ class _TermCOPALayoutAtom(_DistributableAtom):
         expanded_circuit_outcomes = _collections.OrderedDict()
         for i in group:
             observed_outcomes = None if (dataset is None) else dataset[ds_circuits[i]].outcomes
-            d = unique_complete_circuits[i].expand_instruments_and_separate_povm(model, observed_outcomes)
+            d = model.expand_instruments_and_separate_povm(unique_complete_circuits[i], observed_outcomes)
             expanded_circuit_outcomes_by_unique[i] = d
             expanded_circuit_outcomes.update(d)
 

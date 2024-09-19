@@ -74,8 +74,9 @@ class StatelessModel:
     def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout):
         circuits = []
         self.outcome_probs_dim = 0
+        #TODO: Refactor this to use the bulk_expand_instruments_and_separate_povm codepath
         for _, circuit, outcomes in layout.iter_unique_circuits():
-            expanded_circuits = circuit.expand_instruments_and_separate_povm(model, outcomes)
+            expanded_circuits = model.expand_instruments_and_separate_povm(circuit, outcomes)
             if len(expanded_circuits) > 1:
                 raise NotImplementedError("I don't know what to do with this.")
             spc = next(iter(expanded_circuits))
