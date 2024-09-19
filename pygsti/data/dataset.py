@@ -296,33 +296,9 @@ class _DataSetRow(object):
         last_time = None
         seriesDict = {self.dataset.olIndex[ol]: [] for ol in self.dataset.outcome_labels}
 
-        #REMOVED: (though this gives slightly different behavior)
-        #for outcome_label in self.outcomes:
-        #    if outcome_label not in seriesDict.keys():
-        #        seriesDict[outcome_label] = []
-
         if self.reps is None:
             reps = _np.ones(len(self.time), _np.int64)
         else: reps = self.reps
-
-        # An alternate implementation that appears to be (surprisingly?) slower...
-        ##Get time bin locations
-        #time_bins_borders = []
-        #last_time = None
-        #for i, t in enumerate(self.time):
-        #    if t != last_time:
-        #        time_bins_borders.append(i)
-        #        last_time = t
-        #time_bins_borders.append(len(self.time))
-        #nTimes = len(time_bins_borders) - 1
-        #
-        #seriesDict = {self.dataset.olIndex[ol]: _np.zeros(nTimes, _np.int64) for ol in self.dataset.outcome_labels}
-        #
-        #for i in range(nTimes):
-        #    slc = slice(time_bins_borders[i],time_bins_borders[i+1])
-        #    times.append( self.time[slc.start] )
-        #    for oli, rep in zip(self.oli[slc], reps[slc]):
-        #        seriesDict[oli][i] += rep
 
         for t, oli, rep in zip(self.time, self.oli, reps):
 
@@ -586,26 +562,28 @@ class _DataSetRow(object):
             tslc = _np.where(_np.isclose(self.time, timestamp))[0]
         else: tslc = slice(None)
 
+        oli_tslc = self.oli[tslc]
         nOutcomes = len(self.dataset.olIndex)
-        nIndices = len(self.oli[tslc])
+        nIndices = len(oli_tslc)
+        
         if nOutcomes <= nIndices or all_outcomes:
             if self.reps is None:
                 for ol, i in self.dataset.olIndex.items():
-                    cnt = float(_np.count_nonzero(_np.equal(self.oli[tslc], i)))
-                    if all_outcomes or cnt > 0:
+                    cnt = float(_np.count_nonzero(_np.equal(oli_tslc, i)))
+                    if cnt > 0 or all_outcomes:
                         cntDict.setitem_unsafe(ol, cnt)
             else:
                 for ol, i in self.dataset.olIndex.items():
-                    inds = _np.nonzero(_np.equal(self.oli[tslc], i))[0]
-                    if all_outcomes or len(inds) > 0:
+                    inds = oli_tslc[oli_tslc == i]
+                    if len(inds) > 0 or all_outcomes:
                         cntDict.setitem_unsafe(ol, float(sum(self.reps[tslc][inds])))
         else:
             if self.reps is None:
-                for ol_index in self.oli[tslc]:
+                for ol_index in oli_tslc:
                     ol = self.dataset.ol[ol_index]
                     cntDict.setitem_unsafe(ol, 1.0 + cntDict.getitem_unsafe(ol, 0.0))
             else:
-                for ol_index, reps in zip(self.oli[tslc], self.reps[tslc]):
+                for ol_index, reps in zip(oli_tslc, self.reps[tslc]):
                     ol = self.dataset.ol[ol_index]
                     cntDict.setitem_unsafe(ol, reps + cntDict.getitem_unsafe(ol, 0.0))
 
@@ -616,7 +594,8 @@ class _DataSetRow(object):
         """
         Dictionary of per-outcome counts.
         """
-        if self._cntcache: return self._cntcache  # if not None *and* len > 0
+        if self._cntcache: 
+            return self._cntcache  # if not None *and* len > 0
         ret = self._get_counts()
         if self._cntcache is not None:  # == and empty dict {}
             self._cntcache.update(ret)
@@ -1199,10 +1178,10 @@ class DataSet(_MongoSerializable):
         circuit = _cir.Circuit.cast(circuit)
 
         #Note: cirIndex value is either an int (non-static) or a slice (static)
-        repData = self.repData[self.cirIndex[circuit]] \
-            if (self.repData is not None) else None
-        return _DataSetRow(self, self.oliData[self.cirIndex[circuit]],
-                           self.timeData[self.cirIndex[circuit]], repData,
+        cirIndex = self.cirIndex[circuit]
+        repData = self.repData[cirIndex] if (self.repData is not None) else None
+        return _DataSetRow(self, self.oliData[cirIndex],
+                           self.timeData[cirIndex], repData,
                            self.cnt_cache[circuit] if self.bStatic else None,
                            self.auxInfo[circuit])
 
