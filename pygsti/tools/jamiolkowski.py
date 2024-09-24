@@ -215,11 +215,13 @@ def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis):
     #first, get operation matrix into std basis
     operation_mx = _np.asarray(operation_mx)
     op_mx_basis = _bt.create_basis_for_matrix(operation_mx, op_mx_basis)
-    opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, op_mx_basis.create_equivalent('std'))
+    temp =  op_mx_basis.create_equivalent('std')
+    opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, temp)
 
     #expand operation matrix so it acts on entire space of dmDim x dmDim density matrices
-    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand', op_mx_basis.create_equivalent('std'),
-                                       op_mx_basis.create_simple_equivalent('std'))
+    temp1 = op_mx_basis.create_equivalent('std')
+    temp2 = op_mx_basis.create_simple_equivalent('std')
+    opMxInStdBasis = _bt.resize_std_mx(opMxInStdBasis, 'expand',temp1, temp2)
 
     #Shuffle indices to go from process matrix to Jamiolkowski matrix (they vectorize differently)
     N2 = opMxInStdBasis.shape[0]; N = int(_np.sqrt(N2))
