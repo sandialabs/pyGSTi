@@ -3537,7 +3537,7 @@ class Circuit(object):
                     return sum([cnt(sub) for sub in obj])
 
         return sum([cnt(layer_lbl) for layer_lbl in self._labels])
-
+    
     def _togrid(self, identity_name):
         """ return a list-of-lists rep? """
         d = self.num_layers
