@@ -34,7 +34,7 @@ def vec(matrix):
     """
     matrix = _np.array(matrix)
     if matrix.shape == (len(matrix), len(matrix)):
-        return _np.array([_np.concatenate(_np.array(matrix).T)]).T
+        return matrix.reshape(shape=(matrix.size, 1), order='F')
     else:
         raise ValueError('The input matrix must be square.')
 
@@ -54,10 +54,39 @@ def unvec(vectorized):
         ValueError: If the length of the input is not a perfect square
 
     """
-    vectorized = _np.array(vectorized)
-    length = int(_np.sqrt(max(vectorized.shape)))
-    if len(vectorized) == length ** 2:
-        return _np.reshape(vectorized, [length, length]).T
+    return unvec_square(vectorized, order='F')
+
+
+def unvec_square(vectorized, order):
+    """
+    Takes a vector whose length is a perfect square, and returns a square matrix
+    representation by reading from the vectors entries to define the matrix in 
+    column-major order (order='F') or row-major order (order='C').
+
+    Args:
+        vectorized: array-like, where np.array(vectorized).size is a perfect square.
+        order: 'F' or 'C'
+
+    Returns:
+        numpy.ndarray: NxN dimensional array
+
+    Raises:
+        ValueError: If the length of the input is not a perfect square.
+
+    """
+    assert order == 'F' or order == 'C'
+    if not isinstance(vectorized, _np.ndarray):
+        vectorized = _np.array(vectorized)
+
+    if vectorized.ndim == 2:
+        assert min(vectorized.shape) == 1
+        vectorized = vectorized.ravel()
+    elif vectorized.ndim > 2:
+        raise ValueError('vectorized.ndim must be <= 2.')
+
+    n = int(_np.sqrt(max(vectorized.shape)))
+    if len(vectorized) == n ** 2:
+        return vectorized.reshape(shape=(n, n), order=order)
     else:
         msg = 'The input vector length must be a perfect square, but this input has length %d.' % len(vectorized)
         raise ValueError(msg)
