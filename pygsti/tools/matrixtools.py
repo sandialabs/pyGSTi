@@ -1424,35 +1424,6 @@ def _findx(a, inds, always_copy=False):
         return a_inds
 
 
-# TODO: reevaluate the need for this function. It seems like we could just in-line @
-# and let operator overloading and implementations of __matmul__ and __rmatmul__
-# handle it.
-def safe_dot(a, b):
-    """
-    Performs dot(a,b) correctly when neither, either, or both arguments are sparse matrices.
-
-    Parameters
-    ----------
-    a : numpy.ndarray or scipy.sparse matrix.
-        First matrix.
-
-    b : numpy.ndarray or scipy.sparse matrix.
-        Second matrix.
-
-    Returns
-    -------
-    numpy.ndarray or scipy.sparse matrix
-    """
-    if _sps.issparse(a):
-        return a.dot(b)  # sparseMx.dot works for both sparse and dense args
-    elif _sps.issparse(b):
-        # to return a sparse mx even when a is dense (asymmetric behavior):
-        # --> return _sps.csr_matrix(a).dot(b) # numpyMx.dot can't handle sparse argument
-        return _np.dot(a, b.toarray())
-    else:
-        return _np.dot(a, b)
-
-
 def safe_norm(a, part=None):
     """
     Get the frobenius norm of a matrix or vector, `a`, when it is either a dense array or a sparse matrix.
