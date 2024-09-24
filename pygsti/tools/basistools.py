@@ -189,9 +189,9 @@ def change_basis(mx, from_basis, to_basis):
     if isMx:
         # want ret = toMx.dot( _np.dot(mx, fromMx)) but need to deal
         # with some/all args being sparse:
-        ret = _mt.safe_dot(toMx, _mt.safe_dot(mx, fromMx))
+        ret = toMx @ (mx @ fromMx)
     else:  # isVec
-        ret = _mt.safe_dot(toMx, mx)
+        ret = toMx @ mx
 
     if not to_basis.real:
         return ret

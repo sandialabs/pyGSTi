@@ -1208,7 +1208,7 @@ class LindbladErrorgen(_LinearOperator):
 
             #conjugate Lindbladian exponent by U:
             err_gen_mx = self.to_sparse() if self._rep_type == 'sparse superop' else self.to_dense()
-            err_gen_mx = _mt.safe_dot(Uinv, _mt.safe_dot(err_gen_mx, U))
+            err_gen_mx = Uinv  @ (err_gen_mx @ U)
             trunc = 1e-6 if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) else False
             self._set_params_from_matrix(err_gen_mx, truncate=trunc)
             self.dirty = True
