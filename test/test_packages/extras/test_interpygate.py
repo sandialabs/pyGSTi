@@ -51,7 +51,8 @@ class ExampleProcess(interp.PhysicalProcess):
         L = dephasing * self.dephasing_generator + decoherence * self.decoherence_generator
 
         process = change_basis(_expm((H + L) * t), 'pp', 'col')
-        state = unvec_square(_np.dot(process, _np.outer(state, state.conj()).ravel(order='F')), 'F')
+        vec_state = _np.outer(state, state.conj()).ravel(order='F') 
+        state = unvec_square(_np.dot(process, vec_state), 'F')
         return state
 
     def create_process_matrix(self, v, comm=None):
@@ -102,7 +103,8 @@ class ExampleProcess_timedep(interp.PhysicalProcess):
         L = dephasing * self.dephasing_generator + decoherence * self.decoherence_generator
 
         processes = [change_basis(_expm((H + L) * t), 'pp', 'col') for t in times]
-        states = [unvec_square(_np.dot(process, _np.outer(state, state.conj())).ravel(order='F'),'F') for process in processes]
+        vec_state = _np.outer(state, state.conj()).ravel(order='F')
+        states = [unvec_square(_np.dot(process, vec_state),'F') for process in processes]
 
         return states
 

@@ -86,7 +86,7 @@ def unvec_square(vectorized, order):
 
     n = int(_np.sqrt(max(vectorized.shape)))
     if len(vectorized) == n ** 2:
-        return vectorized.reshape(shape=(n, n), order=order)
+        return vectorized.reshape((n, n), order=order)
     else:
         msg = 'The input vector length must be a perfect square, but this input has length %d.' % len(vectorized)
         raise ValueError(msg)
