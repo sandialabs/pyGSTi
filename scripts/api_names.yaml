@@ -3723,7 +3723,6 @@ tools:
     random_hermitian: null
     real_matrix_log: null
     safe_onenorm: null
-    safedot: safe_dot
     safeimag: safe_imag
     safenorm: safe_norm
     safereal: safe_real
