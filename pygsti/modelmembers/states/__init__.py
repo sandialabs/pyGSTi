@@ -32,6 +32,7 @@ from .tpstate import TPState
 from pygsti.baseobjs import statespace as _statespace
 from pygsti.tools import basistools as _bt
 from pygsti.tools import optools as _ot
+from pygsti.tools import sum_of_negative_choi_eigenvalues_gate
 
 # Avoid circular import
 import pygsti.modelmembers as _mm
@@ -286,15 +287,17 @@ def convert(state, to_type, basis, ideal_state=None, flatten_structure=False):
                         return V[:len(S),]
                         
                     phys_directions = calc_physical_subspace(dense_state)
-
+                    cptp_penalty = .5
                     #We use optimization to find the best error generator representation
                     #we only vary physical directions, not independent error generators
+
                     def _objfn(v):
                         L_vec = _np.zeros(len(phys_directions[0]))
                         for coeff, phys_direction in zip(v,phys_directions):
                             L_vec += coeff * phys_direction
                         errorgen.from_vector(L_vec)
-                        return _np.linalg.norm(_spl.expm(errorgen.to_dense()) @ dense_st - dense_state)
+                        proc_matrix = _spl.expm(errorgen.to_dense())
+                        return _np.linalg.norm(proc_matrix @ dense_st - dense_state) + cptp_pentaly * sum_of_negative_choi_eigenvalues_gate(proc_matrix)
                     
                     soln = _spo.minimize(_objfn, _np.zeros(len(phys_directions), 'd'), method="Nelder-Mead", options={},
                                          tol=1e-13)  # , callback=callback)

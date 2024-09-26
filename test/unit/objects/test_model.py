@@ -136,6 +136,16 @@ class GeneralMethodBase(object):
             nParamsPerGate=6,
             nParamsPerSP=6
         )
+    
+    def test_set_all_parameterizations_(self):
+        self.model.set_all_parameterizations("H+S")
+        self._assert_model_params(
+            nOperations=3,
+            nSPVecs=2,
+            nEVecs=0,
+            nParamsPerGate=6,
+            nParamsPerSP=6
+        )
 
     def test_element_accessors(self):
         # XXX what does this test cover and is it useful?  EGN: covers the __getitem__/__setitem__ functions of model
