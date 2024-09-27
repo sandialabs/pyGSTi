@@ -4,12 +4,14 @@ from unittest import mock
 import sys
 import numpy as np
 import scipy
+import scipy.linalg as la
 from pygsti.baseobjs.basis import Basis
 from pygsti.baseobjs.errorgenlabel import LocalElementaryErrorgenLabel as LEEL
 
 import pygsti.tools.basistools as bt
 import pygsti.tools.lindbladtools as lt
 import pygsti.tools.optools as ot
+import pygsti.tools.sdptools as sdps
 from pygsti.modelmembers.operations.lindbladcoefficients import LindbladCoefficientBlock
 from pygsti.modelpacks.legacy import std2Q_XXYYII
 from ..util import BaseCase, needs_cvxpy
@@ -392,13 +394,45 @@ class GateOpsTester(BaseCase):
         val = ot.jtracedist(self.A_TP, self.B_unitary, mx_basis="pp")
         self.assertGreaterEqual(val, 0.5)
 
+    def validate_primal_diamondnorm(self, objective_val, operator, rho0, rho1, places=4):
+        d = rho0.shape[0]
+        assert rho0.shape == (d, d)
+        assert rho1.shape == (d, d)
+        assert operator.shape == (d**2, d**2)
+        left  = np.kron(np.eye(d), la.sqrtm(rho0))
+        right = np.kron(np.eye(d), la.sqrtm(rho1))
+        Jop   = ot._jam.jamiolkowski_iso(operator, 'pp', 'std', normalized=False)
+        arg = left @ Jop @ right
+        s = la.svdvals(arg)
+        expected_val = np.sum(s)
+        self.assertAlmostEqual(objective_val, expected_val, places=places)
+        return
+
     @needs_cvxpy
     def test_diamond_distance(self):
         if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
         val = ot.diamonddist(self.A_TP, self.A_TP, mx_basis="pp")
         self.assertAlmostEqual(val, 0.0)
-        val = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp")
-        self.assertGreaterEqual(val, 0.7)
+        objective_val, modelvars = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp", return_all_vars=True)
+        rho0, rho1 = modelvars[1:]
+        self.validate_primal_diamondnorm(objective_val, self.A_TP - self.B_unitary, rho0, rho1)
+        self.assertGreaterEqual(objective_val, 0.7)
+        return
+
+    @needs_cvxpy
+    def test_diamond_norm_epigraph(self):
+        if SKIP_DIAMONDIST_ON_WIN and sys.platform.startswith('win'): return
+        val0 = ot.diamonddist(self.A_TP, self.B_unitary, mx_basis="pp")
+        delta0 = self.A_TP - self.B_unitary
+        delta1 = bt.change_basis(delta0, 'pp', 'std')
+        import cvxpy as cp
+        obj_expr, constraints = sdps.diamond_norm_canon(delta1, 'std')
+        objective = cp.Minimize(obj_expr)
+        problem = cp.Problem(objective, constraints)
+        val1 = problem.solve(verbose=True, solver='MOSEK')
+        self.assertGreaterEqual(val0, 0.7)
+        self.assertAlmostEqual(val0, val1, places=4)
+        return
 
     def test_entanglement_fidelity(self):
         fidelity_TP_unitary= ot.entanglement_fidelity(self.A_TP, self.B_unitary, is_tp=True, is_unitary=True)
@@ -426,12 +460,6 @@ class GateOpsTester(BaseCase):
         pass
 
     def test_fidelity_upper_bound(self):
-        np.random.seed(0)
-        Q = np.linalg.qr(np.random.randn(4,4) + 1j*np.random.randn(4,4))[0]
-        Q[:, 0] = 0.0  # zero out the first column
-        bad_superoperator = ot.unitary_to_superop(Q)
-        upperBound, _ = ot.fidelity_upper_bound(bad_superoperator)
-        self.assertAlmostEqual(upperBound, 0.75)
         np.random.seed(0)
         Q = np.linalg.qr(np.random.randn(4,4) + 1j*np.random.randn(4,4))[0]
         Q[:, 0] = 0.0  # zero out the first column

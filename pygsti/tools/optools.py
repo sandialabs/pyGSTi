@@ -10,6 +10,11 @@ Utility functions operating on operation matrices
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, List, Tuple
+if TYPE_CHECKING:
+    import cvxpy as cp
+
 import collections as _collections
 import warnings as _warnings
 
@@ -23,6 +28,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jam
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools import sdptools as _sdps
 from pygsti.baseobjs import basis as _pgb
 from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
 from pygsti.baseobjs.label import Label as _Label
@@ -270,7 +276,7 @@ def tracedist(a, b):
     return 0.5 * tracenorm(a - b)
 
 
-def diamonddist(a, b, mx_basis='pp', return_x=False):
+def diamonddist(a, b, mx_basis='pp', return_x=False, return_all_vars=False):
     """
     Returns the approximate diamond norm describing the difference between gate matrices.
 
@@ -303,98 +309,32 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
         Only returned if `return_x = True`.  Encodes the state rho, such that
         `dm = trace( |(J(a)-J(b)).T * W| )`.
     """
+    assert _sdps.CVXPY_ENABLED
+    assert a.shape == b.shape
     mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
 
-    # currently cvxpy is only needed for this function, so don't import until here
-    import cvxpy as _cvxpy
-    old_cvxpy = bool(tuple(map(int, _cvxpy.__version__.split('.'))) < (1, 0))
-    if old_cvxpy:
-        raise RuntimeError('CVXPY 0.4 is no longer supported. Please upgrade to CVXPY 1.0 or higher.')
-
+    c = b - a
     # _jam code below assumes *un-normalized* Jamiol-isomorphism.
-    # It will convert a & b to a "single-block" basis representation
-    # when mx_basis has multiple blocks. So after we call it, we need
-    # to multiply by mx dimension (`smallDim`).
-    JAstd = _jam.fast_jamiolkowski_iso_std(a, mx_basis)
-    JBstd = _jam.fast_jamiolkowski_iso_std(b, mx_basis)
-    dim = JAstd.shape[0]
-    smallDim = int(_np.sqrt(dim))
-    JAstd *= smallDim
-    JBstd *= smallDim
-    assert(dim == JAstd.shape[1] == JBstd.shape[0] == JBstd.shape[1])
-
-    J = JBstd - JAstd
-    prob, vars = _diamond_norm_model(dim, smallDim, J)
+    # It will convert c a "single-block" basis representation
+    # when mx_basis has multiple blocks.
+    J = _jam.fast_jamiolkowski_iso_std(c, mx_basis, normalized=False)
+    prob, vars = _sdps.diamond_norm_model_jamiolkowski(J)
 
     try:
         prob.solve(solver='CVXOPT')
-    except _cvxpy.error.SolverError as e:
+        objective_val = prob.value
+        varvals = [v.value for v in vars]
+    except Exception as e:
         _warnings.warn("CVXPY failed: %s - diamonddist returning -2!" % str(e))
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
-    except:
-        _warnings.warn("CVXOPT failed (unknown err) - diamonddist returning -2!")
-        return (-2, _np.zeros((dim, dim))) if return_x else -2
+        objective_val = -2
+        varvals = [_np.zeros_like(J), None, None]
 
-    if return_x:
-        return prob.value, vars[0].value
+    if return_all_vars:
+        return objective_val, varvals
+    elif return_x:
+        return objective_val, varvals[0]
     else:
-        return prob.value
-
-
-def _diamond_norm_model(dim, smallDim, J):
-    # return a model for computing the diamond norm.
-    #
-    # Uses the primal SDP from arXiv:1207.5726v2, Sec 3.2
-    #
-    # Maximize 1/2 ( < J(phi), X > + < J(phi).dag, X.dag > )
-    # Subject to  [[ I otimes rho0,       X        ],
-    #              [      X.dag   ,   I otimes rho1]] >> 0
-    #              rho0, rho1 are density matrices
-    #              X is linear operator
-
-    import cvxpy as _cp
-
-    rho0 = _cp.Variable((smallDim, smallDim), name='rho0', hermitian=True)
-    rho1 = _cp.Variable((smallDim, smallDim), name='rho1', hermitian=True)
-    X = _cp.Variable((dim, dim), name='X', complex=True)
-    Y = _cp.real(X)
-    Z = _cp.imag(X)
-
-    K = J.real
-    L = J.imag
-    if hasattr(_cp, 'scalar_product'):
-        objective_expr = _cp.scalar_product(K, Y) + _cp.scalar_product(L, Z)
-    else:
-        Kf = K.flatten(order='F')
-        Yf = Y.flatten(order='F')
-        Lf = L.flatten(order='F')
-        Zf = Z.flatten(order='F')
-        objective_expr = Kf @ Yf + Lf @ Zf
-
-    objective = _cp.Maximize(objective_expr)
-
-    ident = _np.identity(smallDim, 'd')
-    kr_tau0 = _cp.kron(ident, _cp.imag(rho0))
-    kr_tau1 = _cp.kron(ident, _cp.imag(rho1))
-    kr_sig0 = _cp.kron(ident, _cp.real(rho0))
-    kr_sig1 = _cp.kron(ident, _cp.real(rho1))
-
-    block_11 = _cp.bmat([[kr_sig0 ,    Y   ],
-                         [   Y.T  , kr_sig1]])
-    block_21 = _cp.bmat([[kr_tau0 ,    Z   ],
-                         [   -Z.T , kr_tau1]])
-    block_12 = block_21.T
-    mat_joint = _cp.bmat([[block_11, block_12],
-                          [block_21, block_11]])
-    constraints = [
-        mat_joint >> 0,
-        rho0 >> 0,
-        rho1 >> 0,
-        _cp.trace(rho0) == 1.,
-        _cp.trace(rho1) == 1.
-    ]
-    prob = _cp.Problem(objective, constraints)
-    return prob, [X, rho0, rho1]
+        return objective_val
 
 
 def jtracedist(a, b, mx_basis='pp'):  # Jamiolkowski trace distance:  Tr(|J(a)-J(b)|)
