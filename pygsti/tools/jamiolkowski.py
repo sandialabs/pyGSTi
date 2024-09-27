@@ -125,20 +125,19 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp', normali
     M = len(BVec)  # can be < N if basis has multiple block dims
     assert(M == N), 'Expected {}, got {}'.format(M, N)
 
-    opMxInStdBasis_vec = opMxInStdBasis.reshape((N*N, 1))
-    # ^ An explicit column vector.
-    choiMx_cols = []
+    opMxInStdBasis_vec = opMxInStdBasis.ravel()
+    choiMx_rows = []
     for i in range(M):
         rows = []
         for j in range(M):
             BiBj = _np.kron(BVec[i], _np.conjugate(BVec[j]))
             BiBj /= _np.linalg.norm(BiBj) ** 2
             rows.append(BiBj.conj().ravel())
-        choiMx_cols.append( _np.array(rows) @ opMxInStdBasis_vec )
+        choiMx_rows.append( _np.array(rows) @ opMxInStdBasis_vec )
     if is_cvxpy_expression:
-        choiMx = cp.hstack(choiMx_cols)
+        choiMx = cp.vstack(choiMx_rows)
     else:
-        choiMx = _np.hstack(choiMx_cols)
+        choiMx = _np.vstack(choiMx_rows)
     # This construction results in a Jmx with trace == dim(H) = sqrt(operation_mx.shape[0])
     #  (dimension of density matrix) but we'd like a Jmx with trace == 1, so normalize:
     if normalized:
@@ -302,7 +301,8 @@ def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis, normalized=True):
     assert(N * N == N2)  # make sure N2 is a perfect square
     opMxInStdBasis = choi_mx.reshape((N, N, N, N))
     if normalized:
-        opMxInStdBasis *= N
+        opMxInStdBasis = N * opMxInStdBasis
+        # ^ Don't do this in-place.
     opMxInStdBasis = _np.swapaxes(opMxInStdBasis, 1, 2).ravel()
     opMxInStdBasis = opMxInStdBasis.reshape((N2, N2))
     op_mx_basis = _bt.create_basis_for_matrix(opMxInStdBasis, op_mx_basis)
