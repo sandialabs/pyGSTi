@@ -636,7 +636,6 @@ class Circuit(object):
         if self._static:
             return self._labels
         else:
-            #return tuple([to_label(layer_lbl) for layer_lbl in self._labels])
             return tuple([layer_lbl if isinstance(layer_lbl, _Label) 
                           else _Label(layer_lbl) for layer_lbl in self._labels])
     @property

@@ -195,7 +195,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                                    self._processor_grid, self._pblk_sizes)
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
-                      derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None):
+                      derivative_dimensions=None, verbosity=0, layout_creation_circuit_cache=None,
+                      circuit_partition_cost_functions=('size', 'propagations'),
+                      load_balancing_parameters=(1.15,.1)):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
@@ -226,10 +228,22 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
             Determines how much output to send to stdout.  0 means no output, higher
             integers mean more output.
         
-        A precomputed dictionary serving as a cache for completed
-            circuits. I.e. circuits with prep labels and POVM labels appended.
-            Along with other useful pre-computed circuit structures used in layout
-            creation.
+        layout_creation_circuit_cache : dict, optional (default None)
+            A precomputed dictionary serving as a cache for completed circuits. I.e. circuits 
+            with prep labels and POVM labels appended. Along with other useful pre-computed 
+            circuit structures used in layout creation.
+
+        circuit_partition_cost_functions : tuple of str, optional (default ('size', 'propagations'))
+            A tuple of strings denoting cost function to use in each of the two stages of the algorithm
+            for determining the partitions of the complete circuit set amongst atoms.
+            Allowed options are 'size', which corresponds to balancing the number of circuits, 
+            and 'propagations', which corresponds to balancing the number of state propagations.
+
+        load_balancing_parameters : tuple of floats, optional (default (1.2, .1))
+            A tuple of floats used as load balancing parameters when splitting a layout across atoms,
+            as in the multi-processor setting when using MPI. These parameters correspond to the `imbalance_threshold`
+            and `minimum_improvement_threshold` parameters described in the method `find_splitting_new`
+            of the `PrefixTable` class.
 
         Returns
         -------
@@ -272,8 +286,9 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
         layout = _MapCOPALayout(circuits, self.model, dataset, self._max_cache_size, natoms, na, npp,
-                                param_dimensions, param_blk_sizes, resource_alloc, verbosity, 
-                                layout_creation_circuit_cache= layout_creation_circuit_cache)
+                                param_dimensions, param_blk_sizes, resource_alloc,circuit_partition_cost_functions,
+                                verbosity, layout_creation_circuit_cache= layout_creation_circuit_cache,
+                                load_balancing_parameters=load_balancing_parameters)
 
         if mem_limit is not None:
             loc_nparams1 = num_params / npp[0] if len(npp) > 0 else 0
