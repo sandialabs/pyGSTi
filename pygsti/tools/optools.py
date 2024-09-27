@@ -10,6 +10,11 @@ Utility functions operating on operation matrices
 # http://www.apache.org/licenses/LICENSE-2.0 or in the LICENSE file in the root pyGSTi directory.
 #***************************************************************************************************
 
+from __future__ import annotations
+from typing import TYPE_CHECKING, List, Tuple
+if TYPE_CHECKING:
+    import cvxpy as cp
+
 import collections as _collections
 import warnings as _warnings
 
@@ -23,6 +28,7 @@ from pygsti.tools import basistools as _bt
 from pygsti.tools import jamiolkowski as _jam
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
+from pygsti.tools import sdptools as _sdps
 from pygsti.baseobjs import basis as _pgb
 from pygsti.baseobjs.basis import Basis as _Basis, ExplicitBasis as _ExplicitBasis, DirectSumBasis as _DirectSumBasis
 from pygsti.baseobjs.label import Label as _Label
@@ -270,7 +276,7 @@ def tracedist(a, b):
     return 0.5 * tracenorm(a - b)
 
 
-def diamonddist(a, b, mx_basis='pp', return_x=False):
+def diamonddist(a, b, mx_basis='pp', return_x=False, return_all_vars=False):
     """
     Returns the approximate diamond norm describing the difference between gate matrices.
 
@@ -303,25 +309,17 @@ def diamonddist(a, b, mx_basis='pp', return_x=False):
         Only returned if `return_x = True`.  Encodes the state rho, such that
         `dm = trace( |(J(a)-J(b)).T * W| )`.
     """
-    mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
-
-    # currently cvxpy is only needed for this function, so don't import until here
+    assert _sdps.CVXPY_ENABLED
     import cvxpy as _cp
 
+    assert a.shape == b.shape
+    mx_basis = _bt.create_basis_for_matrix(a, mx_basis)
+    c = b - a
     # _jam code below assumes *un-normalized* Jamiol-isomorphism.
-    # It will convert a & b to a "single-block" basis representation
-    # when mx_basis has multiple blocks. So after we call it, we need
-    # to multiply by mx dimension (`smallDim`).
-    JAstd = _jam.fast_jamiolkowski_iso_std(a, mx_basis)
-    JBstd = _jam.fast_jamiolkowski_iso_std(b, mx_basis)
-    dim = JAstd.shape[0]
-    smallDim = int(_np.sqrt(dim))
-    JAstd *= smallDim
-    JBstd *= smallDim
-    assert(dim == JAstd.shape[1] == JBstd.shape[0] == JBstd.shape[1])
-
-    J = JBstd - JAstd
-    prob, vars = _diamond_norm_model(dim, smallDim, J)
+    # It will convert c a "single-block" basis representation
+    # when mx_basis has multiple blocks.
+    J = _jam.fast_jamiolkowski_iso_std(c, mx_basis, normalized=False)
+    prob, vars = _sdps.diamond_norm_model_jamiolkowski(J)
 
     objective_val = -2
     varvals = [_np.zeros_like(J), None, None]

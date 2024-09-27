@@ -64,9 +64,10 @@ from pygsti.baseobjs.basis import Basis as _Basis
 #  J(Phi) = sum_(0<i,j<n) Phi(Eij) otimes Eij                                                                                                                   # noqa
 #  where Eij is the matrix unit with a single element in the (i,j)-th position, i.e. Eij == |i><j|                                                              # noqa
 
-def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp'):
+def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp', normalized=True):
     """
-    Given a operation matrix, return the corresponding Choi matrix that is normalized to have trace == 1.
+    Return a Choi matrix (in the choi_mx_basis) for operation_mx, when operation_mx
+    is interpreted in the op_mx_basis. 
 
     Parameters
     ----------
@@ -83,12 +84,23 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp'):
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
 
+    normalized : bool
+        If normalized=True, then this function maps trace-preserving 
+        operation matrices to trace-1 Choi matrices.
+
     Returns
     -------
     numpy array
-        the Choi matrix, normalized to have trace == 1, in the desired basis.
+        the Choi matrix, in the desired basis.
     """
-    operation_mx = _np.asarray(operation_mx)
+    try:
+        import cvxpy as cp
+        is_cvxpy_expression = isinstance(operation_mx, cp.Expression)
+    except ImportError:
+        is_cvxpy_expression = False
+    
+    if not is_cvxpy_expression:
+        operation_mx = _np.asarray(operation_mx)
     op_mx_basis = _bt.create_basis_for_matrix(operation_mx, op_mx_basis)
     opMxInStdBasis = _bt.change_basis(operation_mx, op_mx_basis, op_mx_basis.create_equivalent('std'))
 
@@ -113,25 +125,33 @@ def jamiolkowski_iso(operation_mx, op_mx_basis='pp', choi_mx_basis='pp'):
     M = len(BVec)  # can be < N if basis has multiple block dims
     assert(M == N), 'Expected {}, got {}'.format(M, N)
 
-    choiMx = _np.empty((N, N), 'complex')
+    opMxInStdBasis_vec = opMxInStdBasis.reshape((N*N, 1))
+    # ^ An explicit column vector.
+    choiMx_cols = []
     for i in range(M):
+        rows = []
         for j in range(M):
             BiBj = _np.kron(BVec[i], _np.conjugate(BVec[j]))
-            num = _np.vdot(BiBj, opMxInStdBasis)
-            den = _np.linalg.norm(BiBj) ** 2
-            choiMx[i, j] = num / den 
-
+            BiBj /= _np.linalg.norm(BiBj) ** 2
+            rows.append(BiBj.conj().ravel())
+        choiMx_cols.append( _np.array(rows) @ opMxInStdBasis_vec )
+    if is_cvxpy_expression:
+        choiMx = cp.hstack(choiMx_cols)
+    else:
+        choiMx = _np.hstack(choiMx_cols)
     # This construction results in a Jmx with trace == dim(H) = sqrt(operation_mx.shape[0])
     #  (dimension of density matrix) but we'd like a Jmx with trace == 1, so normalize:
-    choiMx_normalized = choiMx / dmDim
-    return choiMx_normalized
+    if normalized:
+        choiMx /= dmDim
+    return choiMx
 
 # GStd = sum_ij Jij (BSi x BSj^*)
 
 
-def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp'):
+def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp', normalized=True):
     """
-    Given a choi matrix, return the corresponding operation matrix.
+    Given a choi matrix (interpreted in choi_mx_basis), return the corresponding
+    operation matrix (in op_mx_basis).
 
     This function performs the inverse of :func:`jamiolkowski_iso`.
 
@@ -150,6 +170,10 @@ def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp'):
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
 
+    normalized : bool
+        If normalized=True, then we assume choi_mx was computed with the 
+        convention that trace-preserving maps have trace-1 choi matrices.
+
     Returns
     -------
     numpy array
@@ -167,7 +191,10 @@ def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp'):
     assert(len(BVec) == N)  # make sure the number of basis matrices matches the dim of the choi matrix given
 
     # Invert normalization
-    choiMx_unnorm = choi_mx * dmDim
+    if normalized:
+        choiMx_unnorm = choi_mx * dmDim
+    else:
+        choiMx_unnorm = choi_mx
 
     opMxInStdBasis = _np.zeros((N, N), 'complex')  # in matrix unit basis of entire density matrix
     for i in range(N):
@@ -187,9 +214,10 @@ def jamiolkowski_iso_inv(choi_mx, choi_mx_basis='pp', op_mx_basis='pp'):
     return _bt.change_basis(opMxInStdBasis, op_mx_basis.create_equivalent('std'), op_mx_basis)
 
 
-def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis):
+def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis, normalized=True):
     """
-    The corresponding Choi matrix in the standard basis that is normalized to have trace == 1.
+    Returns the standard-basis representation of the Choi matrix for operation_mx,
+    where operation_mx is interpreted in op_mx_basis.
 
     This routine *only* computes the case of the Choi matrix being in the
     standard (matrix unit) basis, but does so more quickly than
@@ -205,6 +233,10 @@ def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis):
         The source and destination basis, respectively.  Allowed
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
+
+    normalized : bool
+        If normalized=True, then this function maps trace-preserving 
+        operation matrices to trace-1 Choi matrices. 
 
     Returns
     -------
@@ -232,13 +264,15 @@ def fast_jamiolkowski_iso_std(operation_mx, op_mx_basis):
 
     # This construction results in a Jmx with trace == dim(H) = sqrt(gateMxInPauliBasis.shape[0])
     #  but we'd like a Jmx with trace == 1, so normalize:
-    Jmx_norm = Jmx / N
-    return Jmx_norm
+    if normalized:
+        Jmx /= N
+    return Jmx
 
 
-def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
+def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis, normalized=True):
     """
-    Given a choi matrix in the standard basis, return the corresponding operation matrix.
+    Given a choi matrix in the standard basis, return the corresponding
+    operation matrix (in op_mx_basis).
 
     This function performs the inverse of :func:`fast_jamiolkowski_iso_std`.
 
@@ -253,6 +287,10 @@ def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
         values are Matrix-unit (std), Gell-Mann (gm), Pauli-product (pp),
         and Qutrit (qt) (or a custom basis object).
 
+    normalized : bool
+        If normalized=True, then we assume choi_mx was computed with the 
+        convention that trace-preserving maps have trace-1 choi matrices.
+
     Returns
     -------
     numpy array
@@ -262,7 +300,9 @@ def fast_jamiolkowski_iso_std_inv(choi_mx, op_mx_basis):
     #Shuffle indices to go from process matrix to Jamiolkowski matrix (they vectorize differently)
     N2 = choi_mx.shape[0]; N = int(_np.sqrt(N2))
     assert(N * N == N2)  # make sure N2 is a perfect square
-    opMxInStdBasis = choi_mx.reshape((N, N, N, N)) * N
+    opMxInStdBasis = choi_mx.reshape((N, N, N, N))
+    if normalized:
+        opMxInStdBasis *= N
     opMxInStdBasis = _np.swapaxes(opMxInStdBasis, 1, 2).ravel()
     opMxInStdBasis = opMxInStdBasis.reshape((N2, N2))
     op_mx_basis = _bt.create_basis_for_matrix(opMxInStdBasis, op_mx_basis)
