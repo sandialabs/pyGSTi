@@ -16,7 +16,6 @@ import itertools as _itertools
 import uuid as _uuid
 import warnings as _warnings
 import collections as _collections
-
 import numpy as _np
 
 from pygsti.baseobjs import statespace as _statespace
@@ -27,6 +26,7 @@ from pygsti.evotypes import Evotype as _Evotype
 from pygsti.forwardsims import forwardsim as _fwdsim
 from pygsti.modelmembers import modelmember as _gm
 from pygsti.modelmembers import operations as _op
+from pygsti.modelmembers.povms import POVM as _POVM, POVMEffect as _POVMEffect
 from pygsti.baseobjs.basis import Basis as _Basis, TensorProdBasis as _TensorProdBasis
 from pygsti.baseobjs.label import Label as _Label
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
@@ -1223,25 +1223,9 @@ class OpModel(Model):
         -------
         None
         """
-    
-        self._paramvec[index] = val
-        if self._param_interposer is not None or self._index_mm_map is None:
-            #fall back to standard from_vector call.
-            self.from_vector(self._paramvec)
-        else:
-            #loop through the modelmembers associated with this index and update their parameters.
-            for obj in self._index_mm_map[index]:
-                obj.from_vector(self._paramvec[obj.gpindices].copy(), close, dirty_value=False)
-
-            # Call from_vector on elements of the cache
-            if self._call_fromvector_on_cache:
-                for opcache in self._opcaches.values():
-                    for obj in opcache.values():
-                        opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
-                        if index in opcache_elem_gpindices:
-                            obj.from_vector(self._paramvec[opcache_elem_gpindices], close, dirty_value=False)
-
-            if OpModel._pcheck: self._check_paramvec()
+        
+        self.set_parameter_values([index], [val], close)
+        
         
 
     def set_parameter_values(self, indices, values, close=False):
@@ -1279,6 +1263,20 @@ class OpModel(Model):
             for obj in unique_mms.values():
                 obj.from_vector(self._paramvec[obj.gpindices].copy(), close, dirty_value=False)
             
+            #go through the model members which have been updated and identify whether any of them have children
+            #which may be present in the _opcaches which have already been updated by the parents. I think the
+            #conditions under which this should be safe are: a) the layer rules are ExplicitLayerRules,
+            #b) The parent is a POVM (it should be safe to assume that POVMs update their children, 
+            #and c) the effect is a child of that POVM.
+            
+            if isinstance(self._layer_rules, _ExplicitLayerRules):
+                updated_children = []
+                for obj in unique_mms.values():
+                    if isinstance(obj, _POVM):
+                        updated_children.extend(obj.values())
+            else:
+                updated_children = None
+
             # Call from_vector on elements of the cache
             if self._call_fromvector_on_cache:
                 #print(f'{self._opcaches=}')
@@ -1286,6 +1284,9 @@ class OpModel(Model):
                     for obj in opcache.values():
                         opcache_elem_gpindices = _slct.indices(obj.gpindices) if isinstance(obj.gpindices, slice) else obj.gpindices
                         if any([idx in opcache_elem_gpindices for idx in indices]):
+                            #check whether we have already updated this object.
+                            if updated_children is not None and any([child is obj for child in updated_children]):
+                                continue
                             obj.from_vector(self._paramvec[opcache_elem_gpindices], close, dirty_value=False)
 
             if OpModel._pcheck: self._check_paramvec()
@@ -2899,3 +2900,6 @@ def _default_param_bounds(num_params):
 def _param_bounds_are_nontrivial(param_bounds):
     """Checks whether a parameter-bounds array holds any actual bounds, or if all are just +-inf """
     return _np.any(param_bounds[:, 0] != -_np.inf) or _np.any(param_bounds[:, 1] != _np.inf)
+
+#stick this on the bottom to resolve a circular import issue:
+from pygsti.models.explicitmodel import ExplicitLayerRules as _ExplicitLayerRules
