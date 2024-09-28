@@ -1209,8 +1209,9 @@ class OpModel(Model):
 
         Parameters
         ----------
-        index : int
+        index : int or str
             Index of the parameter value in the model's parameter vector to update.
+            If a string this instead indexes by the corresponding parameter label.
         
         val : float
             Updated parameter value.
@@ -1235,8 +1236,12 @@ class OpModel(Model):
 
         Parameters
         ----------
-        indices : list of ints
+        indices : list of ints or strs
             Indices of the parameter values in the model's parameter vector to update.
+            If strings this instead indexes by the corresponding parameter label.
+            Mixing integer indices and parameter label strings is not supported.
+            Note: In the event that the parameter labels vector for this model contains
+            duplicates the update may only apply to the first instance.
         
         values : list or tuple of floats
             Updated parameter values.
@@ -1249,6 +1254,10 @@ class OpModel(Model):
         -------
         None
         """
+
+        if isinstance(indices[0], str):
+            #parse the strings into integer indices.
+            indices = [self.parameter_labels.index(lbl) for lbl in indices]
                         
         for idx, val in zip(indices, values):
             self._paramvec[idx] = val

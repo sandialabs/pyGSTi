@@ -220,17 +220,23 @@ class PrefixTable(object):
                                                                             return_levels_and_weights=True)
 
             if len(new_roots) > num_sub_tables: #iteratively row the maximum subtree size until we either hit or are less than the target.
+                last_seen_sub_max_sub_table_size_val = None
                 feasible_range = [initial_max_sub_table_size+1, max_max_sub_table_size-1]
                 #bisect on max_sub_table_size until we find the smallest value for which len(new_roots) <= num_sub_tables
                 while feasible_range[0] < feasible_range[1]:
                     current_max_sub_table_size = (feasible_range[0] + feasible_range[1])//2
                     cut_edges, new_roots = tree_partition_kundu_misra(circuit_tree_nx, max_weight=current_max_sub_table_size,
                                                                       weight_key='cost' if initial_cost_metric=='size' else 'prop_cost',
-                                                                      test_leaves=False, precomp_levels=tree_levels, precomp_weights=subtree_weights)
+                                                                      test_leaves=False, precomp_levels=tree_levels, precomp_weights=subtree_weights)                    
                     if len(new_roots) > num_sub_tables:
                         feasible_range[0] = current_max_sub_table_size+1
                     else:
+                        last_seen_sub_max_sub_table_size_val = (cut_edges, new_roots) #In the multiple root setting I am seeing some strange
+                        #non-monotonicity, so add this as a fall back in case the final result anomalously has len(roots)>num_sub_tables
                         feasible_range[1] = current_max_sub_table_size
+                if len(new_roots)>num_sub_tables and last_seen_sub_max_sub_table_size_val is not None: #fallback
+                    cut_edges, new_roots = last_seen_sub_max_sub_table_size_val
+
                 #only apply the cuts now that we have found our starting point.
                 partitioned_tree = _copy_networkx_graph(circuit_tree_nx)
                  #update the propagation cost attribute of the promoted nodes.
@@ -268,10 +274,7 @@ class PrefixTable(object):
             for edge in cut_edges:
                     partitioned_tree.nodes[edge[1]]['prop_cost'] += partitioned_tree.edges[edge[0], edge[1]]['promotion_cost']
             partitioned_tree.remove_edges_from(cut_edges)
-
-        #the kundu misra algorithm only takes as input a maximum subtree size, but doesn't guarantee a particular number of partitions.
-        #if we haven't gotten the target value do some iterative refinement.
-
+        
         #Collect the original circuit indices for each of the parititioned subtrees.
         orig_index_groups = []
         for root in new_roots:
@@ -1171,6 +1174,14 @@ class Tree:
                 G.add_edge(parent_id, node_id, promotion_cost=edge_cost)
             for child in node.children:
                 stack.append((node, child))
+
+        #if there are multiple roots then add an additional virtual root node as the
+        #parent for all of these roots to enable partitioning with later algorithms.
+        if len(self.roots)>1:
+            G.add_node('virtual_root', cost = 0, orig_indices=(), label = (), prop_cost=0)
+            for root in self.roots:
+                G.add_edge('virtual_root', id(root), promotion_cost=0)
+
         return G
 
 #--------------- Tree Partitioning Algorithm Helpers (+NetworkX Utilities)-----------------#
