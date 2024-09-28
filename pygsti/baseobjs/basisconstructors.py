@@ -862,12 +862,8 @@ def pp_matrices(matrix_dim, max_weight=None, normalize=True):
 
     nQubits = _np.log2(matrix_dim)
     if not _is_integer(nQubits):
-        nQutrits = _np.log(matrix_dim) / _np.log(3)
-        if _is_integer(nQutrits):
-            return gm_matrices(matrix_dim)
-        else:
-            raise ValueError(
-                "Dimension for Pauli tensor product matrices must be an integer *power of 2* (not %d)" % matrix_dim)
+        raise ValueError(
+            "Dimension for Pauli tensor product matrices must be an integer *power of 2* (not %d)" % matrix_dim)
     nQubits = int(round(nQubits))
 
     if nQubits == 0:  # special case: return single 1x1 identity mx
