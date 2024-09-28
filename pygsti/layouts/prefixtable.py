@@ -89,23 +89,6 @@ class PrefixTable(object):
         table_contents, curCacheSize = _build_table(sorted_circuits_to_evaluate, cache_hits,
                                                     max_cache_size, self.circuit_reps, circuit_lens,
                                                     orig_indices)
-        
-        #circuit_tree = _build_prefix_tree(sorted_circuits_to_evaluate, self.circuit_reps, orig_indices)
-        #print(f'{circuit_tree.count_nodes()=}')
-        #print(f'{circuit_tree.calculate_cost()=}')
-        #circuit_tree.roots[0].children[0].promote_to_root()
-        #print(f'{circuit_tree.count_nodes()=}')
-        #print(f'{circuit_tree.calculate_cost()=}')
-
-        #circuit_tree.print_tree()
-        #circuit_tree_nx = circuit_tree.to_networkx_graph()
-        #print(circuit_tree_nx)
-        #_draw_graph(circuit_tree_nx, figure_size=(15,15))
-        #print(f'{len(sorted_circuits_to_evaluate)=}')
-        #print(f'max size: {ceil(len(sorted_circuits_to_evaluate)/8)}')
-        #partitioned_tree, cut_edges, new_roots = tree_partition_kundu_misra(circuit_tree_nx, max_weight = ceil(len(self.sorted_circuits_to_evaluate)/8))
-
-        #_draw_graph(partitioned_tree, figure_size=(15,15))
 
         #FUTURE: could perform a second pass, and if there is
         # some threshold number of elements which share the
@@ -228,42 +211,49 @@ class PrefixTable(object):
             
         #construct a tree structure describing the prefix strucure of the circuit set.
         circuit_tree = _build_prefix_tree(self.sorted_circuits_to_evaluate, self.circuit_reps, self.orig_indices)
-        #print(f'{circuit_tree.count_nodes()=}')
-        #print(f'{circuit_tree.calculate_cost()=}')
-        #circuit_tree.roots[0].children[0].promote_to_root()
-        #print(f'{circuit_tree.count_nodes()=}')
-        #print(f'{circuit_tree.calculate_cost()=}')
-
-        #circuit_tree.print_tree()
         circuit_tree_nx = circuit_tree.to_networkx_graph()
-        #print(circuit_tree_nx)
-        #_draw_graph(circuit_tree_nx, figure_size=(15,15))
-        #print(f'{len(self.sorted_circuits_to_evaluate)=}')
-        #print(f'max size: {ceil(len(self.sorted_circuits_to_evaluate)/8)}')
         
         if num_sub_tables is not None:
+            max_max_sub_table_size = len(self.sorted_circuits_to_evaluate)
             initial_max_sub_table_size = ceil(len(self.sorted_circuits_to_evaluate)/num_sub_tables)
-            partitioned_tree, cut_edges, new_roots = tree_partition_kundu_misra(circuit_tree_nx, max_weight = initial_max_sub_table_size,
-                                                                                weight_key= 'cost' if initial_cost_metric=='size' else 'prop_cost')
-            
-            #print('Pre-rebalancing Tree')
-            #_draw_graph(partitioned_tree, figure_size=(15,15))
+            cut_edges, new_roots, tree_levels, subtree_weights = tree_partition_kundu_misra(circuit_tree_nx, max_weight=initial_max_sub_table_size,
+                                                                            weight_key= 'cost' if initial_cost_metric=='size' else 'prop_cost',
+                                                                            return_levels_and_weights=True)
 
             if len(new_roots) > num_sub_tables: #iteratively row the maximum subtree size until we either hit or are less than the target.
-                current_max_sub_table_size = initial_max_sub_table_size +1
-                while len(new_roots) > num_sub_tables:
-                    partitioned_tree, cut_edges, new_roots = tree_partition_kundu_misra(circuit_tree_nx, max_weight = current_max_sub_table_size,
-                                                                                        weight_key='cost' if initial_cost_metric=='size' else 'prop_cost')
-                    current_max_sub_table_size+=1
+                feasible_range = [initial_max_sub_table_size+1, max_max_sub_table_size-1]
+                #bisect on max_sub_table_size until we find the smallest value for which len(new_roots) <= num_sub_tables
+                while feasible_range[0] < feasible_range[1]:
+                    current_max_sub_table_size = (feasible_range[0] + feasible_range[1])//2
+                    cut_edges, new_roots = tree_partition_kundu_misra(circuit_tree_nx, max_weight=current_max_sub_table_size,
+                                                                      weight_key='cost' if initial_cost_metric=='size' else 'prop_cost',
+                                                                      test_leaves=False, precomp_levels=tree_levels, precomp_weights=subtree_weights)
+                    if len(new_roots) > num_sub_tables:
+                        feasible_range[0] = current_max_sub_table_size+1
+                    else:
+                        feasible_range[1] = current_max_sub_table_size
+                #only apply the cuts now that we have found our starting point.
+                partitioned_tree = _copy_networkx_graph(circuit_tree_nx)
+                 #update the propagation cost attribute of the promoted nodes.
+                #only do this at this point to reduce the need for copying
+                for edge in cut_edges:
+                    partitioned_tree.nodes[edge[1]]['prop_cost'] += partitioned_tree.edges[edge[0], edge[1]]['promotion_cost']
+                partitioned_tree.remove_edges_from(cut_edges)
+               
             #if we have hit the number of partitions, great, we're done!
             if len(new_roots) == num_sub_tables:
+                #only apply the cuts now that we have found our starting point.
+                partitioned_tree = _copy_networkx_graph(circuit_tree_nx)
+                 #update the propagation cost attribute of the promoted nodes.
+                #only do this at this point to reduce the need for copying
+                for edge in cut_edges:
+                    partitioned_tree.nodes[edge[1]]['prop_cost'] += partitioned_tree.edges[edge[0], edge[1]]['promotion_cost']
+                partitioned_tree.remove_edges_from(cut_edges)
                 pass
             #if we have fewer subtables then we need to look whether or not we should strictly
             #hit the number of partitions, or whether we allow for fewer than the requested number to be returned.
             if len(new_roots) < num_sub_tables:
                 #Perform bisection operations on the heaviest subtrees until we hit the target number.
-                #print('Pre-rebalancing Tree')
-                #_draw_graph(partitioned_tree, figure_size=(15,15))
                 while len(new_roots) < num_sub_tables:
                     partitioned_tree, new_roots, cut_edges = _bisection_pass(partitioned_tree, cut_edges, new_roots, num_sub_tables,
                                                                              weight_key='cost' if rebalancing_cost_metric=='size' else 'prop_cost')
@@ -273,14 +263,15 @@ class PrefixTable(object):
                                                                            imbalance_threshold= imbalance_threshold, 
                                                                            minimum_improvement_threshold= minimum_improvement_threshold)
         else:
-            partitioned_tree, cut_edges, new_roots = tree_partition_kundu_misra(circuit_tree_nx, max_weight = max_sub_table_size,
-                                                                                 weight_key='cost' if initial_cost_metric=='size' else 'prop_cost')
-
+            cut_edges, new_roots = tree_partition_kundu_misra(circuit_tree_nx, max_weight = max_sub_table_size,
+                                                              weight_key='cost' if initial_cost_metric=='size' else 'prop_cost')
+            partitioned_tree = _copy_networkx_graph(circuit_tree_nx)
+            for edge in cut_edges:
+                    partitioned_tree.nodes[edge[1]]['prop_cost'] += partitioned_tree.edges[edge[0], edge[1]]['promotion_cost']
+            partitioned_tree.remove_edges_from(cut_edges)
 
         #the kundu misra algorithm only takes as input a maximum subtree size, but doesn't guarantee a particular number of partitions.
         #if we haven't gotten the target value do some iterative refinement.
-        #print('Rebalanced Tree')
-        #_draw_graph(partitioned_tree, figure_size=(15,15))
 
         #Collect the original circuit indices for each of the parititioned subtrees.
         orig_index_groups = []
@@ -295,7 +286,6 @@ class PrefixTable(object):
 
         return orig_index_groups
         
-
 
     def find_splitting(self, max_sub_table_size=None, num_sub_tables=None, cost_metric="size", verbosity=0):
         """
@@ -552,7 +542,7 @@ class PrefixTableJacobian(object):
         #Sort the operation sequences "alphabetically", so that it's trivial to find common prefixes        
         circuits_to_sort_by = [cir.circuit_without_povm if isinstance(cir, _SeparatePOVMCircuit) else cir
                                for cir in circuits_to_evaluate]  # always Circuits - not SeparatePOVMCircuits
-        sorted_circuits_to_sort_by = sorted(list(enumerate(circuits_to_sort_by)), key=lambda x: x[1])
+        sorted_circuits_to_sort_by = sorted(list(enumerate(circuits_to_sort_by)), key=lambda x: len(x[1]))
         sorted_circuits_to_evaluate = [(i, circuits_to_evaluate[i]) for i, _ in sorted_circuits_to_sort_by]
         #create a map from sorted_circuits_to_sort_by by can be used to quickly sort each of the parameter
         #dependency lists.
@@ -721,16 +711,13 @@ def _build_table(sorted_circuits_to_evaluate, cache_hits, max_cache_size, circui
     for j, (i, _) in zip(orig_indices,enumerate(sorted_circuits_to_evaluate)):
         
         circuit_rep = circuit_reps[i] 
-        #print(circuit_rep)
         L = circuit_lengths[i]
-        #print(L)
 
         #find longest existing prefix for circuit by working backwards
         # and finding the first string that *is* a prefix of this string
         # (this will necessarily be the longest prefix, given the sorting)
         for i_in_cache in range(curCacheSize - 1, -1, -1):  # from curCacheSize-1 -> 0
             candidate = circuit_reps[cacheIndices[i_in_cache]]
-            #print(candidate)
             Lc = circuit_lengths[cacheIndices[i_in_cache]]
             if L >= Lc > 0 and circuit_rep[0:Lc] == candidate:  # ">=" allows for duplicates
                 iStart = i_in_cache  # an index into the *cache*, not into circuits_to_evaluate
@@ -749,65 +736,6 @@ def _build_table(sorted_circuits_to_evaluate, cache_hits, max_cache_size, circui
 
         #Add instruction for computing this circuit
         table_contents[i] = (j, iStart, remaining, iCache)
-
-    #perform a secondary pass which looks for circuits without an istart
-    #value but for which there exists another shorter circuit (whose results may or may not
-    #already be cached) which could be used as a prefix.
-    #prepent the original index into table_context for future tracking.
-    #orphaned_prefix_lists = [list((i,) + tup) for i, tup in enumerate(table_contents) if tup[1] is None]
-    #sorted_orphaned_prefix_lists = sorted(orphaned_prefix_lists, key= lambda x: x[3], reverse=True)
-#
-    ##for each orphaned tuple search through the remaining orphans to see if one of them is a suitable prefix.
-    ##This relatively low-cost heuristic of looking only through the orphans is based on observations in the
-    ##context of GST-type circuits where it looked like most of the good prefixing candidates for the longer 
-    ##orphans were found among other orphans as shorter repetitions of the same germ. In the future we could
-    ##refine this futher (at some additional cost) by also searching through the rest of the circuits for a
-    ##suitable prefix.
-    #for i, prefix_list in enumerate(sorted_orphaned_prefix_lists):
-    #    ckt_rep = prefix_list[3]
-    #    L = len(ckt_rep)
-    #    for candidate in sorted_orphaned_prefix_lists[i+1:]:
-    #        Lc = len(candidate[3])
-    #        if Lc < L and circuit_rep[0:Lc] == candidate[3]:
-    #            #check whether this candidate is already in the cache
-    #            #if so then update this prefix tuple in table_contents
-    #            #to point to it.
-    #            if candidate[4] is None:
-    #                if (max_cache_size is None or curCacheSize < max_cache_size):
-    #                    candidate[4] = curCacheSize
-    #                    prefix_list[2] = curCacheSize
-    #                    prefix_list[3] = candidate[3][Lc:]
-    #                    curCacheSize+=1
-    #                    break
-    #                #if there is no room in the cache continue to the next iteration of the outer loop.
-    #                else:
-    #                    break
-    #            #there is already a value in the cache in this case so we don't need to run any
-    #            #cache capacity checks or increment the cache size.
-    #            else:
-    #                prefix_list[2] = candidate[4]
-    #                prefix_list[3] = candidate[3][Lc:]
-    #                break
-
-    #at this point all of the entries in sorted_orphan_prefix_lists should have been updated in place
-    #with new istart, icache, and remaning circuit values. Next loop through table contents and update
-    #the entries with the updated tuples.
-    #for prefix_list in sorted_orphaned_prefix_lists:
-    #    table_contents[prefix_list[0]] = tuple(prefix_list[1:])
-
-    #now that the table has been updated it is possible that some of the istart values
-    #appear before the cached values upon which they depend have been instantiated.
-    #go through the table and re-sort it to fix this.
-    #instantiated_cache_indices = set()
-    #for tup in table_contents:
-        #if tup[1] is None:
-           # if tup[3] is not None:
-
-
-        #if tup[1] is not None and tup[1] not in instantiated_cache_indices:
-
-
-    #print(f'{table_contents=}')
 
     return table_contents, curCacheSize
 
@@ -839,22 +767,8 @@ def _build_prefix_tree(sorted_circuits_to_evaluate, circuit_reps, orig_indices):
 
     return circuit_tree
 
-def _find_balanced_splitting(circuit_tree, num_partitions, balance_tolerance=.1):
-    #calculate the total cost of the tree.
-    total_num_ckts = circuit_tree.total_orig_indices()
 
-    target_partition_size = total_num_ckts/num_partitions
-    acceptable_range = (target_partition_size + target_partition_size*balance_tolerance,
-                        target_partition_size - target_partition_size*balance_tolerance)
-
-    while len(circuit_tree.roots)<num_partitions:
-        #loop through the nodes of the tree and calculate the total number of original
-        #indices (i.e. circuits) contained in the corresponding subtree.
-        
-        num_subtree_ckts = [node.total_orig_indices() for node in circuit_tree.traverse]
-
-
-#Helper classes for managing circuit evaluation tree.
+#----------------------Helper classes for managing circuit evaluation tree. --------------#
 class TreeNode:
     def __init__(self, value, children=None, orig_indices=None):
         """
@@ -1249,9 +1163,7 @@ class Tree:
         while stack:
             parent, node = stack.pop()
             node_id = id(node)
-            #print(node_id)
             prop_cost = node.cost if isinstance(node, RootNode) else 1
-            #print(f'{prop_cost=}')
             G.add_node(node_id, cost=len(node.orig_indices), orig_indices=tuple(node.orig_indices), 
                        label=node.value, prop_cost = prop_cost)
             if parent is not None:
@@ -1261,6 +1173,8 @@ class Tree:
             for child in node.children:
                 stack.append((node, child))
         return G
+
+#--------------- Tree Partitioning Algorithm Helpers (+NetworkX Utilities)-----------------#
 
 def _draw_graph(G, node_label_key='label', edge_label_key='promotion_cost', figure_size=(10,10)):
     """
@@ -1289,6 +1203,34 @@ def _draw_graph(G, node_label_key='label', edge_label_key='promotion_cost', figu
     _nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels)
     plt.show()
 
+def _copy_networkx_graph(G):
+    """
+    Create a new independent copy of a NetworkX directed graph with node and edge attributes that
+    match the original graph. Specialized to copying graphs with the known attributes set by the
+    `to_networkx_graph` method of the `Tree` class.
+
+    Parameters
+    ----------
+    G : networkx.DiGraph
+        The original NetworkX directed graph.
+
+    Returns
+    -------
+    networkx.DiGraph
+        The new independent copy of the NetworkX directed graph.
+    """
+    new_G = _nx.DiGraph()
+
+    # Copy nodes with attributes
+    for node, data in G.nodes(data=True):
+        new_G.add_node(node, cost = data['cost'], orig_indices=data['orig_indices'], 
+                       label= data['label'] , prop_cost = data['prop_cost'])
+
+    # Copy edges with attributes
+    for u, v, data in G.edges(data=True):
+        new_G.add_edge(u, v, promotion_cost = data['promotion_cost'])
+
+    return new_G
 
 def _find_root(tree):
     """
@@ -1333,7 +1275,7 @@ def _compute_subtree_weights(tree, root, weight_key):
     """
 
     subtree_weights = {} # {node: 0 for node in tree.nodes()}
-    stack = _collections.deque([root])
+    stack = [root]
     visited = set()
 
     # First pass: calculate the subtree weights in a bottom-up manner
@@ -1354,6 +1296,105 @@ def _compute_subtree_weights(tree, root, weight_key):
                     stack.append(child)
 
     return subtree_weights
+
+def _partition_levels(tree, root):
+    """
+    Partition the nodes of a rooted directed tree into levels based on their distance from the root.
+
+    Parameters
+    ----------
+    tree : networkx.DiGraph 
+        The directed tree.
+    root : networkx node
+        The root node of the tree.
+
+    Returns
+    -------
+    list of sets: 
+        A list where each set contains nodes that are equidistant from the root.
+    """
+    # Initialize a dictionary to store the level of each node
+    levels = {}
+    # Initialize a queue for BFS
+    queue = _collections.deque([(root, 0)])
+    
+    while queue:
+        node, level = queue.popleft()
+        if level not in levels:
+            levels[level] = set()
+        levels[level].add(node)
+        
+        for child in tree.successors(node):
+            queue.append((child, level + 1))
+    
+    # Convert the levels dictionary to a list of sets ordered by level
+    sorted_levels = [levels[level] for level in sorted(levels.keys())]
+    
+    return sorted_levels
+
+
+
+def _partition_levels_and_compute_subtree_weights(tree, root, weight_key):
+    """
+    Partition the nodes of a rooted directed tree into levels based on their distance from the root
+    and compute the total weight of each subtree.
+
+    Parameters
+    ----------
+    tree : networkx.DiGraph 
+        The directed tree.
+    root : networkx node
+        The root node of the tree.
+    weight_key : str
+        A string corresponding to the node attribute to use as the weights.
+
+    Returns
+    -------
+    tuple:
+        - list of sets: A list where each set contains nodes that are equidistant from the root.
+        - dict: A dictionary where keys are nodes and values are the total weights of the subtrees rooted at those nodes.
+    """
+    # Initialize a dictionary to store the level of each node
+    levels = {}
+    # Initialize a dictionary to store the subtree weights
+    subtree_weights = {}
+    # Initialize a queue for BFS
+    queue = _collections.deque([(root, 0)])
+    # Initialize a stack for DFS to compute subtree weights
+    stack = []
+    visited = set()
+
+    #I think this returns a view, so grab this ahead of time in case
+    #there is overhead with that.
+    tree_nodes = tree.nodes
+
+    #successors is kind of an expensive call and we use at least twice
+    #per node, so let's just compute it once and cache in a dict.
+    node_successors = {node: list(tree.successors(node)) for node in tree_nodes}
+
+    while queue:
+        node, level = queue.popleft()
+        if node not in visited:
+            visited.add(node)
+            if level not in levels:
+                levels[level] = set()
+            levels[level].add(node)
+            stack.append(node)
+            for child in node_successors[node]:
+                queue.append((child, level + 1))
+
+    # Compute subtree weights in a bottom-up manner
+    while stack:
+        node = stack.pop()
+        subtree_weight = tree_nodes[node][weight_key]
+        for child in node_successors[node]:
+            subtree_weight += subtree_weights[child]
+        subtree_weights[node] = subtree_weight
+
+    # Convert the levels dictionary to a list of sets ordered by level
+    sorted_levels = [levels[level] for level in sorted(levels.keys())]
+
+    return sorted_levels, subtree_weights
 
 
 def _find_leaves(tree):
@@ -1460,41 +1501,6 @@ def _collect_orig_indices(tree, root):
     
     return orig_indices_list
 
-def _partition_levels(tree, root):
-    """
-    Partition the nodes of a rooted directed tree into levels based on their distance from the root.
-
-    Parameters
-    ----------
-    tree : networkx.DiGraph 
-        The directed tree.
-    root : networkx node
-        The root node of the tree.
-
-    Returns
-    -------
-    list of sets: 
-        A list where each set contains nodes that are equidistant from the root.
-    """
-    # Initialize a dictionary to store the level of each node
-    levels = {}
-    # Initialize a queue for BFS
-    queue = _collections.deque([(root, 0)])
-    
-    while queue:
-        node, level = queue.popleft()
-        if level not in levels:
-            levels[level] = set()
-        levels[level].add(node)
-        
-        for child in tree.successors(node):
-            queue.append((child, level + 1))
-    
-    # Convert the levels dictionary to a list of sets ordered by level
-    sorted_levels = [levels[level] for level in sorted(levels.keys())]
-    
-    return sorted_levels
-
 def _process_node_km(node, tree, subtree_weights, cut_edges, max_weight, root, new_roots):
     """
     Helper function for Kundu-Misra algorithm. This function processes each node
@@ -1527,11 +1533,13 @@ def _process_node_km(node, tree, subtree_weights, cut_edges, max_weight, root, n
         for node_to_update in nodes_to_update:
             subtree_weights[node_to_update]-= removed_child_weight
         #update the propagation cost attribute of the removed child.
-        tree.nodes[removed_child]['prop_cost'] += tree.edges[node, removed_child]['promotion_cost']
+        #tree.nodes[removed_child]['prop_cost'] += tree.edges[node, removed_child]['promotion_cost']
         #update index:
         removed_child_index+=1
 
-def tree_partition_kundu_misra(tree, max_weight, weight_key='cost'):
+def tree_partition_kundu_misra(tree, max_weight, weight_key='cost', test_leaves = True,
+                               return_levels_and_weights=False, precomp_levels = None,
+                               precomp_weights = None):
     """
     Algorithm for optimal minimum cardinality k-partition of tree (a partition
     of a tree into cluster of size at most k) based on a slightly less sophisticated
@@ -1554,6 +1562,20 @@ def tree_partition_kundu_misra(tree, max_weight, weight_key='cost'):
         An optional string denoting the node attribute label to use for node weights
         in partitioning.
 
+    test_leaves : bool, optional (default True)
+        When True an initial test is performed to ensure that the weight of the leaves are all
+        less than the maximum weight. Only turn off if you know for certain this is true.
+
+    return_levels_and_weights : bool, optional (default False)
+        If True return the constructed tree level structure (the lists of nodes partitioned
+        by distance from the root) and subtree weights.
+
+    precomp_levels : list of sets, optional (default None)
+        A list where each set contains nodes that are equidistant from the root.
+
+    precomp_weights : dict, optional (default None)
+        A dictionary where keys are nodes and values are the total weights of the subtrees rooted at those nodes.
+        
     Returns
     -------
     partitioned_tree : networkx.DiGraph
@@ -1562,41 +1584,50 @@ def tree_partition_kundu_misra(tree, max_weight, weight_key='cost'):
  
     cut_edges : list of tuples
         A list of the parent-child node pairs whose edges were cut in partitioning the tree.
+
+    
     """
     #create a copy of the input tree:
-    tree = deepcopy(tree)
+    #tree = _copy_networkx_graph(tree)
     
     cut_edges = [] #list of cut edges.
     new_roots = [] #list of the subtree root node in the partitioned tree
-    
+
     #find the root node of tree:
     root = _find_root(tree)
     new_roots.append(root)
 
-    #find the leaves:
-    leaves = _find_leaves(tree)
-    
-    #make sure that the weights of the leaves are all less than the maximum weight.
-    msg = 'The maximum node weight for at least one leaf is greater than the maximum weight, no partition possible.'
-    assert all([tree.nodes[leaf][weight_key]<=max_weight for leaf in leaves]), msg
+    if test_leaves:
+        #find the leaves:
+        leaves = _find_leaves(tree)
+        #make sure that the weights of the leaves are all less than the maximum weight.
+        msg = 'The maximum node weight for at least one leaf is greater than the maximum weight, no partition possible.'
+        assert all([tree.nodes[leaf][weight_key]<=max_weight for leaf in leaves]), msg
         
     #precompute a list of subtree weights which will be dynamically updated as we make cuts.
-    subtree_weights = _compute_subtree_weights(tree, root, weight_key)
+    #subtree_weights = 
     
     #break the tree into levels equidistant from the root.
-    tree_levels = _partition_levels(tree, root)
-    
+    #tree_levels = 
+    if precomp_levels is None and precomp_weights is None:
+        tree_levels, subtree_weights = _partition_levels_and_compute_subtree_weights(tree, root, weight_key)
+    else:
+        tree_levels = precomp_levels if precomp_levels is not None else _partition_levels(tree, root)
+        subtree_weights = precomp_weights.copy() if precomp_weights is not None else _compute_subtree_weights(tree, root, weight_key)
+        
+    #the subtree_weights get modified in-place by _process_node_km, so create a copy for the return value.
+    if return_levels_and_weights:
+        subtree_weights_orig = subtree_weights.copy()
+
     #begin processing the nodes level-by-level.
     for level in reversed(tree_levels):
         for node in level:
             _process_node_km(node, tree, subtree_weights, cut_edges, max_weight, root, new_roots)
-    
-    #return the graph with the edges cut, and also return the list of cut edges.
-    tree.remove_edges_from(cut_edges)
-    
-    #print(len(cut_edges))
-
-    return tree, cut_edges, new_roots
+        
+    if return_levels_and_weights:
+        return cut_edges, new_roots, tree_levels, subtree_weights_orig
+    else:
+        return cut_edges, new_roots
 
 def _bisect_tree(tree, subtree_root, subtree_weights, weight_key, root_cost = 0, target_proportion = .5):
     #perform a bisection on the subtree. Loop through the tree beginning at the root,
@@ -1631,7 +1662,7 @@ def _bisect_tree(tree, subtree_root, subtree_weights, weight_key, root_cost = 0,
         return None, None
 
 def _bisection_pass(partitioned_tree, cut_edges, new_roots, num_sub_tables, weight_key):
-    partitioned_tree = deepcopy(partitioned_tree)
+    partitioned_tree = _copy_networkx_graph(partitioned_tree)
     subtree_weights = [(root, _compute_subtree_weights(partitioned_tree, root, weight_key)) for root in new_roots]
     sorted_subtree_weights = sorted(subtree_weights, key=lambda x: x[1][x[0]], reverse=True)
 
@@ -1657,7 +1688,7 @@ def _refinement_pass(partitioned_tree, roots, weight_key, imbalance_threshold=1.
     #refine the partitioning to improve the balancing of the specified weights across the
     #subtrees.
     #start by recomputing the latest subtree weights and ranking them from heaviest to lightest.
-    partitioned_tree = deepcopy(partitioned_tree)
+    partitioned_tree = _copy_networkx_graph(partitioned_tree)
     subtree_weights = [(root, _compute_subtree_weights(partitioned_tree, root, weight_key)) for root in roots]
     sorted_subtree_weights = sorted(subtree_weights, key=lambda x: x[1][x[0]], reverse=True)
 

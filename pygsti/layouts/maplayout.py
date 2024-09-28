@@ -295,6 +295,7 @@ class MapCOPALayout(_DistributableCOPALayout):
         max_sub_table_size = None  # was an argument but never used; remove in future
         if (num_sub_tables is not None and num_sub_tables > 1) or max_sub_table_size is not None:
             circuit_table = _PrefixTable(unique_povmless_circuits, max_cache_size)
+            self.complete_circuit_table = circuit_table
             groups = circuit_table.find_splitting_new(max_sub_table_size, num_sub_tables, verbosity=verbosity,
                                                       initial_cost_metric=circuit_partition_cost_functions[0],
                                                       rebalancing_cost_metric=circuit_partition_cost_functions[1],
@@ -302,8 +303,8 @@ class MapCOPALayout(_DistributableCOPALayout):
                                                       minimum_improvement_threshold = load_balancing_parameters[1])
             #groups = circuit_table.find_splitting(max_sub_table_size, num_sub_tables, verbosity=verbosity)
         else:
-            groups = list(range(len(unique_complete_circuits)))
-        self.complete_circuit_table = circuit_table
+            groups = [list(range(len(unique_complete_circuits)))]
+        
 
         def _create_atom(group):
             return _MapCOPALayoutAtom(unique_complete_circuits, ds_circuits, group,
