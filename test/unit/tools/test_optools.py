@@ -426,7 +426,7 @@ class GateOpsTester(BaseCase):
         obj_expr, constraints = sdps.diamond_norm_canon(delta1, 'std')
         objective = cp.Minimize(obj_expr)
         problem = cp.Problem(objective, constraints)
-        val1 = problem.solve(verbose=True, solver='MOSEK')
+        val1 = problem.solve(verbose=True, solver='CLARABEL')
         self.assertGreaterEqual(val0, 0.7)
         self.assertAlmostEqual(val0, val1, places=4)
         return
