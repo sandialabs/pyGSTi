@@ -504,6 +504,9 @@ class LindbladErrorgen(_LinearOperator):
             blk.create_lindblad_term_superoperators(self.matrix_basis, sparse_bases, include_1norms=True, flat=True)
             for blk in lindblad_coefficient_blocks]
 
+        #combine all of the linblad term superoperators across the blocks to a single concatenated tensor.
+        self.combined_lindblad_term_superops = _np.concatenate([Lterm_superops for (Lterm_superops, _) in self.lindblad_term_superops_and_1norms], axis=0)
+
         #Create a representation of the type chosen above:
         if self._rep_type == 'lindblad errorgen':
             rep = evotype.create_lindblad_errorgen_rep(lindblad_coefficient_blocks, state_space)
@@ -640,17 +643,16 @@ class LindbladErrorgen(_LinearOperator):
             # __init__, so we just update the *data* array).
             self._rep.data[:] = data.real
 
-        else:  # dense matrices
-            lnd_error_gen = sum([_np.tensordot(blk.block_data.flat, Lterm_superops, (0, 0)) for blk, (Lterm_superops, _)
-                                 in zip(self.coefficient_blocks, self.lindblad_term_superops_and_1norms)])
-
-            assert(_np.isclose(_np.linalg.norm(lnd_error_gen.imag), 0)), \
+        else:  # dense matrices            
+            comb_blk_datas = _np.concatenate([blk.block_data.ravel() for blk in self.coefficient_blocks])
+            lnd_error_gen = _np.einsum('i,ijk->jk', comb_blk_datas, self.combined_lindblad_term_superops)
+            
+            #This test has been previously commented out in the sparse case, should we do the same for this one?
+            assert(_np.linalg.norm(lnd_error_gen.imag)<1e-10), \
                 "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
-            #print("errgen pre-real = \n"); _mt.print_mx(lnd_error_gen,width=4,prec=1)
             self._rep.base[:, :] = lnd_error_gen.real
 
         self._onenorm_upbound = onenorm
-        #assert(self._onenorm_upbound >= _np.linalg.norm(self.to_dense(), ord=1) - 1e-6)  #DEBUG
 
     def to_dense(self, on_space='minimal'):
         """
@@ -670,10 +672,10 @@ class LindbladErrorgen(_LinearOperator):
         """
         if self._rep_type == 'lindblad errorgen':
             assert(on_space in ('minimal', 'HilbertSchmidt'))
-            lnd_error_gen = sum([_np.tensordot(blk.block_data.flat, Lterm_superops, (0, 0)) for blk, (Lterm_superops, _)
-                                 in zip(self.coefficient_blocks, self.lindblad_term_superops_and_1norms)])
+            comb_blk_datas = _np.concatenate([blk.block_data.ravel() for blk in self.coefficient_blocks])
+            lnd_error_gen = _np.einsum('i,ijk->jk', comb_blk_datas, self.combined_lindblad_term_superops)
 
-            assert(_np.isclose(_np.linalg.norm(lnd_error_gen.imag), 0)), \
+            assert(_np.linalg.norm(lnd_error_gen.imag)<1e-10), \
                 "Imaginary error gen norm: %g" % _np.linalg.norm(lnd_error_gen.imag)
             return lnd_error_gen.real
 
