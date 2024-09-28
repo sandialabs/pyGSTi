@@ -14,7 +14,6 @@ import collections as _collections
 import networkx as _nx
 import matplotlib.pyplot as plt
 from math import ceil
-from copy import deepcopy
 from pygsti.baseobjs import Label as _Label
 from pygsti.circuits.circuit import SeparatePOVMCircuit as _SeparatePOVMCircuit
 
