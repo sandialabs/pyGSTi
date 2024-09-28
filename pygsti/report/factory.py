@@ -1192,14 +1192,17 @@ def construct_standard_report(results, title="auto",
 
     Returns
     -------
-    Workspace
-        The workspace object used to create the report
+    Report
     """
 
     printer = _VerbosityPrinter.create_printer(verbosity, comm=comm)
     ws = ws or _ws.Workspace()
 
     advanced_options = advanced_options or {}
+    n_leak = advanced_options.get('n_leak', 0)
+    # ^ Not sure if this is a good place to pass this parameter.
+    #   A better implementation would be to store this info in model.basis
+    #   (for the various models).
     linlogPercentile = advanced_options.get('linlog percentile', 5)
     nmthreshold = advanced_options.get('nmthreshold', DEFAULT_NONMARK_ERRBAR_THRESHOLD)
     embed_figures = advanced_options.get('embed_figures', True)
@@ -1332,8 +1335,12 @@ def construct_standard_report(results, title="auto",
         'gauge_opt_labels': tuple(gauge_opt_labels),
         'max_lengths': tuple(Ls),
         'switchbd_maxlengths': tuple(swLs),
-        'show_unmodeled_error': bool('ShowUnmodeledError' in flags)
+        'show_unmodeled_error': bool('ShowUnmodeledError' in flags),
+        'n_leak' : n_leak
     }
+    # ^ Not sure if this is a good place to pass n_leak.
+    #   A better implementation would be to store this info in model.basis
+    #   (for the various models).
 
     templates = dict(
         html='~standard_html_report',
