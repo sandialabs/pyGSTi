@@ -531,7 +531,7 @@ def leaky_jtracedist(op_a, op_b, mx_basis, n_leak=0):
     return j_dist
 
 
-def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis):
+def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis, return_labels=False):
     """
     Let "H" denote n^2 dimensional Hilbert-Schdmit space, and let "U" denote the d^2
     dimensional subspace of H spanned by vectors whose Hermitian matrix representations
@@ -604,12 +604,18 @@ def leading_dxd_submatrix_basis_vectors(d: int, n: int, current_basis):
     std_basis = _pgb.BuiltinBasis(name='std', dim_or_statespace=n**2)
     label2ind = {ell: idx for idx,ell in enumerate(std_basis.labels)}
     basis_ind = []
+    basis_labels = []
     for i in range(d):
         for j in range(d):
-            basis_ind.append(label2ind[f"({i},{j})"])
+            ell = f"({i},{j})"
+            basis_ind.append(label2ind[ell])
+            basis_labels.append(ell)
     basis_ind = _np.array(basis_ind)
     submatrix_basis_vectors = std_to_current[:, basis_ind]
-    return submatrix_basis_vectors
+    if return_labels:
+        return submatrix_basis_vectors, basis_labels
+    if not return_labels:
+        return submatrix_basis_vectors
 
 
 def average_gate_fidelity(a, b, mx_basis='pp', is_tp=None, is_unitary=None):
