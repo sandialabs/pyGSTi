@@ -159,23 +159,23 @@ class Basis(_NicelySerializable):
     # could be static methods.
 
     @classmethod
-    def cast_from_name_and_statespace(cls, name: str, state_space: _StateSpace, sparse=None, classical_name='cl'):
+    def cast_from_name_and_statespace(cls, name: str, state_space: _StateSpace, sparse=None):
         tpbBases = []
-        if len(state_space.tensor_product_blocks_labels) == 1 \
-            and len(state_space.tensor_product_blocks_labels[0]) == 1:
-            #Special case when we can actually pipe state_space to the BuiltinBasis constructor
-            lbl = state_space.tensor_product_blocks_labels[0][0]
-            nm = name if (state_space.label_type(lbl) == 'Q') else classical_name
+        block_labels = state_space.tensor_product_blocks_labels
+        if len(block_labels) == 1 and len(block_labels[0]) == 1:
+            # Special case when we can actually pipe state_space to the BuiltinBasis constructor
+            lbl = block_labels[0][0]
+            nm = name if (state_space.label_type(lbl) == 'Q') else 'cl'
             tpbBases.append(BuiltinBasis(nm, state_space, sparse))
         else:
             #TODO: add methods to StateSpace that can extract a sub-*StateSpace* object for a given label.
-            for tpbLabels in state_space.tensor_product_blocks_labels:
+            for tpbLabels in block_labels:
                 if len(tpbLabels) == 1:
-                    nm = name if (state_space.label_type(tpbLabels[0]) == 'Q') else classical_name
+                    nm = name if (state_space.label_type(tpbLabels[0]) == 'Q') else 'cl'
                     tpbBases.append(BuiltinBasis(nm, state_space.label_dimension(tpbLabels[0]), sparse))
                 else:
                     tpbBases.append(TensorProdBasis([
-                        BuiltinBasis(name if (state_space.label_type(l) == 'Q') else classical_name,
+                        BuiltinBasis(name if (state_space.label_type(l) == 'Q') else 'cl',
                                         state_space.label_dimension(l), sparse) for l in tpbLabels]))
         if len(tpbBases) == 1:
             return tpbBases[0]
@@ -227,13 +227,13 @@ class Basis(_NicelySerializable):
         return b
 
     @classmethod
-    def cast(cls, arg, dim=None, sparse=None, classical_name='cl'):
+    def cast(cls, arg, dim=None, sparse=None):
         #print("DB: CAST = ",arg,dim)
         if isinstance(arg, Basis):
             return cls.cast_from_basis(arg, dim, sparse)
         if isinstance(arg, str):
             if isinstance(dim, _StateSpace):
-                return cls.cast_from_name_and_statespace(arg, dim, sparse, classical_name)
+                return cls.cast_from_name_and_statespace(arg, dim, sparse)
             return cls.cast_from_name_and_dims(arg, dim, sparse)
         if (arg is None) or (hasattr(arg,'__len__') and len(arg) == 0):
             return ExplicitBasis([], [], "*Empty*", "Empty (0-element) basis", False, sparse)
