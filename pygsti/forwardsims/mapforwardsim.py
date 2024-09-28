@@ -275,9 +275,15 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
         # but we can reduce from_vector calls by having np1, np2 > 0 (each param requires a from_vector
         # call when using finite diffs) - so we want to choose nc = Ng < nprocs and np1 > 1 (so nc * np1 = nprocs).
         #work_per_proc = self.model.dim**2
+        
+        #when we have only a single processor (nprocs=1) it doesn't make sense to do any splitting
+        #with the possible exception of when we have memory limits.
+        default_natoms = 1 if nprocs==1 and mem_limit is None else 2 * self.model.dim # heuristic?
+        #TODO: factor in the mem_limit value to more intelligently set the default number of atoms.
 
         natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
-            array_types, nprocs, num_params, len(circuits), default_natoms=2 * self.model.dim)  # heuristic?
+            array_types, nprocs, num_params, len(circuits), default_natoms=default_natoms)  
+        
         printer.log(f'Num Param Processors {npp}')
         
         printer.log("MapLayout: %d processors divided into %s (= %d) grid along circuit and parameter directions." %
