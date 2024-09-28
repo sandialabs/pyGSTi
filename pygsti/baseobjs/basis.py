@@ -234,8 +234,8 @@ class Basis(_NicelySerializable):
         if isinstance(arg, str):
             if isinstance(dim, _StateSpace):
                 return cls.cast_from_name_and_statespace(arg, dim, sparse, classical_name)
-            return cls.cast_from_name_and_dims(arg, dim, sparse, classical_name)
-        if isinstance(arg, None) or (hasattr(arg,'__len__') and len(arg) == 0):
+            return cls.cast_from_name_and_dims(arg, dim, sparse)
+        if (arg is None) or (hasattr(arg,'__len__') and len(arg) == 0):
             return ExplicitBasis([], [], "*Empty*", "Empty (0-element) basis", False, sparse)
             # ^ The original implementation would return this value under two conditions.
             #   Either arg was None, or isinstance(arg,(tuple,list,ndarray)) and len(arg) == 0.
