@@ -14,6 +14,26 @@ from ..errorgenpropagation import errorpropagator as _ep
 from tensorflow import unique
 import tensorflow as _tf
 
+def grid_adj_matrix(grid_width: int):
+    num_qubits = grid_width**2
+    adj_matrix = _np.zeros((num_qubits, num_qubits))
+    for i in range(num_qubits):
+        if i % grid_width == grid_width - 1 and i != grid_width*grid_width - 1:
+            # far right column, not the bottom left corner
+            # print(i)
+            # print('first')
+            adj_matrix[i, i+grid_width] = 1
+        elif i // grid_width == grid_width - 1 and i != grid_width*grid_width - 1:
+            # bottom row, not the bottom left corner
+            adj_matrix[i, i+1] = 1
+        elif i != num_qubits - 1:
+            # print(i)
+            # print('third')
+            # not the bottom right corner
+            adj_matrix[i, i+grid_width] = 1
+            adj_matrix[i, i+1] = 1
+    adj_matrix = adj_matrix + adj_matrix.T
+    return  adj_matrix
 
 def ring_adj_matrix(num_qubits: int):
     adj_matrix = _np.zeros((num_qubits, num_qubits))
