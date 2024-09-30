@@ -197,7 +197,8 @@ def mapfill_probs_atom(fwdsim, np.ndarray[double, mode="c", ndim=1] array_to_fil
 cdef dm_mapfill_probs(double[:] array_to_fill,
                       vector[vector[INT]] c_layout_atom,
                       vector[OpCRep*] c_opreps,
-                      vector[StateCRep*] c_rhoreps, vector[EffectCRep*] c_ereps,
+                      vector[StateCRep*] c_rhoreps, 
+                      vector[EffectCRep*] c_ereps,
                       vector[StateCRep*]* prho_cache,
                       vector[vector[INT]] elabel_indices_per_circuit,
                       vector[vector[INT]] final_indices_per_circuit,
@@ -207,7 +208,7 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
     # elements point to (instead of copying the states) - we just guarantee that in the end
     # all of the cache entries are filled with allocated (by 'new') states that the caller
     # can deallocate at will.
-    cdef INT k,l,i,istart, icache, iFirstOp, precomp_id
+    cdef INT k,l,i,istart, icache, iFirstOp
     cdef double p
     cdef StateCRep *init_state
     cdef StateCRep *prop1
@@ -219,6 +220,12 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
 
     cdef vector[INT] final_indices
     cdef vector[INT] elabel_indices
+
+    #vector to store values of ids for caching of effect reps (particularly when using
+    #composed effect reps).
+    # this should be initialized to a number that is *never* a Python id()
+    cdef int len_c_ereps =  c_ereps.size()
+    cdef vector[INT] precomp_id = vector[INT](len_c_ereps, 0)
 
     #Invariants required for proper memory management:
     # - upon loop entry, prop2 is allocated and prop1 is not (it doesn't "own" any memory)
@@ -267,14 +274,14 @@ cdef dm_mapfill_probs(double[:] array_to_fill,
         #print "begin prob comps: %.2fs since last, %.2fs elapsed" % (pytime.time()-t1, pytime.time()-t0) # DEBUG
         final_indices = final_indices_per_circuit[i]
         elabel_indices = elabel_indices_per_circuit[i]
+        
         #print("Op actons done - computing %d probs" % elabel_indices.size());t1 = pytime.time() # DEBUG
 
         precomp_state = prop2  # used as cache/scratch space
-        precomp_id = 0  # this should be a number that is *never* a Python id()
         for j in range(<INT>elabel_indices.size()):
             #print("Erep prob %d of %d: elapsed = %.2fs" % (j, elabel_indices.size(), pytime.time() - t1))
             #OLD: array_to_fill[ final_indices[j] ] = c_ereps[elabel_indices[j]].probability(final_state) #outcome probability
-            array_to_fill[ final_indices[j] ] = c_ereps[elabel_indices[j]].probability_using_cache(final_state, precomp_state, precomp_id) #outcome probability
+            array_to_fill[ final_indices[j] ] = c_ereps[elabel_indices[j]].probability_using_cache(final_state, precomp_state, precomp_id[elabel_indices[j]]) #outcome probability
 
         if icache != -1:
             deref(prho_cache)[icache] = final_state # store this state in the cache
