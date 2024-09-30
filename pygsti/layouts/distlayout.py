@@ -807,7 +807,6 @@ class DistributableCOPALayout(_CircuitOutcomeProbabilityArrayLayout):
         super().__init__(local_circuits, local_unique_circuits, local_to_unique, local_elindex_outcome_tuples,
                          local_unique_complete_circuits, param_dimensions, resource_alloc)
 
-
     @property
     def max_atom_elements(self):
         """ The most elements owned by a single atom. """

@@ -345,34 +345,3 @@ class RBSummaryDataset(object):
                                                     descriptor='data created from a non-parametric bootstrap')
 
             self.bootstraps.append(bootstrapped_dataset)
-
-    # todo : add this back in.
-    # def create_smaller_dataset(self, numberofcircuits):
-    #     """
-    #     Creates a new dataset that has discarded the data from all but the first `numberofcircuits`
-    #     circuits at each length.
-
-    #     Parameters
-    #     ----------
-    #     numberofcircuits : int
-    #         The maximum number of circuits to keep at each length.
-
-    #     Returns
-    #     -------
-    #     RBSummaryDataset
-    #         A new dataset containing less data.
-    #     """
-    #     newRBSdataset = _copy.deepcopy(self)
-    #     for i in range(len(newRBSdataset.lengths)):
-    #         if newRBSdataset.success_counts is not None:
-    #             newRBSdataset.success_counts[i] = newRBSdataset.success_counts[i][:numberofcircuits]
-    #         if newRBSdataset.success_probabilities is not None:
-    #             newRBSdataset.success_probabilities[i] = newRBSdataset.success_probabilities[i][:numberofcircuits]
-    #         if newRBSdataset.total_counts is not None:
-    #             newRBSdataset.total_counts[i] = newRBSdataset.total_counts[i][:numberofcircuits]
-    #         if newRBSdataset.circuit_depths is not None:
-    #             newRBSdataset.circuit_depths[i] = newRBSdataset.circuit_depths[i][:numberofcircuits]
-    #         if newRBSdataset.circuit_twoQgate_counts is not None:
-    #             newRBSdataset.circuit_twoQgate_counts[i] = newRBSdataset.circuit_twoQgate_counts[i][:numberofcircuits]
-
-    #     return newRBSdataset
