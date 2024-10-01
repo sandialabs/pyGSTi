@@ -8,6 +8,7 @@ import scipy.linalg as la
 import scipy.sparse as spar
 from pygsti.baseobjs import basisconstructors as bcons
 from pygsti.tools.matrixtools import eign
+from pygsti.tools.optools import unitary_to_std_process_mx
 
 
 def check_su2_generators(Jx, Jy, Jz):
@@ -54,9 +55,9 @@ def batch_normal_expm_1jscales(eigvecs, eigvals, scales):
     n = eigvals.size
     assert eigvecs.shape == (n, n)
     scales = np.atleast_1d(scales)
-
+    eigvecs_inv = eigvecs.T.conj()
     batch_out = np.array([
-        (eigvecs * np.exp(1j*s*eigvals)[np.newaxis,:]) @ eigvecs.T.conj() for s in scales
+        (eigvecs * np.exp(1j*s*eigvals)[np.newaxis,:]) @ eigvecs_inv for s in scales
     ])
     return batch_out
 
@@ -99,6 +100,8 @@ class SU2:
         alpha = np.random.uniform(low=0,high=2*np.pi, size=size)
         beta = np.arccos(np.random.uniform(low=-1,high=1, size=size))
         gamma = np.random.uniform(low=0,high=4*np.pi, size=size)
+        # Note: the asymmetry in (alpha, gamma) is intentional. See Kevin's
+        # email dated 18 July 2024 for an explanation.
         return alpha, beta, gamma
 
     @classmethod
@@ -145,25 +148,46 @@ class SU2:
         return batch_normal_expm_1jscales(cls.VJy, cls.eigJy, theta)
 
     @staticmethod
-    def angles_from_2x2_unitary(R):
-        assert R.shape == (2, 2)
-        try:
-            # Compute the euler angles from the SU(2) elements
-            beta = 2*np.arccos(np.real(np.sqrt(R[0,0]*R[1,1])))
-            alpha = np.angle(-1.j*R[0,0]*R[0,1]/(np.sin(beta/2)*np.cos(beta/2)))
-            if alpha < 0:
-                alpha += 2*np.pi
-            gamma = np.angle(-1.j*R[0,0]*R[1,0]/(np.sin(beta/2)*np.cos(beta/2)))
-            if gamma < 0:
-                gamma += 2*np.pi
-            if np.isclose(np.exp(1.j*(alpha+gamma)/2)*np.cos(beta/2) / R[0,0], -1):
-                gamma += 2*np.pi
-        except ZeroDivisionError:
-            return 0, 0, 0
-        if np.any(np.isnan((alpha, beta, gamma))):
-            return 0, 0, 0
+    def angles_from_2x2_unitaries(R):
+        if R.ndim == 2:
+            R = R[np.newaxis, :, :]
+        
+        beta = 2*np.arccos(np.real(np.sqrt(R[:,0,0]*R[:,1,1])))
+        alpha = np.zeros_like(beta)
+        gamma = np.zeros_like(beta)
+
+        den = np.sin(beta/2)*np.cos(beta/2)
+        s = den!=0
+        alpha[s] = np.angle(-1.j*R[s,0,0]*R[s,0,1]/den[s])
+        alpha[alpha < 0] += 2*np.pi
+
+        gamma[s] = np.angle(-1.j*R[s,0,0]*R[s,1,0]/den[s])
+        gamma[gamma < 0] += 2*np.pi
+
+        s1 = R[:,0,0] != 0
+        if np.any(s1):
+            s2 = np.zeros_like(s1)
+            s2[s1] = np.isclose(np.exp(1.j*(alpha[s1]+gamma[s1])/2)*np.cos(beta[s1]/2) / R[s1,0,0], -1)
+            gamma[s2] += 2*np.pi
+
         return alpha, beta, gamma
     
+    @staticmethod
+    def angles_from_2x2_unitary(R):
+        a,b,g = SU2.angles_from_2x2_unitaries(R)
+        return a.item(), b.item(), g.item()
+
+    @staticmethod
+    def axis_rotation_angle_from_2x2_unitaries(U):
+        if U.ndim == 2:
+            U = U[np.newaxis, :, :]
+        eigs = np.linalg.eigvals(U) # eigs = exp(\pm i theta /2)
+        theta = np.real(2*np.log(eigs[:,0])/1j)
+        tr = np.trace(U, axis1=1, axis2=2)
+        check = tr - 2*np.cos(theta/2)
+        assert abs(check) < 1e-10
+        return theta
+
     # TODO: interrogate all the places where I'm using np.newaxis and de-vectorize in case I broke things.
     @classmethod
     def unitaries_from_angles(cls,alpha,beta,gamma):
@@ -220,11 +244,7 @@ class SU2:
             R2x2 = SU2.unitaries_from_angles(a,b,g)[0]
             return SU2.character_from_unitary(R2x2, j)
         
-        eigs = la.eigvals(U) # eigs = exp(\pm i theta /2)
-        theta = np.real(2*np.log(eigs[0])/1j)
-        tr = np.trace(U)
-        check = tr - 2*np.cos(theta/2)
-        assert abs(check) < 1e-10
+        theta = SU2.axis_rotation_angle_from_2x2_unitaries(U)
 
         return np.real(np.sum([np.exp(1j*__j*theta) for __j in np.arange(-j, j+1)]))
 
@@ -235,6 +255,15 @@ class SU2:
         assert angles.size == 3
         U = SU2.unitaries_from_angles(angles[0], angles[1], angles[2])[0]
         out = np.array([ SU2.character_from_unitary(U, j) for j in cls.irrep_labels ])
+        return out
+    
+    @classmethod
+    def characters_from_euler_angles(cls,abg):
+        # Require that a,b,g = abg (so either it's an array of shape (3,) or (3,N) for some N)
+        theta_by_2 = np.arccos(np.cos(abg[1]/2)*np.cos((abg[0]+abg[2])/2))
+        def char(_k):
+            return np.sin((2*_k + 1)*theta_by_2)/np.sin(theta_by_2)
+        out = np.array([ char(_k) for _k in cls.irrep_labels])
         return out
 
     @staticmethod
@@ -426,7 +455,7 @@ def irrep_projectors(dims, cob):
     projectors = []
     for bk_sz in dims:
         stop = start + bk_sz 
-        subspace = cob[:,start:stop]
+        subspace = cob[:,start:stop].reshape((-1, bk_sz))
         P = subspace @ subspace.T.conj()
         projectors.append(P)
         trP = np.trace(P)
@@ -477,3 +506,26 @@ class Spin72(SU2):
         out = np.array(out)
         return out
 
+
+def monte_carlo_projectors(N:int, seed=0) -> np.ndarray:
+    """
+    This function computes an array "Pis" of shape (8, 64, 64), where Pis[a] is
+    an N-sample Monte-Carlo estimate for the projector onto the a-th irrep of
+    the spin-7/2 superoperator representation of SU2. 
+
+    We compute five intermediate arrays on the way to getting "Pis."
+
+            su2s[b] = Euler angles for the b-th SU2 element
+            Us[b]   = 8-by-8 unitary representation of su2s[b]
+            Gs[b]   = 64-by-64 superoperator representation of su2s[b]
+
+            chars[a,b] = a-th irrep character for su2s[b]
+        wchars[a,b] = [dim of a-th irrep] / N * chars[a, b]
+    """
+    su2s = np.row_stack(SU2.random_euler_angles(N, True, seed))
+    Us = Spin72.unitaries_from_angles(*su2s)
+    Gs = [unitary_to_std_process_mx(U) for U in Us]
+    chars  = Spin72.new_characters_from_euler_angles(su2s)
+    wchars = Spin72.irrep_block_sizes[:,np.newaxis] * chars / N
+    Pis = np.tensordot(wchars, Gs, axes=1)
+    return Pis
