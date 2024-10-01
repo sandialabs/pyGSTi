@@ -549,6 +549,24 @@ class Circuit(object):
 
         return self
     
+    #pickle management functions
+    def __getstate__(self):
+        state_dict = self.__dict__
+        #if state_dict.get('_hash', None) is not None:
+        #    del state_dict['_hash'] #don't store the hash, recompute at unpickling time
+        return state_dict
+
+    def __setstate__(self, state_dict):
+        for k, v in state_dict.items():
+            self.__dict__[k] = v
+        if self.__dict__['_static']:
+            #reinitialize the hash
+            if self.__dict__.get('_hashable_tup', None) is not None:
+                self._hash = hash(self._hashable_tup)
+            else: #legacy support
+                self._hashable_tup = self.tup
+                self._hash = hash(self._hashable_tup)
+
 
     def to_label(self, nreps=1):
         """
