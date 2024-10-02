@@ -10,6 +10,8 @@ from pygsti.baseobjs.basis import Basis, BuiltinBasis
 from typing import List, Tuple, Callable
 from tqdm import tqdm
 import functools
+from matplotlib import pyplot as plt
+from matplotlib import axes as plt_axes
 
 
 def get_M():
@@ -343,9 +345,9 @@ class SU2CharacterRBDesign(SU2RBDesign):
     def _compute_chars(self):
         # This is a separate function since it might take a while.
         for j in range(self.num_lens):
-            for k in range(self.N):
-                angles = self.all_circuits[j][k]
-                self.chars[j,k,:] = self.angles2irrepchars(angles[0,:])
+            circuits = np.array(self.all_circuits[j])
+            firstgate_angles = circuits[:,0,:]
+            self.chars[j,:,:] = self.angles2irrepchars(firstgate_angles)
         return
 
 
@@ -435,3 +437,94 @@ class SU2CharacterRBSim(SU2RBSim):
             synthetic_probs[:, j] = Q[diag_povmeffects]
 
         return synthetic_probs, survival_probs
+
+
+class Analysis:
+
+    plot_colors = default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+    @staticmethod
+    def exp_decay_logvar(x,a,b):
+        return a * np.exp(-b * x)
+    
+    @staticmethod
+    def exp_decay(x,a,b):
+        return a * b ** x
+
+    @staticmethod
+    def fit_exp(x, y, fitlog):
+        assert x.size == y.size
+        assert x.ndim == y.ndim == 1
+
+        if fitlog:
+            model = Analysis.exp_decay_logvar
+            p0 = np.array([1, 0.05])
+            bounds = ((-np.inf, -np.inf), (np.inf, np.inf))
+        else:
+            p0 = np.array([1, np.exp(-0.05)])
+            model = Analysis.exp_decay
+            bounds = ((-np.inf, 0), (np.inf, 1))
+
+        from scipy.optimize import curve_fit
+        p, pcov = curve_fit(model, x, y, p0=p0, bounds=bounds, maxfev=6000)
+        stddevs = np.sqrt(np.diag(pcov))
+        if fitlog:
+            stddevs[1] = np.exp(-p[1])*abs(2*np.sinh(stddevs[1]))
+        return p, stddevs
+    
+    @staticmethod
+    def fit_exp_batch(x, ys, fitlog):
+        num_series = ys.shape[0]
+        ps = np.zeros((num_series, 2))
+        sigmas = np.zeros((num_series, 2))
+        for i,y in enumerate(ys):
+            p, sigma = Analysis.fit_exp(x, y, fitlog)
+            ps[i,:] = p
+            sigmas[i,:] = sigma
+        return ps, sigmas
+
+    @staticmethod
+    def fit_and_get_rates(x, ys, fitlog, F=None):
+        assert np.all(x > 0)
+        if F is None:
+            F = get_F()
+        num_series = ys.shape[0]
+        assert F.shape == (num_series, num_series)
+        ps, sigmas = Analysis.fit_exp_batch(x, ys, fitlog)
+        f_mu = ps[:,1]
+        rates = la.solve(F, f_mu)
+        return rates, ps, sigmas
+
+    @staticmethod
+    def fit_and_plot(x, pkm, ax : plt_axes.Axes, fitlog):
+        ps, sigmas = Analysis.fit_exp_batch(x, pkm, fitlog)
+        f_mu = ps[:,1]
+        f_sig = sigmas[:,1]
+        default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        model = Analysis.exp_decay_logvar if fitlog else Analysis.exp_decay
+        num_series = f_mu.size
+        for i in range(num_series):
+            y = pkm[i,:]
+            textstr = f'{i}: f = {f_mu[i]:.3f}±({f_sig[i]:.3f})'
+            ax.scatter(x, y, label=textstr, color=default_colors[i % len(default_colors)], s=20)
+            ax.plot(x, model(x, ps[i,0], ps[i,1]), color=default_colors[i % len(default_colors)], linestyle='-')
+        ax.legend()
+        return ps, sigmas
+
+    @staticmethod
+    def fit_and_plot_with_rates(x, ys, ax : plt_axes.Axes, fitlog, F=None):
+        if F is None:
+            F = get_F()
+        rates, ps, sigmas = Analysis.fit_and_get_rates(x, ys, fitlog)
+        f_mu = ps[:,1]
+        f_sig = sigmas[:,1]
+        rates = la.solve(F, f_mu)
+        default_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+        model = Analysis.exp_decay_logvar if fitlog else Analysis.exp_decay
+        for i,r in enumerate(rates):
+            y = ys[i,:]
+            textstr = f'{i}: f = {f_mu[i]:.3f}±({f_sig[i]:.3f}) | rate = {r:.3f}'
+            ax.scatter(x, y, label=textstr, color=default_colors[i % len(default_colors)], s=20)
+            ax.plot(x, model(x, ps[i,0], ps[i,1]), color=default_colors[i % len(default_colors)], linestyle='-')
+        ax.legend()
+        return rates, ps, sigmas

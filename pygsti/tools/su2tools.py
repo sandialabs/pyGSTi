@@ -251,10 +251,10 @@ class SU2:
     @classmethod
     def angles2irrepchars(cls, angles):
         angles = np.atleast_1d(angles)
-        assert angles.ndim == 1
-        assert angles.size == 3
-        U = SU2.unitaries_from_angles(angles[0], angles[1], angles[2])[0]
-        out = np.array([ SU2.character_from_unitary(U, j) for j in cls.irrep_labels ])
+        angles = np.atleast_2d(angles).T
+        assert angles.shape == (3, angles.size // 3)
+        out = cls.characters_from_euler_angles(angles).T
+        assert out.shape == (angles.size // 3, cls.irrep_labels.size)
         return out
     
     @classmethod
@@ -265,14 +265,6 @@ class SU2:
             return np.sin((2*_k + 1)*theta_by_2)/np.sin(theta_by_2)
         out = np.array([ char(_k) for _k in cls.irrep_labels])
         return out
-
-    @staticmethod
-    def characters_from_angles(alphas, betas, gammas, j):
-        U2x2s = SU2.unitaries_from_angles(alphas, betas, gammas)
-        characters = np.zeros(len(U2x2s))
-        for i,U in enumerate(U2x2s):
-            characters[i] = SU2.character_from_unitary(U, j)
-        return characters
 
 
 def clebsh_gordan_matrix_spin72():
@@ -505,27 +497,3 @@ class Spin72(SU2):
             idx += b_sz
         out = np.array(out)
         return out
-
-
-def monte_carlo_projectors(N:int, seed=0) -> np.ndarray:
-    """
-    This function computes an array "Pis" of shape (8, 64, 64), where Pis[a] is
-    an N-sample Monte-Carlo estimate for the projector onto the a-th irrep of
-    the spin-7/2 superoperator representation of SU2. 
-
-    We compute five intermediate arrays on the way to getting "Pis."
-
-            su2s[b] = Euler angles for the b-th SU2 element
-            Us[b]   = 8-by-8 unitary representation of su2s[b]
-            Gs[b]   = 64-by-64 superoperator representation of su2s[b]
-
-            chars[a,b] = a-th irrep character for su2s[b]
-        wchars[a,b] = [dim of a-th irrep] / N * chars[a, b]
-    """
-    su2s = np.row_stack(SU2.random_euler_angles(N, True, seed))
-    Us = Spin72.unitaries_from_angles(*su2s)
-    Gs = [unitary_to_std_process_mx(U) for U in Us]
-    chars  = Spin72.new_characters_from_euler_angles(su2s)
-    wchars = Spin72.irrep_block_sizes[:,np.newaxis] * chars / N
-    Pis = np.tensordot(wchars, Gs, axes=1)
-    return Pis
