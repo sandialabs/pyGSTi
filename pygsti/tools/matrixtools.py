@@ -973,7 +973,8 @@ def norm1to1(operator, num_samples=10000, mx_basis="gm", return_list=False):
     float or list
         Depends on the value of `return_list`.
     """
-    std_operator = change_basis(operator, mx_basis, 'std')
+    from . import basistools as _bt
+    std_operator = _bt.change_basis(operator, mx_basis, 'std')
     rand_dim = int(_np.sqrt(float(len(std_operator))))
     vals = [norm1(unvec(_np.dot(std_operator, vec(random_hermitian(rand_dim)))))
             for n in range(num_samples)]
