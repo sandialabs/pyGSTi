@@ -185,10 +185,11 @@ class SU2:
         theta = np.real(2*np.log(eigs[:,0])/1j)
         tr = np.trace(U, axis1=1, axis2=2)
         check = tr - 2*np.cos(theta/2)
-        assert abs(check) < 1e-10
+        assert np.all(abs(check) < 1e-10)
+        theta[theta < 0] += 2*np.pi
+        theta[theta > np.pi] = 2*np.pi - theta[theta > np.pi] 
         return theta
 
-    # TODO: interrogate all the places where I'm using np.newaxis and de-vectorize in case I broke things.
     @classmethod
     def unitaries_from_angles(cls,alpha,beta,gamma):
         # Construct an element of SU(2) from Euler angles
@@ -261,6 +262,9 @@ class SU2:
     def characters_from_euler_angles(cls,abg):
         # Require that a,b,g = abg (so either it's an array of shape (3,) or (3,N) for some N)
         theta_by_2 = np.arccos(np.cos(abg[1]/2)*np.cos((abg[0]+abg[2])/2))
+        theta = 2*theta_by_2
+        theta[theta > np.pi] = 2*np.pi - theta[theta > np.pi] 
+        theta_by_2 = theta / 2
         def char(_k):
             return np.sin((2*_k + 1)*theta_by_2)/np.sin(theta_by_2)
         out = np.array([ char(_k) for _k in cls.irrep_labels])
