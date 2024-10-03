@@ -136,18 +136,15 @@ def raw_su2_rb_design(N: int, lengths: np.ndarray, seed: int, character=False):
     invert_from = 1 if character else 0
     assert 0 not in lengths
     for ell in lengths:
-        angles_for_length_ell = []
+        fixedlen_circuits = []
         for _ in range(N):
-            alphas, betas, gammas = SU2.random_euler_angles(ell)
-            inv_angles = SU2.composition_inverse(
-                alphas[invert_from:],
-                betas[invert_from:],
-                gammas[invert_from:]
-            )
-            ell_out = list(zip(alphas, betas, gammas))
-            ell_out.append(inv_angles)
-            angles_for_length_ell.append(np.array(ell_out))
-        all_circuits.append(angles_for_length_ell)
+            onecircuit_angles = np.zeros((3, ell+1))
+            onecircuit_angles[:, 0:ell] = np.row_stack(SU2.random_euler_angles(ell))
+            onecircuit_angles[:, ell:]  = np.row_stack(SU2.composition_inverse(
+                *onecircuit_angles[:, invert_from:ell]
+            ))
+            fixedlen_circuits.append(onecircuit_angles.T)
+        all_circuits.append(np.array(fixedlen_circuits))
     return all_circuits
 
 
@@ -261,7 +258,7 @@ class SU2RBSim:
         self.probs = probs
         return
 
-    def _process_circuits(self, fixedlen_circuits):
+    def _process_circuits(self, fixedlen_circuits, skip_first_noise=False):
         block = np.zeros(shape=(self.num_statepreps, self.N, self.num_effects))
         # block[i,k,ell] = the probability of measuring outcome ell after running the k-th circuit, given i-th starting state.
         for k, angles in enumerate(fixedlen_circuits):
@@ -269,11 +266,14 @@ class SU2RBSim:
             # The sequence of SU(2) elements induced by the rows of angles defines a circuit. 
             unitaries = self.su2rep.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
             for i,superket in enumerate(self.design.statepreps):
+                skip_next_noise = skip_first_noise
                 for U in unitaries:
                     densitymx_in = superket.reshape(U.shape)
                     densitymx_out = U @ densitymx_in @ U.T.conj()
                     superket = densitymx_out.ravel()
-                    superket = self._noise_channel @ superket
+                    if not skip_next_noise:
+                        superket = self._noise_channel @ superket
+                    skip_next_noise = False
                 block[i,k,:] = self.design.povm @ superket
         return block
 
@@ -334,6 +334,7 @@ class SU2CharacterRBDesign(SU2RBDesign):
     def __init__(self, su2rep, N, lengths, statepreps, povm, seed):
         SU2RBDesign.__init__(self, su2rep, N, lengths, statepreps, povm, seed, __character__=True)
         self.angles2irrepchars = su2rep.angles2irrepchars
+        self.unitaries_from_angles = su2rep.unitaries_from_angles
         self.num_irreps = su2rep.irrep_labels.size
         self.chars = np.zeros(shape=(self.lengths.size, self.N, self.num_irreps))
         # chars[j,k,ell] = the ell-th irrep's character for the unitary induced by the (noiseless version of the) k-th circuit of length lengths[j]
@@ -374,20 +375,20 @@ class SU2CharacterRBSim(SU2RBSim):
             # probs[i,k,ell] = the probability of measuring outcome ell after running the k-th circuit, given i-th starting state.
             for k, angles in enumerate(fixedlen_circuits):
                 a,b,g = angles.T
-                for i,superket in enumerate(self.statepreps):
-                    char_U = SU2.unitaries_from_angles(a[0], b[0], g[0])[0]
+                char_U = self.design.unitaries_from_angles(a[0], b[0], g[0])[0]
+                superop = unitary_to_superoperator(char_U, 'std')
+                for i,superket in enumerate(self.design.statepreps):
                     superket = superket.copy()
-                    superop = unitary_to_superoperator(char_U, 'std')
                     superket = superop @ superket
-                    probs[i,k,:] = self.design._povm @ superket
+                    probs[i,k,:] = self.design.povm @ superket
         else:
-            probs = SU2RBSim._process_circuits(self, fixedlen_circuits)
+            probs = SU2RBSim._process_circuits(self, fixedlen_circuits, True)
         return probs
 
     @staticmethod
-    def synspam_character_transform(_probs, _chars, _irrep_sizes, M=None, shots_per_circuit=np.inf, blockweight_power=1, seed=0):
+    def synspam_character_transform(_probs, _chars, _irrep_sizes, M=None, shots_per_circuit=np.inf, seed=0):
         #  probs[i,j,k,ell] = probability of measuring outcome ell when running the k-th lengths[j] circuit given preparation in state i.
-        #  chars[  j,k,ell] = the value of the ell^th irrep's character function for the "hidden" initial gate in the k-th circuit of length lengths[j];
+        #  chars[  j,k,x] = the value of the x^th irrep's character function for the "hidden" initial gate in the k-th circuit of length lengths[j];
         #   ^ the same circuits and hidden initial gates were used for all statepreps.
         if M is None:
             M = get_M()
@@ -400,43 +401,34 @@ class SU2CharacterRBSim(SU2RBSim):
         if num_irreps != num_effects:
             raise NotImplementedError()
 
+        SU2RBSim.sanitize_probs(_probs)
+        wchars = _chars * _irrep_sizes[np.newaxis, np.newaxis, :]
         g = np.random.default_rng(seed)
-    
-        dimweighted_chars = _chars * (_irrep_sizes[np.newaxis, np.newaxis, :]**blockweight_power)
-
         
-        def mean_charweighted_empirical_distribution(distributions, wchars):
-            # distributions will be _probs[i,j,:,:] for some i,j,
-            #       --> rows will be indexed from 0 to N-1 and it'll have num_effects columns.
-            # wchars will be dimweighted_chars[j,:,:] for some j.
-            #       --> rows will be indexed from 0 to N-1, cols will be indexed by num_irreps.
-            #
-            # How in the heck do irrep labels correspond to effects? I guess the assumption is that
-            # each effect exists to help us pin down an irrep?
+        def empirical_distribution(distributions):
             if shots_per_circuit == np.inf:
                 empirical_distn = distributions.copy()
-                empirical_distn *= wchars
             else:
                 empirical_distn = g.multinomial(shots_per_circuit, distributions) / shots_per_circuit
-                empirical_distn *= wchars
-            return np.mean(empirical_distn, axis=0)
+            return empirical_distn
 
-        # check each _probs[i,j,k,:] for negative values and normalize to a probability distribution
-        SU2RBSim.sanitize_probs(_probs)
-
-        diag_statepreps  = np.diag_indices(num_statepreps)
-        diag_povmeffects = np.diag_indices(num_effects)
+        permprobs = np.moveaxis(_probs, (1,2,3), (2,3,1))
+        # permprobs[a,b,c,d] = prob of measuring b given starting in a, for a circuit of length lengths[c], and in fact the d-th such circuit.
+        permwchars = np.moveaxis(wchars, (0,1), (1,0))
+        # permchars[x,y,z] = value of the z-th irreps character function for the hidden initial gate in the x-th circuit of length lengths[y]
         synthetic_probs  = np.zeros((num_effects, num_lens))
-        survival_probs   = np.zeros((num_statepreps,   num_lens))
         for j in range(num_lens):
-            P = np.zeros((num_statepreps, num_statepreps))
-            for i in range(num_statepreps):
-                P[i,:] = mean_charweighted_empirical_distribution(_probs[i,j,:,:], dimweighted_chars[j,:,:])
-            Q = M @ P @ M.T
-            survival_probs[ :, j] = P[diag_statepreps]
-            synthetic_probs[:, j] = Q[diag_povmeffects]
+            currprobs = permprobs[:,:,j,:]
+            currprobs = empirical_distribution(currprobs)
+            currchars = permwchars[:,j,:]
+            P = np.tensordot(currprobs, currchars, axes=1) / circuits_per_length
+            # P[u,v,w] = [w-th irrep character-weighted] transition probability to state v from state u
+            for k in range(num_irreps):
+                block = P[:,:,k]
+                row_M_k = M[k,:]
+                synthetic_probs[k,j] = row_M_k @ block @ row_M_k
 
-        return synthetic_probs, survival_probs
+        return synthetic_probs, None
 
 
 class Analysis:
