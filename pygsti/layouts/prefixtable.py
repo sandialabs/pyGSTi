@@ -1162,12 +1162,15 @@ class Tree:
         """
         G = _nx.DiGraph()
         stack = [(None, root) for root in self.roots]
+        insertion_order = 0
         while stack:
             parent, node = stack.pop()
             node_id = id(node)
             prop_cost = node.cost if isinstance(node, RootNode) else 1
             G.add_node(node_id, cost=len(node.orig_indices), orig_indices=tuple(node.orig_indices), 
-                       label=node.value, prop_cost = prop_cost)
+                       label=node.value, prop_cost = prop_cost,
+                       insertion_order=insertion_order)
+            insertion_order+=1
             if parent is not None:
                 parent_id = id(parent)
                 edge_cost = node.calculate_promotion_cost()
@@ -1178,7 +1181,7 @@ class Tree:
         #if there are multiple roots then add an additional virtual root node as the
         #parent for all of these roots to enable partitioning with later algorithms.
         if len(self.roots)>1:
-            G.add_node('virtual_root', cost = 0, orig_indices=(), label = (), prop_cost=0)
+            G.add_node('virtual_root', cost = 0, orig_indices=(), label = (), prop_cost=0, insertion_order=-1)
             for root in self.roots:
                 G.add_edge('virtual_root', id(root), promotion_cost=0)
 
@@ -1234,7 +1237,8 @@ def _copy_networkx_graph(G):
     # Copy nodes with attributes
     for node, data in G.nodes(data=True):
         new_G.add_node(node, cost = data['cost'], orig_indices=data['orig_indices'], 
-                       label= data['label'] , prop_cost = data['prop_cost'])
+                       label= data['label'] , prop_cost = data['prop_cost'],
+                       insertion_order=data['insertion_order'])
 
     # Copy edges with attributes
     for u, v, data in G.edges(data=True):
@@ -1337,11 +1341,15 @@ def _partition_levels(tree, root):
         for child in tree.successors(node):
             queue.append((child, level + 1))
     
+    tree_nodes = tree.nodes
     # Convert the levels dictionary to a list of sets ordered by level
-    sorted_levels = [levels[level] for level in sorted(levels.keys())]
+    sorted_levels = []
+    for level in sorted(levels.keys()):
+        # Sort nodes at each level by 'insertion_order' attribute
+        sorted_nodes = sorted(levels[level], key=lambda node: tree_nodes[node]['insertion_order'])
+        sorted_levels.append(sorted_nodes)
     
     return sorted_levels
-
 
 
 def _partition_levels_and_compute_subtree_weights(tree, root, weight_key):
@@ -1402,7 +1410,11 @@ def _partition_levels_and_compute_subtree_weights(tree, root, weight_key):
         subtree_weights[node] = subtree_weight
 
     # Convert the levels dictionary to a list of sets ordered by level
-    sorted_levels = [levels[level] for level in sorted(levels.keys())]
+    sorted_levels = []
+    for level in sorted(levels.keys()):
+        # Sort nodes at each level by 'insertion_order' attribute
+        sorted_nodes = sorted(levels[level], key=lambda node: tree_nodes[node]['insertion_order'])
+        sorted_levels.append(sorted_nodes)
 
     return sorted_levels, subtree_weights
 
@@ -1445,6 +1457,9 @@ def _path_to_root(tree, node, root):
 
     while current_node != root:
         path.append(current_node)
+        #note: for a tree structure there should be just one predecessor
+        #so not worried about nondeterminism, if we every apply this to another
+        #graph structure this needs to be reevaluated.
         predecessors = list(tree.predecessors(current_node))
         current_node = predecessors[0]
     path.append(root)
@@ -1503,13 +1518,14 @@ def _collect_orig_indices(tree, root):
     orig_indices_list = []
     queue = [root]
     
+    #TODO: See if this would be any faster with one of the dfs/bfs iterators in networkx
     while queue:
         node = queue.pop()
         orig_indices_list.extend(tree.nodes[node]['orig_indices'])
         for child in tree.successors(node):
             queue.append(child)
     
-    return orig_indices_list
+    return sorted(orig_indices_list) #sort it to account for any nondeterministic traversal order.
 
 def _process_node_km(node, tree, subtree_weights, cut_edges, max_weight, root, new_roots):
     """
@@ -1524,8 +1540,11 @@ def _process_node_km(node, tree, subtree_weights, cut_edges, max_weight, root, n
     if subtree_weights[node]<=max_weight:
         return
     
+    tree_nodes = tree.nodes
     #otherwise we will sort the weights of the child nodes to get the heaviest weight ones.
-    weighted_children = [(child, subtree_weights[child]) for child in tree.successors(node)]
+    #sorting by insertion order to ensure determinism.
+    weighted_children = [(child, subtree_weights[child]) for child in 
+                         sorted(tree.successors(node), key=lambda node: tree_nodes[node]['insertion_order']) ]
     sorted_weighted_children = sorted(weighted_children, key = lambda x: x[1], reverse=True)
     
     #get the path of nodes up to the root which need to have their weights updated upon edge removal.
@@ -1542,8 +1561,6 @@ def _process_node_km(node, tree, subtree_weights, cut_edges, max_weight, root, n
         #update the subtree weight of the current node and all parents up to the root.
         for node_to_update in nodes_to_update:
             subtree_weights[node_to_update]-= removed_child_weight
-        #update the propagation cost attribute of the removed child.
-        #tree.nodes[removed_child]['prop_cost'] += tree.edges[node, removed_child]['promotion_cost']
         #update index:
         removed_child_index+=1
 
@@ -1607,18 +1624,17 @@ def tree_partition_kundu_misra(tree, max_weight, weight_key='cost', test_leaves 
     root = _find_root(tree)
     new_roots.append(root)
 
+    tree_nodes = tree.nodes
+
     if test_leaves:
         #find the leaves:
         leaves = _find_leaves(tree)
         #make sure that the weights of the leaves are all less than the maximum weight.
         msg = 'The maximum node weight for at least one leaf is greater than the maximum weight, no partition possible.'
-        assert all([tree.nodes[leaf][weight_key]<=max_weight for leaf in leaves]), msg
+        assert all([tree_nodes[leaf][weight_key]<=max_weight for leaf in leaves]), msg
         
-    #precompute a list of subtree weights which will be dynamically updated as we make cuts.
-    #subtree_weights = 
-    
-    #break the tree into levels equidistant from the root.
-    #tree_levels = 
+    #precompute a list of subtree weights which will be dynamically updated as we make cuts. Also
+    #parition tree into levels based on distance from root.
     if precomp_levels is None and precomp_weights is None:
         tree_levels, subtree_weights = _partition_levels_and_compute_subtree_weights(tree, root, weight_key)
     else:
@@ -1633,7 +1649,10 @@ def tree_partition_kundu_misra(tree, max_weight, weight_key='cost', test_leaves 
     for level in reversed(tree_levels):
         for node in level:
             _process_node_km(node, tree, subtree_weights, cut_edges, max_weight, root, new_roots)
-        
+
+    #sort the new root nodes in case there are determinism issues
+    new_roots = sorted(new_roots, key=lambda node: tree_nodes[node]['insertion_order'])    
+    
     if return_levels_and_weights:
         return cut_edges, new_roots, tree_levels, subtree_weights_orig
     else:
@@ -1658,7 +1677,7 @@ def _bisect_tree(tree, subtree_root, subtree_weights, weight_key, root_cost = 0,
     target_prop_cost = new_subtree_cost[subtree_root] * target_proportion
     closest_node = subtree_root
     closest_distance = new_subtree_cost[subtree_root]
-    for node, cost in new_subtree_cost.items():
+    for node, cost in new_subtree_cost.items(): #since the nodes in each level are sorted this should be alright for determinism.
         current_distance = abs(cost - target_prop_cost)
         if current_distance < closest_distance:
             closest_distance = current_distance
@@ -1666,6 +1685,7 @@ def _bisect_tree(tree, subtree_root, subtree_weights, weight_key, root_cost = 0,
     #we now have the node which when promoted to a root produces the tree closest to a bisection in terms of propagation
     #cost possible. Let's perform that bisection now.
     if closest_node is not subtree_root:
+        #since a tree should only be one predecessor, so don't need to worry about determinism.
         cut_edge = (list(tree.predecessors(closest_node))[0], closest_node)
         return cut_edge, (new_subtree_cost[closest_node], subtree_weights[subtree_root] - subtree_weights[closest_node])
     else:
@@ -1691,7 +1711,9 @@ def _bisection_pass(partitioned_tree, cut_edges, new_roots, num_sub_tables, weig
         #check whether we need to continue paritioning subtrees.
         if len(new_roots) == num_sub_tables:
             break
-            
+    #sort the new root nodes in case there are determinism issues
+    new_roots = sorted(new_roots, key=lambda node: partitioned_tree.nodes[node]['insertion_order'])    
+
     return partitioned_tree, new_roots, cut_edges
 
 def _refinement_pass(partitioned_tree, roots, weight_key, imbalance_threshold=1.2, minimum_improvement_threshold = .1):
@@ -1701,6 +1723,8 @@ def _refinement_pass(partitioned_tree, roots, weight_key, imbalance_threshold=1.
     partitioned_tree = _copy_networkx_graph(partitioned_tree)
     subtree_weights = [(root, _compute_subtree_weights(partitioned_tree, root, weight_key)) for root in roots]
     sorted_subtree_weights = sorted(subtree_weights, key=lambda x: x[1][x[0]], reverse=True)
+
+    partitioned_tree_nodes = partitioned_tree.nodes
 
     #Strategy: pair heaviest and lightest subtrees and identify the subtree in the heaviest that could be
     #snipped out and added to the lightest to bring their weights as close as possible.
@@ -1723,7 +1747,7 @@ def _refinement_pass(partitioned_tree, roots, weight_key, imbalance_threshold=1.
         if heavy_light_ratios[i] > imbalance_threshold:
             #calculate the fraction of the heavy tree that would be needed to bring the weight of the
             #lighter tree in line.
-            root_cost =  partitioned_tree.nodes[heavy_light_pairs[i][0][0]][weight_key] if weight_key == 'prop_cost' else 0
+            root_cost =  partitioned_tree_nodes[heavy_light_pairs[i][0][0]][weight_key] if weight_key == 'prop_cost' else 0
 
             rebalancing_target_fraction = (.5*(heavy_light_weights[i][0] - heavy_light_weights[i][1]))/heavy_light_weights[i][0]
             cut_edge, new_subtree_weights =_bisect_tree(partitioned_tree, heavy_light_pairs[i][0][0], heavy_light_pairs[i][0][1], 
