@@ -198,7 +198,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 if sparse:
                     #Note: complex OK here sometimes, as only linear combos of "other" gens
                     # (like (i,j) + (j,i) terms) need to be real.
-                    superops = [_mt.safe_dot(leftTrans, _mt.safe_dot(mx, rightTrans)) for mx in superops]
+                    superops = [leftTrans @ (mx @ rightTrans) for mx in superops]
                     for mx in superops: mx.sort_indices()
                 else:
                     #superops = _np.einsum("ik,akl,lj->aij", leftTrans, superops, rightTrans)

@@ -606,14 +606,14 @@ class OpModel(Model):
         """
         self._clean_paramvec()
         return len(self._paramvec)
-    
+
     @property
     def parameter_labels(self):
         """
         A list of labels, usually of the form `(op_label, string_description)` describing this model's parameters.
         """
         self._clean_paramvec()
-        return self._paramlbls
+        return self._ops_paramlbls_to_model_paramlbls(self._paramlbls)
     
     def set_parameter_label(self, index, label):
         """
@@ -1093,7 +1093,7 @@ class OpModel(Model):
                 obj.set_gpindices(new_inds, self, memo)
 
         self._paramvec = self._ops_paramvec_to_model_paramvec(w)
-        self._paramlbls = self._ops_paramlbls_to_model_paramlbls(wl)
+        self._paramlbls = wl
         self._param_bounds = wb if _param_bounds_are_nontrivial(wb) else None
         if debug: print("DEBUG: Done rebuild: %d op params" % len(w))
         

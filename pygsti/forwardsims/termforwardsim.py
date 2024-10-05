@@ -267,7 +267,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
                                     self.oob_check_interval, self.cache)
 
     def create_layout(self, circuits, dataset=None, resource_alloc=None, array_types=('E',),
-                      derivative_dimension=None, verbosity=0):
+                      derivative_dimension=None, verbosity=0, layout_creation_circuit_cache=None):
         """
         Constructs an circuit-outcome-probability-array (COPA) layout for a list of circuits.
 
@@ -296,6 +296,12 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         verbosity : int or VerbosityPrinter
             Determines how much output to send to stdout.  0 means no output, higher
             integers mean more output.
+        
+        layout_creation_circuit_cache:
+            A precomputed dictionary serving as a cache for completed
+            circuits. I.e. circuits with prep labels and POVM labels appended.
+            Along with other useful pre-computed circuit structures used in layout
+            creation.
 
         Returns
         -------
@@ -330,6 +336,7 @@ class TermForwardSimulator(_DistributableForwardSimulator):
         printer.log("   %d atoms, parameter block size limits %s" % (natoms, str(param_blk_sizes)))
         assert(_np.prod((na,) + npp) <= nprocs), "Processor grid size exceeds available processors!"
 
+        # TODO: Layout circuit creation cache unused for TermCOPALayout
         layout = _TermCOPALayout(circuits, self.model, dataset, natoms, na, npp, param_dimensions,
                                  param_blk_sizes, resource_alloc, printer)
         #MEM debug_prof.print_memory("CreateLayout2 - nAtoms = %d" % len(layout.atoms), True)

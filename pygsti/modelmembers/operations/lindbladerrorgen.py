@@ -540,8 +540,8 @@ class LindbladErrorgen(_LinearOperator):
         self._paramlbls = _np.array(list(_itertools.chain.from_iterable(
             [blk.param_labels for blk in self.coefficient_blocks])), dtype=object)
         assert(self._onenorm_upbound is not None)  # _update_rep should set this
-        #Done with __init__(...)
 
+        # Done with __init__(...)
 
     def _init_terms(self, coefficient_blocks, max_polynomial_vars):
 
@@ -1238,7 +1238,7 @@ class LindbladErrorgen(_LinearOperator):
 
             #conjugate Lindbladian exponent by U:
             err_gen_mx = self.to_sparse() if self._rep_type == 'sparse superop' else self.to_dense()
-            err_gen_mx = _mt.safe_dot(Uinv, _mt.safe_dot(err_gen_mx, U))
+            err_gen_mx = Uinv  @ (err_gen_mx @ U)
             trunc = 1e-6 if isinstance(s, _gaugegroup.UnitaryGaugeGroupElement) else False
             self._set_params_from_matrix(err_gen_mx, truncate=trunc)
             self.dirty = True
