@@ -147,6 +147,20 @@ def raw_su2_rb_design(N: int, lengths: np.ndarray, seed: int, character=False):
         all_circuits.append(np.array(fixedlen_circuits))
     return all_circuits
 
+def empirical_distribution(outcome_distributions, shots_per_circuit, g):
+    if shots_per_circuit == np.inf:
+        empirical_distn = outcome_distributions.copy()
+    else:
+        empirical_distn = g.multinomial(shots_per_circuit, outcome_distributions) / shots_per_circuit
+    return empirical_distn
+
+def sanitize_probs(_probs):
+    tol = 1e-14
+    temp = _probs.copy()
+    temp[temp >= 0] = 0
+    assert np.all(la.norm(temp, axis=3, ord=2) <= tol)
+    _probs[_probs < 0] = 0.0
+    _probs /= np.sum(_probs, axis=3)[:,:,:,np.newaxis]
 
 """
 Classic RB (although allowing for multiple state preps, and allowing full POVMs rather than 2-element POVMs)
@@ -278,15 +292,6 @@ class SU2RBSim:
         return block
 
     @staticmethod
-    def sanitize_probs(_probs):
-        tol = 1e-14
-        temp = _probs.copy()
-        temp[temp >= 0] = 0
-        assert np.all(la.norm(temp, axis=3, ord=2) <= tol)
-        _probs[_probs < 0] = 0.0
-        _probs /= np.sum(_probs, axis=3)[:,:,:,np.newaxis]
-
-    @staticmethod
     def synspam_transform(_probs, M=None, shots_per_circuit=np.inf, seed=0):
         #  probs[i,j,k,ell] = probability of measuring outcome ell when running the k-th lengths[j] circuit given preparation in state i.
         if M is None:
@@ -297,16 +302,9 @@ class SU2RBSim:
         assert M.shape == (num_statepreps, num_povm_effects)
         
         g = np.random.default_rng(seed)
-        
-        def mean_empirical_distribution(distributions):
-            if shots_per_circuit == np.inf:
-                empirical_distn = distributions
-            else:
-                empirical_distn = g.multinomial(shots_per_circuit, distributions) / shots_per_circuit
-            return np.mean(empirical_distn, axis=0)
 
         # check each _probs[i,j,k,:] for negative values and normalize to a probability distribution
-        SU2RBSim.sanitize_probs(_probs)
+        sanitize_probs(_probs)
 
         diag_statepreps  = np.diag_indices(num_statepreps)
         diag_povmeffects = np.diag_indices(num_povm_effects)
@@ -316,7 +314,7 @@ class SU2RBSim:
             P = np.zeros((num_statepreps, num_statepreps))
             # ^ This will be row-stochastic, like a state transition matrix for a Markov chain.
             for i in range(num_statepreps):
-                P[i,:] = mean_empirical_distribution(_probs[i,j,:,:])
+                P[i,:] = empirical_distribution(_probs[i,j,:,:], shots_per_circuit, g).mean(axis=0)
             Q = M @ P @ M.T
             survival_probs[ :, j] = P[diag_statepreps]
             synthetic_probs[:, j] = Q[diag_povmeffects]
@@ -387,9 +385,18 @@ class SU2CharacterRBSim(SU2RBSim):
 
     @staticmethod
     def synspam_character_transform(_probs, _chars, _irrep_sizes, M=None, shots_per_circuit=np.inf, seed=0):
-        #  probs[i,j,k,ell] = probability of measuring outcome ell when running the k-th lengths[j] circuit given preparation in state i.
-        #  chars[  j,k,x] = the value of the x^th irrep's character function for the "hidden" initial gate in the k-th circuit of length lengths[j];
-        #   ^ the same circuits and hidden initial gates were used for all statepreps.
+        # Inputs:
+        #   probs[i,j,k,ell] = probability of measuring outcome ell when running the k-th lengths[j] circuit given preparation in state i.
+        #
+        #   chars[  j,k,x] = the value of the x^th irrep's character function for the "hidden" initial gate in the k-th circuit of length lengths[j];
+        #       ^ the same circuits and hidden initial gates were used for all statepreps.
+        #
+        # Output
+        #   synthetic_probs[ell,j] = character-weighted synthetic survival probability for circuits of length lengths[j] that start in state ell,
+        #   where empirical distributions are computed with shots_per_circuit shots of each circuit.
+        #   
+        #   None (retained for compatibility reasons)
+        #
         if M is None:
             M = get_M()
 
@@ -401,17 +408,10 @@ class SU2CharacterRBSim(SU2RBSim):
         if num_irreps != num_effects:
             raise NotImplementedError()
 
-        SU2RBSim.sanitize_probs(_probs)
+        sanitize_probs(_probs)
         wchars = _chars * _irrep_sizes[np.newaxis, np.newaxis, :]
         g = np.random.default_rng(seed)
         
-        def empirical_distribution(distributions):
-            if shots_per_circuit == np.inf:
-                empirical_distn = distributions.copy()
-            else:
-                empirical_distn = g.multinomial(shots_per_circuit, distributions) / shots_per_circuit
-            return empirical_distn
-
         permprobs = np.moveaxis(_probs, (1,2,3), (2,3,1))
         # permprobs[a,b,c,d] = prob of measuring b given starting in a, for a circuit of length lengths[c], and in fact the d-th such circuit.
         permwchars = np.moveaxis(wchars, (0,1), (1,0))
@@ -419,7 +419,7 @@ class SU2CharacterRBSim(SU2RBSim):
         synthetic_probs  = np.zeros((num_effects, num_lens))
         for j in range(num_lens):
             currprobs = permprobs[:,:,j,:]
-            currprobs = empirical_distribution(currprobs)
+            currprobs = empirical_distribution(currprobs, shots_per_circuit, g)
             currchars = permwchars[:,j,:]
             P = np.tensordot(currprobs, currchars, axes=1) / circuits_per_length
             # P[u,v,w] = [w-th irrep character-weighted] transition probability to state v from state u
@@ -429,6 +429,45 @@ class SU2CharacterRBSim(SU2RBSim):
                 synthetic_probs[k,j] = row_M_k @ block @ row_M_k
 
         return synthetic_probs, None
+
+    @staticmethod
+    def character_transform(_probs, _chars, irrep_sizes, shots_per_circuit=np.inf, seed=0):
+        # Inputs:
+        #   probs[i,j,k,ell] = probability of measuring outcome ell when running the k-th lengths[j] circuit given preparation in state i.
+        #
+        #   chars[  j,k,x] = the value of the x^th irrep's character function for the "hidden" initial gate in the k-th circuit of length lengths[j];
+        #       ^ the same circuits and hidden initial gates were used for all statepreps.
+        #
+        # Output
+        #   arr[i,ell,x,j] = empirical mean of x^th irrep's (scaled) character function times the indicator variable that we end in state ell, having started in state i and run a circuit of depth lengths[j].
+        #                    (the mean being over the k=0,...,N-1 random circuits)
+
+        num_statepreps, num_lens, circuits_per_length, num_effects = _probs.shape
+        assert circuits_per_length > 1
+        num_irreps = irrep_sizes.size
+        assert _chars.shape == (num_lens, circuits_per_length, num_irreps)
+        if num_irreps != num_effects:
+            raise NotImplementedError()
+
+
+        sanitize_probs(_probs)
+        g = np.random.default_rng(seed)
+        probs = empirical_distribution(_probs, shots_per_circuit, g)
+        wchars = _chars * irrep_sizes[np.newaxis, np.newaxis, :]
+
+        permprobs = np.moveaxis(probs, (1,2,3), (2,3,1))
+        # permprobs[a,b,c,d] = prob of measuring b given starting in a, for a circuit of length lengths[c], and in fact the d-th such circuit.
+        permwchars = np.moveaxis(wchars, (0,1), (1,0))
+        # permchars[x,y,z] = value of the z-th irreps character function for the hidden initial gate in the x-th circuit of length lengths[y]
+        
+        arr = np.zeros((num_statepreps, num_effects, num_irreps, num_lens))
+        for j in range(num_lens):
+            currprobs = permprobs[:,:,j,:]
+            currchars = permwchars[:,j,:]
+            P = np.tensordot(currprobs, currchars, axes=1) / circuits_per_length
+            # P[u,v,w] = [w-th irrep character-weighted] transition probability to state v from state u
+            arr[:,:,:,j] = P
+        return arr
 
 
 class Analysis:
