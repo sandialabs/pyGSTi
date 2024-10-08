@@ -315,6 +315,9 @@ class SU2RBSim:
             # ^ This will be row-stochastic, like a state transition matrix for a Markov chain.
             for i in range(num_statepreps):
                 P[i,:] = empirical_distribution(_probs[i,j,:,:], shots_per_circuit, g).mean(axis=0)
+                # ^ Compare to SU2CharacterRBSim.character_transform. This is equivalent to 
+                #   that function's tensor contraction (see "tensordot") where "currchars" is
+                #   an array of all ones.
             Q = M @ P @ M.T
             survival_probs[ :, j] = P[diag_statepreps]
             synthetic_probs[:, j] = Q[diag_povmeffects]
@@ -383,52 +386,6 @@ class SU2CharacterRBSim(SU2RBSim):
             probs = SU2RBSim._process_circuits(self, fixedlen_circuits, True)
         return probs
 
-    @staticmethod
-    def synspam_character_transform(_probs, _chars, _irrep_sizes, M=None, shots_per_circuit=np.inf, seed=0):
-        # Inputs:
-        #   probs[i,j,k,ell] = probability of measuring outcome ell when running the k-th lengths[j] circuit given preparation in state i.
-        #
-        #   chars[  j,k,x] = the value of the x^th irrep's character function for the "hidden" initial gate in the k-th circuit of length lengths[j];
-        #       ^ the same circuits and hidden initial gates were used for all statepreps.
-        #
-        # Output
-        #   synthetic_probs[ell,j] = character-weighted synthetic survival probability for circuits of length lengths[j] that start in state ell,
-        #   where empirical distributions are computed with shots_per_circuit shots of each circuit.
-        #   
-        #   None (retained for compatibility reasons)
-        #
-        if M is None:
-            M = get_M()
-
-        num_statepreps, num_lens, circuits_per_length, num_effects = _probs.shape
-        assert circuits_per_length > 1
-        assert M.shape == (num_statepreps, num_effects)
-        num_irreps = _irrep_sizes.size
-        assert _chars.shape == (num_lens, circuits_per_length, num_irreps)
-        if num_irreps != num_effects:
-            raise NotImplementedError()
-
-        sanitize_probs(_probs)
-        wchars = _chars * _irrep_sizes[np.newaxis, np.newaxis, :]
-        g = np.random.default_rng(seed)
-        
-        permprobs = np.moveaxis(_probs, (1,2,3), (2,3,1))
-        # permprobs[a,b,c,d] = prob of measuring b given starting in a, for a circuit of length lengths[c], and in fact the d-th such circuit.
-        permwchars = np.moveaxis(wchars, (0,1), (1,0))
-        # permchars[x,y,z] = value of the z-th irreps character function for the hidden initial gate in the x-th circuit of length lengths[y]
-        synthetic_probs  = np.zeros((num_effects, num_lens))
-        for j in range(num_lens):
-            currprobs = permprobs[:,:,j,:]
-            currprobs = empirical_distribution(currprobs, shots_per_circuit, g)
-            currchars = permwchars[:,j,:]
-            P = np.tensordot(currprobs, currchars, axes=1) / circuits_per_length
-            # P[u,v,w] = [w-th irrep character-weighted] transition probability to state v from state u
-            for k in range(num_irreps):
-                block = P[:,:,k]
-                row_M_k = M[k,:]
-                synthetic_probs[k,j] = row_M_k @ block @ row_M_k
-
-        return synthetic_probs, None
 
     @staticmethod
     def character_transform(_probs, _chars, irrep_sizes, shots_per_circuit=np.inf, seed=0):
@@ -441,14 +398,11 @@ class SU2CharacterRBSim(SU2RBSim):
         # Output
         #   arr[i,ell,x,j] = empirical mean of x^th irrep's (scaled) character function times the indicator variable that we end in state ell, having started in state i and run a circuit of depth lengths[j].
         #                    (the mean being over the k=0,...,N-1 random circuits)
-
+        #
         num_statepreps, num_lens, circuits_per_length, num_effects = _probs.shape
         assert circuits_per_length > 1
         num_irreps = irrep_sizes.size
         assert _chars.shape == (num_lens, circuits_per_length, num_irreps)
-        if num_irreps != num_effects:
-            raise NotImplementedError()
-
 
         sanitize_probs(_probs)
         g = np.random.default_rng(seed)
@@ -468,6 +422,39 @@ class SU2CharacterRBSim(SU2RBSim):
             # P[u,v,w] = [w-th irrep character-weighted] transition probability to state v from state u
             arr[:,:,:,j] = P
         return arr
+
+    @staticmethod
+    def synspam_character_transform(_probs, _chars, _irrep_sizes, M=None, shots_per_circuit=np.inf, seed=0):
+        # Inputs:
+        #   probs[i,j,k,ell] = probability of measuring outcome ell when running the k-th lengths[j] circuit given preparation in state i.
+        #
+        #   chars[  j,k,x] = the value of the x^th irrep's character function for the "hidden" initial gate in the k-th circuit of length lengths[j];
+        #       ^ the same circuits and hidden initial gates were used for all statepreps.
+        #
+        # Output
+        #   synthetic_probs[ell,j] = character-weighted synthetic survival probability for circuits of length lengths[j] that start in state ell,
+        #   where empirical distributions are computed with shots_per_circuit shots of each circuit.
+        #   
+        #   None (retained for compatibility reasons)
+        #
+        arr = SU2CharacterRBSim.character_transform(_probs, _chars, _irrep_sizes, shots_per_circuit, seed)
+        num_statepreps, num_effects, num_irreps, num_lens = arr.shape
+        if num_irreps != num_effects:
+            raise NotImplementedError()
+        if M is None:
+            M = get_M()
+        assert M.shape == (num_effects, num_statepreps)
+
+        synthetic_probs  = np.zeros((num_effects, num_lens))
+        for j in range(num_lens):
+            P = arr[:,:,:,j]
+            # P[u,v,w] = [w-th irrep character-weighted] transition probability to state v from state u
+            for k in range(num_irreps):
+                block = P[:,:,k]
+                row_M_k = M[k,:]
+                synthetic_probs[k,j] = row_M_k @ block @ row_M_k
+
+        return synthetic_probs, None
 
 
 class Analysis:
