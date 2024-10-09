@@ -336,7 +336,8 @@ class SU2CharacterRBDesign(SU2RBDesign):
         SU2RBDesign.__init__(self, su2rep, N, lengths, statepreps, povm, seed, __character__=True)
         self.angles2irrepchars = su2rep.angles2irrepchars
         self.unitaries_from_angles = su2rep.unitaries_from_angles
-        self.num_irreps = su2rep.irrep_labels.size
+        self.irrep_sizes = su2rep.irrep_block_sizes
+        self.num_irreps = self.irrep_sizes.size
         self.chars = np.zeros(shape=(self.lengths.size, self.N, self.num_irreps))
         # chars[j,k,ell] = the ell-th irrep's character for the unitary induced by the (noiseless version of the) k-th circuit of length lengths[j]
         self._compute_chars()
