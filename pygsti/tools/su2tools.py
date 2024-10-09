@@ -189,6 +189,13 @@ class SU2:
         theta[theta < 0] += 2*np.pi
         theta[theta > np.pi] = 2*np.pi - theta[theta > np.pi] 
         return theta
+    
+    @staticmethod
+    def axis_rotation_angle_from_euler_angles(abg):
+        theta_by_2 = np.atleast_1d(np.arccos(np.cos(abg[1]/2)*np.cos((abg[0]+abg[2])/2)))
+        theta = 2*theta_by_2
+        theta[theta > np.pi] = 2*np.pi - theta[theta > np.pi]
+        return theta
 
     @classmethod
     def unitaries_from_angles(cls,alpha,beta,gamma):
@@ -254,20 +261,22 @@ class SU2:
         angles = np.atleast_1d(angles)
         angles = np.atleast_2d(angles).T
         assert angles.shape == (3, angles.size // 3)
-        out = cls.characters_from_euler_angles(angles).T
+        out = cls.characters_from_euler_angles(angles)
         assert out.shape == (angles.size // 3, cls.irrep_labels.size)
         return out
     
     @classmethod
     def characters_from_euler_angles(cls,abg):
-        # Require that a,b,g = abg (so either it's an array of shape (3,) or (3,N) for some N)
-        theta_by_2 = np.arccos(np.cos(abg[1]/2)*np.cos((abg[0]+abg[2])/2))
-        theta = 2*theta_by_2
-        theta[theta > np.pi] = 2*np.pi - theta[theta > np.pi] 
+        # Input: 
+        #   Require that a,b,g = abg (so either it's an array of shape (3,) or (3,N) for some N)
+        # Output:
+        #   if abg.size == 3, then out.shape == (cls.num_irreps,)
+        #   else, out.shape == (abg.shape[1], )
+        theta = SU2.axis_rotation_angle_from_euler_angles(abg)
         theta_by_2 = theta / 2
         def char(_k):
             return np.sin((2*_k + 1)*theta_by_2)/np.sin(theta_by_2)
-        out = np.array([ char(_k) for _k in cls.irrep_labels])
+        out = np.array([ char(_k) for _k in cls.irrep_labels]).T
         return out
 
 
@@ -500,4 +509,5 @@ class Spin72(SU2):
             out.append(np.sum(vec))
             idx += b_sz
         out = np.array(out)
-        return out
+        return out.reshape((1,-1))
+

@@ -54,7 +54,6 @@ class BaseSU2Tests(TestCase):
             return la.expm(1j * t * su2class.Jy)
         self._test_matval_funcs_agree(self.thetas, our_handle, ref_handle)
         
-
     def _test_expmiJy_batch(self, su2class):
         actual = su2class.expm_iJy(self.thetas)
         expect = np.array([
@@ -204,6 +203,20 @@ class TestSU2(BaseSU2Tests):
         #TODO: run KS tests for each of the three angles, comparing against SU2.random_euler_angles.
         return
 
+    def test_rotation_axis_angles(self):
+        # compare angles extracted from unitaries and from Euler angles
+        np.random.seed(0)
+        eas = np.row_stack(SU2.random_euler_angles(5))
+        Us = SU2.unitaries_from_angles(*eas)
+        raas_from_eas = SU2.axis_rotation_angle_from_euler_angles(eas)
+        raas_from_us  = SU2.axis_rotation_angle_from_2x2_unitaries(Us)
+        for t_ea, t_u in zip(raas_from_eas, raas_from_us):
+            self.assertGreaterEqual(t_ea, 0.0)
+            self.assertGreaterEqual(t_u, 0.0)
+            self.assertLessEqual(t_ea, np.pi)
+            self.assertLessEqual(t_u, np.pi)
+            self.assertAlmostEqual(t_ea, t_u)
+        return
 
 class TestSpin72(BaseSU2Tests):
 
@@ -248,11 +261,11 @@ class TestSpin72(BaseSU2Tests):
         # be verified by testing a single random SU(2) element, and the diagonalizer's
         # unitarity can be checked cheaply.
         np.random.seed(0)
-        aa = np.column_stack(Spin72.random_euler_angles(5))
-        Us = Spin72.unitaries_from_angles(aa[:,0], aa[:,1], aa[:,2])
+        aa = np.row_stack(Spin72.random_euler_angles(5))
+        Us = Spin72.unitaries_from_angles(*aa)
         for i,U in enumerate(Us):
             expect = Spin72.all_characters_from_unitary(U)
-            actual = Spin72.characters_from_euler_angles(aa[i,:])
+            actual = Spin72.characters_from_euler_angles(aa[:,i])
             discrepency = la.norm(actual - expect)
             self.assertLessEqual(discrepency, 64*self.RELTOL)
         return
