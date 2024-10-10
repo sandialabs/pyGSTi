@@ -147,12 +147,14 @@ def raw_su2_rb_design(N: int, lengths: np.ndarray, seed: int, character=False):
         all_circuits.append(np.array(fixedlen_circuits))
     return all_circuits
 
+
 def empirical_distribution(outcome_distributions, shots_per_circuit, g):
     if shots_per_circuit == np.inf:
         empirical_distn = outcome_distributions.copy()
     else:
         empirical_distn = g.multinomial(shots_per_circuit, outcome_distributions) / shots_per_circuit
     return empirical_distn
+
 
 def sanitize_probs(_probs):
     tol = 1e-14
@@ -196,11 +198,13 @@ class SU2RBDesign:
 
 class SU2RBSim:
 
-    def __init__(self, design):
+    def __init__(self, design, __allow_characters__=False):
         self._unitary_dim = design.su2rep.eigJx.size
         self._superop_dim = self._unitary_dim ** 2
         self._noise_channel = np.eye(self._superop_dim)
         self.design = design
+        if not __allow_characters__:
+            assert type(design) == SU2RBDesign
         self.probs = None
         pass
     
@@ -246,10 +250,16 @@ class SU2RBSim:
         self._set_error_channel_Jz_dephasing(gamma, 2.0)
         return
 
-    def set_error_channel_rotate_Jz2(self, theta: float):
-        U = la.expm(1j * theta * self.su2rep.Jz @ self.su2rep.Jz)
+    def set_error_channel_rotate_Jz_pow(self, theta: float, pow: int):
+        dZ = self.su2rep.SPINS
+        exp_1jthetaJzpow = np.exp(1j * theta * (dZ ** pow))
+        U = np.diag(exp_1jthetaJzpow)
         self._noise_channel = unitary_to_superop(U, 'std')
-        self._noise_channel_info = ('rotate_Jz2', (theta,))
+        self._noise_channel_info = ('rotate_Jz', (theta, pow))
+        return
+
+    def set_error_channel_rotate_Jz2(self, theta: float):
+        self.set_error_channel_rotate_Jz_pow(theta, 2)
         return
 
     def set_error_channel_gaussian_compose_rotate_Jz2(self, gamma:float, theta:float):
@@ -357,7 +367,8 @@ class SU2CharacterRBDesign(SU2RBDesign):
 class SU2CharacterRBSim(SU2RBSim):
 
     def __init__(self, design : SU2CharacterRBDesign):
-        SU2RBSim.__init__(self, design)
+        assert isinstance(design, SU2CharacterRBDesign)
+        SU2RBSim.__init__(self, design, __allow_characters__=True)
         return
     
     """Inherited properties: N, num_effects, num_lens, num_statepreps
