@@ -497,7 +497,7 @@ MEASURE 2 ro[2]
         ckt = circuit.Circuit([Label('Gxpi2',0), Label(()), Label([Label('Gh',0), Label('Gtdag',1)]), 
                                Label('Gcnot', (0,1))], line_labels=(0,1))
 
-        converted_qasm = ckt.convert_to_openqasm()
+        converted_qasm = ckt.convert_to_openqasm(include_delay_on_idle=True)
         #this is really just doing a check if anything has changed. I.e. an integration test.
         expected_qasm = 'OPENQASM 2.0;\ninclude "qelib1.inc";\n\nopaque delay(t) q;\n\nqreg q[2];'\
                         +'\ncreg cr[2];\n\nu3(1.570796326794897, 4.71238898038469, 1.570796326794897) q[0];\ndelay(0) q[1];'\
