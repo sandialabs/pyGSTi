@@ -219,6 +219,7 @@ class TorchForwardSimulator(ForwardSimulator):
         if not self.ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
         self.model = model
+        self.logs = []
         super(ForwardSimulator, self).__init__(model)
 
     def _bulk_fill_probs(self, array_to_fill, layout, split_model = None) -> None:
@@ -262,4 +263,5 @@ class TorchForwardSimulator(ForwardSimulator):
         J_val = J_func(*free_params)
         J_val = torch.column_stack(J_val)
         array_to_fill[:] = J_val.cpu().detach().numpy()
+        self.logs.append(array_to_fill.copy())
         return
