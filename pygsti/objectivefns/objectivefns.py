@@ -4943,6 +4943,7 @@ class TimeIndependentMDCObjectiveFunction(MDCObjectiveFunction):
         # dpr has shape == (nCircuits, nDerivCols), weights has shape == (nCircuits,)
         # return shape == (nCircuits, nDerivCols) where ret[i,j] = dP[i,j]*(weights+dweights*(p-f))[i]
         self.raw_objfn.resource_alloc.profiler.add_time("JACOBIAN", tm)
+        # Riley note: could return an abstract linear operator instead.
         return self.jac
 
     def dterms(self, paramvec=None):

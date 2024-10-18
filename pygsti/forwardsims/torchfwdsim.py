@@ -18,6 +18,7 @@ See also: pyGSTi/modelmembers/torchable.py.
 
 from __future__ import annotations
 from typing import Tuple, Optional, Dict, TYPE_CHECKING
+import numpy as np
 if TYPE_CHECKING:
     from pygsti.baseobjs.label import Label
     from pygsti.models.explicitmodel import ExplicitOpModel
@@ -71,7 +72,9 @@ class StatelessModel:
     the sophiciated machinery in TorchForwardSimulator's base class.
     """
 
-    def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout):
+    def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout, **kwargs):
+        if len(kwargs) > 0:
+            raise ValueError('Keyword arguments are only available for subclasses.')
         circuits = []
         self.outcome_probs_dim = 0
         #TODO: Refactor this to use the bulk_expand_instruments_and_separate_povm codepath
@@ -214,37 +217,46 @@ class TorchForwardSimulator(ForwardSimulator):
     """
 
     ENABLED = TORCH_ENABLED
+    StatelessModelType = StatelessModel
 
     def __init__(self, model : Optional[ExplicitOpModel] = None):
         if not self.ENABLED:
             raise RuntimeError('PyTorch could not be imported.')
         self.model = model
         self.logs = []
+        self.extra_stateless_args = dict()
+        self.allow_outcome_dim_mismatch = False
         super(ForwardSimulator, self).__init__(model)
 
     def _bulk_fill_probs(self, array_to_fill, layout, split_model = None) -> None:
         if split_model is None:
-            slm = StatelessModel(self.model, layout)
+            slm = self.StatelessModelType(self.model, layout, **self.extra_stateless_args)
             free_params = slm.get_free_params(self.model)
             torch_bases = slm.get_torch_bases(free_params)
         else:
             slm, torch_bases = split_model
 
         probs = slm.circuit_probs_from_torch_bases(torch_bases)
-        array_to_fill[:slm.outcome_probs_dim] = probs.cpu().detach().numpy().ravel()
+        probs_np = probs.cpu().detach().numpy().ravel()
+        if self.allow_outcome_dim_mismatch:
+            stop = probs_np.size
+        else:
+            stop = slm.outcome_probs_dim
+        array_to_fill[:stop] = probs_np
         return
 
     def _bulk_fill_dprobs(self, array_to_fill, layout, pr_array_to_fill) -> None:
-        slm = StatelessModel(self.model, layout)
+        slm =  self.StatelessModelType(self.model, layout, **self.extra_stateless_args)
         # ^ TODO: figure out how to safely recycle StatelessModel objects from one
         #   call to another. The current implementation is wasteful if we need to 
         #   compute many jacobians without structural changes to layout or self.model.
         free_params = slm.get_free_params(self.model)
     
-        if pr_array_to_fill is not None:
-            torch_bases = slm.get_torch_bases(free_params)
-            splitm = (slm, torch_bases)
-            self._bulk_fill_probs(pr_array_to_fill, layout, splitm)
+        if pr_array_to_fill is None:
+            pr_array_to_fill = np.zeros(shape=(slm.outcome_probs_dim,))
+        torch_bases = slm.get_torch_bases(free_params)
+        splitm = (slm, torch_bases)
+        self._bulk_fill_probs(pr_array_to_fill, layout, splitm)
 
         argnums = tuple(range(len(slm.param_metadata)))
         if slm.default_to_reverse_ad:
@@ -262,6 +274,52 @@ class TorchForwardSimulator(ForwardSimulator):
 
         J_val = J_func(*free_params)
         J_val = torch.column_stack(J_val)
-        array_to_fill[:] = J_val.cpu().detach().numpy()
-        self.logs.append(array_to_fill.copy())
+        J_np = J_val.cpu().detach().numpy()
+        if self.allow_outcome_dim_mismatch:
+            stop = J_np.shape[0]
+        else:
+            stop = slm.outcome_probs_dim
+        array_to_fill[:stop, :] = J_np
+        self.logs.append(
+            np.hstack([array_to_fill.copy(), pr_array_to_fill.reshape((-1,1))])
+        )
         return
+
+
+class SketchableStatelessModel(StatelessModel):
+
+    def __init__(self, model: ExplicitOpModel, layout: CircuitOutcomeProbabilityArrayLayout, sketch=True, **kwargs):
+        super().__init__(model, layout)
+        self.sketch = sketch
+        _ = self.get_free_params(model)
+        # ^ do that to set self.params_dim
+        self.sketch_size = 2 * self.params_dim
+        if self.sketch:
+            self.S = torch.normal(0.0, self.sketch_size ** -0.5, size=(self.sketch_size, self.outcome_probs_dim), dtype=torch.double)
+        return
+
+    def circuit_probs_from_torch_bases(self, torch_bases: Dict[Label, torch.Tensor]) -> torch.Tensor:
+        probs = []
+        for c in self.circuits:
+            superket = torch_bases[c.prep_label]
+            superops = [torch_bases[ol] for ol in c.op_labels]
+            povm_mat = torch_bases[c.povm_label]
+            for superop in superops:
+                superket = superop @ superket
+            circuit_probs = povm_mat @ superket
+            probs.append(circuit_probs)
+        probs = torch.concat(probs)
+        if self.sketch:
+            probs = self.S @ probs
+        return probs
+
+
+class SketchableForwardSimulator(TorchForwardSimulator):
+
+    StatelessModelType = SketchableStatelessModel
+
+    def __init__(self, model : Optional[ExplicitOpModel] = None, sketch=True):
+        super().__init__(model)
+        self.extra_stateless_args = {'sketch': sketch}
+        self.allow_outcome_dim_mismatch = True
+

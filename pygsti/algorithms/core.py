@@ -995,6 +995,7 @@ def _do_runopt(objective, optimizer, printer):
 
     #Perform actual optimization
     tm = _time.time()
+    optimizer.fditer = 0
     opt_result = optimizer.run(objective, profiler, printer)
     profiler.add_time("run_gst_fit: optimize", tm)
 

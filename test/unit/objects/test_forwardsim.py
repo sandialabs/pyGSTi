@@ -150,7 +150,7 @@ class BaseProtocolData:
         cls.mdl_target = smq1Q_XYI.target_model()
         cls.mdl_datagen = cls.mdl_target.depolarize(op_noise=0.05, spam_noise=0.025)
 
-        ds = simulate_data(cls.mdl_datagen, cls.gst_design.all_circuits_needing_data, 20000, sample_error='none')
+        ds = simulate_data(cls.mdl_datagen, cls.gst_design.all_circuits_needing_data, 20000, sample_error='multinomial')
         cls.gst_data = ProtocolData(cls.gst_design, ds)
 
 
