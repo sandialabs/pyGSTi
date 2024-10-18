@@ -1250,7 +1250,11 @@ if _CVXPY_AVAILABLE:
             float
             """
             mxBasis = nearby_model.basis
-            A = nearby_model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt')
+            if isinstance(nearby_model, _ExplicitOpModel):
+                A = nearby_model.operations[self.oplabel].to_dense(on_space='HilbertSchmidt')
+            else:
+                A = nearby_model.operation_blks['gates'][self.oplabel].to_dense(on_space='HilbertSchmidt')
+                mxBasis = 'pp'  # HACK need to set mxBasis based on model but not the full model basis
             JAstd = self.d * _tools.fast_jamiolkowski_iso_std(A, mxBasis)
             JBstd = self.d * _tools.fast_jamiolkowski_iso_std(self.B, mxBasis)
             J = JBstd - JAstd

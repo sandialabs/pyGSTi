@@ -1467,7 +1467,7 @@ class GateSetTomography(_proto.Protocol):
         ret.add_estimate(estimate, estimate_key=self.name)
 
         #Add some better handling for when gauge optimization is turned off (current code path isn't working.)
-        if not self.gaugeopt_suite.is_empty():
+        if not self.gaugeopt_suite.is_empty():  # maybe add flag to do this even when empty?
             ret = _add_gaugeopt_and_badfit(ret, self.name, target_model,
                                            self.gaugeopt_suite, self.unreliable_ops,
                                            self.badfit_options, self.optimizer, 
@@ -2416,7 +2416,7 @@ def _compute_1d_reference_values_and_name(estimate, badfit_options, gaugeopt_sui
                 if dd[key] < 0:  # indicates that diamonddist failed (cvxpy failure)
                     _warnings.warn(("Diamond distance failed to compute %s reference value for 1D wildcard budget!"
                                     " Falling back to trace distance.") % str(key))
-                    dd[key] = _tools.jtracedist(op.to_dense(), target_model.operations[key].to_dense())
+                    dd[key] = _tools.jtracedist(op.to_dense(), targetops_dict[key].to_dense())
 
             spamdd = {}
             for key, op in preps_dict.items():
