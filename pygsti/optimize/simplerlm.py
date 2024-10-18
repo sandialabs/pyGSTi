@@ -140,14 +140,6 @@ class SimplerLMOptimizer(Optimizer):
         Number of finite-difference iterations applied to the first
         stage of the optimization (only).  Unused.
 
-    damping_mode : {'identity', 'JTJ', 'invJTJ', 'adaptive'}
-        How damping is applied.  `'identity'` means that the damping parameter mu
-        multiplies the identity matrix.  `'JTJ'` means that mu multiplies the
-        diagonal or singular values (depending on `scaling_mode`) of the JTJ
-        (Fischer information and approx. hessaian) matrix, whereas `'invJTJ'`
-        means mu multiplies the reciprocals of these values instead.  The
-        `'adaptive'` mode adaptively chooses a damping strategy.
-
     damping_basis : {'diagonal_values', 'singular_values'}
         Whether the the diagonal or singular values of the JTJ matrix are used
         during damping.  If `'singular_values'` is selected, then a SVD of the
@@ -155,12 +147,6 @@ class SimplerLMOptimizer(Optimizer):
         of (right) singular vectors.  If `'diagonal_values'` is selected, the
         diagonal values of relevant matrices are used as a proxy for the the
         singular values (saving the cost of performing a SVD).
-
-    damping_clip : tuple, optional
-        A 2-tuple giving upper and lower bounds for the values that mu multiplies.
-        If `damping_mode == "identity"` then this argument is ignored, as mu always
-        multiplies a 1.0 on the diagonal if the identity matrix.  If None, then no
-        clipping is applied.
 
     use_acceleration : bool, optional
         Whether to include a geodesic acceleration term as suggested in
@@ -213,8 +199,8 @@ class SimplerLMOptimizer(Optimizer):
         "per-circuit quantities" computed by the objective function's `.percircuit()` and
         `.lsvec_percircuit()` methods (`'percircuit'` mode).
     """
-    def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0, damping_mode="identity",
-                 damping_basis="diagonal_values", damping_clip=None, use_acceleration=False,
+    def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0,
+                 damping_basis="diagonal_values", use_acceleration=False,
                  uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0,
                  oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal"):
 
@@ -225,9 +211,7 @@ class SimplerLMOptimizer(Optimizer):
         self.tol = tol
         self.fditer = fditer
         self.first_fditer = first_fditer
-        self.damping_mode = damping_mode
         self.damping_basis = damping_basis
-        self.damping_clip = damping_clip
         self.use_acceleration = use_acceleration
         self.uphill_step_threshold = uphill_step_threshold
         self.init_munu = init_munu
@@ -247,9 +231,7 @@ class SimplerLMOptimizer(Optimizer):
             'tolerance': self.tol,
             'number_of_finite_difference_iterations': self.fditer,
             'number_of_first_stage_finite_difference_iterations': self.first_fditer,
-            'damping_mode': self.damping_mode,
             'damping_basis': self.damping_basis,
-            'damping_clip': self.damping_clip,
             'use_acceleration': self.use_acceleration,
             'uphill_step_threshold': self.uphill_step_threshold,
             'initial_mu_and_nu': self.init_munu,
@@ -270,9 +252,7 @@ class SimplerLMOptimizer(Optimizer):
                    tol=state['tolerance'],
                    fditer=state['number_of_finite_difference_iterations'],
                    first_fditer=state['number_of_first_stage_finite_difference_iterations'],
-                   damping_mode=state['damping_mode'],
                    damping_basis=state['damping_basis'],
-                   damping_clip=state['damping_clip'],
                    use_acceleration=state['use_acceleration'],
                    uphill_step_threshold=state['uphill_step_threshold'],
                    init_munu=state['initial_mu_and_nu'],
@@ -333,9 +313,7 @@ class SimplerLMOptimizer(Optimizer):
             rel_ftol=self.tol.get('relf', 1e-6),
             rel_xtol=self.tol.get('relx', 1e-8),
             max_dx_scale=self.tol.get('maxdx', 1.0),
-            damping_mode=self.damping_mode,
             damping_basis=self.damping_basis,
-            damping_clip=self.damping_clip,
             use_acceleration=self.use_acceleration,
             uphill_step_threshold=self.uphill_step_threshold,
             init_munu=self.init_munu,
@@ -386,8 +364,7 @@ class SimplerLMOptimizer(Optimizer):
 def simplish_leastsq(
     obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
-    max_dx_scale=1.0, damping_mode="identity", damping_basis="diagonal_values",
-    damping_clip=None, use_acceleration=False, uphill_step_threshold=0.0,
+    max_dx_scale=1.0, damping_basis="diagonal_values", use_acceleration=False, uphill_step_threshold=0.0,
     init_munu="auto", oob_check_interval=0, oob_action="reject", oob_check_mode=0,
     resource_alloc=None, arrays_interface=None, serial_solve_proc_threshold=100,
     x_limits=None, verbosity=0, profiler=None
@@ -443,14 +420,6 @@ def simplish_leastsq(
         `|dx|^2 < max_dx_scale^2 * len(dx)` (so elements of `dx` should be,
         roughly, less than `max_dx_scale`).
 
-    damping_mode : {'identity', 'JTJ', 'invJTJ', 'adaptive'}
-        How damping is applied.  `'identity'` means that the damping parameter mu
-        multiplies the identity matrix.  `'JTJ'` means that mu multiplies the
-        diagonal or singular values (depending on `scaling_mode`) of the JTJ
-        (Fischer information and approx. hessaian) matrix, whereas `'invJTJ'`
-        means mu multiplies the reciprocals of these values instead.  The
-        `'adaptive'` mode adaptively chooses a damping strategy.
-
     damping_basis : {'diagonal_values', 'singular_values'}
         Whether the the diagonal or singular values of the JTJ matrix are used
         during damping.  If `'singular_values'` is selected, then a SVD of the
@@ -458,12 +427,6 @@ def simplish_leastsq(
         of (right) singular vectors.  If `'diagonal_values'` is selected, the
         diagonal values of relevant matrices are used as a proxy for the the
         singular values (saving the cost of performing a SVD).
-
-    damping_clip : tuple, optional
-        A 2-tuple giving upper and lower bounds for the values that mu multiplies.
-        If `damping_mode == "identity"` then this argument is ignored, as mu always
-        multiplies a 1.0 on the diagonal if the identity matrix.  If None, then no
-        clipping is applied.
 
     use_acceleration : bool, optional
         Whether to include a geodesic acceleration term as suggested in
@@ -575,20 +538,15 @@ def simplish_leastsq(
     if damping_basis == "singular_values":
         Jac_V = ari.allocate_jtj()
 
-    if damping_mode == 'adaptive':
-        dx_lst = [ari.allocate_jtf(), ari.allocate_jtf(), ari.allocate_jtf()]
-        new_x_lst = [ari.allocate_jtf(), ari.allocate_jtf(), ari.allocate_jtf()]
-        global_new_x_lst = [global_x.copy() for i in range(3)]
-    else:
-        dx = ari.allocate_jtf()
-        new_x = ari.allocate_jtf()
-        global_new_x = global_x.copy()
-        if use_acceleration:
-            dx1 = ari.allocate_jtf()
-            dx2 = ari.allocate_jtf()
-            df2_x = ari.allocate_jtf()
-            JTdf2 = ari.allocate_jtf()
-            global_accel_x = global_x.copy()
+    dx = ari.allocate_jtf()
+    new_x = ari.allocate_jtf()
+    global_new_x = global_x.copy()
+    if use_acceleration:
+        dx1 = ari.allocate_jtf()
+        dx2 = ari.allocate_jtf()
+        df2_x = ari.allocate_jtf()
+        JTdf2 = ari.allocate_jtf()
+        global_accel_x = global_x.copy()
 
     # don't let any component change by more than ~max_dx_scale
     if max_dx_scale:
@@ -610,7 +568,6 @@ def simplish_leastsq(
     best_x = ari.allocate_jtf()
     best_x[:] = x[:]  # like x.copy() -the x-value corresponding to min_norm_f ('P'-type)
 
-    spow = 0.0  # for damping_mode == 'adaptive'
     if damping_clip is not None:
         def dclip(ar): return _np.clip(ar, damping_clip[0], damping_clip[1])
     else:
@@ -618,7 +575,7 @@ def simplish_leastsq(
 
     if init_munu != "auto":
         mu, nu = init_munu
-    best_x_state = (mu, nu, norm_f, f.copy(), spow, None)  # need f.copy() b/c f is objfn mem
+    best_x_state = (mu, nu, norm_f, f.copy(), None)  # need f.copy() b/c f is objfn mem
     rawJTJ_scratch = None
     jtj_buf = ari.allocate_jtj_shared_mem_buf()
 
@@ -639,7 +596,7 @@ def simplish_leastsq(
                                  "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f[:], spow, _ = best_x_state
+                    mu, nu, norm_f, f[:], _ = best_x_state
                     continue  # can't make use of saved JTJ yet - recompute on nxt iter
 
             #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
@@ -754,23 +711,17 @@ def simplish_leastsq(
                                  "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f[:], spow, _ = best_x_state
+                    mu, nu, norm_f, f[:], _ = best_x_state
                     continue  # can't make use of saved JTJ yet - recompute on nxt iter
 
             if k == 0:
                 if init_munu == "auto":
-                    if damping_mode == 'identity':
-                        mu = tau * ari.max_x(undamped_JTJ_diag)  # initial damping element
-                        #mu = min(mu, MU_TOL1)
-                    else:
-                        # initial multiplicative damping element
-                        #mu = tau # initial damping element - but this seem to low, at least for termgap...
-                        mu = min(1.0e5, ari.max_x(undamped_JTJ_diag) / norm_JTf)  # Erik's heuristic
-                        #tries to avoid making mu so large that dx is tiny and we declare victory prematurely
+                    mu = tau * ari.max_x(undamped_JTJ_diag)  # initial damping element
+                    #mu = min(mu, MU_TOL1)
                 else:
                     mu, nu = init_munu
                 rawJTJ_scratch = JTJ.copy()  # allocates the memory for a copy of JTJ so only update mem elsewhere
-                best_x_state = mu, nu, norm_f, f.copy(), spow, rawJTJ_scratch  # update mu,nu,JTJ of initial best state
+                best_x_state = mu, nu, norm_f, f.copy(), rawJTJ_scratch  # update mu,nu,JTJ of initial best state
             else:
                 #on all other iterations, update JTJ of best_x_state if best_x == x, i.e. if we've just evaluated
                 # a previously accepted step that was deemed the best we've seen so far
@@ -785,45 +736,18 @@ def simplish_leastsq(
                 if profiler: profiler.memory_check("simplish_leastsq: begin inner iter")
                 #print("DB: Pre-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
 
-                if damping_mode == 'identity':
-                    assert(damping_clip is None), "damping_clip cannot be used with damping_mode == 'identity'"
-                    if damping_basis == "singular_values":
-                        reg_Jac_s = global_Jac_s + mu
+                if damping_basis == "singular_values":
+                    reg_Jac_s = global_Jac_s + mu
 
-                        #Notes:
-                        #Previously we computed inv_JTJ here and below computed dx:
-                        #inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1 / reg_Jac_s**2), Jac_V.T))
-                        # dx = _np.dot(Jac_V, _np.diag(1 / reg_Jac_s**2), global_Jac_VT_mJTf
-                        #But now we just compute reg_Jac_s here, and so the rest below.
-                    else:
-                        # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
-                        JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
-
-                elif damping_mode == 'JTJ':
-                    if damping_basis == "singular_values":
-                        reg_Jac_s = global_Jac_s + mu * dclip(global_Jac_s)
-                    else:
-                        add_to_diag = mu * dclip(undamped_JTJ_diag)
-                        JTJ[idiag] = undamped_JTJ_diag + add_to_diag  # ok if assume fine-param-proc.size == 1
-
-                elif damping_mode == 'invJTJ':
-                    if damping_basis == "singular_values":
-                        reg_Jac_s = global_Jac_s + mu * dclip(1.0 / global_Jac_s)
-                    else:
-                        add_to_diag = mu * dclip(1.0 / undamped_JTJ_diag)
-                        JTJ[idiag] = undamped_JTJ_diag + add_to_diag  # ok if assume fine-param-proc.size == 1
-
-                elif damping_mode == 'adaptive':
-                    if damping_basis == "singular_values":
-                        reg_Jac_s_lst = [global_Jac_s + mu * dclip(global_Jac_s**(spow + 0.1)),
-                                         global_Jac_s + mu * dclip(global_Jac_s**spow),
-                                         global_Jac_s + mu * dclip(global_Jac_s**(spow - 0.1))]
-                    else:
-                        add_to_diag_lst = [mu * dclip(undamped_JTJ_diag**(spow + 0.1)),
-                                           mu * dclip(undamped_JTJ_diag**spow),
-                                           mu * dclip(undamped_JTJ_diag**(spow - 0.1))]
+                    #Notes:
+                    #Previously we computed inv_JTJ here and below computed dx:
+                    #inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1 / reg_Jac_s**2), Jac_V.T))
+                    # dx = _np.dot(Jac_V, _np.diag(1 / reg_Jac_s**2), global_Jac_VT_mJTf
+                    #But now we just compute reg_Jac_s here, and so the rest below.
                 else:
-                    raise ValueError("Invalid damping mode: %s" % damping_mode)
+                    # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
+                    JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
+
 
                 #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
                 #assert(_np.isfinite(JTf).all()), "Non-finite JTf (inner)!" # NaNs tracking
@@ -834,29 +758,9 @@ def simplish_leastsq(
                     success = True
 
                     if damping_basis == 'diagonal_values':
-                        if damping_mode == 'adaptive':
-                            for ii, add_to_diag in enumerate(add_to_diag_lst):
-                                JTJ[idiag] = undamped_JTJ_diag + add_to_diag  # ok if assume fine-param-proc.size == 1
-                                #dx_lst.append(_scipy.linalg.solve(JTJ, -JTf, sym_pos=True))
-                                #dx_lst.append(custom_solve(JTJ, -JTf, resource_alloc))
-                                _custom_solve(JTJ, minus_JTf, dx_lst[ii], ari, resource_alloc,
-                                              serial_solve_proc_threshold)
-                        else:
-                            #dx = _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
-                            _custom_solve(JTJ, minus_JTf, dx, ari, resource_alloc, serial_solve_proc_threshold)
-
+                        _custom_solve(JTJ, minus_JTf, dx, ari, resource_alloc, serial_solve_proc_threshold)
                     elif damping_basis == 'singular_values':
-                        #Note: above solves JTJ*x = -JTf => x = inv_JTJ * (-JTf)
-                        # but: J = U*s*Vh => JTJ = (VhT*s*UT)(U*s*Vh) = VhT*s^2*Vh, and inv_Vh = V b/c V is unitary
-                        # so inv_JTJ = inv_Vh * 1/s^2 * inv_VhT = V * 1/s^2 * VT  = (N,K)*(K,K)*(K,N) if use psuedoinv
-
-                        if damping_mode == 'adaptive':
-                            #dx_lst = [_np.dot(ijtj, minus_JTf) for ijtj in inv_JTJ_lst]  # special case
-                            for ii, s in enumerate(reg_Jac_s_lst):
-                                ari.fill_dx_svd(Jac_V, (1 / s**2) * global_Jac_VT_mJTf, dx_lst[ii])
-                        else:
-                            # dx = _np.dot(inv_JTJ, minus_JTf)
-                            ari.fill_dx_svd(Jac_V, (1 / reg_Jac_s**2) * global_Jac_VT_mJTf, dx)
+                        ari.fill_dx_svd(Jac_V, (1 / reg_Jac_s**2) * global_Jac_VT_mJTf, dx)
                     else:
                         raise ValueError("Invalid damping_basis = '%s'" % damping_basis)
 
@@ -866,7 +770,6 @@ def simplish_leastsq(
                     success = False
 
                 if success and use_acceleration:  # Find acceleration term:
-                    assert(damping_mode != 'adaptive'), "Cannot use acceleration in adaptive mode (yet)"
                     assert(damping_basis != 'singular_values'), "Cannot use acceleration w/singular-value basis (yet)"
                     df2_eps = 1.0
                     try:
@@ -898,99 +801,51 @@ def simplish_leastsq(
                 reject_msg = ""
                 if profiler: profiler.memory_check("simplish_leastsq: after linsolve")
                 if success:  # linear solve succeeded
-                    #dx = _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f)
+                    new_x[:] = x + dx
+                    norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
 
-                    if damping_mode != 'adaptive':
+                    #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
+                    if max_norm_dx and norm_dx > max_norm_dx:
+                        dx *= _np.sqrt(max_norm_dx / norm_dx)
                         new_x[:] = x + dx
                         norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
 
-                        #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
-                        if max_norm_dx and norm_dx > max_norm_dx:
-                            dx *= _np.sqrt(max_norm_dx / norm_dx)
-                            new_x[:] = x + dx
-                            norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
+                    #apply x limits (bounds)
+                    if x_limits is not None:
+                        # Approach 1: project x into valid space by simply clipping out-of-bounds values
+                        for i, (x_el, lower, upper) in enumerate(zip(x, x_lower_limits, x_upper_limits)):
+                            if new_x[i] < lower:
+                                new_x[i] = lower
+                                dx[i] = lower - x_el
+                            elif new_x[i] > upper:
+                                new_x[i] = upper
+                                dx[i] = upper - x_el
+                        norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
 
-                        #apply x limits (bounds)
-                        if x_limits is not None:
-                            # Approach 1: project x into valid space by simply clipping out-of-bounds values
-                            for i, (x_el, lower, upper) in enumerate(zip(x, x_lower_limits, x_upper_limits)):
-                                if new_x[i] < lower:
-                                    new_x[i] = lower
-                                    dx[i] = lower - x_el
-                                elif new_x[i] > upper:
-                                    new_x[i] = upper
-                                    dx[i] = upper - x_el
-                            norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
+                        # Approach 2: by scaling back dx (seems less good, but here in case we want it later)
+                        # # minimally reduce dx s.t. new_x = x + dx so that x_lower_limits <= x+dx <= x_upper_limits
+                        # # x_lower_limits - x <= dx <= x_upper_limits - x.  Note: use potentially updated dx from
+                        # # max_norm_dx block above.  For 0 <= scale <= 1,
+                        # # 1) require x + scale*dx - x_upper_limits <= 0 => scale <= (x_upper_limits - x) / dx
+                        # #    [Note: above assumes dx > 0 b/c if not it moves x away from bound and scale < 0]
+                        # #    so if scale >= 0, then scale = min((x_upper_limits - x) / dx, 1.0)
+                        # scale = None
+                        # new_x[:] = (x_upper_limits - x) / dx
+                        # new_x_min = ari.min_x(new_x)
+                        # if 0 <= new_x_min < 1.0:
+                        #     scale = new_x_min
+                        #
+                        # # 2) require x + scale*dx - x_lower_limits <= 0 => scale <= (x - x_lower_limits) / (-dx)
+                        # new_x[:] = (x_lower_limits - x) / dx
+                        # new_x_min = ari.min_x(new_x)
+                        # if 0 <= new_x_min < 1.0:
+                        #     scale = new_x_min if (scale is None) else min(new_x_min, scale)
+                        #
+                        # if scale is not None:
+                        #     dx *= scale
+                        # new_x[:] = x + dx
+                        # norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
 
-                            # Approach 2: by scaling back dx (seems less good, but here in case we want it later)
-                            # # minimally reduce dx s.t. new_x = x + dx so that x_lower_limits <= x+dx <= x_upper_limits
-                            # # x_lower_limits - x <= dx <= x_upper_limits - x.  Note: use potentially updated dx from
-                            # # max_norm_dx block above.  For 0 <= scale <= 1,
-                            # # 1) require x + scale*dx - x_upper_limits <= 0 => scale <= (x_upper_limits - x) / dx
-                            # #    [Note: above assumes dx > 0 b/c if not it moves x away from bound and scale < 0]
-                            # #    so if scale >= 0, then scale = min((x_upper_limits - x) / dx, 1.0)
-                            # scale = None
-                            # new_x[:] = (x_upper_limits - x) / dx
-                            # new_x_min = ari.min_x(new_x)
-                            # if 0 <= new_x_min < 1.0:
-                            #     scale = new_x_min
-                            #
-                            # # 2) require x + scale*dx - x_lower_limits <= 0 => scale <= (x - x_lower_limits) / (-dx)
-                            # new_x[:] = (x_lower_limits - x) / dx
-                            # new_x_min = ari.min_x(new_x)
-                            # if 0 <= new_x_min < 1.0:
-                            #     scale = new_x_min if (scale is None) else min(new_x_min, scale)
-                            #
-                            # if scale is not None:
-                            #     dx *= scale
-                            # new_x[:] = x + dx
-                            # norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
-
-                    else:
-                        for dx, new_x in zip(dx_lst, new_x_lst):
-                            new_x[:] = x + dx
-                        norm_dx_lst = [ari.norm2_x(dx) for dx in dx_lst]
-
-                        #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
-                        if max_norm_dx:
-                            for i, norm_dx in enumerate(norm_dx_lst):
-                                if norm_dx > max_norm_dx:
-                                    dx_lst[i] *= _np.sqrt(max_norm_dx / norm_dx)
-                                    new_x_lst[i][:] = x + dx_lst[i]
-                                    norm_dx_lst[i] = ari.norm2_x(dx_lst[i])
-
-                        #apply x limits (bounds)
-                        if x_limits is not None:
-                            for i, (dx, new_x) in enumerate(zip(dx_lst, new_x_lst)):
-                                # Do same thing as above for each possible dx in dx_lst
-                                # Approach 1:
-                                for ii, (x_el, lower, upper) in enumerate(zip(x, x_lower_limits, x_upper_limits)):
-                                    if new_x[ii] < lower:
-                                        new_x[ii] = lower
-                                        dx[ii] = lower - x_el
-                                    elif new_x[ii] > upper:
-                                        new_x[ii] = upper
-                                        dx[ii] = upper - x_el
-                                norm_dx_lst[i] = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
-
-                                # Approach 2:
-                                # scale = None
-                                # new_x[:] = (x_upper_limits - x) / dx
-                                # new_x_min = ari.min_x(new_x)
-                                # if 0 <= new_x_min < 1.0:
-                                #     scale = new_x_min
-                                #
-                                # new_x[:] = (x_lower_limits - x) / dx
-                                # new_x_min = ari.min_x(new_x)
-                                # if 0 <= new_x_min < 1.0:
-                                #     scale = new_x_min if (scale is None) else min(new_x_min, scale)
-                                #
-                                # if scale is not None:
-                                #     dx *= scale
-                                # new_x[:] = x + dx
-                                # norm_dx_lst[i] = ari.norm2_x(dx)
-
-                        norm_dx = norm_dx_lst[1]  # just use center value for printing & checks below
 
                     printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu, norm_dx), 2)
                     #MEM if profiler: profiler.memory_check("simplish_leastsq: mid inner loop")
@@ -1005,7 +860,7 @@ def simplish_leastsq(
                                          "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                             oob_check_interval = 1
                             x[:] = best_x[:]
-                            mu, nu, norm_f, f[:], spow, _ = best_x_state
+                            mu, nu, norm_f, f[:], _ = best_x_state
                             break
 
                     if norm_dx > (norm_x + rel_xtol) / (_MACH_PRECISION**2):
@@ -1016,28 +871,15 @@ def simplish_leastsq(
                             #Check to see if objective function is out of bounds
 
                             in_bounds = []
-                            if damping_mode == 'adaptive':
-                                new_f_lst = []
-                                for new_x, global_new_x in zip(new_x_lst, global_new_x_lst):
-                                    ari.allgather_x(new_x, global_new_x)
-                                    try:
-                                        new_f = obj_fn(global_new_x, oob_check=True)
-                                    except ValueError:  # Use this to mean - "not allowed, but don't stop"
-                                        in_bounds.append(False)
-                                        new_f_lst.append(None)  # marks OOB attempts that shouldn't be considered
-                                    else:  # no exception raised
-                                        in_bounds.append(True)
-                                        new_f_lst.append(new_f.copy())
+                            #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
+                            # MEM if profiler: profiler.memory_check("simplish_leastsq: before oob_check obj_fn")
+                            ari.allgather_x(new_x, global_new_x)
+                            try:
+                                new_f = obj_fn(global_new_x, oob_check=True)
+                            except ValueError:  # Use this to mean - "not allowed, but don't stop"
+                                in_bounds.append(False)
                             else:
-                                #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
-                                # MEM if profiler: profiler.memory_check("simplish_leastsq: before oob_check obj_fn")
-                                ari.allgather_x(new_x, global_new_x)
-                                try:
-                                    new_f = obj_fn(global_new_x, oob_check=True)
-                                except ValueError:  # Use this to mean - "not allowed, but don't stop"
-                                    in_bounds.append(False)
-                                else:
-                                    in_bounds.append(True)
+                                in_bounds.append(True)
 
                             if any(in_bounds):  # In adaptive mode, proceed if *any* cases are in-bounds
                                 new_x_is_allowed = True
@@ -1056,68 +898,29 @@ def simplish_leastsq(
                                              "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                                         oob_check_interval = 1
                                         x[:] = best_x[:]
-                                        mu, nu, norm_f, f[:], spow, _ = best_x_state  # can't make use of saved JTJ yet
+                                        mu, nu, norm_f, f[:], _ = best_x_state  # can't make use of saved JTJ yet
                                         break  # restart next outer loop
                                 else:
                                     raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
                         else:  # don't check this time
-
-                            if damping_mode == 'adaptive':
-                                new_f_lst = []
-                                for new_x, global_new_x in zip(new_x_lst, global_new_x_lst):
-                                    ari.allgather_x(new_x, global_new_x)
-                                    new_f_lst.append(obj_fn(global_new_x).copy())
-                            else:
-                                ari.allgather_x(new_x, global_new_x)
-                                new_f = obj_fn(global_new_x, oob_check=False)
+                            ari.allgather_x(new_x, global_new_x)
+                            new_f = obj_fn(global_new_x, oob_check=False)
 
                             new_x_is_allowed = True
                             new_x_is_known_inbounds = False
                     else:
                         #Just evaluate objective function normally; never check for in-bounds condition
-                        if damping_mode == 'adaptive':
-                            new_f_lst = []
-                            for new_x, global_new_x in zip(new_x_lst, global_new_x_lst):
-                                ari.allgather_x(new_x, global_new_x)
-                                new_f_lst.append(obj_fn(global_new_x).copy())
-                        else:
-                            ari.allgather_x(new_x, global_new_x)
-                            new_f = obj_fn(global_new_x)
+                        ari.allgather_x(new_x, global_new_x)
+                        new_f = obj_fn(global_new_x)
 
                         new_x_is_allowed = True
                         new_x_is_known_inbounds = bool(oob_check_interval == 0)  # consider "in bounds" if not checking
 
                     if new_x_is_allowed:
 
-                        # MEM if profiler: profiler.memory_check("simplish_leastsq: after obj_fn")
-                        if damping_mode == 'adaptive':
-                            norm_new_f_lst = [ari.norm2_f(new_f) if (new_f is not None) else 1e100
-                                              for new_f in new_f_lst]  # 1e100 so we don't choose OOB adaptive cases
-                            if any([not _np.isfinite(norm_new_f) for norm_new_f in norm_new_f_lst]):  # avoid inf loop
-                                msg = "Infinite norm of objective function!"; break
-
-                            #iMin = _np.argmin(norm_new_f_lst)  # pick lowest (best) objective
-                            gain_ratio_lst = [(norm_f - nnf) / ari.dot_x(dx, mu * dx + minus_JTf)
-                                              for (nnf, dx) in zip(norm_new_f_lst, dx_lst)]
-                            iMin = _np.argmax(gain_ratio_lst)  # pick highest (best) gain ratio
-                            # but expected decrease is |f|^2 = grad(fTf) * dx = (grad(fT)*f + fT*grad(f)) * dx
-                            #                                                 = (JT*f + fT*J) * dx
-                            # <<more explanation>>
-                            norm_new_f = norm_new_f_lst[iMin]
-                            new_f = new_f_lst[iMin]
-                            new_x = new_x_lst[iMin]
-                            global_new_x = global_new_x_lst[iMin]
-                            dx = dx_lst[iMin]
-                            if iMin == 0: spow = min(1.0, spow + 0.1)
-                            elif iMin == 2: spow = max(-1.0, spow - 0.1)
-                            printer.log("ADAPTIVE damping => i=%d b/c fs=[%s] gains=[%s] => spow=%g" % (
-                                iMin, ", ".join(["%.3g" % v for v in norm_new_f_lst]),
-                                ", ".join(["%.3g" % v for v in gain_ratio_lst]), spow))
-
-                        else:
-                            norm_new_f = ari.norm2_f(new_f)  # _np.linalg.norm(new_f)**2
-                            if not _np.isfinite(norm_new_f):  # avoid infinite loop...
-                                msg = "Infinite norm of objective function!"; break
+                        norm_new_f = ari.norm2_f(new_f)  # _np.linalg.norm(new_f)**2
+                        if not _np.isfinite(norm_new_f):  # avoid infinite loop...
+                            msg = "Infinite norm of objective function!"; break
 
                         # dL = expected decrease in ||F||^2 from linear model
                         dL = ari.dot_x(dx, mu * dx + minus_JTf)
@@ -1163,7 +966,7 @@ def simplish_leastsq(
                                              "interval=1 **") % oob_check_interval, 2)
                                 oob_check_interval = 1
                                 x[:] = best_x[:]
-                                mu, nu, norm_f, f[:], spow, _ = best_x_state  # can't make use of saved JTJ yet
+                                mu, nu, norm_f, f[:], _ = best_x_state  # can't make use of saved JTJ yet
                                 break
 
                         # MEM if profiler: profiler.memory_check("simplish_leastsq: before success")
@@ -1194,7 +997,7 @@ def simplish_leastsq(
                                                 2)
                                             oob_check_interval = 1
                                             x[:] = best_x[:]
-                                            mu, nu, norm_f, f[:], spow, _ = best_x_state  # can't use of saved JTJ yet
+                                            mu, nu, norm_f, f[:], _ = best_x_state  # can't use of saved JTJ yet
                                             break  # restart next outer loop
                                     else:
                                         raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
@@ -1216,7 +1019,7 @@ def simplish_leastsq(
                                 if new_x_is_known_inbounds and norm_f < min_norm_f:
                                     min_norm_f = norm_f
                                     best_x[:] = x[:]
-                                    best_x_state = (mu, nu, norm_f, f.copy(), spow, None)
+                                    best_x_state = (mu, nu, norm_f, f.copy(), None)
                                     #Note: we use rawJTJ=None above because the current `JTJ` was evaluated
                                     # at the *last* x-value -- we need to wait for the next outer loop
                                     # to compute the JTJ for this best_x_state
@@ -1286,17 +1089,13 @@ def simplish_leastsq(
     if damping_basis == "singular_values":
         ari.deallocate_jtj(Jac_V)
 
-    if damping_mode == 'adaptive':
-        for xx in dx_lst: ari.deallocate_jtf(xx)
-        for xx in new_x_lst: ari.deallocate_jtf(xx)
-    else:
-        ari.deallocate_jtf(dx)
-        ari.deallocate_jtf(new_x)
-        if use_acceleration:
-            ari.deallocate_jtf(dx1)
-            ari.deallocate_jtf(dx2)
-            ari.deallocate_jtf(df2_x)
-            ari.deallocate_jtf(JTdf2)
+    ari.deallocate_jtf(dx)
+    ari.deallocate_jtf(new_x)
+    if use_acceleration:
+        ari.deallocate_jtf(dx1)
+        ari.deallocate_jtf(dx2)
+        ari.deallocate_jtf(df2_x)
+        ari.deallocate_jtf(JTdf2)
 
     if num_fd_iters > 0:
         ari.deallocate_jac(fdJac)
@@ -1305,132 +1104,10 @@ def simplish_leastsq(
     ari.deallocate_jtf(best_x)
 
     #JTJ[idiag] = undampled_JTJ_diag #restore diagonal
-    mu, nu, norm_f, f[:], spow, rawJTJ = best_x_state
+    mu, nu, norm_f, f[:], rawJTJ = best_x_state
 
     global_f = _np.empty(ari.global_num_elements(), 'd')
     ari.allgather_f(f, global_f)
 
     return global_x, converged, msg, mu, nu, norm_f, global_f, rawJTJ
-    #solution = _optResult()
-    #solution.x = x; solution.fun = f
-    #solution.success = converged
-    #solution.message = msg
-    #return solution
-
-
-def _hack_dx(obj_fn, x, dx, jac, jtj, jtf, f, norm_f):
-    #HACK1
-    #if nRejects >= 2:
-    #    dx = -(10.0**(1-nRejects))*x
-    #    print("HACK - setting dx = -%gx!" % 10.0**(1-nRejects))
-    #    return dx
-
-    #HACK2
-    if True:
-        print("HACK2 - trying to find a good dx by iteratively stepping in each direction...")
-
-        test_f = obj_fn(x + dx); cmp_normf = _np.dot(test_f, test_f)
-        print("Compare with suggested step => ", cmp_normf)
-        STEP = 0.0001
-
-        #import bpdb; bpdb.set_trace()
-        #gradient = -jtf
-        test_dx = _np.zeros(len(dx), 'd')
-        last_normf = norm_f
-        for ii in range(len(dx)):
-
-            #Try adding
-            while True:
-                test_dx[ii] += STEP
-                test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
-                if test_normf < last_normf:
-                    last_normf = test_normf
-                else:
-                    test_dx[ii] -= STEP
-                    break
-
-            if test_dx[ii] == 0:  # then try subtracting
-                while True:
-                    test_dx[ii] -= STEP
-                    test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
-                    if test_normf < last_normf:
-                        last_normf = test_normf
-                    else:
-                        test_dx[ii] += STEP
-                        break
-
-            if abs(test_dx[ii]) > 1e-6:
-                test_prediction = norm_f + _np.dot(-2 * jtf, test_dx)
-                tp2_f = f + _np.dot(jac, test_dx)
-                test_prediction2 = _np.dot(tp2_f, tp2_f)
-                cmp_dx = dx  # -jtf
-                print(" -> Adjusting index ", ii, ":", x[ii], "+", test_dx[ii], " => ", last_normf, "(cmp w/dx: ",
-                      cmp_dx[ii], test_prediction, test_prediction2, ") ",
-                      "YES" if test_dx[ii] * cmp_dx[ii] > 0 else "NO")
-
-        if _np.linalg.norm(test_dx) > 0 and last_normf < cmp_normf:
-            print("FOUND HACK dx w/norm = ", _np.linalg.norm(test_dx))
-            return test_dx
-        else:
-            print("KEEPING ORIGINAL dx")
-
-    #HACK3
-    if False:
-        print("HACK3 - checking if there's a simple dx that is better...")
-        test_f = obj_fn(x + dx); cmp_normf = _np.dot(test_f, test_f)
-        orig_prediction = norm_f + _np.dot(2 * jtf, dx)
-        Jdx = _np.dot(jac, dx)
-        op2_f = f + Jdx
-        orig_prediction2 = _np.dot(op2_f, op2_f)
-        # main objective = fT*f = norm_f
-        # at new x => (f+J*dx)T * (f+J*dx) = norm_f + JdxT*f + fT*Jdx
-        #                                  = norm_f + 2*(fT*J)dx (b/c transpose of real# does nothing)
-        #                                  = norm_f + 2*dxT*(JT*f)
-        # prediction 2 also includes (J*dx)T * (J*dx) term = dxT * (jtj) * dx
-        orig_prediction3 = orig_prediction + _np.dot(Jdx, Jdx)
-        norm_dx = _np.linalg.norm(dx)
-        print("Compare with suggested |dx| = ", norm_dx, " => ", cmp_normf,
-              "(predicted: ", orig_prediction, orig_prediction2, orig_prediction3)
-        STEP = norm_dx  # 0.0001
-
-        #import bpdb; bpdb.set_trace()
-        test_dx = _np.zeros(len(dx), 'd')
-        best_ii = -1; best_normf = norm_f; best_dx = 0
-        for ii in range(len(dx)):
-
-            #Try adding a small amount
-            test_dx[ii] = STEP
-            test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
-            if test_normf < best_normf:
-                best_normf = test_normf
-                best_dx = STEP
-                best_ii = ii
-            else:
-                test_dx[ii] = -STEP
-                test_f = obj_fn(x + test_dx); test_normf = _np.dot(test_f, test_f)
-                if test_normf < best_normf:
-                    best_normf = test_normf
-                    best_dx = -STEP
-                    best_ii = ii
-            test_dx[ii] = 0
-
-        test_dx[best_ii] = best_dx
-        test_prediction = norm_f + _np.dot(2 * jtf, test_dx)
-        tp2_f = f + _np.dot(jac, test_dx)
-        test_prediction2 = _np.dot(tp2_f, tp2_f)
-
-        jj = _np.argmax(_np.abs(dx))
-        print("Best decrease = index", best_ii, ":", x[best_ii], '+', best_dx, "==>",
-              best_normf, " (predictions: ", test_prediction, test_prediction2, ")")
-        print(" compare with original dx[", best_ii, "]=", dx[best_ii],
-              "YES" if test_dx[best_ii] * dx[best_ii] > 0 else "NO")
-        print(" max of abs(dx) is index ", jj, ":", dx[jj], "yes" if jj == best_ii else "no")
-
-        if _np.linalg.norm(test_dx) > 0 and best_normf < cmp_normf:
-            print("FOUND HACK dx w/norm = ", _np.linalg.norm(test_dx))
-            return test_dx
-        else:
-            print("KEEPING ORIGINAL dx")
-    return dx
-
 
