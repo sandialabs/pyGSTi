@@ -545,11 +545,6 @@ def simplish_leastsq(
     best_x = ari.allocate_jtf()
     best_x[:] = x[:]  # like x.copy() -the x-value corresponding to min_norm_f ('P'-type)
 
-    if damping_clip is not None:
-        def dclip(ar): return _np.clip(ar, damping_clip[0], damping_clip[1])
-    else:
-        def dclip(ar): return ar
-
     if init_munu != "auto":
         mu, nu = init_munu
     best_x_state = (mu, nu, norm_f, f.copy(), None)  # need f.copy() b/c f is objfn mem
