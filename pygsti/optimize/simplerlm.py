@@ -290,8 +290,10 @@ class SimplerLMOptimizer(Optimizer):
         objective.resource_alloc.check_can_allocate_memory(3 * nP + nEls + nEls * nP + nP * nP)  # see array_types above
 
         from ..layouts.distlayout import DistributableCOPALayout as _DL
-        ari = _ari.DistributedArraysInterface(objective.layout, self.lsvec_mode, nExtra) \
-            if isinstance(objective.layout, _DL) else _ari.UndistributedArraysInterface(nEls, nP)
+        if isinstance(objective.layout, _DL):
+            ari = _ari.DistributedArraysInterface(objective.layout, self.lsvec_mode, nExtra)
+        else:
+            ari = _ari.UndistributedArraysInterface(nEls, nP)
 
         opt_x, converged, msg, mu, nu, norm_f, f, opt_jtj = simplish_leastsq(
             objective_func, jacobian, x0,
@@ -534,7 +536,8 @@ def simplish_leastsq(
         msg = "Infinite norm of objective function at initial point!"
 
     if len(global_x) == 0:  # a model with 0 parameters - nothing to optimize
-        msg = "No parameters to optimize"; converged = True
+        msg = "No parameters to optimize"
+        converged = True
 
     # DB: from ..tools import matrixtools as _mt
     # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
@@ -562,10 +565,10 @@ def simplish_leastsq(
             if norm_f < f_norm2_tol:
                 if oob_check_interval <= 1:
                     msg = "Sum of squares is at most %g" % f_norm2_tol
-                    converged = True; break
+                    converged = True
+                    break
                 else:
-                    printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last "
-                                 "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                    printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
                     mu, nu, norm_f, f[:], _ = best_x_state
@@ -640,7 +643,8 @@ def simplish_leastsq(
             undamped_JTJ_diag = JTJ[idiag].copy()  # 'P'-type
             #max_JTJ_diag = JTJ.diagonal().copy()
 
-            JTf *= -1.0; minus_JTf = JTf  # use the same memory for -JTf below (shouldn't use JTf anymore)
+            JTf *= -1.0
+            minus_JTf = JTf  # use the same memory for -JTf below (shouldn't use JTf anymore)
             #Maybe just have a minus_JTf variable?
 
             # FUTURE TODO: keep tallying allocated memory, i.e. array_types (stopped here)
@@ -648,10 +652,10 @@ def simplish_leastsq(
             if norm_JTf < jac_norm_tol:
                 if oob_check_interval <= 1:
                     msg = "norm(jacobian) is at most %g" % jac_norm_tol
-                    converged = True; break
+                    converged = True
+                    break
                 else:
-                    printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last "
-                                 "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                    printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
                     mu, nu, norm_f, f[:], _ = best_x_state
@@ -691,18 +695,17 @@ def simplish_leastsq(
                     tm = _time.time()
                     success = True
                     _custom_solve(JTJ, minus_JTf, dx, ari, resource_alloc, serial_solve_proc_threshold)
-
-
                     if profiler: profiler.add_time("simplish_leastsq: linsolve", tm)
-                #except _np.linalg.LinAlgError:
-                except _scipy.linalg.LinAlgError:  # DIST TODO - a different kind of exception caught?
+
+                except _scipy.linalg.LinAlgError:
+                    # DIST TODO - a different kind of exception caught?
                     success = False
 
                 if success and use_acceleration:  # Find acceleration term:
                     df2_eps = 1.0
                     try:
-                        #df2 = (obj_fn(x + df2_dx) + obj_fn(x - df2_dx) - 2 * f) / \
-                        #    df2_eps**2  # 2nd deriv of f along dx direction
+                        #df2 = (obj_fn(x + df2_dx) + obj_fn(x - df2_dx) - 2 * f) / df2_eps**2  
+                        # # 2nd deriv of f along dx direction
                         # Above line expanded to reuse shared memory
                         df2 = -2 * f
                         df2_x[:] = x + df2_eps * dx
@@ -712,7 +715,8 @@ def simplish_leastsq(
                         ari.allgather_x(df2_x, global_accel_x)
                         df2 += obj_fn(global_accel_x)
                         df2 /= df2_eps**2
-                        f[:] = df2; df2 = f  # use `f` as an appropriate shared-mem object for fill_jtf below
+                        f[:] = df2
+                        df2 = f  # use `f` as an appropriate shared-mem object for fill_jtf below
 
                         ari.fill_jtf(Jac, df2, JTdf2)
                         JTdf2 *= -0.5  # keep using JTdf2 memory in solve call below
@@ -782,17 +786,18 @@ def simplish_leastsq(
                     if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
                         if oob_check_interval <= 1:
                             msg = "Relative change, |dx|/|x|, is at most %g" % rel_xtol
-                            converged = True; break
+                            converged = True
+                            break
                         else:
-                            printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last "
-                                         "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                            printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                             oob_check_interval = 1
                             x[:] = best_x[:]
                             mu, nu, norm_f, f[:], _ = best_x_state
                             break
 
                     if norm_dx > (norm_x + rel_xtol) / (_MACH_PRECISION**2):
-                        msg = "(near-)singular linear system"; break
+                        msg = "(near-)singular linear system"
+                        break
 
                     if oob_check_interval > 0 and oob_check_mode == 0:
                         if k % oob_check_interval == 0:
@@ -819,11 +824,10 @@ def simplish_leastsq(
                                 elif oob_action == "stop":
                                     if oob_check_interval == 1:
                                         msg = "Objective function out-of-bounds! STOP"
-                                        converged = True; break
+                                        converged = True
+                                        break
                                     else:  # reset to last know in-bounds point and not do oob check every step
-                                        printer.log(
-                                            ("** Hit out-of-bounds with check interval=%d, reverting to last "
-                                             "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                                        printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                                         oob_check_interval = 1
                                         x[:] = best_x[:]
                                         mu, nu, norm_f, f[:], _ = best_x_state  # can't make use of saved JTJ yet
@@ -848,7 +852,8 @@ def simplish_leastsq(
 
                         norm_new_f = ari.norm2_f(new_f)  # _np.linalg.norm(new_f)**2
                         if not _np.isfinite(norm_new_f):  # avoid infinite loop...
-                            msg = "Infinite norm of objective function!"; break
+                            msg = "Infinite norm of objective function!"
+                            break
 
                         # dL = expected decrease in ||F||^2 from linear model
                         dL = ari.dot_x(dx, mu * dx + minus_JTf)
@@ -858,9 +863,11 @@ def simplish_leastsq(
                         #    cos_phi = 0
 
                         if dF <= 0 and uphill_step_threshold > 0:
-                            beta = 0 if last_accepted_dx is None else \
-                                (ari.dot_x(dx, last_accepted_dx)
-                                    / _np.sqrt(ari.norm2_x(dx) * ari.norm2_x(last_accepted_dx)))
+                            if last_accepted_dx is None:
+                                beta = 0.0
+                            else:
+                                beta = ari.dot_x(dx, last_accepted_dx) / _np.sqrt(ari.norm2_x(dx) * ari.norm2_x(last_accepted_dx))
+                            
                             uphill_ok = (uphill_step_threshold - beta) * norm_new_f < min(min_norm_f, norm_f)
                         else:
                             uphill_ok = False
@@ -875,16 +882,13 @@ def simplish_leastsq(
                                         (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
                             accel_ratio = 0.0
 
-                        if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol \
-                           and dF / dL < 2.0 and accel_ratio <= alpha:
+                        if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0 and accel_ratio <= alpha:
                             if oob_check_interval <= 1:  # (if 0 then no oob checking is done)
-                                msg = "Both actual and predicted relative reductions in the" + \
-                                    " sum of squares are at most %g" % rel_ftol
-                                converged = True; break
+                                msg = "Both actual and predicted relative reductions in the sum of squares are at most %g" % rel_ftol
+                                converged = True
+                                break
                             else:
-                                printer.log(("** Converged with out-of-bounds with check interval=%d, "
-                                             "reverting to last know in-bounds point and setting "
-                                             "interval=1 **") % oob_check_interval, 2)
+                                printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                                 oob_check_interval = 1
                                 x[:] = best_x[:]
                                 mu, nu, norm_f, f[:], _ = best_x_state  # can't make use of saved JTJ yet
@@ -910,12 +914,10 @@ def simplish_leastsq(
                                     elif oob_action == "stop":
                                         if oob_check_interval == 1:
                                             msg = "Objective function out-of-bounds! STOP"
-                                            converged = True; break
+                                            converged = True
+                                            break
                                         else:  # reset to last know in-bounds point and not do oob check every step
-                                            printer.log(
-                                                ("** Hit out-of-bounds with check interval=%d, reverting to last "
-                                                 "know in-bounds point and setting interval=1 **") % oob_check_interval,
-                                                2)
+                                            printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                                             oob_check_interval = 1
                                             x[:] = best_x[:]
                                             mu, nu, norm_f, f[:], _ = best_x_state  # can't use of saved JTJ yet
@@ -932,7 +934,9 @@ def simplish_leastsq(
                                 mu_factor = max(t, 1.0 / 3.0) if norm_dx > 1e-8 else 0.3
                                 mu *= mu_factor
                                 nu = 2
-                                x[:] = new_x[:]; f[:] = new_f[:]; norm_f = norm_new_f
+                                x[:] = new_x[:]
+                                f[:] = new_f[:]
+                                norm_f = norm_new_f
                                 global_x[:] = global_new_x[:]
                                 printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g"
                                             % (" UPHILL" if uphill_ok else "", dF / dL, mu_factor, mu), 2)
@@ -970,7 +974,8 @@ def simplish_leastsq(
                 # accelerate further damping increases.
                 mu *= nu
                 if nu > half_max_nu:  # watch for nu getting too large (&overflow)
-                    msg = "Stopping after nu overflow!"; break
+                    msg = "Stopping after nu overflow!"
+                    break
                 nu = 2 * nu
                 printer.log("      Rejected%s!  mu => mu*nu = %g, nu => 2*nu = %g"
                             % (reject_msg, mu, nu), 2)
