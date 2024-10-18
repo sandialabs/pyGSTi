@@ -33,8 +33,6 @@ if 'PYGSTI_NO_CUSTOMLM_SIGINT' not in _os.environ:
 
 #constants
 _MACH_PRECISION = 1e-12
-#MU_TOL1 = 1e10 # ??
-#MU_TOL2 = 1e3  # ??
 
 
 class OptimizerResult(object):
@@ -486,15 +484,11 @@ def simplish_leastsq(
     printer = _VerbosityPrinter.create_printer(verbosity, comm)
     ari = arrays_interface  # shorthand
 
-    # MEM from ..baseobjs.profiler import Profiler
-    # MEM debug_prof = Profiler(comm, True)
-    # MEM profiler = debug_prof
-
     msg = ""
     converged = False
     global_x = x0.copy()
     f = obj_fn(global_x)  # 'E'-type array
-    norm_f = ari.norm2_f(f)  # _np.linalg.norm(f)**2
+    norm_f = ari.norm2_f(f)
     half_max_nu = 2**62  # what should this be??
     tau = 1e-3
     alpha = 0.5  # for acceleration
@@ -505,7 +499,7 @@ def simplish_leastsq(
     JTJ = ari.allocate_jtj()
     JTf = ari.allocate_jtf()
     x = ari.allocate_jtf()
-    #x_for_jac = ari.allocate_x_for_jac()
+
     if num_fd_iters > 0:
         fdJac = ari.allocate_jac()
 
@@ -539,10 +533,6 @@ def simplish_leastsq(
         msg = "No parameters to optimize"
         converged = True
 
-    # DB: from ..tools import matrixtools as _mt
-    # DB: print("DB F0 (%s)=" % str(f.shape)); _mt.print_mx(f,prec=0,width=4)
-    #num_fd_iters = 1000000 # DEBUG: use finite difference iterations instead
-    # print("DEBUG: setting num_fd_iters == 0!");  num_fd_iters = 0 # DEBUG
     last_accepted_dx = None
     min_norm_f = 1e100  # sentinel
     best_x = ari.allocate_jtf()
@@ -574,8 +564,6 @@ def simplish_leastsq(
                     mu, nu, norm_f, f[:], _ = best_x_state
                     continue  # can't make use of saved JTJ yet - recompute on nxt iter
 
-            #printer.log("--- Outer Iter %d: norm_f = %g, mu=%g" % (k,norm_f,mu))
-
             if profiler: profiler.memory_check("simplish_leastsq: begin outer iter *before de-alloc*")
             Jac = None
 
@@ -600,15 +588,13 @@ def simplish_leastsq(
                         fdJac[:, i - pslice.start] = fd
                     #if comm is not None: comm.barrier()  # overkill for shared memory leader host barrier
                 Jac = fdJac
+                #DEBUG: compare with analytic jacobian (need to uncomment num_fd_iters DEBUG line above too)
+                #Jac_analytic = jac_fn(x)
+                #if _np.linalg.norm(Jac_analytic-Jac) > 1e-6:
+                #    print("JACDIFF = ",_np.linalg.norm(Jac_analytic-Jac)," per el=",
+                #          _np.linalg.norm(Jac_analytic-Jac)/Jac.size," sz=",Jac.size)
 
-            #DEBUG: compare with analytic jacobian (need to uncomment num_fd_iters DEBUG line above too)
-            #Jac_analytic = jac_fn(x)
-            #if _np.linalg.norm(Jac_analytic-Jac) > 1e-6:
-            #    print("JACDIFF = ",_np.linalg.norm(Jac_analytic-Jac)," per el=",
-            #          _np.linalg.norm(Jac_analytic-Jac)/Jac.size," sz=",Jac.size)
 
-            # DB: from ..tools import matrixtools as _mt
-            # DB: print("DB JAC (%s)=" % str(Jac.shape)); _mt.print_mx(Jac,prec=0,width=4); assert(False)
             if profiler: profiler.memory_check("simplish_leastsq: after jacobian:"
                                                + "shape=%s, GB=%.2f" % (str(Jac.shape),
                                                                         Jac.nbytes / (1024.0**3)))
@@ -620,12 +606,6 @@ def simplish_leastsq(
             #assert(_np.isfinite(_np.linalg.norm(Jac))), "Finite Jacobian has inf norm!" # NaNs tracking
 
             tm = _time.time()
-
-            #OLD MPI-enabled JTJ computation
-            ##if my_mpidot_qtys is None:
-            ##    my_mpidot_qtys = _mpit.distribute_for_dot(Jac.T.shape, Jac.shape, resource_alloc)
-            #JTJ, JTJ_shm = _mpit.mpidot(Jac.T, Jac, my_mpidot_qtys[0], my_mpidot_qtys[1],
-            #                            my_mpidot_qtys[2], resource_alloc, JTJ, JTJ_shm)  # _np.dot(Jac.T,Jac) 'PP'
 
             # Riley note: fill_JTJ is the first place where we try to access J as a dense matrix.
             ari.fill_jtj(Jac, JTJ, jtj_buf)
@@ -639,15 +619,12 @@ def simplish_leastsq(
 
             idiag = ari.jtj_diag_indices(JTJ)
             norm_JTf = ari.infnorm_x(JTf)
-            norm_x = ari.norm2_x(x)  # _np.linalg.norm(x)**2
+            norm_x = ari.norm2_x(x)
             undamped_JTJ_diag = JTJ[idiag].copy()  # 'P'-type
-            #max_JTJ_diag = JTJ.diagonal().copy()
 
             JTf *= -1.0
             minus_JTf = JTf  # use the same memory for -JTf below (shouldn't use JTf anymore)
             #Maybe just have a minus_JTf variable?
-
-            # FUTURE TODO: keep tallying allocated memory, i.e. array_types (stopped here)
 
             if norm_JTf < jac_norm_tol:
                 if oob_check_interval <= 1:
@@ -664,13 +641,12 @@ def simplish_leastsq(
             if k == 0:
                 if init_munu == "auto":
                     mu = tau * ari.max_x(undamped_JTJ_diag)  # initial damping element
-                    #mu = min(mu, MU_TOL1)
                 else:
                     mu, nu = init_munu
                 rawJTJ_scratch = JTJ.copy()  # allocates the memory for a copy of JTJ so only update mem elsewhere
                 best_x_state = mu, nu, norm_f, f.copy(), rawJTJ_scratch  # update mu,nu,JTJ of initial best state
             else:
-                #on all other iterations, update JTJ of best_x_state if best_x == x, i.e. if we've just evaluated
+                # on all other iterations, update JTJ of best_x_state if best_x == x, i.e. if we've just evaluated
                 # a previously accepted step that was deemed the best we've seen so far
                 if _np.allclose(x, best_x):
                     rawJTJ_scratch[:, :] = JTJ[:, :]  # use pre-allocated memory
@@ -681,11 +657,9 @@ def simplish_leastsq(
             while True:  # inner loop
 
                 if profiler: profiler.memory_check("simplish_leastsq: begin inner iter")
-                #print("DB: Pre-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
 
                 # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
                 JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
-
 
                 #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
                 #assert(_np.isfinite(JTf).all()), "Non-finite JTf (inner)!" # NaNs tracking
@@ -696,10 +670,15 @@ def simplish_leastsq(
                     success = True
                     _custom_solve(JTJ, minus_JTf, dx, ari, resource_alloc, serial_solve_proc_threshold)
                     if profiler: profiler.add_time("simplish_leastsq: linsolve", tm)
-
                 except _scipy.linalg.LinAlgError:
-                    # DIST TODO - a different kind of exception caught?
                     success = False
+
+                """
+                We have > 200 l.o.c. for handling success==True.
+                These lines should be factored out into their own function.
+
+                    The last 100 lines of this region are just for handling new_x_is_allowed == True.
+                """
 
                 if success and use_acceleration:  # Find acceleration term:
                     df2_eps = 1.0
@@ -734,13 +713,13 @@ def simplish_leastsq(
                 if profiler: profiler.memory_check("simplish_leastsq: after linsolve")
                 if success:  # linear solve succeeded
                     new_x[:] = x + dx
-                    norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
+                    norm_dx = ari.norm2_x(dx)
 
                     #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
                     if max_norm_dx and norm_dx > max_norm_dx:
                         dx *= _np.sqrt(max_norm_dx / norm_dx)
                         new_x[:] = x + dx
-                        norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
+                        norm_dx = ari.norm2_x(dx)
 
                     #apply x limits (bounds)
                     if x_limits is not None:
@@ -752,38 +731,11 @@ def simplish_leastsq(
                             elif new_x[i] > upper:
                                 new_x[i] = upper
                                 dx[i] = upper - x_el
-                        norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
-
-                        # Approach 2: by scaling back dx (seems less good, but here in case we want it later)
-                        # # minimally reduce dx s.t. new_x = x + dx so that x_lower_limits <= x+dx <= x_upper_limits
-                        # # x_lower_limits - x <= dx <= x_upper_limits - x.  Note: use potentially updated dx from
-                        # # max_norm_dx block above.  For 0 <= scale <= 1,
-                        # # 1) require x + scale*dx - x_upper_limits <= 0 => scale <= (x_upper_limits - x) / dx
-                        # #    [Note: above assumes dx > 0 b/c if not it moves x away from bound and scale < 0]
-                        # #    so if scale >= 0, then scale = min((x_upper_limits - x) / dx, 1.0)
-                        # scale = None
-                        # new_x[:] = (x_upper_limits - x) / dx
-                        # new_x_min = ari.min_x(new_x)
-                        # if 0 <= new_x_min < 1.0:
-                        #     scale = new_x_min
-                        #
-                        # # 2) require x + scale*dx - x_lower_limits <= 0 => scale <= (x - x_lower_limits) / (-dx)
-                        # new_x[:] = (x_lower_limits - x) / dx
-                        # new_x_min = ari.min_x(new_x)
-                        # if 0 <= new_x_min < 1.0:
-                        #     scale = new_x_min if (scale is None) else min(new_x_min, scale)
-                        #
-                        # if scale is not None:
-                        #     dx *= scale
-                        # new_x[:] = x + dx
-                        # norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
-
+                        norm_dx = ari.norm2_x(dx)
 
                     printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu, norm_dx), 2)
-                    #MEM if profiler: profiler.memory_check("simplish_leastsq: mid inner loop")
-                    #print("DB: new_x = ", new_x)
 
-                    if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
+                    if norm_dx < (rel_xtol**2) * norm_x:
                         if oob_check_interval <= 1:
                             msg = "Relative change, |dx|/|x|, is at most %g" % rel_xtol
                             converged = True
@@ -804,8 +756,6 @@ def simplish_leastsq(
                             #Check to see if objective function is out of bounds
 
                             in_bounds = []
-                            #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
-                            # MEM if profiler: profiler.memory_check("simplish_leastsq: before oob_check obj_fn")
                             ari.allgather_x(new_x, global_new_x)
                             try:
                                 new_f = obj_fn(global_new_x, oob_check=True)
@@ -850,7 +800,7 @@ def simplish_leastsq(
 
                     if new_x_is_allowed:
 
-                        norm_new_f = ari.norm2_f(new_f)  # _np.linalg.norm(new_f)**2
+                        norm_new_f = ari.norm2_f(new_f)
                         if not _np.isfinite(norm_new_f):  # avoid infinite loop...
                             msg = "Infinite norm of objective function!"
                             break
@@ -858,9 +808,6 @@ def simplish_leastsq(
                         # dL = expected decrease in ||F||^2 from linear model
                         dL = ari.dot_x(dx, mu * dx + minus_JTf)
                         dF = norm_f - norm_new_f      # actual decrease in ||F||^2
-
-                        #DEBUG - see if cos_phi < 0.001, say, might work as a convergence criterion
-                        #    cos_phi = 0
 
                         if dF <= 0 and uphill_step_threshold > 0:
                             if last_accepted_dx is None:
@@ -874,12 +821,10 @@ def simplish_leastsq(
 
                         if use_acceleration:
                             accel_ratio = 2 * _np.sqrt(ari.norm2_x(dx2) / ari.norm2_x(dx1))
-                            printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g aC=%g" %
-                                        (norm_new_f, dL, dF, dL / norm_f, dF / norm_f, accel_ratio), 2)
+                            printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g aC=%g" % (norm_new_f, dL, dF, dL / norm_f, dF / norm_f, accel_ratio), 2)
 
                         else:
-                            printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" %
-                                        (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
+                            printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" % (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
                             accel_ratio = 0.0
 
                         if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0 and accel_ratio <= alpha:
@@ -894,16 +839,11 @@ def simplish_leastsq(
                                 mu, nu, norm_f, f[:], _ = best_x_state  # can't make use of saved JTJ yet
                                 break
 
-                        # MEM if profiler: profiler.memory_check("simplish_leastsq: before success")
-
                         if (dL > 0 and dF > 0 and accel_ratio <= alpha) or uphill_ok:
                             #Check whether an otherwise acceptable solution is in-bounds
                             if oob_check_mode == 1 and oob_check_interval > 0 and k % oob_check_interval == 0:
                                 #Check to see if objective function is out of bounds
                                 try:
-                                    #print("DB: Trying |x| = ", _np.linalg.norm(new_x), " |x|^2=", _np.dot(new_x,new_x))
-                                    # MEM if profiler:
-                                    # MEM    profiler.memory_check("simplish_leastsq: before oob_check obj_fn mode 1")
                                     obj_fn(global_new_x, oob_check=True)  # don't actually need return val (== new_f)
                                     new_f_is_allowed = True
                                     new_x_is_known_inbounds = True
@@ -938,8 +878,7 @@ def simplish_leastsq(
                                 f[:] = new_f[:]
                                 norm_f = norm_new_f
                                 global_x[:] = global_new_x[:]
-                                printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g"
-                                            % (" UPHILL" if uphill_ok else "", dF / dL, mu_factor, mu), 2)
+                                printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g" % (" UPHILL" if uphill_ok else "", dF / dL, mu_factor, mu), 2)
                                 last_accepted_dx = dx.copy()
                                 if new_x_is_known_inbounds and norm_f < min_norm_f:
                                     min_norm_f = norm_f
@@ -952,12 +891,6 @@ def simplish_leastsq(
                                 #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
                                 #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
 
-                                ##Check to see if we *would* switch to Q-N method in a hybrid algorithm
-                                #new_Jac = jac_fn(new_x)
-                                #new_JTf = _np.dot(new_Jac.T,new_f)
-                                #print(" CHECK: %g < %g ?" % (_np.linalg.norm(new_JTf,
-                                #    ord=_np.inf),0.02 * _np.linalg.norm(new_f)))
-
                                 break  # exit inner loop normally
                             else:
                                 reject_msg = " (out-of-bounds)"
@@ -967,18 +900,21 @@ def simplish_leastsq(
                 else:
                     reject_msg = " (LinSolve Failure)"
 
-                # if this point is reached, either the linear solve failed
-                # or the error did not reduce.  In either case, reject increment.
+                ############################################################################################
+                #
+                #   if this point is reached, either the linear solve failed
+                #   or the error did not reduce.  In either case, reject increment.
+                #
+                ############################################################################################
 
-                #Increase damping (mu), then increase damping factor to
+                # Increase damping (mu), then increase damping factor to
                 # accelerate further damping increases.
                 mu *= nu
                 if nu > half_max_nu:  # watch for nu getting too large (&overflow)
                     msg = "Stopping after nu overflow!"
                     break
                 nu = 2 * nu
-                printer.log("      Rejected%s!  mu => mu*nu = %g, nu => 2*nu = %g"
-                            % (reject_msg, mu, nu), 2)
+                printer.log("      Rejected%s!  mu => mu*nu = %g, nu => 2*nu = %g" % (reject_msg, mu, nu), 2)
             #end of inner loop
 
         #end of outer loop
