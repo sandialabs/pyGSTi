@@ -1,3 +1,29 @@
+import os as _os
+import signal as _signal
+import time as _time
+
+import numpy as _np
+import scipy as _scipy
+
+from pygsti.optimize import arraysinterface as _ari
+from pygsti.optimize.customsolve import custom_solve as _custom_solve
+from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
+from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
+from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+
+# from scipy.optimize import OptimizeResult as _optResult
+
+#Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
+#This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
+#so this can be turned off by setting the PYGSTI_NO_CUSTOMLM_SIGINT environment variable
+if 'PYGSTI_NO_CUSTOMLM_SIGINT' not in _os.environ:
+    _signal.signal(_signal.SIGINT, _signal.default_int_handler)
+
+#constants
+_MACH_PRECISION = 1e-12
+#MU_TOL1 = 1e10 # ??
+#MU_TOL2 = 1e3  # ??
+
 OOB_MESSAGE = "out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **"
 
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
