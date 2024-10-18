@@ -1134,6 +1134,9 @@ class GSTGaugeOptSuite(_NicelySerializable):
             for lbl, goparams in self.gaugeopt_argument_dicts.items():
                 goparams_list = [goparams] if hasattr(goparams, 'keys') else goparams
                 serialize_list = []
+                if lbl == 'trivial_gauge_opt':
+                    dicts_to_serialize[lbl] = None
+                    continue
                 for goparams_dict in goparams_list:
                     to_add = goparams_dict.copy()
                     if 'target_model' in to_add:
@@ -1165,6 +1168,9 @@ class GSTGaugeOptSuite(_NicelySerializable):
     def _from_nice_serialization(cls, state):  # memo holds already de-serialized objects
         gaugeopt_argument_dicts = {}
         for lbl, serialized_goparams_list in state['gaugeopt_argument_dicts'].items():
+            if lbl == 'trivial_gauge_opt':
+                gaugeopt_argument_dicts[lbl] = None
+                continue
             goparams_list = []
             for serialized_goparams in serialized_goparams_list:
                 to_add = serialized_goparams.copy()

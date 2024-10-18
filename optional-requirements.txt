@@ -10,5 +10,4 @@ cython
 cvxopt
 cvxpy
 seaborn
-qibo
 packaging
