@@ -26,6 +26,443 @@ _MACH_PRECISION = 1e-12
 
 OOB_MESSAGE = "out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **"
 
+def jls_extract_inner_loop(damping_mode, damping_clip, damping_basis, global_Jac_s, mu, JTJ, idiag, undamped_JTJ_diag, dclip, spow, add_to_diag_lst, minus_JTf, dx_lst, ari, resource_alloc, serial_solve_proc_threshold, dx, reg_Jac_s_lst, Jac_V, global_Jac_VT_mJTf, reg_Jac_s, use_acceleration, f, df2_x, x, global_accel_x, obj_fn, Jac, JTdf2, dx2, dx1, new_x, max_norm_dx, x_limits, x_lower_limits, x_upper_limits, new_x_lst, printer, rel_xtol, norm_x, oob_check_interval, best_x, best_x_state, oob_check_mode, k, global_new_x_lst, oob_check, global_new_x, oob_action, new_f_lst, norm_new_f, norm_f, nnf, v, uphill_step_threshold, last_accepted_dx, min_norm_f, rel_ftol, alpha, global_x, nu, half_max_nu):
+    #determing increment using adaptive damping
+    while True:  # inner loop
+    
+        if damping_mode == 'identity':
+            assert(damping_clip is None), "damping_clip cannot be used with damping_mode == 'identity'"
+            if damping_basis == "singular_values":
+                reg_Jac_s = global_Jac_s + mu
+    
+                #Notes:
+                #Previously we computed inv_JTJ here and below computed dx:
+                #inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1 / reg_Jac_s**2), Jac_V.T))
+                # dx = _np.dot(Jac_V, _np.diag(1 / reg_Jac_s**2), global_Jac_VT_mJTf
+                #But now we just compute reg_Jac_s here, and so the rest below.
+            else:
+                # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
+                JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
+    
+        elif damping_mode == 'JTJ':
+            if damping_basis == "singular_values":
+                reg_Jac_s = global_Jac_s + mu * dclip(global_Jac_s)
+            else:
+                add_to_diag = mu * dclip(undamped_JTJ_diag)
+                JTJ[idiag] = undamped_JTJ_diag + add_to_diag  # ok if assume fine-param-proc.size == 1
+    
+        elif damping_mode == 'invJTJ':
+            if damping_basis == "singular_values":
+                reg_Jac_s = global_Jac_s + mu * dclip(1.0 / global_Jac_s)
+            else:
+                add_to_diag = mu * dclip(1.0 / undamped_JTJ_diag)
+                JTJ[idiag] = undamped_JTJ_diag + add_to_diag  # ok if assume fine-param-proc.size == 1
+    
+        elif damping_mode == 'adaptive':
+            if damping_basis == "singular_values":
+                reg_Jac_s_lst = [global_Jac_s + mu * dclip(global_Jac_s**(spow + 0.1)),
+                                 global_Jac_s + mu * dclip(global_Jac_s**spow),
+                                 global_Jac_s + mu * dclip(global_Jac_s**(spow - 0.1))]
+            else:
+                add_to_diag_lst = [mu * dclip(undamped_JTJ_diag**(spow + 0.1)),
+                                   mu * dclip(undamped_JTJ_diag**spow),
+                                   mu * dclip(undamped_JTJ_diag**(spow - 0.1))]
+        else:
+            raise ValueError("Invalid damping mode: %s" % damping_mode)
+    
+        try:
+    
+            tm = _time.time()
+            success = True
+    
+            if damping_basis == 'diagonal_values':
+                if damping_mode == 'adaptive':
+                    for ii, add_to_diag in enumerate(add_to_diag_lst):
+                        JTJ[idiag] = undamped_JTJ_diag + add_to_diag  # ok if assume fine-param-proc.size == 1
+                        #dx_lst.append(_scipy.linalg.solve(JTJ, -JTf, sym_pos=True))
+                        #dx_lst.append(custom_solve(JTJ, -JTf, resource_alloc))
+                        _custom_solve(JTJ, minus_JTf, dx_lst[ii], ari, resource_alloc,
+                                      serial_solve_proc_threshold)
+                else:
+                    #dx = _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
+                    _custom_solve(JTJ, minus_JTf, dx, ari, resource_alloc, serial_solve_proc_threshold)
+    
+            elif damping_basis == 'singular_values':
+                #Note: above solves JTJ*x = -JTf => x = inv_JTJ * (-JTf)
+                # but: J = U*s*Vh => JTJ = (VhT*s*UT)(U*s*Vh) = VhT*s^2*Vh, and inv_Vh = V b/c V is unitary
+                # so inv_JTJ = inv_Vh * 1/s^2 * inv_VhT = V * 1/s^2 * VT  = (N,K)*(K,K)*(K,N) if use psuedoinv
+    
+                if damping_mode == 'adaptive':
+                    #dx_lst = [_np.dot(ijtj, minus_JTf) for ijtj in inv_JTJ_lst]  # special case
+                    for ii, s in enumerate(reg_Jac_s_lst):
+                        ari.fill_dx_svd(Jac_V, (1 / s**2) * global_Jac_VT_mJTf, dx_lst[ii])
+                else:
+                    # dx = _np.dot(inv_JTJ, minus_JTf)
+                    ari.fill_dx_svd(Jac_V, (1 / reg_Jac_s**2) * global_Jac_VT_mJTf, dx)
+            else:
+                raise ValueError("Invalid damping_basis = '%s'" % damping_basis)
+    
+    
+        #except _np.linalg.LinAlgError:
+        except _scipy.linalg.LinAlgError:  # DIST TODO - a different kind of exception caught?
+            success = False
+    
+        if success and use_acceleration:  # Find acceleration term:
+            assert(damping_mode != 'adaptive'), "Cannot use acceleration in adaptive mode (yet)"
+            assert(damping_basis != 'singular_values'), "Cannot use acceleration w/singular-value basis (yet)"
+            df2_eps = 1.0
+            try:
+                #df2 = (obj_fn(x + df2_dx) + obj_fn(x - df2_dx) - 2 * f) / \
+                #    df2_eps**2  # 2nd deriv of f along dx direction
+                # Above line expanded to reuse shared memory
+                df2 = -2 * f
+                df2_x[:] = x + df2_eps * dx
+                ari.allgather_x(df2_x, global_accel_x)
+                df2 += obj_fn(global_accel_x)
+                df2_x[:] = x - df2_eps * dx
+                ari.allgather_x(df2_x, global_accel_x)
+                df2 += obj_fn(global_accel_x)
+                df2 /= df2_eps**2
+                f[:] = df2; df2 = f  # use `f` as an appropriate shared-mem object for fill_jtf below
+    
+                ari.fill_jtf(Jac, df2, JTdf2)
+                JTdf2 *= -0.5  # keep using JTdf2 memory in solve call below
+                #dx2 = _scipy.linalg.solve(JTJ, -0.5 * JTdf2, sym_pos=True)  # Note: JTJ not init w/'adaptive'
+                _custom_solve(JTJ, JTdf2, dx2, ari, resource_alloc, serial_solve_proc_threshold)
+                dx1[:] = dx[:]
+                dx += dx2  # add acceleration term to dx
+            except _scipy.linalg.LinAlgError:
+                print("WARNING - linear solve failed for acceleration term!")
+                # but ok to continue - just stick with first order term
+            except ValueError:
+                print("WARNING - value error during computation of acceleration term!")
+    
+        reject_msg = ""
+    
+        if success:  # linear solve succeeded
+            #dx = _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f)
+    
+            if damping_mode != 'adaptive':
+                new_x[:] = x + dx
+                norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
+    
+                #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
+                if max_norm_dx and norm_dx > max_norm_dx:
+                    dx *= _np.sqrt(max_norm_dx / norm_dx)
+                    new_x[:] = x + dx
+                    norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
+    
+                #apply x limits (bounds)
+                if x_limits is not None:
+                    # Approach 1: project x into valid space by simply clipping out-of-bounds values
+                    for i, (x_el, lower, upper) in enumerate(zip(x, x_lower_limits, x_upper_limits)):
+                        if new_x[i] < lower:
+                            new_x[i] = lower
+                            dx[i] = lower - x_el
+                        elif new_x[i] > upper:
+                            new_x[i] = upper
+                            dx[i] = upper - x_el
+                    norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
+    
+                    # Approach 2: by scaling back dx (seems less good, but here in case we want it later)
+                    # # minimally reduce dx s.t. new_x = x + dx so that x_lower_limits <= x+dx <= x_upper_limits
+                    # # x_lower_limits - x <= dx <= x_upper_limits - x.  Note: use potentially updated dx from
+                    # # max_norm_dx block above.  For 0 <= scale <= 1,
+                    # # 1) require x + scale*dx - x_upper_limits <= 0 => scale <= (x_upper_limits - x) / dx
+                    # #    [Note: above assumes dx > 0 b/c if not it moves x away from bound and scale < 0]
+                    # #    so if scale >= 0, then scale = min((x_upper_limits - x) / dx, 1.0)
+                    # scale = None
+                    # new_x[:] = (x_upper_limits - x) / dx
+                    # new_x_min = ari.min_x(new_x)
+                    # if 0 <= new_x_min < 1.0:
+                    #     scale = new_x_min
+                    #
+                    # # 2) require x + scale*dx - x_lower_limits <= 0 => scale <= (x - x_lower_limits) / (-dx)
+                    # new_x[:] = (x_lower_limits - x) / dx
+                    # new_x_min = ari.min_x(new_x)
+                    # if 0 <= new_x_min < 1.0:
+                    #     scale = new_x_min if (scale is None) else min(new_x_min, scale)
+                    #
+                    # if scale is not None:
+                    #     dx *= scale
+                    # new_x[:] = x + dx
+                    # norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
+    
+            else:
+                for dx, new_x in zip(dx_lst, new_x_lst):
+                    new_x[:] = x + dx
+                norm_dx_lst = [ari.norm2_x(dx) for dx in dx_lst]
+    
+                #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
+                if max_norm_dx:
+                    for i, norm_dx in enumerate(norm_dx_lst):
+                        if norm_dx > max_norm_dx:
+                            dx_lst[i] *= _np.sqrt(max_norm_dx / norm_dx)
+                            new_x_lst[i][:] = x + dx_lst[i]
+                            norm_dx_lst[i] = ari.norm2_x(dx_lst[i])
+    
+                #apply x limits (bounds)
+                if x_limits is not None:
+                    for i, (dx, new_x) in enumerate(zip(dx_lst, new_x_lst)):
+                        # Do same thing as above for each possible dx in dx_lst
+                        # Approach 1:
+                        for ii, (x_el, lower, upper) in enumerate(zip(x, x_lower_limits, x_upper_limits)):
+                            if new_x[ii] < lower:
+                                new_x[ii] = lower
+                                dx[ii] = lower - x_el
+                            elif new_x[ii] > upper:
+                                new_x[ii] = upper
+                                dx[ii] = upper - x_el
+                        norm_dx_lst[i] = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
+    
+                        # Approach 2:
+                        # scale = None
+                        # new_x[:] = (x_upper_limits - x) / dx
+                        # new_x_min = ari.min_x(new_x)
+                        # if 0 <= new_x_min < 1.0:
+                        #     scale = new_x_min
+                        #
+                        # new_x[:] = (x_lower_limits - x) / dx
+                        # new_x_min = ari.min_x(new_x)
+                        # if 0 <= new_x_min < 1.0:
+                        #     scale = new_x_min if (scale is None) else min(new_x_min, scale)
+                        #
+                        # if scale is not None:
+                        #     dx *= scale
+                        # new_x[:] = x + dx
+                        # norm_dx_lst[i] = ari.norm2_x(dx)
+    
+                norm_dx = norm_dx_lst[1]  # just use center value for printing & checks below
+    
+            printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu, norm_dx), 2)
+            #MEM if profiler: profiler.memory_check("custom_leastsq: mid inner loop")
+    
+            if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
+                if oob_check_interval <= 1:
+                    msg = "Relative change, |dx|/|x|, is at most %g" % rel_xtol
+                    converged = True; break
+                else:
+                    printer.log("** Converged with " + (OOB_MESSAGE % oob_check_interval), 2)
+                    oob_check_interval = 1
+                    x[:] = best_x[:]
+                    mu, nu, norm_f, f[:], spow, _ = best_x_state
+                    break
+    
+            if norm_dx > (norm_x + rel_xtol) / (_MACH_PRECISION**2):
+                msg = "(near-)singular linear system"; break
+    
+            if oob_check_interval > 0 and oob_check_mode == 0:
+                if k % oob_check_interval == 0:
+                    #Check to see if objective function is out of bounds
+    
+                    in_bounds = []
+                    if damping_mode == 'adaptive':
+                        new_f_lst = []
+                        for new_x, global_new_x in zip(new_x_lst, global_new_x_lst):
+                            ari.allgather_x(new_x, global_new_x)
+                            try:
+                                new_f = obj_fn(global_new_x, oob_check=True)
+                            except ValueError:  # Use this to mean - "not allowed, but don't stop"
+                                in_bounds.append(False)
+                                new_f_lst.append(None)  # marks OOB attempts that shouldn't be considered
+                            else:  # no exception raised
+                                in_bounds.append(True)
+                                new_f_lst.append(new_f.copy())
+                    else:
+                        ari.allgather_x(new_x, global_new_x)
+                        try:
+                            new_f = obj_fn(global_new_x, oob_check=True)
+                        except ValueError:  # Use this to mean - "not allowed, but don't stop"
+                            in_bounds.append(False)
+                        else:
+                            in_bounds.append(True)
+    
+                    if any(in_bounds):  # In adaptive mode, proceed if *any* cases are in-bounds
+                        new_x_is_allowed = True
+                        new_x_is_known_inbounds = True
+                    else:
+                        MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
+                        if oob_action == "reject" or k < MIN_STOP_ITER:
+                            new_x_is_allowed = False  # (and also not in bounds)
+                        elif oob_action == "stop":
+                            if oob_check_interval == 1:
+                                msg = "Objective function out-of-bounds! STOP"
+                                converged = True; break
+                            else:  # reset to last know in-bounds point and not do oob check every step
+                                printer.log(
+                                    ("** Hit out-of-bounds with check interval=%d, reverting to last "
+                                     "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                                oob_check_interval = 1
+                                x[:] = best_x[:]
+                                mu, nu, norm_f, f[:], spow, _ = best_x_state  # can't make use of saved JTJ yet
+                                break  # restart next outer loop
+                        else:
+                            raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
+                else:  # don't check this time
+    
+                    if damping_mode == 'adaptive':
+                        new_f_lst = []
+                        for new_x, global_new_x in zip(new_x_lst, global_new_x_lst):
+                            ari.allgather_x(new_x, global_new_x)
+                            new_f_lst.append(obj_fn(global_new_x).copy())
+                    else:
+                        ari.allgather_x(new_x, global_new_x)
+                        new_f = obj_fn(global_new_x, oob_check=False)
+    
+                    new_x_is_allowed = True
+                    new_x_is_known_inbounds = False
+            else:
+                #Just evaluate objective function normally; never check for in-bounds condition
+                if damping_mode == 'adaptive':
+                    new_f_lst = []
+                    for new_x, global_new_x in zip(new_x_lst, global_new_x_lst):
+                        ari.allgather_x(new_x, global_new_x)
+                        new_f_lst.append(obj_fn(global_new_x).copy())
+                else:
+                    ari.allgather_x(new_x, global_new_x)
+                    new_f = obj_fn(global_new_x)
+    
+                new_x_is_allowed = True
+                new_x_is_known_inbounds = bool(oob_check_interval == 0)  # consider "in bounds" if not checking
+    
+            if new_x_is_allowed:
+    
+                if damping_mode == 'adaptive':
+                    norm_new_f_lst = [ari.norm2_f(new_f) if (new_f is not None) else 1e100
+                                      for new_f in new_f_lst]  # 1e100 so we don't choose OOB adaptive cases
+                    if any([not _np.isfinite(norm_new_f) for norm_new_f in norm_new_f_lst]):  # avoid inf loop
+                        msg = "Infinite norm of objective function!"; break
+    
+                    #iMin = _np.argmin(norm_new_f_lst)  # pick lowest (best) objective
+                    gain_ratio_lst = [(norm_f - nnf) / ari.dot_x(dx, mu * dx + minus_JTf)
+                                      for (nnf, dx) in zip(norm_new_f_lst, dx_lst)]
+                    iMin = _np.argmax(gain_ratio_lst)  # pick highest (best) gain ratio
+                    # but expected decrease is |f|^2 = grad(fTf) * dx = (grad(fT)*f + fT*grad(f)) * dx
+                    #                                                 = (JT*f + fT*J) * dx
+                    # <<more explanation>>
+                    norm_new_f = norm_new_f_lst[iMin]
+                    new_f = new_f_lst[iMin]
+                    new_x = new_x_lst[iMin]
+                    global_new_x = global_new_x_lst[iMin]
+                    dx = dx_lst[iMin]
+                    if iMin == 0: spow = min(1.0, spow + 0.1)
+                    elif iMin == 2: spow = max(-1.0, spow - 0.1)
+                    printer.log("ADAPTIVE damping => i=%d b/c fs=[%s] gains=[%s] => spow=%g" % (
+                        iMin, ", ".join(["%.3g" % v for v in norm_new_f_lst]),
+                        ", ".join(["%.3g" % v for v in gain_ratio_lst]), spow))
+    
+                else:
+                    norm_new_f = ari.norm2_f(new_f)  # _np.linalg.norm(new_f)**2
+                    if not _np.isfinite(norm_new_f):  # avoid infinite loop...
+                        msg = "Infinite norm of objective function!"; break
+    
+                # dL = expected decrease in ||F||^2 from linear model
+                dL = ari.dot_x(dx, mu * dx + minus_JTf)
+                dF = norm_f - norm_new_f      # actual decrease in ||F||^2
+    
+                if dF <= 0 and uphill_step_threshold > 0:
+                    beta = 0 if last_accepted_dx is None else \
+                        (ari.dot_x(dx, last_accepted_dx)
+                            / _np.sqrt(ari.norm2_x(dx) * ari.norm2_x(last_accepted_dx)))
+                    uphill_ok = (uphill_step_threshold - beta) * norm_new_f < min(min_norm_f, norm_f)
+                else:
+                    uphill_ok = False
+    
+                if use_acceleration:
+                    accel_ratio = 2 * _np.sqrt(ari.norm2_x(dx2) / ari.norm2_x(dx1))
+                    printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g aC=%g" %
+                                (norm_new_f, dL, dF, dL / norm_f, dF / norm_f, accel_ratio), 2)
+    
+                else:
+                    printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" %
+                                (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
+                    accel_ratio = 0.0
+    
+                if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol \
+                   and dF / dL < 2.0 and accel_ratio <= alpha:
+                    if oob_check_interval <= 1:  # (if 0 then no oob checking is done)
+                        msg = "Both actual and predicted relative reductions in the" + \
+                            " sum of squares are at most %g" % rel_ftol
+                        converged = True; break
+                    else:
+                        printer.log("** Converged with " + (OOB_MESSAGE % oob_check_interval), 2)
+                        oob_check_interval = 1
+                        x[:] = best_x[:]
+                        mu, nu, norm_f, f[:], spow, _ = best_x_state  # can't make use of saved JTJ yet
+                        break
+    
+                if (dL > 0 and dF > 0 and accel_ratio <= alpha) or uphill_ok:
+                    #Check whether an otherwise acceptable solution is in-bounds
+                    if oob_check_mode == 1 and oob_check_interval > 0 and k % oob_check_interval == 0:
+                        #Check to see if objective function is out of bounds
+                        try:
+                            obj_fn(global_new_x, oob_check=True)  # don't actually need return val (== new_f)
+                            new_f_is_allowed = True
+                            new_x_is_known_inbounds = True
+                        except ValueError:  # Use this to mean - "not allowed, but don't stop"
+                            MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective can stops the opt.
+                            if oob_action == "reject" or k < MIN_STOP_ITER:
+                                new_f_is_allowed = False  # (and also not in bounds)
+                            elif oob_action == "stop":
+                                if oob_check_interval == 1:
+                                    msg = "Objective function out-of-bounds! STOP"
+                                    converged = True; break
+                                else:  # reset to last know in-bounds point and not do oob check every step
+                                    printer.log("** Hit " + (OOB_MESSAGE % oob_check_interval), 2)
+                                    oob_check_interval = 1
+                                    x[:] = best_x[:]
+                                    mu, nu, norm_f, f[:], spow, _ = best_x_state  # can't use of saved JTJ yet
+                                    break  # restart next outer loop
+                            else:
+                                raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
+                    else:
+                        new_f_is_allowed = True
+    
+                    if new_f_is_allowed:
+                        # reduction in error: increment accepted!
+                        t = 1.0 - (2 * dF / dL - 1.0)**3  # dF/dL == gain ratio
+                        # always reduce mu for accepted step when |dx| is small
+                        mu_factor = max(t, 1.0 / 3.0) if norm_dx > 1e-8 else 0.3
+                        mu *= mu_factor
+                        nu = 2
+                        x[:] = new_x[:]; f[:] = new_f[:]; norm_f = norm_new_f
+                        global_x[:] = global_new_x[:]
+                        printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g"
+                                    % (" UPHILL" if uphill_ok else "", dF / dL, mu_factor, mu), 2)
+                        last_accepted_dx = dx.copy()
+                        if new_x_is_known_inbounds and norm_f < min_norm_f:
+                            min_norm_f = norm_f
+                            best_x[:] = x[:]
+                            best_x_state = (mu, nu, norm_f, f.copy(), spow, None)
+                            #Note: we use rawJTJ=None above because the current `JTJ` was evaluated
+                            # at the *last* x-value -- we need to wait for the next outer loop
+                            # to compute the JTJ for this best_x_state
+    
+                        break  # exit inner loop normally
+                    else:
+                        reject_msg = " (out-of-bounds)"
+            else:
+                reject_msg = " (out-of-bounds)"
+    
+        else:
+            reject_msg = " (LinSolve Failure)"
+    
+        # if this point is reached, either the linear solve failed
+        # or the error did not reduce.  In either case, reject increment.
+    
+        #Increase damping (mu), then increase damping factor to
+        # accelerate further damping increases.
+        mu *= nu
+        if nu > half_max_nu:  # watch for nu getting too large (&overflow)
+            msg = "Stopping after nu overflow!"; break
+        nu = 2 * nu
+        printer.log("      Rejected%s!  mu => mu*nu = %g, nu => 2*nu = %g"
+                    % (reject_msg, mu, nu), 2)
+    #end of inner loop
+    
+    return nu
+
+
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
                    max_dx_scale=1.0, damping_mode="identity", damping_basis="diagonal_values",
@@ -275,10 +712,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     mu, nu, norm_f, f[:], spow, _ = best_x_state
                     continue  # can't make use of saved JTJ yet - recompute on nxt iter
 
-
             Jac = None
-
-
 
             # unnecessary b/c global_x is already valid: ari.allgather_x(x, global_x)
             if k >= num_fd_iters:
@@ -310,8 +744,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             # Riley note: fill_JTJ is the first place where we try to access J as a dense matrix.
             ari.fill_jtj(Jac, JTJ, jtj_buf)
             ari.fill_jtf(Jac, f, JTf)  # 'P'-type
-
-
 
             idiag = ari.jtj_diag_indices(JTJ)
             norm_JTf = ari.infnorm_x(JTf)
@@ -376,439 +808,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     rawJTJ_scratch[idiag] = undamped_JTJ_diag  # no damping; the "raw" JTJ
                     best_x_state = best_x_state[0:5] + (rawJTJ_scratch,)  # update mu,nu,JTJ of initial "best state"
 
-            #determing increment using adaptive damping
-            while True:  # inner loop
-
-                if damping_mode == 'identity':
-                    assert(damping_clip is None), "damping_clip cannot be used with damping_mode == 'identity'"
-                    if damping_basis == "singular_values":
-                        reg_Jac_s = global_Jac_s + mu
-
-                        #Notes:
-                        #Previously we computed inv_JTJ here and below computed dx:
-                        #inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1 / reg_Jac_s**2), Jac_V.T))
-                        # dx = _np.dot(Jac_V, _np.diag(1 / reg_Jac_s**2), global_Jac_VT_mJTf
-                        #But now we just compute reg_Jac_s here, and so the rest below.
-                    else:
-                        # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
-                        JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
-
-                elif damping_mode == 'JTJ':
-                    if damping_basis == "singular_values":
-                        reg_Jac_s = global_Jac_s + mu * dclip(global_Jac_s)
-                    else:
-                        add_to_diag = mu * dclip(undamped_JTJ_diag)
-                        JTJ[idiag] = undamped_JTJ_diag + add_to_diag  # ok if assume fine-param-proc.size == 1
-
-                elif damping_mode == 'invJTJ':
-                    if damping_basis == "singular_values":
-                        reg_Jac_s = global_Jac_s + mu * dclip(1.0 / global_Jac_s)
-                    else:
-                        add_to_diag = mu * dclip(1.0 / undamped_JTJ_diag)
-                        JTJ[idiag] = undamped_JTJ_diag + add_to_diag  # ok if assume fine-param-proc.size == 1
-
-                elif damping_mode == 'adaptive':
-                    if damping_basis == "singular_values":
-                        reg_Jac_s_lst = [global_Jac_s + mu * dclip(global_Jac_s**(spow + 0.1)),
-                                         global_Jac_s + mu * dclip(global_Jac_s**spow),
-                                         global_Jac_s + mu * dclip(global_Jac_s**(spow - 0.1))]
-                    else:
-                        add_to_diag_lst = [mu * dclip(undamped_JTJ_diag**(spow + 0.1)),
-                                           mu * dclip(undamped_JTJ_diag**spow),
-                                           mu * dclip(undamped_JTJ_diag**(spow - 0.1))]
-                else:
-                    raise ValueError("Invalid damping mode: %s" % damping_mode)
-
-                try:
-
-                    tm = _time.time()
-                    success = True
-
-                    if damping_basis == 'diagonal_values':
-                        if damping_mode == 'adaptive':
-                            for ii, add_to_diag in enumerate(add_to_diag_lst):
-                                JTJ[idiag] = undamped_JTJ_diag + add_to_diag  # ok if assume fine-param-proc.size == 1
-                                #dx_lst.append(_scipy.linalg.solve(JTJ, -JTf, sym_pos=True))
-                                #dx_lst.append(custom_solve(JTJ, -JTf, resource_alloc))
-                                _custom_solve(JTJ, minus_JTf, dx_lst[ii], ari, resource_alloc,
-                                              serial_solve_proc_threshold)
-                        else:
-                            #dx = _scipy.linalg.solve(JTJ, -JTf, sym_pos=True)
-                            _custom_solve(JTJ, minus_JTf, dx, ari, resource_alloc, serial_solve_proc_threshold)
-
-                    elif damping_basis == 'singular_values':
-                        #Note: above solves JTJ*x = -JTf => x = inv_JTJ * (-JTf)
-                        # but: J = U*s*Vh => JTJ = (VhT*s*UT)(U*s*Vh) = VhT*s^2*Vh, and inv_Vh = V b/c V is unitary
-                        # so inv_JTJ = inv_Vh * 1/s^2 * inv_VhT = V * 1/s^2 * VT  = (N,K)*(K,K)*(K,N) if use psuedoinv
-
-                        if damping_mode == 'adaptive':
-                            #dx_lst = [_np.dot(ijtj, minus_JTf) for ijtj in inv_JTJ_lst]  # special case
-                            for ii, s in enumerate(reg_Jac_s_lst):
-                                ari.fill_dx_svd(Jac_V, (1 / s**2) * global_Jac_VT_mJTf, dx_lst[ii])
-                        else:
-                            # dx = _np.dot(inv_JTJ, minus_JTf)
-                            ari.fill_dx_svd(Jac_V, (1 / reg_Jac_s**2) * global_Jac_VT_mJTf, dx)
-                    else:
-                        raise ValueError("Invalid damping_basis = '%s'" % damping_basis)
-
-
-                #except _np.linalg.LinAlgError:
-                except _scipy.linalg.LinAlgError:  # DIST TODO - a different kind of exception caught?
-                    success = False
-
-                if success and use_acceleration:  # Find acceleration term:
-                    assert(damping_mode != 'adaptive'), "Cannot use acceleration in adaptive mode (yet)"
-                    assert(damping_basis != 'singular_values'), "Cannot use acceleration w/singular-value basis (yet)"
-                    df2_eps = 1.0
-                    try:
-                        #df2 = (obj_fn(x + df2_dx) + obj_fn(x - df2_dx) - 2 * f) / \
-                        #    df2_eps**2  # 2nd deriv of f along dx direction
-                        # Above line expanded to reuse shared memory
-                        df2 = -2 * f
-                        df2_x[:] = x + df2_eps * dx
-                        ari.allgather_x(df2_x, global_accel_x)
-                        df2 += obj_fn(global_accel_x)
-                        df2_x[:] = x - df2_eps * dx
-                        ari.allgather_x(df2_x, global_accel_x)
-                        df2 += obj_fn(global_accel_x)
-                        df2 /= df2_eps**2
-                        f[:] = df2; df2 = f  # use `f` as an appropriate shared-mem object for fill_jtf below
-
-                        ari.fill_jtf(Jac, df2, JTdf2)
-                        JTdf2 *= -0.5  # keep using JTdf2 memory in solve call below
-                        #dx2 = _scipy.linalg.solve(JTJ, -0.5 * JTdf2, sym_pos=True)  # Note: JTJ not init w/'adaptive'
-                        _custom_solve(JTJ, JTdf2, dx2, ari, resource_alloc, serial_solve_proc_threshold)
-                        dx1[:] = dx[:]
-                        dx += dx2  # add acceleration term to dx
-                    except _scipy.linalg.LinAlgError:
-                        print("WARNING - linear solve failed for acceleration term!")
-                        # but ok to continue - just stick with first order term
-                    except ValueError:
-                        print("WARNING - value error during computation of acceleration term!")
-
-                reject_msg = ""
-
-                if success:  # linear solve succeeded
-                    #dx = _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f)
-
-                    if damping_mode != 'adaptive':
-                        new_x[:] = x + dx
-                        norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
-
-                        #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
-                        if max_norm_dx and norm_dx > max_norm_dx:
-                            dx *= _np.sqrt(max_norm_dx / norm_dx)
-                            new_x[:] = x + dx
-                            norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
-
-                        #apply x limits (bounds)
-                        if x_limits is not None:
-                            # Approach 1: project x into valid space by simply clipping out-of-bounds values
-                            for i, (x_el, lower, upper) in enumerate(zip(x, x_lower_limits, x_upper_limits)):
-                                if new_x[i] < lower:
-                                    new_x[i] = lower
-                                    dx[i] = lower - x_el
-                                elif new_x[i] > upper:
-                                    new_x[i] = upper
-                                    dx[i] = upper - x_el
-                            norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
-
-                            # Approach 2: by scaling back dx (seems less good, but here in case we want it later)
-                            # # minimally reduce dx s.t. new_x = x + dx so that x_lower_limits <= x+dx <= x_upper_limits
-                            # # x_lower_limits - x <= dx <= x_upper_limits - x.  Note: use potentially updated dx from
-                            # # max_norm_dx block above.  For 0 <= scale <= 1,
-                            # # 1) require x + scale*dx - x_upper_limits <= 0 => scale <= (x_upper_limits - x) / dx
-                            # #    [Note: above assumes dx > 0 b/c if not it moves x away from bound and scale < 0]
-                            # #    so if scale >= 0, then scale = min((x_upper_limits - x) / dx, 1.0)
-                            # scale = None
-                            # new_x[:] = (x_upper_limits - x) / dx
-                            # new_x_min = ari.min_x(new_x)
-                            # if 0 <= new_x_min < 1.0:
-                            #     scale = new_x_min
-                            #
-                            # # 2) require x + scale*dx - x_lower_limits <= 0 => scale <= (x - x_lower_limits) / (-dx)
-                            # new_x[:] = (x_lower_limits - x) / dx
-                            # new_x_min = ari.min_x(new_x)
-                            # if 0 <= new_x_min < 1.0:
-                            #     scale = new_x_min if (scale is None) else min(new_x_min, scale)
-                            #
-                            # if scale is not None:
-                            #     dx *= scale
-                            # new_x[:] = x + dx
-                            # norm_dx = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
-
-                    else:
-                        for dx, new_x in zip(dx_lst, new_x_lst):
-                            new_x[:] = x + dx
-                        norm_dx_lst = [ari.norm2_x(dx) for dx in dx_lst]
-
-                        #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
-                        if max_norm_dx:
-                            for i, norm_dx in enumerate(norm_dx_lst):
-                                if norm_dx > max_norm_dx:
-                                    dx_lst[i] *= _np.sqrt(max_norm_dx / norm_dx)
-                                    new_x_lst[i][:] = x + dx_lst[i]
-                                    norm_dx_lst[i] = ari.norm2_x(dx_lst[i])
-
-                        #apply x limits (bounds)
-                        if x_limits is not None:
-                            for i, (dx, new_x) in enumerate(zip(dx_lst, new_x_lst)):
-                                # Do same thing as above for each possible dx in dx_lst
-                                # Approach 1:
-                                for ii, (x_el, lower, upper) in enumerate(zip(x, x_lower_limits, x_upper_limits)):
-                                    if new_x[ii] < lower:
-                                        new_x[ii] = lower
-                                        dx[ii] = lower - x_el
-                                    elif new_x[ii] > upper:
-                                        new_x[ii] = upper
-                                        dx[ii] = upper - x_el
-                                norm_dx_lst[i] = ari.norm2_x(dx)  # _np.linalg.norm(dx)**2
-
-                                # Approach 2:
-                                # scale = None
-                                # new_x[:] = (x_upper_limits - x) / dx
-                                # new_x_min = ari.min_x(new_x)
-                                # if 0 <= new_x_min < 1.0:
-                                #     scale = new_x_min
-                                #
-                                # new_x[:] = (x_lower_limits - x) / dx
-                                # new_x_min = ari.min_x(new_x)
-                                # if 0 <= new_x_min < 1.0:
-                                #     scale = new_x_min if (scale is None) else min(new_x_min, scale)
-                                #
-                                # if scale is not None:
-                                #     dx *= scale
-                                # new_x[:] = x + dx
-                                # norm_dx_lst[i] = ari.norm2_x(dx)
-
-                        norm_dx = norm_dx_lst[1]  # just use center value for printing & checks below
-
-                    printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu, norm_dx), 2)
-                    #MEM if profiler: profiler.memory_check("custom_leastsq: mid inner loop")
-
-                    if norm_dx < (rel_xtol**2) * norm_x:  # and mu < MU_TOL2:
-                        if oob_check_interval <= 1:
-                            msg = "Relative change, |dx|/|x|, is at most %g" % rel_xtol
-                            converged = True; break
-                        else:
-                            printer.log("** Converged with " + (OOB_MESSAGE % oob_check_interval), 2)
-                            oob_check_interval = 1
-                            x[:] = best_x[:]
-                            mu, nu, norm_f, f[:], spow, _ = best_x_state
-                            break
-
-                    if norm_dx > (norm_x + rel_xtol) / (_MACH_PRECISION**2):
-                        msg = "(near-)singular linear system"; break
-
-                    if oob_check_interval > 0 and oob_check_mode == 0:
-                        if k % oob_check_interval == 0:
-                            #Check to see if objective function is out of bounds
-
-                            in_bounds = []
-                            if damping_mode == 'adaptive':
-                                new_f_lst = []
-                                for new_x, global_new_x in zip(new_x_lst, global_new_x_lst):
-                                    ari.allgather_x(new_x, global_new_x)
-                                    try:
-                                        new_f = obj_fn(global_new_x, oob_check=True)
-                                    except ValueError:  # Use this to mean - "not allowed, but don't stop"
-                                        in_bounds.append(False)
-                                        new_f_lst.append(None)  # marks OOB attempts that shouldn't be considered
-                                    else:  # no exception raised
-                                        in_bounds.append(True)
-                                        new_f_lst.append(new_f.copy())
-                            else:
-                                ari.allgather_x(new_x, global_new_x)
-                                try:
-                                    new_f = obj_fn(global_new_x, oob_check=True)
-                                except ValueError:  # Use this to mean - "not allowed, but don't stop"
-                                    in_bounds.append(False)
-                                else:
-                                    in_bounds.append(True)
-
-                            if any(in_bounds):  # In adaptive mode, proceed if *any* cases are in-bounds
-                                new_x_is_allowed = True
-                                new_x_is_known_inbounds = True
-                            else:
-                                MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
-                                if oob_action == "reject" or k < MIN_STOP_ITER:
-                                    new_x_is_allowed = False  # (and also not in bounds)
-                                elif oob_action == "stop":
-                                    if oob_check_interval == 1:
-                                        msg = "Objective function out-of-bounds! STOP"
-                                        converged = True; break
-                                    else:  # reset to last know in-bounds point and not do oob check every step
-                                        printer.log(
-                                            ("** Hit out-of-bounds with check interval=%d, reverting to last "
-                                             "know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                                        oob_check_interval = 1
-                                        x[:] = best_x[:]
-                                        mu, nu, norm_f, f[:], spow, _ = best_x_state  # can't make use of saved JTJ yet
-                                        break  # restart next outer loop
-                                else:
-                                    raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
-                        else:  # don't check this time
-
-                            if damping_mode == 'adaptive':
-                                new_f_lst = []
-                                for new_x, global_new_x in zip(new_x_lst, global_new_x_lst):
-                                    ari.allgather_x(new_x, global_new_x)
-                                    new_f_lst.append(obj_fn(global_new_x).copy())
-                            else:
-                                ari.allgather_x(new_x, global_new_x)
-                                new_f = obj_fn(global_new_x, oob_check=False)
-
-                            new_x_is_allowed = True
-                            new_x_is_known_inbounds = False
-                    else:
-                        #Just evaluate objective function normally; never check for in-bounds condition
-                        if damping_mode == 'adaptive':
-                            new_f_lst = []
-                            for new_x, global_new_x in zip(new_x_lst, global_new_x_lst):
-                                ari.allgather_x(new_x, global_new_x)
-                                new_f_lst.append(obj_fn(global_new_x).copy())
-                        else:
-                            ari.allgather_x(new_x, global_new_x)
-                            new_f = obj_fn(global_new_x)
-
-                        new_x_is_allowed = True
-                        new_x_is_known_inbounds = bool(oob_check_interval == 0)  # consider "in bounds" if not checking
-
-                    if new_x_is_allowed:
-
-                        if damping_mode == 'adaptive':
-                            norm_new_f_lst = [ari.norm2_f(new_f) if (new_f is not None) else 1e100
-                                              for new_f in new_f_lst]  # 1e100 so we don't choose OOB adaptive cases
-                            if any([not _np.isfinite(norm_new_f) for norm_new_f in norm_new_f_lst]):  # avoid inf loop
-                                msg = "Infinite norm of objective function!"; break
-
-                            #iMin = _np.argmin(norm_new_f_lst)  # pick lowest (best) objective
-                            gain_ratio_lst = [(norm_f - nnf) / ari.dot_x(dx, mu * dx + minus_JTf)
-                                              for (nnf, dx) in zip(norm_new_f_lst, dx_lst)]
-                            iMin = _np.argmax(gain_ratio_lst)  # pick highest (best) gain ratio
-                            # but expected decrease is |f|^2 = grad(fTf) * dx = (grad(fT)*f + fT*grad(f)) * dx
-                            #                                                 = (JT*f + fT*J) * dx
-                            # <<more explanation>>
-                            norm_new_f = norm_new_f_lst[iMin]
-                            new_f = new_f_lst[iMin]
-                            new_x = new_x_lst[iMin]
-                            global_new_x = global_new_x_lst[iMin]
-                            dx = dx_lst[iMin]
-                            if iMin == 0: spow = min(1.0, spow + 0.1)
-                            elif iMin == 2: spow = max(-1.0, spow - 0.1)
-                            printer.log("ADAPTIVE damping => i=%d b/c fs=[%s] gains=[%s] => spow=%g" % (
-                                iMin, ", ".join(["%.3g" % v for v in norm_new_f_lst]),
-                                ", ".join(["%.3g" % v for v in gain_ratio_lst]), spow))
-
-                        else:
-                            norm_new_f = ari.norm2_f(new_f)  # _np.linalg.norm(new_f)**2
-                            if not _np.isfinite(norm_new_f):  # avoid infinite loop...
-                                msg = "Infinite norm of objective function!"; break
-
-                        # dL = expected decrease in ||F||^2 from linear model
-                        dL = ari.dot_x(dx, mu * dx + minus_JTf)
-                        dF = norm_f - norm_new_f      # actual decrease in ||F||^2
-
-                        if dF <= 0 and uphill_step_threshold > 0:
-                            beta = 0 if last_accepted_dx is None else \
-                                (ari.dot_x(dx, last_accepted_dx)
-                                    / _np.sqrt(ari.norm2_x(dx) * ari.norm2_x(last_accepted_dx)))
-                            uphill_ok = (uphill_step_threshold - beta) * norm_new_f < min(min_norm_f, norm_f)
-                        else:
-                            uphill_ok = False
-
-                        if use_acceleration:
-                            accel_ratio = 2 * _np.sqrt(ari.norm2_x(dx2) / ari.norm2_x(dx1))
-                            printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g aC=%g" %
-                                        (norm_new_f, dL, dF, dL / norm_f, dF / norm_f, accel_ratio), 2)
-
-                        else:
-                            printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" %
-                                        (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
-                            accel_ratio = 0.0
-
-                        if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol \
-                           and dF / dL < 2.0 and accel_ratio <= alpha:
-                            if oob_check_interval <= 1:  # (if 0 then no oob checking is done)
-                                msg = "Both actual and predicted relative reductions in the" + \
-                                    " sum of squares are at most %g" % rel_ftol
-                                converged = True; break
-                            else:
-                                printer.log("** Converged with " + (OOB_MESSAGE % oob_check_interval), 2)
-                                oob_check_interval = 1
-                                x[:] = best_x[:]
-                                mu, nu, norm_f, f[:], spow, _ = best_x_state  # can't make use of saved JTJ yet
-                                break
-
-                        if (dL > 0 and dF > 0 and accel_ratio <= alpha) or uphill_ok:
-                            #Check whether an otherwise acceptable solution is in-bounds
-                            if oob_check_mode == 1 and oob_check_interval > 0 and k % oob_check_interval == 0:
-                                #Check to see if objective function is out of bounds
-                                try:
-                                    obj_fn(global_new_x, oob_check=True)  # don't actually need return val (== new_f)
-                                    new_f_is_allowed = True
-                                    new_x_is_known_inbounds = True
-                                except ValueError:  # Use this to mean - "not allowed, but don't stop"
-                                    MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective can stops the opt.
-                                    if oob_action == "reject" or k < MIN_STOP_ITER:
-                                        new_f_is_allowed = False  # (and also not in bounds)
-                                    elif oob_action == "stop":
-                                        if oob_check_interval == 1:
-                                            msg = "Objective function out-of-bounds! STOP"
-                                            converged = True; break
-                                        else:  # reset to last know in-bounds point and not do oob check every step
-                                            printer.log("** Hit " + (OOB_MESSAGE % oob_check_interval), 2)
-                                            oob_check_interval = 1
-                                            x[:] = best_x[:]
-                                            mu, nu, norm_f, f[:], spow, _ = best_x_state  # can't use of saved JTJ yet
-                                            break  # restart next outer loop
-                                    else:
-                                        raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
-                            else:
-                                new_f_is_allowed = True
-
-                            if new_f_is_allowed:
-                                # reduction in error: increment accepted!
-                                t = 1.0 - (2 * dF / dL - 1.0)**3  # dF/dL == gain ratio
-                                # always reduce mu for accepted step when |dx| is small
-                                mu_factor = max(t, 1.0 / 3.0) if norm_dx > 1e-8 else 0.3
-                                mu *= mu_factor
-                                nu = 2
-                                x[:] = new_x[:]; f[:] = new_f[:]; norm_f = norm_new_f
-                                global_x[:] = global_new_x[:]
-                                printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g"
-                                            % (" UPHILL" if uphill_ok else "", dF / dL, mu_factor, mu), 2)
-                                last_accepted_dx = dx.copy()
-                                if new_x_is_known_inbounds and norm_f < min_norm_f:
-                                    min_norm_f = norm_f
-                                    best_x[:] = x[:]
-                                    best_x_state = (mu, nu, norm_f, f.copy(), spow, None)
-                                    #Note: we use rawJTJ=None above because the current `JTJ` was evaluated
-                                    # at the *last* x-value -- we need to wait for the next outer loop
-                                    # to compute the JTJ for this best_x_state
-
-                                break  # exit inner loop normally
-                            else:
-                                reject_msg = " (out-of-bounds)"
-                    else:
-                        reject_msg = " (out-of-bounds)"
-
-                else:
-                    reject_msg = " (LinSolve Failure)"
-
-                # if this point is reached, either the linear solve failed
-                # or the error did not reduce.  In either case, reject increment.
-
-                #Increase damping (mu), then increase damping factor to
-                # accelerate further damping increases.
-                mu *= nu
-                if nu > half_max_nu:  # watch for nu getting too large (&overflow)
-                    msg = "Stopping after nu overflow!"; break
-                nu = 2 * nu
-                printer.log("      Rejected%s!  mu => mu*nu = %g, nu => 2*nu = %g"
-                            % (reject_msg, mu, nu), 2)
-            #end of inner loop
-
+            nu = jls_extract_def(damping_mode, damping_clip, damping_basis, global_Jac_s, mu, JTJ, idiag, undamped_JTJ_diag, dclip, spow, add_to_diag_lst, minus_JTf, dx_lst, ari, resource_alloc, serial_solve_proc_threshold, dx, reg_Jac_s_lst, Jac_V, global_Jac_VT_mJTf, reg_Jac_s, use_acceleration, f, df2_x, x, global_accel_x, obj_fn, Jac, JTdf2, dx2, dx1, new_x, max_norm_dx, x_limits, x_lower_limits, x_upper_limits, new_x_lst, printer, rel_xtol, norm_x, oob_check_interval, best_x, best_x_state, oob_check_mode, k, global_new_x_lst, oob_check, global_new_x, oob_action, new_f_lst, norm_new_f, norm_f, nnf, v, uphill_step_threshold, last_accepted_dx, min_norm_f, rel_ftol, alpha, global_x, nu, half_max_nu)
         #end of outer loop
         else:
             #if no break stmt hit, then we've exceeded max_iter
