@@ -26,7 +26,14 @@ _MACH_PRECISION = 1e-12
 
 OOB_MESSAGE = "out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **"
 
-def jls_extract_inner_loop(damping_mode, damping_clip, damping_basis, global_Jac_s, mu, JTJ, idiag, undamped_JTJ_diag, dclip, spow, add_to_diag_lst, minus_JTf, dx_lst, ari, resource_alloc, serial_solve_proc_threshold, dx, reg_Jac_s_lst, Jac_V, global_Jac_VT_mJTf, reg_Jac_s, use_acceleration, f, df2_x, x, global_accel_x, obj_fn, Jac, JTdf2, dx2, dx1, new_x, max_norm_dx, x_limits, x_lower_limits, x_upper_limits, new_x_lst, printer, rel_xtol, norm_x, oob_check_interval, best_x, best_x_state, oob_check_mode, k, global_new_x_lst, oob_check, global_new_x, oob_action, new_f_lst, norm_new_f, norm_f, nnf, v, uphill_step_threshold, last_accepted_dx, min_norm_f, rel_ftol, alpha, global_x, nu, half_max_nu):
+def jls_extract_inner_loop(
+    damping_mode, damping_clip, damping_basis, global_Jac_s, mu, JTJ, idiag, undamped_JTJ_diag, dclip, spow, add_to_diag_lst,
+    minus_JTf, dx_lst, ari, resource_alloc, serial_solve_proc_threshold, dx, reg_Jac_s_lst, Jac_V, global_Jac_VT_mJTf, reg_Jac_s,
+    use_acceleration, f, df2_x, x, global_accel_x, obj_fn, Jac, JTdf2, dx2, dx1, new_x, max_norm_dx, x_limits, x_lower_limits,
+    x_upper_limits, new_x_lst, printer, rel_xtol, norm_x, oob_check_interval, best_x, best_x_state, oob_check_mode, k, global_new_x_lst,
+    oob_check, global_new_x, oob_action, new_f_lst, norm_new_f, norm_f, nnf, v, uphill_step_threshold, last_accepted_dx, min_norm_f,
+    rel_ftol, alpha, global_x, nu, half_max_nu
+):
     #determing increment using adaptive damping
     while True:  # inner loop
     
