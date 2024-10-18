@@ -138,12 +138,6 @@ class SimplerLMOptimizer(Optimizer):
         Number of finite-difference iterations applied to the first
         stage of the optimization (only).  Unused.
 
-    use_acceleration : bool, optional
-        Whether to include a geodesic acceleration term as suggested in
-        arXiv:1201.5885.  This is supposed to increase the rate of
-        convergence with very little overhead.  In practice we've seen
-        mixed results.
-
     uphill_step_threshold : float, optional
         Allows uphill steps when taking two consecutive steps in nearly
         the same direction.  The condition for accepting an uphill step
@@ -190,7 +184,6 @@ class SimplerLMOptimizer(Optimizer):
         `.lsvec_percircuit()` methods (`'percircuit'` mode).
     """
     def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0,
-                 use_acceleration=False,
                  uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0,
                  oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal"):
 
@@ -201,7 +194,6 @@ class SimplerLMOptimizer(Optimizer):
         self.tol = tol
         self.fditer = fditer
         self.first_fditer = first_fditer
-        self.use_acceleration = use_acceleration
         self.uphill_step_threshold = uphill_step_threshold
         self.init_munu = init_munu
         self.oob_check_interval = oob_check_interval
@@ -220,7 +212,6 @@ class SimplerLMOptimizer(Optimizer):
             'tolerance': self.tol,
             'number_of_finite_difference_iterations': self.fditer,
             'number_of_first_stage_finite_difference_iterations': self.first_fditer,
-            'use_acceleration': self.use_acceleration,
             'uphill_step_threshold': self.uphill_step_threshold,
             'initial_mu_and_nu': self.init_munu,
             'out_of_bounds_check_interval': self.oob_check_interval,
@@ -240,7 +231,6 @@ class SimplerLMOptimizer(Optimizer):
                    tol=state['tolerance'],
                    fditer=state['number_of_finite_difference_iterations'],
                    first_fditer=state['number_of_first_stage_finite_difference_iterations'],
-                   use_acceleration=state['use_acceleration'],
                    uphill_step_threshold=state['uphill_step_threshold'],
                    init_munu=state['initial_mu_and_nu'],
                    oob_check_interval=state['out_of_bounds_check_interval'],
@@ -302,7 +292,6 @@ class SimplerLMOptimizer(Optimizer):
             rel_ftol=self.tol.get('relf', 1e-6),
             rel_xtol=self.tol.get('relx', 1e-8),
             max_dx_scale=self.tol.get('maxdx', 1.0),
-            use_acceleration=self.use_acceleration,
             uphill_step_threshold=self.uphill_step_threshold,
             init_munu=self.init_munu,
             oob_check_interval=self.oob_check_interval,
@@ -352,7 +341,7 @@ class SimplerLMOptimizer(Optimizer):
 def simplish_leastsq(
     obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
-    max_dx_scale=1.0, use_acceleration=False, uphill_step_threshold=0.0,
+    max_dx_scale=1.0, uphill_step_threshold=0.0,
     init_munu="auto", oob_check_interval=0, oob_action="reject", oob_check_mode=0,
     resource_alloc=None, arrays_interface=None, serial_solve_proc_threshold=100,
     x_limits=None, verbosity=0, profiler=None
@@ -407,12 +396,6 @@ def simplish_leastsq(
         If not None, impose a limit on the magnitude of the step, so that
         `|dx|^2 < max_dx_scale^2 * len(dx)` (so elements of `dx` should be,
         roughly, less than `max_dx_scale`).
-
-    use_acceleration : bool, optional
-        Whether to include a geodesic acceleration term as suggested in
-        arXiv:1201.5885.  This is supposed to increase the rate of
-        convergence with very little overhead.  In practice we've seen
-        mixed results.
 
     uphill_step_threshold : float, optional
         Allows uphill steps when taking two consecutive steps in nearly
@@ -491,7 +474,6 @@ def simplish_leastsq(
     norm_f = ari.norm2_f(f)
     half_max_nu = 2**62  # what should this be??
     tau = 1e-3
-    alpha = 0.5  # for acceleration
     nu = 2
     mu = 1  # just a guess - initialized on 1st iter and only used if rejected
 
@@ -514,12 +496,6 @@ def simplish_leastsq(
     dx = ari.allocate_jtf()
     new_x = ari.allocate_jtf()
     global_new_x = global_x.copy()
-    if use_acceleration:
-        dx1 = ari.allocate_jtf()
-        dx2 = ari.allocate_jtf()
-        df2_x = ari.allocate_jtf()
-        JTdf2 = ari.allocate_jtf()
-        global_accel_x = global_x.copy()
 
     # don't let any component change by more than ~max_dx_scale
     if max_dx_scale:
@@ -674,40 +650,11 @@ def simplish_leastsq(
                     success = False
 
                 """
-                We have > 200 l.o.c. for handling success==True.
+                We have > 180 l.o.c. for handling success==True.
                 These lines should be factored out into their own function.
 
                     The last 100 lines of this region are just for handling new_x_is_allowed == True.
                 """
-
-                if success and use_acceleration:  # Find acceleration term:
-                    df2_eps = 1.0
-                    try:
-                        #df2 = (obj_fn(x + df2_dx) + obj_fn(x - df2_dx) - 2 * f) / df2_eps**2  
-                        # # 2nd deriv of f along dx direction
-                        # Above line expanded to reuse shared memory
-                        df2 = -2 * f
-                        df2_x[:] = x + df2_eps * dx
-                        ari.allgather_x(df2_x, global_accel_x)
-                        df2 += obj_fn(global_accel_x)
-                        df2_x[:] = x - df2_eps * dx
-                        ari.allgather_x(df2_x, global_accel_x)
-                        df2 += obj_fn(global_accel_x)
-                        df2 /= df2_eps**2
-                        f[:] = df2
-                        df2 = f  # use `f` as an appropriate shared-mem object for fill_jtf below
-
-                        ari.fill_jtf(Jac, df2, JTdf2)
-                        JTdf2 *= -0.5  # keep using JTdf2 memory in solve call below
-                        #dx2 = _scipy.linalg.solve(JTJ, -0.5 * JTdf2, sym_pos=True)  # Note: JTJ not init w/'adaptive'
-                        _custom_solve(JTJ, JTdf2, dx2, ari, resource_alloc, serial_solve_proc_threshold)
-                        dx1[:] = dx[:]
-                        dx += dx2  # add acceleration term to dx
-                    except _scipy.linalg.LinAlgError:
-                        print("WARNING - linear solve failed for acceleration term!")
-                        # but ok to continue - just stick with first order term
-                    except ValueError:
-                        print("WARNING - value error during computation of acceleration term!")
 
                 reject_msg = ""
                 if profiler: profiler.memory_check("simplish_leastsq: after linsolve")
@@ -819,15 +766,9 @@ def simplish_leastsq(
                         else:
                             uphill_ok = False
 
-                        if use_acceleration:
-                            accel_ratio = 2 * _np.sqrt(ari.norm2_x(dx2) / ari.norm2_x(dx1))
-                            printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g aC=%g" % (norm_new_f, dL, dF, dL / norm_f, dF / norm_f, accel_ratio), 2)
+                        printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" % (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
 
-                        else:
-                            printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" % (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
-                            accel_ratio = 0.0
-
-                        if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0 and accel_ratio <= alpha:
+                        if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0:
                             if oob_check_interval <= 1:  # (if 0 then no oob checking is done)
                                 msg = "Both actual and predicted relative reductions in the sum of squares are at most %g" % rel_ftol
                                 converged = True
@@ -839,7 +780,7 @@ def simplish_leastsq(
                                 mu, nu, norm_f, f[:], _ = best_x_state  # can't make use of saved JTJ yet
                                 break
 
-                        if (dL > 0 and dF > 0 and accel_ratio <= alpha) or uphill_ok:
+                        if (dL > 0 and dF > 0) or uphill_ok:
                             #Check whether an otherwise acceptable solution is in-bounds
                             if oob_check_mode == 1 and oob_check_interval > 0 and k % oob_check_interval == 0:
                                 #Check to see if objective function is out of bounds
@@ -950,11 +891,6 @@ def simplish_leastsq(
 
     ari.deallocate_jtf(dx)
     ari.deallocate_jtf(new_x)
-    if use_acceleration:
-        ari.deallocate_jtf(dx1)
-        ari.deallocate_jtf(dx2)
-        ari.deallocate_jtf(df2_x)
-        ari.deallocate_jtf(JTdf2)
 
     if num_fd_iters > 0:
         ari.deallocate_jac(fdJac)
