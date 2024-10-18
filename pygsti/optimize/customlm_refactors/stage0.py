@@ -249,10 +249,10 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     mu, nu, norm_f, f[:], spow, _ = best_x_state
                     continue  # can't make use of saved JTJ yet - recompute on nxt iter
 
-            if profiler: profiler.memory_check("custom_leastsq: begin outer iter *before de-alloc*")
+
             Jac = None
 
-            if profiler: profiler.memory_check("custom_leastsq: begin outer iter")
+
 
             # unnecessary b/c global_x is already valid: ari.allgather_x(x, global_x)
             if k >= num_fd_iters:
@@ -274,9 +274,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     #if comm is not None: comm.barrier()  # overkill for shared memory leader host barrier
                 Jac = fdJac
 
-            if profiler: profiler.memory_check("custom_leastsq: after jacobian:"
-                                               + "shape=%s, GB=%.2f" % (str(Jac.shape),
-                                                                        Jac.nbytes / (1024.0**3)))
+
             Jnorm = _np.sqrt(ari.norm2_jac(Jac))
             xnorm = _np.sqrt(ari.norm2_x(x))
             printer.log("--- Outer Iter %d: norm_f = %g, mu=%g, |x|=%g, |J|=%g" % (k, norm_f, mu, xnorm, Jnorm))
@@ -287,7 +285,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             ari.fill_jtj(Jac, JTJ, jtj_buf)
             ari.fill_jtf(Jac, f, JTf)  # 'P'-type
 
-            if profiler: profiler.add_time("custom_leastsq: dotprods", tm)
+
 
             idiag = ari.jtj_diag_indices(JTJ)
             norm_JTf = ari.infnorm_x(JTf)
@@ -355,8 +353,6 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
             #determing increment using adaptive damping
             while True:  # inner loop
 
-                if profiler: profiler.memory_check("custom_leastsq: begin inner iter")
-
                 if damping_mode == 'identity':
                     assert(damping_clip is None), "damping_clip cannot be used with damping_mode == 'identity'"
                     if damping_basis == "singular_values":
@@ -398,7 +394,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     raise ValueError("Invalid damping mode: %s" % damping_mode)
 
                 try:
-                    if profiler: profiler.memory_check("custom_leastsq: before linsolve")
+
                     tm = _time.time()
                     success = True
 
@@ -429,7 +425,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                     else:
                         raise ValueError("Invalid damping_basis = '%s'" % damping_basis)
 
-                    if profiler: profiler.add_time("custom_leastsq: linsolve", tm)
+
                 #except _np.linalg.LinAlgError:
                 except _scipy.linalg.LinAlgError:  # DIST TODO - a different kind of exception caught?
                     success = False
@@ -465,7 +461,7 @@ def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                         print("WARNING - value error during computation of acceleration term!")
 
                 reject_msg = ""
-                if profiler: profiler.memory_check("custom_leastsq: after linsolve")
+
                 if success:  # linear solve succeeded
                     #dx = _hack_dx(obj_fn, x, dx, Jac, JTJ, JTf, f, norm_f)
 
