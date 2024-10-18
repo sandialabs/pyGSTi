@@ -19,6 +19,7 @@ import scipy as _scipy
 
 from pygsti.optimize import arraysinterface as _ari
 from pygsti.optimize.customsolve import custom_solve as _custom_solve
+from pygsti.optimize.simplerlm import Optimizer, OptimizerResult
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
@@ -35,81 +36,6 @@ if 'PYGSTI_NO_CUSTOMLM_SIGINT' not in _os.environ:
 _MACH_PRECISION = 1e-12
 #MU_TOL1 = 1e10 # ??
 #MU_TOL2 = 1e3  # ??
-
-
-class OptimizerResult(object):
-    """
-    The result from an optimization.
-
-    Parameters
-    ----------
-    objective_func : ObjectiveFunction
-        The objective function that was optimized.
-
-    opt_x : numpy.ndarray
-        The optimal argument (x) value.  Often a vector of parameters.
-
-    opt_f : numpy.ndarray
-        the optimal objective function (f) value.  Often this is the least-squares
-        vector of objective function values.
-
-    opt_jtj : numpy.ndarray, optional
-        the optimial `dot(transpose(J),J)` value, where `J`
-        is the Jacobian matrix.  This may be useful for computing
-        approximate error bars.
-
-    opt_unpenalized_f : numpy.ndarray, optional
-        the optimal objective function (f) value with any
-        penalty terms removed.
-
-    chi2_k_distributed_qty : float, optional
-        a value that is supposed to be chi2_k distributed.
-
-    optimizer_specific_qtys : dict, optional
-        a dictionary of additional optimization parameters.
-    """
-    def __init__(self, objective_func, opt_x, opt_f=None, opt_jtj=None,
-                 opt_unpenalized_f=None, chi2_k_distributed_qty=None,
-                 optimizer_specific_qtys=None):
-        self.objective_func = objective_func
-        self.x = opt_x
-        self.f = opt_f
-        self.jtj = opt_jtj  # jacobian.T * jacobian
-        self.f_no_penalties = opt_unpenalized_f
-        self.optimizer_specific_qtys = optimizer_specific_qtys
-        self.chi2_k_distributed_qty = chi2_k_distributed_qty
-
-
-class Optimizer(_NicelySerializable):
-    """
-    An optimizer.  Optimizes an objective function.
-    """
-
-    @classmethod
-    def cast(cls, obj):
-        """
-        Cast `obj` to a :class:`Optimizer`.
-
-        If `obj` is already an `Optimizer` it is just returned,
-        otherwise this function tries to create a new object
-        using `obj` as a dictionary of constructor arguments.
-
-        Parameters
-        ----------
-        obj : Optimizer or dict
-            The object to cast.
-
-        Returns
-        -------
-        Optimizer
-        """
-        if isinstance(obj, cls):
-            return obj
-        else:
-            return cls(**obj) if obj else cls()
-
-    def __init__(self):
-        super().__init__()
 
 
 class CustomLMOptimizer(Optimizer):
