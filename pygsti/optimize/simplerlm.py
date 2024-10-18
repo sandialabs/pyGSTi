@@ -140,14 +140,6 @@ class SimplerLMOptimizer(Optimizer):
         Number of finite-difference iterations applied to the first
         stage of the optimization (only).  Unused.
 
-    damping_basis : {'diagonal_values', 'singular_values'}
-        Whether the the diagonal or singular values of the JTJ matrix are used
-        during damping.  If `'singular_values'` is selected, then a SVD of the
-        Jacobian (J) matrix is performed and damping is performed in the basis
-        of (right) singular vectors.  If `'diagonal_values'` is selected, the
-        diagonal values of relevant matrices are used as a proxy for the the
-        singular values (saving the cost of performing a SVD).
-
     use_acceleration : bool, optional
         Whether to include a geodesic acceleration term as suggested in
         arXiv:1201.5885.  This is supposed to increase the rate of
@@ -200,7 +192,7 @@ class SimplerLMOptimizer(Optimizer):
         `.lsvec_percircuit()` methods (`'percircuit'` mode).
     """
     def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0,
-                 damping_basis="diagonal_values", use_acceleration=False,
+                 use_acceleration=False,
                  uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0,
                  oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal"):
 
@@ -211,7 +203,6 @@ class SimplerLMOptimizer(Optimizer):
         self.tol = tol
         self.fditer = fditer
         self.first_fditer = first_fditer
-        self.damping_basis = damping_basis
         self.use_acceleration = use_acceleration
         self.uphill_step_threshold = uphill_step_threshold
         self.init_munu = init_munu
@@ -231,7 +222,6 @@ class SimplerLMOptimizer(Optimizer):
             'tolerance': self.tol,
             'number_of_finite_difference_iterations': self.fditer,
             'number_of_first_stage_finite_difference_iterations': self.first_fditer,
-            'damping_basis': self.damping_basis,
             'use_acceleration': self.use_acceleration,
             'uphill_step_threshold': self.uphill_step_threshold,
             'initial_mu_and_nu': self.init_munu,
@@ -252,7 +242,6 @@ class SimplerLMOptimizer(Optimizer):
                    tol=state['tolerance'],
                    fditer=state['number_of_finite_difference_iterations'],
                    first_fditer=state['number_of_first_stage_finite_difference_iterations'],
-                   damping_basis=state['damping_basis'],
                    use_acceleration=state['use_acceleration'],
                    uphill_step_threshold=state['uphill_step_threshold'],
                    init_munu=state['initial_mu_and_nu'],
@@ -313,7 +302,6 @@ class SimplerLMOptimizer(Optimizer):
             rel_ftol=self.tol.get('relf', 1e-6),
             rel_xtol=self.tol.get('relx', 1e-8),
             max_dx_scale=self.tol.get('maxdx', 1.0),
-            damping_basis=self.damping_basis,
             use_acceleration=self.use_acceleration,
             uphill_step_threshold=self.uphill_step_threshold,
             init_munu=self.init_munu,
@@ -364,7 +352,7 @@ class SimplerLMOptimizer(Optimizer):
 def simplish_leastsq(
     obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
-    max_dx_scale=1.0, damping_basis="diagonal_values", use_acceleration=False, uphill_step_threshold=0.0,
+    max_dx_scale=1.0, use_acceleration=False, uphill_step_threshold=0.0,
     init_munu="auto", oob_check_interval=0, oob_action="reject", oob_check_mode=0,
     resource_alloc=None, arrays_interface=None, serial_solve_proc_threshold=100,
     x_limits=None, verbosity=0, profiler=None
@@ -419,14 +407,6 @@ def simplish_leastsq(
         If not None, impose a limit on the magnitude of the step, so that
         `|dx|^2 < max_dx_scale^2 * len(dx)` (so elements of `dx` should be,
         roughly, less than `max_dx_scale`).
-
-    damping_basis : {'diagonal_values', 'singular_values'}
-        Whether the the diagonal or singular values of the JTJ matrix are used
-        during damping.  If `'singular_values'` is selected, then a SVD of the
-        Jacobian (J) matrix is performed and damping is performed in the basis
-        of (right) singular vectors.  If `'diagonal_values'` is selected, the
-        diagonal values of relevant matrices are used as a proxy for the the
-        singular values (saving the cost of performing a SVD).
 
     use_acceleration : bool, optional
         Whether to include a geodesic acceleration term as suggested in
@@ -534,9 +514,6 @@ def simplish_leastsq(
         x_upper_limits = ari.allocate_jtf()
         ari.allscatter_x(x_limits[:, 0], x_lower_limits)
         ari.allscatter_x(x_limits[:, 1], x_upper_limits)
-
-    if damping_basis == "singular_values":
-        Jac_V = ari.allocate_jtj()
 
     dx = ari.allocate_jtf()
     new_x = ari.allocate_jtf()
@@ -673,35 +650,6 @@ def simplish_leastsq(
 
             # FUTURE TODO: keep tallying allocated memory, i.e. array_types (stopped here)
 
-            if damping_basis == "singular_values":
-                # Jac = U * s * Vh; J.T * J = conj(V) * s * U.T * U * s * Vh = conj(V) * s^2 * Vh
-                # Jac_U, Jac_s, Jac_Vh = _np.linalg.svd(Jac, full_matrices=False)
-                # Jac_V = _np.conjugate(Jac_Vh.T)
-
-                global_JTJ = ari.gather_jtj(JTJ)
-                if comm is None or comm.rank == 0:
-                    global_Jac_s2, global_Jac_V = _np.linalg.eigh(global_JTJ)
-                    ari.scatter_jtj(global_Jac_V, Jac_V)
-                    comm.bcast(global_Jac_s2, root=0)
-                else:
-                    ari.scatter_jtj(None, Jac_V)
-                    global_Jac_s2 = comm.bcast(None, root=0)
-
-                #print("Rank %d: min s2 = %g" % (comm.rank, min(global_Jac_s2)))
-                #if min(global_Jac_s2) < -1e-4 and (comm is None or comm.rank == 0):
-                #    print("WARNING: min Jac s^2 = %g (max = %g)" % (min(global_Jac_s2), max(global_Jac_s2)))
-                assert(min(global_Jac_s2) / abs(max(global_Jac_s2)) > -1e-6), "JTJ should be positive!"
-                global_Jac_s = _np.sqrt(_np.clip(global_Jac_s2, 1e-12, None))  # eigvals of JTJ must be >= 0
-                global_Jac_VT_mJTf = ari.global_svd_dot(Jac_V, minus_JTf)  # = dot(Jac_V.T, minus_JTf)
-
-                #DEBUG
-                #num_large_svals = _np.count_nonzero(Jac_s > _np.max(Jac_s) / 1e2)
-                #Jac_Uproj = Jac_U[:,0:num_large_svals]
-                #JTJ_evals, JTJ_U = _np.linalg.eig(JTJ)
-                #printer.log("JTJ (dim=%d) eval min/max=%g, %g; %d large svals (of %d)" % (
-                #    JTJ.shape[0], _np.min(_np.abs(JTJ_evals)), _np.max(_np.abs(JTJ_evals)),
-                #                          num_large_svals, len(Jac_s)))
-
             if norm_JTf < jac_norm_tol:
                 if oob_check_interval <= 1:
                     msg = "norm(jacobian) is at most %g" % jac_norm_tol
@@ -736,17 +684,8 @@ def simplish_leastsq(
                 if profiler: profiler.memory_check("simplish_leastsq: begin inner iter")
                 #print("DB: Pre-damping JTJ diag = [",_np.min(_np.abs(JTJ[idiag])),_np.max(_np.abs(JTJ[idiag])),"]")
 
-                if damping_basis == "singular_values":
-                    reg_Jac_s = global_Jac_s + mu
-
-                    #Notes:
-                    #Previously we computed inv_JTJ here and below computed dx:
-                    #inv_JTJ = _np.dot(Jac_V, _np.dot(_np.diag(1 / reg_Jac_s**2), Jac_V.T))
-                    # dx = _np.dot(Jac_V, _np.diag(1 / reg_Jac_s**2), global_Jac_VT_mJTf
-                    #But now we just compute reg_Jac_s here, and so the rest below.
-                else:
-                    # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
-                    JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
+                # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
+                JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
 
 
                 #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
@@ -756,13 +695,8 @@ def simplish_leastsq(
                     if profiler: profiler.memory_check("simplish_leastsq: before linsolve")
                     tm = _time.time()
                     success = True
+                    _custom_solve(JTJ, minus_JTf, dx, ari, resource_alloc, serial_solve_proc_threshold)
 
-                    if damping_basis == 'diagonal_values':
-                        _custom_solve(JTJ, minus_JTf, dx, ari, resource_alloc, serial_solve_proc_threshold)
-                    elif damping_basis == 'singular_values':
-                        ari.fill_dx_svd(Jac_V, (1 / reg_Jac_s**2) * global_Jac_VT_mJTf, dx)
-                    else:
-                        raise ValueError("Invalid damping_basis = '%s'" % damping_basis)
 
                     if profiler: profiler.add_time("simplish_leastsq: linsolve", tm)
                 #except _np.linalg.LinAlgError:
@@ -770,7 +704,6 @@ def simplish_leastsq(
                     success = False
 
                 if success and use_acceleration:  # Find acceleration term:
-                    assert(damping_basis != 'singular_values'), "Cannot use acceleration w/singular-value basis (yet)"
                     df2_eps = 1.0
                     try:
                         #df2 = (obj_fn(x + df2_dx) + obj_fn(x - df2_dx) - 2 * f) / \
@@ -927,13 +860,6 @@ def simplish_leastsq(
                         dF = norm_f - norm_new_f      # actual decrease in ||F||^2
 
                         #DEBUG - see if cos_phi < 0.001, say, might work as a convergence criterion
-                        #if damping_basis == 'singular_values':
-                        #    # projection of new_f onto solution tangent plane
-                        #    new_f_proj = _np.dot(Jac_Uproj, _np.dot(Jac_Uproj.T, new_f))
-                        #    # angle between residual vec and tangent plane
-                        #    cos_phi = _np.sqrt(_np.dot(new_f_proj, new_f_proj) / norm_new_f)
-                        #    #grad_f_norm = _np.linalg.norm(mu * dx - JTf)
-                        #else:
                         #    cos_phi = 0
 
                         if dF <= 0 and uphill_step_threshold > 0:
@@ -1085,9 +1011,6 @@ def simplish_leastsq(
     if x_limits is not None:
         ari.deallocate_jtf(x_lower_limits)
         ari.deallocate_jtf(x_upper_limits)
-
-    if damping_basis == "singular_values":
-        ari.deallocate_jtj(Jac_V)
 
     ari.deallocate_jtf(dx)
     ari.deallocate_jtf(new_x)
