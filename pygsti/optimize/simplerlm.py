@@ -540,9 +540,6 @@ def simplish_leastsq(
                     mu, nu, norm_f, f[:], _ = best_x_state
                     continue  # can't make use of saved JTJ yet - recompute on nxt iter
 
-            if profiler: profiler.memory_check("simplish_leastsq: begin outer iter *before de-alloc*")
-            Jac = None
-
             if profiler: profiler.memory_check("simplish_leastsq: begin outer iter")
 
             # unnecessary b/c global_x is already valid: ari.allgather_x(x, global_x)
