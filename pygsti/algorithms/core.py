@@ -31,8 +31,7 @@ from pygsti.modelmembers import instruments as _instrument
 from pygsti.modelmembers import states as _state
 from pygsti.circuits.circuitlist import CircuitList as _CircuitList
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
-from pygsti.optimize.customlm import CustomLMOptimizer as _CustomLMOptimizer
-from pygsti.optimize.customlm import Optimizer as _Optimizer
+from pygsti.optimize.simplerlm import Optimizer as _Optimizer, SimplerLMOptimizer as _SimplerLMOptimizer
 from pygsti import forwardsims as _fwdsims
 from pygsti import layouts as _layouts
 
@@ -619,7 +618,7 @@ def run_gst_fit_simple(dataset, start_model, circuits, optimizer, objective_func
     model : Model
         the best-fit model.
     """
-    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
+    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _SimplerLMOptimizer.cast(optimizer)
     objective_function_builder = _objfns.ObjectiveFunctionBuilder.cast(objective_function_builder)
     array_types = optimizer.array_types + \
         objective_function_builder.compute_array_types(optimizer.called_objective_methods, start_model.sim)
@@ -666,7 +665,7 @@ def run_gst_fit(mdc_store, optimizer, objective_function_builder, verbosity=0):
     objfn_store : MDCObjectiveFunction
         the objective function and store containing the best-fit model evaluated at the best-fit point.
     """
-    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
+    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _SimplerLMOptimizer.cast(optimizer)
     comm = mdc_store.resource_alloc.comm
     profiler = mdc_store.resource_alloc.profiler
     printer = VerbosityPrinter.create_printer(verbosity, comm)
@@ -843,7 +842,7 @@ def iterative_gst_generator(dataset, start_model, circuit_lists,
           (an "evaluated" model-dataset-circuits store).
     """
     resource_alloc = _ResourceAllocation.cast(resource_alloc)
-    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _CustomLMOptimizer.cast(optimizer)
+    optimizer = optimizer if isinstance(optimizer, _Optimizer) else _SimplerLMOptimizer.cast(optimizer)
     comm = resource_alloc.comm
     profiler = resource_alloc.profiler
     printer = VerbosityPrinter.create_printer(verbosity, comm)

@@ -1249,15 +1249,16 @@ class GateSetTomography(_proto.Protocol):
 
         if isinstance(optimizer, _opt.Optimizer):
             self.optimizer = optimizer
-            if isinstance(optimizer, _opt.CustomLMOptimizer) and optimizer.first_fditer is None:
-                #special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
+            if hasattr(optimizer,'first_fditer') and optimizer.first_fditer is None:
+                # special behavior: can set optimizer's first_fditer to `None` to mean "fill with default"
                 self.optimizer = _copy.deepcopy(optimizer)  # don't mess with caller's optimizer
                 self.optimizer.first_fditer = default_first_fditer
         else:
-            if optimizer is None: optimizer = {}
+            if optimizer is None:
+                optimizer = {}
             if 'first_fditer' not in optimizer:  # then add default first_fditer value
                 optimizer['first_fditer'] = default_first_fditer
-            self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
+            self.optimizer = _opt.SimplerLMOptimizer.cast(optimizer)
 
         self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders)
 
@@ -1751,12 +1752,12 @@ class StandardGST(_proto.Protocol):
         self.target_model = target_model
         self.gaugeopt_suite = GSTGaugeOptSuite.cast(gaugeopt_suite)
         self.objfn_builders = GSTObjFnBuilders.cast(objfn_builders) if (objfn_builders is not None) else None
-        self.optimizer = _opt.CustomLMOptimizer.cast(optimizer)
+        self.optimizer = _opt.SimplerLMOptimizer.cast(optimizer)
         self.badfit_options = GSTBadFitOptions.cast(badfit_options)
         self.verbosity = verbosity
 
         if not isinstance(optimizer, _opt.Optimizer) and isinstance(optimizer, dict) \
-           and 'first_fditer' not in optimizer:  # then a dict was cast into a CustomLMOptimizer above.
+           and 'first_fditer' not in optimizer:  # then a dict was cast into an Optimizer above.
             # by default, set special "first_fditer=auto" behavior (see logic in GateSetTomography.__init__)
             self.optimizer.first_fditer = None
 

@@ -183,6 +183,19 @@ class SimplerLMOptimizer(Optimizer):
         "per-circuit quantities" computed by the objective function's `.percircuit()` and
         `.lsvec_percircuit()` methods (`'percircuit'` mode).
     """
+
+    @classmethod
+    def cast(cls, obj):
+        if isinstance(obj, cls):
+            return obj
+        if obj:
+            try:
+                return cls(**obj)
+            except:
+                from pygsti.optimize.customlm import CustomLMOptimizer
+                return CustomLMOptimizer(**obj)
+        return cls()
+
     def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0,
                  uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0,
                  oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal"):
@@ -624,7 +637,7 @@ def simplish_leastsq(
                 if _np.allclose(x, best_x):
                     rawJTJ_scratch[:, :] = JTJ[:, :]  # use pre-allocated memory
                     rawJTJ_scratch[idiag] = undamped_JTJ_diag  # no damping; the "raw" JTJ
-                    best_x_state = best_x_state[0:5] + (rawJTJ_scratch,)  # update mu,nu,JTJ of initial "best state"
+                    best_x_state = best_x_state[0:4] + (rawJTJ_scratch,)  # update mu,nu,JTJ of initial "best state"
 
             #determing increment using adaptive damping
             while True:  # inner loop
