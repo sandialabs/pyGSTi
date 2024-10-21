@@ -23,21 +23,26 @@ from pygsti.optimize.simplerlm import Optimizer, OptimizerResult
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from pygsti.tools.legacytools import deprecate_with_details
 
-# from scipy.optimize import OptimizeResult as _optResult
-
-#Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
-#This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
-#so this can be turned off by setting the PYGSTI_NO_CUSTOMLM_SIGINT environment variable
+# Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
+# This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
+# so this can be turned off by setting the PYGSTI_NO_CUSTOMLM_SIGINT environment variable
 if 'PYGSTI_NO_CUSTOMLM_SIGINT' not in _os.environ:
     _signal.signal(_signal.SIGINT, _signal.default_int_handler)
 
 #constants
 _MACH_PRECISION = 1e-12
-#MU_TOL1 = 1e10 # ??
-#MU_TOL2 = 1e3  # ??
 
+dep_msg_template = """
+    %s is deprecated in favor of %s.
+    The pyGSTi development team intends to remove %s
+    in a future release of pyGSTi. Please get in touch with us if
+    you need functionality that's only available in %s.
+"""
 
+dep_msg_class = dep_msg_template % ('CustomLMOptimizer', 'SimplerLMOptimizer', 'CustomLMOptimizer', 'CustomLMOptimizer')
+@deprecate_with_details(dep_msg_class)
 class CustomLMOptimizer(Optimizer):
     """
     A Levenberg-Marquardt optimizer customized for GST-like problems.
@@ -301,14 +306,9 @@ class CustomLMOptimizer(Optimizer):
         return OptimizerResult(objective, opt_x, norm_f, opt_jtj, unpenalized_normf, chi2k_qty,
                                {'msg': msg, 'mu': mu, 'nu': nu, 'fvec': f})
 
-#Scipy version...
-#            opt_x, _, _, msg, flag = \
-#                _spo.leastsq(objective_func, x0, xtol=tol['relx'], ftol=tol['relf'], gtol=tol['jac'],
-#                             maxfev=maxfev * (len(x0) + 1), full_output=True, Dfun=jacobian)  # pragma: no cover
-#            printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)            # pragma: no cover
-#            opt_state = (msg,)
 
-
+dep_msg_func = dep_msg_template % ('custom_leastsq', 'simplish_lstsq', 'custom_leastsq', 'custom_leastsq')
+@deprecate_with_details(dep_msg_func)
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
                    max_dx_scale=1.0, damping_mode="identity", damping_basis="diagonal_values",
