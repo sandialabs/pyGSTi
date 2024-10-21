@@ -270,6 +270,32 @@ class SU2RBSim:
         self._noise_channel = E1 @ E0
         self._noise_channel_info = ('gaussian_compose_rotate_Jz2', (gamma, theta))
 
+    @property
+    def noise_channel_parameter_names(self):
+        if self._noise_channel_info is None:
+            return ('Identity',)
+        ncname = self._noise_channel_info[0]
+        if ncname == 'Jz_dephasing':
+            return (r'$\gamma$', '$p$')
+        if ncname == 'rotate_Jz':
+            return (r'$\theta$', '$p$')
+        raise NotImplementedError()
+    
+    @property
+    def noise_channel_math_expr(self):
+        if self._noise_channel_info is None:
+            return ('Id',)
+        pnames = [s.strip('$') for s in self.noise_channel_parameter_names]
+        ncname = self._noise_channel_info[0]
+        if ncname == 'Jz_dephasing':
+            rhoij = '\\rho_{ij}'
+            return f'elementwise scaling ${rhoij} \\leftarrow {rhoij} \\cdot \\exp(-{pnames[0]} \\cdot |i - j|^{pnames[1]})$'
+        if ncname == 'rotate_Jz':
+            im = 'i'
+            jzpow = 'J_z^' + pnames[1]
+            return f'evolve $\\rho \\mapsto U \\rho U^\\dagger$ where $U =$ expm($-${im}$ \\cdot {pnames[0]} \\cdot {jzpow}$)'
+        raise NotImplementedError()
+
     def compute_probabilities(self):
         probs = np.zeros((self.num_statepreps, self.num_lens, self.N,  self.num_effects))
         # probs[i,j,k,ell] = probability of measuring outcome ell 
@@ -322,12 +348,15 @@ class SU2RBSim:
         survival_probs   = np.zeros((num_statepreps,   num_lengths))
         for j in range(num_lengths):
             P = np.zeros((num_statepreps, num_statepreps))
-            # ^ This will be row-stochastic, like a state transition matrix for a Markov chain.
+            # ^ This will be row-stochastic, like a
+            #   state transition matrix for a Markov chain.
             for i in range(num_statepreps):
                 P[i,:] = empirical_distribution(_probs[i,j,:,:], shots_per_circuit, g).mean(axis=0)
+                """
                 # ^ Compare to SU2CharacterRBSim.character_transform. This is equivalent to 
                 #   that function's tensor contraction (see "tensordot") where "currchars" is
                 #   an array of all ones.
+                """
             Q = M @ P @ M.T
             survival_probs[ :, j] = P[diag_statepreps]
             synthetic_probs[:, j] = Q[diag_povmeffects]
@@ -398,7 +427,6 @@ class SU2CharacterRBSim(SU2RBSim):
             probs = SU2RBSim._process_circuits(self, fixedlen_circuits, True)
         return probs
 
-
     @staticmethod
     def character_transform(_probs, _chars, irrep_sizes, shots_per_circuit=np.inf, seed=0):
         # Inputs:
@@ -449,7 +477,9 @@ class SU2CharacterRBSim(SU2RBSim):
         #   
         #   None (retained for compatibility reasons)
         #
-        arr = SU2CharacterRBSim.character_transform(_probs, _chars, _irrep_sizes, shots_per_circuit, seed)
+        arr = SU2CharacterRBSim.character_transform(
+            _probs, _chars, _irrep_sizes, shots_per_circuit, seed
+        )
         num_statepreps, num_effects, num_irreps, num_lens = arr.shape
         if num_irreps != num_effects:
             raise NotImplementedError()
@@ -460,7 +490,8 @@ class SU2CharacterRBSim(SU2RBSim):
         synthetic_probs  = np.zeros((num_effects, num_lens))
         for j in range(num_lens):
             P = arr[:,:,:,j]
-            # P[u,v,w] = [w-th irrep character-weighted] transition probability to state v from state u
+            # P[u,v,w] = [w-th irrep character-weighted] transition probability
+            #             to state v from state u, for circuits of length lengths[j]
             for k in range(num_irreps):
                 block = P[:,:,k]
                 row_M_k = M[k,:]
