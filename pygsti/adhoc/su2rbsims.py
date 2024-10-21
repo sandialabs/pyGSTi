@@ -12,6 +12,7 @@ from tqdm import tqdm
 import functools
 from matplotlib import pyplot as plt
 from matplotlib import axes as plt_axes
+import scipy.sparse as spar
 
 
 def get_M():
@@ -206,6 +207,8 @@ class SU2RBSim:
         if not __allow_characters__:
             assert type(design) == SU2RBDesign
         self.probs = None
+        self.nonspam_compositions = None
+        self._noise_channel_repr = 'superoperator'
         pass
     
     @property
@@ -238,8 +241,11 @@ class SU2RBSim:
             i = ell  % self._unitary_dim
             j = ell // self._unitary_dim
             E_matrixunit[ell,ell] = np.exp(-gamma * abs(i - j)**power)
-        self._noise_channel = E_matrixunit
-        self._noise_channel_info = ('Jz_dephasing', (gamma, power))
+        if self._noise_channel_repr == 'superoperator':
+            self._noise_channel = spar.dia_array(E_matrixunit)
+            self._noise_channel_info = ('Jz_dephasing', (gamma, power))
+        else:
+            raise ValueError()
         return
 
     def set_error_channel_exponential(self, gamma: float):
@@ -254,7 +260,12 @@ class SU2RBSim:
         dZ = self.su2rep.SPINS
         exp_1jthetaJzpow = np.exp(1j * theta * (dZ ** pow))
         U = np.diag(exp_1jthetaJzpow)
-        self._noise_channel = unitary_to_superop(U, 'std')
+        if self._noise_channel_repr == 'superoperator':
+            self._noise_channel = unitary_to_superop(U, 'std')
+        elif self._noise_channel_repr == 'unitary':
+            self._noise_channel = U
+        else:
+            raise ValueError()
         self._noise_channel_info = ('rotate_Jz', (theta, pow))
         return
 
@@ -263,6 +274,7 @@ class SU2RBSim:
         return
 
     def set_error_channel_gaussian_compose_rotate_Jz2(self, gamma:float, theta:float):
+        self._noise_channel_repr = 'superoperator'
         self.set_error_channel_gaussian(gamma)
         E0 = self._noise_channel
         self.set_error_channel_rotate_Jz2(theta)
@@ -309,6 +321,7 @@ class SU2RBSim:
         return
 
     def _process_circuits(self, fixedlen_circuits, skip_first_noise=False):
+        assert self._noise_channel_repr in ('superoperator', 'unitary')
         block = np.zeros(shape=(self.num_statepreps, self.N, self.num_effects))
         # block[i,k,ell] = the probability of measuring outcome ell after running the k-th circuit, given i-th starting state.
         for k, angles in enumerate(fixedlen_circuits):
@@ -317,15 +330,61 @@ class SU2RBSim:
             unitaries = self.su2rep.unitaries_from_angles(angles[:, 0], angles[:, 1], angles[:, 2])
             for i,superket in enumerate(self.design.statepreps):
                 skip_next_noise = skip_first_noise
-                for U in unitaries:
-                    densitymx_in = superket.reshape(U.shape)
-                    densitymx_out = U @ densitymx_in @ U.T.conj()
+                if self._noise_channel_repr == 'superoperator':
+                    # simulate by alternating between density matrix and superket reps
+                    for U in unitaries:
+                        densitymx_in = superket.reshape(U.shape)
+                        densitymx_out = U @ densitymx_in @ U.T.conj()
+                        superket = densitymx_out.ravel()
+                        if not skip_next_noise:
+                            superket = self._noise_channel @ superket
+                        skip_next_noise = False
+                else:
+                    # simulate the entire circuit in density matrix rep
+                    #   could cut the matmuls in half by working with sqrtm(rho)
+                    densitymx_out = superket.reshape((self._unitary_dim, self._unitary_dim))
+                    for U in unitaries:
+                        W = U if skip_next_noise else self._noise_channel @ U
+                        densitymx_out = W @ densitymx_out @ W.T.conj()
+                        skip_next_noise = False
                     superket = densitymx_out.ravel()
-                    if not skip_next_noise:
-                        superket = self._noise_channel @ superket
-                    skip_next_noise = False
                 block[i,k,:] = self.design.povm @ superket
         return block
+
+    def compute_nonspam_compositions(self, skip_first_noise=False):
+        """
+        out.shape == (self.num_lens, self.N, self._superop_dim, self._superop_dim)
+        out[a, b] = superoperator representing the composition of all non-spam operations
+                    in the b-th circuit of length self.design.lengths[a].
+        """
+        assert self._noise_channel_repr in ('superoperator', 'unitary')
+        all_circuits = self.design.all_circuits
+        out = []
+        for fixedlen_circuits in tqdm(all_circuits):
+            temp = []
+            for angles in fixedlen_circuits:
+                unitaries = self.su2rep.unitaries_from_angles(*angles.T)
+                skip_next_noise = skip_first_noise
+                if self._noise_channel_repr == 'unitary':
+                    V = np.eye(self._unitary_dim, dtype=np.complex128)
+                    for U in unitaries:
+                        V = U @ V
+                        V = V if skip_next_noise else self._noise_channel @ V
+                        skip_next_noise = False
+                    S = unitary_to_superoperator(V, 'std')
+                else:
+                    S = np.eye(self._superop_dim, dtype=np.complex128)
+                    for U in unitaries:
+                        T = unitary_to_superoperator(U, 'std')
+                        S = T @ S
+                        S = S if skip_next_noise else self._noise_channel @ S
+                        skip_next_noise = False
+                    pass
+                temp.append(S)
+            out.append(np.array(temp))
+        out = np.array(out)
+        self.nonspam_compositions = out
+        return
 
     @staticmethod
     def synspam_transform(_probs, M=None, shots_per_circuit=np.inf, seed=0):
@@ -408,7 +467,7 @@ class SU2CharacterRBSim(SU2RBSim):
         return self.design.chars
 
     def _process_circuits(self, fixedlen_circuits):
-        if la.norm(self._noise_channel - np.eye(64)) <= 1e-16:
+        if la.norm(self._noise_channel - np.eye(self._noise_channel.shape[0])) <= 1e-16:
             # We're simulating character RB on a noiseless system;
             # we can evaluate the circuit faster since we know in
             # advance that the composition of all rotations is equal
