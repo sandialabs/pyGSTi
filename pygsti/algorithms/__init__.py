@@ -22,3 +22,5 @@ from .gaugeopt import *
 from .germselection import *
 from .grammatrix import *
 from .mirroring import *
+from .dfe import *
+from .randomcircuit import *
