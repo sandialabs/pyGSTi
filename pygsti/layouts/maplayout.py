@@ -280,7 +280,7 @@ class MapCOPALayout(_DistributableCOPALayout):
         #construct a map for the parameter dependence for each of the unique_complete_circuits.
         #returns a dictionary who's keys are the unique completed circuits, and whose
         #values are lists of model parameters upon which that circuit depends.
-        if model.sim.calclib is _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic"):
+        if model.sim.calclib is _importlib.import_module("pygsti.forwardsims.mapforwardsim_calc_generic") and model.param_interposer is None:
             circ_param_map, param_circ_map = model.circuit_parameter_dependence(unique_complete_circuits, return_param_circ_map=True)
             uniq_comp_circs_param_depend = list(circ_param_map.values())
             uniq_comp_param_circs_depend = param_circ_map

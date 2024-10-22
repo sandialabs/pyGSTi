@@ -1853,11 +1853,42 @@ class OpModel(Model):
             return comp_circuits
         
     def circuit_parameter_dependence(self, circuits, return_param_circ_map = False):
+        """
+        Calculate the which model parameters each of the input circuits depends upon.
+        Return this result in the the form of a dictionary whose keys are circuits,
+        and whose values are lists of parameters upon which that circuit depends.
+        Optionally a reverse mapping from model parameters to the input circuits
+        which depend on that parameter.
+
+        Note: This methods does not work with models using parameter interposers presently.
+
+        Parameters
+        ----------
+        circuits : list of Circuits
+            List of circuits to determine parameter dependence for.
+        
+        return_param_circ_map : bool, optional (default False)
+            A flag indicating whether to return a reverse mapping from parameters
+            to circuits depending on those parameters.
+        
+        Returns
+        -------
+        circuit_parameter_map : dict
+            Dictionary with keys given by Circuits and values giving the list of
+            model parameter indices upon which that circuit depends.
+
+        param_to_circuit_map : dict, optional
+            Dictionary with keys given by model parameter indices, and values
+            giving the list of input circuits dependent upon that parameter.
+        """
+
+        if self.param_interposer is not None:
+            msg = 'Circuit parameter dependence evaluation is not currently implemented for models with parameter interposers.'
+            raise NotImplementedError(msg)
         #start by completing the model:
         #Here we want to do this for all of the different primitive prep and
         #measurement layers present.
         circuit_parameter_map = {}
-        circuit_parameter_set_map = {}
         
         completed_circuits_by_prep_povm = []
         prep_povm_pairs = list(_itertools.product(self.primitive_prep_labels, self.primitive_povm_labels))
@@ -1890,11 +1921,9 @@ class OpModel(Model):
                 gpindices_for_layer = unique_layers_gpindices_dict[layer]
                 seen_gpindices.extend(gpindices_for_layer)
                     
-            seen_gpindices_set = set(seen_gpindices)
-            seen_gpindices = sorted(list(seen_gpindices_set))
+            seen_gpindices = sorted(set(seen_gpindices))
 
             circuit_parameter_map[circuit] = seen_gpindices
-            circuit_parameter_set_map[circuit] = seen_gpindices_set
         
         #We can also optionally compute the reverse map, from parameters to circuits which touch that parameter.
         #it would be more efficient to do this in parallel with the other maps construction, so refactor this later.
