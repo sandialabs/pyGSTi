@@ -1,7 +1,4 @@
 # encoding: utf-8
-# cython: linetrace=True
-# cython: binding=True
-# distutils: define_macros=CYTHON_TRACE_NOGIL=1
 
 #***************************************************************************************************
 # Copyright 2015, 2019 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
