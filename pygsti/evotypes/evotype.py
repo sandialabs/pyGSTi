@@ -90,7 +90,7 @@ class Evotype(object):
                     raise ValueError('state_space must be a StateSpace object.')
                 default_prefer_dense_reps = False if state_space.dim > 64 else True #HARDCODED
 
-        elif obj == "default":
+        if obj == "default":
             return Evotype(cls.default_evotype, default_prefer_dense_reps)
         else:  # assume obj is a string naming an evotype
             return Evotype(str(obj), default_prefer_dense_reps)
