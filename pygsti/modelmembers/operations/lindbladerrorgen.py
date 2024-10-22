@@ -454,10 +454,10 @@ class LindbladErrorgen(_LinearOperator):
                             " a LindbladErrorgen.from_elementary_errorgens(...) instead."))
 
         state_space = _statespace.StateSpace.cast(state_space)
-
+        dim = state_space.dim  # Store superop dimension
         #Decide on our rep-type ahead of time so we know whether to make bases sparse
         # (a LindbladErrorgen with a sparse rep => sparse bases and similar with dense rep)
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         reptype_preferences = ('lindblad errorgen', 'dense superop', 'sparse superop') \
             if evotype.prefer_dense_reps else ('lindblad errorgen', 'sparse superop', 'dense superop')
         for reptype in reptype_preferences:
@@ -465,10 +465,7 @@ class LindbladErrorgen(_LinearOperator):
                 self._rep_type = reptype; break
         else:
             raise ValueError("Evotype doesn't support any of the representations a LindbladErrorgen requires.")
-        sparse_bases = bool(self._rep_type == 'sparse superop')  # we use sparse bases iff we have a sparse rep
-
-        state_space = _statespace.StateSpace.cast(state_space)
-        dim = state_space.dim  # Store superop dimension
+        sparse_bases = bool(self._rep_type == 'sparse superop')  # we use sparse bases iff we have a sparse rep        
 
         if lindblad_basis == "auto":
             assert(all([(blk._basis is not None) for blk in lindblad_coefficient_blocks])), \

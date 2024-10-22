@@ -467,9 +467,9 @@ class OpModel(Model):
         """
         Creates a new OpModel.  Rarely used except from derived classes `__init__` functions.
         """
-        self._evotype = _Evotype.cast(evotype)
         self._set_state_space(state_space, basis)
         #sets self._state_space, self._basis
+        self._evotype = _Evotype.cast(evotype, state_space=self.state_space)
 
         super(OpModel, self).__init__(self.state_space)  # do this as soon as possible
 
