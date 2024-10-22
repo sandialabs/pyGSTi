@@ -13,6 +13,8 @@ import functools
 from matplotlib import pyplot as plt
 from matplotlib import axes as plt_axes
 import scipy.sparse as spar
+import pathlib
+import pickle
 
 
 def get_M():
@@ -230,6 +232,39 @@ class SU2RBSim:
     @property
     def su2rep(self):
         return self.design.su2rep
+
+    @property
+    def main_filename(self):
+        profile = self._noise_channel_info[0]
+        assert profile in {'rotate_Jz', 'Jz_dephasing'}
+
+        rate_or_angle, power = self._noise_channel_info[1]
+        ratestr = f'{rate_or_angle:6.4f}'[2:] # just grabs four digits after the decimal place.
+        max_circuit_length = self.design.lengths[-1]
+        typestr = 'character' if isinstance(self.design, SU2CharacterRBDesign) else 'standard'
+        n = self.N
+        prefix = '/Users/rjmurr/Documents/pygsti-general/scripts/demos/workspace'
+        if profile == 'rotate_Jz':
+            fn = f'{prefix}/su2_{typestr}_rb_N_{n}_maxlen_{max_circuit_length}_rotateJz_angle_{ratestr}_power_{power}.pkl'
+            return fn
+        else:
+            fn = f'{prefix}/su2_{typestr}_rb_N_{n}_maxlen_{max_circuit_length}_dephasing_rate_{ratestr}_power_{power}.pkl'
+            return fn
+
+    @property
+    def nonspam_comp_filename(self):
+        fn = self.main_filename.strip('.pkl') + '_nonspam_comp.pkl'
+        return fn
+    
+    def load_nonspam_compositions(self):
+        if self.nonspam_compositions is not None:
+            return
+        fn = self.nonspam_comp_filename
+        if pathlib.Path(fn).exists():
+            f = open(fn, 'rb')
+            self.nonspam_compositions = pickle.load(f)
+            f.close()
+        return
 
     def _set_error_channel_Jz_dephasing(self, gamma: float, power: float):
         assert gamma >= 0
