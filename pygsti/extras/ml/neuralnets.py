@@ -1,10 +1,8 @@
 import tensorflow as _tf
 import keras as _keras
 import numpy as _np
-# from . import tools as qcl
 import copy as _copy
 import warnings
-from pygsti.extras.ml import newtools
 
 # @_keras.utils.register_keras_serializable()
 class DenseSubNetwork(_keras.layers.Layer):

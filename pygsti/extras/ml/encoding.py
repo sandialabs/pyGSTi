@@ -1,12 +1,10 @@
 import numpy as _np
 import warnings as _warnings
-
 from pygsti.processors.processorspec import QubitProcessorSpec as QPS
-from pygsti.extras.ml.newtools import create_error_propagation_matrix, index_to_error_gen, error_gen_to_index
+from pygsti.extras.ml.tools import create_error_propagation_matrix, index_to_error_gen, error_gen_to_index
 
 ###### Functions that encode a circuit into a tensor ###
 
-#qubit_to_index = {0:0, 1:1, 2:2, 3:3}
 geometry_cnot_channels = {'ring': 4, 'linear': 4, 'bowtie': 12, 't-bar': 8, 'algiers-t-bar': 8, 'grid': 8, 'melbourne': 8} # you get 2 channels for each cnot gate
 
 def compute_channels(pspec: QPS, geometry: str) -> int:

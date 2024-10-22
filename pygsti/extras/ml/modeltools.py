@@ -1,4 +1,4 @@
-import itertools
+import itertools as _itertools
 
 import numpy as _np
 
@@ -31,9 +31,9 @@ def create_spec_model(pspec):
     error_dict = {'gates': {},
                   'readout': {i: .0 for i in qubit_labels}}
 
-    for i,j in itertools.product(one_qubit_gate_names, qubit_labels):
+    for i,j in _itertools.product(one_qubit_gate_names, qubit_labels):
         error_dict['gates'][Label(i,state_space_labels = (j,))] = 0.01
-    for i,j in itertools.product(['Gcnot'],availability['Gcnot']):
+    for i,j in _itertools.product(['Gcnot'],availability['Gcnot']):
         error_dict['gates'][Label('Gcnot',state_space_labels = j)] = 0.01
     specmodel = TwirledLayersModel(error_dict, num_qubits = num_qubits, state_space_labels = qubit_labels, 
                                    idle_name = None)
