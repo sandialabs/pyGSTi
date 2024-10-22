@@ -7,7 +7,7 @@ import scipy.linalg as la
 from pygsti.tools.su2tools import SU2, Spin72
 from pygsti.tools.optools import unitary_to_superop
 from pygsti.baseobjs.basis import Basis, BuiltinBasis
-from typing import List, Tuple, Callable
+from typing import List, Tuple, Callable, Union
 from tqdm import tqdm
 import functools
 from matplotlib import pyplot as plt
@@ -683,3 +683,28 @@ class Analysis:
             ax.plot(x, model(x, ps[i,0], ps[i,1]), color=default_colors[i % len(default_colors)], linestyle='-')
         ax.legend()
         return rates, ps, sigmas
+
+    @staticmethod
+    def synspam_rb_fig(_rbm : Union[SU2RBSim, SU2CharacterRBSim], fitlog=False, figax=None):
+        sps = np.inf
+        if type(_rbm) == SU2RBSim:
+            pkm, _ = SU2RBSim.synspam_transform(_rbm.probs, shots_per_circuit=sps)
+            rbtype = 'Standard'
+        elif isinstance(_rbm, SU2CharacterRBSim):
+            pkm, _ = SU2CharacterRBSim.synspam_character_transform(_rbm.probs, _rbm.chars, Spin72.irrep_block_sizes, shots_per_circuit=sps)
+            rbtype = 'Character'
+        else:
+            raise ValueError()
+        if figax is None:
+            fig, axs = plt.subplots(nrows=1, ncols=1)
+            showfig = True
+            fig.suptitle(f'{rbtype} RB with synSPAM, {sps} shot/circuit. Noise model {_rbm._noise_channel_info}')
+        else:
+            fig, axs = figax
+            showfig = False
+            names = _rbm.noise_channel_parameter_names
+            axs.set_title(f'{names[0]} = {_rbm._noise_channel_info[1][0]}, {names[1]} = {_rbm._noise_channel_info[1][1]} ')
+        out = Analysis.fit_and_plot_with_rates(_rbm.design.lengths + 1, pkm, axs, fitlog)
+        if showfig:
+            fig.show()
+        return out
