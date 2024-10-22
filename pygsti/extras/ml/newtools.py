@@ -4,10 +4,6 @@ import itertools as _itertools
 import copy as _copy
 import warnings as _warnings
 
-from . import tools as _tools
-
-import warnings as _warning
-
 from ..errorgenpropagation import propagatableerrorgen as _peg
 from ..errorgenpropagation import errorpropagator as _ep
 
@@ -368,50 +364,39 @@ def remap_indices(c_indices):
     unique_values, idx = _np.unique(flat_indices, return_inverse = True)
     return idx.reshape(c_indices.shape)
 
-### DEPRECATED: Use create_input_data in encoding.py ###
-    
-def create_input_data(circs, fidelities, tracked_error_gens: list, num_channels: int,
-    _qubits: int, max_depth=None, return_separate = False, stimDict = None):
-    _warning.warn('newtools create_input_data is deprecated. Use the version in encoding.py.')
-    if max_depth is None: max_depth = _np.max([c.depth for c in circs])
-    print(max_depth)
-    
-    numchannels = num_channels
-    numqubits = num_qubits
-    numcircs = len(circs)
-    num_error_gens = len(tracked_error_gens)
+def clockwise_cnot(g):
+    return (g.qubits[0] - g.qubits[1]) % num_qubits == num_qubits - 1
 
-    x_circs = _np.zeros((numcircs, numqubits, max_depth, numchannels), float)
-    x_signs = _np.zeros((numcircs, num_error_gens, max_depth), int)
-    x_indices = _np.zeros((numcircs, num_error_gens, max_depth), int)
-    y = _np.array(fidelities)
-                    
-    for i, c in enumerate(circs):
-        if i % 200 == 0:
-            print(i, end=',')
-        x_circs[i, :, :, :] = _tools.circuit_to_tensor(c, max_depth)              
-        c_indices, c_signs = create_error_propagation_matrix(c, tracked_error_gens, stimDict = stimDict)
-        # c_indices = remap_indices(c_indices)
-        x_indices[i, :, 0:c.depth] = c_indices.T # deprecated: np.rint(c_indices)
-        x_signs[i, :, 0:c.depth] = c_signs.T # deprecated: np.rint(c_signs)
-        
-    if return_separate:
-        return x_circs, x_signs, x_indices, y
-
+def gate_to_index(g, q):
+    assert(q in g.qubits)
+    if g.name == 'Gxpi2':
+        return 0
+    elif g.name == 'Gypi2':
+        return 1
+    elif g.name == 'Gcnot':
+        qs = g.qubits
+        if q == g.qubits[0] and clockwise_cnot(g):
+            return 2
+        if q == g.qubits[1] and clockwise_cnot(g):
+            return 3
+        if q == g.qubits[0] and not clockwise_cnot(g):
+            return 4
+        if q == g.qubits[1] and not clockwise_cnot(g):
+            return 5
     else:
-        len_gate_encoding = numqubits * numchannels
-        xc_reshaped = _np.zeros((x_circs.shape[0], x_circs.shape[1] * x_circs.shape[3], x_circs.shape[2]), float) 
-        for qi in range(4):
-            for ci in range(6):
-                xc_reshaped[:, qi * num_channels + ci, :] = x_circs[:, qi, :, ci].copy()
+        raise ValueError('Invalid gate name for this encoding!')
+        
+def layer_to_matrix(layer):
+    mat = np.zeros((num_qubits, num_channels), float)
+    for g in layer:
+        for q in g.qubits:
+            mat[q, gate_to_index(g, q)] = 1
+    return mat
 
-        xi2 = _np.transpose(x_indices, (0, 2, 1))
-        xc2 = _np.transpose(xc_reshaped, (0, 2, 1))
-        xs2 = _np.transpose(x_signs, (0, 2, 1))
-
-        xt = _np.zeros((xi2.shape[0], xi2.shape[1], 2 * num_error_gens + len_gate_encoding), float)
-        xt[:, :, 0:len_gate_encoding] = xc2[:, :, :]
-        xt[:, :, len_gate_encoding:num_error_gens + len_gate_encoding] = xi2[:, :, :]
-        xt[:, :, num_error_gens + len_gate_encoding:2 * num_error_gens + len_gate_encoding] = xs2[:, :, :]
-
-        return xt, y
+def circuit_to_tensor(circ, depth=None):
+    
+    if depth is None: depth = circ.depth
+    ctensor = np.zeros((num_qubits, depth, num_channels), float)
+    for i in range(circ.depth):
+        ctensor[:, i, :] = layer_to_matrix(circ.layer(i))
+    return ctensor

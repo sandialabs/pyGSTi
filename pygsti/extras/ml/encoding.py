@@ -6,9 +6,7 @@ from pygsti.extras.ml.newtools import create_error_propagation_matrix, index_to_
 
 ###### Functions that encode a circuit into a tensor ###
 
-# TO DO: Make more general
-
-qubit_to_index = {0:0, 1:1, 2:2, 3:3}
+#qubit_to_index = {0:0, 1:1, 2:2, 3:3}
 geometry_cnot_channels = {'ring': 4, 'linear': 4, 'bowtie': 12, 't-bar': 8, 'algiers-t-bar': 8, 'grid': 8, 'melbourne': 8} # you get 2 channels for each cnot gate
 
 def compute_channels(pspec: QPS, geometry: str) -> int:
@@ -42,6 +40,7 @@ def melbourne_gate_to_index(g, q, pspec)-> int:
         return geometry_cnot_channels['melbourne']+single_qubit_gates.index(g.name) # we put the single-qubit gates after the CNOT channels.
     else:
         raise ValueError('Invalid gate name for this encoding!')
+
 def bowtie_gate_to_index(g, q, pspec)-> int:
     '''
     Works for Yorktown.
@@ -403,92 +402,4 @@ def create_input_data(circs:list, fidelities:list, tracked_error_gens: list,
             return x, y, measurements, x_zmask, x_mmask
 
         return x, y
-            
-# def old_create_input_data(circs:list, fidelities:list, tracked_error_gens: list, 
-#                       pspec, geometry: str, num_qubits = None, num_channels = None, 
-#                       measurement_encoding = None,
-#                       indexmapper = None, indexmapper_kwargs = {}, 
-#                       valuemapper = None, valuemapper_kwargs = {},
-#                       max_depth = None, return_separate=False):
-#     '''
-#     Maps a list of circuits and fidelities to numpy arrays of encoded circuits and fidelities. 
-
-#     Args:
-#        - tracked_error_gens: a list of the tracked error generators.
-#        - pspec: the processor on which the circuits are defined. Used to determine the number of qubits and channels (optional)
-#        - geometry: the geometry in which you plan to embed the circuits (i.e., ring, grid, linear). Optional.
-#        - num_qubits: the number of qubits (optional, if pspec and geometry are specified)
-#        - num_channels: the number of channels used to embed a (qubit, gate) pair (optional, if pspec and geometry are specified.)
-#        - indexmapper: function specifying how to map a gate to a channel.
-#        - valuemapper: function specifying how to encode each gate in pspec (optional, defaults to assigning each gate a value of 1)
-#        - measurement_encoding: int or NoneType specifying how to encode measurements. 
-#             - If NoneType, then no measurements are returned.
-#             - If 1, then measurements are encoded as extra channels in the circuit tensor.
-#             - If 2, then the measurements are returned separately in a tensor of shape (num_qubits,)
-#     '''
-#     num_circs = len(circs)
-#     num_error_gens = len(tracked_error_gens)
-
-#     if max_depth is None: max_depth = _np.max([c.depth for c in circs])
-#     print(max_depth)
-    
-#     if num_channels is None: num_channels = compute_channels(pspec, geometry)
-#     encode_measurements = False
-#     if measurement_encoding == 1:
-#         encode_measurements = True
-#         num_channels += 1
-#         max_depth += 1 # adding an additional layer to each circuit for the measurements.
-#     elif measurement_encoding == 2:
-#         measurements = _np.zeros((num_circs, num_qubits))
-    
-#     if num_qubits is None: num_qubits = len(pspec.qubit_labels)
-#     if valuemapper is None: valuemapper = lambda x: 1
-#     assert(indexmapper is not None), 'I need a way to map gates to an index!!!!'
-
-#     x_circs = _np.zeros((num_circs, num_qubits, max_depth, num_channels), float)
-#     x_signs = _np.zeros((num_circs, num_error_gens, max_depth), int)
-#     x_indices = _np.zeros((num_circs, num_error_gens, max_depth), int)
-#     if type(fidelities) is list: y = _np.array(fidelities)
-                    
-#     for i, c in enumerate(circs):
-#         if i % 200 == 0:
-#             print(i, end=',')
-#         x_circs[i, :, :, :] = circuit_to_tensor(c, max_depth, num_qubits, num_channels, encode_measurements,
-#                                                          indexmapper, indexmapper_kwargs,
-#                                                          valuemapper, valuemapper_kwargs 
-#                                                          )              
-#         c_indices, c_signs = create_error_propagation_matrix(c, tracked_error_gens)
-#         # c_indices = remap_indices(c_indices)
-#         x_indices[i, :, 0:c.depth] = c_indices.T # deprecated: np.rint(c_indices)
-#         x_signs[i, :, 0:c.depth] = c_signs.T # deprecated: np.rint(c_signs)
-#         if measurement_encoding == 1:
-#             # This is where update the signs and indices to account for the measurements
-#             # NOT IMPLEMENTED!!!!!
-#             x_signs[i, :, -1] = 1 
-#             x_indices[i, :, -1] = 0 # ??? Need to figure this out ??? Need to take the tracked error gens and map them to their unique id
-#         elif measurement_encoding == 2:
-#             measurements[i, :] = active_qubits(x_circs[i, :, :, :])
-           
-#     if return_separate:
-#         return x_circs, x_signs, x_indices, y
-
-#     else:
-#         len_gate_encoding = num_qubits * num_channels
-#         xc_reshaped = _np.zeros((x_circs.shape[0], x_circs.shape[1] * x_circs.shape[3], x_circs.shape[2]), float) 
-#         for qi in range(num_qubits): 
-#             for ci in range(num_channels): 
-#                 xc_reshaped[:, qi * num_channels + ci, :] = x_circs[:, qi, :, ci].copy()
-
-#         xi2 = _np.transpose(x_indices, (0, 2, 1))
-#         xc2 = _np.transpose(xc_reshaped, (0, 2, 1))
-#         xs2 = _np.transpose(x_signs, (0, 2, 1))
-
-#         xt = _np.zeros((xi2.shape[0], xi2.shape[1], 2 * num_error_gens + len_gate_encoding), float)
-#         xt[:, :, 0:len_gate_encoding] = xc2[:, :, :]
-#         xt[:, :, len_gate_encoding:num_error_gens + len_gate_encoding] = xi2[:, :, :]
-#         xt[:, :, num_error_gens + len_gate_encoding:2 * num_error_gens + len_gate_encoding] = xs2[:, :, :]
-
-#         if measurement_encoding == 2:
-#             return xt, y, measurements
-#         return xt, y
         
