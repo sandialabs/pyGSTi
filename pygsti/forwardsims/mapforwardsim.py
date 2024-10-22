@@ -269,16 +269,10 @@ class MapForwardSimulator(_DistributableForwardSimulator, SimpleMapForwardSimula
                 raise MemoryError("Attempted layout creation w/memory limit = %g <= 0!" % mem_limit)
             printer.log("Layout creation w/mem limit = %.2fGB" % (mem_limit * C))
 
-        #Start with how we'd like to split processors up (without regard to memory limit):
-
-        # when there are lots of processors, the from_vector calls dominante over the actual fwdsim,
-        # but we can reduce from_vector calls by having np1, np2 > 0 (each param requires a from_vector
-        # call when using finite diffs) - so we want to choose nc = Ng < nprocs and np1 > 1 (so nc * np1 = nprocs).
-        #work_per_proc = self.model.dim**2
-        
-        #when we have only a single processor (nprocs=1) it doesn't make sense to do any splitting
-        #with the possible exception of when we have memory limits.
-        default_natoms = 1 if nprocs==1 and mem_limit is None else 2 * self.model.dim # heuristic?
+        #Start with how we'd like to split processors up (without regard to memory limit):        
+        #The current implementation of map (should) benefit more from having a matching between the number of atoms
+        #and the number of processors, at least for up to around two-qubits.
+        default_natoms = nprocs # heuristic
         #TODO: factor in the mem_limit value to more intelligently set the default number of atoms.
 
         natoms, na, npp, param_dimensions, param_blk_sizes = self._compute_processor_distribution(
