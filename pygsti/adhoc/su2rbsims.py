@@ -340,7 +340,7 @@ class SU2RBSim:
         if ncname == 'rotate_Jz':
             im = 'i'
             jzpow = 'J_z^' + pnames[1]
-            return f'evolve $\\rho \\mapsto U \\rho U^\\dagger$ where $U =$ expm($-${im}$ \\cdot {pnames[0]} \\cdot {jzpow}$)'
+            return f'evolve $\\rho \\mapsto U \\rho U^\\dagger$ where $U =$ expm($-${im}$ {pnames[0]} \\cdot {jzpow}$)'
         raise NotImplementedError()
 
     def compute_probabilities(self):
