@@ -507,7 +507,6 @@ def simplish_leastsq(
         msg = "No parameters to optimize"
         converged = True
 
-    last_accepted_dx = None
     min_norm_f = 1e100  # sentinel
     best_x = ari.allocate_jtf()
     best_x[:] = x[:]  # like x.copy() -the x-value corresponding to min_norm_f ('P'-type)
@@ -834,7 +833,6 @@ def simplish_leastsq(
                 norm_f = norm_new_f
                 global_x[:] = global_new_x[:]
                 printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g" % ("", dF / dL, mu_factor, mu), 2)
-                last_accepted_dx = dx.copy()
                 if new_x_is_known_inbounds and norm_f < min_norm_f:
                     min_norm_f = norm_f
                     best_x[:] = x[:]
