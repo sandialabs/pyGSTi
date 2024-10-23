@@ -23,7 +23,6 @@ from pygsti.optimize.simplerlm import Optimizer, OptimizerResult
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
-from pygsti.tools.legacytools import deprecate_with_details
 
 # Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
 # This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
@@ -34,15 +33,7 @@ if 'PYGSTI_NO_CUSTOMLM_SIGINT' not in _os.environ:
 #constants
 _MACH_PRECISION = 1e-12
 
-dep_msg_template = """
-    %s is deprecated in favor of %s.
-    The pyGSTi development team intends to remove %s
-    in a future release of pyGSTi. Please get in touch with us if
-    you need functionality that's only available in %s.
-"""
 
-dep_msg_class = dep_msg_template % ('CustomLMOptimizer', 'SimplerLMOptimizer', 'CustomLMOptimizer', 'CustomLMOptimizer')
-@deprecate_with_details(dep_msg_class)
 class CustomLMOptimizer(Optimizer):
     """
     A Levenberg-Marquardt optimizer customized for GST-like problems.
@@ -307,8 +298,6 @@ class CustomLMOptimizer(Optimizer):
                                {'msg': msg, 'mu': mu, 'nu': nu, 'fvec': f})
 
 
-dep_msg_func = dep_msg_template % ('custom_leastsq', 'simplish_lstsq', 'custom_leastsq', 'custom_leastsq')
-@deprecate_with_details(dep_msg_func)
 def custom_leastsq(obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
                    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
                    max_dx_scale=1.0, damping_mode="identity", damping_basis="diagonal_values",

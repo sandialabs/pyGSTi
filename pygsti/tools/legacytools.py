@@ -59,27 +59,6 @@ def deprecate(replacement=None):
     return decorator
 
 
-def deprecate_with_details(full_message):
-    """
-    Decorator for deprecating a function.
-
-    Parameters
-    ----------
-    replacement : str, optional
-        the name of the function that should replace it.
-
-    Returns
-    -------
-    function
-    """
-    def decorator(fn):
-        def _inner(*args, **kwargs):
-            _warnings.warn(full_message)
-            return fn(*args, **kwargs)
-        return _inner
-    return decorator
-
-
 def deprecate_imports(module_name, replacement_map, warning_msg):
     """
     Utility to deprecate imports from a module.

@@ -23,8 +23,6 @@ from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrint
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
 
-# from scipy.optimize import OptimizeResult as _optResult
-
 #Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
 #This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
 #so this can be turned off by setting the PYGSTI_NO_CUSTOMLM_SIGINT environment variable
