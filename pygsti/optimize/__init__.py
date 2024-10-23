@@ -12,6 +12,7 @@ pyGSTi Optimization Python Package
 
 from .arraysinterface import *
 from .customlm import *
+from .simplerlm import *
 from .customsolve import *
 # Import the most important/useful routines of each module into
 # the package namespace
