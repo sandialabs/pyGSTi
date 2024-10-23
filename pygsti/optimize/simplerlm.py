@@ -348,7 +348,6 @@ def damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer):
 
 
 def jac_guarded(k: int, num_fd_iters: int, obj_fn: Callable, jac_fn: Callable, f, ari, global_x, fdJac_work):
-    # unnecessary b/c global_x is already valid: ari.allgather_x(x, global_x)
     if k >= num_fd_iters:
         Jac = jac_fn(global_x)  # 'EP'-type, but doesn't actually allocate any more mem (!)
     else:
