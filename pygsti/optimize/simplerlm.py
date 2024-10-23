@@ -22,6 +22,7 @@ from pygsti.optimize.customsolve import custom_solve as _custom_solve
 from pygsti.baseobjs.verbosityprinter import VerbosityPrinter as _VerbosityPrinter
 from pygsti.baseobjs.resourceallocation import ResourceAllocation as _ResourceAllocation
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+from typing import Callable
 
 #Make sure SIGINT will generate a KeyboardInterrupt (even if we're launched in the background)
 #This may be problematic for multithreaded parallelism above pyGSTi, e.g. Dask,
@@ -346,6 +347,35 @@ def damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer):
     return mu, nu, msg
 
 
+def jac_guarded(k: int, num_fd_iters: int, obj_fn: Callable, jac_fn: Callable, f, ari, global_x, fdJac_work):
+    # unnecessary b/c global_x is already valid: ari.allgather_x(x, global_x)
+    if k >= num_fd_iters:
+        Jac = jac_fn(global_x)  # 'EP'-type, but doesn't actually allocate any more mem (!)
+    else:
+        # Note: x holds only number of "fine"-division params - need to use global_x, and
+        # Jac only holds a subset of the derivative and element columns and rows, respectively.
+        f_fixed = f.copy()  # a static part of the distributed `f` resturned by obj_fn - MUST copy this.
+
+        pslice = ari.jac_param_slice(only_if_leader=True)
+        eps = 1e-7
+        #Don't do this: for ii, i in enumerate(range(pslice.start, pslice.stop)): (must keep procs in sync)
+        for i in range(len(global_x)):
+            x_plus_dx = global_x.copy()
+            x_plus_dx[i] += eps
+            fd = (obj_fn(x_plus_dx) - f_fixed) / eps
+            if pslice.start <= i < pslice.stop:
+                fdJac_work[:, i - pslice.start] = fd
+            #if comm is not None: comm.barrier()  # overkill for shared memory leader host barrier
+        Jac = fdJac_work
+        #DEBUG: compare with analytic jacobian (need to uncomment num_fd_iters DEBUG line above too)
+        #Jac_analytic = jac_fn(x)
+        #if _np.linalg.norm(Jac_analytic-Jac) > 1e-6:
+        #    print("JACDIFF = ",_np.linalg.norm(Jac_analytic-Jac)," per el=",
+        #          _np.linalg.norm(Jac_analytic-Jac)/Jac.size," sz=",Jac.size)
+    return Jac
+
+
+
 def simplish_leastsq(
     obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
     rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0, max_dx_scale=1.0,
@@ -467,39 +497,36 @@ def simplish_leastsq(
 
     msg = ""
     converged = False
-    global_x = x0.copy()
-    f = obj_fn(global_x)  # 'E'-type array
-    norm_f = ari.norm2_f(f)
     half_max_nu = 2**62  # what should this be??
     tau = 1e-3
-    nu = 2
-    mu = 1  # just a guess - initialized on 1st iter and only used if rejected
 
     #Allocate potentially shared memory used in loop
     JTJ = ari.allocate_jtj()
-    JTf = ari.allocate_jtf()
+    minus_JTf = ari.allocate_jtf()
     x = ari.allocate_jtf()
+    best_x = ari.allocate_jtf()
+    dx = ari.allocate_jtf()
+    new_x = ari.allocate_jtf()
+    jtj_buf = ari.allocate_jtj_shared_mem_buf()
+    fdJac = ari.allocate_jac() if num_fd_iters > 0 else None
 
-    if num_fd_iters > 0:
-        fdJac = ari.allocate_jac()
-
+    global_x = x0.copy()
     ari.allscatter_x(global_x, x)
+    global_new_x = global_x.copy()
+    best_x[:] = x[:] 
+    # ^ like x.copy() -the x-value corresponding to min_norm_f ('P'-type)
 
     if x_limits is not None:
         x_lower_limits = ari.allocate_jtf()
         x_upper_limits = ari.allocate_jtf()
         ari.allscatter_x(x_limits[:, 0], x_lower_limits)
         ari.allscatter_x(x_limits[:, 1], x_upper_limits)
+    max_norm_dx = (max_dx_scale**2) * len(global_x) if max_dx_scale else None
+    # ^ don't let any component change by more than ~max_dx_scale
 
-    dx = ari.allocate_jtf()
-    new_x = ari.allocate_jtf()
-    global_new_x = global_x.copy()
 
-    # don't let any component change by more than ~max_dx_scale
-    if max_dx_scale:
-        max_norm_dx = (max_dx_scale**2) * len(global_x)
-    else: max_norm_dx = None
-
+    f = obj_fn(global_x)  # 'E'-type array
+    norm_f = ari.norm2_f(f)
     if not _np.isfinite(norm_f):
         msg = "Infinite norm of objective function at initial point!"
 
@@ -507,15 +534,13 @@ def simplish_leastsq(
         msg = "No parameters to optimize"
         converged = True
 
+    mu, nu =  (1, 2) if init_munu == 'auto' else init_munu
+    # ^ We have to set some *some* values in case we exit at the start of the first
+    #   iteration. mu will almost certainly be overwritten before being read.
     min_norm_f = 1e100  # sentinel
-    best_x = ari.allocate_jtf()
-    best_x[:] = x[:]  # like x.copy() -the x-value corresponding to min_norm_f ('P'-type)
-
-    if init_munu != "auto":
-        mu, nu = init_munu
-    best_x_state = (mu, nu, norm_f, f.copy(), None)  # need f.copy() b/c f is objfn mem
+    best_x_state = (mu, nu, norm_f, f.copy(), None)
+    # ^ here and elsewhere, need f.copy() b/c f is objfn mem
     rawJTJ_scratch = None
-    jtj_buf = ari.allocate_jtj_shared_mem_buf()
 
     try:
 
@@ -539,30 +564,7 @@ def simplish_leastsq(
 
             if profiler: profiler.memory_check("simplish_leastsq: begin outer iter")
 
-            # unnecessary b/c global_x is already valid: ari.allgather_x(x, global_x)
-            if k >= num_fd_iters:
-                Jac = jac_fn(global_x)  # 'EP'-type, but doesn't actually allocate any more mem (!)
-            else:
-                # Note: x holds only number of "fine"-division params - need to use global_x, and
-                # Jac only holds a subset of the derivative and element columns and rows, respectively.
-                f_fixed = f.copy()  # a static part of the distributed `f` resturned by obj_fn - MUST copy this.
-
-                pslice = ari.jac_param_slice(only_if_leader=True)
-                eps = 1e-7
-                #Don't do this: for ii, i in enumerate(range(pslice.start, pslice.stop)): (must keep procs in sync)
-                for i in range(len(global_x)):
-                    x_plus_dx = global_x.copy()
-                    x_plus_dx[i] += eps
-                    fd = (obj_fn(x_plus_dx) - f_fixed) / eps
-                    if pslice.start <= i < pslice.stop:
-                        fdJac[:, i - pslice.start] = fd
-                    #if comm is not None: comm.barrier()  # overkill for shared memory leader host barrier
-                Jac = fdJac
-                #DEBUG: compare with analytic jacobian (need to uncomment num_fd_iters DEBUG line above too)
-                #Jac_analytic = jac_fn(x)
-                #if _np.linalg.norm(Jac_analytic-Jac) > 1e-6:
-                #    print("JACDIFF = ",_np.linalg.norm(Jac_analytic-Jac)," per el=",
-                #          _np.linalg.norm(Jac_analytic-Jac)/Jac.size," sz=",Jac.size)
+            Jac = jac_guarded(k, num_fd_iters, obj_fn, jac_fn, f, ari, global_x, fdJac)
 
 
             if profiler: profiler.memory_check("simplish_leastsq: after jacobian:"
@@ -579,22 +581,19 @@ def simplish_leastsq(
 
             # Riley note: fill_JTJ is the first place where we try to access J as a dense matrix.
             ari.fill_jtj(Jac, JTJ, jtj_buf)
-            ari.fill_jtf(Jac, f, JTf)  # 'P'-type
+            ari.fill_jtf(Jac, f, minus_JTf)  # 'P'-type
+            minus_JTf *= -1
 
             if profiler: profiler.add_time("simplish_leastsq: dotprods", tm)
             #assert(not _np.isnan(JTJ).any()), "NaN in JTJ!" # NaNs tracking
             #assert(not _np.isinf(JTJ).any()), "inf in JTJ! norm Jac = %g" % _np.linalg.norm(Jac) # NaNs tracking
             #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ!" # NaNs tracking
-            #assert(_np.isfinite(JTf).all()), "Non-finite JTf!" # NaNs tracking
+            #assert(_np.isfinite(minus_JTf).all()), "Non-finite minus_JTf!" # NaNs tracking
 
             idiag = ari.jtj_diag_indices(JTJ)
-            norm_JTf = ari.infnorm_x(JTf)
+            norm_JTf = ari.infnorm_x(minus_JTf)
             norm_x = ari.norm2_x(x)
             undamped_JTJ_diag = JTJ[idiag].copy()  # 'P'-type
-
-            JTf *= -1.0
-            minus_JTf = JTf  # use the same memory for -JTf below (shouldn't use JTf anymore)
-            #Maybe just have a minus_JTf variable?
 
             if norm_JTf < jac_norm_tol:
                 if oob_check_interval <= 1:
@@ -609,19 +608,15 @@ def simplish_leastsq(
                     continue  # can't make use of saved JTJ yet - recompute on nxt iter
 
             if k == 0:
-                if init_munu == "auto":
-                    mu = tau * ari.max_x(undamped_JTJ_diag)  # initial damping element
-                else:
-                    mu, nu = init_munu
+                mu, nu = (tau * ari.max_x(undamped_JTJ_diag), 2) if init_munu == 'auto' else init_munu
                 rawJTJ_scratch = JTJ.copy()  # allocates the memory for a copy of JTJ so only update mem elsewhere
-                best_x_state = mu, nu, norm_f, f.copy(), rawJTJ_scratch  # update mu,nu,JTJ of initial best state
-            else:
-                # on all other iterations, update JTJ of best_x_state if best_x == x, i.e. if we've just evaluated
-                # a previously accepted step that was deemed the best we've seen so far
-                if _np.allclose(x, best_x):
-                    rawJTJ_scratch[:, :] = JTJ[:, :]  # use pre-allocated memory
-                    rawJTJ_scratch[idiag] = undamped_JTJ_diag  # no damping; the "raw" JTJ
-                    best_x_state = best_x_state[0:4] + (rawJTJ_scratch,)  # update mu,nu,JTJ of initial "best state"
+                best_x_state = (mu, nu, norm_f, f.copy(), rawJTJ_scratch)  # update mu,nu,JTJ of initial best state
+            elif _np.allclose(x, best_x):
+                # for iter k > 0, update JTJ of best_x_state if best_x == x (i.e., if we've just evaluated
+                # a previously accepted step that was deemed the best we've seen so far.)
+                rawJTJ_scratch[:, :] = JTJ[:, :]  # use pre-allocated memory
+                rawJTJ_scratch[idiag] = undamped_JTJ_diag  # no damping; the "raw" JTJ
+                best_x_state = best_x_state[0:4] + (rawJTJ_scratch,)  # update mu,nu,JTJ of initial "best state"
 
             #determing increment using adaptive damping
             while True:  # inner loop
@@ -632,35 +627,23 @@ def simplish_leastsq(
                 JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
 
                 #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
-                #assert(_np.isfinite(JTf).all()), "Non-finite JTf (inner)!" # NaNs tracking
+                #assert(_np.isfinite(minus_JTf).all()), "Non-finite minus_JTf (inner)!" # NaNs tracking
 
                 try:
                     if profiler: profiler.memory_check("simplish_leastsq: before linsolve")
                     tm = _time.time()
-                    success = True
                     _custom_solve(JTJ, minus_JTf, dx, ari, resource_alloc, serial_solve_proc_threshold)
                     if profiler: profiler.add_time("simplish_leastsq: linsolve", tm)
                 except _scipy.linalg.LinAlgError:
-                    success = False
-
-                """
-                We have > 180 l.o.c. for handling success==True.
-                These lines should be factored out into their own function.
-
-                    The last 100 lines of this region are just for handling new_x_is_allowed == True.
-                """
+                    reject_msg = " (LinSolve Failure)"
+                    mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
+                    if len(msg) == 0:
+                        continue
+                    else:
+                        break
 
                 reject_msg = ""
                 if profiler: profiler.memory_check("simplish_leastsq: after linsolve")
-
-                if not success:
-                    # linear solve failed
-                    reject_msg = " (LinSolve Failure)"
-                    mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
-                    if len(msg) > 0:
-                        break
-                    else:
-                        continue
 
                 new_x[:] = x + dx
                 norm_dx = ari.norm2_x(dx)
@@ -696,12 +679,11 @@ def simplish_leastsq(
                         x[:] = best_x[:]
                         mu, nu, norm_f, f[:], _ = best_x_state
                         break
-
-                if norm_dx > (norm_x + rel_xtol) / (_MACH_PRECISION**2):
+                elif (norm_x + rel_xtol) < norm_dx * (_MACH_PRECISION**2):
                     msg = "(near-)singular linear system"
                     break
 
-                if oob_check_interval > 0 and oob_check_mode == 0:
+                if oob_check_mode == 0 and oob_check_interval > 0:
                     if k % oob_check_interval == 0:
                         #Check to see if objective function is out of bounds
 
@@ -715,12 +697,16 @@ def simplish_leastsq(
                             in_bounds.append(True)
 
                         if any(in_bounds):  # In adaptive mode, proceed if *any* cases are in-bounds
-                            new_x_is_allowed = True
                             new_x_is_known_inbounds = True
                         else:
                             MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
                             if oob_action == "reject" or k < MIN_STOP_ITER:
-                                new_x_is_allowed = False  # (and also not in bounds)
+                                reject_msg = " (out-of-bounds)"
+                                mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
+                                if len(msg) == 0:
+                                    continue
+                                else:
+                                    break
                             elif oob_action == "stop":
                                 if oob_check_interval == 1:
                                     msg = "Objective function out-of-bounds! STOP"
@@ -737,24 +723,13 @@ def simplish_leastsq(
                     else:  # don't check this time
                         ari.allgather_x(new_x, global_new_x)
                         new_f = obj_fn(global_new_x, oob_check=False)
-
-                        new_x_is_allowed = True
                         new_x_is_known_inbounds = False
                 else:
                     #Just evaluate objective function normally; never check for in-bounds condition
                     ari.allgather_x(new_x, global_new_x)
                     new_f = obj_fn(global_new_x)
-
-                    new_x_is_allowed = True
-                    new_x_is_known_inbounds = bool(oob_check_interval == 0)  # consider "in bounds" if not checking
-
-                if not new_x_is_allowed:
-                    reject_msg = " (out-of-bounds)"
-                    mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
-                    if len(msg) > 0:
-                        break
-                    else:
-                        continue
+                    new_x_is_known_inbounds = oob_check_interval == 0
+                    # ^ assume in bounds if we have no out-of-bounds checks.
 
                 norm_new_f = ari.norm2_f(new_f)
                 if not _np.isfinite(norm_new_f):  # avoid infinite loop...
@@ -782,22 +757,26 @@ def simplish_leastsq(
                 if (dL <= 0 or dF <= 0):
                     reject_msg = " (out-of-bounds)"
                     mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
-                    if len(msg) > 0:
-                        break
-                    else:
+                    if len(msg) == 0:
                         continue
+                    else:
+                        break
 
                 #Check whether an otherwise acceptable solution is in-bounds
                 if oob_check_mode == 1 and oob_check_interval > 0 and k % oob_check_interval == 0:
                     #Check to see if objective function is out of bounds
                     try:
                         obj_fn(global_new_x, oob_check=True)  # don't actually need return val (== new_f)
-                        new_f_is_allowed = True
                         new_x_is_known_inbounds = True
                     except ValueError:  # Use this to mean - "not allowed, but don't stop"
                         MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective can stops the opt.
                         if oob_action == "reject" or k < MIN_STOP_ITER:
-                            new_f_is_allowed = False  # (and also not in bounds)
+                            reject_msg = " (out-of-bounds)"
+                            mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
+                            if len(msg) == 0:
+                                continue
+                            else:
+                                break
                         elif oob_action == "stop":
                             if oob_check_interval == 1:
                                 msg = "Objective function out-of-bounds! STOP"
@@ -811,18 +790,9 @@ def simplish_leastsq(
                                 break  # restart next outer loop
                         else:
                             raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
-                else:
-                    new_f_is_allowed = True
-
-                if not new_f_is_allowed:
-                    reject_msg = " (out-of-bounds)"
-                    mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
-                    if len(msg) > 0:
-                        break
-                    else:
-                        continue
 
                 # reduction in error: increment accepted!
+                #       ^ Note: if we ever reach this line, then we know that we'll be breaking from the loop.
                 t = 1.0 - (2 * dF / dL - 1.0)**3  # dF/dL == gain ratio
                 # always reduce mu for accepted step when |dx| is small
                 mu_factor = max(t, 1.0 / 3.0) if norm_dx > 1e-8 else 0.3
@@ -844,11 +814,10 @@ def simplish_leastsq(
                 #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
                 #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
 
-                break  # exit inner loop normally
-                # ... ^ Do we really break if we hit the end of the loop?
-            #end of inner loop
-
-        #end of outer loop
+                break 
+                # ^ exit inner loop normally ...
+            # end of inner loop
+        # end of outer loop
         else:
             #if no break stmt hit, then we've exceeded max_iter
             msg = "Maximum iterations (%d) exceeded" % max_iter
@@ -870,10 +839,9 @@ def simplish_leastsq(
         comm.barrier()  # Just to be safe, so procs stay synchronized and we don't free anything too soon
 
     ari.deallocate_jtj(JTJ)
-    ari.deallocate_jtf(JTf)
+    ari.deallocate_jtf(minus_JTf)
     ari.deallocate_jtf(x)
     ari.deallocate_jtj_shared_mem_buf(jtj_buf)
-    #ari.deallocate_x_for_jac(x_for_jac)
 
     if x_limits is not None:
         ari.deallocate_jtf(x_lower_limits)
@@ -882,7 +850,7 @@ def simplish_leastsq(
     ari.deallocate_jtf(dx)
     ari.deallocate_jtf(new_x)
 
-    if num_fd_iters > 0:
+    if fdJac is not None:
         ari.deallocate_jac(fdJac)
 
     ari.allgather_x(best_x, global_x)
