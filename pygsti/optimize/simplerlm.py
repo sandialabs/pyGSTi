@@ -136,15 +136,6 @@ class SimplerLMOptimizer(Optimizer):
         Number of finite-difference iterations applied to the first
         stage of the optimization (only).  Unused.
 
-    uphill_step_threshold : float, optional
-        Allows uphill steps when taking two consecutive steps in nearly
-        the same direction.  The condition for accepting an uphill step
-        is that `(uphill_step_threshold-beta)*new_objective < old_objective`,
-        where `beta` is the cosine of the angle between successive steps.
-        If `uphill_step_threshold == 0` then no uphill steps are allowed,
-        otherwise it should take a value between 1.0 and 2.0, with 1.0 being
-        the most permissive to uphill steps.
-
     init_munu : tuple, optional
         If not None, a (mu, nu) tuple of 2 floats giving the initial values
         for mu and nu.
@@ -194,8 +185,7 @@ class SimplerLMOptimizer(Optimizer):
                 return CustomLMOptimizer(**obj)
         return cls()
 
-    def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0,
-                 uphill_step_threshold=0.0, init_munu="auto", oob_check_interval=0,
+    def __init__(self, maxiter=100, maxfev=100, tol=1e-6, fditer=0, first_fditer=0, init_munu="auto", oob_check_interval=0,
                  oob_action="reject", oob_check_mode=0, serial_solve_proc_threshold=100, lsvec_mode="normal"):
 
         super().__init__()
@@ -205,7 +195,6 @@ class SimplerLMOptimizer(Optimizer):
         self.tol = tol
         self.fditer = fditer
         self.first_fditer = first_fditer
-        self.uphill_step_threshold = uphill_step_threshold
         self.init_munu = init_munu
         self.oob_check_interval = oob_check_interval
         self.oob_action = oob_action
@@ -223,7 +212,6 @@ class SimplerLMOptimizer(Optimizer):
             'tolerance': self.tol,
             'number_of_finite_difference_iterations': self.fditer,
             'number_of_first_stage_finite_difference_iterations': self.first_fditer,
-            'uphill_step_threshold': self.uphill_step_threshold,
             'initial_mu_and_nu': self.init_munu,
             'out_of_bounds_check_interval': self.oob_check_interval,
             'out_of_bounds_action': self.oob_action,
@@ -242,7 +230,6 @@ class SimplerLMOptimizer(Optimizer):
                    tol=state['tolerance'],
                    fditer=state['number_of_finite_difference_iterations'],
                    first_fditer=state['number_of_first_stage_finite_difference_iterations'],
-                   uphill_step_threshold=state['uphill_step_threshold'],
                    init_munu=state['initial_mu_and_nu'],
                    oob_check_interval=state['out_of_bounds_check_interval'],
                    oob_action=state['out_of_bounds_action'],
@@ -303,7 +290,6 @@ class SimplerLMOptimizer(Optimizer):
             rel_ftol=self.tol.get('relf', 1e-6),
             rel_xtol=self.tol.get('relx', 1e-8),
             max_dx_scale=self.tol.get('maxdx', 1.0),
-            uphill_step_threshold=self.uphill_step_threshold,
             init_munu=self.init_munu,
             oob_check_interval=self.oob_check_interval,
             oob_action=self.oob_action,
@@ -341,18 +327,28 @@ class SimplerLMOptimizer(Optimizer):
         return OptimizerResult(objective, opt_x, norm_f, opt_jtj, unpenalized_normf, chi2k_qty,
                                {'msg': msg, 'mu': mu, 'nu': nu, 'fvec': f})
 
-#Scipy version...
-#            opt_x, _, _, msg, flag = \
-#                _spo.leastsq(objective_func, x0, xtol=tol['relx'], ftol=tol['relf'], gtol=tol['jac'],
-#                             maxfev=maxfev * (len(x0) + 1), full_output=True, Dfun=jacobian)  # pragma: no cover
-#            printer.log("Least squares message = %s; flag =%s" % (msg, flag), 2)            # pragma: no cover
-#            opt_state = (msg,)
+
+
+def damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer):
+    ############################################################################################
+    #
+    #   if this point is reached, either the linear solve failed
+    #   or the error did not reduce.  In either case, reject increment.
+    #
+    ############################################################################################
+    mu *= nu
+    if nu > half_max_nu:  # watch for nu getting too large (&overflow)
+        msg = "Stopping after nu overflow!"
+    else:
+        msg = ""
+    nu = 2 * nu
+    printer.log("      Rejected%s!  mu => mu*nu = %g, nu => 2*nu = %g" % (reject_msg, mu, nu), 2)
+    return mu, nu, msg
 
 
 def simplish_leastsq(
     obj_fn, jac_fn, x0, f_norm2_tol=1e-6, jac_norm_tol=1e-6,
-    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0,
-    max_dx_scale=1.0, uphill_step_threshold=0.0,
+    rel_ftol=1e-6, rel_xtol=1e-6, max_iter=100, num_fd_iters=0, max_dx_scale=1.0,
     init_munu="auto", oob_check_interval=0, oob_action="reject", oob_check_mode=0,
     resource_alloc=None, arrays_interface=None, serial_solve_proc_threshold=100,
     x_limits=None, verbosity=0, profiler=None
@@ -407,15 +403,6 @@ def simplish_leastsq(
         If not None, impose a limit on the magnitude of the step, so that
         `|dx|^2 < max_dx_scale^2 * len(dx)` (so elements of `dx` should be,
         roughly, less than `max_dx_scale`).
-
-    uphill_step_threshold : float, optional
-        Allows uphill steps when taking two consecutive steps in nearly
-        the same direction.  The condition for accepting an uphill step
-        is that `(uphill_step_threshold-beta)*new_objective < old_objective`,
-        where `beta` is the cosine of the angle between successive steps.
-        If `uphill_step_threshold == 0` then no uphill steps are allowed,
-        otherwise it should take a value between 1.0 and 2.0, with 1.0 being
-        the most permissive to uphill steps.
 
     init_munu : tuple, optional
         If not None, a (mu, nu) tuple of 2 floats giving the initial values
@@ -666,204 +653,201 @@ def simplish_leastsq(
 
                 reject_msg = ""
                 if profiler: profiler.memory_check("simplish_leastsq: after linsolve")
-                if success:  # linear solve succeeded
+
+                if not success:
+                    # linear solve failed
+                    reject_msg = " (LinSolve Failure)"
+                    mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
+                    if len(msg) > 0:
+                        break
+                    else:
+                        continue
+
+                new_x[:] = x + dx
+                norm_dx = ari.norm2_x(dx)
+
+                #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
+                if max_norm_dx and norm_dx > max_norm_dx:
+                    dx *= _np.sqrt(max_norm_dx / norm_dx)
                     new_x[:] = x + dx
                     norm_dx = ari.norm2_x(dx)
 
-                    #ensure dx isn't too large - don't let any component change by more than ~max_dx_scale
-                    if max_norm_dx and norm_dx > max_norm_dx:
-                        dx *= _np.sqrt(max_norm_dx / norm_dx)
-                        new_x[:] = x + dx
-                        norm_dx = ari.norm2_x(dx)
+                #apply x limits (bounds)
+                if x_limits is not None:
+                    # Approach 1: project x into valid space by simply clipping out-of-bounds values
+                    for i, (x_el, lower, upper) in enumerate(zip(x, x_lower_limits, x_upper_limits)):
+                        if new_x[i] < lower:
+                            new_x[i] = lower
+                            dx[i] = lower - x_el
+                        elif new_x[i] > upper:
+                            new_x[i] = upper
+                            dx[i] = upper - x_el
+                    norm_dx = ari.norm2_x(dx)
 
-                    #apply x limits (bounds)
-                    if x_limits is not None:
-                        # Approach 1: project x into valid space by simply clipping out-of-bounds values
-                        for i, (x_el, lower, upper) in enumerate(zip(x, x_lower_limits, x_upper_limits)):
-                            if new_x[i] < lower:
-                                new_x[i] = lower
-                                dx[i] = lower - x_el
-                            elif new_x[i] > upper:
-                                new_x[i] = upper
-                                dx[i] = upper - x_el
-                        norm_dx = ari.norm2_x(dx)
+                printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu, norm_dx), 2)
 
-                    printer.log("  - Inner Loop: mu=%g, norm_dx=%g" % (mu, norm_dx), 2)
-
-                    if norm_dx < (rel_xtol**2) * norm_x:
-                        if oob_check_interval <= 1:
-                            msg = "Relative change, |dx|/|x|, is at most %g" % rel_xtol
-                            converged = True
-                            break
-                        else:
-                            printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                            oob_check_interval = 1
-                            x[:] = best_x[:]
-                            mu, nu, norm_f, f[:], _ = best_x_state
-                            break
-
-                    if norm_dx > (norm_x + rel_xtol) / (_MACH_PRECISION**2):
-                        msg = "(near-)singular linear system"
+                if norm_dx < (rel_xtol**2) * norm_x:
+                    if oob_check_interval <= 1:
+                        msg = "Relative change, |dx|/|x|, is at most %g" % rel_xtol
+                        converged = True
+                        break
+                    else:
+                        printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                        oob_check_interval = 1
+                        x[:] = best_x[:]
+                        mu, nu, norm_f, f[:], _ = best_x_state
                         break
 
-                    if oob_check_interval > 0 and oob_check_mode == 0:
-                        if k % oob_check_interval == 0:
-                            #Check to see if objective function is out of bounds
+                if norm_dx > (norm_x + rel_xtol) / (_MACH_PRECISION**2):
+                    msg = "(near-)singular linear system"
+                    break
 
-                            in_bounds = []
-                            ari.allgather_x(new_x, global_new_x)
-                            try:
-                                new_f = obj_fn(global_new_x, oob_check=True)
-                            except ValueError:  # Use this to mean - "not allowed, but don't stop"
-                                in_bounds.append(False)
-                            else:
-                                in_bounds.append(True)
+                if oob_check_interval > 0 and oob_check_mode == 0:
+                    if k % oob_check_interval == 0:
+                        #Check to see if objective function is out of bounds
 
-                            if any(in_bounds):  # In adaptive mode, proceed if *any* cases are in-bounds
-                                new_x_is_allowed = True
-                                new_x_is_known_inbounds = True
-                            else:
-                                MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
-                                if oob_action == "reject" or k < MIN_STOP_ITER:
-                                    new_x_is_allowed = False  # (and also not in bounds)
-                                elif oob_action == "stop":
-                                    if oob_check_interval == 1:
-                                        msg = "Objective function out-of-bounds! STOP"
-                                        converged = True
-                                        break
-                                    else:  # reset to last know in-bounds point and not do oob check every step
-                                        printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                                        oob_check_interval = 1
-                                        x[:] = best_x[:]
-                                        mu, nu, norm_f, f[:], _ = best_x_state  # can't make use of saved JTJ yet
-                                        break  # restart next outer loop
-                                else:
-                                    raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
-                        else:  # don't check this time
-                            ari.allgather_x(new_x, global_new_x)
-                            new_f = obj_fn(global_new_x, oob_check=False)
-
-                            new_x_is_allowed = True
-                            new_x_is_known_inbounds = False
-                    else:
-                        #Just evaluate objective function normally; never check for in-bounds condition
+                        in_bounds = []
                         ari.allgather_x(new_x, global_new_x)
-                        new_f = obj_fn(global_new_x)
+                        try:
+                            new_f = obj_fn(global_new_x, oob_check=True)
+                        except ValueError:  # Use this to mean - "not allowed, but don't stop"
+                            in_bounds.append(False)
+                        else:
+                            in_bounds.append(True)
+
+                        if any(in_bounds):  # In adaptive mode, proceed if *any* cases are in-bounds
+                            new_x_is_allowed = True
+                            new_x_is_known_inbounds = True
+                        else:
+                            MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective stops the optimization
+                            if oob_action == "reject" or k < MIN_STOP_ITER:
+                                new_x_is_allowed = False  # (and also not in bounds)
+                            elif oob_action == "stop":
+                                if oob_check_interval == 1:
+                                    msg = "Objective function out-of-bounds! STOP"
+                                    converged = True
+                                    break
+                                else:  # reset to last know in-bounds point and not do oob check every step
+                                    printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                                    oob_check_interval = 1
+                                    x[:] = best_x[:]
+                                    mu, nu, norm_f, f[:], _ = best_x_state  # can't make use of saved JTJ yet
+                                    break  # restart next outer loop
+                            else:
+                                raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
+                    else:  # don't check this time
+                        ari.allgather_x(new_x, global_new_x)
+                        new_f = obj_fn(global_new_x, oob_check=False)
 
                         new_x_is_allowed = True
-                        new_x_is_known_inbounds = bool(oob_check_interval == 0)  # consider "in bounds" if not checking
+                        new_x_is_known_inbounds = False
+                else:
+                    #Just evaluate objective function normally; never check for in-bounds condition
+                    ari.allgather_x(new_x, global_new_x)
+                    new_f = obj_fn(global_new_x)
 
-                    if new_x_is_allowed:
+                    new_x_is_allowed = True
+                    new_x_is_known_inbounds = bool(oob_check_interval == 0)  # consider "in bounds" if not checking
 
-                        norm_new_f = ari.norm2_f(new_f)
-                        if not _np.isfinite(norm_new_f):  # avoid infinite loop...
-                            msg = "Infinite norm of objective function!"
-                            break
+                if not new_x_is_allowed:
+                    reject_msg = " (out-of-bounds)"
+                    mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
+                    if len(msg) > 0:
+                        break
+                    else:
+                        continue
 
-                        # dL = expected decrease in ||F||^2 from linear model
-                        dL = ari.dot_x(dx, mu * dx + minus_JTf)
-                        dF = norm_f - norm_new_f      # actual decrease in ||F||^2
+                norm_new_f = ari.norm2_f(new_f)
+                if not _np.isfinite(norm_new_f):  # avoid infinite loop...
+                    msg = "Infinite norm of objective function!"
+                    break
 
-                        if dF <= 0 and uphill_step_threshold > 0:
-                            if last_accepted_dx is None:
-                                beta = 0.0
-                            else:
-                                beta = ari.dot_x(dx, last_accepted_dx) / _np.sqrt(ari.norm2_x(dx) * ari.norm2_x(last_accepted_dx))
-                            
-                            uphill_ok = (uphill_step_threshold - beta) * norm_new_f < min(min_norm_f, norm_f)
-                        else:
-                            uphill_ok = False
+                # dL = expected decrease in ||F||^2 from linear model
+                dL = ari.dot_x(dx, mu * dx + minus_JTf)
+                dF = norm_f - norm_new_f      # actual decrease in ||F||^2
 
-                        printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" % (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
+                printer.log("      (cont): norm_new_f=%g, dL=%g, dF=%g, reldL=%g, reldF=%g" % (norm_new_f, dL, dF, dL / norm_f, dF / norm_f), 2)
 
-                        if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0:
-                            if oob_check_interval <= 1:  # (if 0 then no oob checking is done)
-                                msg = "Both actual and predicted relative reductions in the sum of squares are at most %g" % rel_ftol
+                if dL / norm_f < rel_ftol and dF >= 0 and dF / norm_f < rel_ftol and dF / dL < 2.0:
+                    if oob_check_interval <= 1:  # (if 0 then no oob checking is done)
+                        msg = "Both actual and predicted relative reductions in the sum of squares are at most %g" % rel_ftol
+                        converged = True
+                        break
+                    else:
+                        printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                        oob_check_interval = 1
+                        x[:] = best_x[:]
+                        mu, nu, norm_f, f[:], _ = best_x_state  # can't make use of saved JTJ yet
+                        break
+
+                if (dL <= 0 or dF <= 0):
+                    reject_msg = " (out-of-bounds)"
+                    mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
+                    if len(msg) > 0:
+                        break
+                    else:
+                        continue
+
+                #Check whether an otherwise acceptable solution is in-bounds
+                if oob_check_mode == 1 and oob_check_interval > 0 and k % oob_check_interval == 0:
+                    #Check to see if objective function is out of bounds
+                    try:
+                        obj_fn(global_new_x, oob_check=True)  # don't actually need return val (== new_f)
+                        new_f_is_allowed = True
+                        new_x_is_known_inbounds = True
+                    except ValueError:  # Use this to mean - "not allowed, but don't stop"
+                        MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective can stops the opt.
+                        if oob_action == "reject" or k < MIN_STOP_ITER:
+                            new_f_is_allowed = False  # (and also not in bounds)
+                        elif oob_action == "stop":
+                            if oob_check_interval == 1:
+                                msg = "Objective function out-of-bounds! STOP"
                                 converged = True
                                 break
-                            else:
-                                printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
+                            else:  # reset to last know in-bounds point and not do oob check every step
+                                printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                                 oob_check_interval = 1
                                 x[:] = best_x[:]
-                                mu, nu, norm_f, f[:], _ = best_x_state  # can't make use of saved JTJ yet
-                                break
-
-                        if (dL > 0 and dF > 0) or uphill_ok:
-                            #Check whether an otherwise acceptable solution is in-bounds
-                            if oob_check_mode == 1 and oob_check_interval > 0 and k % oob_check_interval == 0:
-                                #Check to see if objective function is out of bounds
-                                try:
-                                    obj_fn(global_new_x, oob_check=True)  # don't actually need return val (== new_f)
-                                    new_f_is_allowed = True
-                                    new_x_is_known_inbounds = True
-                                except ValueError:  # Use this to mean - "not allowed, but don't stop"
-                                    MIN_STOP_ITER = 1  # the minimum iteration where an OOB objective can stops the opt.
-                                    if oob_action == "reject" or k < MIN_STOP_ITER:
-                                        new_f_is_allowed = False  # (and also not in bounds)
-                                    elif oob_action == "stop":
-                                        if oob_check_interval == 1:
-                                            msg = "Objective function out-of-bounds! STOP"
-                                            converged = True
-                                            break
-                                        else:  # reset to last know in-bounds point and not do oob check every step
-                                            printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
-                                            oob_check_interval = 1
-                                            x[:] = best_x[:]
-                                            mu, nu, norm_f, f[:], _ = best_x_state  # can't use of saved JTJ yet
-                                            break  # restart next outer loop
-                                    else:
-                                        raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
-                            else:
-                                new_f_is_allowed = True
-
-                            if new_f_is_allowed:
-                                # reduction in error: increment accepted!
-                                t = 1.0 - (2 * dF / dL - 1.0)**3  # dF/dL == gain ratio
-                                # always reduce mu for accepted step when |dx| is small
-                                mu_factor = max(t, 1.0 / 3.0) if norm_dx > 1e-8 else 0.3
-                                mu *= mu_factor
-                                nu = 2
-                                x[:] = new_x[:]
-                                f[:] = new_f[:]
-                                norm_f = norm_new_f
-                                global_x[:] = global_new_x[:]
-                                printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g" % (" UPHILL" if uphill_ok else "", dF / dL, mu_factor, mu), 2)
-                                last_accepted_dx = dx.copy()
-                                if new_x_is_known_inbounds and norm_f < min_norm_f:
-                                    min_norm_f = norm_f
-                                    best_x[:] = x[:]
-                                    best_x_state = (mu, nu, norm_f, f.copy(), None)
-                                    #Note: we use rawJTJ=None above because the current `JTJ` was evaluated
-                                    # at the *last* x-value -- we need to wait for the next outer loop
-                                    # to compute the JTJ for this best_x_state
-
-                                #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
-                                #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
-
-                                break  # exit inner loop normally
-                            else:
-                                reject_msg = " (out-of-bounds)"
-                    else:
-                        reject_msg = " (out-of-bounds)"
-
+                                mu, nu, norm_f, f[:], _ = best_x_state  # can't use of saved JTJ yet
+                                break  # restart next outer loop
+                        else:
+                            raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
                 else:
-                    reject_msg = " (LinSolve Failure)"
+                    new_f_is_allowed = True
 
-                ############################################################################################
-                #
-                #   if this point is reached, either the linear solve failed
-                #   or the error did not reduce.  In either case, reject increment.
-                #
-                ############################################################################################
+                if not new_f_is_allowed:
+                    reject_msg = " (out-of-bounds)"
+                    mu, nu, msg = damp_coeff_update(mu, nu, half_max_nu, reject_msg, printer)
+                    if len(msg) > 0:
+                        break
+                    else:
+                        continue
 
-                # Increase damping (mu), then increase damping factor to
-                # accelerate further damping increases.
-                mu *= nu
-                if nu > half_max_nu:  # watch for nu getting too large (&overflow)
-                    msg = "Stopping after nu overflow!"
-                    break
-                nu = 2 * nu
-                printer.log("      Rejected%s!  mu => mu*nu = %g, nu => 2*nu = %g" % (reject_msg, mu, nu), 2)
+                # reduction in error: increment accepted!
+                t = 1.0 - (2 * dF / dL - 1.0)**3  # dF/dL == gain ratio
+                # always reduce mu for accepted step when |dx| is small
+                mu_factor = max(t, 1.0 / 3.0) if norm_dx > 1e-8 else 0.3
+                mu *= mu_factor
+                nu = 2
+                x[:] = new_x[:]
+                f[:] = new_f[:]
+                norm_f = norm_new_f
+                global_x[:] = global_new_x[:]
+                printer.log("      Accepted%s! gain ratio=%g  mu * %g => %g" % ("", dF / dL, mu_factor, mu), 2)
+                last_accepted_dx = dx.copy()
+                if new_x_is_known_inbounds and norm_f < min_norm_f:
+                    min_norm_f = norm_f
+                    best_x[:] = x[:]
+                    best_x_state = (mu, nu, norm_f, f.copy(), None)
+                    #Note: we use rawJTJ=None above because the current `JTJ` was evaluated
+                    # at the *last* x-value -- we need to wait for the next outer loop
+                    # to compute the JTJ for this best_x_state
+
+                #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
+                #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
+
+                break  # exit inner loop normally
+                # ... ^ Do we really break if we hit the end of the loop?
             #end of inner loop
 
         #end of outer loop
