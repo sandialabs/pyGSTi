@@ -84,7 +84,7 @@ class CPTPState(_DenseState):
         state_space = _statespace.default_space_for_dim(len(vector)) if (state_space is None) \
             else _statespace.StateSpace.cast(state_space)
 
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         _DenseState.__init__(self, vector, basis, evotype, state_space)
         self._paramlbls = _np.array(labels, dtype=object)
 

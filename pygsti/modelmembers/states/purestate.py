@@ -64,7 +64,7 @@ class EmbeddedPureState(_State):
         self.pure_state = pure_state
         self.basis = dm_basis  # only used for dense conversion
 
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=self.pure_state.state_space)
         #rep = evotype.create_state_rep()
         #rep.init_from_dense_purevec(pure_state)
         raise NotImplementedError("Maybe this class isn't even needed, or need to create a static pure state class?")

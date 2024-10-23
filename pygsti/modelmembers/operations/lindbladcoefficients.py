@@ -8,10 +8,13 @@ import warnings as _warnings
 from pygsti.tools import lindbladtools as _lt
 from pygsti.tools import matrixtools as _mt
 from pygsti.tools import optools as _ot
+from pygsti.tools import fastcalc as _fc
 from pygsti.baseobjs.basis import Basis as _Basis, BuiltinBasis as _BuiltinBasis
 from pygsti.modelmembers import term as _term
 from pygsti.baseobjs.polynomial import Polynomial as _Polynomial
 from pygsti.baseobjs.nicelyserializable import NicelySerializable as _NicelySerializable
+
+from functools import lru_cache
 
 IMAG_TOL = 1e-7  # tolerance for imaginary part being considered zero
 
@@ -816,12 +819,19 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 #  encodes a lower-triangular matrix "cache_mx" via:
                 #  cache_mx[i,i] = params[i,i]
                 #  cache_mx[i,j] = params[i,j] + 1j*params[j,i] (i > j)
-                cache_mx = self._cache_mx
-                iparams = 1j * params
-                for i in range(num_bels):
-                    cache_mx[i, i] = params[i, i]
-                    cache_mx[i, :i] = params[i, :i] + iparams[:i, i]
 
+                cache_mx = self._cache_mx
+
+                params_upper_indices = _fc.fast_triu_indices(num_bels) 
+                params_upper = 1j*params[params_upper_indices]
+                params_lower = (params.T)[params_upper_indices]
+
+                cache_mx_trans = cache_mx.T
+                cache_mx_trans[params_upper_indices] = params_lower + params_upper
+                        
+                diag_indices = cached_diag_indices(num_bels)
+                cache_mx[diag_indices] = params[diag_indices]
+                
                 #The matrix of (complex) "other"-coefficients is build by assuming
                 # cache_mx is its Cholesky decomp; means otherCoeffs is pos-def.
 
@@ -830,20 +840,22 @@ class LindbladCoefficientBlock(_NicelySerializable):
                 # matrix, but we don't care about this uniqueness criteria and so
                 # the diagonal els of cache_mx can be negative and that's fine -
                 # block_data will still be posdef.
-                self.block_data[:, :] = _np.dot(cache_mx, cache_mx.T.conjugate())
+                self.block_data[:, :] = cache_mx@cache_mx.T.conj()
 
-                #DEBUG - test for pos-def
-                #evals = _np.linalg.eigvalsh(block_data)
-                #DEBUG_TOL = 1e-16; #print("EVALS DEBUG = ",evals)
-                #assert(all([ev >= -DEBUG_TOL for ev in evals]))
 
             elif self._param_mode == "elements":  # params mx stores block_data (hermitian) directly
                 #params holds block_data real and imaginary parts directly
-                iparams = 1j * params
-                for i in range(num_bels):
-                    self.block_data[i, i] = params[i, i]
-                    self.block_data[i, :i] = params[i, :i] + iparams[:i, i]
-                    self.block_data[:i, i] = params[i, :i] - iparams[:i, i]
+                params_upper_indices = _fc.fast_triu_indices(num_bels) 
+                params_upper = -1j*params[params_upper_indices]
+                params_lower = (params.T)[params_upper_indices]
+
+                block_data_trans = self.block_data.T
+                self.block_data[params_upper_indices] = params_lower + params_upper
+                block_data_trans[params_upper_indices] = params_lower - params_upper
+
+                diag_indices = cached_diag_indices(num_bels)
+                self.block_data[diag_indices] = params[diag_indices]
+
             else:
                 raise ValueError("Internal error: invalid parameter mode (%s) for block type %s!"
                                  % (self._param_mode, self._block_type))
@@ -1204,3 +1216,7 @@ class LindbladCoefficientBlock(_NicelySerializable):
         if len(self._bel_labels) < 10:
             s += " Coefficients are:\n" + str(_np.round(self.block_data, 4))
         return s
+
+@lru_cache(maxsize=16)
+def cached_diag_indices(n):
+    return _np.diag_indices(n)

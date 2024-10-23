@@ -1,6 +1,7 @@
 import importlib as _importlib
 
 from . import basereps as _basereps
+from pygsti.baseobjs.statespace import StateSpace as _StateSpace
 
 
 class Evotype(object):
@@ -50,10 +51,46 @@ class Evotype(object):
     }
 
     @classmethod
-    def cast(cls, obj, default_prefer_dense_reps=False):
+    def cast(cls, obj, default_prefer_dense_reps=None, state_space=None):
+        """
+        Cast the specified object to an Evotype with options for default Evotype
+        handling.
+
+        Parameters
+        ----------
+        obj : Evotype or str
+            Object to cast to an Evotype. If already an Evotype the object is simply
+            returned. Otherwise if a string we attempt to cast it to a recognized
+            evotype option. If the string "default" is passed in then we determine
+            the type of evotype used in conjunction with the two optional kwargs below.
+
+        default_prefer_dense_reps : None or bool, optional (default None)
+            Flag to indicate preference for dense representation types when casting
+            a string. If None then there is no preference and this will be determined
+            by the optional state_space kwarg, if present. Otherwise if a boolean value
+            this selection overrides any logic based on the state space.
+
+        state_space : StateSpace, optional (default None)
+            If not None then the dimension of the state space is used to determine whether
+            or not to prefer the use of dense representation types when not already specified
+            by the default_prefer_dense_reps kwarg.
+        
+        Returns
+        -------
+        Evotype
+        """
         if isinstance(obj, Evotype):
             return obj
-        elif obj == "default":
+        
+        if default_prefer_dense_reps is None:
+            if state_space is None:
+                default_prefer_dense_reps = False #reproduces legacy behavior.
+            else:
+                if not isinstance(state_space, _StateSpace):
+                    raise ValueError('state_space must be a StateSpace object.')
+                default_prefer_dense_reps = False if state_space.dim > 64 else True #HARDCODED
+
+        if obj == "default":
             return Evotype(cls.default_evotype, default_prefer_dense_reps)
         else:  # assume obj is a string naming an evotype
             return Evotype(str(obj), default_prefer_dense_reps)

@@ -54,7 +54,7 @@ class StaticStandardOp(_LinearOperator, _NoErrorGeneratorInterface):
             else _statespace.StateSpace.cast(state_space)
         basis = _Basis.cast(basis, state_space.dim)  # basis for Hilbert-Schmidt (superop) space
 
-        evotype = _Evotype.cast(evotype)
+        evotype = _Evotype.cast(evotype, state_space=state_space)
         rep = evotype.create_standard_rep(name, basis, state_space)
         _LinearOperator.__init__(self, rep, evotype)
 

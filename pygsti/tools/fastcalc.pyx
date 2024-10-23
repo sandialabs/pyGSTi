@@ -14,6 +14,7 @@
 
 import numpy as np
 from libc.stdlib cimport malloc, free
+from functools import lru_cache
 cimport numpy as np
 cimport cython
 
@@ -570,67 +571,6 @@ def fast_kron(np.ndarray[double, ndim=1, mode="c"] outvec not None,
             outvec[endoff+i] *= mult
         sz *= fastArraySizes[k]
 
-    #assert(sz == N)
-
-
-
-#An attempt at a faster matrix prod specific to 2D matrices -- much SLOWER than numpy!!
-#@cython.cdivision(True) # turn off divide-by-zero checking
-#@cython.boundscheck(False) # turn off bounds-checking for entire function
-#@cython.wraparound(False)  # turn off negative index wrapping for entire function
-#def fast_dot2(np.ndarray[double, ndim=2] out,
-#              np.ndarray[double, ndim=2] a, np.ndarray[double, ndim=2] b):
-#    cdef double* out_ptr = <double*>out.data
-#    cdef double* a_ptr = <double*>a.data
-#    cdef double* b_ptr = <double*>b.data
-#    cdef double* arow
-#    cdef double* bcol
-#    cdef double* outrow
-#    cdef double tot
-#    cdef INT m = a.shape[0]
-#    cdef INT n = b.shape[1]
-#    cdef INT l = a.shape[1]
-#    cdef INT astride = a.strides[0] // a.itemsize
-#    cdef INT bstride = b.strides[0] // b.itemsize
-#    cdef INT outstride = out.strides[0] // out.itemsize
-#    cdef INT ainc = a.strides[1] // a.itemsize
-#    cdef INT binc = b.strides[1] // b.itemsize
-#    cdef INT outinc = out.strides[1] // out.itemsize
-#    cdef INT i_times_astride
-#    cdef INT i_times_outstride
-#    cdef INT j_times_binc
-#    cdef INT j_times_outinc
-#    cdef INT k_times_bstride
-#    cdef INT k_times_ainc
-#    cdef INT i
-#    cdef INT j
-#    cdef INT k
-#
-#    # out_ij = sum_k a_ik * b_kl
-#
-#    i_times_astride = 0
-#    i_times_outstride = 0
-#    for i in range(m):
-#        arow = &a_ptr[i_times_astride]
-#        outrow = &out_ptr[i_times_outstride]
-#        j_times_binc = 0
-#        j_times_outinc = 0
-#        for j in range(n):
-#            bcol = &b_ptr[j_times_binc]
-#            k_times_bstride = 0
-#            k_times_ainc = 0
-#            tot = 0.0
-#            for k in range(l):
-#                tot = tot + arow[k_times_ainc] * bcol[k_times_bstride]
-#                k_times_bstride = k_times_bstride + bstride
-#                k_times_ainc = k_times_ainc + ainc
-#            outrow[j_times_outinc] = tot
-#            j_times_binc = j_times_binc + binc
-#            j_times_outinc = j_times_outinc + outinc
-#        i_times_astride = i_times_astride + astride
-#        i_times_outstride = i_times_outstride + outstride
-
-
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
 def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not None,
@@ -680,21 +620,6 @@ def fast_kron_complex(np.ndarray[np.complex128_t, ndim=1, mode="c"] outvec not N
     #assert(sz == N)
 
 
-#Manually inline to avoid overhead of argument passing
-#@cython.boundscheck(False) # turn off bounds-checking for entire function
-#@cython.wraparound(False)  # turn off negative index wrapping for entire function
-#cdef vec_inf_norm(np.ndarray[double, ndim=1] v):
-#    cdef INT i
-#    cdef INT N = v.shape[0]
-#    cdef double mx = 0.0
-#    cdef double a
-#    for i in range(N):
-#        a = abs(v[i])
-#        if a > mx: mx = a
-#    return mx
-
-
-
 @cython.cdivision(True) # turn off divide-by-zero checking
 @cython.boundscheck(False) # turn off bounds-checking for entire function
 @cython.wraparound(False)  # turn off negative index wrapping for entire function
@@ -715,9 +640,6 @@ def custom_expm_multiply_simple_core(np.ndarray[double, ndim=1, mode="c"] Adata,
                                        mu, m_star, s, tol, eta,
                                        &F[0], &scratch[0])
     return F
-
-
-
 
 @cython.cdivision(True) # turn off divide-by-zero checking
 cdef custom_expm_multiply_simple_core_c(double* Adata, INT* Aindptr,
@@ -1305,6 +1227,38 @@ def fast_compose_cliffords(np.ndarray[np.int64_t, ndim=2] s1, np.ndarray[np.int6
     return s, p
 
 
+#Faster generation of upper triangular indices specialized to first
+#superdiagonal and up.
+@cython.boundscheck(False)  # Deactivate bounds checking
+@cython.wraparound(False)   # Deactivate negative indexing.
+@cython.cdivision(True)
+@lru_cache(maxsize=16)
+def fast_triu_indices(int n):
+    if n < 1:
+        raise ValueError('n must be greater than 0')
+        
+    cdef int size = (n**2-n)/2
+    cdef int curr_idx = 0
+    cdef int j, i
+    
+    cdef np.ndarray[np.int64_t, ndim=1, mode="c"] row_indices_np = np.empty(size, dtype=np.int64)
+    cdef np.ndarray[np.int64_t, ndim=1, mode="c"] col_indices_np = np.empty(size, dtype=np.int64)
+    
+    cdef np.int64_t[::1] row_indices = row_indices_np
+    cdef np.int64_t[::1] col_indices = col_indices_np
+
+    for j in range(n-1):
+        for i in range(n-j-1, 0, -1):
+            row_indices[curr_idx] = j
+            curr_idx += 1
+
+    curr_idx = 0
+    for j in range(1, n):
+        for i in range(j, n):
+            col_indices[curr_idx] = i
+            curr_idx += 1
+
+    return row_indices_np, col_indices_np
 
 
 
