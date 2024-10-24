@@ -196,7 +196,8 @@ class ErrorGeneratorPropagator:
         return propagated_errorgen_layers
         
 
-    def propagate_errorgens_bch(self, circuit, bch_order=1, bch_layerwise=False, multi_gate_dict=None):
+    def propagate_errorgens_bch(self, circuit, bch_order=1, bch_layerwise=False, multi_gate_dict=None,
+                                include_spam=True):
         """
         Propagate all of the error generators for each circuit to the end,
         performing approximation/recombination either along the way (layerwise)
@@ -222,6 +223,10 @@ class ErrorGeneratorPropagator:
         multi_gate_dict : dict, optional (default None)
             An optional dictionary mapping between gate name aliases and their
             standard name counterparts.
+        
+        include_spam : bool, optional (default True)
+            If True then we include in the propagation the error generators associated
+            with state preparation and measurement.
         """
 
         msg = 'When bch_layerwise is True this can take the values of either 1 or 2.'\
@@ -235,13 +240,14 @@ class ErrorGeneratorPropagator:
 
         #if not doing layerwise BCH then we can re-use `propagate_errorgens` fully.
         if not bch_layerwise:
-            propagated_errorgen_layers = self.propagate_errorgens(circuit, multi_gate_dict)
+            propagated_errorgen_layers = self.propagate_errorgens(circuit, multi_gate_dict, 
+                                                                  include_spam=include_spam)
         #otherwise we need to do the error generator layer propagation slightly
         #differently.
         else:
             #start by converting the input circuit into a list of stim Tableaus with the 
             #first element dropped.
-            stim_layers = self.construct_stim_layers(circuit, multi_gate_dict, drop_first_layer=True)
+            stim_layers = self.construct_stim_layers(circuit, multi_gate_dict, drop_first_layer= not include_spam)
 
             #We next want to construct a new set of Tableaus corresponding to the cumulative products
             #of each of the circuit layers with those that follow. These Tableaus correspond to the
@@ -253,11 +259,12 @@ class ErrorGeneratorPropagator:
             #to the error generators for a particular gate layer.
             #TODO: Add proper inferencing for number of qubits:
             assert circuit.line_labels is not None and circuit.line_labels != ('*',)
-            errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels))
+            errorgen_layers = self.construct_errorgen_layers(circuit, len(circuit.line_labels), include_spam)
 
             #propagate the errorgen_layers through the propagation_layers to get a list
             #of end of circuit error generator dictionaries.
-            propagated_errorgen_layers = self._propagate_errorgen_layers_bch(errorgen_layers, propagation_layers)
+            propagated_errorgen_layers = self._propagate_errorgen_layers_bch(errorgen_layers, propagation_layers, 
+                                                                             include_spam = include_spam)
 
         return propagated_errorgen_layers
 
@@ -527,7 +534,7 @@ class ErrorGeneratorPropagator:
         return fully_propagated_layers
     
     #TODO: Add an option to return the results with the different BCH order combined.
-    def _propagate_errorgen_layers_bch(self, errorgen_layers, propagation_layers, bch_order=1):
+    def _propagate_errorgen_layers_bch(self, errorgen_layers, propagation_layers, bch_order=1, include_spam=True):
         """
         Propagates the error generator layers through each of the corresponding propagation layers
         (i.e. the clifford operations for the remainder of the circuit). In this version we 
@@ -551,6 +558,11 @@ class ErrorGeneratorPropagator:
         bch_order : int, optional (default 1)
             Order of the BCH approximation to use.
         
+        include_spam : bool, optional (default True)
+            If True then include the error generators for state preparation and measurement
+            are included in errogen_layers, and the state preparation error generator should
+            be propagated through (the measurement one is simply appended at the end).
+        
         Returns
         -------
 
@@ -570,7 +582,14 @@ class ErrorGeneratorPropagator:
         if len(errorgen_layers)>0:
             combined_err_layer = errorgen_layers[0]
 
-        for i in range(len(errorgen_layers)-1):
+        #the stopping index in errorgen_layers will depend on whether the measurement error
+        #generator is included or not.
+        if include_spam:
+            stopping_idx = len(errorgen_layers)-2
+        else:
+            stopping_idx = len(errorgen_layers)-1
+
+        for i in range(stopping_idx):
             #err_layer = errorgen_layers[i]
             prop_layer = propagation_layers[i]
             new_err_layer = []
