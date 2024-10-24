@@ -1,5 +1,5 @@
 
-from pygsti.extras.errorgenpropagation.localstimerrorgen import LocalStimErrorgenLabel as _LSE
+from .localstimerrorgen import LocalStimErrorgenLabel as _LSE
 from numpy import conjugate
 
 '''
@@ -8,15 +8,15 @@ Returns the Commutator of two errors
 def commute_errors(ErG1,ErG2, weightFlip=1.0, BCHweight=1.0):
     def com(P1,P2):
         P3=P1*P2-P2*P1
-        return (P3.weight,P3*conjugate(P3.weight))
-    
+        return (P3.weight, P3*conjugate(P3.weight))
+        # returns (sign
     def acom(P1,P2):
         P3=P1*P2+P2*P1
-        return (P3.weight,P3*conjugate(P3.weight))
+        return (P3.weight, P3*conjugate(P3.weight))
     
     def labelMultiply(P1,P2):
         P3=P1*P2
-        return (P3.weight,P3*conjugate(P3.weight))
+        return (P3.weight, P3*conjugate(P3.weight))
     
     errorGens=[]
     
@@ -24,7 +24,8 @@ def commute_errors(ErG1,ErG2, weightFlip=1.0, BCHweight=1.0):
     
     if ErG1.getType()=='H' and ErG2.getType()=='H':
         pVec=com(ErG1.basis_element_labels[0] , ErG2.basis_element_labels[0])
-        errorGens.append( _LSE( 'H' , [pVec[1]] , -1j*wT *pVec[0] ) )
+        if pVec[0] != 0: 
+            errorGens.append( _LSE( 'H' , [pVec[1]] , -1j*wT *pVec[0] ) )
         
     elif ErG1.getType()=='H' and ErG2.getType()=='S':
         pVec=com(ErG2.basis_element_labels[0] , ErG1.basis_element_labels[0])

@@ -1897,7 +1897,7 @@ class OpModel(Model):
         if reduce_to_model_space:
             allowed_lbls = op.errorgen_coefficient_labels()
             allowed_lbls_set = set(allowed_lbls)
-            allowed_row_basis = _ExplicitElementaryErrorgenBasis(self.state_space, allowed_lbls, basis1q=None)
+            allowed_row_basis = _ExplicitElementaryErrorgenBasis(self.state_space, allowed_lbls, basis_1q=None)
             disallowed_indices = [i for i, lbl in enumerate(row_basis.labels) if lbl not in allowed_lbls_set]
 
             if len(disallowed_indices) > 0:

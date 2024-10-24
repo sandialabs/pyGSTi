@@ -1,5 +1,5 @@
 from pygsti.baseobjs.errorgenlabel import ElementaryErrorgenLabel
-from pygsti.extras.errorgenpropagation.utilspygstistimtranslator import *
+from .utilspygstistimtranslator import *
 import stim
 from numpy import array,kron
 from pygsti.tools import change_basis

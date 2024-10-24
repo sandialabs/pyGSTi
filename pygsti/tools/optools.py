@@ -1979,16 +1979,6 @@ def project_model(model, target_model,
     basis = model.basis
     proj_basis = basis  # just use the same basis here (could make an arg later?)
 
-    #OLD REMOVE
-    ##The projection basis needs to be a basis for density matrices
-    ## (i.e. 2x2 mxs in 1Q case) rather than superoperators (4x4 mxs
-    ## in 1Q case) - whcih is what model.basis is.  So, we just extract
-    ## a builtin basis name for the projection basis.
-    #if basis.name in ('pp', 'gm', 'std', 'qt'):
-    #    proj_basis_name = basis.name
-    #else:
-    #    proj_basis_name = 'pp'  # model.basis is weird so just use paulis as projection basis
-
     if basis.name != target_model.basis.name:
         raise ValueError("Basis mismatch between model (%s) and target (%s)!"
                          % (model.basis.name, target_model.basis.name))
@@ -2029,8 +2019,6 @@ def project_model(model, target_model,
             otherGens = otherBlk.create_lindblad_term_superoperators(mx_basis=basis)
 
             #Note: return values *can* be None if an empty/None basis is given
-            #lnd_error_gen = _np.einsum('i,ijk', HProj, HGens) + \
-            #                _np.einsum('ij,ijkl', OProj, OGens)
             lnd_error_gen = _np.tensordot(HBlk.block_data, HGens, (0, 0)) + \
                 _np.tensordot(otherBlk.block_data, otherGens, ((0, 1), (0, 1)))
 
@@ -2061,31 +2049,12 @@ def project_model(model, target_model,
             pos_evals = evals.clip(0, 1e100)  # clip negative eigenvalues to 0
             OProj_cp = _np.dot(U, _np.dot(_np.diag(pos_evals), _np.linalg.inv(U)))
             #OProj_cp is now a pos-def matrix
-            #lnd_error_gen_cp = _np.einsum('i,ijk', HProj, HGens) + \
-            #                   _np.einsum('ij,ijkl', OProj_cp, OGens)
             lnd_error_gen_cp = _np.tensordot(HBlk.block_data, HGens, (0, 0)) + \
                 _np.tensordot(OProj_cp, otherGens, ((0, 1), (0, 1)))
-            #lnd_error_gen_cp = _bt.change_basis(lnd_error_gen_cp, "std", basis)
 
             gsDict['LND'].operations[gl] = operation_from_error_generator(
                 lnd_error_gen_cp, targetOp, basis, gen_type)
             NpDict['LND'] += HBlk.block_data.size + otherBlk.block_data.size
-
-        #Removed attempt to contract H+S to CPTP by removing positive stochastic projections,
-        # but this doesn't always return the gate to being CPTP (maybe b/c of normalization)...
-        #sto_error_gen_cp = _np.einsum('i,ijk', stoProj.clip(None,0), stoGens)
-        #  # (only negative stochastic projections OK)
-        #sto_error_gen_cp = _tools.std_to_pp(sto_error_gen_cp)
-        #gsHSCP.operations[gl] = _tools.operation_from_error_generator(
-        #    ham_error_gen, targetOp, gen_type) #+sto_error_gen_cp
-
-    #DEBUG!!!
-    #print("DEBUG: BEST sum neg evals = ",_tools.sum_of_negative_choi_eigenvalues(model))
-    #print("DEBUG: LNDCP sum neg evals = ",_tools.sum_of_negative_choi_eigenvalues(gsDict['LND']))
-
-    #Check for CPTP where expected
-    #assert(_tools.sum_of_negative_choi_eigenvalues(gsHSCP) < 1e-6)
-    #assert(_tools.sum_of_negative_choi_eigenvalues(gsDict['LND']) < 1e-6)
 
     #Collect and return requrested results:
     ret_gs = [gsDict[p] for p in projectiontypes]

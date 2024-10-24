@@ -65,6 +65,19 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             raise ValueError("Cannot convert %s to a local elementary errorgen label!" % str(obj))
 
     def __init__(self, errorgen_type, basis_element_labels):
+        """
+        Parameters
+        ----------
+        errorgen_type : str
+            A string corresponding to the error generator sector this error generator label is
+            an element of. Allowed values are 'H', 'S', 'C' and 'A'.
+
+        basis_element_labels : tuple or list
+            A list or tuple of strings labeling basis elements used to label this error generator.
+            This is either length-1 for 'H' and 'S' type error generators, or length-2 for 'C' and 'A'
+            type.
+        """
+
         self.errorgen_type = str(errorgen_type)
         self.basis_element_labels = tuple(basis_element_labels)
 
@@ -80,6 +93,16 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
 
     def __repr__(self):
         return str((self.errorgen_type, self.basis_element_labels))
+    
+    def support_indices(self, identity_label='I'):
+        """ 
+        Returns a sorted tuple of the elements of indices of the nontrivial basis
+        element label entries for this label.
+        """
+        nonidentity_indices = [i for i in range(len(self.basis_element_labels[0]))
+                                   if any([bel[i] != identity_label for bel in self.basis_element_labels])]
+
+        return tuple(nonidentity_indices)
 
 
 class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
@@ -132,6 +155,27 @@ class GlobalElementaryErrorgenLabel(ElementaryErrorgenLabel):
             raise ValueError("Cannot convert %s to a global elementary errorgen label!" % str(obj))
 
     def __init__(self, errorgen_type, basis_element_labels, sslbls, sort=True):
+        """
+        Parameters
+        ----------
+        errorgen_type : str
+            A string corresponding to the error generator sector this error generator label is
+            an element of. Allowed values are 'H', 'S', 'C' and 'A'.
+
+        basis_element_labels : tuple or list
+            A list or tuple of strings labeling basis elements used to label this error generator.
+            This is either length-1 for 'H' and 'S' type error generators, or length-2 for 'C' and 'A'
+            type.
+        
+        sslbls : tuple or list
+            A tuple or list of state space labels corresponding to the qudits upon which this error generator
+            is supported.
+
+        sort : bool, optional (default True)
+            If True then the input state space labels are first sorted, and then the used basis element labels
+            are sorted to match the order to the newly sorted state space labels.
+        """
+        
         if sort:
             sorted_indices, sslbls = zip(*sorted(enumerate(sslbls), key=lambda x: x[1]))
             basis_element_labels = [''.join([bel[i] for i in sorted_indices]) for bel in basis_element_labels]

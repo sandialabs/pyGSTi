@@ -469,7 +469,7 @@ class StateSpace(_NicelySerializable):
                     other_udim = other_state_space.label_udimension(lbl)
                     other_typ = other_state_space.label_type(lbl)
                     if other_iTPB != iTPB or other_udim != udim or other_typ != typ:
-                        raise ValueError(("Cannot take state space union: repeated label '%s' has inconsistent index,"
+                        raise ValueError(("Cannot take state space intersection: repeated label '%s' has inconsistent index,"
                                           " dim, or type!") % str(lbl))
                     ret_lbls.append(lbl)
                     ret_udims.append(udim)
@@ -532,6 +532,58 @@ class StateSpace(_NicelySerializable):
                     ret_tpb_labels[iTPB].append(lbl)
                     ret_tpb_udims[iTPB].append(udim)
                     ret_tpb_types[iTPB].append(typ)
+
+        return ExplicitStateSpace(ret_tpb_labels, ret_tpb_udims, ret_tpb_types)
+    
+
+    def difference(self, other_state_space):
+        """
+        Create a state space whose labels are the difference of the labels of this space and one other.
+        I.e. a state space containing the labels of this space which don't appear in the other.
+
+        Dimensions associated with the labels are preserved, as is the tensor product block index.
+        If the two spaces have the same label, but their dimensions or indices do not agree, an
+        error is raised.
+
+        Parameters
+        ----------
+        other_state_space : StateSpace
+            The other state space.
+
+        Returns
+        -------
+        StateSpace
+        """
+        ret_tpb_labels = []
+        ret_tpb_udims = []
+        ret_tpb_types = []
+
+        for iTPB, (lbls, udims, typs) in enumerate(zip(self.tensor_product_blocks_labels,
+                                                       self.tensor_product_blocks_udimensions,
+                                                       self.tensor_product_blocks_types)):
+            ret_lbls = []; ret_udims = []; ret_types = []
+            for lbl, udim, typ in zip(lbls, udims, typs):
+                #If the label does appear in the other state space, verify that the 
+                #properties of the label are consistently defined accross the two state spaces
+                #otherwise raise an error.
+                if other_state_space.contains_label(lbl):
+                    other_iTPB = other_state_space.label_tensor_product_block_index(lbl)
+                    other_udim = other_state_space.label_udimension(lbl)
+                    other_typ = other_state_space.label_type(lbl)
+                    if other_iTPB != iTPB or other_udim != udim or other_typ != typ:
+                        raise ValueError(("Cannot take state space difference: repeated label '%s' has inconsistent index,"
+                                          " dim, or type!") % str(lbl))
+                    continue
+                #Otherwise add this to the state space.
+                else:
+                    ret_lbls.append(lbl)
+                    ret_udims.append(udim)
+                    ret_types.append(typ)
+
+            if len(ret_lbls) > 0:
+                ret_tpb_labels.append(ret_lbls)
+                ret_tpb_udims.append(ret_udims)
+                ret_tpb_types.append(ret_types)
 
         return ExplicitStateSpace(ret_tpb_labels, ret_tpb_udims, ret_tpb_types)
 
