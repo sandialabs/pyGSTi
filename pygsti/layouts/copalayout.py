@@ -600,10 +600,6 @@ class CircuitOutcomeProbabilityArrayLayout(_NicelySerializable):
         """
         jtj[:] = _np.dot(j.T, j)
 
-    #Not needed
-    #def allocate_jtj_shared_mem_buf(self):
-    #    return _np.empty((self._param_dimensions[0], self._param_dimensions[0]), 'd'), None
-
     def memory_estimate(self, array_type, dtype='d'):
         """
         Memory required to allocate an array of a given type (in bytes).
