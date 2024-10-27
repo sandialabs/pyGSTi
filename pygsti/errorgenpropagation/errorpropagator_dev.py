@@ -604,6 +604,11 @@ class ErrorGeneratorPropagator:
             #next use BCH to combine new_err_layer with the now adjacent layer of errorgen_layers[i+1]
             combined_err_layer = _eprop.bch_approximation(new_err_layer, errorgen_layers[i+1], bch_order=1)
 
+        #If we are including spam then there will be one last error generator which we don't propagate
+        #through which needs to be combined using BCH.
+        if include_spam:
+            combined_err_layer = _eprop.bch_approximation(combined_err_layer, errorgen_layers[-1], bch_order=1)
+
         fully_propagated_layers.append(combined_err_layer)
         return fully_propagated_layers
     
