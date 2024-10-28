@@ -565,7 +565,12 @@ class ErrorGeneratorPropagator:
         
         Returns
         -------
-
+        fully_propagated_layers : list of lists of dicts
+            A list of list of dicts with the same structure as errorgen_layers corresponding
+            to the results of having propagated each of the error generator layers through
+            the circuit to the end while combining the layers in a layerwise fashion using the
+            BCH approximation. As a result of this combination, this list should have a length
+            of one.
         """
 
         #Add temporary errors when trying to do BCH beyond 1st order while the details of the 2nd order
@@ -604,8 +609,8 @@ class ErrorGeneratorPropagator:
             #next use BCH to combine new_err_layer with the now adjacent layer of errorgen_layers[i+1]
             combined_err_layer = _eprop.bch_approximation(new_err_layer, errorgen_layers[i+1], bch_order=1)
 
-        #If we are including spam then there will be one last error generator which we don't propagate
-        #through which needs to be combined using BCH.
+        #If we are including spam then there will be one last error generator which we doesn't have an associated propagation
+        #which needs to be combined using BCH.
         if include_spam:
             combined_err_layer = _eprop.bch_approximation(combined_err_layer, errorgen_layers[-1], bch_order=1)
 

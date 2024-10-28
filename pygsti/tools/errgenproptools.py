@@ -198,23 +198,23 @@ def commute_error_generators(errorgen_1, errorgen_2, flip_weight=False, weight=1
     if errorgen_1_type=='H' and errorgen_2_type=='H':
         ptup = com(errorgen_1_bel_0 , errorgen_2_bel_0)
         if ptup is not None:
-            errorGens.append((_LSE('H', [ptup[1]]), -1j*w *ptup[0]) )
+            errorGens.append((_LSE('H', [ptup[1]]), -1j*w *ptup[0]))
         
     elif errorgen_1_type=='H' and errorgen_2_type=='S':
         ptup = com(errorgen_2_bel_0 , errorgen_1_bel_0)
         if ptup is not None:
             if errorgen_2_bel_0 == ptup[1]:
-                errorGens.append(( _LSE('S', [errorgen_2_bel_0]), 1j*w*ptup[0]) )
+                errorGens.append(( _LSE('S', [errorgen_2_bel_0]), 1j*w*ptup[0]))
             else:
-                errorGens.append(( _LSE('C', [errorgen_2_bel_0, ptup[1]]), 1j*w*ptup[0]) )
+                errorGens.append(( _LSE('C', [errorgen_2_bel_0, ptup[1]]), 1j*w*ptup[0]))
          
     elif errorgen_1_type=='S' and errorgen_2_type=='H':
         ptup = com(errorgen_2_bel_0 , errorgen_1_bel_0)
         if ptup is not None:
             if errorgen_2_bel_0 == ptup[1]:
-                errorGens.append(( _LSE('S', [errorgen_2_bel_0]), -1j*w*ptup[0]) )
+                errorGens.append(( _LSE('S', [errorgen_2_bel_0]), -1j*w*ptup[0]))
             else:
-                errorGens.append(( _LSE('C', [errorgen_2_bel_0, ptup[1]]), -1j*w*ptup[0]) )
+                errorGens.append(( _LSE('C', [errorgen_2_bel_0, ptup[1]]), -1j*w*ptup[0]))
 
           
     elif errorgen_1_type=='H' and errorgen_2_type=='C':
@@ -222,14 +222,14 @@ def commute_error_generators(errorgen_1, errorgen_2, flip_weight=False, weight=1
         ptup2 = com(errorgen_2_bel_1 , errorgen_1_bel_0)
         if ptup1 is not None:
             if ptup1[1] == errorgen_2_bel_1:
-                errorGens.append((_LSE('S', [errorgen_2_bel_1]), 1j*w*ptup1[0]) )
+                errorGens.append((_LSE('S', [errorgen_2_bel_1]), 1j*w*ptup1[0]))
             else:
-                errorGens.append((_LSE('C', [ptup1[1], errorgen_2_bel_1]), 1j*w*ptup1[0]) )
+                errorGens.append((_LSE('C', [ptup1[1], errorgen_2_bel_1]), 1j*w*ptup1[0]))
         if ptup2 is not None:
             if ptup2[1] == errorgen_2_bel_0:
-                errorGens.append(( _LSE('S', [errorgen_2_bel_0]), 1j*w*ptup2[0]) )
+                errorGens.append(( _LSE('S', [errorgen_2_bel_0]), 1j*w*ptup2[0]))
             else:
-                errorGens.append((_LSE('C', [ptup2[1], errorgen_2_bel_0]), 1j*w*ptup2[0]) )
+                errorGens.append((_LSE('C', [ptup2[1], errorgen_2_bel_0]), 1j*w*ptup2[0]))
                           
     elif errorgen_1_type=='C' and errorgen_2_type=='H':
         errorGens = commute_error_generators(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
@@ -239,10 +239,10 @@ def commute_error_generators(errorgen_1, errorgen_2, flip_weight=False, weight=1
         ptup2 = com(errorgen_1_bel_0 , errorgen_2_bel_1)
         if ptup1 is not None:
             if ptup1[1] != errorgen_2_bel_1:
-                errorGens.append((_LSE('A', [ptup1[1], errorgen_2_bel_1]), -1j*w*ptup1[0]) )
+                errorGens.append((_LSE('A', [ptup1[1], errorgen_2_bel_1]), -1j*w*ptup1[0]))
         if ptup2 is not None:
             if ptup2[1] != errorgen_2_bel_0:
-                errorGens.append((_LSE('A', [errorgen_2_bel_0, ptup2[1]]), -1j*w*ptup2[0]) )
+                errorGens.append((_LSE('A', [errorgen_2_bel_0, ptup2[1]]), -1j*w*ptup2[0]))
                           
     elif errorgen_1_type=='A' and errorgen_2_type=='H':
         errorGens = commute_error_generators(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
@@ -275,10 +275,10 @@ def commute_error_generators(errorgen_1, errorgen_2, flip_weight=False, weight=1
         ptup1 = acom(errorgen_2_bel_0, errorgen_2_bel_1)
         if ptup1 is not None:
             ptup2 = product(ptup1[1], errorgen_1_bel_0)
-            #it shouldn't be possible for ptup2[1] to equal ptup1[1],
+            #it shouldn't be possible for ptup2[1] to equal errorgen_1_bel_0,
             #as that would imply that errorgen_1_bel_0 was the identity.
             if ptup2[1] == identity:
-                errorGens.append((_LSE('H', [errorgen_1_bel_0]), -1j*.5*w*ptup1[0]*ptup2[0]) )
+                errorGens.append((_LSE('H', [errorgen_1_bel_0]), -1j*.5*w*ptup1[0]*ptup2[0]))
             else:
                 errorGens.append((_LSE('A', [ptup2[1], errorgen_1_bel_0]) , -1j*.5*w*ptup1[0]*ptup2[0]))
 
@@ -288,119 +288,306 @@ def commute_error_generators(errorgen_1, errorgen_2, flip_weight=False, weight=1
             if ptup3[1] == identity:
                 errorGens.append((_LSE('H', [errorgen_1_bel_0]), -1j*.5*w*ptup1[0]*ptup3[0]) )
             else:
-                errorGens.append((_LSE('A', [ptup3[1], errorgen_1_bel_0]) , -1j*.5*w*ptup1[0]*ptup3[0]))
+                errorGens.append((_LSE('A', [errorgen_1_bel_0, ptup3[1]]) , -1j*.5*w*ptup1[0]*ptup3[0]))
                          
     elif errorgen_1_type == 'C' and errorgen_2_type == 'S':
         errorGens = commute_error_generators(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
-    
-    #07/29/24 : I've completed up to this point.
 
     elif errorgen_1_type == 'S' and errorgen_2_type == 'A':
-        ptup1 =product(errorgen_1_bel_0, errorgen_2_bel_0)
-        ptup2=product(errorgen_2_bel_1, errorgen_1_bel_0)
-        errorGens.append( _LSE( 'C', [ptup1[1], ptup2[1]] ,1j*w*ptup1[0]*ptup2[0] ))
-        ptup1=product(errorgen_1_bel_0, errorgen_2_bel_1)
-        ptup2=product(errorgen_2_bel_0, errorgen_1_bel_0)
-        errorGens.append( _LSE( 'C', [ptup1[1], ptup2[1]] , -1j*w*ptup1[0]*ptup2[0]))
+        ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_0)
+        ptup2 = product(errorgen_2_bel_1, errorgen_1_bel_0)
+        if ptup1[1] != ptup2[1]:
+            if (ptup1[1] != identity) and (ptup2[1] != identity):
+                errorGens.append((_LSE('C', [ptup1[1], ptup2[1]]), 1j*w*ptup1[0]*ptup2[0]))
+        else:
+            if ptup[1] != identity:
+                errorGens.append((_LSE('S', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_1)
+        ptup2 = product(errorgen_2_bel_0, errorgen_1_bel_0)
+        if ptup[1] != ptup2[1]:
+            if (ptup1[1] != identity) and (ptup2[1] != identity):
+                errorGens.append((_LSE('C', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+        else:
+            if ptup[1] != identity:
+                errorGens.append((_LSE('S', [ptup1[1]]), -1j*w*ptup1[0]*ptup2[0]))
+        
         ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
-        ptup2 = com(errorgen_1_bel_0, ptup1[1])
-        errorGens.append( _LSE( 'A', [errorgen_1_bel_0, ptup2[1]] ,-.5*w*ptup1[0]*ptup2[0]))
-                         
+        if ptup1 is not None:
+            ptup2 = com(errorgen_1_bel_0, ptup1[1])
+            if ptup2 is not None:
+                #it shouldn't be possible for errorgen_1_bel_0 to be equal to ptup2,
+                #since that would imply 
+                #com(errorgen_1_bel_0,com(errorgen_2_bel_0, errorgen_2_bel_1)) == errorgen_1_bel_0
+                #Which I don't think is possible when these come from valid error genator indices.
+                #errorgen_1_bel_0 can't be the identity,
+                #And com(errorgen_1_bel_0,com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be by the same
+                #argument that it can't be errorgen_1_bel_0                
+                errorGens.append((_LSE('A', [errorgen_1_bel_0, ptup2[1]]), -1j*.5*w*ptup1[0]*ptup2[0]))
+                            
     elif errorgen_1_type == 'A' and errorgen_1_type == 'S':
         errorGens = commute_error_generators(errorgen_2,errorgen_1, flip_weight=True, weight=weight)
                          
     elif errorgen_1_type == 'C' and errorgen_2_type == 'C':
         ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_0)
-        ptup2 =product(errorgen_2_bel_1, errorgen_1_bel_1)
-        errorGens.append( _LSE( 'A', [ptup1[1], ptup2[1]] , -1j*w*ptup1[0]*ptup2[0] ))        
+        ptup2 = product(errorgen_2_bel_1, errorgen_1_bel_1)
+        if ptup1[1] != ptup2[1]:
+            if (ptup1[1] != identity) and (ptup2[1] != identity):
+                errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            elif ptup1[1] == identity:
+                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            else: #ptup2[1] == identity
+                errorGens.append((_LSE('H', [ptup1[1]]), -1j*w*ptup1[0]*ptup2[0]))
+
         ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_1)
-        ptup2 =product(errorgen_2_bel_0, errorgen_1_bel_1)
-        errorGens.append( _LSE( 'A', [ptup1[1] , ptup2[1]] , -1j*w*ptup1[0]*ptup2[0] ))
+        ptup2 = product(errorgen_2_bel_0, errorgen_1_bel_1)
+        if ptup1[1] != ptup2[1]:
+            if (ptup1[1] != identity) and (ptup2[1] != identity):
+                errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            elif ptup1[1] == identity:
+                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            else: #ptup2[1] == identity
+                errorGens.append((_LSE('H', [ptup1[1]]), -1j*w*ptup1[0]*ptup2[0]))
+
         ptup1 = product(errorgen_1_bel_1,errorgen_2_bel_0)
-        ptup2 =product(errorgen_2_bel_1,errorgen_1_bel_0)                 
-        errorGens.append( _LSE( 'A', [ptup1[1] , ptup2[1]] , -1j*w*ptup1[0]*ptup2[0] ))
+        ptup2 = product(errorgen_2_bel_1,errorgen_1_bel_0)                 
+        if ptup1[1] != ptup2[1]:
+            if (ptup1[1] != identity) and (ptup2[1] != identity):
+                errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            elif ptup1[1] == identity:
+                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            else: #ptup2[1] == identity
+                errorGens.append((_LSE('H', [ptup1[1]]), -1j*w*ptup1[0]*ptup2[0]))
+
         ptup1 = product(errorgen_1_bel_1, errorgen_2_bel_1)
-        ptup2 =product(errorgen_2_bel_0, errorgen_1_bel_0)
-        errorGens.append( _LSE( 'A'  , [ptup1[1] , ptup2[1]] , -1j*w*ptup1[0]*ptup2[0]))
-        ptup1=acom(errorgen_1_bel_0, errorgen_1_bel_1)
-        ptup2=com(errorgen_2_bel_0, ptup1[1])
-        errorGens.append( _LSE( 'A'  , [ptup2[1] , errorgen_2_bel_1 ], -.5*1j*w*ptup1[0]*ptup2[0]))
-        ptup1=acom(errorgen_1_bel_0,errorgen_1_bel_1)
-        ptup2=com(errorgen_2_bel_1,ptup1[1])
-        errorGens.append( _LSE( 'A'  , [ptup2[1], errorgen_2_bel_0] , -.5*1j*w*ptup1[0]*ptup2[0]))
-        ptup1=acom(errorgen_2_bel_0,errorgen_2_bel_1)
-        ptup2=com(ptup1[1],errorgen_1_bel_0)
-        errorGens.append( _LSE( 'A' , [ptup2[1] , errorgen_1_bel_1] , -.5*1j*w*ptup1[0]*ptup2[0]))
-        ptup1=acom(errorgen_2_bel_0,errorgen_2_bel_1)
-        ptup2=com(ptup1[1],errorgen_1_bel_1)
-        errorGens.append( _LSE( 'A' , [ptup2[1] , errorgen_1_bel_0 ] , -.5*1j*w*ptup1[0]*ptup2[0]))
-        ptup1=acom(errorgen_1_bel_0,errorgen_1_bel_1)
-        ptup2=acom(errorgen_2_bel_0,errorgen_2_bel_1)
-        ptup3=com(ptup1[1],ptup2[1])
-        errorGens.append( _LSE( 'H', [ptup3[1]] ,.25*1j*w*ptup1[0]*ptup2[0]*ptup3[0]))
+        ptup2 = product(errorgen_2_bel_0, errorgen_1_bel_0)
+        if ptup1[1] != ptup2[1]:
+            if (ptup1[1] != identity) and (ptup2[1] != identity):
+                errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            elif ptup1[1] == identity:
+                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            else: #ptup2[1] == identity
+                errorGens.append((_LSE('H', [ptup1[1]]), -1j*w*ptup1[0]*ptup2[0]))
+        
+        ptup1 = acom(errorgen_1_bel_0, errorgen_1_bel_1)
+        if ptup1 is not None:
+            ptup2 = com(errorgen_2_bel_0, ptup1[1])
+            if ptup2 is not None:
+                if ptup2[1] != errorgen_2_bel_1:
+                    #errorgen_2_bel_1 can't be the identity,
+                    #And com(errorgen_2_bel_0, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either.
+                    errorGens.append((_LSE('A', [ptup2[1], errorgen_2_bel_1]), -.5*1j*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = acom(errorgen_1_bel_0, errorgen_1_bel_1)
+        if ptup1 is not None:
+            ptup2 = com(errorgen_2_bel_1, ptup1[1])
+            if ptup2 is not None:
+                if ptup2[1] != errorgen_2_bel_0:
+                    #errorgen_2_bel_0 can't be the identity.
+                    #And com(errorgen_2_bel_1, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either.
+                    errorGens.append((_LSE('A', [ptup2[1], errorgen_2_bel_0]), -.5*1j*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = acom(errorgen_2_bel_0, errorgen_2_bel_1)
+        if ptup1 is not None:
+            ptup2 = com(ptup1[1], errorgen_1_bel_0)
+            if ptup2 is not None:
+                if ptup2[1] != errorgen_1_bel_1:
+                    #errorgen_1_bel_1 can't be the identity.
+                    #And com(acom(errorgen_2_bel_0, errorgen_2_bel_1), errorgen_2_bel_0) can't be either
+                    errorGens.append((_LSE('A', [ptup2[1] , errorgen_1_bel_1]), -.5*1j*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = acom(errorgen_2_bel_0, errorgen_2_bel_1)
+        if ptup1 is not None:
+            ptup2 = com(ptup1[1], errorgen_1_bel_1)
+            if ptup2 is not None:
+                if ptup2[1] != errorgen_1_bel_0:
+                    #errorgen_1_bel_0 can't be the identity.
+                    #And com(acom(errorgen_2_bel_0, errorgen_2_bel_1), errorgen_2_bel_1) can't be either
+                    errorGens.append((_LSE('A', [ptup2[1] , errorgen_1_bel_0]), -.5*1j*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = acom(errorgen_1_bel_0, errorgen_1_bel_1)
+        if ptup1 is not None:
+            ptup2 = acom(errorgen_2_bel_0, errorgen_2_bel_1)
+            if ptup2 is not None:
+                ptup3 = com(ptup1[1], ptup2[1])
+                if ptup3 is not None:
+                    #It shouldn't be possible for ptup3 to be the identity given valid error generator indices.
+                    errorGens.append((_LSE('H', [ptup3[1]]), .25*1j*w*ptup1[0]*ptup2[0]*ptup3[0]))
 
     elif errorgen_1_type == 'C' and errorgen_2_type == 'A':
-        ptup1 = product(errorgen_1_bel_0,errorgen_2_bel_0)
-        ptup2 =product(errorgen_2_bel_1,errorgen_1_bel_1)
-        errorGens.append( _LSE('C' , [ptup1[1],ptup2[1]] , 1j*w*ptup1[0]*ptup2[0]))
-        ptup1 = product(errorgen_1_bel_0,errorgen_2_bel_1)
-        ptup2 =product(errorgen_2_bel_0,errorgen_1_bel_1)
-        errorGens.append( _LSE('C' ,[ptup1[1],ptup2[1]] , -1j*w*ptup1[0]*ptup2[0]))
-        ptup1 = product(errorgen_1_bel_1,errorgen_2_bel_0)
-        ptup2 =product(errorgen_2_bel_1,errorgen_1_bel_0)
-        errorGens.append( _LSE('C' , [ptup1[1],ptup2[1]] , 1j*w*ptup1[0]*ptup2[0]))
-        ptup1 = product(errorgen_2_bel_0,errorgen_1_bel_0)
-        ptup2 =product(errorgen_1_bel_1,errorgen_2_bel_1)
-        errorGens.append( _LSE('C'  ,[ptup1[1],ptup2[1]] , -1j*w*ptup1[0]*ptup2[0]))
-        ptup1 = com(errorgen_2_bel_0,errorgen_2_bel_1)
-        ptup2 =com(errorgen_1_bel_0,ptup1[1])
-        errorGens.append( _LSE('A'  , [ptup2[1] , errorgen_1_bel_1] , .5*w*ptup1[0]*ptup2[0] ))
-        ptup1 = com(errorgen_2_bel_0,errorgen_2_bel_1)
-        ptup2 =com(errorgen_1_bel_1,ptup1[1])
-        errorGens.append( _LSE('A' , [ptup2[1],  errorgen_1_bel_0 ], .5*w*ptup1[0]*ptup2[0] ))
+        ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_0)
+        ptup2 = product(errorgen_2_bel_1, errorgen_1_bel_1)
+        if ptup1[1] != ptup2[1]:
+            if ptup1[1] != identity and ptup2[1] != identity:
+                errorGens.append((_LSE('C', [ptup1[1], ptup2[1]]), 1j*w*ptup1[0]*ptup2[0]))
+        else: #ptup[1] == ptup[2]
+            if ptup1[1] != identity:
+                errorGens.append((_LSE('S', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_1)
+        ptup2 = product(errorgen_2_bel_0, errorgen_1_bel_1)
+        if ptup1[1] != ptup2[1]:
+            if ptup1[1] != identity and ptup2[1] != identity:
+                errorGens.append((_LSE('C', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+        else: #ptup[1] == ptup[2]
+            if ptup1[1] != identity:
+                errorGens.append((_LSE('S', [ptup1[1]]), -1j*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = product(errorgen_1_bel_1, errorgen_2_bel_0)
+        ptup2 = product(errorgen_2_bel_1, errorgen_1_bel_0)
+        if ptup1[1] != ptup2[1]:
+            if ptup1[1] != identity and ptup2[1] != identity:
+                errorGens.append((_LSE('C', [ptup1[1], ptup2[1]]), 1j*w*ptup1[0]*ptup2[0]))
+        else: #ptup[1] == ptup[2]
+            if ptup1[1] != identity:
+                errorGens.append((_LSE('S', [ptup1[1]]), 1j*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = product(errorgen_2_bel_0, errorgen_1_bel_0)
+        ptup2 = product(errorgen_1_bel_1, errorgen_2_bel_1)
+        if ptup1[1] != ptup2[1]:
+            if ptup1[1] != identity and ptup2[1] != identity:
+                errorGens.append((_LSE('C', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+        else: #ptup[1] == ptup[2]
+            if ptup1[1] != identity:
+                errorGens.append((_LSE('S', [ptup1[1]]), -1j*w*ptup1[0]*ptup2[0]))
+
+
+        ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
+        if ptup1 is not None:
+            ptup2 = com(errorgen_1_bel_0, ptup1[1])
+            if ptup2 is not None:
+                if ptup2[1] != errorgen_1_bel_1:
+                    #errorgen_1_bel_1 can't be the identity.
+                    #com(errorgen_1_bel_0, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
+                    errorGens.append((_LSE('A', [ptup2[1], errorgen_1_bel_1]), .5*w*ptup1[0]*ptup2[0]))
+        
+        ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
+        if ptup1 is not None:
+            ptup2 = com(errorgen_1_bel_1, ptup1[1])
+            if ptup2 is not None:
+                if ptup2[1] != errorgen_1_bel_0:
+                    #errorgen_1_bel_0 can't be the identity.
+                    #com(errorgen_1_bel_1, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
+                    errorGens.append((_LSE('A', [ptup2[1], errorgen_1_bel_0]), .5*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = acom(errorgen_1_bel_0, errorgen_1_bel_1)
+        if ptup1 is not None:
+            ptup2 = com(errorgen_2_bel_0, ptup1[1])
+            if ptup2 is not None:
+                if ptup2[1] != errorgen_2_bel_1:
+                    #errorgen_2_bel_1 can't be the identity.
+                    #com(errorgen_2_bel_1, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either
+                    errorGens.append((_LSE('C', [ptup2[1], errorgen_2_bel_1]), .5*1j*w*ptup1[0]*ptup2[0]))
+
         ptup1 = acom(errorgen_1_bel_0,errorgen_1_bel_1)
-        ptup2 =com(errorgen_2_bel_0,ptup1[1])
-        errorGens.append( _LSE('C', [ptup2[1] , errorgen_2_bel_1 ], .5*1j*w*ptup1[0]*ptup2[0] ))
-        ptup1 = acom(errorgen_1_bel_0,errorgen_1_bel_1)
-        ptup2 =com(errorgen_2_bel_1,ptup1[1])
-        errorGens.append( _LSE('C',[ptup2[1],errorgen_2_bel_0 ],-.5*1j*w*ptup1[0]*ptup2[0] ))
-        ptup1 = com(errorgen_2_bel_0,errorgen_2_bel_1)
-        ptup2 =acom(errorgen_1_bel_0,errorgen_1_bel_1)
-        ptup3=com(ptup1[1],ptup2[1])
-        errorGens.append( _LSE('H',[ptup3[1]],-.25*w*ptup1[0]*ptup2[0]*ptup3[0]))
+        if ptup1 is not None:
+            ptup2 = com(errorgen_2_bel_1, ptup1[1])
+            if ptup2 is not None:
+                if ptup2[1] != errorgen_2_bel_0:
+                    #errorgen_2_bel_0 can't be the identity.
+                    #com(errorgen_2_bel_1, acom(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either
+                    errorGens.append((_LSE('C', [ptup2[1], errorgen_2_bel_0]), -.5*1j*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
+        if ptup1 is not None:
+            ptup2 = acom(errorgen_1_bel_0, errorgen_1_bel_1)
+            if ptup2 is not None:
+                ptup3= com(ptup1[1], ptup2[1])
+                if ptup3 is not None:
+                    #it shouldn't be possible for ptup3 to be identity given valid error generator
+                    #indices.
+                    errorGens.append((_LSE('H', [ptup3[1]]), -.25*w*ptup1[0]*ptup2[0]*ptup3[0]))
     
     elif errorgen_1_type == 'A' and errorgen_2_type == 'C':
         errorGens = commute_error_generators(errorgen_2, errorgen_1, flip_weight=True, weight=weight)
                          
     elif errorgen_1_type == 'A' and errorgen_2_type == 'A':
-        ptup1=product(errorgen_2_bel_1,errorgen_1_bel_1)
-        ptup2=product(errorgen_1_bel_0,errorgen_2_bel_0)
-        errorGens.append(_LSE('A',[ptup1[1],ptup2[1]] ,-1j*w*ptup1[0]*ptup2[0]))
-        ptup1=product(errorgen_2_bel_0,errorgen_1_bel_0)
-        ptup2=product(errorgen_1_bel_1,errorgen_2_bel_1)
-        errorGens.append(_LSE('A',[ptup1[1],ptup2[1]],-1j*w*ptup1[0]*ptup2[0]))
-        ptup1=product(errorgen_1_bel_1,errorgen_2_bel_0)
-        ptup2=product(errorgen_2_bel_1,errorgen_1_bel_0)
-        errorGens.append(_LSE('A',[ptup1[1],ptup2[1]],-1j*w*ptup1[0]*ptup2[0]))
-        ptup1=product(errorgen_1_bel_0,errorgen_2_bel_1)
-        ptup2=product(errorgen_2_bel_0,errorgen_1_bel_1)
-        errorGens.append(_LSE('A',[ptup1[1],ptup2[1]],-1j*w*ptup1[0]*ptup2[0]))
-        ptup1=com(errorgen_2_bel_0,errorgen_2_bel_1)
-        ptup2=com(errorgen_1_bel_1,ptup1[1])
-        errorGens.append(_LSE('C',[ptup2[1],errorgen_1_bel_0],.5*w*ptup1[0]*ptup2[0]))
-        ptup1=com(errorgen_2_bel_0,errorgen_2_bel_1)
-        ptup2=com(errorgen_1_bel_0,ptup1[1])
-        errorGens.append(_LSE('C',[ptup2[1],errorgen_1_bel_1] ,-.5*w*ptup1[0]*ptup2[0]))
-        ptup1=com(errorgen_1_bel_0,errorgen_1_bel_1)
-        ptup2=com(errorgen_2_bel_0,ptup1[1])
-        errorGens.append(_LSE('C', [ptup2[1],errorgen_2_bel_1] ,.5*w*ptup1[0]*ptup2[0]))
-        ptup1=com(errorgen_1_bel_0,errorgen_1_bel_1)
-        ptup2=com(errorgen_2_bel_1,ptup1[1])
-        errorGens.append(_LSE('C', [ptup2[1],errorgen_2_bel_0]  ,-.5*w*ptup1[0]*ptup2[0]))
-        ptup1=com(errorgen_2_bel_0,errorgen_2_bel_1)
-        ptup2=com(errorgen_1_bel_0,errorgen_1_bel_1)
-        ptup3=com(ptup1[1],ptup2[1])
-        errorGens.append( _LSE('H',[ptup3[1]] ,.25*w*ptup1[0]*ptup2[0]*ptup3[0]))
+        ptup1 = product(errorgen_2_bel_1, errorgen_1_bel_1)
+        ptup2 = product(errorgen_1_bel_0, errorgen_2_bel_0)
+
+        if ptup1[1] != ptup2[1]:
+            if (ptup1[1] != identity) and (ptup2[1] != identity):
+                errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            elif ptup1[1] == identity:
+                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            else: #ptup2[1] == identity
+                errorGens.append((_LSE('H', [ptup1[1]]), -1j*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = product(errorgen_2_bel_0, errorgen_1_bel_0)
+        ptup2 = product(errorgen_1_bel_1, errorgen_2_bel_1)
+        if ptup1[1] != ptup2[1]:
+            if (ptup1[1] != identity) and (ptup2[1] != identity):
+                errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            elif ptup1[1] == identity:
+                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            else: #ptup2[1] == identity
+                errorGens.append((_LSE('H', [ptup1[1]]), -1j*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = product(errorgen_1_bel_1, errorgen_2_bel_0)
+        ptup2 = product(errorgen_2_bel_1, errorgen_1_bel_0)
+        if ptup1[1] != ptup2[1]:
+            if (ptup1[1] != identity) and (ptup2[1] != identity):
+                errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            elif ptup1[1] == identity:
+                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            else: #ptup2[1] == identity
+                errorGens.append((_LSE('H', [ptup1[1]]), -1j*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = product(errorgen_1_bel_0, errorgen_2_bel_1)
+        ptup2 = product(errorgen_2_bel_0, errorgen_1_bel_1)
+        if ptup1[1] != ptup2[1]:
+            if (ptup1[1] != identity) and (ptup2[1] != identity):
+                errorGens.append((_LSE('A', [ptup1[1], ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            elif ptup1[1] == identity:
+                errorGens.append((_LSE('H', [ptup2[1]]), -1j*w*ptup1[0]*ptup2[0]))
+            else: #ptup2[1] == identity
+                errorGens.append((_LSE('H', [ptup1[1]]), -1j*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
+        if ptup1 is not None:
+            ptup2 = com(errorgen_1_bel_1, ptup1[1])
+            if ptup2 is not None:
+                if ptup2[1] != errorgen_1_bel_0:
+                    #errorgen_1_bel_0 can't be the identity.
+                    #com(errorgen_1_bel_1, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
+                    errorGens.append((_LSE('C', [ptup2[1], errorgen_1_bel_0]), .5*w*ptup1[0]*ptup2[0]))
+        
+        ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
+        if ptup1 is not None:
+            ptup2 = com(errorgen_1_bel_0, ptup1[1])
+            if ptup2 is not None:
+                if ptup2[1] != errorgen_1_bel_1:
+                    #errorgen_1_bel_1 can't be the identity.
+                    #com(errorgen_1_bel_0, com(errorgen_2_bel_0, errorgen_2_bel_1)) can't be either.
+                    errorGens.append((_LSE('C', [ptup2[1], errorgen_1_bel_1]), -.5*w*ptup1[0]*ptup2[0]))
+        
+        ptup1 = com(errorgen_1_bel_0, errorgen_1_bel_1)
+        if ptup1 is not None:
+            ptup2 = com(errorgen_2_bel_0, ptup1[1])
+            if ptup2 is not None:
+                if ptup2[1] != errorgen_2_bel_1:
+                    #errorgen_2_bel_1 can't be the identity.
+                    #com(errorgen_2_bel_0, com(errorgen_1_bel_0, errorgen_1_bel_1)) can't be either.
+                    errorGens.append((_LSE('C', [ptup2[1], errorgen_2_bel_1]), .5*w*ptup1[0]*ptup2[0]))
+        
+        ptup1 = com(errorgen_1_bel_0, errorgen_1_bel_1)
+        if ptup1 is not None:
+            ptup2 = com(errorgen_2_bel_1, ptup1[1])
+            if ptup2 is not None:
+                if ptup2[1] != errorgen_2_bel_0:
+                    #errorgen_2_bel_0 can't be the identity.
+                    #com(errorgen_2_bel_1, com(errorgen_1_bel_0,errorgen_1_bel_1)) can't be either.
+                    errorGens.append((_LSE('C', [ptup2[1], errorgen_2_bel_0]), -.5*w*ptup1[0]*ptup2[0]))
+
+        ptup1 = com(errorgen_2_bel_0, errorgen_2_bel_1)
+        if ptup1 is not None:
+            ptup2 = com(errorgen_1_bel_0, errorgen_1_bel_1)
+            if ptup2 is not None:
+                ptup3 = com(ptup1[1], ptup2[1])
+                if ptup3 is not None:
+                    #it shouldn't be possible for ptup3 to be identity given valid error generator
+                    #indices.
+                    errorGens.append((_LSE('H', [ptup3[1]]), .25*w*ptup1[0]*ptup2[0]*ptup3[0]))
            
     return errorGens
 
