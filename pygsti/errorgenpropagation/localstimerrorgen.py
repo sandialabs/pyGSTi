@@ -27,6 +27,75 @@ class LocalStimErrorgenLabel(_ElementaryErrorgenLabel):
     Null
     """
 
+    @classmethod
+    def cast(cls, obj, sslbls=None):
+        """
+        Method for casting objects to instances of LocalStimErrorgenLabel.
+
+        Parameters
+        ----------
+        obj : `LocalStimErrorgenLabel`, ``LocalElementaryErrorgenLabel`, `GlobalElementaryErrorgenLabel`, tuple or list
+
+        sslbls : tuple or list, optional (default None)
+            A complete set of state space labels. Used when casting from a GlobalElementaryErrorgenLabel
+            or from a tuple of length 3 (wherein the final element is interpreted as the set of ssblbs the error
+            generator acts upon).
+
+        Returns
+        -------
+        `LocalStimErrorgenLabel`
+        """
+        if isinstance(obj, LocalStimErrorgenLabel):
+            return obj
+        
+        if isinstance(obj, _GEEL):
+            #convert to a tuple representation
+            assert sslbls is not None, 'Must specify sslbls when casting from `GlobalElementaryErrorgenLabel`.'
+            obj = (obj.errorgen_type, obj.basis_element_labels, obj.sslbls)
+        
+        if isinstance(obj, _LEEL):
+            #convert to a tuple representation
+            obj = (obj.errorgen_type, obj.basis_element_labels)
+        
+        if isinstance(obj, (tuple, list)):
+            #In this case assert that the first element of the tuple is a string corresponding to the
+            #error generator type.
+            errorgen_type = obj[0]
+            
+            #two elements for a local label and three for a global one
+            #second element should have the basis element labels
+            assert len(obj)==2 or len(obj)==3 and isinstance(obj[1], (tuple, list)) 
+            
+            #if a global label tuple the third element should be a tuple or list.
+            if len(obj)==3:
+                assert isinstance(obj[2], (tuple, list))
+                assert sslbls is not None, 'Must specify sslbls when casting from a tuple or list of length 3. See docstring.'
+                #convert to local-style bels.
+                indices_to_replace = [sslbls.index(sslbl) for sslbl in obj[2]]
+                local_bels = []
+                for global_lbl in obj[1]:
+                    #start by figure out which initialization to use, either stim
+                    #or a string.
+                    local_bel = stim.PauliString('I'*len(sslbls))
+                    for kk, k in enumerate(indices_to_replace):
+                        local_bel[k] = global_lbl[kk]
+                    local_bels.append(local_bel)
+            else:
+                local_bels = obj[1]
+
+        #now build the LocalStimErrorgenLabel
+        stim_bels = []
+        for bel in local_bels:
+            if isinstance(bel, str):
+                stim_bels.append(stim.PauliString(bel))
+            elif isinstance(bel, stim.PauliString):
+                stim_bels.append(bel)
+            else:
+                raise ValueError('Only str and `stim.PauliString` basis element labels are supported presently.')
+            
+        return cls(errorgen_type, stim_bels)
+
+
     def __init__(self, errorgen_type, basis_element_labels, circuit_time=None, initial_label=None,
                  label=None):
         """

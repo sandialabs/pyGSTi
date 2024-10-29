@@ -29,6 +29,26 @@ class LocalElementaryErrorgenLabel(ElementaryErrorgenLabel):
     """
     @classmethod
     def cast(cls, obj, sslbls=None, identity_label='I'):
+        """
+        Method for casting an object to an instance of LocalElementaryErrorgenLabel
+
+        Parameters
+        ----------
+        obj : `LocalElementaryErrorgenLabel`, `GlobalElementaryErrorgenLabel`, tuple or list
+            Object to cast.
+
+        sslbls : tuple or list, optional (default None)
+            A complete set of state space labels. Used when casting from a GlobalElementaryErrorgenLabel
+            or from a tuple of length 3 (wherein the final element is interpreted as the set of ssblbs the error
+            generator acts upon).
+        
+        identity_label : str, optional (default 'I')
+            An optional string specifying the label used to denote the identity in basis element labels.
+
+        Returns
+        -------
+        LocalElementaryErrorgenLabel
+        """
         if isinstance(obj, LocalElementaryErrorgenLabel):
             return obj
         elif isinstance(obj, GlobalElementaryErrorgenLabel):

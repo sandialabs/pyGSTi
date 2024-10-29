@@ -148,7 +148,7 @@ def bch_approximation(errgen_layer_1, errgen_layer_2, bch_order=1):
     return new_errorgen_layer
 
 
-def commute_error_generators(errorgen_1, errorgen_2, flip_weight=False, weight=1.0):
+def error_generator_commutator(errorgen_1, errorgen_2, flip_weight=False, weight=1.0):
     """
     Returns the commutator of two error generators. I.e. [errorgen_1, errorgen_2].
     

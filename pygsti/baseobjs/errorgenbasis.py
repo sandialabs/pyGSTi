@@ -283,7 +283,6 @@ class ExplicitElementaryErrorgenBasis(ElementaryErrorgenBasis):
         difference_state_space = self.state_space
         return ExplicitElementaryErrorgenBasis(difference_state_space, difference_labels, self._basis_1q)
 
-
 class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
     """
     This basis object contains the information  necessary for building, 
@@ -464,11 +463,11 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         return (offsets, total_support) if return_total_support else offsets
 
     def __init__(self, basis_1q, state_space, elementary_errorgen_types=('H', 'S', 'C', 'A'),
-                 max_weights=None, sslbl_overlap=None):
+                 max_weights=None, sslbl_overlap=None, default_label_type='global'):
         """
         Parameters
         ----------
-        basis_1q : `Basis` or str, optional (default None)
+        basis_1q : `Basis` or str
             A `Basis` object, or str which can be cast to one
             corresponding to the single-qubit basis elements which
             comprise the basis element labels for the values of the
@@ -493,6 +492,14 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             A list of state space labels corresponding to qudits the support of
             an error generator must overlap with (i.e. the support must include at least
             one of these qudits) in order to be included in this basis.
+
+        default_label_type : str, optional (default 'global')
+            String specifying the type of error generator label to use by default.
+            i.e. the type of label returned by `labels`. This also impacts the
+            construction of the error generator matrices.
+            Supported options are 'global' or 'local', which correspond to 
+            `GlobalElementaryErrorgenLabel` and `LocalElementaryErrorgenLabel`,
+            respectively.
         """
 
         if isinstance(basis_1q, _Basis):
@@ -506,6 +513,7 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         self.state_space = state_space
         self.max_weights = max_weights if max_weights is not None else dict()
         self._sslbl_overlap = sslbl_overlap
+        self._default_lbl_typ = default_label_type
 
         assert(self.state_space.is_entirely_qubits), "FOGI only works for models containing just qubits (so far)"
         assert(all([eetyp in ('H', 'S', 'C', 'A') for eetyp in elementary_errorgen_types])), \
@@ -536,7 +544,8 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             # this should never happen - somehow the statespace doesn't have all the labels!
             assert(False), "Logic error! State space doesn't contain all of the present labels!!"
 
-        self._cached_labels = None
+        self._cached_global_labels = None
+        self._cached_local_labels = None
         self._cached_matrices = None
         self._cached_dual_matrices = None
         self._cached_supports = None
@@ -578,14 +587,44 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
     #TODO: Why can't this be done at initialization time?
     @property
     def labels(self):
-        if self._cached_labels is None:
+        """
+        Tuple of either `GlobalElementaryErrorgenLabel` or `LocalElementaryErrorgenLabel` objects
+        for this basis, with which one determined by the `default_label_type` specified on basis
+        construction.
+
+        For specific label types see the `global_labels` and `local_labels` methods.
+        """
+
+        if self._default_lbl_typ == 'global':
+            return self.global_labels()
+        else:
+            return self.local_labels()
+    
+    def global_labels(self):
+        """
+        Return a list of labels for this basis as `GlobalElementaryErrorgenLabel`
+        objects.
+        """
+        if self._cached_global_labels is None:
             labels = []
             for eetyp in self._elementary_errorgen_types:
                 labels.extend(self._create_ordered_labels(eetyp, self._basis_1q, self.state_space,
                                                           self.max_weights.get(eetyp, None),
                                                           self._sslbl_overlap))
-            self._cached_labels = tuple(labels)
-        return self._cached_labels
+            
+            self._cached_global_labels = tuple(labels)
+        return self._cached_global_labels
+    
+    def local_labels(self):
+        """
+        Return a list of labels for this basis as `LocalElementaryErrorgenLabel`
+        objects.
+        """
+        if self._cached_local_labels is None:
+            if self._cached_global_labels is None:
+                self._cached_global_labels = self.global_labels()
+            self._cached_local_labels = tuple([_LocalElementaryErrorgenLabel.cast(lbl) for lbl in self._cached_global_labels])
+        return self._cached_local_labels
     
     def sublabels(self, errorgen_type):
         """
@@ -599,22 +638,26 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         
         Returns
         -------
-        tuple of `GlobalElementaryErrorgenLabel`
+        tuple of either `GlobalElementaryErrorgenLabels` or `LocalElementaryErrorgenLabels`
         """
-
-        return self._create_ordered_labels(errorgen_type, self._basis_1q, self.state_space,
+        #TODO: It should be possible to do this much faster than regenerating these from scratch.
+        #Perhaps by caching the error generators by type at construction time.
+        labels = self._create_ordered_labels(errorgen_type, self._basis_1q, self.state_space,
                                            self.max_weights.get(errorgen_type, None),
                                            self._sslbl_overlap)
+        if self._default_lbl_typ == 'local':
+            labels = tuple([_LocalElementaryErrorgenLabel.cast(lbl) for lbl in labels])
+        return labels
     
     @property
-    def elemgen_supports(self):
+    def elemgen_supports(self, identity_label='I'):
         """
         Returns a tuple of tuples, each corresponding to the support
         of the elementary error generators in this basis, returned in
         the same order as they appear in `labels`.
         """
         if self._cached_supports is None:
-            self._cached_supports = tuple([elemgen_label.sslbls for elemgen_label in self.labels])
+            self._cached_supports = tuple([elemgen_label.sslbls for elemgen_label in self.global_labels()])
         return self._cached_supports
     
     @property
@@ -676,6 +719,11 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
         ok_if_missing : bool
            If True, then returns `None` instead of an integer when the given label is not present.
         """
+        #CIO: I don't entirely understand the intention behind this method, so rather than trying to make it work
+        #using `LocalElementaryErrorgenLabel` I'll just assert it is a global one for now...
+        if isinstance(label, _LocalElementaryErrorgenLabel):
+            raise NotImplementedError('This method is not currently implemented for `LocalElementaryErrorgenLabel` inputs.')
+        
         support = label.sslbls
         eetype = label.errorgen_type
         bels = label.basis_element_labels
@@ -706,7 +754,6 @@ class CompleteElementaryErrorgenBasis(ElementaryErrorgenBasis):
             raise ValueError("Invalid elementary errorgen type: %s" % str(eetype))
 
         return base + indices[label]
-    
 
     def create_subbasis(self, sslbl_overlap, retain_max_weights=True):
         """
