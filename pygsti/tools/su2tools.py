@@ -9,6 +9,7 @@ import scipy.sparse as spar
 from pygsti.baseobjs import basisconstructors as bcons
 from pygsti.tools.matrixtools import eign
 from pygsti.tools.optools import unitary_to_std_process_mx
+from scipy.special import eval_legendre as legendre
 
 
 def check_su2_generators(Jx, Jy, Jz):
@@ -265,6 +266,21 @@ class SU2:
         assert out.shape == (angles.size // 3, cls.irrep_labels.size)
         return out
     
+    @classmethod 
+    def charactercores_from_euler_angles(cls, abg):
+        assert abg.ndim == 2 and abg.shape[0] == 3
+        beta = abg[1,:]
+        return legendre(cls.irrep_labels[np.newaxis,:], np.cos(beta[:,np.newaxis]))
+
+    @classmethod
+    def angles2irrepcharcores(cls, angles):
+        angles = np.atleast_1d(angles)
+        angles = np.atleast_2d(angles).T
+        assert angles.shape == (3, angles.size // 3)
+        out = cls.charactercores_from_euler_angles(angles)
+        assert out.shape == (angles.size // 3, cls.irrep_labels.size)
+        return out
+
     @classmethod
     def characters_from_euler_angles(cls,abg):
         # Input: 

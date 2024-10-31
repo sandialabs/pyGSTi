@@ -468,15 +468,41 @@ class SU2CharacterRBDesign(SU2RBDesign):
     def __init__(self, su2rep, N, lengths, statepreps, povm, seed):
         SU2RBDesign.__init__(self, su2rep, N, lengths, statepreps, povm, seed, __character__=True)
         self.angles2irrepchars = su2rep.angles2irrepchars
+        self._angles2irrepcharcores = su2rep.angles2irrepcharcores
         self.unitaries_from_angles = su2rep.unitaries_from_angles
         self.irrep_sizes = su2rep.irrep_block_sizes
         self.num_irreps = self.irrep_sizes.size
         self.chars = np.zeros(shape=(self.lengths.size, self.N, self.num_irreps))
         # chars[j,k,ell] = the ell-th irrep's character for the unitary induced by the (noiseless version of the) k-th circuit of length lengths[j]
+        self._charcores = np.zeros_like(self.chars)
         self._compute_chars()
+        self._ssr1rb = False
 
     """Inherited properties: N, num_effects, num_lens, num_statepreps
     """
+
+    @property
+    def angles2irrepcharcores(self) -> Callable:
+        if not hasattr(self, '_angles2irrepcharcores'):
+            su2rep = Spin72 if self.irrep_sizes.size == 8 else SU2
+            self._angles2irrepcharcores = su2rep.angles2irrepcharcores
+        return self._angles2irrepcharcores
+
+    @property
+    def charcores(self) -> np.ndarray:
+        if not hasattr(self, '_charcores'):
+            self._charcores = np.zeros_like(self.chars)
+            for j in range(self.num_lens):
+                circuits = np.array(self.all_circuits[j])
+                firstgate_angles = circuits[:,0,:]
+                self._charcores[j,:,:] = self.angles2irrepcharcores(firstgate_angles)
+        return self._charcores
+
+    @property
+    def ssr1rb(self) -> bool:
+        if not hasattr(self, '_ssr1rb'):
+            self._ssr1rb = False
+        return self._ssr1rb
 
     def _compute_chars(self):
         # This is a separate function since it might take a while.
@@ -484,6 +510,7 @@ class SU2CharacterRBDesign(SU2RBDesign):
             circuits = np.array(self.all_circuits[j])
             firstgate_angles = circuits[:,0,:]
             self.chars[j,:,:] = self.angles2irrepchars(firstgate_angles)
+            self.charcores[j,:,:] = self.angles2irrepcharcores(firstgate_angles)
         return
 
 
@@ -500,6 +527,14 @@ class SU2CharacterRBSim(SU2RBSim):
     @property
     def chars(self) -> np.ndarray:
         return self.design.chars
+
+    @property
+    def charcores(self) -> np.ndarray:
+        return self.design.charcores
+    
+    @property
+    def ssr1rb(self) -> bool:
+        return self.design.ssr1rb
 
     def _process_circuits(self, fixedlen_circuits):
         if la.norm(self._noise_channel - np.eye(self._noise_channel.shape[0])) <= 1e-16:
@@ -570,6 +605,12 @@ class SU2CharacterRBSim(SU2RBSim):
         #   where empirical distributions are computed with shots_per_circuit shots of each circuit.
         #   
         #   None (retained for compatibility reasons)
+        #
+        # Notes
+        #   It's also valid to use
+        #       chars[  j,k,x] = P_k(beta) where beta is the middle Euler angle of the "hidden"
+        #                        initial gate in the k-th circuit of length lengths[j].
+        #   In that case this is the transform for SSR1RB.
         #
         arr = SU2CharacterRBSim.character_transform(
             _probs, _chars, _irrep_sizes, shots_per_circuit, seed
@@ -691,8 +732,13 @@ class Analysis:
             pkm, _ = SU2RBSim.synspam_transform(_rbm.probs, shots_per_circuit=sps)
             rbtype = 'Standard'
         elif isinstance(_rbm, SU2CharacterRBSim):
-            pkm, _ = SU2CharacterRBSim.synspam_character_transform(_rbm.probs, _rbm.chars, Spin72.irrep_block_sizes, shots_per_circuit=sps)
-            rbtype = 'Character'
+            if _rbm.ssr1rb:
+                rbtype = 'Rank-1 Character'
+                chararg = _rbm.charcores
+            else:
+                rbtype = 'Character'
+                chararg = _rbm.chars
+            pkm, _ = SU2CharacterRBSim.synspam_character_transform(_rbm.probs, chararg, Spin72.irrep_block_sizes, shots_per_circuit=sps)
         else:
             raise ValueError()
         if figax is None:
