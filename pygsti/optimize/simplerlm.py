@@ -580,7 +580,6 @@ def simplish_leastsq(
             norm_JTf = ari.infnorm_x(minus_JTf)
             norm_x = ari.norm2_x(x)
             pre_reg_data = ari.jtj_pre_regularization_data(JTJ)
-            max_jtj_diag = ari.jtj_max_diagonal_element(JTJ)
 
             if norm_JTf < jac_norm_tol:
                 if oob_check_interval <= 1:
@@ -595,6 +594,7 @@ def simplish_leastsq(
                     continue
 
             if k == 0:
+                max_jtj_diag = ari.jtj_max_diagonal_element(JTJ)
                 mu, nu = (tau * max_jtj_diag, 2) if init_munu == 'auto' else init_munu
                 best_x_state = (mu, nu, norm_f, f.copy())
 
