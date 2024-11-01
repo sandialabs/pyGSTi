@@ -284,7 +284,7 @@ class SimplerLMOptimizer(Optimizer):
             # ari = _ari.UndistributedArraysInterface(nEls, nP)
             ari = _ari.ImplicitArraysInterface(nEls, nP)
 
-        opt_x, converged, msg, mu, nu, norm_f, f, opt_jtj = simplish_leastsq(
+        opt_x, converged, msg, mu, nu, norm_f, f = simplish_leastsq(
             objective_func, jacobian, x0,
             max_iter=self.maxiter,
             num_fd_iters=self.fditer,
@@ -326,9 +326,8 @@ class SimplerLMOptimizer(Optimizer):
         unpenalized_f = f[0:-objective.ex] if (objective.ex > 0) else f
         unpenalized_normf = sum(unpenalized_f**2)  # objective function without penalty factors
         chi2k_qty = objective.chi2k_distributed_qty(norm_f)
-
-        return OptimizerResult(objective, opt_x, norm_f, opt_jtj, unpenalized_normf, chi2k_qty,
-                               {'msg': msg, 'mu': mu, 'nu': nu, 'fvec': f})
+        optimizer_specific_qtys = {'msg': msg, 'mu': mu, 'nu': nu, 'fvec': f}
+        return OptimizerResult(objective, opt_x, norm_f, None, unpenalized_normf, chi2k_qty, optimizer_specific_qtys)
 
 
 
@@ -533,9 +532,8 @@ def simplish_leastsq(
     # ^ We have to set some *some* values in case we exit at the start of the first
     #   iteration. mu will almost certainly be overwritten before being read.
     min_norm_f = 1e100  # sentinel
-    best_x_state = (mu, nu, norm_f, f.copy(), None)
+    best_x_state = (mu, nu, norm_f, f.copy())
     # ^ here and elsewhere, need f.copy() b/c f is objfn mem
-    rawJTJ_scratch = None
 
     try:
 
@@ -554,8 +552,8 @@ def simplish_leastsq(
                     printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f[:], _ = best_x_state
-                    continue  # can't make use of saved JTJ yet - recompute on nxt iter
+                    mu, nu, norm_f, f[:] = best_x_state
+                    continue
 
             if profiler: profiler.memory_check("simplish_leastsq: begin outer iter")
 
@@ -593,19 +591,12 @@ def simplish_leastsq(
                     printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                     oob_check_interval = 1
                     x[:] = best_x[:]
-                    mu, nu, norm_f, f[:], _ = best_x_state
-                    continue  # can't make use of saved JTJ yet - recompute on nxt iter
+                    mu, nu, norm_f, f[:] = best_x_state
+                    continue
 
             if k == 0:
                 mu, nu = (tau * ari.max_x(undamped_JTJ_diag), 2) if init_munu == 'auto' else init_munu
-                rawJTJ_scratch = JTJ.copy()  # allocates the memory for a copy of JTJ so only update mem elsewhere
-                best_x_state = (mu, nu, norm_f, f.copy(), rawJTJ_scratch)  # update mu,nu,JTJ of initial best state
-            elif _np.allclose(x, best_x):
-                # for iter k > 0, update JTJ of best_x_state if best_x == x (i.e., if we've just evaluated
-                # a previously accepted step that was deemed the best we've seen so far.)
-                rawJTJ_scratch[:, :] = JTJ[:, :]  # use pre-allocated memory
-                rawJTJ_scratch[idiag] = undamped_JTJ_diag  # no damping; the "raw" JTJ
-                best_x_state = best_x_state[0:4] + (rawJTJ_scratch,)  # update mu,nu,JTJ of initial "best state"
+                best_x_state = (mu, nu, norm_f, f.copy())
 
             #determing increment using adaptive damping
             while True:  # inner loop
@@ -666,7 +657,7 @@ def simplish_leastsq(
                         printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                         oob_check_interval = 1
                         x[:] = best_x[:]
-                        mu, nu, norm_f, f[:], _ = best_x_state
+                        mu, nu, norm_f, f[:] = best_x_state
                         break
                 elif (norm_x + rel_xtol) < norm_dx * (_MACH_PRECISION**2):
                     msg = "(near-)singular linear system"
@@ -705,7 +696,7 @@ def simplish_leastsq(
                                     printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                                     oob_check_interval = 1
                                     x[:] = best_x[:]
-                                    mu, nu, norm_f, f[:], _ = best_x_state  # can't make use of saved JTJ yet
+                                    mu, nu, norm_f, f[:] = best_x_state
                                     break  # restart next outer loop
                             else:
                                 raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
@@ -740,7 +731,7 @@ def simplish_leastsq(
                         printer.log(("** Converged with out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                         oob_check_interval = 1
                         x[:] = best_x[:]
-                        mu, nu, norm_f, f[:], _ = best_x_state  # can't make use of saved JTJ yet
+                        mu, nu, norm_f, f[:] = best_x_state
                         break
 
                 if (dL <= 0 or dF <= 0):
@@ -775,7 +766,7 @@ def simplish_leastsq(
                                 printer.log(("** Hit out-of-bounds with check interval=%d, reverting to last know in-bounds point and setting interval=1 **") % oob_check_interval, 2)
                                 oob_check_interval = 1
                                 x[:] = best_x[:]
-                                mu, nu, norm_f, f[:], _ = best_x_state  # can't use of saved JTJ yet
+                                mu, nu, norm_f, f[:] = best_x_state
                                 break  # restart next outer loop
                         else:
                             raise ValueError("Invalid `oob_action`: '%s'" % oob_action)
@@ -795,10 +786,7 @@ def simplish_leastsq(
                 if new_x_is_known_inbounds and norm_f < min_norm_f:
                     min_norm_f = norm_f
                     best_x[:] = x[:]
-                    best_x_state = (mu, nu, norm_f, f.copy(), None)
-                    #Note: we use rawJTJ=None above because the current `JTJ` was evaluated
-                    # at the *last* x-value -- we need to wait for the next outer loop
-                    # to compute the JTJ for this best_x_state
+                    best_x_state = (mu, nu, norm_f, f.copy())
 
                 #assert(_np.isfinite(x).all()), "Non-finite x!" # NaNs tracking
                 #assert(_np.isfinite(f).all()), "Non-finite f!" # NaNs tracking
@@ -844,11 +832,10 @@ def simplish_leastsq(
     ari.allgather_x(best_x, global_x)
     ari.deallocate_jtf(best_x)
 
-    #JTJ[idiag] = undampled_JTJ_diag #restore diagonal
-    mu, nu, norm_f, f[:], rawJTJ = best_x_state
+    mu, nu, norm_f, f[:] = best_x_state
 
     global_f = _np.empty(ari.global_num_elements(), 'd')
     ari.allgather_f(f, global_f)
 
-    return global_x, converged, msg, mu, nu, norm_f, global_f, rawJTJ
+    return global_x, converged, msg, mu, nu, norm_f, global_f
 
