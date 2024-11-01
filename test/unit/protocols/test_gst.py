@@ -251,7 +251,7 @@ class TestGateSetTomography(BaseProtocolData):
     def test_run_custom_sim(self, capfd: pytest.LogCaptureFixture):
         self.setUpClass()
         proto = gst.GateSetTomography(smq1Q_XYI.target_model("CPTPLND"), 'stdgaugeopt', name="testGST")
-        results = proto.run(self.gst_data, simulator=MapForwardSimulatorWrapper())
+        results = proto.run(self.gst_data, simulator=MapForwardSimulatorWrapper)
         stdout, _ = capfd.readouterr()
         assert MapForwardSimulatorWrapper.Message in stdout
 
@@ -261,10 +261,9 @@ class TestGateSetTomography(BaseProtocolData):
 
         for estimate in results.estimates.values():
             for model in estimate.models.values():
-                assert isinstance(model, MapForwardSimulatorWrapper)
+                assert isinstance(model.sim, MapForwardSimulatorWrapper)
         pass
-
-    
+   
     def test_write_and_read_to_dir(self):
         #integration test to at least confirm we are writing and reading
         #to and from the directory serializations.
@@ -280,6 +279,7 @@ class TestGateSetTomography(BaseProtocolData):
         assert proto_read.gaugeopt_suite.gaugeopt_suite_names == proto.gaugeopt_suite.gaugeopt_suite_names
         assert proto_read.name == proto.name
         assert proto_read.badfit_options.actions == proto.badfit_options.actions
+
 
 class LinearGateSetTomographyTester(BaseProtocolData, BaseCase):
     """
@@ -316,6 +316,7 @@ class LinearGateSetTomographyTester(BaseProtocolData, BaseCase):
         assert proto_read.gaugeopt_suite.gaugeopt_suite_names == proto.gaugeopt_suite.gaugeopt_suite_names
         assert proto_read.name == proto.name
         assert proto_read.badfit_options.actions == proto.badfit_options.actions
+
 
 class TestStandardGST(BaseProtocolData):
     """
@@ -355,7 +356,7 @@ class TestStandardGST(BaseProtocolData):
             assert twoDLogL <= 1.0  # should be near 0 for perfect data
         for estimate in results.estimates.values():
             for model in estimate.models.values():
-                assert isinstance(model, MapForwardSimulatorWrapper)
+                assert isinstance(model.sim, MapForwardSimulatorWrapper)
         pass
 
     def test_write_and_read_to_dir(self):
