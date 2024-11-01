@@ -577,10 +577,10 @@ def simplish_leastsq(
 
             if profiler: profiler.add_time("simplish_leastsq: dotprods", tm)
 
-            idiag = ari.jtj_diag_indices(JTJ)
             norm_JTf = ari.infnorm_x(minus_JTf)
             norm_x = ari.norm2_x(x)
-            undamped_JTJ_diag = JTJ[idiag].copy()  # 'P'-type
+            pre_reg_data = ari.jtj_pre_regularization_data(JTJ)
+            max_jtj_diag = ari.jtj_max_diagonal_element(JTJ)
 
             if norm_JTf < jac_norm_tol:
                 if oob_check_interval <= 1:
@@ -595,7 +595,7 @@ def simplish_leastsq(
                     continue
 
             if k == 0:
-                mu, nu = (tau * ari.max_x(undamped_JTJ_diag), 2) if init_munu == 'auto' else init_munu
+                mu, nu = (tau * max_jtj_diag, 2) if init_munu == 'auto' else init_munu
                 best_x_state = (mu, nu, norm_f, f.copy())
 
             #determing increment using adaptive damping
@@ -604,7 +604,7 @@ def simplish_leastsq(
                 if profiler: profiler.memory_check("simplish_leastsq: begin inner iter")
 
                 # ok if assume fine-param-proc.size == 1 (otherwise need to sync setting local JTJ)
-                JTJ[idiag] = undamped_JTJ_diag + mu  # augment normal equations
+                ari.jtj_update_regularization(JTJ, pre_reg_data, mu)
 
                 #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ (inner)!" # NaNs tracking
                 #assert(_np.isfinite(minus_JTf).all()), "Non-finite minus_JTf (inner)!" # NaNs tracking

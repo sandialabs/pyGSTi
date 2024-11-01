@@ -579,6 +579,19 @@ class UndistributedArraysInterface(ArraysInterface):
         """
         return _np.diag_indices_from(jtj)
 
+    def jtj_update_regularization(self, jtj, prd, mu):
+        ind = self.jtj_diag_indices(jtj)
+        jtj[ind] = prd + mu
+        return
+
+    def jtj_pre_regularization_data(self, jtj):
+        return jtj[self.jtj_diag_indices(jtj)].copy()
+    
+    
+    def jtj_max_diagonal_element(self, jtj):
+        diag = jtj[self.jtj_diag_indices(jtj)]
+        return self.max_x(diag)
+
 
 class ImplicitArraysInterface(ArraysInterface):
 
@@ -657,12 +670,17 @@ class ImplicitArraysInterface(ArraysInterface):
         jtj[:] = j.T @ j
         return
 
-    def jtj_diag_indices(self, jtj):
-        # The question of how to implement this
-        # is less significant than the question of how
-        # to handle people's attempts at indexing into jtj
-        # when it's only defined implicitly.
-        return _np.diag_indices_from(jtj)
+    def jtj_update_regularization(self, jtj, prd, mu):
+        ind = _np.diag_indices_from(jtj)
+        jtj[ind] = prd + mu
+        return
+
+    def jtj_pre_regularization_data(self, jtj):
+        return jtj[_np.diag_indices_from(jtj)].copy()
+    
+    def jtj_max_diagonal_element(self, jtj):
+        diag = jtj[_np.diag_indices_from(jtj)]
+        return self.max_x(diag)
 
     """No-ops"""
 
@@ -674,6 +692,8 @@ class ImplicitArraysInterface(ArraysInterface):
 
     """
     Omitted function definitions:
+        jtj_diag_indices
+            Only needed in CustomLMOptimizer.
         param_fine_info
             Only called in customsolve.py::_back_substitution.
         gather_jtj
@@ -1394,3 +1414,15 @@ class DistributedArraysInterface(ArraysInterface):
         col_indices = _np.arange(global_param_indices.start, global_param_indices.stop)
         assert(len(row_indices) == len(col_indices))  # checks that global_param_indices is good
         return row_indices, col_indices  # ~ _np.diag_indices_from(jtj)
+
+    def jtj_update_regularization(self, jtj, prd, mu):
+        ind = self.jtj_diag_indices(jtj)
+        jtj[ind] = prd + mu
+        return
+
+    def jtj_pre_regularization_data(self, jtj):
+        return jtj[self.jtj_diag_indices(jtj)].copy()
+    
+    def jtj_max_diagonal_element(self, jtj):
+        diag = jtj[self.jtj_diag_indices(jtj)]
+        return self.max_x(diag)
