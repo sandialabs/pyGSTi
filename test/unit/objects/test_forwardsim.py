@@ -149,8 +149,8 @@ class BaseProtocolData:
         cls.gst_design = smq1Q_XYI.create_gst_experiment_design(max_max_length=16)
         cls.mdl_target = smq1Q_XYI.target_model()
         cls.mdl_datagen = cls.mdl_target.depolarize(op_noise=0.05, spam_noise=0.025)
-
-        ds = simulate_data(cls.mdl_datagen, cls.gst_design.all_circuits_needing_data, 20000, sample_error='multinomial')
+        sample_error = 'multinomial' if not hasattr(cls,'sample_error_mode') else cls.sample_error_mode
+        ds = simulate_data(cls.mdl_datagen, cls.gst_design.all_circuits_needing_data, 20000, sample_error=sample_error)
         cls.gst_data = ProtocolData(cls.gst_design, ds)
 
 
@@ -328,6 +328,8 @@ class ForwardSimConsistencyTester(TestCase):
 
 
 class ForwardSimIntegrationTester(BaseProtocolData):
+
+    sample_error_mode = 'none'
 
     def _run(self, obj : ForwardSimulator.Castable):
         self.setUpClass()
