@@ -597,6 +597,15 @@ class ImplicitArraysInterface(ArraysInterface):
         return slice(0, self.num_global_params)
     
     def jac_param_slice(self, only_if_leader=False):
+        """
+        We have to keep only_if_leader for compatibility reasons with
+        DistributedArraysInterface. Weirdly, this function is only
+        over called with only_if_leader=True. So from a practical 
+        perspective we can change DistributedArraysInterface.jac_param_slice
+        as though we hard-coded only_if_leader=True, then we could remove
+        this variable from the function signature across all three
+        ArraysInterface classes.
+        """
         return slice(0, self.num_global_params)
 
     def allgather_x(self, x, global_x):
@@ -644,8 +653,7 @@ class ImplicitArraysInterface(ArraysInterface):
     def norm2_jac(self, j):
         return _la.norm(j)**2
 
-    def fill_jtj(self, j, jtj, shared_mem_buff=None):
-        assert shared_mem_buff is None or shared_mem_buff == (None, None)
+    def fill_jtj(self, j, jtj):
         jtj[:] = j.T @ j
         return
 
@@ -663,10 +671,6 @@ class ImplicitArraysInterface(ArraysInterface):
     def deallocate_jtf(self, jtf): pass
 
     def deallocate_jtj(self, jtj): pass
-
-    def allocate_jtj_shared_mem_buf(self): return None, None
-    
-    def deallocate_jtj_shared_mem_buf(self, jtj_buff): pass
 
     """
     Omitted function definitions:
@@ -691,6 +695,13 @@ class ImplicitArraysInterface(ArraysInterface):
             that uses non-identity damping in the singular value basis.
         norm2_jtj
             Not called anywhere!
+    
+        allocate_jtj_shared_mem_buf
+            Not used in any meaningful way even in customlm. Edited simplerlm
+            to remove references to this function. (This ArraysInterface is
+            only for use with SimplerLMOptimzer)
+        dellocate_jtj_shared_mem_buf
+            See above.
     """
 
 

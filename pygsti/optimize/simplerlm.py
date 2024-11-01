@@ -368,11 +368,6 @@ def jac_guarded(k: int, num_fd_iters: int, obj_fn: Callable, jac_fn: Callable, f
                 fdJac_work[:, i - pslice.start] = fd
             #if comm is not None: comm.barrier()  # overkill for shared memory leader host barrier
         Jac = fdJac_work
-        #DEBUG: compare with analytic jacobian (need to uncomment num_fd_iters DEBUG line above too)
-        #Jac_analytic = jac_fn(x)
-        #if _np.linalg.norm(Jac_analytic-Jac) > 1e-6:
-        #    print("JACDIFF = ",_np.linalg.norm(Jac_analytic-Jac)," per el=",
-        #          _np.linalg.norm(Jac_analytic-Jac)/Jac.size," sz=",Jac.size)
     return Jac
 
 
@@ -508,7 +503,6 @@ def simplish_leastsq(
     best_x = ari.allocate_jtf()
     dx = ari.allocate_jtf()
     new_x = ari.allocate_jtf()
-    jtj_buf = ari.allocate_jtj_shared_mem_buf()
     fdJac = ari.allocate_jac() if num_fd_iters > 0 else None
 
     global_x = x0.copy()
@@ -567,28 +561,23 @@ def simplish_leastsq(
 
             Jac = jac_guarded(k, num_fd_iters, obj_fn, jac_fn, f, ari, global_x, fdJac)
 
-            if profiler: profiler.memory_check("simplish_leastsq: after jacobian:"
-                                               + "shape=%s, GB=%.2f" % (str(Jac.shape),
-                                                                        Jac.nbytes / (1024.0**3)))
+            if profiler:
+                jac_gb = Jac.nbyes/(1024.0**3) if hasattr(Jac, 'nbytes') else _np.NaN
+                vals = ((f.size, global_x.size), jac_gb)
+                profiler.memory_check("simplish_leastsq: after jacobian: shape=%s, GB=%.2f" % vals)
+            
             Jnorm = _np.sqrt(ari.norm2_jac(Jac))
             xnorm = _np.sqrt(ari.norm2_x(x))
             printer.log("--- Outer Iter %d: norm_f = %g, mu=%g, |x|=%g, |J|=%g" % (k, norm_f, mu, xnorm, Jnorm))
 
-            #assert(_np.isfinite(Jac).all()), "Non-finite Jacobian!" # NaNs tracking
-            #assert(_np.isfinite(_np.linalg.norm(Jac))), "Finite Jacobian has inf norm!" # NaNs tracking
-
             tm = _time.time()
 
             # Riley note: fill_JTJ is the first place where we try to access J as a dense matrix.
-            ari.fill_jtj(Jac, JTJ, jtj_buf)
+            ari.fill_jtj(Jac, JTJ)
             ari.fill_jtf(Jac, f, minus_JTf)  # 'P'-type
             minus_JTf *= -1
 
             if profiler: profiler.add_time("simplish_leastsq: dotprods", tm)
-            #assert(not _np.isnan(JTJ).any()), "NaN in JTJ!" # NaNs tracking
-            #assert(not _np.isinf(JTJ).any()), "inf in JTJ! norm Jac = %g" % _np.linalg.norm(Jac) # NaNs tracking
-            #assert(_np.isfinite(JTJ).all()), "Non-finite JTJ!" # NaNs tracking
-            #assert(_np.isfinite(minus_JTf).all()), "Non-finite minus_JTf!" # NaNs tracking
 
             idiag = ari.jtj_diag_indices(JTJ)
             norm_JTf = ari.infnorm_x(minus_JTf)
@@ -841,7 +830,6 @@ def simplish_leastsq(
     ari.deallocate_jtj(JTJ)
     ari.deallocate_jtf(minus_JTf)
     ari.deallocate_jtf(x)
-    ari.deallocate_jtj_shared_mem_buf(jtj_buf)
 
     if x_limits is not None:
         ari.deallocate_jtf(x_lower_limits)
